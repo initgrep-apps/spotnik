@@ -3,19 +3,26 @@
 > **Depends on:** Feature 02 (Auth). No dependency on playback features.
 > This is the differentiating feature — it makes Spotnik more than a Spotify client.
 
+> **Layout note:** This feature uses the Stats view, which temporarily replaces the three-pane
+> layout. Pressing `1` returns to the main Library | Player | Queue view. This does not
+> violate the three-pane freeze — see `docs/features/00-overview.md` for the view-switching concept.
+
 ## Implementation Context
 
 ### Store fields this feature uses
 ```go
-TopTracks      []api.Track   // from GET /me/top/tracks
-TopArtists     []api.Artist  // from GET /me/top/artists
-StatsTimeRange string        // "short_term" | "medium_term" | "long_term"
+// Store fields this feature uses
+TopTracks      map[string][]api.Track   // keyed by time range ("short_term", "medium_term", "long_term")
+TopArtists     map[string][]api.Artist  // keyed by time range
+// Note: StatsTimeRange (the currently selected range) is pane-local state in StatsView,
+// not in the Store. The Store only holds cached data keyed by range.
 ```
 
 ### Time range cycling
 Three ranges map to human labels: `short_term` → "4 weeks", `medium_term` → "6 months",
-`long_term` → "all time". User toggles with `[4wk]` / `[6mo]` / `[all]` key hints.
-On range change: re-fetch both endpoints, show spinner until data arrives.
+`long_term` → "all time". User cycles with `f` key. Display hint: `[4wk]` / `[6mo]` / `[all]`.
+On range change: check store cache first — if data exists, render immediately with no fetch.
+If cache misses, fetch from API and show spinner until data arrives.
 
 ### Message types for this feature
 ```go
@@ -29,7 +36,7 @@ type statsTimeRangeChangedMsg struct{ timeRange string }
 
 ### Design tokens used in this feature
 `theme.SectionHeader()` · `theme.PlayingIndicator()` · `theme.TextPrimary()` ·
-`theme.TextSecondary()` · `theme.TextMuted()` · `theme.SelectedBg()`
+`theme.TextSecondary()` · `theme.TextMuted()` · `theme.SelectedBg()` · `theme.ActiveBorder()`
 
 ---
 
@@ -43,14 +50,26 @@ their music habits are data — which they are.
 
 ---
 
+## Feature Acceptance Criteria
+
+- [ ] `2` opens Stats view with data loaded within 3 seconds
+- [ ] Time range switching via `f` shows correct data without flicker
+- [ ] `Enter` on a top track or artist plays it immediately
+- [ ] Recently played shows correct relative timestamps
+- [ ] `1` returns to library view with three-pane layout intact
+- [ ] Cached data avoids re-fetch when switching back to same time range
+- [ ] All API calls and view Update() handlers tested
+
+---
+
 ## User Stories
 
 - **As a user**, I press `2` to switch to the Stats view.
 - **As a user**, I see my top tracks for the last 4 weeks by default.
 - **As a user**, I press `Tab` to switch between top tracks, top artists, and recently played.
-- **As a user**, I press `1`, `2`, or `3` within the stats view to change time range (4wk / 6mo / all-time).
+- **As a user**, I press `f` to cycle the time range (4wk → 6mo → all-time) for the focused section.
 - **As a user**, I press `Enter` on any track or artist to play it immediately.
-- **As a user**, I press `1` (outside stats view) to return to the main library view.
+- **As a user**, I press `1` to return to the main library view.
 
 ---
 
@@ -77,7 +96,7 @@ their music habits are data — which they are.
 │  Levitating       ·  Dua Lipa    ·  Future Nostalgia         18 min ago       │
 │  Starboy          ·  The Weeknd  ·  Starboy                  34 min ago       │
 ├────────────────────────────────────────────────────────────────────────────── │
-│  Tab next section   j/k move   Enter play   [4wk][6mo][all] time range       │
+│  Tab next section   j/k move   Enter play   f cycle time range               │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -85,7 +104,15 @@ their music habits are data — which they are.
 - Top half: split 50/50 between Top Tracks (left) and Top Artists (right)
 - Bottom quarter: Recently Played (full width)
 - Time range toggles affect the top section currently focused
-- Active time range bracket highlighted: `[4wk]` → Blue background
+- Active time range bracket highlighted with `ActiveBorder()` token background
+
+### Initial Focus
+When opening Stats, Top Tracks section is focused by default. Tab cycles:
+Top Tracks → Top Artists → Recently Played → Top Tracks.
+
+### Empty States
+- No top tracks/artists: show "No listening data for this period" centered in the section
+- No recently played: show "No recent listening history" centered
 
 ---
 
@@ -139,13 +166,10 @@ Show relative time for recent items, absolute for older:
 | `Tab` | Cycle section focus: Top Tracks → Top Artists → Recently Played |
 | `j` / `↓` | Move selection down |
 | `k` / `↑` | Move selection up |
-| `f` | Change time range: 4wk → 6mo → all (filter key) |
+| `f` | Cycle time range: 4wk → 6mo → all (filter key) |
 | `Enter` | Play selected track or artist |
 | `1` | Switch to Library view |
 | `PgUp/Dn` | Scroll page |
-
-> Note: `1`, `2`, `3` as time range shortcuts conflict with view switching.
-> Use `f` (filter) to cycle time range instead. This avoids the conflict.
 
 ---
 
@@ -173,45 +197,166 @@ Show relative time for recent items, absolute for older:
 ## Task Breakdown
 
 ### Task 7.1 — User/stats API calls
+
+**Description:**
+Implement the Spotify API client methods for fetching the user's top tracks, top artists,
+and recently played history. Define the `Artist` model struct.
+
+**Files:** `internal/api/user.go`, `internal/api/user_test.go`
+
+**Implementation steps:**
 - [ ] `GetTopTracks(ctx, timeRange string, limit int) ([]Track, error)`
 - [ ] `GetTopArtists(ctx, timeRange string, limit int) ([]Artist, error)`
 - [ ] `GetRecentlyPlayed(ctx, limit int) ([]PlayHistory, error)` (may reuse from Feature 03)
 - [ ] `Artist` struct: id, name, genres, popularity, external_urls
 - [ ] Test each with fixture JSON
 
-### Task 7.2 — StatsView model
-- [ ] Implement `tea.Model`: `Init()`, `Update()`, `View()`
-- [ ] `Init()` fetches top tracks (short_term) + top artists (short_term) + recently played
-- [ ] Three sections: TopTracks, TopArtists, RecentlyPlayed
-- [ ] Active section tracked in model
-- [ ] Test: init fires correct commands, section switching
+**Acceptance criteria:**
+- All three API methods parse Spotify JSON responses correctly
+- Empty result sets return empty slices, not nil
+- Errors are wrapped with context (`fmt.Errorf`)
+- Artist struct unmarshals all required fields
 
-### Task 7.3 — Time range switching
-- [ ] `f` key cycles time range for active section
-- [ ] On switch: check store cache first, fetch if missing
-- [ ] Time range toggle renders with active range highlighted
-- [ ] Test: cache hit skips fetch, cache miss fires fetch
+**Tests:**
 
-### Task 7.4 — Recently played rendering
-- [ ] Relative time formatting function `FormatRelativeTime(t time.Time) string`
-- [ ] Test: all time ranges (just now, minutes, hours, days, older)
-- [ ] Render: track · artist · album, right-aligned time
-
-### Task 7.5 — View switching
-- [ ] Root model: `2` switches to StatsView, `1` switches back to main
-- [ ] StatsView lazy-initializes on first open (not on app start)
-- [ ] Test: view switching preserves state (cursor position) when returning
+*Unit tests:*
+- `TestGetTopTracks_Success` — returns parsed tracks for time range
+- `TestGetTopTracks_EmptyResults` — returns empty slice
+- `TestGetTopArtists_Success` — returns parsed artists
+- `TestGetTopArtists_EmptyResults` — returns empty slice
+- `TestGetRecentlyPlayed_Success` — returns play history items with timestamps
+- `TestArtist_Unmarshal` — parses Artist JSON (id, name, genres, popularity)
 
 ---
 
-## Acceptance Criteria
+### Task 7.2 — StatsView model
 
-- [ ] `2` opens stats view with data loaded within 3 seconds
-- [ ] Time range switching shows correct data with no flicker
-- [ ] `Enter` on a top track plays it immediately
-- [ ] Recently played shows correct relative timestamps
-- [ ] `1` returns to library view with layout intact
-- [ ] All API calls and view update handlers tested
+**Description:**
+Build the StatsView Bubble Tea model with three sections (Top Tracks, Top Artists,
+Recently Played), section focus cycling via Tab, cursor navigation via j/k, and
+play-on-Enter for tracks and artists.
+
+**Files:** `internal/ui/panes/stats.go`, `internal/ui/panes/stats_test.go`
+
+**Implementation steps:**
+- [ ] Implement `tea.Model`: `Init()`, `Update()`, `View()`
+- [ ] `Init()` fetches top tracks (short_term) + top artists (short_term) + recently played
+- [ ] Three sections: TopTracks, TopArtists, RecentlyPlayed
+- [ ] Active section tracked in model (pane-local state)
+- [ ] Top Tracks focused by default on open
+- [ ] Tab cycles: Top Tracks → Top Artists → Recently Played → Top Tracks
+- [ ] j/k moves cursor within focused section
+- [ ] Enter on track or artist returns play command
+- [ ] Render empty state messages when sections have no data
+
+**Acceptance criteria:**
+- Init returns a batch command fetching short_term tracks, short_term artists, and recently played
+- Tab cycles through all three sections in order
+- j/k moves cursor within the focused section without crossing section boundaries
+- Enter on a track returns a play command with the track URI
+- Enter on an artist returns a play command with the artist context URI
+- Empty sections show the appropriate "No listening data" message
+
+**Tests:**
+
+*Unit tests:*
+- `TestStatsView_Init_FetchesShortTerm` — returns batch command for short_term tracks + artists + recently played
+- `TestStatsView_View_TopTracks` — renders numbered track list with artist
+- `TestStatsView_View_TopArtists` — renders numbered artist list
+- `TestStatsView_View_RecentlyPlayed` — renders track · artist · album with relative time
+- `TestStatsView_View_EmptySection` — shows "No listening data" message
+- `TestStatsView_Update_Tab` — cycles section focus
+- `TestStatsView_Update_JK` — moves cursor within section
+- `TestStatsView_Update_Enter_PlaysTrack` — returns play command
+
+---
+
+### Task 7.3 — Time range switching
+
+**Description:**
+Implement time range cycling with the `f` key. Check the store cache before fetching —
+if data for the requested range already exists, render it immediately. Otherwise fire a
+fetch command and show a spinner. Highlight the active range in the time range display.
+
+**Files:** `internal/ui/panes/stats.go`, `internal/ui/panes/stats_test.go`
+
+**Implementation steps:**
+- [ ] `f` key cycles time range for active section: short_term → medium_term → long_term → short_term
+- [ ] On switch: check store cache first, fetch if missing
+- [ ] Time range toggle renders with active range highlighted using `ActiveBorder()` token
+- [ ] Show spinner while fetching uncached range data
+
+**Acceptance criteria:**
+- `f` cycles through all three ranges in order and wraps around
+- Cached data renders immediately with no fetch command returned
+- Uncached data triggers a fetch command and shows a loading spinner
+- Active range bracket is visually distinct using `ActiveBorder()` token
+
+**Tests:**
+
+*Unit tests:*
+- `TestStatsView_Update_F_CyclesRange` — short_term → medium_term → long_term → short_term
+- `TestStatsView_TimeRange_CacheHit` — cached data renders immediately, no fetch
+- `TestStatsView_TimeRange_CacheMiss` — uncached range triggers fetch command
+- `TestStatsView_View_ActiveRangeHighlighted` — active range bracket shown with highlight
+
+---
+
+### Task 7.4 — Recently played rendering
+
+**Description:**
+Implement the `FormatRelativeTime` function for human-readable timestamps in the recently
+played section. Render each item as track · artist · album with right-aligned relative time.
+
+**Files:** `internal/ui/panes/stats.go`, `internal/ui/panes/stats_test.go`
+
+**Implementation steps:**
+- [ ] Relative time formatting function `FormatRelativeTime(t time.Time) string`
+- [ ] Handle all ranges: just now, minutes, hours, days, short date for older
+- [ ] Render: track · artist · album, right-aligned time
+
+**Acceptance criteria:**
+- All five time ranges from the spec table produce correct output
+- Times older than 7 days display as short date (e.g. "Mar 12")
+- Recently played items render in the format: track · artist · album with right-aligned time
+
+**Tests:**
+
+*Unit tests:*
+- `TestFormatRelativeTime_JustNow` — < 1 min → "just now"
+- `TestFormatRelativeTime_Minutes` — 5 min → "5 min ago"
+- `TestFormatRelativeTime_Hours` — 3 hr → "3 hr ago"
+- `TestFormatRelativeTime_Days` — 2 days → "2 days ago"
+- `TestFormatRelativeTime_OlderThanWeek` — 10 days → "Mar 12" short date
+
+---
+
+### Task 7.5 — View switching
+
+**Description:**
+Wire the Stats view into the root app model. `2` opens the Stats view (lazy-initialized on
+first open). `1` returns to the main three-pane library view. Cursor position and section
+focus are preserved when switching away and back.
+
+**Files:** `internal/app/app.go`, `internal/ui/panes/stats.go`
+
+**Implementation steps:**
+- [ ] Root model: `2` switches to StatsView, `1` switches back to main
+- [ ] StatsView lazy-initializes on first open (not on app start)
+- [ ] Preserve cursor position and section focus when switching views
+
+**Acceptance criteria:**
+- Pressing `2` switches the view to StatsView and triggers data loading
+- Pressing `1` from Stats restores the three-pane layout intact
+- Returning to Stats preserves cursor position and focused section
+- StatsView is not initialized until the user first presses `2`
+
+**Tests:**
+
+*Integration tests:*
+- `TestApp_2KeyOpensStats` — pressing 2 switches to StatsView
+- `TestApp_1KeyReturnsToLibrary` — pressing 1 from stats restores three-pane layout
+- `TestApp_StatsPreservesCursor` — returning to stats preserves cursor position
 
 ---
 
@@ -224,4 +369,4 @@ Show relative time for recent items, absolute for older:
 
 ---
 
-*Last updated: 2026-02-21*
+*Last updated: 2026-03-22*

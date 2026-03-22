@@ -99,7 +99,7 @@ type Store struct {
     mu sync.RWMutex
 
     // Playback
-    CurrentTrack    *api.Track
+    CurrentTrack    *api.Track        // URI available via CurrentTrack.URI — no separate field needed
     PlaybackState   *api.PlaybackState
     Queue           []api.Track
     RecentlyPlayed  []api.PlayHistory
@@ -150,29 +150,54 @@ Every distinct piece of data coming back from async operations has its own messa
 ```go
 // internal/app/messages.go
 
-// Playback messages
+// Playback messages (Feature 03)
 type playbackStateFetchedMsg struct{ state *api.PlaybackState }
 type playbackStateErrMsg      struct{ err error }
 type playPausedMsg            struct{}
 type trackSkippedMsg          struct{}
 type volumeSetMsg             struct{ volume int }
 type seekedMsg                struct{ positionMs int }
+type tickMsg                  time.Time
 
-// Library messages
+// Auth messages (Feature 02)
+type authSuccessMsg struct{}
+type authErrMsg     struct{ err error }
+
+// Library messages (Feature 04)
 type libraryLoadedMsg         struct{ playlists []api.SimplePlaylist }
 type libraryErrMsg            struct{ err error }
 type playlistTracksLoadedMsg  struct{ id string; tracks []api.Track }
+type playContextMsg           struct{ contextURI string }
 
-// Search messages
-type searchResultsMsg         struct{ results *api.SearchResult }
-type searchErrMsg             struct{ err error }
+// Search messages (Feature 05)
+type searchDebounceMsg   struct{ query string }
+type searchResultsMsg    struct{ results *api.SearchResult }
+type searchErrMsg        struct{ err error }
+type searchClosedMsg     struct{}
 
-// Device messages
-type devicesLoadedMsg         struct{ devices []api.Device }
-type deviceTransferredMsg     struct{ deviceID string }
+// Queue messages (Feature 06)
+type queueLoadedMsg  struct{ tracks []api.Track }
+type queueAddedMsg   struct{ uri string }
+type queueAddErrMsg  struct{ err error }
+
+// Device messages (Feature 07)
+type devicesLoadedMsg       struct{ devices []api.Device }
+type deviceTransferredMsg   struct{ deviceID string }
+
+// Stats messages (Feature 08)
+type statsLoadedMsg struct {
+    topTracks  []api.Track
+    topArtists []api.Artist
+    timeRange  string
+}
+type statsTimeRangeChangedMsg struct{ timeRange string }
+
+// Playlist manager messages (Feature 09)
+type playlistCreatedMsg      struct{ playlist api.SimplePlaylist }
+type playlistRenamedMsg      struct{ playlistID, newName string }
+type playlistTracksAddedMsg  struct{ playlistID string; count int }
 
 // System messages
-type tickMsg                  time.Time
 type errorDismissMsg          struct{}
 type terminalSizeMsg          struct{ width, height int }
 ```
@@ -206,9 +231,11 @@ type SpotifyClient interface {
     AddToQueue(ctx context.Context, uri string) error
     GetRecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error)
     GetDevices(ctx context.Context) ([]Device, error)
-    TransferPlayback(ctx context.Context, deviceID string) error
+    TransferPlayback(ctx context.Context, deviceID string, play bool) error
 
     // Library
+    // Pagination methods return (items, error) — the total count is handled
+    // internally by the fetchAll helper and not exposed in the interface.
     GetPlaylists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error)
     GetPlaylistTracks(ctx context.Context, id string, limit, offset int) ([]Track, error)
     GetSavedAlbums(ctx context.Context, limit, offset int) ([]SavedAlbum, error)
@@ -229,6 +256,7 @@ type SpotifyClient interface {
     UpdatePlaylist(ctx context.Context, id, name, description string) error
     AddTracksToPlaylist(ctx context.Context, playlistID string, uris []string) error
     RemoveTracksFromPlaylist(ctx context.Context, playlistID string, uris []string) error
+    ReorderPlaylistTracks(ctx context.Context, id string, rangeStart, insertBefore, rangeLength int) error
 }
 ```
 
@@ -363,6 +391,22 @@ case tickMsg:
     )
 ```
 
+### Polling Ownership
+
+The root model's 1-second tick loop is the single polling mechanism in the app.
+
+| Tick Cycle | Endpoint | Owner | Consumers |
+|---|---|---|---|
+| Every 1s | `GET /me/player` | Feature 03 (Playback) | Features 03, 04, 07, 08 |
+| Every 1s | `GET /me/player/queue` | Feature 06 (Queue) | Feature 06 |
+
+**Rules:**
+- Feature 03 owns the tick loop and dispatches `fetchPlaybackState` on each `tickMsg`
+- Feature 06 extends the tick to also dispatch `fetchQueue` alongside the playback fetch
+- Features 04 (Library) and 08 (Stats) fetch their own data on-demand (init, section expand, view open) — they do NOT add to the tick loop
+- Feature 07 (Devices) reads device info from the playback state response — it only fetches `GET /me/player/devices` when the device overlay opens
+- No feature other than 03 and 06 should add recurring poll commands to the tick cycle
+
 ---
 
 ## Configuration
@@ -471,6 +515,36 @@ func TestPlayerPane_SpaceTogglesPlayback(t *testing.T) {
     assert.True(t, client.PauseCalled)
 }
 ```
+
+### Integration Test Convention
+
+Integration tests verify multi-component interactions: message routing through the root model,
+state updates across panes, and end-to-end user workflows with mocked HTTP.
+
+**File naming:** `*_integration_test.go` (e.g., `app_integration_test.go`, `player_integration_test.go`)
+
+**Build tag:** Every integration test file starts with:
+```go
+//go:build integration
+```
+
+**Running tests:**
+- `make test` — runs unit tests only (fast, default)
+- `make test-integration` — runs integration tests only
+- `make ci` — runs both unit and integration tests
+
+**What qualifies as an integration test:**
+- Tests that exercise message routing through the root `app.Model`
+- Tests that verify state changes propagate from one pane to another
+- Tests that combine `httptest.NewServer` with multiple model updates in sequence
+- Tests that verify the polling tick produces correct downstream state changes
+
+**What stays as a unit test:**
+- Individual API client methods with `httptest.NewServer` (testing one function)
+- Store mutation methods (Get/Set)
+- Bubble Tea model `Update()` handlers (testing one key → one command)
+- `View()` output assertions
+- Config loading, PKCE helpers, time formatters
 
 ---
 

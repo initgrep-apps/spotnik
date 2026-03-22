@@ -25,6 +25,24 @@ Features must be built in order. Each depends on the previous being stable and t
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
 
+> **Note on views:** Features 08 (Stats) and 09 (Playlists) use alternative views that
+> temporarily replace the three-pane layout. Pressing `1` always returns to the main
+> Library | Player | Queue layout. This does not violate the three-pane freeze — the freeze
+> means the three-pane layout itself is never modified, not that it must be the only view.
+
+---
+
+## Testing Convention
+
+All features use two test tiers: **Unit** and **Integration**.
+
+- **Unit tests** live in standard `*_test.go` files. They test individual functions, model handlers, and API methods in isolation.
+- **Integration tests** live in `*_integration_test.go` files tagged with `//go:build integration`. They test multi-component flows.
+- `make test` runs unit tests only. `make ci` runs both.
+- See `docs/ARCHITECTURE.md` → "Integration Test Convention" for full details.
+
+Each task in every feature spec lists its required tests by category.
+
 ---
 
 ## Feature Scope Summary
@@ -50,8 +68,9 @@ The `/` search overlay. Live search as user types (debounced). Results grouped b
 Play directly, add to queue, or open in library.
 
 ### Feature 6: Queue Management
-Right pane. Show upcoming queue. Remove items. Add items from library/search.
-Current queue sourced from Spotify's own queue endpoint.
+Right pane. Show upcoming queue. Add items from library/search.
+Current queue sourced from Spotify's own queue endpoint. Queue removal is not supported
+by the Spotify Web API.
 
 ### Feature 7: Device Switcher
 `d` key overlay. List all Spotify Connect devices. One-keypress transfer of playback.

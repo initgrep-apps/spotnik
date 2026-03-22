@@ -3,31 +3,10 @@
 > **Depends on:** Feature 04 (Library Browser) complete and committed.
 > This is the v1.0.0 power feature — do not implement before all prior features are stable.
 
-## Implementation Context
-
-### Store fields this feature uses
-```go
-Playlists []api.Playlist // shared with Library — mutations refresh the same slice
-```
-
-### Text input pattern (new playlist name modal)
-Use `github.com/charmbracelet/bubbles/textinput` for the name input.
-Call `m.nameInput.Focus()` when the modal opens. Input value is `m.nameInput.Value()`.
-Pressing `Enter` submits; pressing `Esc` cancels and restores previous state.
-
-### Message types for this feature
-```go
-type playlistCreatedMsg struct{ playlist api.Playlist }
-type playlistDeletedMsg struct{ playlistID string }
-type playlistRenamedMsg struct{ playlistID, newName string }
-type playlistTracksAddedMsg struct{ playlistID string; count int }
-```
-
-### Design tokens used in this feature
-`theme.SurfaceAlt()` · `theme.ActiveBorder()` · `theme.TextPrimary()` ·
-`theme.Error()` · `theme.SelectedBg()` · `theme.KeyHint()`
-
----
+> **Layout note:** This feature uses the Playlist Manager view, which temporarily replaces
+> the three-pane layout. Pressing `1` returns to the main Library | Player | Queue view.
+> This does not violate the three-pane freeze — see `docs/features/00-overview.md` for the
+> view-switching concept.
 
 ---
 
@@ -39,6 +18,18 @@ not just a player.
 
 ---
 
+## Feature Acceptance Criteria
+
+- [ ] `3` opens Playlist Manager with playlists loaded from store
+- [ ] New playlist created and visible within 1 second
+- [ ] Playlist rename updates immediately (optimistic), reverts on API error
+- [ ] Track removed from playlist immediately (optimistic), reverts on error
+- [ ] Track reorder moves visually before API confirms, reverts on error
+- [ ] On any API error: list reverts to previous state, error shown in status bar
+- [ ] All API calls and pane `Update()` handlers tested
+
+---
+
 ## User Stories
 
 - **As a user**, I press `3` to open the Playlist Manager view.
@@ -47,7 +38,45 @@ not just a player.
 - **As a user**, I can add tracks from search or library to a playlist with a keypress.
 - **As a user**, I can remove a track from a playlist.
 - **As a user**, I can reorder tracks in a playlist using keyboard shortcuts.
-- **As a user**, I can change a playlist between public and private.
+
+---
+
+## Implementation Context
+
+### Store fields this feature uses
+```go
+Playlists []api.SimplePlaylist // shared with Library — mutations refresh via re-fetch
+```
+
+### Text input pattern (new playlist name modal)
+Use `github.com/charmbracelet/bubbles/textinput` for the name input.
+Call `m.nameInput.Focus()` when the modal opens. Input value is `m.nameInput.Value()`.
+Pressing `Enter` submits; pressing `Esc` cancels and restores previous state.
+
+### Message types for this feature
+```go
+type playlistCreatedMsg      struct{ playlist api.SimplePlaylist }
+type playlistRenamedMsg      struct{ playlistID, newName string }
+type playlistTracksAddedMsg  struct{ playlistID string; count int }
+```
+
+### API methods (see `docs/ARCHITECTURE.md` → SpotifyClient interface)
+```go
+CreatePlaylist(ctx context.Context, name, description string, public bool) (*Playlist, error)
+UpdatePlaylist(ctx context.Context, id, name, description string) error
+AddTracksToPlaylist(ctx context.Context, playlistID string, uris []string) error
+RemoveTracksFromPlaylist(ctx context.Context, playlistID string, uris []string) error
+ReorderPlaylistTracks(ctx context.Context, id string, rangeStart, insertBefore, rangeLength int) error
+```
+
+### Duration display
+
+Track duration comes from the `DurationMs` field on the `api.Track` struct, available from
+the `GetPlaylistTracks()` response. Format as `m:ss` (e.g., "4:20").
+
+### Design tokens used in this feature
+`theme.SurfaceAlt()` · `theme.ActiveBorder()` · `theme.TextPrimary()` ·
+`theme.Error()` · `theme.SelectedBg()` · `theme.KeyHint()`
 
 ---
 
@@ -108,6 +137,10 @@ not just a player.
 - Sub-overlay shows playlist picker: list of playlists with cursor
 - Select playlist, press Enter → calls `POST /playlists/{id}/items`
 
+### Toggle Public/Private
+- Not available in MVP. Playlists are created as private by default.
+- Future enhancement: add `v` key to toggle visibility.
+
 ---
 
 ## Keymap (Playlist Manager)
@@ -131,6 +164,142 @@ not just a player.
 
 ---
 
+## Task Breakdown
+
+### Task 8.1 — Playlist API calls
+
+**Description:** Implement all playlist mutation methods on the API client. Each method
+maps to a single Spotify Web API endpoint. All methods must wrap errors with context and
+conform to the `SpotifyClient` interface in `docs/ARCHITECTURE.md`.
+
+**Files:** `internal/api/playlists.go`, `internal/api/playlists_test.go`
+
+**Implementation steps:**
+- [ ] `CreatePlaylist(ctx, name, description string, public bool) (*Playlist, error)`
+- [ ] `UpdatePlaylist(ctx, id, name, description string) error`
+- [ ] `AddTracksToPlaylist(ctx, playlistID string, uris []string) error`
+- [ ] `RemoveTracksFromPlaylist(ctx, playlistID string, uris []string) error`
+- [ ] `ReorderPlaylistTracks(ctx, id string, rangeStart, insertBefore, rangeLength int) error`
+
+**Acceptance criteria:**
+- Each method sends the correct HTTP method, path, and JSON body
+- Errors are wrapped with `fmt.Errorf` including the operation name
+- All methods tested with `httptest.NewServer`
+
+**Tests:**
+
+*Unit tests:*
+- `TestCreatePlaylist_Success` — returns created playlist
+- `TestCreatePlaylist_ServerError` — returns descriptive error
+- `TestUpdatePlaylist_Success` — sends correct PUT body
+- `TestAddTracksToPlaylist_Success` — sends correct POST body with URIs
+- `TestRemoveTracksFromPlaylist_Success` — sends correct DELETE body
+- `TestReorderPlaylistTracks_Success` — sends correct PUT body with range params
+- `TestReorderPlaylistTracks_Error` — returns error with context
+
+---
+
+### Task 8.2 — PlaylistManager model (left pane)
+
+**Description:** Build the left pane of the Playlist Manager view. Displays the user's
+playlists with track counts. Supports creating new playlists and renaming existing ones
+via inline text input. Selecting a playlist loads its tracks in the right pane.
+
+**Files:** `internal/ui/panes/playlists.go`, `internal/ui/panes/playlists_test.go`
+
+**Implementation steps:**
+- [ ] Playlist list with selection, track count display, and `▶` indicator for currently playing
+- [ ] `n` key opens inline name input using `bubbles/textinput`
+- [ ] `r` key opens rename input pre-filled with current name
+- [ ] On confirm: fire create/rename command
+- [ ] On cancel (Esc): hide text input, restore previous state
+
+**Acceptance criteria:**
+- Playlists render with name and track count
+- Currently playing playlist shows `▶` indicator
+- `n` opens text input; Enter creates, Esc cancels
+- `r` opens text input pre-filled; Enter renames, Esc cancels
+- All styling uses `Theme` tokens — no hardcoded colors
+
+**Tests:**
+
+*Unit tests:*
+- `TestPlaylistManager_View_PlaylistList` — renders playlists with track counts
+- `TestPlaylistManager_View_PlayingIndicator` — shows `▶` next to currently playing playlist
+- `TestPlaylistManager_Update_N_OpensInput` — text input appears for new playlist name
+- `TestPlaylistManager_Update_R_OpensRename` — text input pre-filled with current name
+- `TestPlaylistManager_Update_Enter_SubmitsCreate` — returns create command with name
+- `TestPlaylistManager_Update_Esc_CancelsInput` — hides text input, restores state
+- `TestPlaylistManager_Update_Enter_SelectsPlaylist` — loads playlist tracks in right pane
+
+---
+
+### Task 8.3 — Track list (right pane)
+
+**Description:** Build the right pane of the Playlist Manager view. Displays tracks for the
+selected playlist with duration right-aligned. Supports removing tracks (with confirmation)
+and reordering via Shift+arrow keys. Both operations use optimistic updates that revert on
+API error.
+
+**Files:** `internal/ui/panes/playlists.go`, `internal/ui/panes/playlists_test.go`
+
+**Implementation steps:**
+- [ ] Track list with duration column (right-aligned, formatted as `m:ss`)
+- [ ] Total duration + track count in footer
+- [ ] `x` key: confirmation prompt before remove
+- [ ] `Shift+↑/↓`: reorder with optimistic update
+- [ ] On API error for remove/reorder: revert to previous state, show error in status bar
+
+**Acceptance criteria:**
+- Tracks render with name, artist, and right-aligned duration
+- Footer shows total tracks and total duration
+- `x` shows `Remove? [y/N]` prompt; `y` removes optimistically; API failure reverts
+- `Shift+↑/↓` moves track visually; API failure reverts
+- All styling uses `Theme` tokens — no hardcoded colors
+
+**Tests:**
+
+*Unit tests:*
+- `TestPlaylistTracks_View_TrackList` — renders tracks with duration right-aligned
+- `TestPlaylistTracks_View_Footer` — shows total tracks + total duration
+- `TestPlaylistTracks_Update_X_ShowsConfirmation` — shows `Remove? [y/N]` prompt
+- `TestPlaylistTracks_Update_Y_ConfirmsRemove` — returns remove command, track disappears optimistically
+- `TestPlaylistTracks_Update_ShiftDown_ReordersDown` — track moves down, returns reorder command
+- `TestPlaylistTracks_Update_ShiftUp_ReordersUp` — track moves up, returns reorder command
+
+*Integration tests:*
+- `TestPlaylistTracks_ReorderRevert_OnError` — reorder API fails → track reverts to original position
+- `TestPlaylistTracks_RemoveRevert_OnError` — remove API fails → track reappears
+
+---
+
+### Task 8.4 — View switching
+
+**Description:** Wire the Playlist Manager into the root model's view-switching logic.
+Pressing `3` switches to the Playlist Manager view. Pressing `1` returns to the main
+three-pane layout. Playlist data is reused from the store (no fresh fetch on view switch).
+
+**Files:** `internal/app/app.go`, `internal/ui/panes/playlists.go`
+
+**Implementation steps:**
+- [ ] Root model: `3` switches to PlaylistManager view
+- [ ] Reuse library playlist data from store (no fresh fetch needed)
+- [ ] `1` returns to Library view
+
+**Acceptance criteria:**
+- `3` opens Playlist Manager with playlists already loaded from store
+- `1` returns to the three-pane layout
+- No additional API call on view switch — data comes from store
+
+**Tests:**
+
+*Integration tests:*
+- `TestApp_3KeyOpensPlaylists` — pressing `3` switches to PlaylistManager
+- `TestApp_1KeyReturnsFromPlaylists` — pressing `1` restores three-pane layout
+- `TestApp_PlaylistsReusesLibraryData` — playlists loaded from store (no fresh fetch)
+
+---
+
 ## Files to Create
 
 | File | Purpose |
@@ -142,48 +311,6 @@ not just a player.
 
 ---
 
-## Task Breakdown
-
-### Task 8.1 — Playlist API calls
-- [ ] `CreatePlaylist(ctx, name, description string, public bool) (*Playlist, error)`
-- [ ] `UpdatePlaylist(ctx, id, name, description string) error`
-- [ ] `AddTracksToPlaylist(ctx, id string, uris []string, position *int) error`
-- [ ] `RemoveTracksFromPlaylist(ctx, id string, uris []string) error`
-- [ ] `ReorderPlaylistTracks(ctx, id string, rangeStart, insertBefore, rangeLength int) error`
-- [ ] Test each with mock server
-
-### Task 8.2 — PlaylistManager model (left pane)
-- [ ] Playlist list with selection
-- [ ] `n` key opens inline name input using `bubbles/textinput`
-- [ ] `r` key opens rename input pre-filled with current name
-- [ ] On confirm: fire create/rename command
-- [ ] Test: create flow, rename flow, cancel with Esc
-
-### Task 8.3 — Track list (right pane)
-- [ ] Track list with duration column (right-aligned)
-- [ ] Total duration + track count in footer
-- [ ] `x` key: confirmation prompt before delete
-- [ ] `Shift+↑/↓`: reorder with optimistic update
-- [ ] Test: remove, reorder, empty playlist
-
-### Task 8.4 — View switching
-- [ ] Root model: `3` switches to PlaylistManager
-- [ ] Reuse library playlist data from store (no fresh fetch needed)
-- [ ] `1` returns to Library view
-
----
-
-## Acceptance Criteria
-
-- [ ] `3` opens Playlist Manager with playlists loaded
-- [ ] New playlist created and visible within 1 second
-- [ ] Track removed immediately from list, API call fires in background
-- [ ] Reorder moves track visually before API confirm
-- [ ] On API error for reorder/remove: list reverts, error shown in status bar
-- [ ] All API calls and pane update handlers tested
-
----
-
 ## Out of Scope
 
 - Collaborative playlist management (shared with other users)
@@ -191,7 +318,8 @@ not just a player.
 - Playlist duplication
 - Smart playlist rules
 - Folder/group organization
+- Public/private toggle (playlists are created as private by default; toggle is a future enhancement)
 
 ---
 
-*Last updated: 2026-02-21*
+*Last updated: 2026-03-22*

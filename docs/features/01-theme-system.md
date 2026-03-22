@@ -13,6 +13,19 @@ The active theme is loaded once at startup from config and injected everywhere.
 
 ---
 
+## Feature Acceptance Criteria
+
+- All five themes compile and implement the full `Theme` interface (23 methods each)
+- `Load()` returns the correct concrete theme for every known ID
+- Unknown theme IDs never panic — `Load()` always falls back to the default
+- `DefaultThemeID` is `"black"` and can never be empty
+- No component file contains a raw hex colour string — all colour comes from `Theme` methods
+- `theme = "monokai"` in config.toml results in Monokai colours being used throughout the UI
+- Theme is injected at startup and passed to all pane constructors — panes never call `Load()` themselves
+- 100% test coverage on `theme.go` (registry, load, fallback)
+
+---
+
 ## What Needs to Exist
 
 ```
@@ -368,7 +381,7 @@ func (p PlayerPane) View() string {
 | Theme selection | `~/.config/spotnik/config.toml` | `theme = "monokai"` |
 | Theme code | `internal/ui/theme/*.go` | One file per theme |
 | Active theme instance | In-memory, passed at construction | Not persisted |
-| Runtime switching | ❌ Not in MVP | Restart required to change theme |
+| Runtime switching | Not in MVP | Restart required to change theme |
 
 > **Runtime theme switching** (change theme without restarting) is a future enhancement.
 > It requires passing the theme through a channel or making it observable. Out of scope for MVP.
@@ -392,77 +405,98 @@ func (p PlayerPane) View() string {
 ## Task Breakdown
 
 ### Task 0b.1 — Theme interface + registry
-- [ ] Define `Theme` interface with all 21 methods
+
+**Description:** Define the `Theme` interface that every UI component depends on, plus the registry and loader that map config IDs to concrete implementations. This is the foundation — nothing else in the theme system works without it.
+
+**Files:** `internal/ui/theme/theme.go`, `internal/ui/theme/theme_test.go`
+
+**Implementation steps:**
+- [ ] Define `Theme` interface with all 21 colour methods + `ID()` + `Name()`
 - [ ] Create `registry` map and `Load(id string) Theme` function
 - [ ] Create `Available() []string` returning stable ordered list
 - [ ] Create `DefaultThemeID = "black"` constant
 - [ ] `Load()` falls back to default on unknown ID, no panic
 
+**Acceptance criteria:**
+- `Theme` interface has exactly 23 methods (21 color tokens + ID + Name)
+- `Load()` returns the correct theme for known IDs
+- `Load()` returns default theme (not panic) for unknown IDs
+- `Available()` returns exactly 5 entries in stable order
+- `DefaultThemeID` is `"black"`
+
+**Tests:**
+
+*Unit tests:*
+- `TestLoad_KnownID` — Load("monokai") returns MonokaiTheme with correct ID
+- `TestLoad_UnknownID_FallsBackToDefault` — Load("does-not-exist") returns BlackTheme
+- `TestLoad_DefaultTheme` — Load("black") returns non-nil with ID "black"
+- `TestAvailable_Returns5Entries` — returns exactly ["black", "monokai", "catppuccin", "nord", "light"]
+- `TestAvailable_StableOrder` — multiple calls return same order
+
+---
+
 ### Task 0b.2 — Implement all five themes
+
+**Description:** Create one file per theme, each implementing the full `Theme` interface with the exact hex values specified in the token tables above. Every method must return a non-empty `lipgloss.Color`.
+
+**Files:** `internal/ui/theme/black.go`, `internal/ui/theme/monokai.go`, `internal/ui/theme/catppuccin.go`, `internal/ui/theme/nord.go`, `internal/ui/theme/light.go`, `internal/ui/theme/theme_test.go`
+
+**Implementation steps:**
 - [ ] `black.go` — True Black (all token values from table above)
 - [ ] `monokai.go` — Monokai (all token values from table above)
 - [ ] `catppuccin.go` — Catppuccin Mocha (all token values from table above)
 - [ ] `nord.go` — Nord (all token values from table above)
 - [ ] `light.go` — Light/Catppuccin Latte (all token values from table above)
 
+**Acceptance criteria:**
+- Each theme struct implements every method of the `Theme` interface (compile-time check)
+- Every color method returns a non-empty `lipgloss.Color` value
+- `ID()` matches the registry key for each theme
+- `Name()` is a non-empty human-readable display name
+
+**Tests:**
+
+*Unit tests:*
+- `TestAllThemes_ImplementInterface` — iterate Available(), Load each, assert all 23 methods return non-empty values
+- `TestBlackTheme_Base_IsPureBlack` — Base() returns "#000000"
+- `TestMonokaiTheme_Base` — Base() returns "#272822"
+- `TestCatppuccinTheme_Base` — Base() returns "#1e1e2e"
+- `TestNordTheme_Base` — Base() returns "#2e3440"
+- `TestLightTheme_Base` — Base() returns "#eff1f5"
+- `TestAllThemes_IDMatchesRegistryKey` — each theme's ID() equals the key used to Load it
+
+---
+
 ### Task 0b.3 — Tests
 
-```go
-// theme_test.go — interface compliance test pattern
-// Run this for every theme to guarantee completeness
+> **Note:** Tests are defined per-task above (Tasks 0b.1 and 0b.2). This task is not standalone — all test definitions live alongside the task they verify.
 
-func TestAllThemesImplementInterface(t *testing.T) {
-    for _, id := range theme.Available() {
-        t.Run(id, func(t *testing.T) {
-            th := theme.Load(id)
-
-            // Every method must return a non-empty colour
-            assert.NotEmpty(t, string(th.Base()))
-            assert.NotEmpty(t, string(th.Surface()))
-            assert.NotEmpty(t, string(th.ActiveBorder()))
-            assert.NotEmpty(t, string(th.TextPrimary()))
-            // ... all 21 methods
-
-            // Metadata
-            assert.Equal(t, id, th.ID())
-            assert.NotEmpty(t, th.Name())
-        })
-    }
-}
-
-func TestLoadUnknownThemeFallsBackToDefault(t *testing.T) {
-    th := theme.Load("does-not-exist")
-    assert.Equal(t, theme.DefaultThemeID, th.ID())
-}
-
-func TestLoadDefaultTheme(t *testing.T) {
-    th := theme.Load(theme.DefaultThemeID)
-    assert.NotNil(t, th)
-    assert.Equal(t, "black", th.ID())
-}
-```
-
-- [ ] Test all five themes return non-empty values for all 21 methods
-- [ ] Test `Load("unknown-id")` falls back to default without panicking
-- [ ] Test `Available()` returns exactly 5 entries
-- [ ] Test each theme's `ID()` matches its registry key
+---
 
 ### Task 0b.4 — Wire into app startup
+
+**Description:** Connect the theme system to the application bootstrap so that `cmd/root.go` reads the theme from config, loads it, and passes it through `app.New()` down to every pane constructor. This is the integration point that makes the theme system usable by the rest of the UI.
+
+**Files:** `cmd/root.go` (modify), `internal/app/app.go` (modify)
+
+**Implementation steps:**
 - [ ] `cmd/root.go` reads `cfg.UI.Theme` and calls `theme.Load()`
 - [ ] Theme passed into `app.New()` and down to all pane constructors
 - [ ] Verify unknown theme in config produces a warning log + fallback (not crash)
 
----
+**Acceptance criteria:**
+- `cmd/root.go` reads `cfg.UI.Theme` and calls `theme.Load()`
+- Theme is passed to `app.New()` and stored as a field
+- Pane constructors receive the theme at construction time
+- Unknown theme in config produces a log warning + fallback to default (never crash)
 
-## Acceptance Criteria
+**Tests:**
 
-- [ ] All five themes compile and implement the `Theme` interface completely
-- [ ] `Load("monokai")` returns a `MonokaiTheme`, `Load("black")` returns `BlackTheme`, etc.
-- [ ] Unknown theme ID never panics — always returns the default
-- [ ] No component file contains a raw hex colour string
-- [ ] `theme = "monokai"` in config.toml results in Monokai colours on screen
-- [ ] 100% test coverage on `theme.go` (registry, load, fallback)
-- [ ] Each theme file has at least one test confirming interface compliance
+*Unit tests:*
+- `TestAppNew_ReceivesTheme` — verify theme is stored and accessible
+- `TestAppNew_DefaultThemeFallback` — config with invalid theme ID still creates app with default theme
+
+No integration tests needed for Feature 01 — themes are pure value objects.
 
 ---
 
@@ -475,4 +509,4 @@ func TestLoadDefaultTheme(t *testing.T) {
 
 ---
 
-*Last updated: 2026-02-21*
+*Last updated: 2026-03-22*

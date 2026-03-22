@@ -21,6 +21,10 @@
 
 This layout is **frozen**. The three-pane model is the identity of the app.
 
+Alternative views (Stats via `2`, Playlist Manager via `3`) may temporarily replace the
+three-pane layout. Pressing `1` always returns to it. The freeze means the three-pane layout
+itself is never modified, not that it must be the only view.
+
 ```
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │  Spotnik                                              ◉ MacBook Pro Speakers │
@@ -314,8 +318,8 @@ five themes are in `docs/features/01-theme-system.md`.
 - **Font**: monospace only (inherit from terminal)
 - **Title text** (track name, section headers): bold
 - **Body text** (artist name, list items): normal weight
-- **Muted text** (album name, timestamps, counts): `Subtext` color, normal weight
-- **Keybinding hints**: `Sky` color for key label (e.g., `Space`), `Subtext0` for description
+- **Muted text** (album name, timestamps, counts): `TextMuted()` token, normal weight
+- **Keybinding hints**: `KeyHint()` token for key label (e.g., `Space`), `TextMuted()` token for description
 
 ---
 
@@ -350,7 +354,7 @@ Pane separators use `│` for vertical and `─` for horizontal.
 - Empty character: `░` (U+2591)
 - Width: fills the center pane minus padding
 - Time labels: left-aligned elapsed, right-aligned total, with `─` fill between
-- Color: `Peach` for filled, `Surface1` for empty
+- Color: `SeekBar()` token for filled, `Surface()` token for empty
 
 ### Volume Bar
 
@@ -361,7 +365,7 @@ VOL  ████████░░░░░░  65%
 - Same character set as seek bar
 - Width: 14 characters fixed
 - Percentage shown on right
-- Color: `Peach` for filled
+- Color: `VolumeBar()` token for filled
 
 ### Transport Controls
 
@@ -370,8 +374,8 @@ VOL  ████████░░░░░░  65%
 ```
 
 - Symbols: `⏮` (prev), `⏸` / `▶` (pause/play), `⏭` (next), `🔀` (shuffle), `🔁` (repeat)
-- Active state (shuffle on, repeat active): symbol rendered in `Green`
-- Inactive state: `Subtext1`
+- Active state (shuffle on, repeat active): symbol rendered in `PlayingIndicator()` token
+- Inactive state: `TextSecondary()` token
 - Spacing: 3 spaces between each symbol
 
 > **Note on emoji rendering**: Test on Linux (kitty, alacritty), macOS (Terminal.app, iTerm2). If emoji cause rendering issues in CI, fall back to ASCII: `|<`, `||`, `>|`, `>?`, `>>`.
@@ -383,8 +387,8 @@ VOL  ████████░░░░░░  65%
 ○ No device                ← nothing playing
 ```
 
-- Active device: `◉` in `Teal`
-- No device: `○` in `Overlay0`
+- Active device: `◉` in `DeviceActive()` token
+- No device: `○` in `TextMuted()` token
 - Right-aligned in the header bar
 
 ### Playing Indicator in Lists
@@ -394,12 +398,12 @@ VOL  ████████░░░░░░  65%
   Save Your Tears    ← not playing
 ```
 
-- `▶` in `Green` for the currently playing track
+- `▶` in `PlayingIndicator()` token for the currently playing track
 - 2-space indent for non-playing items (to align with indicator width)
 
 ### Spinner (Loading State)
 
-Use Bubbles' built-in spinner component. Default spinner type: `Dot`. Color: `Blue`.
+Use Bubbles' built-in spinner component. Default spinner type: `Dot`. Color: `ActiveBorder()` token.
 
 ```
 ⣾ Loading library...
@@ -427,7 +431,7 @@ All animations are **purely cosmetic** and must be implemented as `tea.Tick`-bas
 - The progress bar resets to 0 immediately
 
 ### Focus Change (Pane Border)
-- When focus moves between panes, the border color changes from `Surface0` to `Blue`
+- When focus moves between panes, the border color changes from `InactiveBorder()` to `ActiveBorder()` token
 - This happens in the same render cycle — no animation needed, the color change is the feedback
 
 ### Search Typing Debounce
@@ -437,7 +441,7 @@ All animations are **purely cosmetic** and must be implemented as `tea.Tick`-bas
 
 ### Error Messages
 - Appear in the status bar area (bottom)
-- Color: `Pink`
+- Color: `Error()` token
 - Auto-dismiss after **4 seconds** using `tea.Tick`
 
 ---
