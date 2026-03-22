@@ -34,6 +34,7 @@ the feature spec explicitly points you to a pattern or layout you need to look u
 | HTTP | Go stdlib `net/http` | No extra HTTP lib |
 | Config | `github.com/BurntSushi/toml` | |
 | Keychain | `github.com/zalando/go-keyring` | Token storage |
+| CLI | `github.com/spf13/cobra` | Commands + subcommands |
 | Testing | `testing` + `testify` | Table-driven |
 | Linting | `golangci-lint` | Required gate |
 
@@ -44,7 +45,7 @@ the feature spec explicitly points you to a pattern or layout you need to look u
 ## Go Module
 
 ```
-module github.com/[owner]/spotnik   ← replace [owner] before first commit
+module github.com/initgrep-apps/spotnik
 go 1.22
 ```
 
@@ -112,6 +113,7 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 ## Code Style
 
 - `gofmt` always — non-negotiable, enforced by `make lint`
+- `golangci-lint` uses default rules — no custom `.golangci.yml` needed
 - Exported types/funcs/consts: doc comment required
 - Comments explain *why*, not *what*
 - `// NOTE:` for non-obvious decisions, `// TODO(feature-name):` for planned work
@@ -205,7 +207,7 @@ make build     # compile → bin/spotnik
 make run       # build + run
 make test      # all tests
 make lint      # golangci-lint
-make coverage  # coverage report (min 80%)
+make test-coverage  # coverage report (min 80%)
 make ci        # full pre-commit check
 ```
 

@@ -386,7 +386,7 @@ type SpotifyConfig struct {
 }
 
 type UIConfig struct {
-    Theme string `toml:"theme"` // default: "catppuccin"
+    Theme string `toml:"theme"` // default: "black"
 }
 
 type KeybindingsConfig struct {
