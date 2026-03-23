@@ -31,7 +31,8 @@ const (
 type viewMode int
 
 const (
-	viewMain      viewMode = iota // three-pane Library | Player | Queue layout
+	viewSplash    viewMode = iota // Splash screen shown on startup
+	viewMain                      // three-pane Library | Player | Queue layout
 	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
 	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
 )
@@ -90,6 +91,9 @@ type App struct {
 // statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
 type statusDismissMsg struct{}
 
+// splashDismissMsg is sent after 2 seconds to close the splash screen.
+type splashDismissMsg struct{}
+
 // New creates a new App, loading the theme from cfg.UI.Theme.
 func New(cfg *config.Config) *App {
 	t := theme.Load(cfg.UI.Theme)
@@ -115,6 +119,7 @@ func New(cfg *config.Config) *App {
 		searchPane:  searchPane,
 		devicePane:  devicePane,
 		focus:       focusPlayer,
+		currentView: viewSplash,
 		volumeStep:  volStep,
 	}
 }
@@ -202,6 +207,9 @@ func (a *App) Init() tea.Cmd {
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
+		tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+			return splashDismissMsg{}
+		}),
 	)
 }
 
@@ -280,6 +288,12 @@ func (a *App) closePlaylists() (*App, tea.Cmd) {
 // Update handles all messages routed through the root model.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
+	case splashDismissMsg:
+		if a.currentView == viewSplash {
+			a.currentView = viewMain
+		}
+		return a, nil
+
 	case panes.SearchClosedMsg:
 		// Search overlay closed — restore previous focus and close overlay.
 		return a.closeSearch()
@@ -470,6 +484,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
+		// Dismiss splash screen when first playback data arrives.
+		if a.currentView == viewSplash {
+			a.currentView = viewMain
+		}
 		updatedPane, cmd := a.playerPane.Update(m)
 		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
 			a.playerPane = pp
@@ -1084,6 +1102,14 @@ func (a *App) View() string {
 		return a.renderTooSmall()
 	}
 
+	// Splash screen on startup (only when terminal size is known).
+	if a.currentView == viewSplash {
+		if a.width > 0 && a.height > 0 {
+			return a.renderSplash()
+		}
+		// No size yet — fall through to main view for tests.
+	}
+
 	// Stats view replaces the three-pane layout when active.
 	if a.currentView == viewStats && a.statsPane != nil {
 		header := a.renderStatsHeader()
@@ -1163,6 +1189,36 @@ func (a *App) renderWithSearchOverlay(background string) string {
 }
 
 // renderTooSmall renders the minimum size message per DESIGN.md.
+// renderSplash renders the startup splash screen with ASCII art branding.
+func (a *App) renderSplash() string {
+	banner := `
+  ___  ___  ___ _____ _  _ ___ _  __
+ / __|/ _ \/ _ \_   _| \| |_ _| |/ /
+ \__ \ ___/ (_) || | | .  || ||   <
+ |___/|_|  \___/ |_| |_|\_|___|_|\_\
+`
+	bannerStyle := lipgloss.NewStyle().
+		Foreground(a.theme.ActiveBorder()).
+		Bold(true)
+
+	tagline := lipgloss.NewStyle().
+		Foreground(a.theme.TextMuted()).
+		Render("A terminal Spotify client for developers")
+
+	version := lipgloss.NewStyle().
+		Foreground(a.theme.TextMuted()).
+		Render("v1.1.0")
+
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		bannerStyle.Render(banner),
+		"",
+		tagline,
+		version,
+	)
+
+	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, content)
+}
+
 func (a *App) renderTooSmall() string {
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
