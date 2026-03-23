@@ -1707,3 +1707,30 @@ func TestApp_FetchQueueCmd_SetsErrorOnFailure(t *testing.T) {
 
 	assert.Error(t, a.Store().QueueError(), "store should have queue error after API failure")
 }
+
+func TestApp_SplashScreen_ShownOnStartup(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	output := a.View()
+	assert.Contains(t, output, "terminal Spotify client", "splash should show tagline")
+	assert.Contains(t, output, "v1.1.0", "splash should show version")
+}
+
+func TestApp_SplashScreen_DismissedOnPlaybackData(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	// Splash should be active.
+	output := a.View()
+	assert.Contains(t, output, "v1.1.0")
+
+	// Playback data arrives — splash should dismiss.
+	model, _ := a.Update(panes.PlaybackStateFetchedMsg{})
+	a = model.(*app.App)
+
+	output = a.View()
+	assert.NotContains(t, output, "v1.1.0", "splash should be dismissed after playback data")
+}

@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -188,15 +190,8 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	// Build the authorization URL.
 	authURL := api.BuildAuthURL(cfg.ClientID, redirectURI, challenge, api.SpotifyScopes)
 
-	// Print the first-run UX prompt.
-	fmt.Println("╭─────────────────────────────────────────────────────╮")
-	fmt.Println("│  Opening Spotify login in your browser...           │")
-	fmt.Println("│                                                     │")
-	fmt.Println("│  If it doesn't open automatically, visit:          │")
-	fmt.Printf("│  %s\n", authURL)
-	fmt.Println("│                                                     │")
-	fmt.Println("│  Waiting for authorization...                       │")
-	fmt.Println("╰─────────────────────────────────────────────────────╯")
+	// Print the styled auth prompt.
+	printAuthPrompt(authURL)
 
 	// Open browser (best-effort — failure does not abort auth).
 	if err := api.OpenBrowser(authURL); err != nil {
@@ -326,4 +321,33 @@ func HandleMissingClientID() error {
 // printSetupInstructions prints clear guidance when client_id is missing.
 func printSetupInstructions() {
 	_ = PrintMissingClientIDInstructions(os.Stdout)
+}
+
+// printAuthPrompt renders a styled TUI box for the auth flow.
+// The URL is truncated to 60 chars to avoid terminal overflow.
+func printAuthPrompt(authURL string) {
+	// Truncate URL for display (full URL is still opened in browser).
+	displayURL := authURL
+	if len(displayURL) > 60 {
+		displayURL = displayURL[:57] + "..."
+	}
+
+	lines := []string{
+		"",
+		"  Authentication Required",
+		"",
+		"  Visit this URL to authorize:",
+		"  " + displayURL,
+		"",
+		"  Press Enter to open in browser",
+		"  Waiting for authorization...",
+		"",
+	}
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		Render(strings.Join(lines, "\n"))
+
+	fmt.Println(box)
 }
