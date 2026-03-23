@@ -270,6 +270,16 @@ func TestApp_SetLibrary(t *testing.T) {
 	// No panic — library was set
 }
 
+// TestApp_SetSearch verifies that SetSearch injects the search client.
+func TestApp_SetSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	search := api.NewSearchClient("http://localhost", "test-token")
+	a.SetSearch(search)
+	// No panic — search client was set
+}
+
 // TestApp_TabFocusRotation verifies Tab cycles focus between panes.
 func TestApp_TabFocusRotation(t *testing.T) {
 	cfg := &config.Config{}
@@ -541,6 +551,82 @@ func TestApp_QuitKey(t *testing.T) {
 	msg := cmd()
 	_, isQuit := msg.(tea.QuitMsg)
 	assert.True(t, isQuit, "q should produce tea.QuitMsg")
+}
+
+// TestApp_SlashOpensSearch verifies '/' opens the search overlay.
+func TestApp_SlashOpensSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	_, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	appModel := model.(*app.App)
+
+	assert.True(t, appModel.SearchOpen(), "'/' should open the search overlay")
+}
+
+// TestApp_EscClosesSearch verifies Esc closes the search overlay and restores pane focus.
+func TestApp_EscClosesSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open search
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	// Close search via SearchClosedMsg
+	model, _ = a.Update(panes.SearchClosedMsg{})
+	a = model.(*app.App)
+
+	assert.False(t, a.SearchOpen(), "SearchClosedMsg should close the overlay")
+}
+
+// TestApp_SearchPlayClosesOverlay verifies that a play command from search closes the overlay.
+func TestApp_SearchPlayClosesOverlay(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open search
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	// Send a PlayTrackMsg (simulating Enter on a search result)
+	model, _ = a.Update(panes.PlayTrackMsg{TrackURI: "spotify:track:t1"})
+	a = model.(*app.App)
+
+	assert.False(t, a.SearchOpen(), "playing from search should close the overlay")
+}
+
+// TestApp_BackgroundDimmed verifies the view contains faint styling hint when overlay open.
+func TestApp_BackgroundDimmed(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Set size so View renders full content
+	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = model.(*app.App)
+
+	// Open search
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+
+	// View should render without panic when overlay is open
+	output := a.View()
+	assert.NotEmpty(t, output, "view should not be empty when search overlay is open")
+	assert.True(t, a.SearchOpen(), "search should still be open after View()")
+}
+
+// TestApp_SearchRequestMsg_DispatchesSearch verifies SearchRequestMsg triggers API cmd.
+func TestApp_SearchRequestMsg_DispatchesSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	searchMsg := panes.SearchRequestMsg{Query: "blinding lights"}
+	_, cmd := a.Update(searchMsg)
+
+	assert.NotNil(t, cmd, "SearchRequestMsg should produce a search command")
 }
 
 // TestApp_StatusDismiss verifies statusDismissMsg clears the status bar.

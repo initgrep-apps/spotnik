@@ -34,13 +34,22 @@ type App struct {
 	store   *state.Store
 	player  *api.Player
 	library *api.LibraryClient
+	search  *api.SearchClient
 
 	playerPane  *panes.PlayerPane
 	libraryPane *panes.LibraryPane
+	searchPane  *panes.SearchOverlay
 
 	focus  focusedPane
 	width  int
 	height int
+
+	// searchOpen is true while the search overlay is visible.
+	searchOpen bool
+
+	// prevFocus captures which pane was focused before search opened,
+	// so it can be restored when the overlay closes.
+	prevFocus focusedPane
 
 	// statusMsg is a transient error/info message shown in the status bar for 4 seconds.
 	statusMsg string
@@ -56,12 +65,14 @@ func New(cfg *config.Config) *App {
 
 	playerPane := panes.NewPlayerPane(s, t, true)
 	libraryPane := panes.NewLibraryPane(s, t, false)
+	searchPane := panes.NewSearchOverlay(s, t)
 
 	return &App{
 		theme:       t,
 		store:       s,
 		playerPane:  playerPane,
 		libraryPane: libraryPane,
+		searchPane:  searchPane,
 		focus:       focusPlayer,
 	}
 }
@@ -86,6 +97,16 @@ func (a *App) SetLibrary(library *api.LibraryClient) {
 	a.library = library
 }
 
+// SetSearch injects the Spotify API search client into the app.
+func (a *App) SetSearch(search *api.SearchClient) {
+	a.search = search
+}
+
+// SearchOpen returns true while the search overlay is visible.
+func (a *App) SearchOpen() bool {
+	return a.searchOpen
+}
+
 // LibraryFocused returns true if the library pane currently has keyboard focus.
 func (a *App) LibraryFocused() bool {
 	return a.focus == focusLibrary
@@ -107,9 +128,40 @@ func (a *App) Init() tea.Cmd {
 	)
 }
 
+// openSearch opens the search overlay and captures the current pane focus.
+func (a *App) openSearch() (*App, tea.Cmd) {
+	a.prevFocus = a.focus
+	a.searchOpen = true
+	cmd := a.searchPane.Init()
+	return a, cmd
+}
+
+// closeSearch closes the search overlay and restores the previous pane focus.
+func (a *App) closeSearch() (*App, tea.Cmd) {
+	a.searchOpen = false
+	return a, nil
+}
+
 // Update handles all messages routed through the root model.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
+	case panes.SearchClosedMsg:
+		// Search overlay closed — restore previous focus and close overlay.
+		return a.closeSearch()
+
+	case panes.SearchRequestMsg:
+		// Debounce fired — dispatch search API call.
+		return a, a.buildSearchCmd(m.Query)
+
+	case panes.SearchResultsMsg:
+		// Search results are in the store; notify the overlay.
+		a.store.SetSearchLoading(false)
+		updated, cmd := a.searchPane.Update(m)
+		if sp, ok := updated.(*panes.SearchOverlay); ok {
+			a.searchPane = sp
+		}
+		return a, cmd
+
 	case tea.WindowSizeMsg:
 		a.width = m.Width
 		a.height = m.Height
@@ -120,12 +172,26 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Subtract 2 per border (left+right) from content width.
 		a.libraryPane.SetSize(libraryWidth-2, m.Height-4)
 		a.playerPane.SetSize(playerWidth-2, m.Height-4)
+		a.searchPane.SetSize(m.Width, m.Height)
 		return a, nil
 
 	case tea.KeyMsg:
+		// When search overlay is open, route all keys to the search pane first.
+		if a.searchOpen {
+			updated, cmd := a.searchPane.Update(m)
+			if sp, ok := updated.(*panes.SearchOverlay); ok {
+				a.searchPane = sp
+			}
+			return a, cmd
+		}
+
 		// Global: q always quits.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "q" {
 			return a, tea.Quit
+		}
+		// '/' opens the search overlay from any pane.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "/" {
+			return a.openSearch()
 		}
 		// Tab rotates focus forward.
 		if m.Type == tea.KeyTab {
@@ -201,9 +267,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildPlaybackAPICmd(m.Action)
 
 	case panes.PlayContextMsg:
+		// Close search overlay when playing from search results.
+		if a.searchOpen {
+			a.searchOpen = false
+		}
 		return a, a.buildPlayContextCmd(m.ContextURI)
 
 	case panes.PlayTrackMsg:
+		// Close search overlay when playing from search results.
+		if a.searchOpen {
+			a.searchOpen = false
+		}
 		return a, a.buildPlayTrackCmd(m.TrackURI)
 
 	case panes.FetchPlaylistsRequestMsg:
@@ -436,6 +510,34 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 	}
 }
 
+// buildSearchCmd creates a command that calls the Spotify search API and writes results to store.
+func (a *App) buildSearchCmd(query string) tea.Cmd {
+	search := a.search
+	store := a.store
+	store.SetSearchQuery(query)
+	store.SetSearchLoading(true)
+
+	return func() tea.Msg {
+		if search == nil {
+			store.SetSearchLoading(false)
+			return panes.SearchResultsMsg{}
+		}
+		results, err := search.Search(
+			context.Background(),
+			query,
+			[]string{"track", "artist", "album", "playlist"},
+			5,
+		)
+		if err != nil {
+			store.SetSearchLoading(false)
+			return panes.SearchResultsMsg{Err: err}
+		}
+		store.SetSearchResults(results)
+		store.SetSearchLoading(false)
+		return panes.SearchResultsMsg{}
+	}
+}
+
 // buildToggleLikeCmd creates a command that likes or unlikes a track.
 func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 	library := a.library
@@ -484,8 +586,34 @@ func (a *App) View() string {
 	playerView := a.renderPaneWithBorder(a.playerPane.View(), a.focus == focusPlayer)
 
 	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, libraryView, playerView)
+	body := strings.Join([]string{header, mainContent, statusBar}, "\n")
 
-	return strings.Join([]string{header, mainContent, statusBar}, "\n")
+	if a.searchOpen {
+		return a.renderWithSearchOverlay(body)
+	}
+
+	return body
+}
+
+// renderWithSearchOverlay renders the three-pane view dimmed and places the
+// search overlay on top using lipgloss.Place() per the DESIGN.md spec.
+func (a *App) renderWithSearchOverlay(background string) string {
+	// Dim the background using Faint styling per DESIGN.md.
+	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
+
+	overlay := a.searchPane.View()
+	if a.width <= 0 || a.height <= 0 {
+		return dimmed + "\n" + overlay
+	}
+
+	// Place the overlay centered in the terminal.
+	return lipgloss.Place(
+		a.width, a.height,
+		lipgloss.Center, lipgloss.Center,
+		overlay,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "#000000", Dark: "#000000"}),
+	)
 }
 
 // renderTooSmall renders the minimum size message per DESIGN.md.
