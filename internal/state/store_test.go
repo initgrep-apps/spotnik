@@ -183,3 +183,25 @@ func TestStore_SearchLoading(t *testing.T) {
 	s.SetSearchLoading(false)
 	assert.False(t, s.SearchLoading())
 }
+
+func TestStore_SetGetQueue(t *testing.T) {
+	s := New()
+
+	// Initially empty.
+	assert.Empty(t, s.Queue())
+
+	tracks := []api.Track{
+		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+		{ID: "q2", Name: "Starboy", URI: "spotify:track:q2"},
+	}
+	s.SetQueue(tracks)
+
+	got := s.Queue()
+	require.Len(t, got, 2)
+	assert.Equal(t, "Save Your Tears", got[0].Name)
+	assert.Equal(t, "Starboy", got[1].Name)
+
+	// Clear queue.
+	s.SetQueue(nil)
+	assert.Empty(t, s.Queue())
+}

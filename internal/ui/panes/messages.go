@@ -126,3 +126,8 @@ type LikeToggleResultMsg struct {
 type AddToQueueResultMsg struct {
 	Err error
 }
+
+// QueueLoadedMsg is sent by the root app model after the queue has been fetched
+// from the Spotify API and written to the store.
+// The QueuePane reads from store directly on receipt.
+type QueueLoadedMsg struct{}

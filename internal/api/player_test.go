@@ -329,3 +329,61 @@ func TestAddToQueue_ServerError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "403", "error should include status code")
 }
+
+// TestGetQueue_Success verifies GetQueue parses the queue JSON correctly.
+func TestGetQueue_Success(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/fixtures/queue_response.json")
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	player := newTestPlayer(srv.URL, "test-token")
+	queueResp, err := player.GetQueue(context.Background())
+
+	require.NoError(t, err)
+	require.NotNil(t, queueResp)
+	assert.Equal(t, "Blinding Lights", queueResp.CurrentlyPlaying.Name, "currently_playing track name should match")
+	require.Len(t, queueResp.Queue, 2, "queue should have 2 tracks")
+	assert.Equal(t, "Save Your Tears", queueResp.Queue[0].Name)
+	assert.Equal(t, "Starboy", queueResp.Queue[1].Name)
+}
+
+// TestGetQueue_ServerError verifies GetQueue returns an error on non-2xx.
+func TestGetQueue_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error": "server error"}`))
+	}))
+	defer srv.Close()
+
+	player := newTestPlayer(srv.URL, "test-token")
+	queueResp, err := player.GetQueue(context.Background())
+
+	require.Error(t, err)
+	assert.Nil(t, queueResp)
+	assert.Contains(t, err.Error(), "500")
+}
+
+// TestQueueResponse_Parse verifies that the QueueResponse struct correctly
+// deserialises both currently_playing and queue fields from the fixture.
+func TestQueueResponse_Parse(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/fixtures/queue_response.json")
+	require.NoError(t, err)
+
+	var qr QueueResponse
+	err = json.Unmarshal(fixture, &qr)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Blinding Lights", qr.CurrentlyPlaying.Name)
+	assert.Equal(t, "spotify:track:track-xyz789", qr.CurrentlyPlaying.URI)
+	require.Len(t, qr.Queue, 2)
+	assert.Equal(t, "The Weeknd", qr.Queue[0].Artists[0].Name)
+}

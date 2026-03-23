@@ -241,10 +241,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Batch(
 			fetchPlaybackStateCmd(a.player, a.store),
+			fetchQueueCmd(a.player, a.store),
 			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 				return panes.TickMsg{}
 			}),
 		)
+
+	case panes.QueueLoadedMsg:
+		// Queue data is already in the store — no pane-specific handling needed here.
+		// QueuePane reads directly from store on View().
+		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
 		updatedPane, cmd := a.playerPane.Update(m)
@@ -586,6 +592,24 @@ func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 			err = library.LikeTrack(ctx, trackID)
 		}
 		return panes.LikeToggleResultMsg{TrackID: trackID, Err: err}
+	}
+}
+
+// fetchQueueCmd creates a command that fetches the current play queue,
+// writes the queue tracks to the store, and notifies panes via QueueLoadedMsg.
+func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
+	return func() tea.Msg {
+		if player == nil {
+			return panes.QueueLoadedMsg{}
+		}
+		qr, err := player.GetQueue(context.Background())
+		if err != nil {
+			return panes.QueueLoadedMsg{}
+		}
+		if qr != nil {
+			store.SetQueue(qr.Queue)
+		}
+		return panes.QueueLoadedMsg{}
 	}
 }
 

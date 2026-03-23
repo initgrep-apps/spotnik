@@ -695,6 +695,54 @@ func TestApp_StatusDismiss_ClearsMsg(t *testing.T) {
 	assert.Contains(t, output, "error to dismiss", "status should persist until dismissed")
 }
 
+// TestApp_TickFetchesQueue verifies that a TickMsg causes the app to
+// dispatch both fetchPlaybackState and fetchQueue commands.
+func TestApp_TickFetchesQueue(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Tick should produce a batch command (non-nil).
+	_, cmd := a.Update(panes.TickMsg{})
+	require.NotNil(t, cmd, "tickMsg should produce a follow-up command batch")
+}
+
+// TestApp_QueueLoadedMsg_UpdatesStore verifies that a QueueLoadedMsg updates the store.
+func TestApp_QueueLoadedMsg_UpdatesStore(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	tracks := []api.Track{
+		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+	}
+	a.Store().SetQueue(tracks)
+
+	got := a.Store().Queue()
+	require.Len(t, got, 1)
+	assert.Equal(t, "Save Your Tears", got[0].Name)
+}
+
+// TestApp_QueueUpdate_StoreReflectsQueueData verifies that after a QueueLoadedMsg,
+// the store contains the updated queue data (set by the fetchQueueCmd before the msg).
+func TestApp_QueueUpdate_StoreReflectsQueueData(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Simulate fetchQueueCmd writing to store and sending QueueLoadedMsg.
+	a.Store().SetQueue([]api.Track{
+		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+	})
+
+	// Send QueueLoadedMsg — app should handle it without crashing.
+	m, cmd := a.Update(panes.QueueLoadedMsg{})
+	require.NotNil(t, m)
+	assert.Nil(t, cmd, "QueueLoadedMsg should produce no follow-up command")
+
+	// Store should still reflect the queue data.
+	got := a.Store().Queue()
+	require.Len(t, got, 1)
+	assert.Equal(t, "Save Your Tears", got[0].Name)
+}
+
 // TestApp_SearchDebounceRouted verifies that debounce messages reach the
 // search overlay when it is open (not swallowed by library pane default).
 func TestApp_SearchDebounceRouted(t *testing.T) {

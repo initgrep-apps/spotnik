@@ -1,0 +1,52 @@
+{
+  "currently_playing": {
+    "id": "track-xyz789",
+    "name": "Blinding Lights",
+    "uri": "spotify:track:track-xyz789",
+    "duration_ms": 252000,
+    "artists": [
+      {
+        "id": "artist-weeknd",
+        "name": "The Weeknd"
+      }
+    ],
+    "album": {
+      "id": "album-after-hours",
+      "name": "After Hours"
+    }
+  },
+  "queue": [
+    {
+      "id": "track-save-your-tears",
+      "name": "Save Your Tears",
+      "uri": "spotify:track:track-save-your-tears",
+      "duration_ms": 215000,
+      "artists": [
+        {
+          "id": "artist-weeknd",
+          "name": "The Weeknd"
+        }
+      ],
+      "album": {
+        "id": "album-after-hours",
+        "name": "After Hours"
+      }
+    },
+    {
+      "id": "track-starboy",
+      "name": "Starboy",
+      "uri": "spotify:track:track-starboy",
+      "duration_ms": 230000,
+      "artists": [
+        {
+          "id": "artist-weeknd",
+          "name": "The Weeknd"
+        }
+      ],
+      "album": {
+        "id": "album-starboy",
+        "name": "Starboy"
+      }
+    }
+  ]
+}
