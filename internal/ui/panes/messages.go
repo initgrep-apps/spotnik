@@ -95,7 +95,8 @@ type PlayTrackMsg struct {
 // AddToQueueMsg is sent when the user presses 'a' on a track.
 // The root app model receives this and dispatches an add-to-queue API call.
 type AddToQueueMsg struct {
-	TrackURI string
+	TrackURI  string
+	TrackName string
 }
 
 // LibraryLoadedMsg is sent by the root app model after playlists have been loaded
@@ -122,9 +123,11 @@ type LikeToggleResultMsg struct {
 }
 
 // AddToQueueResultMsg carries the result of an add-to-queue operation.
-// Err is non-nil on failure.
+// Err is non-nil on failure. TrackName is the name of the queued track for
+// status bar display.
 type AddToQueueResultMsg struct {
-	Err error
+	Err       error
+	TrackName string
 }
 
 // QueueLoadedMsg is sent by the root app model after the queue has been fetched

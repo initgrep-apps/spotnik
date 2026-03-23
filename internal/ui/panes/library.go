@@ -582,7 +582,8 @@ func (p *LibraryPane) handleAddToQueue() (*LibraryPane, tea.Cmd) {
 	if uri == "" {
 		return p, nil
 	}
-	return p, func() tea.Msg { return AddToQueueMsg{TrackURI: uri} }
+	name := item.DisplayName
+	return p, func() tea.Msg { return AddToQueueMsg{TrackURI: uri, TrackName: name} }
 }
 
 // handleToggleLike handles the 'l' key.
