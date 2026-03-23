@@ -120,3 +120,9 @@ type LikeToggleResultMsg struct {
 	TrackID string
 	Err     error
 }
+
+// AddToQueueResultMsg carries the result of an add-to-queue operation.
+// Err is non-nil on failure.
+type AddToQueueResultMsg struct {
+	Err error
+}

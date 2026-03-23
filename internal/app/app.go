@@ -280,6 +280,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, a.buildPlayTrackCmd(m.TrackURI)
 
+	case panes.AddToQueueMsg:
+		return a, a.buildAddToQueueCmd(m.TrackURI)
+
+	case panes.AddToQueueResultMsg:
+		if m.Err != nil {
+			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		}
+		a.statusMsg = "✓ Added to queue"
+		return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+
 	case panes.FetchPlaylistsRequestMsg:
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
 
@@ -507,6 +518,18 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 		}
 		store.SetRecentlyPlayed(items)
 		return panes.RecentlyPlayedLoadedMsg{}
+	}
+}
+
+// buildAddToQueueCmd creates a command that adds a track to the user's queue.
+func (a *App) buildAddToQueueCmd(trackURI string) tea.Cmd {
+	player := a.player
+	return func() tea.Msg {
+		if player == nil {
+			return panes.AddToQueueResultMsg{}
+		}
+		err := player.AddToQueue(context.Background(), trackURI)
+		return panes.AddToQueueResultMsg{Err: err}
 	}
 }
 

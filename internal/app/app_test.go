@@ -553,6 +553,49 @@ func TestApp_QuitKey(t *testing.T) {
 	assert.True(t, isQuit, "q should produce tea.QuitMsg")
 }
 
+// TestApp_AddToQueueMsg_DispatchesAPICmd verifies AddToQueueMsg produces a queue command.
+func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	queueMsg := panes.AddToQueueMsg{TrackURI: "spotify:track:abc"}
+	_, cmd := a.Update(queueMsg)
+
+	assert.NotNil(t, cmd, "AddToQueueMsg should produce a command")
+	msg := cmd()
+	resultMsg, ok := msg.(panes.AddToQueueResultMsg)
+	assert.True(t, ok, "nil player should return AddToQueueResultMsg, got %T", msg)
+	assert.Nil(t, resultMsg.Err, "nil player should return no error")
+}
+
+// TestApp_AddToQueueResultMsg_Success verifies success shows status bar confirmation.
+func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	successMsg := panes.AddToQueueResultMsg{Err: nil}
+	m, cmd := a.Update(successMsg)
+	require.NotNil(t, m)
+	assert.NotNil(t, cmd, "success should schedule a dismiss timer")
+	appModel := m.(*app.App)
+	output := appModel.View()
+	assert.Contains(t, output, "Added to queue", "status bar should show queue confirmation")
+}
+
+// TestApp_AddToQueueResultMsg_Error verifies error sets the status bar.
+func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("queue failed")}
+	m, cmd := a.Update(errMsg)
+	require.NotNil(t, m)
+	assert.NotNil(t, cmd, "error result should produce dismiss timer cmd")
+	appModel := m.(*app.App)
+	output := appModel.View()
+	assert.Contains(t, output, "queue failed", "status bar should show error message")
+}
+
 // TestApp_SlashOpensSearch verifies '/' opens the search overlay.
 func TestApp_SlashOpensSearch(t *testing.T) {
 	cfg := &config.Config{}
