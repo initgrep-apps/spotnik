@@ -27,6 +27,14 @@ const (
 	focusQueue                      // queue pane has focus
 )
 
+// viewMode identifies which top-level view is currently active.
+type viewMode int
+
+const (
+	viewMain  viewMode = iota // three-pane Library | Player | Queue layout
+	viewStats                 // Stats dashboard (press 2 to open, 1 to return)
+)
+
 // App is the root application model. It owns the active theme, the central
 // store, the API clients, and all pane models. It is the ONLY layer that
 // calls the Spotify API — panes emit request messages and app.go dispatches them.
@@ -37,12 +45,19 @@ type App struct {
 	library *api.LibraryClient
 	search  *api.SearchClient
 	devices *api.DevicesClient
+	userAPI *api.UserClient
 
 	playerPane  *panes.PlayerPane
 	libraryPane *panes.LibraryPane
 	queuePane   *panes.QueuePane
 	searchPane  *panes.SearchOverlay
 	devicePane  *panes.DeviceOverlay
+
+	// statsPane is lazy-initialized the first time the user presses 2.
+	statsPane *panes.StatsView
+
+	// currentView tracks which top-level view is displayed.
+	currentView viewMode
 
 	focus  focusedPane
 	width  int
@@ -118,6 +133,16 @@ func (a *App) SetDevices(devices *api.DevicesClient) {
 	a.devices = devices
 }
 
+// SetUserAPI injects the Spotify user stats API client into the app.
+func (a *App) SetUserAPI(userAPI *api.UserClient) {
+	a.userAPI = userAPI
+}
+
+// StatsViewOpen returns true while the stats view is the active top-level view.
+func (a *App) StatsViewOpen() bool {
+	return a.currentView == viewStats
+}
+
 // SearchOpen returns true while the search overlay is visible.
 func (a *App) SearchOpen() bool {
 	return a.searchOpen
@@ -182,6 +207,31 @@ func (a *App) closeDeviceOverlay() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// openStats switches to the Stats view. The StatsView is lazy-initialized on the
+// first call — cursor and section focus are preserved on subsequent calls.
+func (a *App) openStats() (*App, tea.Cmd) {
+	a.currentView = viewStats
+	if a.statsPane == nil {
+		// First open: construct and init the stats pane.
+		sv := panes.NewStatsView(a.store, a.theme)
+		if a.userAPI != nil {
+			sv.SetUserAPI(a.userAPI)
+		}
+		if a.width > 0 {
+			sv.SetSize(a.width, a.height-4) // subtract header + status bar
+		}
+		a.statsPane = sv
+		return a, sv.Init()
+	}
+	return a, nil
+}
+
+// closeStats returns to the main three-pane layout.
+func (a *App) closeStats() (*App, tea.Cmd) {
+	a.currentView = viewMain
+	return a, nil
+}
+
 // Update handles all messages routed through the root model.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
@@ -217,6 +267,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.devicePane.SetSize(m.Width, m.Height)
 		return a, nil
 
+	case panes.FetchStatsMsg:
+		// Stats view requesting data for a time range.
+		return a, a.buildFetchStatsCmd(m.TimeRange)
+
+	case panes.StatsLoadedMsg:
+		// Stats data fetched — forward to stats pane.
+		if a.statsPane != nil {
+			updated, cmd := a.statsPane.Update(m)
+			if sv, ok := updated.(*panes.StatsView); ok {
+				a.statsPane = sv
+			}
+			return a, cmd
+		}
+		return a, nil
+
 	case tea.KeyMsg:
 		// When device overlay is open, route all keys to the device pane.
 		if a.deviceOverlayOpen {
@@ -240,6 +305,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Type == tea.KeyRunes && string(m.Runes) == "q" {
 			return a, tea.Quit
 		}
+		// '2' opens the Stats view.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "2" {
+			return a.openStats()
+		}
+		// '1' returns to the main three-pane layout.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "1" {
+			return a.closeStats()
+		}
+
+		// When stats view is open, route all non-global keys to it.
+		if a.currentView == viewStats {
+			if a.statsPane != nil {
+				updated, cmd := a.statsPane.Update(m)
+				if sv, ok := updated.(*panes.StatsView); ok {
+					a.statsPane = sv
+				}
+				return a, cmd
+			}
+			return a, nil
+		}
+
 		// '/' opens the search overlay from any pane.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "/" {
 			return a.openSearch()
@@ -748,6 +834,34 @@ func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 	}
 }
 
+// buildFetchStatsCmd creates a command that fetches top tracks and artists for
+// the given time range, writes to the store, and returns a StatsLoadedMsg.
+func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
+	userAPI := a.userAPI
+	store := a.store
+	return func() tea.Msg {
+		if userAPI == nil {
+			return panes.StatsLoadedMsg{TimeRange: timeRange}
+		}
+		ctx := context.Background()
+		tracks, err := userAPI.GetTopTracks(ctx, timeRange, 25)
+		if err != nil {
+			return panes.StatsLoadedMsg{TimeRange: timeRange}
+		}
+		artists, err := userAPI.GetTopArtists(ctx, timeRange, 25)
+		if err != nil {
+			return panes.StatsLoadedMsg{TimeRange: timeRange}
+		}
+		store.SetTopTracks(timeRange, tracks)
+		store.SetTopArtists(timeRange, artists)
+		return panes.StatsLoadedMsg{
+			TopTracks:  tracks,
+			TopArtists: artists,
+			TimeRange:  timeRange,
+		}
+	}
+}
+
 // fetchQueueCmd creates a command that fetches the current play queue,
 // writes the queue tracks to the store, and notifies panes via QueueLoadedMsg.
 func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
@@ -787,6 +901,14 @@ func (a *App) View() string {
 	// DESIGN.md: minimum terminal size check.
 	if a.width > 0 && a.height > 0 && (a.width < 100 || a.height < 24) {
 		return a.renderTooSmall()
+	}
+
+	// Stats view replaces the three-pane layout when active.
+	if a.currentView == viewStats && a.statsPane != nil {
+		header := a.renderStatsHeader()
+		statsContent := a.statsPane.View()
+		statusBar := a.renderStatsStatusBar()
+		return strings.Join([]string{header, statsContent, statusBar}, "\n")
 	}
 
 	header := a.renderHeader()
@@ -919,6 +1041,71 @@ func (a *App) renderHeader() string {
 		return appName + strings.Repeat(" ", gap) + deviceStr
 	}
 	return appName + "  " + deviceStr
+}
+
+// renderStatsHeader renders the header bar while the stats view is active.
+// It shows "spotnik [STATS]" on the left and the device indicator on the right.
+func (a *App) renderStatsHeader() string {
+	appNameStyle := lipgloss.NewStyle().
+		Background(a.theme.SurfaceAlt()).
+		Foreground(a.theme.TextPrimary()).
+		Bold(true)
+
+	statsLabelStyle := lipgloss.NewStyle().
+		Foreground(a.theme.SectionHeader()).
+		Bold(true)
+
+	device := a.store.ActiveDevice()
+	var deviceStr string
+	if device != nil {
+		name := truncateDeviceName(device.Name)
+		deviceStr = lipgloss.NewStyle().
+			Foreground(a.theme.DeviceActive()).
+			Render(fmt.Sprintf("◉ %s", name))
+	} else {
+		deviceStr = lipgloss.NewStyle().
+			Foreground(a.theme.TextMuted()).
+			Render("○ No device")
+	}
+
+	appName := appNameStyle.Render(" spotnik ") + " " + statsLabelStyle.Render("[STATS]")
+
+	if a.width > 0 {
+		gap := a.width - lipgloss.Width(appName) - lipgloss.Width(deviceStr)
+		if gap < 1 {
+			gap = 1
+		}
+		return appName + strings.Repeat(" ", gap) + deviceStr
+	}
+	return appName + "  " + deviceStr
+}
+
+// renderStatsStatusBar renders the bottom status bar for the stats view.
+func (a *App) renderStatsStatusBar() string {
+	if a.statusMsg != "" {
+		return lipgloss.NewStyle().
+			Background(a.theme.StatusBarBg()).
+			Foreground(a.theme.Error()).
+			Render("  " + a.statusMsg)
+	}
+
+	style := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.StatusBarFg())
+
+	keyStyle := lipgloss.NewStyle().
+		Foreground(a.theme.KeyHint()).
+		Bold(true)
+
+	hints := []string{
+		keyStyle.Render("Tab") + " next section",
+		keyStyle.Render("j/k") + " move",
+		keyStyle.Render("Enter") + " play",
+		keyStyle.Render("f") + " cycle range",
+		keyStyle.Render("1") + " library",
+		keyStyle.Render("q") + " quit",
+	}
+	return style.Render("  " + strings.Join(hints, "  "))
 }
 
 // renderStatusBar renders the bottom status bar with context-sensitive key hints.
