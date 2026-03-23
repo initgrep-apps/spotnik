@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -159,7 +160,11 @@ func (d *DeviceOverlay) View() string {
 		sb.WriteString("\n")
 	}
 
-	if len(d.devices) == 0 {
+	if err := d.store.DevicesError(); err != nil {
+		errView := components.RenderError(d.theme, minWidth-4, 4,
+			"Failed to load devices", "Press d to retry")
+		sb.WriteString(errView)
+	} else if len(d.devices) == 0 {
 		emptyStyle := lipgloss.NewStyle().
 			Foreground(d.theme.TextMuted()).
 			Background(d.theme.SurfaceAlt())
