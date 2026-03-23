@@ -16,6 +16,10 @@ type UIConfig struct {
 	// Valid values: "black", "monokai", "catppuccin", "nord", "light".
 	// Defaults to "black" if unset or unknown.
 	Theme string `toml:"theme"`
+
+	// VolumeStep is the percentage change per volume up/down keypress.
+	// Defaults to 5 if unset or zero.
+	VolumeStep int `toml:"volume_step"`
 }
 
 // spotifyConfig holds Spotify-specific configuration.
@@ -34,7 +38,8 @@ type Config struct {
 func Default() *Config {
 	return &Config{
 		UI: UIConfig{
-			Theme: "black",
+			Theme:      "black",
+			VolumeStep: 5,
 		},
 	}
 }
