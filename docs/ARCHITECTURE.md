@@ -550,6 +550,32 @@ state updates across panes, and end-to-end user workflows with mocked HTTP.
 
 ## Error Handling Conventions
 
+### Error Handling in build*Cmd Functions
+
+API errors in `build*Cmd` functions MUST be surfaced to the user via status bar or in-pane
+error state. **Silent swallowing is prohibited.**
+
+Pattern:
+```go
+// On failure — MUST set error state
+store.SetXxxError(err)
+return XxxLoadedMsg{err: err}
+
+// On success — MUST clear error state
+store.ClearXxxError()
+store.SetXxx(data)
+return XxxLoadedMsg{data: data}
+```
+
+Every pane that reads data from the store MUST check the corresponding error state in `View()`
+and render an error view (using `components.RenderError`) instead of an empty state.
+
+### Pane Rendering Constraints
+
+`View()` output MUST NOT exceed the height set by `SetSize()`. Panes with unbounded content
+(queue, library sections, search results) must implement viewport scrolling. Rendering all
+items in a loop without height capping is a bug.
+
 ### User-Facing Errors
 
 Errors shown in the status bar. Keep them short and actionable.
@@ -628,4 +654,4 @@ Target: under 15MB. Check with `ls -lh bin/spotnik` after each build.
 
 ---
 
-*Last updated: 2026-02-21*
+*Last updated: 2026-03-23*

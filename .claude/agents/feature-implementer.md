@@ -7,10 +7,11 @@ memory: project
 effort: high
 maxTurns: 200
 skills:
+  - go-dev
+  - bubbletea 
   - test-driven-development
   - verification-before-completion
   - systematic-debugging
-  - go-dev
   - requesting-code-review
   - receiving-code-review
 allowedTools:

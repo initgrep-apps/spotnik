@@ -10,17 +10,26 @@
 
 Features must be built in order. Each depends on the previous being stable and tested.
 
-| # | Feature | Spec | Status | Depends On |
-|---|---|---|---|---|
-| 1  | Theme System | `01-theme-system.md` | 🔲 Not started | — |
-| 2 | Authentication | `02-auth.md` | 🔲 Not started | — |
-| 3 | Playback Controls | `03-playback.md` | 🔲 Not started | Theme System, Auth |
-| 4 | Library Browser | `04-library.md` | 🔲 Not started | Auth, Playback |
-| 5 | Search | `05-search.md` | 🔲 Not started | Auth |
-| 6 | Queue Management | `06-queue.md` | 🔲 Not started | Playback |
-| 7 | Device Switcher | `07-devices.md` | 🔲 Not started | Playback |
-| 8 | Stats Dashboard | `08-stats.md` | 🔲 Not started | Auth |
-| 9 | Playlist Manager | `09-playlists.md` | 🔲 Not started | Library |
+| # | Feature | Spec | Status | Depends On | PR |
+|---|---|---|---|---|---|
+| 1  | Theme System | `01-theme-system.md` | ✅ Complete | — | — |
+| 2 | Authentication | `02-auth.md` | ✅ Complete | — | — |
+| 3 | Playback Controls | `03-playback.md` | ✅ Complete | Theme System, Auth | — |
+| 4 | Library Browser | `04-library.md` | ✅ Complete | Auth, Playback | #6 |
+| 5 | Search | `05-search.md` | ✅ Complete | Auth | #8 |
+| 6 | Queue Management | `06-queue.md` | ✅ Complete | Playback | #9 |
+| 7 | Device Switcher | `07-devices.md` | ✅ Complete | Playback | #10 |
+| 8 | Stats Dashboard | `08-stats.md` | ✅ Complete | Auth | #11 |
+| 9 | Playlist Manager | `09-playlists.md` | ✅ Complete | Library | #12 |
+| 10 | Fix Library Display | `10-fix-library-display.md` | 🔲 Planned | — | — |
+| 11 | Fix Playback UX | `11-fix-playback-ux.md` | 🔲 Planned | — | — |
+| 12 | Fix Queue Overflow | `12-fix-queue-overflow.md` | 🔲 Planned | — | — |
+| 13 | Fix Devices Errors | `13-fix-devices-errors.md` | 🔲 Planned | 18 | — |
+| 14 | Fix Views Rendering | `14-fix-views-rendering.md` | 🔲 Planned | 18 | — |
+| 15 | Fix UX Polish | `15-fix-ux-polish.md` | 🔲 Planned | — | — |
+| 16 | Fix Search Results | `16-fix-search-results.md` | 🔲 Planned | — | — |
+| 17 | Fix Auth UX | `17-fix-auth-ux.md` | 🔲 Planned | — | — |
+| 18 | Fix Error Architecture | `18-fix-error-architecture.md` | 🔲 Planned | — | — |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
@@ -86,6 +95,22 @@ Power user feature for curating music libraries from the terminal.
 
 ---
 
+## Bug Fix Execution Order
+
+Bug fix features should be implemented in this order:
+
+1. `18-fix-error-architecture.md` — Foundation: reusable error pattern (all other fixes depend on this)
+2. `10-fix-library-display.md` — Quick, isolated fix
+3. `11-fix-playback-ux.md` — Player UX: centering, icons, volume config, error feedback
+4. `12-fix-queue-overflow.md` — Scroll + repeat label
+5. `13-fix-devices-errors.md` — Error handling in overlay (depends on 18)
+6. `14-fix-views-rendering.md` — Stats + Playlists view fixes (depends on 18)
+7. `15-fix-ux-polish.md` — Status bar hints
+8. `16-fix-search-results.md` — Full search pipeline investigation + fix
+9. `17-fix-auth-ux.md` — Splash screen + auth TUI
+
+---
+
 ## Versioning
 
 | Version | Includes |
@@ -95,7 +120,36 @@ Power user feature for curating music libraries from the terminal.
 | v0.3.0 | Features 6 + 7 (queue + devices) |
 | v0.4.0 | Feature 8 (stats) |
 | v1.0.0 | Feature 9 (playlist manager) + polish |
+| v1.1.0 | Features 10-18 (bug fixes + error architecture + UX polish) |
 
 ---
 
-*Last updated: 2026-02-21*
+## Lessons & Future Improvement Ideas
+
+Brief insights from implementing all 9 features:
+
+**Architecture:**
+- app.go is growing large (~700+ lines) — split into app_routing.go, app_commands.go, app_views.go
+- Overlays (search, devices) share a pattern — extract a generic OverlayModel to reduce boilerplate
+- Store mutex contention will increase with more pollers — consider event-based notifications
+- Every new message type needs a case in app.go Update() — a message registry would scale better
+
+**Performance:**
+- Queue + playback state poll every 1s independently — batch into a single tick to halve API calls
+- Search debounce is 300ms but API latency isn't tracked — add tracking to tune the delay
+- StatsView fetches on first open — prefetch after auth to make `2` feel instant
+
+**UX:**
+- Never intercept single-char rune keys as action keys in overlays with text input — use Ctrl+key or arrows
+- All non-KeyMsg messages must route to the active overlay — forgetting this silently breaks timers
+- Status bar hints should always include overlay triggers (/, d) so users discover features
+- Check lipgloss API availability (e.g. PlaceOverlay) before planning overlay rendering
+
+**Testing:**
+- Test helpers must accept *testing.T and call t.Helper() — nil masks failures
+- sendKey-style helpers are reusable across pane tests — extract to a shared testutil package
+- Coverage holds at ~81-82% across all features — focus new tests on edge cases, not line count
+
+---
+
+*Last updated: 2026-03-23*
