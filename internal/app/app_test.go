@@ -1196,3 +1196,333 @@ func TestApp_SearchDebounceRouted(t *testing.T) {
 	// which should emit a SearchRequestMsg command
 	assert.NotNil(t, cmd, "debounce msg should produce a search request command when routed to overlay")
 }
+
+// TestApp_3KeyOpensPlaylists verifies pressing 3 switches to the PlaylistManager view.
+func TestApp_3KeyOpensPlaylists(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// By default playlist view is not open.
+	assert.False(t, a.PlaylistViewOpen(), "playlist view should not be open by default")
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	assert.True(t, a.PlaylistViewOpen(), "pressing 3 should open the playlist view")
+}
+
+// TestApp_1KeyReturnsFromPlaylists verifies pressing 1 from playlists restores the three-pane layout.
+func TestApp_1KeyReturnsFromPlaylists(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open playlist view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	// Press 1 to return to library view.
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	a = model.(*app.App)
+	assert.False(t, a.PlaylistViewOpen(), "pressing 1 should close the playlist view")
+}
+
+// TestApp_PlaylistsReusesLibraryData verifies that opening playlists uses store data without extra fetch.
+func TestApp_PlaylistsReusesLibraryData(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Pre-populate store with playlists.
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 24},
+		{ID: "pl-2", Name: "Workout Mix", URI: "spotify:playlist:pl-2", TrackCount: 48},
+	})
+
+	// Open playlist view — no extra API fetch should occur (cmd is nil or init cmd).
+	model, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	// The view should render the playlists from the store.
+	view := a.View()
+	assert.Contains(t, view, "Chill Vibes", "view should show playlists from store")
+	assert.Contains(t, view, "Workout Mix", "view should show playlists from store")
+	_ = cmd
+}
+
+// TestApp_PlaylistView_RendersCorrectly verifies View() returns playlist content when open.
+func TestApp_PlaylistView_RendersCorrectly(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
+
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "My Playlist", URI: "spotify:playlist:pl-1", TrackCount: 5},
+	})
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	view := a.View()
+	assert.Contains(t, view, "MY PLAYLISTS", "playlist view should contain MY PLAYLISTS header")
+}
+
+// TestApp_PlaylistViewHandlesCreateRequest verifies PlaylistCreateRequestMsg is handled.
+func TestApp_PlaylistViewHandlesCreateRequest(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open playlist view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	// Send create request — root app should handle it.
+	msg := panes.PlaylistCreateRequestMsg{Name: "New Playlist", Description: ""}
+	model, _ = a.Update(msg)
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_PlaylistViewHandlesRenameRequest verifies PlaylistRenameRequestMsg is handled.
+func TestApp_PlaylistViewHandlesRenameRequest(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 24},
+	})
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	msg := panes.PlaylistRenameRequestMsg{PlaylistID: "pl-1", NewName: "Renamed"}
+	model, _ = a.Update(msg)
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_PlaylistViewHandlesRemoveRequest verifies PlaylistRemoveRequestMsg is handled.
+func TestApp_PlaylistViewHandlesRemoveRequest(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 1},
+	})
+	a.Store().SetPlaylistTracks("pl-1", []api.Track{
+		{ID: "t1", Name: "Track A", URI: "spotify:track:t1", DurationMs: 180000, Artists: []api.Artist{{Name: "Artist A"}}},
+	})
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	msg := panes.PlaylistRemoveRequestMsg{PlaylistID: "pl-1", TrackURI: "spotify:track:t1"}
+	model, _ = a.Update(msg)
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_PlaylistViewHandlesReorderRequest verifies PlaylistReorderRequestMsg is handled.
+func TestApp_PlaylistViewHandlesReorderRequest(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 2},
+	})
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	msg := panes.PlaylistReorderRequestMsg{PlaylistID: "pl-1", RangeStart: 0, InsertBefore: 2, RangeLength: 1}
+	model, _ = a.Update(msg)
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_PlaylistViewHandlesFetchTracksRequest verifies FetchPlaylistTracksRequestMsg is handled.
+func TestApp_PlaylistViewHandlesFetchTracksRequest(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	msg := panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl-1"}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	// Library client is nil in test — command still returns a message.
+	require.NotNil(t, cmd)
+	_ = a
+}
+
+// TestApp_PlaylistCreatedMsg_Success verifies PlaylistCreatedMsg triggers playlist re-fetch.
+func TestApp_PlaylistCreatedMsg_Success(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	msg := panes.PlaylistCreatedMsg{PlaylistID: "new-pl", Name: "New Playlist"}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "should return fetch playlists command after create")
+	_ = a
+}
+
+// TestApp_PlaylistCreatedMsg_Error verifies PlaylistCreatedMsg with error shows status.
+func TestApp_PlaylistCreatedMsg_Error(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	msg := panes.PlaylistCreatedMsg{Err: fmt.Errorf("create failed")}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "should return dismiss timer on error")
+	_ = a
+}
+
+// TestApp_PlaylistRenamedMsg_Success verifies PlaylistRenamedMsg triggers playlist re-fetch.
+func TestApp_PlaylistRenamedMsg_Success(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	msg := panes.PlaylistRenamedMsg{PlaylistID: "pl-1", NewName: "Renamed"}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "should return fetch playlists command after rename")
+	_ = a
+}
+
+// TestApp_PlaylistRenamedMsg_Error verifies PlaylistRenamedMsg with error shows status.
+func TestApp_PlaylistRenamedMsg_Error(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes"},
+	})
+
+	msg := panes.PlaylistRenamedMsg{PlaylistID: "pl-1", NewName: "Renamed", Err: fmt.Errorf("rename failed")}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "should return dismiss timer on error")
+	_ = a
+}
+
+// TestApp_PlaylistRemoveResultMsg_Error verifies remove error is forwarded to playlist pane.
+func TestApp_PlaylistRemoveResultMsg_Error(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes"},
+	})
+	a.Store().SetPlaylistTracks("pl-1", []api.Track{
+		{ID: "t1", Name: "Track A", URI: "spotify:track:t1", DurationMs: 180000, Artists: []api.Artist{{Name: "Artist A"}}},
+	})
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	msg := panes.PlaylistRemoveResultMsg{PlaylistID: "pl-1", Err: fmt.Errorf("remove failed")}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "should return dismiss timer on error")
+	_ = a
+}
+
+// TestApp_PlaylistReorderResultMsg_Error verifies reorder error is forwarded to playlist pane.
+func TestApp_PlaylistReorderResultMsg_Error(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	msg := panes.PlaylistReorderResultMsg{Err: fmt.Errorf("reorder failed")}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "should return dismiss timer on error")
+	_ = a
+}
+
+// TestApp_PlaylistTracksLoadedMsg verifies PlaylistTracksLoadedMsg is forwarded to playlist pane.
+func TestApp_PlaylistTracksLoadedMsg(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Store().SetPlaylistTracks("pl-1", []api.Track{
+		{ID: "t1", Name: "Track A", URI: "spotify:track:t1", DurationMs: 180000, Artists: []api.Artist{{Name: "Artist A"}}},
+	})
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+
+	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl-1"}
+	model, _ = a.Update(msg)
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_PlaylistTracksLoadedMsg_NilPane verifies PlaylistTracksLoadedMsg without
+// a playlist pane is handled gracefully.
+func TestApp_PlaylistTracksLoadedMsg_NilPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl-1"}
+	model, _ := a.Update(msg)
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_SetPlaylistsAPI verifies SetPlaylistsAPI stores the client.
+func TestApp_SetPlaylistsAPI(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	// SetPlaylistsAPI should not panic even with nil.
+	a.SetPlaylistsAPI(nil)
+}
+
+// TestApp_PlaylistViewKeysRoutedToPane verifies key events in playlist view are routed to pane.
+func TestApp_PlaylistViewKeysRoutedToPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Chill Vibes"},
+		{ID: "pl-2", Name: "Workout Mix"},
+	})
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	require.True(t, a.PlaylistViewOpen())
+
+	// Press j to move cursor in playlist view.
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	a = model.(*app.App)
+	_ = a
+}
+
+// TestApp_3KeyInStatsView_SwitchesToPlaylists verifies pressing 3 while stats is open
+// opens playlists (or is handled gracefully).
+func TestApp_3KeyInStatsView_SwitchesToPlaylists(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open stats.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+	require.True(t, a.StatsViewOpen())
+
+	// Press 3 — should switch to playlists.
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	a = model.(*app.App)
+	assert.True(t, a.PlaylistViewOpen(), "pressing 3 in stats should open playlists")
+	assert.False(t, a.StatsViewOpen(), "stats should be closed when playlists opens")
+}

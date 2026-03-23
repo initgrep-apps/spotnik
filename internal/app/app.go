@@ -31,8 +31,9 @@ const (
 type viewMode int
 
 const (
-	viewMain  viewMode = iota // three-pane Library | Player | Queue layout
-	viewStats                 // Stats dashboard (press 2 to open, 1 to return)
+	viewMain      viewMode = iota // three-pane Library | Player | Queue layout
+	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
+	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
 )
 
 // App is the root application model. It owns the active theme, the central
@@ -55,6 +56,12 @@ type App struct {
 
 	// statsPane is lazy-initialized the first time the user presses 2.
 	statsPane *panes.StatsView
+
+	// playlistPane is lazy-initialized the first time the user presses 3.
+	playlistPane *panes.PlaylistManager
+
+	// playlistsAPI is the Spotify playlists mutation client.
+	playlistsAPI *api.PlaylistsClient
 
 	// currentView tracks which top-level view is displayed.
 	currentView viewMode
@@ -138,9 +145,19 @@ func (a *App) SetUserAPI(userAPI *api.UserClient) {
 	a.userAPI = userAPI
 }
 
+// SetPlaylistsAPI injects the Spotify playlists mutation client into the app.
+func (a *App) SetPlaylistsAPI(p *api.PlaylistsClient) {
+	a.playlistsAPI = p
+}
+
 // StatsViewOpen returns true while the stats view is the active top-level view.
 func (a *App) StatsViewOpen() bool {
 	return a.currentView == viewStats
+}
+
+// PlaylistViewOpen returns true while the Playlist Manager is the active top-level view.
+func (a *App) PlaylistViewOpen() bool {
+	return a.currentView == viewPlaylists
 }
 
 // SearchOpen returns true while the search overlay is visible.
@@ -229,6 +246,27 @@ func (a *App) closeStats() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// openPlaylists switches to the Playlist Manager view. The PlaylistManager is
+// lazy-initialized on the first call — subsequent calls preserve pane state.
+// Playlist data is reused from the store (no fresh fetch on view switch).
+func (a *App) openPlaylists() (*App, tea.Cmd) {
+	a.currentView = viewPlaylists
+	if a.playlistPane == nil {
+		pm := panes.NewPlaylistManager(a.store, a.theme)
+		if a.width > 0 {
+			pm.SetSize(a.width, a.height-4) // subtract header + status bar rows
+		}
+		a.playlistPane = pm
+	}
+	return a, nil
+}
+
+// closePlaylists returns to the main three-pane layout.
+func (a *App) closePlaylists() (*App, tea.Cmd) {
+	a.currentView = viewMain
+	return a, nil
+}
+
 // Update handles all messages routed through the root model.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
@@ -262,6 +300,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.queuePane.SetSize(queueWidth-2, m.Height-4)
 		a.searchPane.SetSize(m.Width, m.Height)
 		a.devicePane.SetSize(m.Width, m.Height)
+		if a.statsPane != nil {
+			a.statsPane.SetSize(m.Width, m.Height-4)
+		}
+		if a.playlistPane != nil {
+			a.playlistPane.SetSize(m.Width, m.Height-4)
+		}
 		return a, nil
 
 	case panes.FetchStatsMsg:
@@ -306,8 +350,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Type == tea.KeyRunes && string(m.Runes) == "2" {
 			return a.openStats()
 		}
-		// '1' returns to the main three-pane layout.
+		// '3' opens the Playlist Manager view.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "3" {
+			return a.openPlaylists()
+		}
+		// '1' returns to the main three-pane layout from any alternate view.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "1" {
+			if a.currentView == viewPlaylists {
+				return a.closePlaylists()
+			}
 			return a.closeStats()
 		}
 
@@ -317,6 +368,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				updated, cmd := a.statsPane.Update(m)
 				if sv, ok := updated.(*panes.StatsView); ok {
 					a.statsPane = sv
+				}
+				return a, cmd
+			}
+			return a, nil
+		}
+
+		// When playlist view is open, route all non-global keys to the playlist pane.
+		if a.currentView == viewPlaylists {
+			if a.playlistPane != nil {
+				updated, cmd := a.playlistPane.Update(m)
+				if pm, ok := updated.(*panes.PlaylistManager); ok {
+					a.playlistPane = pm
 				}
 				return a, cmd
 			}
@@ -519,6 +582,85 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.searchPane = sp
 		}
 		return a, cmd
+	}
+
+	// Playlist message routing — handled regardless of current view.
+	switch m := msg.(type) {
+	case panes.FetchPlaylistTracksRequestMsg:
+		return a, a.buildFetchPlaylistTracksCmd(m.PlaylistID)
+
+	case panes.PlaylistTracksLoadedMsg:
+		// Forward to playlist pane so it can refresh from store.
+		if a.playlistPane != nil {
+			updated, cmd := a.playlistPane.Update(m)
+			if pm, ok := updated.(*panes.PlaylistManager); ok {
+				a.playlistPane = pm
+			}
+			return a, cmd
+		}
+		return a, nil
+
+	case panes.PlaylistCreateRequestMsg:
+		return a, a.buildCreatePlaylistCmd(m.Name, m.Description)
+
+	case panes.PlaylistCreatedMsg:
+		if m.Err != nil {
+			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		}
+		// Re-fetch playlists so the new one appears.
+		return a, a.buildFetchPlaylistsCmd(0)
+
+	case panes.PlaylistRenameRequestMsg:
+		return a, a.buildRenamePlaylistCmd(m.PlaylistID, m.NewName)
+
+	case panes.PlaylistRenamedMsg:
+		if m.Err != nil {
+			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			if a.playlistPane != nil {
+				updated, _ := a.playlistPane.Update(m)
+				if pm, ok := updated.(*panes.PlaylistManager); ok {
+					a.playlistPane = pm
+				}
+			}
+			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		}
+		// Re-fetch playlists to reflect rename.
+		return a, a.buildFetchPlaylistsCmd(0)
+
+	case panes.PlaylistRemoveRequestMsg:
+		return a, a.buildRemovePlaylistTrackCmd(m.PlaylistID, m.TrackURI)
+
+	case panes.PlaylistRemoveResultMsg:
+		if a.playlistPane != nil {
+			updated, cmd := a.playlistPane.Update(m)
+			if pm, ok := updated.(*panes.PlaylistManager); ok {
+				a.playlistPane = pm
+			}
+			if m.Err != nil {
+				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+				return a, tea.Batch(cmd, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }))
+			}
+			return a, cmd
+		}
+		return a, nil
+
+	case panes.PlaylistReorderRequestMsg:
+		return a, a.buildReorderPlaylistTracksCmd(m.PlaylistID, m.RangeStart, m.InsertBefore, m.RangeLength)
+
+	case panes.PlaylistReorderResultMsg:
+		if a.playlistPane != nil {
+			updated, cmd := a.playlistPane.Update(m)
+			if pm, ok := updated.(*panes.PlaylistManager); ok {
+				a.playlistPane = pm
+			}
+			if m.Err != nil {
+				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+				return a, tea.Batch(cmd, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }))
+			}
+			return a, cmd
+		}
+		return a, nil
 	}
 
 	// Forward unhandled messages to the library pane (notification msgs, etc.).
@@ -904,6 +1046,14 @@ func (a *App) View() string {
 		return strings.Join([]string{header, statsContent, statusBar}, "\n")
 	}
 
+	// Playlist Manager replaces the three-pane layout when active.
+	if a.currentView == viewPlaylists && a.playlistPane != nil {
+		header := a.renderPlaylistsHeader()
+		playlistContent := a.playlistPane.View()
+		statusBar := a.renderPlaylistsStatusBar()
+		return strings.Join([]string{header, playlistContent, statusBar}, "\n")
+	}
+
 	header := a.renderHeader()
 	statusBar := a.renderStatusBar()
 
@@ -1101,6 +1251,73 @@ func (a *App) renderStatsStatusBar() string {
 	return style.Render("  " + strings.Join(hints, "  "))
 }
 
+// renderPlaylistsHeader renders the header bar while the Playlist Manager view is active.
+// It shows "spotnik [PLAYLISTS]" on the left and the device indicator on the right.
+func (a *App) renderPlaylistsHeader() string {
+	appNameStyle := lipgloss.NewStyle().
+		Background(a.theme.SurfaceAlt()).
+		Foreground(a.theme.TextPrimary()).
+		Bold(true)
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(a.theme.SectionHeader()).
+		Bold(true)
+
+	device := a.store.ActiveDevice()
+	var deviceStr string
+	if device != nil {
+		name := truncateDeviceName(device.Name)
+		deviceStr = lipgloss.NewStyle().
+			Foreground(a.theme.DeviceActive()).
+			Render(fmt.Sprintf("◉ %s", name))
+	} else {
+		deviceStr = lipgloss.NewStyle().
+			Foreground(a.theme.TextMuted()).
+			Render("○ No device")
+	}
+
+	appName := appNameStyle.Render(" spotnik ") + " " + labelStyle.Render("[PLAYLISTS]")
+
+	if a.width > 0 {
+		gap := a.width - lipgloss.Width(appName) - lipgloss.Width(deviceStr)
+		if gap < 1 {
+			gap = 1
+		}
+		return appName + strings.Repeat(" ", gap) + deviceStr
+	}
+	return appName + "  " + deviceStr
+}
+
+// renderPlaylistsStatusBar renders the bottom status bar for the Playlist Manager view.
+func (a *App) renderPlaylistsStatusBar() string {
+	if a.statusMsg != "" {
+		return lipgloss.NewStyle().
+			Background(a.theme.StatusBarBg()).
+			Foreground(a.theme.Error()).
+			Render("  " + a.statusMsg)
+	}
+
+	style := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.StatusBarFg())
+
+	keyStyle := lipgloss.NewStyle().
+		Foreground(a.theme.KeyHint()).
+		Bold(true)
+
+	hints := []string{
+		keyStyle.Render("Enter") + " play",
+		keyStyle.Render("r") + " rename",
+		keyStyle.Render("n") + " new playlist",
+		keyStyle.Render("x") + " remove track",
+		keyStyle.Render("Shift+↑↓") + " reorder",
+		keyStyle.Render("Tab") + " switch pane",
+		keyStyle.Render("1") + " library",
+		keyStyle.Render("q") + " quit",
+	}
+	return style.Render("  " + strings.Join(hints, "  "))
+}
+
 // renderStatusBar renders the bottom status bar with context-sensitive key hints.
 func (a *App) renderStatusBar() string {
 	if a.statusMsg != "" {
@@ -1154,4 +1371,78 @@ func (a *App) renderStatusBar() string {
 	}
 
 	return style.Render("  " + strings.Join(hints, "  "))
+}
+
+// buildFetchPlaylistTracksCmd creates a command that fetches tracks for a playlist
+// and writes them to the store, then sends PlaylistTracksLoadedMsg.
+func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
+	library := a.library
+	store := a.store
+	return func() tea.Msg {
+		if library == nil {
+			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+		}
+		tracks, err := library.GetPlaylistTracks(context.Background(), playlistID, 100, 0)
+		if err != nil {
+			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+		}
+		store.SetPlaylistTracks(playlistID, tracks)
+		return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+	}
+}
+
+// buildCreatePlaylistCmd creates a command that calls CreatePlaylist on the playlists API
+// and returns a PlaylistCreatedMsg with the result.
+func (a *App) buildCreatePlaylistCmd(name, description string) tea.Cmd {
+	playlistsAPI := a.playlistsAPI
+	return func() tea.Msg {
+		if playlistsAPI == nil {
+			// No API client in tests — return a success with empty playlist.
+			return panes.PlaylistCreatedMsg{Name: name}
+		}
+		playlist, err := playlistsAPI.CreatePlaylist(context.Background(), name, description, false)
+		if err != nil {
+			return panes.PlaylistCreatedMsg{Name: name, Err: err}
+		}
+		return panes.PlaylistCreatedMsg{PlaylistID: playlist.ID, Name: playlist.Name}
+	}
+}
+
+// buildRenamePlaylistCmd creates a command that calls UpdatePlaylist on the playlists API
+// and returns a PlaylistRenamedMsg.
+func (a *App) buildRenamePlaylistCmd(playlistID, newName string) tea.Cmd {
+	playlistsAPI := a.playlistsAPI
+	return func() tea.Msg {
+		if playlistsAPI == nil {
+			return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName}
+		}
+		err := playlistsAPI.UpdatePlaylist(context.Background(), playlistID, newName, "")
+		return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName, Err: err}
+	}
+}
+
+// buildRemovePlaylistTrackCmd creates a command that calls RemoveTracksFromPlaylist
+// and returns a PlaylistRemoveResultMsg.
+func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
+	playlistsAPI := a.playlistsAPI
+	return func() tea.Msg {
+		if playlistsAPI == nil {
+			return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI}
+		}
+		err := playlistsAPI.RemoveTracksFromPlaylist(context.Background(), playlistID, []string{trackURI})
+		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
+	}
+}
+
+// buildReorderPlaylistTracksCmd creates a command that calls ReorderPlaylistTracks
+// and returns a PlaylistReorderResultMsg.
+func (a *App) buildReorderPlaylistTracksCmd(playlistID string, rangeStart, insertBefore, rangeLength int) tea.Cmd {
+	playlistsAPI := a.playlistsAPI
+	return func() tea.Msg {
+		if playlistsAPI == nil {
+			return panes.PlaylistReorderResultMsg{}
+		}
+		err := playlistsAPI.ReorderPlaylistTracks(context.Background(), playlistID, rangeStart, insertBefore, rangeLength)
+		return panes.PlaylistReorderResultMsg{Err: err}
+	}
 }
