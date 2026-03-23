@@ -370,15 +370,14 @@ VOL  ████████░░░░░░  65%
 ### Transport Controls
 
 ```
-⏮   ⏸   ⏭      🔀   🔁
+|<   ||   >|      ~   =>
 ```
 
-- Symbols: `⏮` (prev), `⏸` / `▶` (pause/play), `⏭` (next), `🔀` (shuffle), `🔁` (repeat)
+- Symbols: `|<` (prev), `||` / `>` (pause/play), `>|` (next), `~` (shuffle), `=>` (repeat)
+- **Use ASCII symbols, not Unicode emoji** — emoji render inconsistently across terminals
 - Active state (shuffle on, repeat active): symbol rendered in `PlayingIndicator()` token
 - Inactive state: `TextSecondary()` token
 - Spacing: 3 spaces between each symbol
-
-> **Note on emoji rendering**: Test on Linux (kitty, alacritty), macOS (Terminal.app, iTerm2). If emoji cause rendering issues in CI, fall back to ASCII: `|<`, `||`, `>|`, `>?`, `>>`.
 
 ### Device Indicator (Header)
 
@@ -461,10 +460,18 @@ The bottom status bar is **always visible**. It has two modes:
 ```
 
 **Context mode** — hints change based on active pane:
-- Library pane: show `Enter play  a queue  l like`
-- Player pane: show `Space play  +/- vol  s shuffle  r repeat`
-- Queue pane: show `Enter play  x remove`
+- Library pane: show `Enter play  a queue  l like  2 stats  3 playlists`
+- Player pane: show `Space play  +/- vol  s shuffle  r repeat  2 stats  3 playlists`
+- Queue pane: show `Enter play  x remove  2 stats  3 playlists`
 - Search overlay: show `Enter play  a queue  Tab section  Esc close`
+
+**Status bar completeness:** The status bar MUST include ALL discoverable keys, including
+view switchers (`1`/`2`/`3`). If a key exists in the help overlay, it should appear in
+the status bar's context hints for the relevant state.
+
+**Status bar ownership:** Only `app.go` renders the status bar. Panes and overlays MUST NOT
+render their own help/hint bars. This prevents duplicate status bars and ensures consistent
+styling. Panes return their content only; the root model wraps it with the status bar.
 
 ---
 
@@ -489,6 +496,38 @@ On startup, check terminal dimensions. If below minimum, show:
 ```
 
 Check `os.Getenv("COLORTERM")` for TrueColor support. If not `truecolor` or `24bit`, fall back to the nearest 256-color approximation automatically (Lip Gloss handles this).
+
+---
+
+## Pane Scrolling
+
+Panes with variable-length content MUST implement height-capped scrolling with scroll indicators.
+
+- `View()` output MUST NOT exceed the height set by `SetSize()`
+- Content that exceeds the visible area must be scrollable with `j`/`k`
+- Show scroll indicators (`▲` at top, `▼` at bottom) when content extends beyond view
+- Track `scrollOffset` to determine the visible window
+- Affected panes: Queue, Library (when expanded sections have many items)
+
+---
+
+## Error State Rendering
+
+Every overlay and pane that fetches data MUST render an error state, not just an empty state.
+
+- If an API call fails, show a styled error message with a retry hint
+- Never show "No data" or "No devices found" when the real issue is an API error
+- Use the reusable `RenderError` component from `components/errorview.go`
+- Error states auto-clear on successful retry
+
+---
+
+## Volume Control
+
+- Volume step size: configurable via `config.toml` (`volume_step`), default 5%
+- Some Spotify Connect devices don't support volume control via the web API
+- On volume control failure, show "Volume control not supported on this device"
+- Never show raw API error JSON to the user
 
 ---
 
@@ -520,5 +559,5 @@ Check `os.Getenv("COLORTERM")` for TrueColor support. If not `truecolor` or `24b
 
 ---
 
-*Last updated: 2026-02-21*
+*Last updated: 2026-03-23*
 *Status: FROZEN — changes require owner approval and version bump*
