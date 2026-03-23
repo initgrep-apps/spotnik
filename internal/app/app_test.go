@@ -917,6 +917,194 @@ func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
 	assert.Contains(t, output, "Blinding Lights", "queue pane should show NOW playing track")
 }
 
+// TestHeaderDeviceIndicator_ActiveDevice verifies the header shows ◉ and device name.
+func TestHeaderDeviceIndicator_ActiveDevice(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	a.Store().SetActiveDevice(&api.Device{
+		ID:       "abc123",
+		Name:     "MacBook Pro Speakers",
+		Type:     "Computer",
+		IsActive: true,
+	})
+
+	output := a.View()
+	assert.Contains(t, output, "◉", "active device header should contain ◉ symbol")
+	assert.Contains(t, output, "MacBook Pro Speakers", "active device header should show device name")
+}
+
+// TestHeaderDeviceIndicator_NoDevice verifies the header shows ○ and "No device" when no device.
+func TestHeaderDeviceIndicator_NoDevice(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	// No device set in store
+
+	output := a.View()
+	assert.Contains(t, output, "○", "no-device header should contain ○ symbol")
+	assert.Contains(t, output, "No device", "no-device header should show 'No device'")
+}
+
+// TestHeaderDeviceIndicator_LongName verifies that long device names are truncated with ….
+func TestHeaderDeviceIndicator_LongName(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	longName := "This Is An Extremely Long Device Name That Exceeds Limit"
+	a.Store().SetActiveDevice(&api.Device{
+		ID:       "dev1",
+		Name:     longName,
+		Type:     "Computer",
+		IsActive: true,
+	})
+
+	output := a.View()
+	assert.Contains(t, output, "…", "long device name should be truncated with …")
+	assert.NotContains(t, output, longName, "full long device name should not appear (should be truncated)")
+}
+
+// TestApp_DKeyOpensOverlay verifies that pressing d opens the device switcher overlay.
+func TestApp_DKeyOpensOverlay(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	appModel := model.(*app.App)
+	assert.True(t, appModel.DeviceOverlayOpen(), "pressing d should open device overlay")
+}
+
+// TestApp_DeviceOverlay_EscCloses verifies that Esc closes the device overlay.
+func TestApp_DeviceOverlay_EscCloses(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open overlay
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = model.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	// Close with Esc (which produces DeviceOverlayClosedMsg via the overlay)
+	model, _ = a.Update(panes.DeviceOverlayClosedMsg{})
+	a = model.(*app.App)
+	assert.False(t, a.DeviceOverlayOpen(), "DeviceOverlayClosedMsg should close the overlay")
+}
+
+// TestApp_DeviceTransfer_ShowsStatusMessage verifies that a transfer command
+// produces a "Switching to..." status message in the status bar.
+func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	transferMsg := panes.TransferPlaybackMsg{DeviceID: "def456", DeviceName: "iPhone 14"}
+	model, cmd := a.Update(transferMsg)
+	appModel := model.(*app.App)
+
+	output := appModel.View()
+	assert.Contains(t, output, "Switching to", "status bar should show switching message")
+	assert.Contains(t, output, "iPhone 14", "status bar should include device name")
+	assert.NotNil(t, cmd, "transfer should produce an API command")
+}
+
+// TestApp_DeviceTransferredMsg_ErrorShown verifies transfer errors appear in status bar.
+func TestApp_DeviceTransferredMsg_ErrorShown(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	errMsg := panes.DeviceTransferredMsg{DeviceID: "def456", Err: fmt.Errorf("transfer failed")}
+	model, _ := a.Update(errMsg)
+	appModel := model.(*app.App)
+
+	output := appModel.View()
+	assert.Contains(t, output, "transfer failed", "status bar should show transfer error")
+}
+
+// TestApp_FetchDevicesRequestMsg_NilDevices verifies FetchDevicesRequestMsg with
+// nil devices client returns devicesLoadedMsg with empty list.
+func TestApp_FetchDevicesRequestMsg_NilDevices(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	// devices client is nil (not injected)
+
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	require.NotNil(t, cmd, "FetchDevicesRequestMsg should produce a command")
+
+	// Execute the command — it should return a devicesLoadedMsg (or similar)
+	msg := cmd()
+	require.NotNil(t, msg)
+}
+
+// TestApp_DeviceOverlay_View_RenderedWhenOpen verifies that when device overlay is open,
+// the view is rendered differently (overlay placed on top of the dimmed background).
+func TestApp_DeviceOverlay_View_RenderedWhenOpen(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open the device overlay
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = model.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	// View should render the overlay (device pane content)
+	output := a.View()
+	assert.NotEmpty(t, output, "view should not be empty when device overlay is open")
+}
+
+// TestApp_DeviceOverlay_ViewWithSize_RenderedWhenOpen verifies that when device overlay is open
+// with a valid terminal size, it renders via renderWithDeviceOverlay.
+func TestApp_DeviceOverlay_ViewWithSize_RenderedWhenOpen(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Set a valid size (above minimum threshold)
+	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = model.(*app.App)
+
+	// Open the device overlay
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = model.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	// View should render — renderWithDeviceOverlay path
+	output := a.View()
+	assert.NotEmpty(t, output, "view should not be empty when device overlay is open with a valid size")
+}
+
+// TestApp_DeviceTransferredMsg_Success verifies a successful transfer triggers playback refetch.
+func TestApp_DeviceTransferredMsg_Success(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	successMsg := panes.DeviceTransferredMsg{DeviceID: "def456", Err: nil}
+	_, cmd := a.Update(successMsg)
+	assert.NotNil(t, cmd, "successful transfer should trigger a playback refetch command")
+}
+
+// TestApp_SetDevices verifies SetDevices injects the client.
+func TestApp_SetDevices(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	// Should not panic and should be callable.
+	a.SetDevices(nil)
+}
+
+// TestApp_DeviceOverlay_KeysRoutedWhenOpen verifies that key events are routed
+// to the device pane when the overlay is open (j/k navigation).
+func TestApp_DeviceOverlay_KeysRoutedWhenOpen(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open the device overlay
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = model.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	// j key should be routed to device pane (not quit or other global handler)
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	a = model.(*app.App)
+	// Still open — j does not close the overlay
+	assert.True(t, a.DeviceOverlayOpen(), "j key should not close device overlay")
+}
+
 // TestApp_SearchDebounceRouted verifies that debounce messages reach the
 // search overlay when it is open (not swallowed by library pane default).
 func TestApp_SearchDebounceRouted(t *testing.T) {

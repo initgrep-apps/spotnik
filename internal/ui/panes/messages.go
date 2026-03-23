@@ -134,3 +134,22 @@ type AddToQueueResultMsg struct {
 // from the Spotify API and written to the store.
 // The QueuePane reads from store directly on receipt.
 type QueueLoadedMsg struct{}
+
+// DeviceOverlayClosedMsg is emitted by DeviceOverlay when the user presses Esc,
+// signalling the root app model to close the overlay and restore the previous focus.
+type DeviceOverlayClosedMsg struct{}
+
+// TransferPlaybackMsg is emitted by DeviceOverlay when the user presses Enter on
+// a non-active device. The root app model receives it, calls TransferPlayback, and
+// shows the status bar message.
+type TransferPlaybackMsg struct {
+	DeviceID   string
+	DeviceName string
+}
+
+// DeviceTransferredMsg is returned after a TransferPlayback API call completes.
+// Err is non-nil if the transfer failed.
+type DeviceTransferredMsg struct {
+	DeviceID string
+	Err      error
+}

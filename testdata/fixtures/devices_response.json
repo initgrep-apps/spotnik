@@ -1,0 +1,31 @@
+{
+  "devices": [
+    {
+      "id": "abc123",
+      "is_active": true,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "MacBook Pro Speakers",
+      "type": "Computer",
+      "volume_percent": 80
+    },
+    {
+      "id": "def456",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "iPhone 14",
+      "type": "Smartphone",
+      "volume_percent": 50
+    },
+    {
+      "id": "ghi789",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Kitchen Speaker",
+      "type": "Speaker",
+      "volume_percent": 60
+    }
+  ]
+}

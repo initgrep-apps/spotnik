@@ -36,11 +36,13 @@ type App struct {
 	player  *api.Player
 	library *api.LibraryClient
 	search  *api.SearchClient
+	devices *api.DevicesClient
 
 	playerPane  *panes.PlayerPane
 	libraryPane *panes.LibraryPane
 	queuePane   *panes.QueuePane
 	searchPane  *panes.SearchOverlay
+	devicePane  *panes.DeviceOverlay
 
 	focus  focusedPane
 	width  int
@@ -49,7 +51,10 @@ type App struct {
 	// searchOpen is true while the search overlay is visible.
 	searchOpen bool
 
-	// prevFocus captures which pane was focused before search opened,
+	// deviceOverlayOpen is true while the device switcher overlay is visible.
+	deviceOverlayOpen bool
+
+	// prevFocus captures which pane was focused before search/device overlay opened,
 	// so it can be restored when the overlay closes.
 	prevFocus focusedPane
 
@@ -69,6 +74,7 @@ func New(cfg *config.Config) *App {
 	libraryPane := panes.NewLibraryPane(s, t, false)
 	queuePane := panes.NewQueuePane(s, t, false)
 	searchPane := panes.NewSearchOverlay(s, t)
+	devicePane := panes.NewDeviceOverlay(s, t)
 
 	return &App{
 		theme:       t,
@@ -77,6 +83,7 @@ func New(cfg *config.Config) *App {
 		libraryPane: libraryPane,
 		queuePane:   queuePane,
 		searchPane:  searchPane,
+		devicePane:  devicePane,
 		focus:       focusPlayer,
 	}
 }
@@ -106,9 +113,19 @@ func (a *App) SetSearch(search *api.SearchClient) {
 	a.search = search
 }
 
+// SetDevices injects the Spotify Connect devices API client into the app.
+func (a *App) SetDevices(devices *api.DevicesClient) {
+	a.devices = devices
+}
+
 // SearchOpen returns true while the search overlay is visible.
 func (a *App) SearchOpen() bool {
 	return a.searchOpen
+}
+
+// DeviceOverlayOpen returns true while the device switcher overlay is visible.
+func (a *App) DeviceOverlayOpen() bool {
+	return a.deviceOverlayOpen
 }
 
 // LibraryFocused returns true if the library pane currently has keyboard focus.
@@ -151,6 +168,20 @@ func (a *App) closeSearch() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// openDeviceOverlay opens the device switcher overlay and fetches the device list.
+func (a *App) openDeviceOverlay() (*App, tea.Cmd) {
+	a.prevFocus = a.focus
+	a.deviceOverlayOpen = true
+	cmd := a.devicePane.Init()
+	return a, cmd
+}
+
+// closeDeviceOverlay closes the device switcher overlay and restores previous focus.
+func (a *App) closeDeviceOverlay() (*App, tea.Cmd) {
+	a.deviceOverlayOpen = false
+	return a, nil
+}
+
 // Update handles all messages routed through the root model.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
@@ -183,9 +214,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.playerPane.SetSize(playerWidth-2, m.Height-4)
 		a.queuePane.SetSize(queueWidth-2, m.Height-4)
 		a.searchPane.SetSize(m.Width, m.Height)
+		a.devicePane.SetSize(m.Width, m.Height)
 		return a, nil
 
 	case tea.KeyMsg:
+		// When device overlay is open, route all keys to the device pane.
+		if a.deviceOverlayOpen {
+			updated, cmd := a.devicePane.Update(m)
+			if dp, ok := updated.(*panes.DeviceOverlay); ok {
+				a.devicePane = dp
+			}
+			return a, cmd
+		}
+
 		// When search overlay is open, route all keys to the search pane first.
 		if a.searchOpen {
 			updated, cmd := a.searchPane.Update(m)
@@ -202,6 +243,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// '/' opens the search overlay from any pane.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "/" {
 			return a.openSearch()
+		}
+		// 'd' opens the device switcher overlay from any pane.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "d" {
+			return a.openDeviceOverlay()
 		}
 		// Tab rotates focus forward.
 		if m.Type == tea.KeyTab {
@@ -340,9 +385,47 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case panes.DeviceOverlayClosedMsg:
+		// Device overlay closed via Esc — restore previous focus.
+		return a.closeDeviceOverlay()
+
+	case panes.FetchDevicesRequestMsg:
+		// Device overlay is requesting the device list from the API.
+		return a, a.buildFetchDevicesCmd()
+
+	case panes.TransferPlaybackMsg:
+		// User selected a device; show status and dispatch transfer API call.
+		a.statusMsg = fmt.Sprintf("Switching to %s...", m.DeviceName)
+		a.deviceOverlayOpen = false
+		return a, tea.Batch(
+			a.buildTransferPlaybackCmd(m.DeviceID),
+			tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+		)
+
+	case panes.DeviceTransferredMsg:
+		if m.Err != nil {
+			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			return a, tea.Batch(
+				fetchPlaybackStateCmd(a.player, a.store),
+				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+			)
+		}
+		// Transfer succeeded — next poll will update the header.
+		return a, fetchPlaybackStateCmd(a.player, a.store)
+
 	case statusDismissMsg:
 		a.statusMsg = ""
 		return a, nil
+	}
+
+	// When device overlay is open, forward non-key messages (devices loaded, etc.)
+	// to the device pane so they can be processed.
+	if a.deviceOverlayOpen {
+		updated, cmd := a.devicePane.Update(msg)
+		if dp, ok := updated.(*panes.DeviceOverlay); ok {
+			a.devicePane = dp
+		}
+		return a, cmd
 	}
 
 	// When search overlay is open, forward non-key messages (debounce ticks,
@@ -620,6 +703,33 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 	}
 }
 
+// buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices
+// and delivers them back to the DeviceOverlay via devicesLoadedMsg.
+func (a *App) buildFetchDevicesCmd() tea.Cmd {
+	devices := a.devices
+	return func() tea.Msg {
+		if devices == nil {
+			// Deliver empty list when no client is injected (tests / uninitialized).
+			return panes.NewDevicesLoadedMsg(nil, nil)
+		}
+		devList, err := devices.GetDevices(context.Background())
+		return panes.NewDevicesLoadedMsg(devList, err)
+	}
+}
+
+// buildTransferPlaybackCmd creates a command that calls the TransferPlayback API
+// and returns a DeviceTransferredMsg with any error.
+func (a *App) buildTransferPlaybackCmd(deviceID string) tea.Cmd {
+	devices := a.devices
+	return func() tea.Msg {
+		if devices == nil {
+			return panes.DeviceTransferredMsg{DeviceID: deviceID}
+		}
+		err := devices.TransferPlayback(context.Background(), deviceID, true)
+		return panes.DeviceTransferredMsg{DeviceID: deviceID, Err: err}
+	}
+}
+
 // buildToggleLikeCmd creates a command that likes or unlikes a track.
 func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 	library := a.library
@@ -689,11 +799,35 @@ func (a *App) View() string {
 	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, libraryView, playerView, queueView)
 	body := strings.Join([]string{header, mainContent, statusBar}, "\n")
 
+	if a.deviceOverlayOpen {
+		return a.renderWithDeviceOverlay(body)
+	}
+
 	if a.searchOpen {
 		return a.renderWithSearchOverlay(body)
 	}
 
 	return body
+}
+
+// renderWithDeviceOverlay renders the three-pane view dimmed and places the
+// device switcher overlay in the top-right area per the DESIGN.md spec.
+func (a *App) renderWithDeviceOverlay(background string) string {
+	overlay := a.devicePane.View()
+	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
+	if a.width <= 0 || a.height <= 0 {
+		return dimmed + "\n" + overlay
+	}
+
+	// Position overlay in the top-right area (below the header/device indicator).
+	centered := lipgloss.Place(
+		a.width, a.height,
+		lipgloss.Right, lipgloss.Top,
+		overlay,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+	)
+	return centered
 }
 
 // renderWithSearchOverlay renders the three-pane view dimmed and places the
@@ -743,6 +877,18 @@ func (a *App) renderPaneWithBorder(content string, focused bool) string {
 		Render(content)
 }
 
+// maxDeviceNameLen is the maximum number of characters for the device name in the header.
+const maxDeviceNameLen = 25
+
+// truncateDeviceName truncates a device name to maxDeviceNameLen chars, appending … if needed.
+func truncateDeviceName(name string) string {
+	runes := []rune(name)
+	if len(runes) > maxDeviceNameLen {
+		return string(runes[:maxDeviceNameLen-1]) + "…"
+	}
+	return name
+}
+
 // renderHeader renders the top bar: app name left-aligned, device indicator right-aligned.
 func (a *App) renderHeader() string {
 	appNameStyle := lipgloss.NewStyle().
@@ -753,9 +899,10 @@ func (a *App) renderHeader() string {
 	device := a.store.ActiveDevice()
 	var deviceStr string
 	if device != nil {
+		name := truncateDeviceName(device.Name)
 		deviceStr = lipgloss.NewStyle().
 			Foreground(a.theme.DeviceActive()).
-			Render(fmt.Sprintf("◉ %s", device.Name))
+			Render(fmt.Sprintf("◉ %s", name))
 	} else {
 		deviceStr = lipgloss.NewStyle().
 			Foreground(a.theme.TextMuted()).
@@ -799,6 +946,7 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("Enter") + " play",
 			keyStyle.Render("a") + " queue",
 			keyStyle.Render("l") + " like",
+			keyStyle.Render("d") + " devices",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
@@ -807,6 +955,7 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("/") + " search",
 			keyStyle.Render("j/k") + " navigate",
 			keyStyle.Render("Enter") + " play",
+			keyStyle.Render("d") + " devices",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
@@ -818,6 +967,7 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("+/-") + " vol",
 			keyStyle.Render("s") + " shuffle",
 			keyStyle.Render("r") + " repeat",
+			keyStyle.Render("d") + " devices",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
