@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -249,11 +250,17 @@ func runApp(_ *cobra.Command, _ []string) error {
 	}
 
 	// App wires the theme into pane constructors at startup.
-	_ = app.New(cfg)
+	a := app.New(cfg)
 
-	// TODO(03-playback): start the Bubble Tea program here.
-	fmt.Fprintln(os.Stderr, "spotnik: TUI not yet implemented — coming in Feature 03")
-	return nil
+	// Inject the authenticated player client.
+	accessToken, _ := store.Get(keychain.KeyAccessToken)
+	player := api.NewPlayer("", accessToken)
+	a.SetPlayer(player)
+
+	// Start the Bubble Tea program.
+	p := tea.NewProgram(a, tea.WithAltScreen())
+	_, err = p.Run()
+	return err
 }
 
 // runAuth forces a fresh re-authentication flow.
