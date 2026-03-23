@@ -5,6 +5,7 @@ package state
 
 import (
 	"sync"
+	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
 )
@@ -48,6 +49,9 @@ type Store struct {
 	// Used by PlaylistManager to render the ▶ indicator next to the active playlist.
 	playingPlaylistID string
 
+	// netLog records all API calls for the network log panel.
+	netLog *NetLog
+
 	// Error state — one per data-fetching feature.
 	// Set by build*Cmd on failure, cleared on successful retry.
 	searchError          error
@@ -64,7 +68,9 @@ type Store struct {
 
 // New returns an empty Store with no playback state.
 func New() *Store {
-	return &Store{}
+	return &Store{
+		netLog: NewNetLog(),
+	}
 }
 
 // PlaybackState returns the current playback state, or nil if nothing is playing.
@@ -527,4 +533,28 @@ func (s *Store) ClearPlaylistsError() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlistsError = nil
+}
+
+// --- Network log accessors ---
+
+// RecordNetCall adds an API call record to the network log.
+// Implements api.NetLogRecorder.
+func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs int64) {
+	s.netLog.Add(NetLogEntry{
+		Timestamp:  time.Now(),
+		Method:     method,
+		Path:       path,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+	})
+}
+
+// NetLogEntries returns all network log entries in oldest-first order.
+func (s *Store) NetLogEntries() []NetLogEntry {
+	return s.netLog.Entries()
+}
+
+// NetLog returns the underlying NetLog ring buffer.
+func (s *Store) NetLog() *NetLog {
+	return s.netLog
 }
