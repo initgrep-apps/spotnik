@@ -40,7 +40,7 @@ itself is never modified, not that it must be the only view.
 │    Podcasts     (3) │  ████████████████░░░░░░░░░░   │     5  Repeat After Me │
 │                     │  2:34 ──────────────── 4:12   │                        │
 │  ─────────────────  │                               │  ────────────────────  │
-│  RECENTLY PLAYED    │  ⏮   ⏸   ⏭      🔀   🔁       │  5 tracks remaining     │
+│  RECENTLY PLAYED    │  ⏮   ⏸   ⏭      🔀   🔁       │  5 tracks remaining    │
 │  ─────────────────  │  ───────────────────────────  │                        │
 │  Blinding Lights    │  VOL  ████████░░░░░░  65%     │                        │
 │  Save Your Tears    │                               │                        │
@@ -76,10 +76,10 @@ Search opens as a **floating modal overlay** centered on screen. It does not rep
 │  Spotnik                                              ◉ MacBook Pro Speakers   │
 ├─────────────────────┬───────────────────────────────┬────────────────────────┤
 │  (dimmed)           │       ╭─────────────────────────────────╮ (dimmed)    │
-│                     │       │  🔍 Search                      │             │
-│                     │       │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │             │
-│                     │       │  > blinding lig█               │             │
-│                     │       │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │             │
+│                     │       │  🔍 Search                       │             │
+│                     │       │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ┄┄┄  ┄  │             │
+│                     │       │  > blinding lig█                │             │
+│                     │       │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  ┄┄┄  │             │
 │                     │       │  ● TRACKS                       │             │
 │                     │       │  ▶ Blinding Lights  · The Weeknd│             │
 │                     │       │    Blinding Lights  · Sunday Se │             │
@@ -101,16 +101,16 @@ Search opens as a **floating modal overlay** centered on screen. It does not rep
 
 ```
 ╭──────────────────────────────────────────────────────────────────────────────╮
-│  ...                                                                          │
+│  ...                                                                         │
 │                     ╭──────────────────────────────╮                         │
 │                     │  DEVICES                     │                         │
-│                     │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │                         │
+│                     │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄   │                         │
 │                     │  ◉ MacBook Pro   [active]    │                         │
 │                     │  ○ iPhone 14                 │                         │
 │                     │  ○ Kitchen Speaker           │                         │
 │                     │  ○ Living Room TV            │                         │
 │                     ╰──────────────────────────────╯                         │
-│                     ...                                                       │
+│                     ...                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
