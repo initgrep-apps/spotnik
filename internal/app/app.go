@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -382,18 +383,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case authSuccessMsg:
 		a.needsAuth = false
 		a.currentView = viewMain
-		// Inject API clients now that we have a token.
+		// Inject API clients with logging transport now that we have a token.
+		loggingClient := &http.Client{
+			Transport: api.NewLoggingTransport(http.DefaultTransport, a.store),
+		}
 		player := api.NewPlayer("", m.accessToken)
+		player.SetHTTPClient(loggingClient)
 		a.player = player
 		library := api.NewLibraryClient("", m.accessToken)
+		library.SetHTTPClient(loggingClient)
 		a.library = library
 		search := api.NewSearchClient("", m.accessToken)
+		search.SetHTTPClient(loggingClient)
 		a.search = search
 		devices := api.NewDevicesClient("", m.accessToken)
+		devices.SetHTTPClient(loggingClient)
 		a.devices = devices
 		userAPI := api.NewUserClient("", m.accessToken)
+		userAPI.SetHTTPClient(loggingClient)
 		a.userAPI = userAPI
 		playlistsAPI := api.NewPlaylistsClient("", m.accessToken)
+		playlistsAPI.SetHTTPClient(loggingClient)
 		a.playlistsAPI = playlistsAPI
 		// Start data fetching and tick loop.
 		return a, tea.Batch(

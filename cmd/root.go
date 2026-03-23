@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -281,13 +282,27 @@ func runApp(_ *cobra.Command, _ []string) error {
 	if !needsAuth {
 		// Inject API clients for already-authenticated users.
 		accessToken, _ := store.Get(keychain.KeyAccessToken)
+		loggingClient := &http.Client{
+			Transport: api.NewLoggingTransport(http.DefaultTransport, a.Store()),
+		}
 		player := api.NewPlayer("", accessToken)
+		player.SetHTTPClient(loggingClient)
 		a.SetPlayer(player)
-		a.SetLibrary(api.NewLibraryClient("", accessToken))
-		a.SetSearch(api.NewSearchClient("", accessToken))
-		a.SetDevices(api.NewDevicesClient("", accessToken))
-		a.SetUserAPI(api.NewUserClient("", accessToken))
-		a.SetPlaylistsAPI(api.NewPlaylistsClient("", accessToken))
+		library := api.NewLibraryClient("", accessToken)
+		library.SetHTTPClient(loggingClient)
+		a.SetLibrary(library)
+		search := api.NewSearchClient("", accessToken)
+		search.SetHTTPClient(loggingClient)
+		a.SetSearch(search)
+		devices := api.NewDevicesClient("", accessToken)
+		devices.SetHTTPClient(loggingClient)
+		a.SetDevices(devices)
+		userAPI := api.NewUserClient("", accessToken)
+		userAPI.SetHTTPClient(loggingClient)
+		a.SetUserAPI(userAPI)
+		playlists := api.NewPlaylistsClient("", accessToken)
+		playlists.SetHTTPClient(loggingClient)
+		a.SetPlaylistsAPI(playlists)
 	}
 
 	// Start the Bubble Tea program.

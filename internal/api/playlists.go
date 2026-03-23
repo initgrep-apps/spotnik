@@ -33,6 +33,11 @@ func NewPlaylistsClient(baseURL, accessToken string) *PlaylistsClient {
 	}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+func (p *PlaylistsClient) SetHTTPClient(c *http.Client) {
+	p.client = c
+}
+
 // CreatePlaylist creates a new playlist for the current user via POST /me/playlists.
 // Returns the created SimplePlaylist on success. Errors are wrapped with context.
 func (p *PlaylistsClient) CreatePlaylist(ctx context.Context, name, description string, public bool) (*SimplePlaylist, error) {

@@ -160,6 +160,11 @@ func NewSearchClient(baseURL, accessToken string) *SearchClient {
 	}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+func (s *SearchClient) SetHTTPClient(c *http.Client) {
+	s.client = c
+}
+
 // Search calls GET /v1/search with the given query, types, and per-type limit.
 // Always includes market=from_token per Spotify API recommendations.
 // types should contain one or more of: "track", "artist", "album", "playlist".

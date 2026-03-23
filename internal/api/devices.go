@@ -28,6 +28,11 @@ func NewDevicesClient(baseURL, token string) *DevicesClient {
 	}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+func (c *DevicesClient) SetHTTPClient(cl *http.Client) {
+	c.http = cl
+}
+
 // devicesResponse is the JSON envelope returned by GET /me/player/devices.
 type devicesResponse struct {
 	Devices []Device `json:"devices"`

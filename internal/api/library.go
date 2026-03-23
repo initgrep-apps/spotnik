@@ -34,6 +34,11 @@ func NewLibraryClient(baseURL, accessToken string) *LibraryClient {
 	}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+func (l *LibraryClient) SetHTTPClient(c *http.Client) {
+	l.client = c
+}
+
 // GetPlaylists fetches the user's saved playlists via GET /me/playlists.
 // Returns a slice of SimplePlaylist. Errors are wrapped with context.
 func (l *LibraryClient) GetPlaylists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error) {
