@@ -325,11 +325,3 @@ func storeTokens(store keychain.TokenStore, pair TokenPair) error {
 	}
 	return nil
 }
-
-// OpenBrowser opens the given URL in the default browser.
-// On macOS it uses `open`, on Linux `xdg-open`. Failure is not fatal.
-func OpenBrowser(urlStr string) error {
-	// NOTE: This uses os/exec which is acceptable for the browser-open UX helper.
-	// In tests, this function is not called.
-	return openBrowserPlatform(urlStr)
-}
