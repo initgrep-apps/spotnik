@@ -1,6 +1,7 @@
 package panes_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -410,4 +411,65 @@ func TestSearchOverlay_DebounceDelay(t *testing.T) {
 	// We just verify the command is non-nil and not a synchronous cmd
 	elapsed := time.Since(start)
 	assert.Less(t, elapsed, 50*time.Millisecond, "typing key should return immediately, not block")
+}
+
+func TestSearchOverlay_View_ShowsErrorOnSearchFailure(t *testing.T) {
+	s := state.New()
+	s.SetSearchQuery("blinding lights")
+	s.SetSearchError(fmt.Errorf("API error"))
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 30)
+
+	output := o.View()
+	assert.Contains(t, output, "Search failed", "should show error message when search fails")
+}
+
+func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {
+	s := state.New()
+	s.SetSearchQuery("zzz-nonexistent-query")
+	// Set empty results (all sections empty).
+	s.SetSearchResults(&api.SearchResult{})
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 30)
+
+	output := o.View()
+	assert.Contains(t, output, "No results for", "should show no-results message")
+}
+
+func TestSearchOverlay_View_ShowsResults(t *testing.T) {
+	s := state.New()
+	s.SetSearchQuery("blinding")
+	s.SetSearchResults(&api.SearchResult{
+		Tracks: api.SearchTracksResult{Items: []api.Track{
+			{ID: "t1", Name: "Blinding Lights", Artists: []api.Artist{{Name: "The Weeknd"}}},
+		}},
+	})
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 30)
+
+	output := o.View()
+	assert.Contains(t, output, "TRACKS", "should show tracks section header")
+	assert.Contains(t, output, "Blinding Lights", "should show track name in results")
+}
+
+func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 30)
+
+	// Type a character to get the input populated.
+	sendKey(t, o, "b")
+
+	// Simulate the debounce msg arriving with the correct query snapshot.
+	_, cmd := o.Update(panes.SearchDebounceMsgForTest("b"))
+
+	// The debounce should have produced a command that returns SearchRequestMsg.
+	require.NotNil(t, cmd, "debounce should produce a command")
+	msg := cmd()
+	_, ok := msg.(panes.SearchRequestMsg)
+	assert.True(t, ok, "debounce cmd should produce SearchRequestMsg, got %T", msg)
 }
