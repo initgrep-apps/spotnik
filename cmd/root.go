@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -190,8 +188,8 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	// Build the authorization URL.
 	authURL := api.BuildAuthURL(cfg.ClientID, redirectURI, challenge, api.SpotifyScopes)
 
-	// Print the styled auth prompt.
-	printAuthPrompt(authURL)
+	// Print auth URL for the CLI auth subcommand.
+	fmt.Printf("\nVisit this URL to authorize:\n  %s\n\nWaiting for authorization...\n", authURL)
 
 	// Open browser (best-effort — failure does not abort auth).
 	if err := api.OpenBrowser(authURL); err != nil {
@@ -231,8 +229,39 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	}
 }
 
+// CheckAuthState performs a non-blocking check of the token state.
+// Returns (needsAuth bool, clientID string).
+// If a valid token exists (or was refreshed), needsAuth is false.
+// If no token or refresh fails, needsAuth is true.
+// Exported for testing.
+func CheckAuthState(cfg *config.Config, store keychain.TokenStore) bool {
+	access, err := store.Get(keychain.KeyAccessToken)
+	if err != nil || access == "" {
+		return true
+	}
+
+	expiringSoon, err := store.IsExpiringSoon()
+	if err != nil {
+		return true
+	}
+
+	if expiringSoon {
+		refreshToken, err := store.Get(keychain.KeyRefreshToken)
+		if err != nil || refreshToken == "" {
+			return true
+		}
+		if err := api.Refresh(context.Background(), "", refreshToken, cfg.ClientID, store); err != nil {
+			_ = store.Delete()
+			return true
+		}
+	}
+
+	return false
+}
+
 // runApp is the main command handler. It loads config, checks auth state,
-// and launches the Bubble Tea application.
+// and launches the Bubble Tea application. The TUI starts immediately in
+// all cases — auth happens inside the TUI if needed.
 func runApp(_ *cobra.Command, _ []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -240,17 +269,26 @@ func runApp(_ *cobra.Command, _ []string) error {
 	}
 
 	store := keychain.NewKeychainTokenStore()
-	if err := EnsureAuthenticated(cfg, store, ""); err != nil {
-		return err
+	needsAuth := CheckAuthState(cfg, store)
+
+	opts := app.AppOptions{
+		NeedsAuth:  needsAuth,
+		ClientID:   cfg.ClientID,
+		TokenStore: store,
 	}
+	a := app.New(cfg, opts)
 
-	// App wires the theme into pane constructors at startup.
-	a := app.New(cfg)
-
-	// Inject the authenticated player client.
-	accessToken, _ := store.Get(keychain.KeyAccessToken)
-	player := api.NewPlayer("", accessToken)
-	a.SetPlayer(player)
+	if !needsAuth {
+		// Inject API clients for already-authenticated users.
+		accessToken, _ := store.Get(keychain.KeyAccessToken)
+		player := api.NewPlayer("", accessToken)
+		a.SetPlayer(player)
+		a.SetLibrary(api.NewLibraryClient("", accessToken))
+		a.SetSearch(api.NewSearchClient("", accessToken))
+		a.SetDevices(api.NewDevicesClient("", accessToken))
+		a.SetUserAPI(api.NewUserClient("", accessToken))
+		a.SetPlaylistsAPI(api.NewPlaylistsClient("", accessToken))
+	}
 
 	// Start the Bubble Tea program.
 	p := tea.NewProgram(a, tea.WithAltScreen())
@@ -323,31 +361,3 @@ func printSetupInstructions() {
 	_ = PrintMissingClientIDInstructions(os.Stdout)
 }
 
-// printAuthPrompt renders a styled TUI box for the auth flow.
-// The URL is truncated to 60 chars to avoid terminal overflow.
-func printAuthPrompt(authURL string) {
-	// Truncate URL for display (full URL is still opened in browser).
-	displayURL := authURL
-	if len(displayURL) > 60 {
-		displayURL = displayURL[:57] + "..."
-	}
-
-	lines := []string{
-		"",
-		"  Authentication Required",
-		"",
-		"  Visit this URL to authorize:",
-		"  " + displayURL,
-		"",
-		"  Press Enter to open in browser",
-		"  Waiting for authorization...",
-		"",
-	}
-
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1).
-		Render(strings.Join(lines, "\n"))
-
-	fmt.Println(box)
-}
