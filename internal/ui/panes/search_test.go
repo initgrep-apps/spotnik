@@ -83,6 +83,8 @@ func sendKey(o *panes.SearchOverlay, key string) (*panes.SearchOverlay, tea.Cmd)
 		msg = tea.KeyMsg{Type: tea.KeyDown}
 	case "ctrl+u":
 		msg = tea.KeyMsg{Type: tea.KeyCtrlU}
+	case "ctrl+a":
+		msg = tea.KeyMsg{Type: tea.KeyCtrlA}
 	default:
 		// Regular rune key
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
@@ -202,18 +204,18 @@ func TestSearchOverlay_Update_Esc(t *testing.T) {
 	assert.IsType(t, panes.SearchClosedMsg{}, msg, "Esc should return SearchClosedMsg")
 }
 
-// TestSearchOverlay_Update_A verifies 'a' on a track returns an add-to-queue command.
+// TestSearchOverlay_Update_A verifies Ctrl+A on a track returns an add-to-queue command.
 func TestSearchOverlay_Update_A(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
-	// First result is a track; press 'a' to add to queue
-	_, cmd := sendKey(o, "a")
+	// First result is a track; press Ctrl+A to add to queue
+	_, cmd := sendKey(o, "ctrl+a")
 
 	require.NotNil(t, cmd)
 	msg := cmd()
 	qMsg, ok := msg.(AddToQueueMsg)
-	require.True(t, ok, "pressing 'a' on track should produce AddToQueueMsg")
+	require.True(t, ok, "pressing Ctrl+A on track should produce AddToQueueMsg")
 	assert.Equal(t, "spotify:track:t1", qMsg.TrackURI)
 }
 
@@ -242,7 +244,7 @@ func TestSearchOverlay_Update_ShiftTab(t *testing.T) {
 	assert.NotEqual(t, afterForward, o.ActiveSection(), "Shift+Tab should move to previous section")
 }
 
-// TestSearchOverlay_Update_JK verifies j/k navigation moves cursor within section.
+// TestSearchOverlay_Update_JK verifies arrow key navigation moves cursor within section.
 func TestSearchOverlay_Update_JK(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
@@ -250,11 +252,22 @@ func TestSearchOverlay_Update_JK(t *testing.T) {
 	// Tracks section has 2 items; start at item 0
 	initialCursor := o.CursorPos()
 
-	o, _ = sendKey(o, "j")
-	assert.Equal(t, initialCursor+1, o.CursorPos(), "j should move cursor down")
+	o, _ = sendKey(o, "down")
+	assert.Equal(t, initialCursor+1, o.CursorPos(), "down arrow should move cursor down")
 
+	o, _ = sendKey(o, "up")
+	assert.Equal(t, initialCursor, o.CursorPos(), "up arrow should move cursor back up")
+}
+
+// TestSearchOverlay_Update_TypingJKA verifies j, k, a are typed into the input.
+func TestSearchOverlay_Update_TypingJKA(t *testing.T) {
+	o := newTestSearchOverlay()
+	o, _ = sendKey(o, "j")
+	o, _ = sendKey(o, "a")
 	o, _ = sendKey(o, "k")
-	assert.Equal(t, initialCursor, o.CursorPos(), "k should move cursor back up")
+	assert.Contains(t, o.Query(), "j", "j should be typed into input")
+	assert.Contains(t, o.Query(), "a", "a should be typed into input")
+	assert.Contains(t, o.Query(), "k", "k should be typed into input")
 }
 
 // TestSearchOverlay_Update_CtrlU verifies Ctrl+U clears the input.

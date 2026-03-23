@@ -192,15 +192,13 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.Type == tea.KeyShiftTab:
 		return o.moveSectionBackward()
 
-	case m.Type == tea.KeyUp || (m.Type == tea.KeyRunes && string(m.Runes) == "k"):
-		// k and ↑ only navigate when cursor is not at the text input level.
-		// Since input is always focused for typing, j/k navigate the result list.
+	case m.Type == tea.KeyUp:
 		return o.moveCursorUp()
 
-	case m.Type == tea.KeyDown || (m.Type == tea.KeyRunes && string(m.Runes) == "j"):
+	case m.Type == tea.KeyDown:
 		return o.moveCursorDown()
 
-	case m.Type == tea.KeyRunes && string(m.Runes) == "a":
+	case m.Type == tea.KeyCtrlA:
 		return o.handleAddToQueue()
 
 	case m.Type == tea.KeyCtrlU:
