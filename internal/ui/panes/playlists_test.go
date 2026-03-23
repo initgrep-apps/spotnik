@@ -1,6 +1,7 @@
 package panes_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -648,4 +649,77 @@ func TestPlaylistManager_FormatDuration(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestPlaylistManager_View_ErrorState verifies that when the store has a PlaylistsError,
+// the view shows "Failed to load playlists" with a retry hint (B16 fix).
+func TestPlaylistManager_View_ErrorState(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+	s.SetPlaylistsError(fmt.Errorf("spotify: 500 internal server error"))
+	pm := panes.NewPlaylistManager(s, th)
+	pm.SetSize(120, 30)
+
+	view := pm.View()
+	assert.Contains(t, view, "Failed to load playlists", "error state must show failure message")
+	assert.Contains(t, view, "retry", "error state must show retry hint")
+}
+
+// TestPlaylistManager_View_ErrorCleared verifies that once PlaylistsError is cleared,
+// the normal playlist list renders.
+func TestPlaylistManager_View_ErrorCleared(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+	s.SetPlaylistsError(fmt.Errorf("transient error"))
+	pm := panes.NewPlaylistManager(s, th)
+	pm.SetSize(120, 30)
+
+	// Error present — error view renders.
+	view := pm.View()
+	assert.Contains(t, view, "Failed to load playlists")
+
+	// Clear error and populate data.
+	s.ClearPlaylistsError()
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "My Playlist", URI: "spotify:playlist:pl-1", TrackCount: 10},
+	})
+
+	view = pm.View()
+	assert.NotContains(t, view, "Failed to load playlists", "error should not show after cleared")
+	assert.Contains(t, view, "My Playlist", "playlist should appear after error cleared")
+}
+
+// TestPlaylistManager_Init_RequestsPlaylistData verifies that Init returns a
+// command requesting playlist data when store is empty (B16 fix).
+func TestPlaylistManager_Init_RequestsPlaylistData(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+	// Store has no playlists.
+	pm := panes.NewPlaylistManager(s, th)
+
+	cmd := pm.Init()
+	// When store is empty, Init should emit a FetchPlaylistsRequestMsg.
+	require.NotNil(t, cmd, "Init should return a non-nil command when playlists not loaded")
+
+	msg := cmd()
+	_, ok := msg.(panes.FetchPlaylistsRequestMsg)
+	require.True(t, ok, "Init command should return FetchPlaylistsRequestMsg, got %T", msg)
+}
+
+// TestPlaylistManager_Init_NoFetchWhenDataLoaded verifies that Init returns nil
+// when playlists are already in the store (avoid duplicate fetches).
+func TestPlaylistManager_Init_NoFetchWhenDataLoaded(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Already Loaded", URI: "spotify:playlist:pl-1", TrackCount: 5},
+	})
+	pm := panes.NewPlaylistManager(s, th)
+
+	cmd := pm.Init()
+	assert.Nil(t, cmd, "Init should return nil when playlists already loaded")
 }

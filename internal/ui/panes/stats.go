@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -253,8 +254,17 @@ func (sv *StatsView) handleCycleRange() (tea.Model, tea.Cmd) {
 }
 
 // View renders the stats dashboard. It is pure — no external calls.
-// Always renders the full dashboard structure; sections show empty states when data is absent.
+// If the store has a StatsError, renders an error box instead of the dashboard.
+// NOTE: only app.go renders the status bar — no pane-level hint bar here.
 func (sv *StatsView) View() string {
+	if err := sv.store.StatsError(); err != nil {
+		return components.RenderError(
+			sv.theme,
+			sv.width, sv.height,
+			"Failed to load stats",
+			"Press f to retry",
+		)
+	}
 	return sv.renderDashboard()
 }
 
@@ -285,8 +295,6 @@ func (sv *StatsView) renderDashboard() string {
 
 	sb.WriteString("\n")
 	sb.WriteString(sv.renderRecentlyPlayedSection())
-	sb.WriteString("\n")
-	sb.WriteString(sv.renderHelpBar())
 
 	return sb.String()
 }
@@ -450,21 +458,6 @@ func (sv *StatsView) renderTimeRangeToggle(sectionFocused bool) string {
 		}
 	}
 	return "  " + strings.Join(parts, " ")
-}
-
-// renderHelpBar renders the keybinding hint line at the bottom.
-func (sv *StatsView) renderHelpBar() string {
-	style := lipgloss.NewStyle().Foreground(sv.theme.TextMuted())
-	keyStyle := lipgloss.NewStyle().Foreground(sv.theme.KeyHint()).Bold(true)
-
-	hints := []string{
-		keyStyle.Render("Tab") + " next section",
-		keyStyle.Render("j/k") + " move",
-		keyStyle.Render("Enter") + " play",
-		keyStyle.Render("f") + " cycle time range",
-		keyStyle.Render("1") + " library view",
-	}
-	return style.Render("  " + strings.Join(hints, "   "))
 }
 
 // FormatRelativeTime returns a human-readable relative timestamp per the spec:

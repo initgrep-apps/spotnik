@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -104,8 +105,15 @@ func (pm *PlaylistManager) SetSize(w, h int) {
 	pm.height = h
 }
 
-// Init satisfies tea.Model. No startup commands needed — data comes from the store.
+// Init satisfies tea.Model. Requests playlists from the API if the store is empty.
+// If the store already has playlists (e.g. the user navigated away and back), no fetch
+// is triggered to avoid unnecessary duplicate API calls.
 func (pm *PlaylistManager) Init() tea.Cmd {
+	if len(pm.store.Playlists()) == 0 {
+		return func() tea.Msg {
+			return FetchPlaylistsRequestMsg{Offset: 0}
+		}
+	}
 	return nil
 }
 
@@ -505,7 +513,18 @@ func (pm *PlaylistManager) loadTracksFromStore() {
 }
 
 // View renders the full Playlist Manager view.
+// If the store has a PlaylistsError, renders an error box instead of the playlist layout.
+// NOTE: only app.go renders the status bar — no pane-level hint bar here.
 func (pm *PlaylistManager) View() string {
+	if err := pm.store.PlaylistsError(); err != nil {
+		return components.RenderError(
+			pm.theme,
+			pm.width, pm.height,
+			"Failed to load playlists",
+			"Press 3 to retry",
+		)
+	}
+
 	if pm.width <= 0 || pm.height <= 0 {
 		return pm.renderSimple()
 	}
