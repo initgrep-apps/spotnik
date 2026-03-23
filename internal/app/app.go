@@ -823,8 +823,10 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 		}
 		playlists, err := library.GetPlaylists(context.Background(), 50, offset)
 		if err != nil {
+			store.SetPlaylistsFetchError(err)
 			return panes.LibraryLoadedMsg{}
 		}
+		store.ClearPlaylistsFetchError()
 		if offset == 0 {
 			store.SetPlaylists(playlists)
 		} else {
@@ -845,8 +847,10 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 		}
 		albums, err := library.GetSavedAlbums(context.Background(), 50, offset)
 		if err != nil {
+			store.SetAlbumsFetchError(err)
 			return panes.AlbumsLoadedMsg{}
 		}
+		store.ClearAlbumsFetchError()
 		store.SetSavedAlbums(albums)
 		return panes.AlbumsLoadedMsg{}
 	}
@@ -862,8 +866,10 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 		}
 		tracks, err := library.GetLikedTracks(context.Background(), 50, offset)
 		if err != nil {
+			store.SetLikedTracksFetchError(err)
 			return panes.LikedTracksLoadedMsg{}
 		}
+		store.ClearLikedTracksFetchError()
 		store.SetLikedTracks(tracks)
 		store.SetLikedTotal(len(tracks) + offset)
 		return panes.LikedTracksLoadedMsg{}
@@ -880,8 +886,10 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 		}
 		items, err := library.GetRecentlyPlayed(context.Background(), 20)
 		if err != nil {
+			store.SetRecentPlayedFetchError(err)
 			return panes.RecentlyPlayedLoadedMsg{}
 		}
+		store.ClearRecentPlayedFetchError()
 		store.SetRecentlyPlayed(items)
 		return panes.RecentlyPlayedLoadedMsg{}
 	}
@@ -920,8 +928,10 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 		)
 		if err != nil {
 			store.SetSearchLoading(false)
+			store.SetSearchError(err)
 			return panes.SearchResultsMsg{Err: err}
 		}
+		store.ClearSearchError()
 		store.SetSearchResults(results)
 		store.SetSearchLoading(false)
 		return panes.SearchResultsMsg{}
@@ -932,12 +942,18 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 // and delivers them back to the DeviceOverlay via devicesLoadedMsg.
 func (a *App) buildFetchDevicesCmd() tea.Cmd {
 	devices := a.devices
+	store := a.store
 	return func() tea.Msg {
 		if devices == nil {
 			// Deliver empty list when no client is injected (tests / uninitialized).
 			return panes.NewDevicesLoadedMsg(nil, nil)
 		}
 		devList, err := devices.GetDevices(context.Background())
+		if err != nil {
+			store.SetDevicesError(err)
+		} else {
+			store.ClearDevicesError()
+		}
 		return panes.NewDevicesLoadedMsg(devList, err)
 	}
 }
@@ -985,12 +1001,15 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 		ctx := context.Background()
 		tracks, err := userAPI.GetTopTracks(ctx, timeRange, 25)
 		if err != nil {
+			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
 		artists, err := userAPI.GetTopArtists(ctx, timeRange, 25)
 		if err != nil {
+			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
+		store.ClearStatsError()
 		store.SetTopTracks(timeRange, tracks)
 		store.SetTopArtists(timeRange, artists)
 		return panes.StatsLoadedMsg{TimeRange: timeRange}
@@ -1006,8 +1025,10 @@ func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
 		}
 		qr, err := player.GetQueue(context.Background())
 		if err != nil {
+			store.SetQueueError(err)
 			return panes.QueueLoadedMsg{}
 		}
+		store.ClearQueueError()
 		if qr != nil {
 			store.SetQueue(qr.Queue)
 		}
@@ -1384,8 +1405,10 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 		}
 		tracks, err := library.GetPlaylistTracks(context.Background(), playlistID, 100, 0)
 		if err != nil {
+			store.SetPlaylistsError(err)
 			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
 		}
+		store.ClearPlaylistsError()
 		store.SetPlaylistTracks(playlistID, tracks)
 		return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
 	}
