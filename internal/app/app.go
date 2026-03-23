@@ -629,24 +629,24 @@ func (a *App) View() string {
 }
 
 // renderWithSearchOverlay renders the three-pane view dimmed and places the
-// search overlay on top using lipgloss.Place() per the DESIGN.md spec.
+// search overlay centered on top using lipgloss.Place() per the DESIGN.md spec.
 func (a *App) renderWithSearchOverlay(background string) string {
-	// Dim the background using Faint styling per DESIGN.md.
-	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
-
 	overlay := a.searchPane.View()
+	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
 	if a.width <= 0 || a.height <= 0 {
 		return dimmed + "\n" + overlay
 	}
 
-	// Place the overlay centered in the terminal.
-	return lipgloss.Place(
+	// Center the overlay on a consistent black background so the dimmed
+	// three-pane view is replaced with a uniform dark surface behind the modal.
+	centered := lipgloss.Place(
 		a.width, a.height,
 		lipgloss.Center, lipgloss.Center,
 		overlay,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "#000000", Dark: "#000000"}),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
 	)
+	return centered
 }
 
 // renderTooSmall renders the minimum size message per DESIGN.md.
