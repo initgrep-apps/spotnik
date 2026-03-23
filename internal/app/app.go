@@ -1191,32 +1191,7 @@ func (a *App) renderWithSearchOverlay(background string) string {
 // renderTooSmall renders the minimum size message per DESIGN.md.
 // renderSplash renders the startup splash screen with ASCII art branding.
 func (a *App) renderSplash() string {
-	banner := `
-  ___  ___  ___ _____ _  _ ___ _  __
- / __|/ _ \/ _ \_   _| \| |_ _| |/ /
- \__ \ ___/ (_) || | | .  || ||   <
- |___/|_|  \___/ |_| |_|\_|___|_|\_\
-`
-	bannerStyle := lipgloss.NewStyle().
-		Foreground(a.theme.ActiveBorder()).
-		Bold(true)
-
-	tagline := lipgloss.NewStyle().
-		Foreground(a.theme.TextMuted()).
-		Render("A terminal Spotify client for developers")
-
-	version := lipgloss.NewStyle().
-		Foreground(a.theme.TextMuted()).
-		Render("v1.1.0")
-
-	content := lipgloss.JoinVertical(lipgloss.Center,
-		bannerStyle.Render(banner),
-		"",
-		tagline,
-		version,
-	)
-
-	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, content)
+	return renderSplashView(a.theme, a.width, a.height)
 }
 
 func (a *App) renderTooSmall() string {
