@@ -179,36 +179,36 @@ func (o *SearchOverlay) handleDebounce(m searchDebounceMsg) (tea.Model, tea.Cmd)
 
 // handleKey processes key events for the overlay.
 func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case m.Type == tea.KeyEsc:
+	switch m.Type {
+	case tea.KeyEsc:
 		return o, func() tea.Msg { return SearchClosedMsg{} }
 
-	case m.Type == tea.KeyEnter:
+	case tea.KeyEnter:
 		return o.handleEnter()
 
-	case m.Type == tea.KeyTab:
+	case tea.KeyTab:
 		return o.moveSectionForward()
 
-	case m.Type == tea.KeyShiftTab:
+	case tea.KeyShiftTab:
 		return o.moveSectionBackward()
 
-	case m.Type == tea.KeyUp:
+	case tea.KeyUp:
 		return o.moveCursorUp()
 
-	case m.Type == tea.KeyDown:
+	case tea.KeyDown:
 		return o.moveCursorDown()
 
-	case m.Type == tea.KeyCtrlA:
+	case tea.KeyCtrlA:
 		return o.handleAddToQueue()
 
-	case m.Type == tea.KeyCtrlU:
+	case tea.KeyCtrlU:
 		o.input.SetValue("")
 		o.store.SetSearchResults(nil)
 		o.store.SetSearchQuery("")
 		o.cursorPos = 0
 		return o, nil
 
-	case m.Type == tea.KeyBackspace:
+	case tea.KeyBackspace:
 		// Let textinput handle backspace normally.
 		var cmd tea.Cmd
 		o.input, cmd = o.input.Update(m)

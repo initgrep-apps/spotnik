@@ -712,8 +712,7 @@ func TestApp_SearchDebounceRouted(t *testing.T) {
 
 	// Send the debounce message (simulates the 300ms tick firing)
 	debounceMsg := panes.SearchDebounceMsgForTest("x")
-	model, cmd := a.Update(debounceMsg)
-	a = model.(*app.App)
+	_, cmd := a.Update(debounceMsg)
 
 	// The debounce should have been routed to the search overlay,
 	// which should emit a SearchRequestMsg command

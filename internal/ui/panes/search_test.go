@@ -64,7 +64,8 @@ func newTestSearchOverlayWithResults() (*panes.SearchOverlay, *state.Store) {
 }
 
 // sendKey sends a key message to the overlay and returns the updated model.
-func sendKey(o *panes.SearchOverlay, key string) (*panes.SearchOverlay, tea.Cmd) {
+func sendKey(t *testing.T, o *panes.SearchOverlay, key string) (*panes.SearchOverlay, tea.Cmd) {
+	t.Helper()
 	var msg tea.KeyMsg
 	switch key {
 	case "enter":
@@ -92,7 +93,7 @@ func sendKey(o *panes.SearchOverlay, key string) (*panes.SearchOverlay, tea.Cmd)
 
 	model, cmd := o.Update(msg)
 	updated, ok := model.(*panes.SearchOverlay)
-	require.True(nil, ok, "Update must return *panes.SearchOverlay")
+	require.True(t, ok, "Update must return *panes.SearchOverlay")
 	return updated, cmd
 }
 
@@ -104,9 +105,9 @@ func TestDebounce_StaleQueryIgnored(t *testing.T) {
 	o := newTestSearchOverlay()
 
 	// Type 'x', triggering a debounce tick with query "x"
-	o, _ = sendKey(o, "x")
+	o, _ = sendKey(t, o, "x")
 	// Type 'y', changing query to "xy" before the tick fires
-	o, _ = sendKey(o, "y")
+	o, _ = sendKey(t, o, "y")
 
 	// Now fire the debounce tick for the stale query "x" (it's now "xy", so "x" is stale)
 	staleMsg := panes.SearchDebounceMsgForTest("x")
@@ -125,7 +126,7 @@ func TestDebounce_CurrentQueryFires(t *testing.T) {
 	o := newTestSearchOverlay()
 
 	// Type 'x' (a character that is not intercepted as an action key), query becomes "x"
-	o, _ = sendKey(o, "x")
+	o, _ = sendKey(t, o, "x")
 	require.Equal(t, "x", o.Query(), "query should be 'x' after typing 'x'")
 
 	// Fire debounce tick for the current query "x"
@@ -164,7 +165,7 @@ func TestSearchOverlay_Init_FocusesInput(t *testing.T) {
 func TestSearchOverlay_Update_Typing(t *testing.T) {
 	o := newTestSearchOverlay()
 
-	o, cmd := sendKey(o, "h")
+	o, cmd := sendKey(t, o, "h")
 
 	assert.NotNil(t, cmd, "typing should schedule a debounce tick command")
 	assert.Contains(t, o.Query(), "h", "query should contain typed character")
@@ -174,11 +175,11 @@ func TestSearchOverlay_Update_Typing(t *testing.T) {
 func TestSearchOverlay_Update_Backspace(t *testing.T) {
 	o := newTestSearchOverlay()
 
-	o, _ = sendKey(o, "x")
-	o, _ = sendKey(o, "y")
+	o, _ = sendKey(t, o, "x")
+	o, _ = sendKey(t, o, "y")
 	require.Contains(t, o.Query(), "y")
 
-	o, _ = sendKey(o, "backspace")
+	o, _ = sendKey(t, o, "backspace")
 	assert.NotContains(t, o.Query(), "y", "backspace should remove last character")
 }
 
@@ -187,7 +188,7 @@ func TestSearchOverlay_Update_Enter(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
-	_, cmd := sendKey(o, "enter")
+	_, cmd := sendKey(t, o, "enter")
 
 	// Enter should produce a command (play or close)
 	assert.NotNil(t, cmd, "Enter should produce a play command")
@@ -197,7 +198,7 @@ func TestSearchOverlay_Update_Enter(t *testing.T) {
 func TestSearchOverlay_Update_Esc(t *testing.T) {
 	o := newTestSearchOverlay()
 
-	_, cmd := sendKey(o, "esc")
+	_, cmd := sendKey(t, o, "esc")
 
 	require.NotNil(t, cmd)
 	msg := cmd()
@@ -210,7 +211,7 @@ func TestSearchOverlay_Update_A(t *testing.T) {
 	o.SetSize(80, 40)
 
 	// First result is a track; press Ctrl+A to add to queue
-	_, cmd := sendKey(o, "ctrl+a")
+	_, cmd := sendKey(t, o, "ctrl+a")
 
 	require.NotNil(t, cmd)
 	msg := cmd()
@@ -225,7 +226,7 @@ func TestSearchOverlay_Update_Tab(t *testing.T) {
 	o.SetSize(80, 40)
 
 	initialSection := o.ActiveSection()
-	o, _ = sendKey(o, "tab")
+	o, _ = sendKey(t, o, "tab")
 
 	assert.NotEqual(t, initialSection, o.ActiveSection(), "Tab should move to next section")
 }
@@ -236,10 +237,10 @@ func TestSearchOverlay_Update_ShiftTab(t *testing.T) {
 	o.SetSize(80, 40)
 
 	// Move forward first, then back
-	o, _ = sendKey(o, "tab")
-	o, _ = sendKey(o, "tab")
+	o, _ = sendKey(t, o, "tab")
+	o, _ = sendKey(t, o, "tab")
 	afterForward := o.ActiveSection()
-	o, _ = sendKey(o, "shift+tab")
+	o, _ = sendKey(t, o, "shift+tab")
 
 	assert.NotEqual(t, afterForward, o.ActiveSection(), "Shift+Tab should move to previous section")
 }
@@ -252,19 +253,19 @@ func TestSearchOverlay_Update_JK(t *testing.T) {
 	// Tracks section has 2 items; start at item 0
 	initialCursor := o.CursorPos()
 
-	o, _ = sendKey(o, "down")
+	o, _ = sendKey(t, o, "down")
 	assert.Equal(t, initialCursor+1, o.CursorPos(), "down arrow should move cursor down")
 
-	o, _ = sendKey(o, "up")
+	o, _ = sendKey(t, o, "up")
 	assert.Equal(t, initialCursor, o.CursorPos(), "up arrow should move cursor back up")
 }
 
 // TestSearchOverlay_Update_TypingJKA verifies j, k, a are typed into the input.
 func TestSearchOverlay_Update_TypingJKA(t *testing.T) {
 	o := newTestSearchOverlay()
-	o, _ = sendKey(o, "j")
-	o, _ = sendKey(o, "a")
-	o, _ = sendKey(o, "k")
+	o, _ = sendKey(t, o, "j")
+	o, _ = sendKey(t, o, "a")
+	o, _ = sendKey(t, o, "k")
 	assert.Contains(t, o.Query(), "j", "j should be typed into input")
 	assert.Contains(t, o.Query(), "a", "a should be typed into input")
 	assert.Contains(t, o.Query(), "k", "k should be typed into input")
@@ -274,14 +275,14 @@ func TestSearchOverlay_Update_TypingJKA(t *testing.T) {
 func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 	o := newTestSearchOverlay()
 
-	o, _ = sendKey(o, "h")
-	o, _ = sendKey(o, "e")
-	o, _ = sendKey(o, "l")
-	o, _ = sendKey(o, "l")
-	o, _ = sendKey(o, "o") // letters that are not action keys
+	o, _ = sendKey(t, o, "h")
+	o, _ = sendKey(t, o, "e")
+	o, _ = sendKey(t, o, "l")
+	o, _ = sendKey(t, o, "l")
+	o, _ = sendKey(t, o, "o") // letters that are not action keys
 	require.Contains(t, o.Query(), "hello", "query should be 'hello' after typing those chars")
 
-	o, _ = sendKey(o, "ctrl+u")
+	o, _ = sendKey(t, o, "ctrl+u")
 	assert.Empty(t, o.Query(), "Ctrl+U should clear the entire input")
 }
 
@@ -402,7 +403,7 @@ func TestSearchOverlay_DebounceDelay(t *testing.T) {
 	o := newTestSearchOverlay()
 
 	start := time.Now()
-	_, cmd := sendKey(o, "x") // use 'x', not an action key
+	_, cmd := sendKey(t, o, "x") // use 'x', not an action key
 	require.NotNil(t, cmd)
 
 	// The command schedules a debounce tick — it should not fire immediately
