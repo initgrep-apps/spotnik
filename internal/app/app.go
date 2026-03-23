@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -14,6 +15,14 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+)
+
+// focusedPane identifies which pane currently has keyboard focus.
+type focusedPane int
+
+const (
+	focusPlayer  focusedPane = iota // default: player pane has focus
+	focusLibrary                    // library pane has focus
 )
 
 // App is the root application model. It owns the active theme, the central
@@ -29,8 +38,18 @@ type App struct {
 	// It is nil when no access token is available.
 	player *api.Player
 
+	// library is the Spotify API client for library operations.
+	// It is nil when no access token is available.
+	library *api.LibraryClient
+
 	// playerPane is the center pane (currently playing + controls).
 	playerPane *panes.PlayerPane
+
+	// libraryPane is the left pane (library browser).
+	libraryPane *panes.LibraryPane
+
+	// focus tracks which pane has keyboard focus.
+	focus focusedPane
 
 	// width and height are set by WindowSizeMsg.
 	width  int
@@ -44,12 +63,15 @@ func New(cfg *config.Config) *App {
 	t := theme.Load(cfg.UI.Theme)
 	s := state.New()
 
-	playerPane := panes.NewPlayerPane(s, t, true) // player pane is focused by default
+	playerPane := panes.NewPlayerPane(s, t, true)    // player pane is focused by default
+	libraryPane := panes.NewLibraryPane(s, t, false) // library pane starts unfocused
 
 	return &App{
-		theme:      t,
-		store:      s,
-		playerPane: playerPane,
+		theme:       t,
+		store:       s,
+		playerPane:  playerPane,
+		libraryPane: libraryPane,
+		focus:       focusPlayer,
 	}
 }
 
@@ -72,11 +94,31 @@ func (a *App) SetPlayer(player *api.Player) {
 	a.playerPane.SetPlayer(player)
 }
 
+// SetLibrary injects the Spotify API library client into the app.
+// Called by the root CLI after authentication succeeds.
+func (a *App) SetLibrary(library *api.LibraryClient) {
+	a.library = library
+	a.libraryPane.SetLibrary(library)
+}
+
+// LibraryFocused returns true if the library pane currently has keyboard focus.
+// Exported for integration tests.
+func (a *App) LibraryFocused() bool {
+	return a.focus == focusLibrary
+}
+
+// PlayerFocused returns true if the player pane currently has keyboard focus.
+// Exported for integration tests.
+func (a *App) PlayerFocused() bool {
+	return a.focus == focusPlayer
+}
+
 // Init starts the polling loop and fetches initial playback state.
-// Returns a batch: first fetch + tick every 1s.
+// Also initializes the library pane (fetches playlists + recently played).
 func (a *App) Init() tea.Cmd {
 	return tea.Batch(
 		panes.FetchPlaybackStateCmd(a.player, a.store),
+		a.libraryPane.Init(),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
@@ -89,17 +131,33 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = m.Width
 		a.height = m.Height
-		// Give the player pane the full width; reserve 2 rows for header/status.
-		a.playerPane.SetSize(m.Width, m.Height-2)
+		// Distribute width: library gets 30%, player gets 70%; reserve 2 rows for header/status.
+		libraryWidth := m.Width * 30 / 100
+		playerWidth := m.Width - libraryWidth
+		a.libraryPane.SetSize(libraryWidth, m.Height-2)
+		a.playerPane.SetSize(playerWidth, m.Height-2)
 		return a, nil
 
 	case tea.KeyMsg:
-		// Route key events to the active pane.
-		updatedPane, cmd := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
-			a.playerPane = pp
+		// Tab rotates focus between library and player.
+		if m.Type == tea.KeyTab {
+			return a.rotateFocus()
 		}
-		return a, cmd
+		// Route key events to the focused pane.
+		switch a.focus {
+		case focusLibrary:
+			updated, cmd := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, cmd
+		default:
+			updatedPane, cmd := a.playerPane.Update(m)
+			if pp, ok := updatedPane.(*panes.PlayerPane); ok {
+				a.playerPane = pp
+			}
+			return a, cmd
+		}
 
 	case panes.TickMsg:
 		// On each tick: update local progress + reschedule + fetch playback state.
@@ -128,18 +186,76 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, panes.FetchPlaybackStateCmd(a.player, a.store)
 		}
 		return a, nil
+
+	case panes.PlayContextMsg:
+		// Library pane selected a playlist or album — dispatch play command.
+		return a, a.buildPlayContextCmd(m.ContextURI)
+
+	case panes.PlayTrackMsg:
+		// Library pane selected a specific track — dispatch play track command.
+		return a, a.buildPlayTrackCmd(m.TrackURI)
 	}
 
+	// Forward unhandled messages to the library pane (e.g., library loaded msgs).
+	updated, cmd := a.libraryPane.Update(msg)
+	if lp, ok := updated.(*panes.LibraryPane); ok {
+		a.libraryPane = lp
+	}
+	return a, cmd
+}
+
+// rotateFocus cycles keyboard focus between library and player panes.
+func (a *App) rotateFocus() (*App, tea.Cmd) {
+	switch a.focus {
+	case focusPlayer:
+		a.focus = focusLibrary
+		a.playerPane.SetFocused(false)
+		a.libraryPane.SetFocused(true)
+	default:
+		a.focus = focusPlayer
+		a.libraryPane.SetFocused(false)
+		a.playerPane.SetFocused(true)
+	}
 	return a, nil
 }
 
-// View renders the full terminal UI.
+// buildPlayContextCmd dispatches a play command for a playlist or album context URI.
+func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
+	player := a.player
+	return func() tea.Msg {
+		if player == nil {
+			return panes.PlaybackCmdSentMsg{}
+		}
+		err := player.Play(context.Background(), api.PlayOptions{ContextURI: contextURI})
+		return panes.PlaybackCmdSentMsg{Err: err}
+	}
+}
+
+// buildPlayTrackCmd dispatches a play command for a specific track URI.
+func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
+	player := a.player
+	return func() tea.Msg {
+		if player == nil {
+			return panes.PlaybackCmdSentMsg{}
+		}
+		err := player.Play(context.Background(), api.PlayOptions{URIs: []string{trackURI}})
+		return panes.PlaybackCmdSentMsg{Err: err}
+	}
+}
+
+// View renders the full terminal UI as a three-pane layout:
+// Library (left) | Player (center) | (Queue pane to be added in feature 06)
 func (a *App) View() string {
 	header := a.renderHeader()
+	library := a.libraryPane.View()
 	player := a.playerPane.View()
 	statusBar := a.renderStatusBar()
 
-	return strings.Join([]string{header, player, statusBar}, "\n")
+	// Render library and player side-by-side.
+	// Use a simple separator — the panes render themselves without borders for now.
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, library, "  ", player)
+
+	return strings.Join([]string{header, mainContent, statusBar}, "\n")
 }
 
 // renderHeader renders the top bar with the app name and active device.

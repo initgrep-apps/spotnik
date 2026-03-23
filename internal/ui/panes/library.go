@@ -344,19 +344,22 @@ type recentlyPlayedLoadedMsg struct {
 	items []api.PlayHistory
 }
 
-// playContextMsg is sent when the user selects a playlist or album to play.
-type playContextMsg struct {
-	contextURI string
+// PlayContextMsg is sent when the user selects a playlist or album to play.
+// The root app model receives this and dispatches a play command to the API.
+type PlayContextMsg struct {
+	ContextURI string
 }
 
-// playTrackMsg is sent when the user selects a specific track to play.
-type playTrackMsg struct {
-	trackURI string
+// PlayTrackMsg is sent when the user selects a specific track to play.
+// The root app model receives this and dispatches a play command to the API.
+type PlayTrackMsg struct {
+	TrackURI string
 }
 
-// addToQueueMsg is sent when the user presses 'a' on a track.
-type addToQueueMsg struct {
-	trackURI string
+// AddToQueueMsg is sent when the user presses 'a' on a track.
+// The root app model receives this and dispatches an add-to-queue API call.
+type AddToQueueMsg struct {
+	TrackURI string
 }
 
 // likeToggleResultMsg carries the result of a like/unlike operation.
@@ -368,6 +371,12 @@ type likeToggleResultMsg struct {
 // expandSectionMsg triggers expanding a section (used internally and in tests).
 type expandSectionMsg struct {
 	section SectionType
+}
+
+// LibraryExpandMsg creates an expandSectionMsg for use outside the panes package
+// (e.g., in integration tests or the root app model).
+func LibraryExpandMsg(section SectionType) tea.Msg {
+	return expandSectionMsg{section: section}
 }
 
 // --- LibraryPane ---
@@ -627,19 +636,19 @@ func (p *LibraryPane) handleEnter() (*LibraryPane, tea.Cmd) {
 
 	// Playlist or album: play with context URI
 	if uri := item.playableContextURI(); uri != "" {
-		return p, func() tea.Msg { return playContextMsg{contextURI: uri} }
+		return p, func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
 	}
 
 	// Liked track: play with track URI
 	if item.LikedTrack != nil {
 		uri := item.LikedTrack.Track.URI
-		return p, func() tea.Msg { return playTrackMsg{trackURI: uri} }
+		return p, func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
 	}
 
 	// Recently played track: play with track URI
 	if item.PlayHistory != nil {
 		uri := item.PlayHistory.Track.URI
-		return p, func() tea.Msg { return playTrackMsg{trackURI: uri} }
+		return p, func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
 	}
 
 	return p, nil
@@ -676,7 +685,7 @@ func (p *LibraryPane) handleAddToQueue() (*LibraryPane, tea.Cmd) {
 	if uri == "" {
 		return p, nil
 	}
-	return p, func() tea.Msg { return addToQueueMsg{trackURI: uri} }
+	return p, func() tea.Msg { return AddToQueueMsg{TrackURI: uri} }
 }
 
 // handleToggleLike handles the 'l' key — likes/unlikes the selected track.

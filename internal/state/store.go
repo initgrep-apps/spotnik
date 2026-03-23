@@ -18,14 +18,14 @@ type Store struct {
 	activeDevice  *api.Device
 
 	// Library data
-	playlists       []api.SimplePlaylist
-	playlistsTotal  int
-	savedAlbums     []api.SavedAlbum
-	albumsLoaded    bool
-	likedTracks     []api.SavedTrack
-	likedTotal      int
-	likedLoaded     bool
-	recentlyPlayed  []api.PlayHistory
+	playlists      []api.SimplePlaylist
+	playlistsTotal int
+	savedAlbums    []api.SavedAlbum
+	albumsLoaded   bool
+	likedTracks    []api.SavedTrack
+	likedTotal     int
+	likedLoaded    bool
+	recentlyPlayed []api.PlayHistory
 }
 
 // New returns an empty Store with no playback state.

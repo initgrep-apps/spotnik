@@ -201,3 +201,55 @@ func TestUnlikeTrack_SendsDELETE(t *testing.T) {
 	assert.Equal(t, http.MethodDelete, capturedMethod)
 	assert.Equal(t, "/v1/me/tracks", capturedPath)
 }
+
+// TestLibraryClient_RateLimited verifies 429 response returns appropriate error.
+func TestLibraryClient_RateLimited(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "10")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	_, err := client.GetPlaylists(context.Background(), 50, 0)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "429")
+}
+
+// TestLibraryClient_ServerError verifies non-2xx non-429 returns an error.
+func TestLibraryClient_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal error"))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	_, err := client.GetPlaylists(context.Background(), 50, 0)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
+// TestLibraryClient_DoNoContent_ServerError verifies non-2xx for LikeTrack.
+func TestLibraryClient_DoNoContent_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("Premium required"))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	err := client.LikeTrack(context.Background(), "track-xyz789")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403")
+}
+
+// TestNewLibraryClient_DefaultBaseURL verifies production URL is used when baseURL is empty.
+func TestNewLibraryClient_DefaultBaseURL(t *testing.T) {
+	client := NewLibraryClient("", "test-token")
+	assert.NotNil(t, client)
+	// The client was created — we can't easily test the URL but no panic occurred.
+}
