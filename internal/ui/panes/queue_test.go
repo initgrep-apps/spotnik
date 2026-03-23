@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -150,4 +151,94 @@ func TestQueuePane_IsFocused(t *testing.T) {
 
 	pane.SetFocused(true)
 	assert.True(t, pane.IsFocused())
+}
+
+func TestQueuePane_ScrollIndicators_LongQueue(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		Item:      &api.Track{ID: "t1", Name: "Now", Artists: []api.Artist{{Name: "A"}}},
+	})
+
+	// Create 25 tracks in the queue.
+	tracks := make([]api.Track, 25)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("q%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetQueue(tracks)
+
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(40, 30) // limited height
+
+	output := pane.View()
+	// Should not show "more above" at the start.
+	assert.NotContains(t, output, "more above")
+	// Should show "more below" since 25 tracks can't fit.
+	assert.Contains(t, output, "more below")
+}
+
+func TestQueuePane_Scroll_CursorMovesWindow(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		Item:      &api.Track{ID: "t1", Name: "Now", Artists: []api.Artist{{Name: "A"}}},
+	})
+
+	tracks := make([]api.Track, 25)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("q%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetQueue(tracks)
+
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(40, 30)
+
+	// Navigate down past the visible window.
+	for i := 0; i < 20; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		pane = m.(*QueuePane)
+	}
+
+	assert.Equal(t, 20, pane.cursor)
+	assert.True(t, pane.scrollOffset > 0, "scrollOffset should have moved")
+}
+
+func TestQueuePane_RepeatIndicator(t *testing.T) {
+	tests := []struct {
+		name       string
+		repeat     string
+		wantHeader string
+	}{
+		{"repeat off", "off", "QUEUE"},
+		{"repeat context", "context", "QUEUE [repeat]"},
+		{"repeat track", "track", "QUEUE [repeat track]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := state.New()
+			s.SetPlaybackState(&api.PlaybackState{
+				IsPlaying:   true,
+				RepeatState: tt.repeat,
+				Item:        &api.Track{ID: "t1", Name: "Now", Artists: []api.Artist{{Name: "A"}}},
+			})
+			s.SetQueue([]api.Track{{ID: "q1", Name: "Next", Artists: []api.Artist{{Name: "B"}}}})
+
+			th := theme.Load("black")
+			pane := NewQueuePane(s, th, false)
+			output := pane.View()
+
+			assert.Contains(t, output, tt.wantHeader)
+		})
+	}
 }

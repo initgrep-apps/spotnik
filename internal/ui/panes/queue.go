@@ -24,6 +24,9 @@ type QueuePane struct {
 	// cursor is the zero-based index into the NEXT UP queue list.
 	cursor int
 
+	// scrollOffset is the first visible item index in the NEXT UP list.
+	scrollOffset int
+
 	width  int
 	height int
 }
@@ -83,12 +86,14 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		keyMsg.Type == tea.KeyDown:
 		if q.cursor < qLen-1 {
 			q.cursor++
+			q.ensureCursorVisible()
 		}
 
 	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "k",
 		keyMsg.Type == tea.KeyUp:
 		if q.cursor > 0 {
 			q.cursor--
+			q.ensureCursorVisible()
 		}
 
 	case keyMsg.Type == tea.KeyEnter:
@@ -135,8 +140,14 @@ func (q *QueuePane) View() string {
 
 	var lines []string
 
-	// Header
-	lines = append(lines, headerStyle.Render("QUEUE"))
+	// Header — show repeat indicator when repeat-track is active.
+	headerText := "QUEUE"
+	if ps != nil && ps.RepeatState == "track" {
+		headerText = "QUEUE [repeat track]"
+	} else if ps != nil && ps.RepeatState == "context" {
+		headerText = "QUEUE [repeat]"
+	}
+	lines = append(lines, headerStyle.Render(headerText))
 	lines = append(lines, divider)
 	lines = append(lines, "")
 
@@ -165,7 +176,19 @@ func (q *QueuePane) View() string {
 	if len(queue) == 0 {
 		lines = append(lines, "  "+mutedStyle.Render("Queue is empty"))
 	} else {
-		for i, track := range queue {
+		visibleCount := q.visibleTrackCount()
+		endIdx := q.scrollOffset + visibleCount
+		if endIdx > len(queue) {
+			endIdx = len(queue)
+		}
+
+		// Scroll up indicator
+		if q.scrollOffset > 0 {
+			lines = append(lines, "  "+mutedStyle.Render("▲ more above"))
+		}
+
+		for i := q.scrollOffset; i < endIdx; i++ {
+			track := queue[i]
 			numStr := fmt.Sprintf("%d", i+1)
 			trackName := track.Name
 			artistStr := ""
@@ -185,6 +208,11 @@ func (q *QueuePane) View() string {
 				lines = append(lines, "   "+secondaryStyle.Render(artistStr))
 			}
 		}
+
+		// Scroll down indicator
+		if endIdx < len(queue) {
+			lines = append(lines, "  "+mutedStyle.Render("▼ more below"))
+		}
 	}
 
 	lines = append(lines, "")
@@ -196,6 +224,33 @@ func (q *QueuePane) View() string {
 	lines = append(lines, "")
 
 	return strings.Join(lines, "\n")
+}
+
+// visibleTrackCount returns the number of tracks that fit in the visible area.
+// Each track takes 2 lines (name + artist). Header/footer/NOW takes ~10 lines.
+func (q *QueuePane) visibleTrackCount() int {
+	if q.height <= 0 {
+		return 10 // default for tests
+	}
+	available := q.height - 14 // header + NOW + dividers + footer
+	if available <= 0 {
+		return 3
+	}
+	return available / 2 // 2 lines per track
+}
+
+// ensureCursorVisible adjusts scrollOffset so the cursor is within the visible window.
+func (q *QueuePane) ensureCursorVisible() {
+	visible := q.visibleTrackCount()
+	if q.cursor < q.scrollOffset {
+		q.scrollOffset = q.cursor
+	}
+	if q.cursor >= q.scrollOffset+visible {
+		q.scrollOffset = q.cursor - visible + 1
+	}
+	if q.scrollOffset < 0 {
+		q.scrollOffset = 0
+	}
 }
 
 // dividerWidth returns the width to use for divider lines.
