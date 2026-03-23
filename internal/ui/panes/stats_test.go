@@ -1,6 +1,7 @@
 package panes_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -355,4 +356,63 @@ func TestFormatRelativeTime_OlderThanWeek(t *testing.T) {
 	past := time.Date(2024, time.March, 12, 0, 0, 0, 0, time.UTC)
 	result := panes.FormatRelativeTime(past)
 	assert.Equal(t, "Mar 12", result)
+}
+
+// TestStatsView_View_NoHelpBar verifies the stats view does NOT render a
+// pane-level help bar — only app.go owns the status bar (B13 fix).
+func TestStatsView_View_NoHelpBar(t *testing.T) {
+	t.Helper()
+	sv, s := newStatsView()
+	prefillStatsStore(s)
+
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+	require.NotNil(t, sv)
+
+	view := sv.View()
+
+	// The pane must not render "Tab next section  j/k move  Enter play  f cycle"
+	// hint row — that belongs in app.go's renderStatsStatusBar only.
+	assert.NotContains(t, view, "Tab next section", "stats pane must not render its own help bar")
+	assert.NotContains(t, view, "1 library", "stats pane must not render keybindings footer")
+}
+
+// TestStatsView_View_ErrorState verifies that when the store has a StatsError,
+// the pane shows "Failed to load stats" and a retry hint (B12 fix).
+func TestStatsView_View_ErrorState(t *testing.T) {
+	t.Helper()
+	sv, s := newStatsView()
+	// Simulate an API failure by setting StatsError on the store.
+	s.SetStatsError(fmt.Errorf("spotify: 500 internal server error"))
+
+	sv.SetSize(120, 30)
+	view := sv.View()
+
+	assert.Contains(t, view, "Failed to load stats", "error state must show failure message")
+	assert.Contains(t, view, "f to retry", "error state must show retry hint")
+}
+
+// TestStatsView_View_ErrorCleared verifies that once the error is cleared,
+// normal data renders (not the error state).
+func TestStatsView_View_ErrorCleared(t *testing.T) {
+	t.Helper()
+	sv, s := newStatsView()
+	s.SetStatsError(fmt.Errorf("transient error"))
+	sv.SetSize(120, 30)
+
+	// Error is present — error view renders.
+	view := sv.View()
+	assert.Contains(t, view, "Failed to load stats")
+
+	// Clear the error and fill data.
+	s.ClearStatsError()
+	prefillStatsStore(s)
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+	require.NotNil(t, sv)
+
+	// Now the normal view should render.
+	view = sv.View()
+	assert.Contains(t, view, "TOP TRACKS")
+	assert.NotContains(t, view, "Failed to load stats")
 }

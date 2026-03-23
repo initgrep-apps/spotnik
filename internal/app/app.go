@@ -256,8 +256,8 @@ func (a *App) closeStats() (*App, tea.Cmd) {
 }
 
 // openPlaylists switches to the Playlist Manager view. The PlaylistManager is
-// lazy-initialized on the first call — subsequent calls preserve pane state.
-// Playlist data is reused from the store (no fresh fetch on view switch).
+// lazy-initialized on the first call and Init() is called to trigger a playlist
+// fetch if the store is empty. Subsequent calls reuse the existing pane and store data.
 func (a *App) openPlaylists() (*App, tea.Cmd) {
 	a.currentView = viewPlaylists
 	if a.playlistPane == nil {
@@ -266,6 +266,7 @@ func (a *App) openPlaylists() (*App, tea.Cmd) {
 			pm.SetSize(a.width, a.height-4) // subtract header + status bar rows
 		}
 		a.playlistPane = pm
+		return a, pm.Init()
 	}
 	return a, nil
 }
@@ -1389,6 +1390,8 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("a") + " queue",
 			keyStyle.Render("l") + " like",
 			keyStyle.Render("d") + " devices",
+			keyStyle.Render("2") + " stats",
+			keyStyle.Render("3") + " lists",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
@@ -1398,6 +1401,8 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("j/k") + " navigate",
 			keyStyle.Render("Enter") + " play",
 			keyStyle.Render("d") + " devices",
+			keyStyle.Render("2") + " stats",
+			keyStyle.Render("3") + " lists",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
@@ -1410,6 +1415,8 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("s") + " shuffle",
 			keyStyle.Render("r") + " repeat",
 			keyStyle.Render("d") + " devices",
+			keyStyle.Render("2") + " stats",
+			keyStyle.Render("3") + " lists",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
