@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "id": "artist-weeknd",
+      "name": "The Weeknd",
+      "uri": "spotify:artist:artist-weeknd",
+      "genres": ["canadian pop", "pop", "r&b"],
+      "popularity": 95,
+      "external_urls": {
+        "spotify": "https://open.spotify.com/artist/artist-weeknd"
+      }
+    },
+    {
+      "id": "artist-dua",
+      "name": "Dua Lipa",
+      "uri": "spotify:artist:artist-dua",
+      "genres": ["dance pop", "pop"],
+      "popularity": 92,
+      "external_urls": {
+        "spotify": "https://open.spotify.com/artist/artist-dua"
+      }
+    }
+  ],
+  "total": 2,
+  "limit": 25,
+  "offset": 0
+}

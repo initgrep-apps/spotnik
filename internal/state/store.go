@@ -34,6 +34,12 @@ type Store struct {
 	searchResults *api.SearchResult
 	searchQuery   string
 	searchLoading bool
+
+	// Stats data: top tracks and top artists keyed by time range.
+	// Ranges: "short_term", "medium_term", "long_term".
+	// NOTE: cached on first fetch per range; not re-fetched until view is re-opened.
+	topTracks  map[string][]api.Track
+	topArtists map[string][]api.FullArtist
 }
 
 // New returns an empty Store with no playback state.
@@ -229,4 +235,48 @@ func (s *Store) SetSearchLoading(loading bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.searchLoading = loading
+}
+
+// TopTracks returns the cached top tracks for the given time range,
+// or nil if that range has not been fetched yet.
+// timeRange should be "short_term", "medium_term", or "long_term".
+func (s *Store) TopTracks(timeRange string) []api.Track {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.topTracks == nil {
+		return nil
+	}
+	return s.topTracks[timeRange]
+}
+
+// SetTopTracks caches top tracks for a specific time range in the store.
+func (s *Store) SetTopTracks(timeRange string, tracks []api.Track) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.topTracks == nil {
+		s.topTracks = make(map[string][]api.Track)
+	}
+	s.topTracks[timeRange] = tracks
+}
+
+// TopArtists returns the cached top artists for the given time range,
+// or nil if that range has not been fetched yet.
+// timeRange should be "short_term", "medium_term", or "long_term".
+func (s *Store) TopArtists(timeRange string) []api.FullArtist {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.topArtists == nil {
+		return nil
+	}
+	return s.topArtists[timeRange]
+}
+
+// SetTopArtists caches top artists for a specific time range in the store.
+func (s *Store) SetTopArtists(timeRange string, artists []api.FullArtist) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.topArtists == nil {
+		s.topArtists = make(map[string][]api.FullArtist)
+	}
+	s.topArtists[timeRange] = artists
 }
