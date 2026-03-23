@@ -218,18 +218,23 @@ func (a *App) QueueFocused() bool {
 	return a.focus == focusQueue
 }
 
-// Init starts the polling loop and fetches initial playback state.
+// Init starts the splash timer and, if authenticated, fetches initial data.
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(
-		fetchPlaybackStateCmd(a.player, a.store),
-		a.libraryPane.Init(),
-		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
-			return panes.TickMsg{}
-		}),
-		tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+	cmds := []tea.Cmd{
+		tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
 			return splashDismissMsg{}
 		}),
-	)
+	}
+	if !a.needsAuth {
+		cmds = append(cmds,
+			fetchPlaybackStateCmd(a.player, a.store),
+			a.libraryPane.Init(),
+			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+				return panes.TickMsg{}
+			}),
+		)
+	}
+	return tea.Batch(cmds...)
 }
 
 // openSearch opens the search overlay and captures the current pane focus.
@@ -309,8 +314,46 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
+			if a.needsAuth {
+				a.currentView = viewAuth
+				a.authStatus = "Connecting to Spotify..."
+				return a, prepareAuthCmd(a.clientID)
+			}
 			a.currentView = viewMain
 		}
+		return a, nil
+
+	case authPreparedMsg:
+		a.authURL = m.authURL
+		if m.browserErr != nil {
+			a.authStatus = "Open this URL in your browser to authorize"
+		} else {
+			a.authStatus = "Waiting for authorization in browser..."
+		}
+		return a, waitForCallbackCmd(a.clientID, a.tokenStore,
+			m.verifier, m.redirectURI, m.codeCh, m.serverClose)
+
+	case authSuccessMsg:
+		a.needsAuth = false
+		a.currentView = viewMain
+		// Inject API clients with the new token.
+		player := api.NewPlayer("", m.accessToken)
+		a.SetPlayer(player)
+		a.SetLibrary(api.NewLibraryClient("", m.accessToken))
+		a.SetSearch(api.NewSearchClient("", m.accessToken))
+		a.SetDevices(api.NewDevicesClient("", m.accessToken))
+		a.SetUserAPI(api.NewUserClient("", m.accessToken))
+		// Start normal data fetching.
+		return a, tea.Batch(
+			fetchPlaybackStateCmd(a.player, a.store),
+			a.libraryPane.Init(),
+			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+				return panes.TickMsg{}
+			}),
+		)
+
+	case authErrorMsg:
+		a.authStatus = fmt.Sprintf("Auth failed: %s", m.err.Error())
 		return a, nil
 
 	case panes.SearchClosedMsg:
@@ -367,6 +410,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		// Allow quit from any view.
+		if m.String() == "ctrl+c" {
+			return a, tea.Quit
+		}
+		// During auth view, only handle quit and Esc.
+		if a.currentView == viewAuth {
+			if m.Type == tea.KeyRunes && string(m.Runes) == "q" || m.Type == tea.KeyEsc {
+				return a, tea.Quit
+			}
+			return a, nil
+		}
+
 		// When device overlay is open, route all keys to the device pane.
 		if a.deviceOverlayOpen {
 			updated, cmd := a.devicePane.Update(m)
@@ -1127,6 +1182,11 @@ func (a *App) View() string {
 			return a.renderSplash()
 		}
 		// No size yet — fall through to main view for tests.
+	}
+
+	// Auth panel when user needs to authenticate.
+	if a.currentView == viewAuth {
+		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
 	// Stats view replaces the three-pane layout when active.
