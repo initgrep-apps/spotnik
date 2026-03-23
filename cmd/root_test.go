@@ -327,3 +327,40 @@ func TestFullAuthFlow_ConfigToToken(t *testing.T) {
 	_, err = store.Get(keychain.KeyTokenExpiry)
 	require.NoError(t, err, "token expiry should be stored")
 }
+
+// TestCheckAuthState_ValidToken verifies that a valid token returns needsAuth=false.
+func TestCheckAuthState_ValidToken(t *testing.T) {
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "valid-token"))
+	require.NoError(t, store.Set(keychain.KeyRefreshToken, "valid-refresh"))
+	expiry := time.Now().Add(1 * time.Hour)
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
+
+	cfg := &config.Config{ClientID: "test-client"}
+	needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.False(t, needsAuth, "valid token should not need auth")
+}
+
+// TestCheckAuthState_NoToken verifies that missing token returns needsAuth=true.
+func TestCheckAuthState_NoToken(t *testing.T) {
+	store := keychain.NewInMemoryTokenStore()
+	cfg := &config.Config{ClientID: "test-client"}
+	needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.True(t, needsAuth, "no token should need auth")
+}
+
+// TestCheckAuthState_ExpiringSoon verifies that an expiring token with no
+// reachable refresh endpoint returns needsAuth=true.
+func TestCheckAuthState_ExpiringSoon(t *testing.T) {
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "old-token"))
+	require.NoError(t, store.Set(keychain.KeyRefreshToken, "old-refresh"))
+	// Expires in 2 minutes (within 5-minute threshold).
+	expiry := time.Now().Add(2 * time.Minute)
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
+
+	cfg := &config.Config{ClientID: "test-client"}
+	// Refresh will fail (no server running) → should need auth.
+	needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.True(t, needsAuth, "expiring token with failed refresh should need auth")
+}
