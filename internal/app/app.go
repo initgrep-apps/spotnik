@@ -24,6 +24,7 @@ type focusedPane int
 const (
 	focusPlayer  focusedPane = iota // default: player pane has focus
 	focusLibrary                    // library pane has focus
+	focusQueue                      // queue pane has focus
 )
 
 // App is the root application model. It owns the active theme, the central
@@ -38,6 +39,7 @@ type App struct {
 
 	playerPane  *panes.PlayerPane
 	libraryPane *panes.LibraryPane
+	queuePane   *panes.QueuePane
 	searchPane  *panes.SearchOverlay
 
 	focus  focusedPane
@@ -51,7 +53,7 @@ type App struct {
 	// so it can be restored when the overlay closes.
 	prevFocus focusedPane
 
-	// statusMsg is a transient error/info message shown in the status bar for 4 seconds.
+	// statusMsg is a transient error/info message shown in the status bar for 3–4 seconds.
 	statusMsg string
 }
 
@@ -65,6 +67,7 @@ func New(cfg *config.Config) *App {
 
 	playerPane := panes.NewPlayerPane(s, t, true)
 	libraryPane := panes.NewLibraryPane(s, t, false)
+	queuePane := panes.NewQueuePane(s, t, false)
 	searchPane := panes.NewSearchOverlay(s, t)
 
 	return &App{
@@ -72,6 +75,7 @@ func New(cfg *config.Config) *App {
 		store:       s,
 		playerPane:  playerPane,
 		libraryPane: libraryPane,
+		queuePane:   queuePane,
 		searchPane:  searchPane,
 		focus:       focusPlayer,
 	}
@@ -115,6 +119,11 @@ func (a *App) LibraryFocused() bool {
 // PlayerFocused returns true if the player pane currently has keyboard focus.
 func (a *App) PlayerFocused() bool {
 	return a.focus == focusPlayer
+}
+
+// QueueFocused returns true if the queue pane currently has keyboard focus.
+func (a *App) QueueFocused() bool {
+	return a.focus == focusQueue
 }
 
 // Init starts the polling loop and fetches initial playback state.
@@ -166,12 +175,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = m.Width
 		a.height = m.Height
 		// DESIGN.md: Library 22%, Player 50%, Queue 28%.
-		// Queue is not yet implemented (Feature 06), so Player gets 78%.
 		libraryWidth := m.Width * 22 / 100
-		playerWidth := m.Width - libraryWidth
+		queueWidth := m.Width * 28 / 100
+		playerWidth := m.Width - libraryWidth - queueWidth
 		// Subtract 2 per border (left+right) from content width.
 		a.libraryPane.SetSize(libraryWidth-2, m.Height-4)
 		a.playerPane.SetSize(playerWidth-2, m.Height-4)
+		a.queuePane.SetSize(queueWidth-2, m.Height-4)
 		a.searchPane.SetSize(m.Width, m.Height)
 		return a, nil
 
@@ -224,6 +234,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			updated, cmd := a.libraryPane.Update(m)
 			if lp, ok := updated.(*panes.LibraryPane); ok {
 				a.libraryPane = lp
+			}
+			return a, cmd
+		case focusQueue:
+			updated, cmd := a.queuePane.Update(m)
+			if qp, ok := updated.(*panes.QueuePane); ok {
+				a.queuePane = qp
 			}
 			return a, cmd
 		default:
@@ -358,20 +374,42 @@ func isPlaybackKey(m tea.KeyMsg) bool {
 	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight
 }
 
-// rotateFocus cycles keyboard focus between library and player panes.
-// direction: 1 = forward, -1 = backward.
+// rotateFocus cycles keyboard focus between the three panes.
+// direction: 1 = forward (player → library → queue → player),
+//
+//	-1 = backward (player → queue → library → player).
 func (a *App) rotateFocus(direction int) (*App, tea.Cmd) {
-	// Only two panes for now; direction doesn't matter.
-	_ = direction
+	// Clear all pane focus states.
+	a.playerPane.SetFocused(false)
+	a.libraryPane.SetFocused(false)
+	a.queuePane.SetFocused(false)
+
+	// Advance focus in the requested direction.
 	switch a.focus {
 	case focusPlayer:
-		a.focus = focusLibrary
-		a.playerPane.SetFocused(false)
-		a.libraryPane.SetFocused(true)
-	default:
-		a.focus = focusPlayer
-		a.libraryPane.SetFocused(false)
-		a.playerPane.SetFocused(true)
+		if direction >= 0 {
+			a.focus = focusLibrary
+			a.libraryPane.SetFocused(true)
+		} else {
+			a.focus = focusQueue
+			a.queuePane.SetFocused(true)
+		}
+	case focusLibrary:
+		if direction >= 0 {
+			a.focus = focusQueue
+			a.queuePane.SetFocused(true)
+		} else {
+			a.focus = focusPlayer
+			a.playerPane.SetFocused(true)
+		}
+	default: // focusQueue
+		if direction >= 0 {
+			a.focus = focusPlayer
+			a.playerPane.SetFocused(true)
+		} else {
+			a.focus = focusLibrary
+			a.libraryPane.SetFocused(true)
+		}
 	}
 	return a, nil
 }
@@ -646,8 +684,9 @@ func (a *App) View() string {
 
 	libraryView := a.renderPaneWithBorder(a.libraryPane.View(), a.focus == focusLibrary)
 	playerView := a.renderPaneWithBorder(a.playerPane.View(), a.focus == focusPlayer)
+	queueView := a.renderPaneWithBorder(a.queuePane.View(), a.focus == focusQueue)
 
-	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, libraryView, playerView)
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, libraryView, playerView, queueView)
 	body := strings.Join([]string{header, mainContent, statusBar}, "\n")
 
 	if a.searchOpen {
@@ -760,6 +799,14 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("Enter") + " play",
 			keyStyle.Render("a") + " queue",
 			keyStyle.Render("l") + " like",
+			keyStyle.Render("Tab") + " pane",
+			keyStyle.Render("q") + " quit",
+		}
+	case focusQueue:
+		hints = []string{
+			keyStyle.Render("/") + " search",
+			keyStyle.Render("j/k") + " navigate",
+			keyStyle.Render("Enter") + " play",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}

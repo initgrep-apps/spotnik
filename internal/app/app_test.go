@@ -280,7 +280,7 @@ func TestApp_SetSearch(t *testing.T) {
 	// No panic — search client was set
 }
 
-// TestApp_TabFocusRotation verifies Tab cycles focus between panes.
+// TestApp_TabFocusRotation verifies Tab cycles focus: player → library → queue → player.
 func TestApp_TabFocusRotation(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg)
@@ -296,7 +296,14 @@ func TestApp_TabFocusRotation(t *testing.T) {
 	assert.True(t, a.LibraryFocused())
 	assert.False(t, a.PlayerFocused())
 
-	// Tab again → player focused
+	// Tab again → queue focused
+	m, _ = a.Update(tabMsg)
+	a = m.(*app.App)
+	assert.True(t, a.QueueFocused())
+	assert.False(t, a.LibraryFocused())
+	assert.False(t, a.PlayerFocused())
+
+	// Tab again → player focused (wraps around)
 	m, _ = a.Update(tabMsg)
 	a = m.(*app.App)
 	assert.True(t, a.PlayerFocused())
@@ -508,15 +515,20 @@ func TestApp_ShiftTab_RotatesFocusBackward(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg)
 
-	// Start at player, go to library first.
-	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	// Start at player. Shift+Tab should go backward: player → queue.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	a = m.(*app.App)
-	assert.True(t, a.LibraryFocused())
+	assert.True(t, a.QueueFocused(), "Shift+Tab from player should go to queue (backward)")
 
-	// Shift+Tab should go back to player.
+	// Shift+Tab again: queue → library.
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	a = m.(*app.App)
-	assert.True(t, a.PlayerFocused())
+	assert.True(t, a.LibraryFocused(), "Shift+Tab from queue should go to library")
+
+	// Shift+Tab again: library → player.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	a = m.(*app.App)
+	assert.True(t, a.PlayerFocused(), "Shift+Tab from library should go to player")
 }
 
 // TestApp_PlaybackKey_WhenLibraryFocused verifies playback keys work regardless of focus.
@@ -827,6 +839,82 @@ func TestApp_AddToQueueFromLibrary(t *testing.T) {
 
 	// 'a' should produce a command (addToQueue dispatch).
 	assert.NotNil(t, cmd, "'a' on a track in library should produce an add-to-queue command")
+}
+
+// TestApp_QueueFocused verifies that QueueFocused returns true when queue pane is focused.
+func TestApp_QueueFocused(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Default: player focused.
+	assert.False(t, a.QueueFocused(), "queue should not be focused initially")
+
+	// Tab to library.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	assert.False(t, a.QueueFocused())
+
+	// Tab again to queue.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	assert.True(t, a.QueueFocused(), "second Tab should focus queue pane")
+	assert.False(t, a.PlayerFocused())
+	assert.False(t, a.LibraryFocused())
+}
+
+// TestApp_ThreePaneFocusRotation verifies focus cycles player → library → queue → player.
+func TestApp_ThreePaneFocusRotation(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Start: player
+	assert.True(t, a.PlayerFocused())
+
+	// Tab: library
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	assert.True(t, a.LibraryFocused())
+
+	// Tab: queue
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	assert.True(t, a.QueueFocused())
+
+	// Tab: back to player
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	assert.True(t, a.PlayerFocused())
+}
+
+// TestApp_View_ContainsQueuePane verifies that the app View renders the QUEUE pane.
+func TestApp_View_ContainsQueuePane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	output := a.View()
+	assert.Contains(t, output, "QUEUE", "app view should include the QUEUE pane")
+}
+
+// TestApp_QueuePane_ShowsQueueData verifies that the queue pane shows store data in View().
+func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	a.Store().SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:      "now-1",
+			Name:    "Blinding Lights",
+			Artists: []api.Artist{{Name: "The Weeknd"}},
+		},
+	})
+	a.Store().SetQueue([]api.Track{
+		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1", Artists: []api.Artist{{Name: "The Weeknd"}}},
+	})
+
+	output := a.View()
+	assert.Contains(t, output, "QUEUE", "view should contain QUEUE pane")
+	assert.Contains(t, output, "Blinding Lights", "queue pane should show NOW playing track")
 }
 
 // TestApp_SearchDebounceRouted verifies that debounce messages reach the
