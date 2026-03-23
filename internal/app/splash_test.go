@@ -1,0 +1,27 @@
+package app
+
+import (
+	"testing"
+
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestRenderSplash_ContainsBranding(t *testing.T) {
+	th := theme.Load("black")
+	view := renderSplashView(th, 120, 40)
+
+	// go-figure "doom" font renders letters as ASCII art, so we check for
+	// recognizable fragments from the rendered output.
+	assert.Contains(t, view, "___", "splash should contain go-figure ASCII art")
+	assert.Contains(t, view, appVersion, "splash should contain the version")
+	assert.Contains(t, view, "terminal Spotify client", "splash should contain the tagline")
+}
+
+func TestRenderSplash_SmallTerminal(t *testing.T) {
+	th := theme.Load("black")
+	// Even with a small terminal, renderSplashView should not panic.
+	view := renderSplashView(th, 40, 10)
+	assert.NotEmpty(t, view)
+	assert.Contains(t, view, appVersion)
+}

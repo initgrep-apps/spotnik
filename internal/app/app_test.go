@@ -38,7 +38,7 @@ func TestAppNew_ReceivesTheme(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.UI.Theme = "monokai"
 
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
 	assert.Equal(t, "monokai", a.Theme().ID())
 }
@@ -47,7 +47,7 @@ func TestAppNew_DefaultThemeFallback(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.UI.Theme = "invalid-theme-id"
 
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
 	// Unknown IDs fall back to DefaultThemeID without crashing.
 	assert.Equal(t, theme.DefaultThemeID, a.Theme().ID())
@@ -57,7 +57,7 @@ func TestAppNew_EmptyThemeUsesDefault(t *testing.T) {
 	cfg := &config.Config{}
 	// cfg.UI.Theme is zero value (empty string)
 
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
 	assert.Equal(t, theme.DefaultThemeID, a.Theme().ID())
 }
@@ -65,7 +65,7 @@ func TestAppNew_EmptyThemeUsesDefault(t *testing.T) {
 // TestApp_Init_ReturnsBatch verifies Init returns a non-nil batch command.
 func TestApp_Init_ReturnsBatch(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	cmd := a.Init()
 	assert.NotNil(t, cmd, "Init should return a non-nil batch command")
@@ -75,7 +75,7 @@ func TestApp_Init_ReturnsBatch(t *testing.T) {
 // to produce a fetchPlaybackState command (returns a PlaybackStateFetchedMsg).
 func TestApp_Update_TickMsg_DispatchesFetch(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	tickMsg := panes.TickMsg{}
 	updatedModel, cmd := a.Update(tickMsg)
@@ -88,7 +88,7 @@ func TestApp_Update_TickMsg_DispatchesFetch(t *testing.T) {
 // when it is focused.
 func TestApp_PlayerPaneRouting(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Pre-populate the store so key events do something meaningful.
 	a.Store().SetPlaybackState(&api.PlaybackState{
@@ -115,7 +115,7 @@ func TestApp_PlayerPaneRouting(t *testing.T) {
 // when a device is present in the store.
 func TestApp_HeaderShowsDevice(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	a.Store().SetPlaybackState(&api.PlaybackState{
 		IsPlaying: true,
@@ -140,7 +140,7 @@ func TestApp_HeaderShowsDevice(t *testing.T) {
 // The store is written by app.go before the notification is sent.
 func TestPollingLoop_FetchesAndUpdatesStore(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	s := a.Store()
 	assert.Nil(t, s.PlaybackState(), "store should start empty")
@@ -172,7 +172,7 @@ func TestPollingLoop_FetchesAndUpdatesStore(t *testing.T) {
 // TestApp_Update_WindowSizeMsg verifies window size is handled without crashing.
 func TestApp_Update_WindowSizeMsg(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	sizeMsg := tea.WindowSizeMsg{Width: 120, Height: 40}
 	updatedModel, _ := a.Update(sizeMsg)
@@ -183,7 +183,7 @@ func TestApp_Update_WindowSizeMsg(t *testing.T) {
 // TestApp_View_EmptyState verifies View renders without crashing when store is empty.
 func TestApp_View_EmptyState(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Should not panic.
 	output := a.View()
@@ -193,7 +193,7 @@ func TestApp_View_EmptyState(t *testing.T) {
 // TestApp_StoreIsAccessible verifies that Store() returns the app's store.
 func TestApp_StoreIsAccessible(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	s := a.Store()
 	require.NotNil(t, s)
@@ -206,7 +206,7 @@ func TestApp_StoreIsAccessible(t *testing.T) {
 // TestApp_LibraryPaneRouting verifies Tab moves focus from player to library.
 func TestApp_LibraryPaneRouting(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// By default, player pane is focused. Press Tab to move to library.
 	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
@@ -224,7 +224,7 @@ func TestApp_LibraryPaneRouting(t *testing.T) {
 // library produces a play command that flows through the root model.
 func TestApp_LibraryPlay_UpdatesPlayback(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Focus library pane
 	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
@@ -255,7 +255,7 @@ func TestApp_LibraryPlay_UpdatesPlayback(t *testing.T) {
 // appears in the app's View() output.
 func TestApp_LibraryPane_View_ShowsInOutput(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	output := a.View()
 	assert.Contains(t, output, "LIBRARY", "app view should include the library pane")
@@ -264,7 +264,7 @@ func TestApp_LibraryPane_View_ShowsInOutput(t *testing.T) {
 // TestApp_SetPlayer verifies that SetPlayer injects the player client.
 func TestApp_SetPlayer(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	player := api.NewPlayer("http://localhost", "test-token")
 	a.SetPlayer(player)
@@ -283,7 +283,7 @@ func TestApp_SetPlayer(t *testing.T) {
 // TestApp_SetLibrary verifies that SetLibrary injects the library client.
 func TestApp_SetLibrary(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	library := api.NewLibraryClient("http://localhost", "test-token")
 	a.SetLibrary(library)
@@ -293,7 +293,7 @@ func TestApp_SetLibrary(t *testing.T) {
 // TestApp_SetSearch verifies that SetSearch injects the search client.
 func TestApp_SetSearch(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	search := api.NewSearchClient("http://localhost", "test-token")
 	a.SetSearch(search)
@@ -303,7 +303,7 @@ func TestApp_SetSearch(t *testing.T) {
 // TestApp_TabFocusRotation verifies Tab cycles focus: player → library → queue → player.
 func TestApp_TabFocusRotation(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Start: player focused
 	assert.True(t, a.PlayerFocused())
@@ -334,7 +334,7 @@ func TestApp_TabFocusRotation(t *testing.T) {
 // from the library pane produces a play command.
 func TestApp_PlayContextMsg_DispatchesPlayCmd(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	playMsg := panes.PlayContextMsg{ContextURI: "spotify:playlist:pl1"}
 	_, cmd := a.Update(playMsg)
@@ -346,7 +346,7 @@ func TestApp_PlayContextMsg_DispatchesPlayCmd(t *testing.T) {
 // from the library pane produces a play command.
 func TestApp_PlayTrackMsg_DispatchesPlayCmd(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	playMsg := panes.PlayTrackMsg{TrackURI: "spotify:track:t1"}
 	_, cmd := a.Update(playMsg)
@@ -358,7 +358,7 @@ func TestApp_PlayTrackMsg_DispatchesPlayCmd(t *testing.T) {
 // are forwarded to the library pane.
 func TestApp_LibraryLoadedMsg_ForwardedToLibraryPane(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Send a library expand message to the app — it should be forwarded
 	expandMsg := panes.LibraryExpandMsg(panes.SectionAlbums)
@@ -371,7 +371,7 @@ func TestApp_LibraryLoadedMsg_ForwardedToLibraryPane(t *testing.T) {
 // TestApp_BuildPlaybackAPICmd_NilPlayer verifies that a nil player returns a no-op msg.
 func TestApp_BuildPlaybackAPICmd_NilPlayer(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	// player is nil — PlaybackRequestMsg should still return a cmd.
 	a.Store().SetPlaybackState(&api.PlaybackState{
 		IsPlaying: true,
@@ -401,7 +401,7 @@ func TestApp_BuildPlaybackAPICmd_NilPlayer(t *testing.T) {
 // TestApp_BuildFetchCmds_NilLibrary verifies that nil library returns load-complete msgs.
 func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	// library is nil
 
 	tests := []struct {
@@ -428,7 +428,7 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 // TestApp_LikeToggleResultMsg_WithError verifies that a like error sets the status bar.
 func TestApp_LikeToggleResultMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	errMsg := panes.LikeToggleResultMsg{TrackID: "t1", Err: fmt.Errorf("like failed")}
 	m, cmd := a.Update(errMsg)
@@ -443,7 +443,7 @@ func TestApp_LikeToggleResultMsg_WithError(t *testing.T) {
 // TestApp_LikeToggleResultMsg_NoError verifies a successful like clears status.
 func TestApp_LikeToggleResultMsg_NoError(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	successMsg := panes.LikeToggleResultMsg{TrackID: "t1", Err: nil}
 	m, cmd := a.Update(successMsg)
@@ -454,7 +454,7 @@ func TestApp_LikeToggleResultMsg_NoError(t *testing.T) {
 // TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error sets status bar.
 func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	errMsg := panes.PlaybackCmdSentMsg{Err: fmt.Errorf("playback failed")}
 	m, cmd := a.Update(errMsg)
@@ -469,7 +469,7 @@ func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 // TestApp_PlaybackCmdSentMsg_NoError verifies that a successful playback cmd triggers refetch.
 func TestApp_PlaybackCmdSentMsg_NoError(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	successMsg := panes.PlaybackCmdSentMsg{Err: nil}
 	_, cmd := a.Update(successMsg)
@@ -479,7 +479,7 @@ func TestApp_PlaybackCmdSentMsg_NoError(t *testing.T) {
 // TestApp_FetchPlaybackStateCmd_NilPlayer verifies nil player returns a notification.
 func TestApp_FetchPlaybackStateCmd_NilPlayer(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Init returns a batch cmd; when player is nil it calls fetchPlaybackStateCmd(nil, store).
 	// Simulate via TickMsg which also calls fetchPlaybackStateCmd.
@@ -493,7 +493,7 @@ func TestApp_FetchPlaybackStateCmd_NilPlayer(t *testing.T) {
 // TestApp_View_TooSmall verifies the minimum size check renders a help message.
 func TestApp_View_TooSmall(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Set a size below the 100×24 threshold.
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
@@ -507,7 +507,7 @@ func TestApp_View_TooSmall(t *testing.T) {
 // TestApp_View_StatusBarContextSensitive verifies status bar shows player hints when player focused.
 func TestApp_View_StatusBarContextSensitive(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Player focused by default.
 	output := a.View()
@@ -524,7 +524,7 @@ func TestApp_View_StatusBarContextSensitive(t *testing.T) {
 // TestApp_View_HeaderNoDevice verifies header shows "No device" when no device is active.
 func TestApp_View_HeaderNoDevice(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	output := a.View()
 	assert.Contains(t, output, "No device", "header should show No device when none active")
@@ -533,7 +533,7 @@ func TestApp_View_HeaderNoDevice(t *testing.T) {
 // TestApp_ShiftTab_RotatesFocusBackward verifies Shift+Tab cycles focus in reverse.
 func TestApp_ShiftTab_RotatesFocusBackward(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Start at player. Shift+Tab should go backward: player → queue.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
@@ -554,7 +554,7 @@ func TestApp_ShiftTab_RotatesFocusBackward(t *testing.T) {
 // TestApp_PlaybackKey_WhenLibraryFocused verifies playback keys work regardless of focus.
 func TestApp_PlaybackKey_WhenLibraryFocused(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Move focus to library.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -576,7 +576,7 @@ func TestApp_PlaybackKey_WhenLibraryFocused(t *testing.T) {
 // TestApp_QuitKey verifies q returns tea.Quit command.
 func TestApp_QuitKey(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	require.NotNil(t, cmd)
@@ -589,7 +589,7 @@ func TestApp_QuitKey(t *testing.T) {
 // TestApp_AddToQueueMsg_DispatchesAPICmd verifies AddToQueueMsg produces a queue command.
 func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	queueMsg := panes.AddToQueueMsg{TrackURI: "spotify:track:abc"}
 	_, cmd := a.Update(queueMsg)
@@ -604,7 +604,7 @@ func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 // TestApp_AddToQueueResultMsg_Success verifies success shows status bar confirmation.
 func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	successMsg := panes.AddToQueueResultMsg{Err: nil}
 	m, cmd := a.Update(successMsg)
@@ -618,7 +618,7 @@ func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
 // TestApp_AddToQueueResultMsg_Error verifies error sets the status bar.
 func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("queue failed")}
 	m, cmd := a.Update(errMsg)
@@ -632,7 +632,7 @@ func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
 // TestApp_SlashOpensSearch verifies '/' opens the search overlay.
 func TestApp_SlashOpensSearch(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	_, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -644,7 +644,7 @@ func TestApp_SlashOpensSearch(t *testing.T) {
 // TestApp_EscClosesSearch verifies Esc closes the search overlay and restores pane focus.
 func TestApp_EscClosesSearch(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open search
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -661,7 +661,7 @@ func TestApp_EscClosesSearch(t *testing.T) {
 // TestApp_SearchPlayClosesOverlay verifies that a play command from search closes the overlay.
 func TestApp_SearchPlayClosesOverlay(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open search
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -678,7 +678,7 @@ func TestApp_SearchPlayClosesOverlay(t *testing.T) {
 // TestApp_BackgroundDimmed verifies the view contains faint styling hint when overlay open.
 func TestApp_BackgroundDimmed(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Set size so View renders full content
 	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -697,7 +697,7 @@ func TestApp_BackgroundDimmed(t *testing.T) {
 // TestApp_SearchRequestMsg_DispatchesSearch verifies SearchRequestMsg triggers API cmd.
 func TestApp_SearchRequestMsg_DispatchesSearch(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	searchMsg := panes.SearchRequestMsg{Query: "blinding lights"}
 	_, cmd := a.Update(searchMsg)
@@ -708,7 +708,7 @@ func TestApp_SearchRequestMsg_DispatchesSearch(t *testing.T) {
 // TestApp_StatusDismiss verifies statusDismissMsg clears the status bar.
 func TestApp_StatusDismiss_ClearsMsg(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Trigger an error to set the status message.
 	errMsg := panes.PlaybackCmdSentMsg{Err: fmt.Errorf("error to dismiss")}
@@ -731,7 +731,7 @@ func TestApp_StatusDismiss_ClearsMsg(t *testing.T) {
 // dispatch both fetchPlaybackState and fetchQueue commands.
 func TestApp_TickFetchesQueue(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Tick should produce a batch command (non-nil).
 	_, cmd := a.Update(panes.TickMsg{})
@@ -741,7 +741,7 @@ func TestApp_TickFetchesQueue(t *testing.T) {
 // TestApp_QueueLoadedMsg_UpdatesStore verifies that a QueueLoadedMsg updates the store.
 func TestApp_QueueLoadedMsg_UpdatesStore(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	tracks := []api.Track{
 		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
@@ -757,7 +757,7 @@ func TestApp_QueueLoadedMsg_UpdatesStore(t *testing.T) {
 // the store contains the updated queue data (set by the fetchQueueCmd before the msg).
 func TestApp_QueueUpdate_StoreReflectsQueueData(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Simulate fetchQueueCmd writing to store and sending QueueLoadedMsg.
 	a.Store().SetQueue([]api.Track{
@@ -779,7 +779,7 @@ func TestApp_QueueUpdate_StoreReflectsQueueData(t *testing.T) {
 // shows "Added to queue: {track name}" in the status bar.
 func TestAddToQueue_Success_ShowsStatusMessage(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	successMsg := panes.AddToQueueResultMsg{Err: nil, TrackName: "Blinding Lights"}
 	m, cmd := a.Update(successMsg)
@@ -793,7 +793,7 @@ func TestAddToQueue_Success_ShowsStatusMessage(t *testing.T) {
 // TestAddToQueue_Error_ShowsError verifies that a failed add-to-queue shows the error.
 func TestAddToQueue_Error_ShowsError(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("Premium required")}
 	m, cmd := a.Update(errMsg)
@@ -808,7 +808,7 @@ func TestAddToQueue_Error_ShowsError(t *testing.T) {
 // the status message is cleared.
 func TestAddToQueue_StatusAutoDismiss(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Trigger status message.
 	successMsg := panes.AddToQueueResultMsg{Err: nil, TrackName: "Starboy"}
@@ -826,7 +826,7 @@ func TestAddToQueue_StatusAutoDismiss(t *testing.T) {
 // on a track emits an AddToQueueMsg, which the root app dispatches to the API.
 func TestApp_AddToQueueFromLibrary(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Focus library pane.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -864,7 +864,7 @@ func TestApp_AddToQueueFromLibrary(t *testing.T) {
 // TestApp_QueueFocused verifies that QueueFocused returns true when queue pane is focused.
 func TestApp_QueueFocused(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Default: player focused.
 	assert.False(t, a.QueueFocused(), "queue should not be focused initially")
@@ -885,7 +885,7 @@ func TestApp_QueueFocused(t *testing.T) {
 // TestApp_ThreePaneFocusRotation verifies focus cycles player → library → queue → player.
 func TestApp_ThreePaneFocusRotation(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Start: player
 	assert.True(t, a.PlayerFocused())
@@ -909,7 +909,7 @@ func TestApp_ThreePaneFocusRotation(t *testing.T) {
 // TestApp_View_ContainsQueuePane verifies that the app View renders the QUEUE pane.
 func TestApp_View_ContainsQueuePane(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	output := a.View()
 	assert.Contains(t, output, "QUEUE", "app view should include the QUEUE pane")
@@ -918,7 +918,7 @@ func TestApp_View_ContainsQueuePane(t *testing.T) {
 // TestApp_QueuePane_ShowsQueueData verifies that the queue pane shows store data in View().
 func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	a.Store().SetPlaybackState(&api.PlaybackState{
 		IsPlaying: true,
@@ -940,7 +940,7 @@ func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
 // TestHeaderDeviceIndicator_ActiveDevice verifies the header shows ◉ and device name.
 func TestHeaderDeviceIndicator_ActiveDevice(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	a.Store().SetActiveDevice(&api.Device{
 		ID:       "abc123",
@@ -957,7 +957,7 @@ func TestHeaderDeviceIndicator_ActiveDevice(t *testing.T) {
 // TestHeaderDeviceIndicator_NoDevice verifies the header shows ○ and "No device" when no device.
 func TestHeaderDeviceIndicator_NoDevice(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	// No device set in store
 
 	output := a.View()
@@ -968,7 +968,7 @@ func TestHeaderDeviceIndicator_NoDevice(t *testing.T) {
 // TestHeaderDeviceIndicator_LongName verifies that long device names are truncated with ….
 func TestHeaderDeviceIndicator_LongName(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	longName := "This Is An Extremely Long Device Name That Exceeds Limit"
 	a.Store().SetActiveDevice(&api.Device{
@@ -986,7 +986,7 @@ func TestHeaderDeviceIndicator_LongName(t *testing.T) {
 // TestApp_DKeyOpensOverlay verifies that pressing d opens the device switcher overlay.
 func TestApp_DKeyOpensOverlay(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	appModel := model.(*app.App)
@@ -996,7 +996,7 @@ func TestApp_DKeyOpensOverlay(t *testing.T) {
 // TestApp_DeviceOverlay_EscCloses verifies that Esc closes the device overlay.
 func TestApp_DeviceOverlay_EscCloses(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open overlay
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
@@ -1013,7 +1013,7 @@ func TestApp_DeviceOverlay_EscCloses(t *testing.T) {
 // produces a "Switching to..." status message in the status bar.
 func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	transferMsg := panes.TransferPlaybackMsg{DeviceID: "def456", DeviceName: "iPhone 14"}
 	model, cmd := a.Update(transferMsg)
@@ -1028,7 +1028,7 @@ func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
 // TestApp_DeviceTransferredMsg_ErrorShown verifies transfer errors appear in status bar.
 func TestApp_DeviceTransferredMsg_ErrorShown(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	errMsg := panes.DeviceTransferredMsg{DeviceID: "def456", Err: fmt.Errorf("transfer failed")}
 	model, _ := a.Update(errMsg)
@@ -1042,7 +1042,7 @@ func TestApp_DeviceTransferredMsg_ErrorShown(t *testing.T) {
 // nil devices client returns devicesLoadedMsg with empty list.
 func TestApp_FetchDevicesRequestMsg_NilDevices(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	// devices client is nil (not injected)
 
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
@@ -1057,7 +1057,7 @@ func TestApp_FetchDevicesRequestMsg_NilDevices(t *testing.T) {
 // the view is rendered differently (overlay placed on top of the dimmed background).
 func TestApp_DeviceOverlay_View_RenderedWhenOpen(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open the device overlay
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
@@ -1073,7 +1073,7 @@ func TestApp_DeviceOverlay_View_RenderedWhenOpen(t *testing.T) {
 // with a valid terminal size, it renders via renderWithDeviceOverlay.
 func TestApp_DeviceOverlay_ViewWithSize_RenderedWhenOpen(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Set a valid size (above minimum threshold)
 	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -1092,7 +1092,7 @@ func TestApp_DeviceOverlay_ViewWithSize_RenderedWhenOpen(t *testing.T) {
 // TestApp_DeviceTransferredMsg_Success verifies a successful transfer triggers playback refetch.
 func TestApp_DeviceTransferredMsg_Success(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	successMsg := panes.DeviceTransferredMsg{DeviceID: "def456", Err: nil}
 	_, cmd := a.Update(successMsg)
@@ -1102,7 +1102,7 @@ func TestApp_DeviceTransferredMsg_Success(t *testing.T) {
 // TestApp_SetDevices verifies SetDevices injects the client.
 func TestApp_SetDevices(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	// Should not panic and should be callable.
 	a.SetDevices(nil)
 }
@@ -1111,7 +1111,7 @@ func TestApp_SetDevices(t *testing.T) {
 // to the device pane when the overlay is open (j/k navigation).
 func TestApp_DeviceOverlay_KeysRoutedWhenOpen(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open the device overlay
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
@@ -1128,7 +1128,7 @@ func TestApp_DeviceOverlay_KeysRoutedWhenOpen(t *testing.T) {
 // TestApp_2KeyOpensStats verifies pressing 2 switches to the Stats view.
 func TestApp_2KeyOpensStats(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// By default stats view is not open.
 	assert.False(t, a.StatsViewOpen(), "stats view should not be open by default")
@@ -1142,7 +1142,7 @@ func TestApp_2KeyOpensStats(t *testing.T) {
 // TestApp_1KeyReturnsToLibrary verifies pressing 1 from stats restores the three-pane layout.
 func TestApp_1KeyReturnsToLibrary(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open stats view.
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
@@ -1158,7 +1158,7 @@ func TestApp_1KeyReturnsToLibrary(t *testing.T) {
 // TestApp_StatsPreservesCursor verifies returning to stats preserves cursor and section.
 func TestApp_StatsPreservesCursor(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open stats.
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
@@ -1179,7 +1179,7 @@ func TestApp_StatsPreservesCursor(t *testing.T) {
 // when the stats view is open.
 func TestApp_StatsView_ViewRendersInStatsMode(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Set window size.
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -1197,7 +1197,7 @@ func TestApp_StatsView_ViewRendersInStatsMode(t *testing.T) {
 // search overlay when it is open (not swallowed by library pane default).
 func TestApp_SearchDebounceRouted(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open search
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -1220,7 +1220,7 @@ func TestApp_SearchDebounceRouted(t *testing.T) {
 // TestApp_3KeyOpensPlaylists verifies pressing 3 switches to the PlaylistManager view.
 func TestApp_3KeyOpensPlaylists(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// By default playlist view is not open.
 	assert.False(t, a.PlaylistViewOpen(), "playlist view should not be open by default")
@@ -1234,7 +1234,7 @@ func TestApp_3KeyOpensPlaylists(t *testing.T) {
 // TestApp_1KeyReturnsFromPlaylists verifies pressing 1 from playlists restores the three-pane layout.
 func TestApp_1KeyReturnsFromPlaylists(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open playlist view.
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
@@ -1250,7 +1250,7 @@ func TestApp_1KeyReturnsFromPlaylists(t *testing.T) {
 // TestApp_PlaylistsReusesLibraryData verifies that opening playlists uses store data without extra fetch.
 func TestApp_PlaylistsReusesLibraryData(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Pre-populate store with playlists.
 	a.Store().SetPlaylists([]api.SimplePlaylist{
@@ -1273,7 +1273,7 @@ func TestApp_PlaylistsReusesLibraryData(t *testing.T) {
 // TestApp_PlaylistView_RendersCorrectly verifies View() returns playlist content when open.
 func TestApp_PlaylistView_RendersCorrectly(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	a = m.(*app.App)
@@ -1293,7 +1293,7 @@ func TestApp_PlaylistView_RendersCorrectly(t *testing.T) {
 // TestApp_PlaylistViewHandlesCreateRequest verifies PlaylistCreateRequestMsg is handled.
 func TestApp_PlaylistViewHandlesCreateRequest(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open playlist view.
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
@@ -1310,7 +1310,7 @@ func TestApp_PlaylistViewHandlesCreateRequest(t *testing.T) {
 // TestApp_PlaylistViewHandlesRenameRequest verifies PlaylistRenameRequestMsg is handled.
 func TestApp_PlaylistViewHandlesRenameRequest(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetPlaylists([]api.SimplePlaylist{
 		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 24},
 	})
@@ -1328,7 +1328,7 @@ func TestApp_PlaylistViewHandlesRenameRequest(t *testing.T) {
 // TestApp_PlaylistViewHandlesRemoveRequest verifies PlaylistRemoveRequestMsg is handled.
 func TestApp_PlaylistViewHandlesRemoveRequest(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetPlaylists([]api.SimplePlaylist{
 		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 1},
 	})
@@ -1349,7 +1349,7 @@ func TestApp_PlaylistViewHandlesRemoveRequest(t *testing.T) {
 // TestApp_PlaylistViewHandlesReorderRequest verifies PlaylistReorderRequestMsg is handled.
 func TestApp_PlaylistViewHandlesReorderRequest(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetPlaylists([]api.SimplePlaylist{
 		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 2},
 	})
@@ -1367,7 +1367,7 @@ func TestApp_PlaylistViewHandlesReorderRequest(t *testing.T) {
 // TestApp_PlaylistViewHandlesFetchTracksRequest verifies FetchPlaylistTracksRequestMsg is handled.
 func TestApp_PlaylistViewHandlesFetchTracksRequest(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = model.(*app.App)
@@ -1384,7 +1384,7 @@ func TestApp_PlaylistViewHandlesFetchTracksRequest(t *testing.T) {
 // TestApp_PlaylistCreatedMsg_Success verifies PlaylistCreatedMsg triggers playlist re-fetch.
 func TestApp_PlaylistCreatedMsg_Success(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = model.(*app.App)
 
@@ -1398,7 +1398,7 @@ func TestApp_PlaylistCreatedMsg_Success(t *testing.T) {
 // TestApp_PlaylistCreatedMsg_Error verifies PlaylistCreatedMsg with error shows status.
 func TestApp_PlaylistCreatedMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = model.(*app.App)
 
@@ -1412,7 +1412,7 @@ func TestApp_PlaylistCreatedMsg_Error(t *testing.T) {
 // TestApp_PlaylistRenamedMsg_Success verifies PlaylistRenamedMsg triggers playlist re-fetch.
 func TestApp_PlaylistRenamedMsg_Success(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = model.(*app.App)
 
@@ -1426,7 +1426,7 @@ func TestApp_PlaylistRenamedMsg_Success(t *testing.T) {
 // TestApp_PlaylistRenamedMsg_Error verifies PlaylistRenamedMsg with error shows status.
 func TestApp_PlaylistRenamedMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = model.(*app.App)
 	a.Store().SetPlaylists([]api.SimplePlaylist{
@@ -1443,7 +1443,7 @@ func TestApp_PlaylistRenamedMsg_Error(t *testing.T) {
 // TestApp_PlaylistRemoveResultMsg_Error verifies remove error is forwarded to playlist pane.
 func TestApp_PlaylistRemoveResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetPlaylists([]api.SimplePlaylist{
 		{ID: "pl-1", Name: "Chill Vibes"},
 	})
@@ -1463,7 +1463,7 @@ func TestApp_PlaylistRemoveResultMsg_Error(t *testing.T) {
 // TestApp_PlaylistReorderResultMsg_Error verifies reorder error is forwarded to playlist pane.
 func TestApp_PlaylistReorderResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = model.(*app.App)
 
@@ -1477,7 +1477,7 @@ func TestApp_PlaylistReorderResultMsg_Error(t *testing.T) {
 // TestApp_PlaylistTracksLoadedMsg verifies PlaylistTracksLoadedMsg is forwarded to playlist pane.
 func TestApp_PlaylistTracksLoadedMsg(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetPlaylistTracks("pl-1", []api.Track{
 		{ID: "t1", Name: "Track A", URI: "spotify:track:t1", DurationMs: 180000, Artists: []api.Artist{{Name: "Artist A"}}},
 	})
@@ -1494,7 +1494,7 @@ func TestApp_PlaylistTracksLoadedMsg(t *testing.T) {
 // a playlist pane is handled gracefully.
 func TestApp_PlaylistTracksLoadedMsg_NilPane(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl-1"}
 	model, _ := a.Update(msg)
@@ -1505,7 +1505,7 @@ func TestApp_PlaylistTracksLoadedMsg_NilPane(t *testing.T) {
 // TestApp_SetPlaylistsAPI verifies SetPlaylistsAPI stores the client.
 func TestApp_SetPlaylistsAPI(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	// SetPlaylistsAPI should not panic even with nil.
 	a.SetPlaylistsAPI(nil)
 }
@@ -1513,7 +1513,7 @@ func TestApp_SetPlaylistsAPI(t *testing.T) {
 // TestApp_PlaylistViewKeysRoutedToPane verifies key events in playlist view are routed to pane.
 func TestApp_PlaylistViewKeysRoutedToPane(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetPlaylists([]api.SimplePlaylist{
 		{ID: "pl-1", Name: "Chill Vibes"},
 		{ID: "pl-2", Name: "Workout Mix"},
@@ -1533,7 +1533,7 @@ func TestApp_PlaylistViewKeysRoutedToPane(t *testing.T) {
 // opens playlists (or is handled gracefully).
 func TestApp_3KeyInStatsView_SwitchesToPlaylists(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Open stats.
 	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
@@ -1555,7 +1555,7 @@ func TestApp_BuildFetchPlaylistsCmd_SetsErrorOnFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
 
 	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
@@ -1570,7 +1570,7 @@ func TestApp_BuildFetchPlaylistsCmd_ClearsErrorOnSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
 
 	// Pre-set an error.
@@ -1588,7 +1588,7 @@ func TestApp_BuildSearchCmd_SetsErrorOnFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
@@ -1603,7 +1603,7 @@ func TestApp_BuildSearchCmd_ClearsErrorOnSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 	a.Store().SetSearchError(fmt.Errorf("previous error"))
 
@@ -1619,7 +1619,7 @@ func TestApp_BuildFetchDevicesCmd_SetsErrorOnFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
 
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
@@ -1634,7 +1634,7 @@ func TestApp_BuildFetchDevicesCmd_ClearsErrorOnSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
 	a.Store().SetDevicesError(fmt.Errorf("previous error"))
 
@@ -1650,7 +1650,7 @@ func TestApp_BuildFetchStatsCmd_SetsErrorOnFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetUserAPI(api.NewUserClient(srv.URL, "test-token"))
 
 	// Open stats view first (press 2).
@@ -1669,7 +1669,7 @@ func TestApp_BuildFetchStatsCmd_ClearsErrorOnSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetUserAPI(api.NewUserClient(srv.URL, "test-token"))
 	a.Store().SetStatsError(fmt.Errorf("previous error"))
 
@@ -1688,7 +1688,7 @@ func TestApp_FetchQueueCmd_SetsErrorOnFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.SetPlayer(api.NewPlayer(srv.URL, "test-token"))
 
 	// Tick triggers both playback and queue fetches.
@@ -1710,7 +1710,7 @@ func TestApp_FetchQueueCmd_SetsErrorOnFailure(t *testing.T) {
 
 func TestApp_SplashScreen_ShownOnStartup(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	output := a.View()
@@ -1720,7 +1720,7 @@ func TestApp_SplashScreen_ShownOnStartup(t *testing.T) {
 
 func TestApp_SplashScreen_StaysOnPlaybackData(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	// Splash should be active.
@@ -1733,4 +1733,38 @@ func TestApp_SplashScreen_StaysOnPlaybackData(t *testing.T) {
 
 	output = a.View()
 	assert.Contains(t, output, "v1.1.0", "splash should still be visible — only timer dismisses it")
+}
+
+// TestApp_BackoffExpiry_ForcesImmediateFetch verifies that when backoff ticks
+// expire, the app immediately fires playback and queue fetch commands instead
+// of waiting for the next modulo-aligned tick.
+func TestApp_BackoffExpiry_ForcesImmediateFetch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Set up a small backoff via RateLimitedMsg with RetryAfterSecs < default (10).
+	// The handler clamps to defaultBackoffTicks=10, so we use that.
+	rateLimitMsg := panes.RateLimitedMsg{RetryAfterSecs: 3}
+	model, _ := a.Update(rateLimitMsg)
+	a = model.(*app.App)
+
+	// Backoff should be set to defaultBackoffTicks (10).
+	assert.Equal(t, 10, a.BackoffTicks(), "backoff should be clamped to default 10")
+
+	// Send 9 ticks — backoff decrements each time but stays > 0.
+	for i := 0; i < 9; i++ {
+		model, cmd := a.Update(panes.TickMsg{})
+		a = model.(*app.App)
+		assert.NotNil(t, cmd, "tick during backoff should return nextTick")
+		assert.Greater(t, a.BackoffTicks(), 0, "backoff should still be active after tick %d", i)
+	}
+
+	// 10th tick: backoff expires → should return a batch (not just nextTick).
+	// The batch includes nextTick + fetchPlaybackState + fetchQueue = 3 commands.
+	model, cmd := a.Update(panes.TickMsg{})
+	a = model.(*app.App)
+
+	assert.Equal(t, 0, a.BackoffTicks(), "backoff should be zero after expiry tick")
+	assert.Equal(t, 0, a.TickCount(), "tickCount should be reset to 0 after backoff expiry")
+	assert.NotNil(t, cmd, "expiry tick should return a batch command for immediate fetch")
 }

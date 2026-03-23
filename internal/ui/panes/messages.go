@@ -9,6 +9,12 @@ package panes
 // It drives both progress interpolation and playback state refresh.
 type TickMsg struct{}
 
+// RateLimitedMsg is returned by fetch commands when the Spotify API responds with 429.
+// The root app uses RetryAfterSecs to set the backoff timer.
+type RateLimitedMsg struct {
+	RetryAfterSecs int
+}
+
 // PlaybackStateFetchedMsg notifies the player pane that the store has been
 // updated with a fresh playback state. The pane reads from the store directly.
 // NOTE: no api payload — store is the single source of truth.

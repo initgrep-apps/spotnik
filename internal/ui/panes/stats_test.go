@@ -139,6 +139,11 @@ func TestStatsView_Update_Tab(t *testing.T) {
 	sv, _ = updated.(*panes.StatsView)
 	assert.Equal(t, panes.StatsSectionRecentlyPlayed, sv.ActiveSection())
 
+	// Tab → Network Log.
+	updated, _ = sv.Update(tabMsg)
+	sv, _ = updated.(*panes.StatsView)
+	assert.Equal(t, panes.StatsSectionNetLog, sv.ActiveSection())
+
 	// Tab → wraps back to Top Tracks.
 	updated, _ = sv.Update(tabMsg)
 	sv, _ = updated.(*panes.StatsView)
@@ -415,4 +420,49 @@ func TestStatsView_View_ErrorCleared(t *testing.T) {
 	view = sv.View()
 	assert.Contains(t, view, "TOP TRACKS")
 	assert.NotContains(t, view, "Failed to load stats")
+}
+
+// TestStatsView_NetLogSection_Renders verifies the NETWORK LOG section appears in View().
+func TestStatsView_NetLogSection_Renders(t *testing.T) {
+	sv, s := newStatsView()
+	sv.SetSize(100, 40)
+	prefillStatsStore(s)
+
+	s.RecordNetCall("GET", "/v1/me/player", 200, 42)
+
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+
+	view := sv.View()
+	assert.Contains(t, view, "NETWORK LOG")
+	assert.Contains(t, view, "/v1/me/player")
+}
+
+// TestStatsView_NetLog_JK_MovesCursor verifies j/k moves cursor in NetLog section.
+func TestStatsView_NetLog_JK_MovesCursor(t *testing.T) {
+	sv, s := newStatsView()
+	sv.SetSize(100, 40)
+
+	for i := 0; i < 20; i++ {
+		s.RecordNetCall("GET", "/v1/test", 200, int64(i))
+	}
+
+	// Tab 3 times to reach NetLog section.
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	var updated tea.Model
+	updated = sv
+	for i := 0; i < 3; i++ {
+		updated, _ = updated.(*panes.StatsView).Update(tabMsg)
+	}
+	sv = updated.(*panes.StatsView)
+	assert.Equal(t, panes.StatsSectionNetLog, sv.ActiveSection())
+
+	// Cursor should auto-scroll to newest (index 19).
+	assert.Equal(t, 19, sv.Cursor())
+
+	// Press k to move cursor up.
+	kMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
+	updated, _ = sv.Update(kMsg)
+	sv = updated.(*panes.StatsView)
+	assert.Equal(t, 18, sv.Cursor())
 }

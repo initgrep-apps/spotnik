@@ -6,6 +6,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -33,8 +36,18 @@ type viewMode int
 const (
 	viewSplash    viewMode = iota // Splash screen shown on startup
 	viewMain                      // three-pane Library | Player | Queue layout
+	viewAuth                      // Auth panel shown when user needs to authenticate
 	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
 	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
+)
+
+const (
+	// playbackFetchInterval is how many ticks (seconds) between playback state polls.
+	playbackFetchInterval = 3
+	// queueFetchInterval is how many ticks (seconds) between queue polls.
+	queueFetchInterval = 9
+	// defaultBackoffTicks is how many ticks to pause polling after a 429 rate limit.
+	defaultBackoffTicks = 10
 )
 
 // App is the root application model. It owns the active theme, the central
@@ -84,8 +97,31 @@ type App struct {
 	// statusMsg is a transient error/info message shown in the status bar for 3–4 seconds.
 	statusMsg string
 
+	// tickCount increments every 1s tick. Used to throttle API polling:
+	// playback fetched every playbackFetchInterval ticks, queue every queueFetchInterval ticks.
+	tickCount int
+
+	// backoffTicks is the number of ticks to skip all API fetches after a 429 rate limit.
+	// Decremented each tick; when >0 no polling commands are dispatched.
+	backoffTicks int
+
 	// volumeStep is the percentage change per volume up/down keypress.
 	volumeStep int
+
+	// needsAuth is true when the user is not authenticated and must go through the auth flow.
+	needsAuth bool
+
+	// clientID is the Spotify OAuth client ID, needed for the TUI auth flow.
+	clientID string
+
+	// tokenStore is the keychain token store, needed for the TUI auth flow.
+	tokenStore keychain.TokenStore
+
+	// authURL is the Spotify authorization URL shown in the auth panel.
+	authURL string
+
+	// authStatus is the status message shown in the auth panel.
+	authStatus string
 }
 
 // statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
@@ -94,8 +130,16 @@ type statusDismissMsg struct{}
 // splashDismissMsg is sent after 2 seconds to close the splash screen.
 type splashDismissMsg struct{}
 
+// AppOptions carries optional startup configuration into the app.
+// Zero value means the user is already authenticated and no auth flow is needed.
+type AppOptions struct {
+	NeedsAuth  bool
+	ClientID   string
+	TokenStore keychain.TokenStore
+}
+
 // New creates a new App, loading the theme from cfg.UI.Theme.
-func New(cfg *config.Config) *App {
+func New(cfg *config.Config, opts AppOptions) *App {
 	t := theme.Load(cfg.UI.Theme)
 	s := state.New()
 
@@ -121,6 +165,9 @@ func New(cfg *config.Config) *App {
 		focus:       focusPlayer,
 		currentView: viewSplash,
 		volumeStep:  volStep,
+		needsAuth:   opts.NeedsAuth,
+		clientID:    opts.ClientID,
+		tokenStore:  opts.TokenStore,
 	}
 }
 
@@ -174,6 +221,21 @@ func (a *App) PlaylistViewOpen() bool {
 	return a.currentView == viewPlaylists
 }
 
+// AuthViewOpen returns true while the auth panel is the active view.
+func (a *App) AuthViewOpen() bool {
+	return a.currentView == viewAuth
+}
+
+// TickCount returns the current tick counter (exported for testing).
+func (a *App) TickCount() int {
+	return a.tickCount
+}
+
+// BackoffTicks returns the remaining backoff ticks (exported for testing).
+func (a *App) BackoffTicks() int {
+	return a.backoffTicks
+}
+
 // SearchOpen returns true while the search overlay is visible.
 func (a *App) SearchOpen() bool {
 	return a.searchOpen
@@ -199,17 +261,27 @@ func (a *App) QueueFocused() bool {
 	return a.focus == focusQueue
 }
 
-// Init starts the polling loop and fetches initial playback state.
+// Init starts the splash timer. If the user is already authenticated,
+// it also starts data fetching and the polling loop. If not, those are
+// deferred until auth succeeds.
 func (a *App) Init() tea.Cmd {
+	splashTimer := tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
+		return splashDismissMsg{}
+	})
+
+	if a.needsAuth {
+		// Unauthenticated: only show splash, defer everything else.
+		return splashTimer
+	}
+
+	// Authenticated: start data fetching alongside splash.
 	return tea.Batch(
 		fetchPlaybackStateCmd(a.player, a.store),
 		a.libraryPane.Init(),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
-		tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
-			return splashDismissMsg{}
-		}),
+		splashTimer,
 	)
 }
 
@@ -290,8 +362,60 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
+			if a.needsAuth {
+				a.currentView = viewAuth
+				a.authStatus = "Opening browser for authorization..."
+				return a, prepareAuthCmd(a.clientID)
+			}
 			a.currentView = viewMain
 		}
+		return a, nil
+
+	case authPreparedMsg:
+		a.authURL = m.authURL
+		if m.browserErr != nil {
+			a.authStatus = "Could not open browser. Please visit the URL above."
+		} else {
+			a.authStatus = "Waiting for authorization in browser..."
+		}
+		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh, m.serverClose)
+
+	case authSuccessMsg:
+		a.needsAuth = false
+		a.currentView = viewMain
+		// Inject API clients with logging transport now that we have a token.
+		loggingClient := &http.Client{
+			Transport: api.NewLoggingTransport(http.DefaultTransport, a.store),
+		}
+		player := api.NewPlayer("", m.accessToken)
+		player.SetHTTPClient(loggingClient)
+		a.player = player
+		library := api.NewLibraryClient("", m.accessToken)
+		library.SetHTTPClient(loggingClient)
+		a.library = library
+		search := api.NewSearchClient("", m.accessToken)
+		search.SetHTTPClient(loggingClient)
+		a.search = search
+		devices := api.NewDevicesClient("", m.accessToken)
+		devices.SetHTTPClient(loggingClient)
+		a.devices = devices
+		userAPI := api.NewUserClient("", m.accessToken)
+		userAPI.SetHTTPClient(loggingClient)
+		a.userAPI = userAPI
+		playlistsAPI := api.NewPlaylistsClient("", m.accessToken)
+		playlistsAPI.SetHTTPClient(loggingClient)
+		a.playlistsAPI = playlistsAPI
+		// Start data fetching and tick loop.
+		return a, tea.Batch(
+			fetchPlaybackStateCmd(a.player, a.store),
+			a.libraryPane.Init(),
+			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+				return panes.TickMsg{}
+			}),
+		)
+
+	case authErrorMsg:
+		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
 		return a, nil
 
 	case panes.SearchClosedMsg:
@@ -364,6 +488,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchPane = sp
 			}
 			return a, cmd
+		}
+
+		// During auth, only allow quit keys — ignore everything else.
+		if a.currentView == viewAuth {
+			if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") || m.Type == tea.KeyEsc {
+				return a, tea.Quit
+			}
+			return a, nil
 		}
 
 		// Global: q always quits.
@@ -466,17 +598,54 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case panes.TickMsg:
+		// Always forward to playerPane for progress bar animation.
 		updatedPane, _ := a.playerPane.Update(m)
 		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
 			a.playerPane = pp
 		}
-		return a, tea.Batch(
-			fetchPlaybackStateCmd(a.player, a.store),
-			fetchQueueCmd(a.player, a.store),
-			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
-				return panes.TickMsg{}
-			}),
-		)
+
+		nextTick := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+			return panes.TickMsg{}
+		})
+
+		// During backoff, skip all API fetches.
+		if a.backoffTicks > 0 {
+			a.backoffTicks--
+			a.tickCount++
+			// When backoff just expired, force an immediate fetch.
+			if a.backoffTicks == 0 {
+				a.tickCount = 0
+				return a, tea.Batch(
+					nextTick,
+					fetchPlaybackStateCmd(a.player, a.store),
+					fetchQueueCmd(a.player, a.store),
+				)
+			}
+			return a, nextTick
+		}
+
+		// Throttled polling: playback every 3s, queue every 9s.
+		// Check before incrementing so tick 0 fires both fetches immediately.
+		var cmds []tea.Cmd
+		cmds = append(cmds, nextTick)
+		if a.tickCount%playbackFetchInterval == 0 {
+			cmds = append(cmds, fetchPlaybackStateCmd(a.player, a.store))
+		}
+		if a.tickCount%queueFetchInterval == 0 {
+			cmds = append(cmds, fetchQueueCmd(a.player, a.store))
+		}
+		a.tickCount++
+		return a, tea.Batch(cmds...)
+
+	case panes.RateLimitedMsg:
+		// 429 from Spotify — activate backoff and show status message.
+		backoff := m.RetryAfterSecs
+		if backoff < defaultBackoffTicks {
+			backoff = defaultBackoffTicks
+		}
+		a.backoffTicks = backoff
+		a.statusMsg = fmt.Sprintf("Rate limited — pausing requests for %ds", backoff)
+		return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
 
 	case panes.QueueLoadedMsg:
 		// Queue data is already in the store — no pane-specific handling needed here.
@@ -1066,6 +1235,9 @@ func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
 		}
 		qr, err := player.GetQueue(context.Background())
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetQueueError(err)
 			return panes.QueueLoadedMsg{}
 		}
@@ -1086,11 +1258,34 @@ func fetchPlaybackStateCmd(player *api.Player, store *state.Store) tea.Cmd {
 		}
 		ps, err := player.GetPlaybackState(context.Background())
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			return panes.PlaybackStateFetchedMsg{}
 		}
 		store.SetPlaybackState(ps)
 		return panes.PlaybackStateFetchedMsg{}
 	}
+}
+
+// parse429RetryAfter extracts the Retry-After seconds from a 429 error message.
+// Returns 0 if the error is not a 429 or parsing fails.
+func parse429RetryAfter(err error) int {
+	msg := err.Error()
+	if !strings.Contains(msg, "429") {
+		return 0
+	}
+	// Error format from api/player.go: "429 rate limited: retry after %s seconds"
+	parts := strings.Split(msg, "retry after ")
+	if len(parts) < 2 {
+		return defaultBackoffTicks
+	}
+	secStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), " seconds")
+	secs, parseErr := strconv.Atoi(secStr)
+	if parseErr != nil || secs <= 0 {
+		return defaultBackoffTicks
+	}
+	return secs
 }
 
 // View renders the full terminal UI.
@@ -1106,6 +1301,11 @@ func (a *App) View() string {
 			return a.renderSplash()
 		}
 		// No size yet — fall through to main view for tests.
+	}
+
+	// Auth panel shown when the user needs to authenticate.
+	if a.currentView == viewAuth {
+		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
 	// Stats view replaces the three-pane layout when active.
@@ -1186,35 +1386,9 @@ func (a *App) renderWithSearchOverlay(background string) string {
 	return centered
 }
 
-// renderTooSmall renders the minimum size message per DESIGN.md.
-// renderSplash renders the startup splash screen with ASCII art branding.
+// renderSplash renders the startup splash screen with go-figure ASCII art.
 func (a *App) renderSplash() string {
-	banner := `
-  ___  ___  ___ _____ _  _ ___ _  __
- / __|/ _ \/ _ \_   _| \| |_ _| |/ /
- \__ \ ___/ (_) || | | .  || ||   <
- |___/|_|  \___/ |_| |_|\_|___|_|\_\
-`
-	bannerStyle := lipgloss.NewStyle().
-		Foreground(a.theme.ActiveBorder()).
-		Bold(true)
-
-	tagline := lipgloss.NewStyle().
-		Foreground(a.theme.TextMuted()).
-		Render("A terminal Spotify client for developers")
-
-	version := lipgloss.NewStyle().
-		Foreground(a.theme.TextMuted()).
-		Render("v1.1.0")
-
-	content := lipgloss.JoinVertical(lipgloss.Center,
-		bannerStyle.Render(banner),
-		"",
-		tagline,
-		version,
-	)
-
-	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, content)
+	return renderSplashView(a.theme, a.width, a.height)
 }
 
 func (a *App) renderTooSmall() string {

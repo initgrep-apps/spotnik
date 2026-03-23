@@ -55,6 +55,11 @@ func NewUserClient(baseURL, accessToken string) *UserClient {
 	}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+func (u *UserClient) SetHTTPClient(c *http.Client) {
+	u.client = c
+}
+
 // GetTopTracks fetches the user's top tracks via GET /me/top/tracks.
 // timeRange must be "short_term", "medium_term", or "long_term".
 // Returns a slice of Track. Errors are wrapped with context.

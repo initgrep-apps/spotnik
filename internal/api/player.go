@@ -47,6 +47,12 @@ func NewPlayer(baseURL, accessToken string) *Player {
 	}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+// Used to inject a LoggingTransport for network call recording.
+func (p *Player) SetHTTPClient(c *http.Client) {
+	p.client = c
+}
+
 // GetPlaybackState fetches the current playback state from GET /me/player.
 // Returns nil, nil when Spotify returns 204 (nothing playing).
 // Returns an error on 429 or other non-2xx status codes.
