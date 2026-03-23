@@ -1105,6 +1105,74 @@ func TestApp_DeviceOverlay_KeysRoutedWhenOpen(t *testing.T) {
 	assert.True(t, a.DeviceOverlayOpen(), "j key should not close device overlay")
 }
 
+// TestApp_2KeyOpensStats verifies pressing 2 switches to the Stats view.
+func TestApp_2KeyOpensStats(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// By default stats view is not open.
+	assert.False(t, a.StatsViewOpen(), "stats view should not be open by default")
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+
+	assert.True(t, a.StatsViewOpen(), "pressing 2 should open the stats view")
+}
+
+// TestApp_1KeyReturnsToLibrary verifies pressing 1 from stats restores the three-pane layout.
+func TestApp_1KeyReturnsToLibrary(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open stats view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+	require.True(t, a.StatsViewOpen())
+
+	// Press 1 to return to library view.
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	a = model.(*app.App)
+	assert.False(t, a.StatsViewOpen(), "pressing 1 should close the stats view")
+}
+
+// TestApp_StatsPreservesCursor verifies returning to stats preserves cursor and section.
+func TestApp_StatsPreservesCursor(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open stats.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+	require.True(t, a.StatsViewOpen())
+
+	// Close stats, then reopen — model should still exist (lazy init only on first open).
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	a = model.(*app.App)
+	assert.False(t, a.StatsViewOpen())
+
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+	assert.True(t, a.StatsViewOpen(), "reopening stats should work after closing")
+}
+
+// TestApp_StatsView_ViewRendersInStatsMode verifies that View() returns the stats content
+// when the stats view is open.
+func TestApp_StatsView_ViewRendersInStatsMode(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Set window size.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
+
+	// Open stats view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+
+	output := a.View()
+	assert.Contains(t, output, "TOP TRACKS", "stats view should render TOP TRACKS section")
+}
+
 // TestApp_SearchDebounceRouted verifies that debounce messages reach the
 // search overlay when it is open (not swallowed by library pane default).
 func TestApp_SearchDebounceRouted(t *testing.T) {

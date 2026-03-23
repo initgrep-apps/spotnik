@@ -205,3 +205,49 @@ func TestStore_SetGetQueue(t *testing.T) {
 	s.SetQueue(nil)
 	assert.Empty(t, s.Queue())
 }
+
+func TestStore_TopTracks_InitiallyNil(t *testing.T) {
+	s := New()
+	assert.Nil(t, s.TopTracks("short_term"), "before any set, TopTracks should return nil")
+}
+
+func TestStore_SetGetTopTracks(t *testing.T) {
+	s := New()
+
+	tracks := []api.Track{
+		{ID: "t1", Name: "Blinding Lights"},
+		{ID: "t2", Name: "Levitating"},
+	}
+	s.SetTopTracks("short_term", tracks)
+
+	got := s.TopTracks("short_term")
+	require.Len(t, got, 2)
+	assert.Equal(t, "Blinding Lights", got[0].Name)
+	assert.Equal(t, "Levitating", got[1].Name)
+
+	// Different range should still be nil.
+	assert.Nil(t, s.TopTracks("medium_term"))
+}
+
+func TestStore_TopArtists_InitiallyNil(t *testing.T) {
+	s := New()
+	assert.Nil(t, s.TopArtists("short_term"), "before any set, TopArtists should return nil")
+}
+
+func TestStore_SetGetTopArtists(t *testing.T) {
+	s := New()
+
+	artists := []api.FullArtist{
+		{ID: "a1", Name: "The Weeknd", Genres: []string{"pop"}, Popularity: 95},
+		{ID: "a2", Name: "Dua Lipa", Genres: []string{"dance pop"}, Popularity: 92},
+	}
+	s.SetTopArtists("short_term", artists)
+
+	got := s.TopArtists("short_term")
+	require.Len(t, got, 2)
+	assert.Equal(t, "The Weeknd", got[0].Name)
+	assert.Equal(t, 95, got[0].Popularity)
+
+	// Different range should still be nil.
+	assert.Nil(t, s.TopArtists("long_term"))
+}
