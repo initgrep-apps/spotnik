@@ -20,6 +20,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestMain disables browser opening for all tests in this package.
+func TestMain(m *testing.M) {
+	api.OpenBrowser = func(string) error { return nil }
+	os.Exit(m.Run())
+}
+
 // TestRootCmd_Executes verifies the root command runs without error.
 // In tests, the auth flow is skipped because the keychain is mocked.
 func TestRootCmd_Executes(t *testing.T) {

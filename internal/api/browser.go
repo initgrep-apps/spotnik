@@ -6,6 +6,10 @@ import (
 	"runtime"
 )
 
+// OpenBrowser opens the given URL in the default browser.
+// It is a variable so tests can replace it with a no-op.
+var OpenBrowser = openBrowserPlatform
+
 // openBrowserPlatform opens the URL in the system browser using platform-native commands.
 // It is a best-effort operation — failures are logged but do not abort the auth flow.
 func openBrowserPlatform(urlStr string) error {
