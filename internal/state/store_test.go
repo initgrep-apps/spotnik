@@ -5,6 +5,7 @@ import (
 
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStore_SetGetPlaybackState(t *testing.T) {
@@ -136,4 +137,49 @@ func TestStore_SetGetRecentlyPlayed(t *testing.T) {
 	assert.Len(t, got, 2)
 	assert.Equal(t, "track-xyz", got[0].Track.ID)
 	assert.Equal(t, "2024-03-01T22:15:00Z", got[0].PlayedAt)
+}
+
+func TestStore_SearchResults(t *testing.T) {
+	s := New()
+
+	// Initially nil.
+	assert.Nil(t, s.SearchResults())
+
+	results := &api.SearchResult{
+		Tracks: api.SearchTracksResult{
+			Items: []api.Track{{ID: "t1", Name: "Blinding Lights"}},
+			Total: 1,
+		},
+	}
+	s.SetSearchResults(results)
+
+	got := s.SearchResults()
+	require.NotNil(t, got)
+	require.Len(t, got.Tracks.Items, 1)
+	assert.Equal(t, "Blinding Lights", got.Tracks.Items[0].Name)
+
+	// Clear results.
+	s.SetSearchResults(nil)
+	assert.Nil(t, s.SearchResults())
+}
+
+func TestStore_SearchQuery(t *testing.T) {
+	s := New()
+
+	assert.Equal(t, "", s.SearchQuery())
+
+	s.SetSearchQuery("blinding lights")
+	assert.Equal(t, "blinding lights", s.SearchQuery())
+}
+
+func TestStore_SearchLoading(t *testing.T) {
+	s := New()
+
+	assert.False(t, s.SearchLoading())
+
+	s.SetSearchLoading(true)
+	assert.True(t, s.SearchLoading())
+
+	s.SetSearchLoading(false)
+	assert.False(t, s.SearchLoading())
 }

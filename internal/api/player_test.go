@@ -296,3 +296,36 @@ func TestPlayer_BaseURL(t *testing.T) {
 
 	assert.Equal(t, "/v1/me/player/next", capturedPath)
 }
+
+// TestAddToQueue_Success verifies AddToQueue sends the correct URI param.
+func TestAddToQueue_Success(t *testing.T) {
+	var capturedURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		capturedURI = r.URL.Query().Get("uri")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	player := newTestPlayer(srv.URL, "test-token")
+	err := player.AddToQueue(context.Background(), "spotify:track:abc123")
+
+	require.NoError(t, err)
+	assert.Equal(t, "spotify:track:abc123", capturedURI, "URI query param should match the track URI")
+}
+
+// TestAddToQueue_ServerError verifies AddToQueue returns a descriptive error on failure.
+func TestAddToQueue_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error": "Premium required"}`))
+	}))
+	defer srv.Close()
+
+	player := newTestPlayer(srv.URL, "test-token")
+	err := player.AddToQueue(context.Background(), "spotify:track:abc123")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403", "error should include status code")
+}

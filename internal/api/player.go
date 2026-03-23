@@ -184,6 +184,21 @@ func (p *Player) SetShuffle(ctx context.Context, state bool) error {
 	return p.doNoContent(req)
 }
 
+// AddToQueue adds a track to the user's playback queue via POST /me/player/queue?uri=<uri>.
+// trackURI must be a Spotify track URI (e.g. "spotify:track:...").
+func (p *Player) AddToQueue(ctx context.Context, trackURI string) error {
+	req, err := p.newRequest(ctx, http.MethodPost, "/v1/me/player/queue", nil)
+	if err != nil {
+		return fmt.Errorf("creating add to queue request: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Set("uri", trackURI)
+	req.URL.RawQuery = q.Encode()
+
+	return p.doNoContent(req)
+}
+
 // SetRepeat sets the repeat mode via PUT /me/player/repeat?state=<mode>.
 // mode must be one of "off", "context", or "track".
 func (p *Player) SetRepeat(ctx context.Context, mode string) error {

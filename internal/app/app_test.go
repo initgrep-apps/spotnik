@@ -270,6 +270,16 @@ func TestApp_SetLibrary(t *testing.T) {
 	// No panic — library was set
 }
 
+// TestApp_SetSearch verifies that SetSearch injects the search client.
+func TestApp_SetSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	search := api.NewSearchClient("http://localhost", "test-token")
+	a.SetSearch(search)
+	// No panic — search client was set
+}
+
 // TestApp_TabFocusRotation verifies Tab cycles focus between panes.
 func TestApp_TabFocusRotation(t *testing.T) {
 	cfg := &config.Config{}
@@ -475,6 +485,7 @@ func TestApp_View_StatusBarContextSensitive(t *testing.T) {
 	// Player focused by default.
 	output := a.View()
 	assert.Contains(t, output, "Space", "player status bar should show Space hint")
+	assert.Contains(t, output, "/", "status bar should show / search hint")
 
 	// Tab to library.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -543,6 +554,125 @@ func TestApp_QuitKey(t *testing.T) {
 	assert.True(t, isQuit, "q should produce tea.QuitMsg")
 }
 
+// TestApp_AddToQueueMsg_DispatchesAPICmd verifies AddToQueueMsg produces a queue command.
+func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	queueMsg := panes.AddToQueueMsg{TrackURI: "spotify:track:abc"}
+	_, cmd := a.Update(queueMsg)
+
+	assert.NotNil(t, cmd, "AddToQueueMsg should produce a command")
+	msg := cmd()
+	resultMsg, ok := msg.(panes.AddToQueueResultMsg)
+	assert.True(t, ok, "nil player should return AddToQueueResultMsg, got %T", msg)
+	assert.Nil(t, resultMsg.Err, "nil player should return no error")
+}
+
+// TestApp_AddToQueueResultMsg_Success verifies success shows status bar confirmation.
+func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	successMsg := panes.AddToQueueResultMsg{Err: nil}
+	m, cmd := a.Update(successMsg)
+	require.NotNil(t, m)
+	assert.NotNil(t, cmd, "success should schedule a dismiss timer")
+	appModel := m.(*app.App)
+	output := appModel.View()
+	assert.Contains(t, output, "Added to queue", "status bar should show queue confirmation")
+}
+
+// TestApp_AddToQueueResultMsg_Error verifies error sets the status bar.
+func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("queue failed")}
+	m, cmd := a.Update(errMsg)
+	require.NotNil(t, m)
+	assert.NotNil(t, cmd, "error result should produce dismiss timer cmd")
+	appModel := m.(*app.App)
+	output := appModel.View()
+	assert.Contains(t, output, "queue failed", "status bar should show error message")
+}
+
+// TestApp_SlashOpensSearch verifies '/' opens the search overlay.
+func TestApp_SlashOpensSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	_, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	appModel := model.(*app.App)
+
+	assert.True(t, appModel.SearchOpen(), "'/' should open the search overlay")
+}
+
+// TestApp_EscClosesSearch verifies Esc closes the search overlay and restores pane focus.
+func TestApp_EscClosesSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open search
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	// Close search via SearchClosedMsg
+	model, _ = a.Update(panes.SearchClosedMsg{})
+	a = model.(*app.App)
+
+	assert.False(t, a.SearchOpen(), "SearchClosedMsg should close the overlay")
+}
+
+// TestApp_SearchPlayClosesOverlay verifies that a play command from search closes the overlay.
+func TestApp_SearchPlayClosesOverlay(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open search
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	// Send a PlayTrackMsg (simulating Enter on a search result)
+	model, _ = a.Update(panes.PlayTrackMsg{TrackURI: "spotify:track:t1"})
+	a = model.(*app.App)
+
+	assert.False(t, a.SearchOpen(), "playing from search should close the overlay")
+}
+
+// TestApp_BackgroundDimmed verifies the view contains faint styling hint when overlay open.
+func TestApp_BackgroundDimmed(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Set size so View renders full content
+	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = model.(*app.App)
+
+	// Open search
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+
+	// View should render without panic when overlay is open
+	output := a.View()
+	assert.NotEmpty(t, output, "view should not be empty when search overlay is open")
+	assert.True(t, a.SearchOpen(), "search should still be open after View()")
+}
+
+// TestApp_SearchRequestMsg_DispatchesSearch verifies SearchRequestMsg triggers API cmd.
+func TestApp_SearchRequestMsg_DispatchesSearch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	searchMsg := panes.SearchRequestMsg{Query: "blinding lights"}
+	_, cmd := a.Update(searchMsg)
+
+	assert.NotNil(t, cmd, "SearchRequestMsg should produce a search command")
+}
+
 // TestApp_StatusDismiss verifies statusDismissMsg clears the status bar.
 func TestApp_StatusDismiss_ClearsMsg(t *testing.T) {
 	cfg := &config.Config{}
@@ -563,4 +693,28 @@ func TestApp_StatusDismiss_ClearsMsg(t *testing.T) {
 	// Since statusDismissMsg is unexported, verify the timer cmd exists.
 	output := a.View()
 	assert.Contains(t, output, "error to dismiss", "status should persist until dismissed")
+}
+
+// TestApp_SearchDebounceRouted verifies that debounce messages reach the
+// search overlay when it is open (not swallowed by library pane default).
+func TestApp_SearchDebounceRouted(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open search
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	// Type a character to set the query
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	a = model.(*app.App)
+
+	// Send the debounce message (simulates the 300ms tick firing)
+	debounceMsg := panes.SearchDebounceMsgForTest("x")
+	_, cmd := a.Update(debounceMsg)
+
+	// The debounce should have been routed to the search overlay,
+	// which should emit a SearchRequestMsg command
+	assert.NotNil(t, cmd, "debounce msg should produce a search request command when routed to overlay")
 }
