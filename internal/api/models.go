@@ -177,6 +177,16 @@ type PlayHistory struct {
 	PlayedAt string `json:"played_at"`
 }
 
+// QueueResponse represents the response from GET /me/player/queue.
+// It contains the currently playing track and the list of queued tracks.
+type QueueResponse struct {
+	// CurrentlyPlaying is the track currently playing (may be zero-value if nothing is playing).
+	CurrentlyPlaying Track `json:"currently_playing"`
+
+	// Queue contains the upcoming tracks in the user's play queue.
+	Queue []Track `json:"queue"`
+}
+
 // Device represents a Spotify Connect playback device.
 type Device struct {
 	// ID is the Spotify device ID.

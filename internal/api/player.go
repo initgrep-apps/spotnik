@@ -199,6 +199,43 @@ func (p *Player) AddToQueue(ctx context.Context, trackURI string) error {
 	return p.doNoContent(req)
 }
 
+// GetQueue fetches the current play queue from GET /me/player/queue.
+// Returns the currently playing track and the list of upcoming tracks.
+// Returns nil, nil when Spotify returns 204 (nothing playing).
+func (p *Player) GetQueue(ctx context.Context) (*QueueResponse, error) {
+	req, err := p.newRequest(ctx, http.MethodGet, "/v1/me/player/queue", nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating get queue request: %w", err)
+	}
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getting queue: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get queue: unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading queue response: %w", err)
+	}
+
+	var qr QueueResponse
+	if err := json.Unmarshal(body, &qr); err != nil {
+		return nil, fmt.Errorf("parsing queue response: %w", err)
+	}
+
+	return &qr, nil
+}
+
 // SetRepeat sets the repeat mode via PUT /me/player/repeat?state=<mode>.
 // mode must be one of "off", "context", or "track".
 func (p *Player) SetRepeat(ctx context.Context, mode string) error {
