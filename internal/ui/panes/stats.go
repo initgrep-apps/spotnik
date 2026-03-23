@@ -73,9 +73,6 @@ type StatsView struct {
 	// cursor is the selection cursor within the active section.
 	cursor int
 
-	// netLogView is the embedded network log panel.
-	netLogView *NetLogView
-
 	width  int
 	height int
 }
@@ -87,7 +84,6 @@ func NewStatsView(store *state.Store, t theme.Theme) *StatsView {
 		theme:         t,
 		activeSection: StatsSectionTopTracks,
 		timeRange:     "short_term",
-		netLogView:    NewNetLogView(store, t),
 	}
 }
 
@@ -95,8 +91,6 @@ func NewStatsView(store *state.Store, t theme.Theme) *StatsView {
 func (sv *StatsView) SetSize(w, h int) {
 	sv.width = w
 	sv.height = h
-	// Network log gets fixed 8-row height at the bottom.
-	sv.netLogView.SetSize(w, 8)
 }
 
 // ActiveSection returns the currently focused section (exported for testing).
@@ -149,25 +143,27 @@ func (sv *StatsView) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.Type == tea.KeyTab:
 		sv.activeSection = (sv.activeSection + 1) % statsSectionCount
-		sv.cursor = 0
+		// Auto-scroll: when entering NetLog, jump cursor to newest entry.
+		if sv.activeSection == StatsSectionNetLog {
+			entries := sv.store.NetLogEntries()
+			if len(entries) > 0 {
+				sv.cursor = len(entries) - 1
+			} else {
+				sv.cursor = 0
+			}
+		} else {
+			sv.cursor = 0
+		}
 		return sv, nil
 
 	case m.Type == tea.KeyRunes && string(m.Runes) == "j",
 		m.Type == tea.KeyDown:
-		if sv.activeSection == StatsSectionNetLog {
-			sv.netLogView.ScrollDown()
-		} else {
-			sv.moveCursorDown()
-		}
+		sv.moveCursorDown()
 		return sv, nil
 
 	case m.Type == tea.KeyRunes && string(m.Runes) == "k",
 		m.Type == tea.KeyUp:
-		if sv.activeSection == StatsSectionNetLog {
-			sv.netLogView.ScrollUp()
-		} else {
-			sv.moveCursorUp()
-		}
+		sv.moveCursorUp()
 		return sv, nil
 
 	case m.Type == tea.KeyEnter:
@@ -207,6 +203,8 @@ func (sv *StatsView) activeSectionLen() int {
 		return len(sv.store.TopArtists(sv.timeRange))
 	case StatsSectionRecentlyPlayed:
 		return len(sv.store.RecentlyPlayed())
+	case StatsSectionNetLog:
+		return len(sv.store.NetLogEntries())
 	}
 	return 0
 }
@@ -518,13 +516,60 @@ func formatPlayedAt(playedAt string) string {
 	return FormatRelativeTime(t)
 }
 
-// renderNetLogSection renders the NETWORK LOG section header and delegates to NetLogView.
+// renderNetLogSection renders the NETWORK LOG section with cursor-based highlighting.
+// Uses the same pattern as renderTopTracksSection — pure View, no state mutation.
 func (sv *StatsView) renderNetLogSection() string {
 	focused := sv.activeSection == StatsSectionNetLog
 	var sb strings.Builder
+
 	sb.WriteString(sv.renderSectionHeader("NETWORK LOG", focused))
 	sb.WriteString("\n")
-	sb.WriteString(sv.netLogView.View())
+
+	// Column header.
+	header := fmt.Sprintf("  %-8s %-6s %-36s %6s %8s",
+		"TIME", "METHOD", "PATH", "STATUS", "DURATION")
+	sb.WriteString(lipgloss.NewStyle().
+		Foreground(sv.theme.SectionHeader()).
+		Bold(true).
+		Render(header))
+	sb.WriteString("\n")
+
+	entries := sv.store.NetLogEntries()
+	if len(entries) == 0 {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  No API calls recorded yet"))
+		return sb.String()
+	}
+
+	// Chronological order (oldest first), cursor highlights current row.
+	for i, entry := range entries {
+		timeStr := entry.Timestamp.Format("15:04:05")
+		row := fmt.Sprintf("  %-8s %-6s %-36s %6d %6dms",
+			timeStr, entry.Method, truncate(entry.Path, 36),
+			entry.StatusCode, entry.DurationMs)
+
+		if focused && i == sv.cursor {
+			// Highlighted cursor row.
+			sb.WriteString(lipgloss.NewStyle().
+				Background(sv.theme.SelectedBg()).
+				Foreground(sv.theme.TextPrimary()).
+				Render(row))
+		} else {
+			// Color-code by status: 2xx green, 4xx+ red, others default.
+			style := lipgloss.NewStyle()
+			if entry.StatusCode >= 400 {
+				style = style.Foreground(sv.theme.Error())
+			} else if entry.StatusCode >= 200 && entry.StatusCode < 300 {
+				style = style.Foreground(sv.theme.PlayingIndicator())
+			} else {
+				style = style.Foreground(sv.theme.TextPrimary())
+			}
+			sb.WriteString(style.Render(row))
+		}
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 

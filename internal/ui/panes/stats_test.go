@@ -438,8 +438,8 @@ func TestStatsView_NetLogSection_Renders(t *testing.T) {
 	assert.Contains(t, view, "/v1/me/player")
 }
 
-// TestStatsView_NetLog_JK_Scrolls verifies j/k scrolls the NetLog when focused.
-func TestStatsView_NetLog_JK_Scrolls(t *testing.T) {
+// TestStatsView_NetLog_JK_MovesCursor verifies j/k moves cursor in NetLog section.
+func TestStatsView_NetLog_JK_MovesCursor(t *testing.T) {
 	sv, s := newStatsView()
 	sv.SetSize(100, 40)
 
@@ -457,10 +457,12 @@ func TestStatsView_NetLog_JK_Scrolls(t *testing.T) {
 	sv = updated.(*panes.StatsView)
 	assert.Equal(t, panes.StatsSectionNetLog, sv.ActiveSection())
 
-	// Press j to scroll down.
-	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
-	updated, _ = sv.Update(jMsg)
+	// Cursor should auto-scroll to newest (index 19).
+	assert.Equal(t, 19, sv.Cursor())
+
+	// Press k to move cursor up.
+	kMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
+	updated, _ = sv.Update(kMsg)
 	sv = updated.(*panes.StatsView)
-	// Verify it didn't move cursor (NetLog uses scroll, not cursor).
-	assert.Equal(t, 0, sv.Cursor())
+	assert.Equal(t, 18, sv.Cursor())
 }
