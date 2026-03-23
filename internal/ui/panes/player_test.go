@@ -297,6 +297,14 @@ func TestPlayerPane_SetFocused(t *testing.T) {
 	assert.True(t, pane.focused)
 }
 
+func TestPlayerPane_IsFocused(t *testing.T) {
+	pane := newTestPlayerPane(false)
+	assert.False(t, pane.IsFocused())
+
+	pane.SetFocused(true)
+	assert.True(t, pane.IsFocused())
+}
+
 func TestPlayerPane_Init(t *testing.T) {
 	pane := newTestPlayerPane(true)
 	cmd := pane.Init()
