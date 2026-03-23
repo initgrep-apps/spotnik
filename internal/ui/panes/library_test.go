@@ -785,3 +785,77 @@ func findSectionByType(sections []Section, sectionType SectionType) *Section {
 	}
 	return nil
 }
+
+func TestLibraryPane_AutoExpandPlaylists_OnLoad(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewLibraryPane(s, th, false)
+
+	// Playlists section should start collapsed.
+	sec := findSectionByType(pane.tree.Sections(), SectionPlaylists)
+	require.NotNil(t, sec)
+	assert.False(t, sec.Expanded, "playlists should be collapsed initially")
+
+	// Simulate playlists data arriving from API.
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl1", Name: "Chill Vibes"},
+		{ID: "pl2", Name: "Workout"},
+	})
+
+	m, _ := pane.Update(LibraryLoadedMsg{})
+	pane = m.(*LibraryPane)
+
+	sec = findSectionByType(pane.tree.Sections(), SectionPlaylists)
+	assert.True(t, sec.Expanded, "playlists should auto-expand when data arrives")
+}
+
+func TestLibraryPane_AutoExpandPlaylists_NoExpandWhenEmpty(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewLibraryPane(s, th, false)
+
+	// No playlists in store — should stay collapsed.
+	m, _ := pane.Update(LibraryLoadedMsg{})
+	pane = m.(*LibraryPane)
+
+	sec := findSectionByType(pane.tree.Sections(), SectionPlaylists)
+	assert.False(t, sec.Expanded, "playlists should stay collapsed when no data")
+}
+
+func TestLibraryPane_AutoExpandRecentlyPlayed_OnLoad(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewLibraryPane(s, th, false)
+
+	// Recently Played section should start collapsed.
+	sec := findSectionByType(pane.tree.Sections(), SectionRecentlyPlayed)
+	require.NotNil(t, sec)
+	assert.False(t, sec.Expanded, "recently played should be collapsed initially")
+
+	// Simulate data arriving.
+	s.SetRecentlyPlayed([]api.PlayHistory{
+		{Track: api.Track{ID: "t1", Name: "Song A"}},
+	})
+
+	m, _ := pane.Update(RecentlyPlayedLoadedMsg{})
+	pane = m.(*LibraryPane)
+
+	sec = findSectionByType(pane.tree.Sections(), SectionRecentlyPlayed)
+	assert.True(t, sec.Expanded, "recently played should auto-expand when data arrives")
+}
+
+func TestLibraryPane_AlbumsStayCollapsed_OnLoad(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewLibraryPane(s, th, false)
+
+	s.SetSavedAlbums([]api.SavedAlbum{
+		{Album: api.FullAlbum{ID: "a1", Name: "Album"}},
+	})
+
+	m, _ := pane.Update(AlbumsLoadedMsg{})
+	pane = m.(*LibraryPane)
+
+	sec := findSectionByType(pane.tree.Sections(), SectionAlbums)
+	assert.False(t, sec.Expanded, "albums should stay collapsed (lazy load)")
+}

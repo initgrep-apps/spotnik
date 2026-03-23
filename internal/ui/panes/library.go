@@ -361,6 +361,11 @@ func (p *LibraryPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case LibraryLoadedMsg:
 		p.tree.UpdateFromStore(p.store)
+		// Auto-expand Playlists section when data arrives so items are
+		// visible within 2 seconds of app start (per original spec).
+		if len(p.store.Playlists()) > 0 {
+			p.tree.SetSectionExpanded(SectionPlaylists, true)
+		}
 		return p, nil
 
 	case AlbumsLoadedMsg:
@@ -375,6 +380,10 @@ func (p *LibraryPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RecentlyPlayedLoadedMsg:
 		p.tree.UpdateFromStore(p.store)
+		// Auto-expand Recently Played section when data arrives.
+		if len(p.store.RecentlyPlayed()) > 0 {
+			p.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
+		}
 		return p, nil
 
 	case tea.KeyMsg:
