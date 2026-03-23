@@ -139,6 +139,11 @@ func TestStatsView_Update_Tab(t *testing.T) {
 	sv, _ = updated.(*panes.StatsView)
 	assert.Equal(t, panes.StatsSectionRecentlyPlayed, sv.ActiveSection())
 
+	// Tab → Network Log.
+	updated, _ = sv.Update(tabMsg)
+	sv, _ = updated.(*panes.StatsView)
+	assert.Equal(t, panes.StatsSectionNetLog, sv.ActiveSection())
+
 	// Tab → wraps back to Top Tracks.
 	updated, _ = sv.Update(tabMsg)
 	sv, _ = updated.(*panes.StatsView)
@@ -415,4 +420,47 @@ func TestStatsView_View_ErrorCleared(t *testing.T) {
 	view = sv.View()
 	assert.Contains(t, view, "TOP TRACKS")
 	assert.NotContains(t, view, "Failed to load stats")
+}
+
+// TestStatsView_NetLogSection_Renders verifies the NETWORK LOG section appears in View().
+func TestStatsView_NetLogSection_Renders(t *testing.T) {
+	sv, s := newStatsView()
+	sv.SetSize(100, 40)
+	prefillStatsStore(s)
+
+	s.RecordNetCall("GET", "/v1/me/player", 200, 42)
+
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+
+	view := sv.View()
+	assert.Contains(t, view, "NETWORK LOG")
+	assert.Contains(t, view, "/v1/me/player")
+}
+
+// TestStatsView_NetLog_JK_Scrolls verifies j/k scrolls the NetLog when focused.
+func TestStatsView_NetLog_JK_Scrolls(t *testing.T) {
+	sv, s := newStatsView()
+	sv.SetSize(100, 40)
+
+	for i := 0; i < 20; i++ {
+		s.RecordNetCall("GET", "/v1/test", 200, int64(i))
+	}
+
+	// Tab 3 times to reach NetLog section.
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	var updated tea.Model
+	updated = sv
+	for i := 0; i < 3; i++ {
+		updated, _ = updated.(*panes.StatsView).Update(tabMsg)
+	}
+	sv = updated.(*panes.StatsView)
+	assert.Equal(t, panes.StatsSectionNetLog, sv.ActiveSection())
+
+	// Press j to scroll down.
+	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
+	updated, _ = sv.Update(jMsg)
+	sv = updated.(*panes.StatsView)
+	// Verify it didn't move cursor (NetLog uses scroll, not cursor).
+	assert.Equal(t, 0, sv.Cursor())
 }

@@ -25,7 +25,11 @@ const (
 	StatsSectionTopArtists
 	// StatsSectionRecentlyPlayed is the recently played section.
 	StatsSectionRecentlyPlayed
+	// StatsSectionNetLog is the network log section.
+	StatsSectionNetLog
 )
+
+const statsSectionCount = 4
 
 // timeRanges is the cycle order for the f key.
 var timeRanges = []string{"short_term", "medium_term", "long_term"}
@@ -69,6 +73,9 @@ type StatsView struct {
 	// cursor is the selection cursor within the active section.
 	cursor int
 
+	// netLogView is the embedded network log panel.
+	netLogView *NetLogView
+
 	width  int
 	height int
 }
@@ -80,6 +87,7 @@ func NewStatsView(store *state.Store, t theme.Theme) *StatsView {
 		theme:         t,
 		activeSection: StatsSectionTopTracks,
 		timeRange:     "short_term",
+		netLogView:    NewNetLogView(store, t),
 	}
 }
 
@@ -87,6 +95,8 @@ func NewStatsView(store *state.Store, t theme.Theme) *StatsView {
 func (sv *StatsView) SetSize(w, h int) {
 	sv.width = w
 	sv.height = h
+	// Network log gets fixed 8-row height at the bottom.
+	sv.netLogView.SetSize(w, 8)
 }
 
 // ActiveSection returns the currently focused section (exported for testing).
@@ -138,18 +148,26 @@ func (sv *StatsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (sv *StatsView) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.Type == tea.KeyTab:
-		sv.activeSection = (sv.activeSection + 1) % 3
+		sv.activeSection = (sv.activeSection + 1) % statsSectionCount
 		sv.cursor = 0
 		return sv, nil
 
 	case m.Type == tea.KeyRunes && string(m.Runes) == "j",
 		m.Type == tea.KeyDown:
-		sv.moveCursorDown()
+		if sv.activeSection == StatsSectionNetLog {
+			sv.netLogView.ScrollDown()
+		} else {
+			sv.moveCursorDown()
+		}
 		return sv, nil
 
 	case m.Type == tea.KeyRunes && string(m.Runes) == "k",
 		m.Type == tea.KeyUp:
-		sv.moveCursorUp()
+		if sv.activeSection == StatsSectionNetLog {
+			sv.netLogView.ScrollUp()
+		} else {
+			sv.moveCursorUp()
+		}
 		return sv, nil
 
 	case m.Type == tea.KeyEnter:
@@ -295,6 +313,9 @@ func (sv *StatsView) renderDashboard() string {
 
 	sb.WriteString("\n")
 	sb.WriteString(sv.renderRecentlyPlayedSection())
+
+	sb.WriteString("\n")
+	sb.WriteString(sv.renderNetLogSection())
 
 	return sb.String()
 }
@@ -495,6 +516,16 @@ func formatPlayedAt(playedAt string) string {
 		return ""
 	}
 	return FormatRelativeTime(t)
+}
+
+// renderNetLogSection renders the NETWORK LOG section header and delegates to NetLogView.
+func (sv *StatsView) renderNetLogSection() string {
+	focused := sv.activeSection == StatsSectionNetLog
+	var sb strings.Builder
+	sb.WriteString(sv.renderSectionHeader("NETWORK LOG", focused))
+	sb.WriteString("\n")
+	sb.WriteString(sv.netLogView.View())
+	return sb.String()
 }
 
 // NOTE: truncate is defined in search.go and reused here across the panes package.
