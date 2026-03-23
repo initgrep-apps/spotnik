@@ -485,6 +485,7 @@ func TestApp_View_StatusBarContextSensitive(t *testing.T) {
 	// Player focused by default.
 	output := a.View()
 	assert.Contains(t, output, "Space", "player status bar should show Space hint")
+	assert.Contains(t, output, "/", "status bar should show / search hint")
 
 	// Tab to library.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})

@@ -727,6 +727,7 @@ func (a *App) renderStatusBar() string {
 	switch a.focus {
 	case focusLibrary:
 		hints = []string{
+			keyStyle.Render("/") + " search",
 			keyStyle.Render("Enter") + " play",
 			keyStyle.Render("a") + " queue",
 			keyStyle.Render("l") + " like",
@@ -735,6 +736,7 @@ func (a *App) renderStatusBar() string {
 		}
 	default:
 		hints = []string{
+			keyStyle.Render("/") + " search",
 			keyStyle.Render("Space") + " play",
 			keyStyle.Render("n/p") + " skip",
 			keyStyle.Render("+/-") + " vol",
