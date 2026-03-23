@@ -11,13 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- LibraryTree Tests (Task 3.3) ---
+// --- LibraryTree Tests ---
 
 func TestLibraryTree_MoveDown(t *testing.T) {
 	tree := NewLibraryTree()
-
 	tree.MoveDown()
-
 	assert.Equal(t, 1, tree.CursorPos())
 }
 
@@ -25,19 +23,15 @@ func TestLibraryTree_MoveUp(t *testing.T) {
 	tree := NewLibraryTree()
 	tree.MoveDown()
 	tree.MoveDown()
-
 	tree.MoveUp()
-
 	assert.Equal(t, 1, tree.CursorPos())
 }
 
 func TestLibraryTree_MoveDown_AtBottom(t *testing.T) {
 	tree := NewLibraryTree()
-	// Move down far past the end
 	for i := 0; i < 20; i++ {
 		tree.MoveDown()
 	}
-
 	pos := tree.CursorPos()
 	tree.MoveDown()
 	assert.Equal(t, pos, tree.CursorPos(), "cursor should not move past bottom")
@@ -45,36 +39,29 @@ func TestLibraryTree_MoveDown_AtBottom(t *testing.T) {
 
 func TestLibraryTree_MoveUp_AtTop(t *testing.T) {
 	tree := NewLibraryTree()
-
-	tree.MoveUp() // already at top
-
+	tree.MoveUp()
 	assert.Equal(t, 0, tree.CursorPos(), "cursor should not move above top")
 }
 
 func TestLibraryTree_ToggleSection_Expands(t *testing.T) {
 	tree := NewLibraryTree()
-	// cursor is at index 0 = Playlists section header
-
 	tree.ToggleSection()
-
-	assert.True(t, tree.Sections()[0].Expanded, "section should be expanded after toggle")
+	assert.True(t, tree.Sections()[0].Expanded)
 }
 
 func TestLibraryTree_ToggleSection_Collapses(t *testing.T) {
 	tree := NewLibraryTree()
-	tree.ToggleSection() // expand
-
-	tree.ToggleSection() // collapse
-
-	assert.False(t, tree.Sections()[0].Expanded, "section should be collapsed after second toggle")
+	tree.ToggleSection()
+	tree.ToggleSection()
+	assert.False(t, tree.Sections()[0].Expanded)
 }
 
 func TestLibraryTree_SelectedItem(t *testing.T) {
 	tree := NewLibraryTree()
 	// Expand Playlists section which has items
 	tree.Sections()[0].Items = []LibraryItem{
-		{Playlist: &api.SimplePlaylist{ID: "pl1", Name: "Chill Vibes"}},
-		{Playlist: &api.SimplePlaylist{ID: "pl2", Name: "Workout Mix"}},
+		{kind: kindPlaylist, DisplayName: "Chill Vibes", ContextURI: "spotify:playlist:pl1"},
+		{kind: kindPlaylist, DisplayName: "Workout Mix", ContextURI: "spotify:playlist:pl2"},
 	}
 	tree.Sections()[0].Expanded = true
 
@@ -82,11 +69,11 @@ func TestLibraryTree_SelectedItem(t *testing.T) {
 
 	item := tree.SelectedItem()
 	require.NotNil(t, item)
-	assert.NotNil(t, item.Playlist)
-	assert.Equal(t, "pl1", item.Playlist.ID)
+	assert.Equal(t, "Chill Vibes", item.DisplayName)
+	assert.Equal(t, "spotify:playlist:pl1", item.ContextURI)
 }
 
-// --- LibraryPane Tests (Task 3.4) ---
+// --- LibraryPane Tests ---
 
 func TestLibraryPane_Init_FetchesPlaylistsAndRecent(t *testing.T) {
 	s := state.New()
@@ -95,7 +82,7 @@ func TestLibraryPane_Init_FetchesPlaylistsAndRecent(t *testing.T) {
 
 	cmd := pane.Init()
 
-	assert.NotNil(t, cmd, "Init should return a batch command to fetch playlists and recently played")
+	assert.NotNil(t, cmd, "Init should return a batch command")
 }
 
 func TestLibraryPane_View_ShowsSections(t *testing.T) {
@@ -105,16 +92,15 @@ func TestLibraryPane_View_ShowsSections(t *testing.T) {
 
 	view := pane.View()
 
-	assert.Contains(t, view, "LIBRARY", "view should contain LIBRARY header")
-	assert.Contains(t, view, "Playlists", "view should contain Playlists section")
-	assert.Contains(t, view, "Albums", "view should contain Albums section")
+	assert.Contains(t, view, "LIBRARY")
+	assert.Contains(t, view, "Playlists")
+	assert.Contains(t, view, "Albums")
 }
 
 func TestLibraryPane_View_PlayingIndicator(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Set currently playing track
 	s.SetPlaybackState(&api.PlaybackState{
 		IsPlaying: true,
 		Item: &api.Track{
@@ -124,7 +110,6 @@ func TestLibraryPane_View_PlayingIndicator(t *testing.T) {
 		},
 	})
 
-	// Add recently played with the same track
 	s.SetRecentlyPlayed([]api.PlayHistory{
 		{
 			Track:    api.Track{ID: "track-xyz789", Name: "Blinding Lights", URI: "spotify:track:track-xyz789"},
@@ -133,7 +118,6 @@ func TestLibraryPane_View_PlayingIndicator(t *testing.T) {
 	})
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand recently played section to show the items
 	pane.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
 
 	view := pane.View()
@@ -145,28 +129,22 @@ func TestLibraryPane_Update_Enter_OnPlaylist(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Pre-populate playlists in store
 	s.SetPlaylists([]api.SimplePlaylist{
 		{ID: "pl1", Name: "Chill Vibes", URI: "spotify:playlist:pl1"},
 	})
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand the playlists section
 	expandMsg := expandSectionMsg{section: SectionPlaylists}
 	m, _ := pane.Update(expandMsg)
 	pane = m.(*LibraryPane)
 
-	// Move down to first playlist item
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	pane = m.(*LibraryPane)
 
-	// Press Enter on the playlist
 	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	_ = m
 
-	require.NotNil(t, cmd, "Enter on playlist should produce a play command")
-
-	// Execute the command and check the message type
+	require.NotNil(t, cmd)
 	msg := cmd()
 	playMsg, ok := msg.(PlayContextMsg)
 	require.True(t, ok, "expected PlayContextMsg, got %T", msg)
@@ -178,78 +156,71 @@ func TestLibraryPane_Update_Enter_OnSection(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Cursor starts at Playlists section header — Enter should expand
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	pane = m.(*LibraryPane)
 
 	sections := pane.tree.Sections()
 	playlistSection := findSectionByType(sections, SectionPlaylists)
 	require.NotNil(t, playlistSection)
-	assert.True(t, playlistSection.Expanded, "Enter on section header should expand the section")
+	assert.True(t, playlistSection.Expanded)
 }
 
 func TestLibraryPane_Update_A_AddsToQueue(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Set recently played so we have a track
 	s.SetRecentlyPlayed([]api.PlayHistory{
 		{Track: api.Track{ID: "track-xyz789", Name: "Blinding Lights", URI: "spotify:track:track-xyz789"}},
 	})
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand recently played section to show tracks
 	pane.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
 
-	// Navigate to the track
 	var foundTrack bool
 	for i := 0; i < 15; i++ {
 		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		pane = m.(*LibraryPane)
 		item := pane.tree.SelectedItem()
-		if item != nil && item.PlayHistory != nil {
+		if item != nil && item.TrackURI != "" {
 			foundTrack = true
 			break
 		}
 	}
-	require.True(t, foundTrack, "should be able to navigate to a recently played track")
+	require.True(t, foundTrack)
 
 	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
 	_ = m
 
-	assert.NotNil(t, cmd, "'a' on a track should produce an add-to-queue command")
+	assert.NotNil(t, cmd)
 }
 
 func TestLibraryPane_Update_L_ToggleLike(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Set recently played so we have a track to like
 	s.SetRecentlyPlayed([]api.PlayHistory{
 		{Track: api.Track{ID: "track-xyz789", Name: "Blinding Lights", URI: "spotify:track:track-xyz789"}},
 	})
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand recently played section
 	pane.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
 
-	// Navigate to the track
 	var foundTrack bool
 	for i := 0; i < 15; i++ {
 		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		pane = m.(*LibraryPane)
 		item := pane.tree.SelectedItem()
-		if item != nil && item.PlayHistory != nil {
+		if item != nil && item.TrackURI != "" {
 			foundTrack = true
 			break
 		}
 	}
-	require.True(t, foundTrack, "should be able to navigate to a recently played track")
+	require.True(t, foundTrack)
 
 	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
 	_ = m
 
-	assert.NotNil(t, cmd, "'l' on a track should produce a like/unlike command")
+	assert.NotNil(t, cmd)
 }
 
 func TestLibraryPane_View_EmptySection(t *testing.T) {
@@ -257,37 +228,33 @@ func TestLibraryPane_View_EmptySection(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Mark albums section as loading
 	pane.tree.SetSectionLoading(SectionAlbums, true)
 
 	view := pane.View()
-
-	assert.Contains(t, view, "Albums", "view should still show Albums section header when loading")
+	assert.Contains(t, view, "Albums")
 }
 
-// --- Lazy loading Tests (Task 3.5) ---
+// --- Lazy loading Tests ---
 
 func TestLibraryPane_ExpandSection_FetchesIfNotCached(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Albums are not yet cached — expanding should trigger a fetch
 	expandMsg := expandSectionMsg{section: SectionAlbums}
 	m, cmd := pane.Update(expandMsg)
 	pane = m.(*LibraryPane)
 
 	albumSection := findSectionByType(pane.tree.Sections(), SectionAlbums)
 	require.NotNil(t, albumSection)
-	assert.True(t, albumSection.Expanded, "section should be expanded")
-	assert.NotNil(t, cmd, "expanding uncached section should trigger fetch command")
+	assert.True(t, albumSection.Expanded)
+	assert.NotNil(t, cmd)
 }
 
 func TestLibraryPane_ExpandSection_SkipsFetchIfCached(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Pre-populate albums (already cached)
 	s.SetSavedAlbums([]api.SavedAlbum{
 		{AddedAt: "2024-01-15T10:30:00Z", Album: api.FullAlbum{ID: "album-1", Name: "After Hours", URI: "spotify:album:album-1"}},
 	})
@@ -299,12 +266,11 @@ func TestLibraryPane_ExpandSection_SkipsFetchIfCached(t *testing.T) {
 
 	albumSection := findSectionByType(pane.tree.Sections(), SectionAlbums)
 	require.NotNil(t, albumSection)
-	assert.True(t, albumSection.Expanded, "section should be expanded")
+	assert.True(t, albumSection.Expanded)
 
-	// cmd should be nil when data is already cached
 	if cmd != nil {
 		msg := cmd()
-		_, isFetch := msg.(savedAlbumsLoadedMsg)
+		_, isFetch := msg.(FetchAlbumsRequestMsg)
 		assert.False(t, isFetch, "should not re-fetch albums that are already cached")
 	}
 }
@@ -313,7 +279,6 @@ func TestLibraryPane_ScrollNearBottom_LoadsMore(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Populate 10 playlists with total=50 (pagination)
 	playlists := make([]api.SimplePlaylist, 10)
 	for i := range playlists {
 		playlists[i] = api.SimplePlaylist{
@@ -323,15 +288,13 @@ func TestLibraryPane_ScrollNearBottom_LoadsMore(t *testing.T) {
 		}
 	}
 	s.SetPlaylists(playlists)
-	s.SetPlaylistsTotal(50) // 50 total, 10 loaded = more to load
+	s.SetPlaylistsTotal(50)
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand playlists section
 	expandMsg := expandSectionMsg{section: SectionPlaylists}
 	m, _ := pane.Update(expandMsg)
 	pane = m.(*LibraryPane)
 
-	// Move near the bottom (within 5 items of end)
 	var loadMoreCmd tea.Cmd
 	for i := 0; i < 8; i++ {
 		m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
@@ -341,29 +304,17 @@ func TestLibraryPane_ScrollNearBottom_LoadsMore(t *testing.T) {
 		}
 	}
 
-	assert.NotNil(t, loadMoreCmd, "scrolling near bottom should trigger load-more command")
+	assert.NotNil(t, loadMoreCmd)
 }
 
 // --- Additional coverage tests ---
-
-func TestLibraryPane_SetLibrary(t *testing.T) {
-	s := state.New()
-	th := theme.Load("black")
-	pane := NewLibraryPane(s, th, false)
-
-	client := api.NewLibraryClient("http://localhost", "token")
-	pane.SetLibrary(client)
-
-	// No panic — library was set successfully
-}
 
 func TestLibraryPane_SetSize(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, false)
-
 	pane.SetSize(80, 24)
-	// No panic — size set successfully
+	// No panic
 }
 
 func TestLibraryPane_SetFocused(t *testing.T) {
@@ -372,7 +323,6 @@ func TestLibraryPane_SetFocused(t *testing.T) {
 	pane := NewLibraryPane(s, th, false)
 
 	pane.SetFocused(true)
-	// Verify the pane responds to keys when focused
 	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	assert.NotNil(t, m)
 	_ = cmd
@@ -381,13 +331,12 @@ func TestLibraryPane_SetFocused(t *testing.T) {
 func TestLibraryPane_Update_IgnoresKeysWhenNotFocused(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
-	pane := NewLibraryPane(s, th, false) // not focused
+	pane := NewLibraryPane(s, th, false)
 
-	// Should not move cursor when not focused
 	initialPos := pane.tree.CursorPos()
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	pane = m.(*LibraryPane)
-	assert.Equal(t, initialPos, pane.tree.CursorPos(), "unfocused pane should not respond to key events")
+	assert.Equal(t, initialPos, pane.tree.CursorPos())
 }
 
 func TestLibraryPane_Update_ArrowKeys(t *testing.T) {
@@ -395,12 +344,10 @@ func TestLibraryPane_Update_ArrowKeys(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Arrow down
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
 	pane = m.(*LibraryPane)
 	assert.Equal(t, 1, pane.tree.CursorPos())
 
-	// Arrow up
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyUp})
 	pane = m.(*LibraryPane)
 	assert.Equal(t, 0, pane.tree.CursorPos())
@@ -411,12 +358,10 @@ func TestLibraryPane_Update_PgUpPgDown(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// PgDown
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyPgDown})
 	pane = m.(*LibraryPane)
-	assert.True(t, pane.tree.CursorPos() > 0, "PgDown should move cursor down")
+	assert.True(t, pane.tree.CursorPos() > 0)
 
-	// PgUp
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyPgUp})
 	pane = m.(*LibraryPane)
 	assert.Equal(t, 0, pane.tree.CursorPos())
@@ -427,12 +372,10 @@ func TestLibraryPane_Update_GJumpsToTop(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Move down first
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	pane = m.(*LibraryPane)
 	assert.Equal(t, 1, pane.tree.CursorPos())
 
-	// g jumps to top
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 	pane = m.(*LibraryPane)
 	assert.Equal(t, 0, pane.tree.CursorPos())
@@ -446,9 +389,8 @@ func TestLibraryPane_Update_GCapitalJumpsToBottom(t *testing.T) {
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
 	pane = m.(*LibraryPane)
 
-	// Should be at the last section
 	totalSections := len(pane.tree.Sections())
-	assert.Equal(t, totalSections-1, pane.tree.CursorPos(), "G should jump to last row")
+	assert.Equal(t, totalSections-1, pane.tree.CursorPos())
 }
 
 func TestLibraryPane_Update_Backspace_CollapseSection(t *testing.T) {
@@ -456,40 +398,35 @@ func TestLibraryPane_Update_Backspace_CollapseSection(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Expand playlists section
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	pane = m.(*LibraryPane)
 
-	// Backspace should collapse
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	pane = m.(*LibraryPane)
 
 	playlistSection := findSectionByType(pane.tree.Sections(), SectionPlaylists)
 	require.NotNil(t, playlistSection)
-	assert.False(t, playlistSection.Expanded, "Backspace should collapse the section")
+	assert.False(t, playlistSection.Expanded)
 }
 
 func TestLibraryPane_Update_Enter_OnLikedSong(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Pre-populate liked tracks
 	s.SetLikedTracks([]api.SavedTrack{
 		{AddedAt: "2024-01-01", Track: api.Track{ID: "t1", Name: "Song", URI: "spotify:track:t1"}},
 	})
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand liked songs
 	expandMsg := expandSectionMsg{section: SectionLikedSongs}
 	m, _ := pane.Update(expandMsg)
 	pane = m.(*LibraryPane)
 
-	// Navigate to liked song
 	for i := 0; i < 15; i++ {
 		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		pane = m.(*LibraryPane)
 		item := pane.tree.SelectedItem()
-		if item != nil && item.LikedTrack != nil {
+		if item != nil && item.kind == kindLikedTrack {
 			break
 		}
 	}
@@ -508,23 +445,20 @@ func TestLibraryPane_Update_Enter_OnAlbum(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Pre-populate albums
 	s.SetSavedAlbums([]api.SavedAlbum{
 		{Album: api.FullAlbum{ID: "album-1", Name: "After Hours", URI: "spotify:album:album-1"}},
 	})
 
 	pane := NewLibraryPane(s, th, true)
-	// Expand albums
 	expandMsg := expandSectionMsg{section: SectionAlbums}
 	m, _ := pane.Update(expandMsg)
 	pane = m.(*LibraryPane)
 
-	// Navigate to album
 	for i := 0; i < 15; i++ {
 		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		pane = m.(*LibraryPane)
 		item := pane.tree.SelectedItem()
-		if item != nil && item.Album != nil {
+		if item != nil && item.kind == kindAlbum {
 			break
 		}
 	}
@@ -550,12 +484,11 @@ func TestLibraryPane_Update_Enter_OnRecentlyPlayedTrack(t *testing.T) {
 	pane := NewLibraryPane(s, th, true)
 	pane.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
 
-	// Navigate to recently played track
 	for i := 0; i < 15; i++ {
 		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		pane = m.(*LibraryPane)
 		item := pane.tree.SelectedItem()
-		if item != nil && item.PlayHistory != nil {
+		if item != nil && item.kind == kindPlayHistory {
 			break
 		}
 	}
@@ -575,11 +508,12 @@ func TestLibraryPane_Update_LibraryLoadedMsg(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, false)
 
-	loadedMsg := libraryLoadedMsg{
-		playlists: []api.SimplePlaylist{{ID: "pl1", Name: "Chill Vibes"}},
-		total:     5,
-	}
-	m, _ := pane.Update(loadedMsg)
+	// Pre-populate store as if app.go command wrote to it.
+	s.SetPlaylists([]api.SimplePlaylist{{ID: "pl1", Name: "Chill Vibes"}})
+	s.SetPlaylistsTotal(5)
+
+	// Send notification message.
+	m, _ := pane.Update(LibraryLoadedMsg{})
 	_ = m
 
 	assert.Len(t, s.Playlists(), 1)
@@ -591,12 +525,11 @@ func TestLibraryPane_Update_SavedAlbumsLoadedMsg(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, false)
 
-	loadedMsg := savedAlbumsLoadedMsg{
-		albums: []api.SavedAlbum{
-			{Album: api.FullAlbum{ID: "album-1", Name: "After Hours"}},
-		},
-	}
-	m, _ := pane.Update(loadedMsg)
+	s.SetSavedAlbums([]api.SavedAlbum{
+		{Album: api.FullAlbum{ID: "album-1", Name: "After Hours"}},
+	})
+
+	m, _ := pane.Update(AlbumsLoadedMsg{})
 	pane = m.(*LibraryPane)
 	_ = pane
 
@@ -609,13 +542,12 @@ func TestLibraryPane_Update_LikedTracksLoadedMsg(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, false)
 
-	loadedMsg := likedTracksLoadedMsg{
-		tracks: []api.SavedTrack{
-			{Track: api.Track{ID: "t1", Name: "Song"}},
-		},
-		total: 287,
-	}
-	m, _ := pane.Update(loadedMsg)
+	s.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "t1", Name: "Song"}},
+	})
+	s.SetLikedTotal(287)
+
+	m, _ := pane.Update(LikedTracksLoadedMsg{})
 	_ = m
 
 	assert.Len(t, s.LikedTracks(), 1)
@@ -627,12 +559,11 @@ func TestLibraryPane_Update_RecentlyPlayedLoadedMsg(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, false)
 
-	loadedMsg := recentlyPlayedLoadedMsg{
-		items: []api.PlayHistory{
-			{Track: api.Track{ID: "t1", Name: "Song"}, PlayedAt: "2024-03-01T22:15:00Z"},
-		},
-	}
-	m, _ := pane.Update(loadedMsg)
+	s.SetRecentlyPlayed([]api.PlayHistory{
+		{Track: api.Track{ID: "t1", Name: "Song"}, PlayedAt: "2024-03-01T22:15:00Z"},
+	})
+
+	m, _ := pane.Update(RecentlyPlayedLoadedMsg{})
 	_ = m
 
 	assert.Len(t, s.RecentlyPlayed(), 1)
@@ -643,7 +574,6 @@ func TestLibraryPane_Update_ExpandSection_LikedSongs(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Liked songs not loaded — expanding should trigger fetch
 	expandMsg := expandSectionMsg{section: SectionLikedSongs}
 	m, cmd := pane.Update(expandMsg)
 	pane = m.(*LibraryPane)
@@ -651,17 +581,17 @@ func TestLibraryPane_Update_ExpandSection_LikedSongs(t *testing.T) {
 	section := findSectionByType(pane.tree.Sections(), SectionLikedSongs)
 	require.NotNil(t, section)
 	assert.True(t, section.Expanded)
-	assert.NotNil(t, cmd, "expanding unloaded liked songs should trigger fetch")
+	assert.NotNil(t, cmd)
 }
 
 func TestLibraryTree_LibraryExpandMsg(t *testing.T) {
 	msg := LibraryExpandMsg(SectionAlbums)
 	expandMsg, ok := msg.(expandSectionMsg)
-	require.True(t, ok, "LibraryExpandMsg should return expandSectionMsg")
+	require.True(t, ok)
 	assert.Equal(t, SectionAlbums, expandMsg.section)
 }
 
-func TestLibraryItem_DisplayNames(t *testing.T) {
+func TestLibraryItem_DisplayName(t *testing.T) {
 	tests := []struct {
 		name string
 		item LibraryItem
@@ -669,22 +599,22 @@ func TestLibraryItem_DisplayNames(t *testing.T) {
 	}{
 		{
 			name: "playlist",
-			item: LibraryItem{Playlist: &api.SimplePlaylist{Name: "Chill Vibes"}},
+			item: LibraryItem{kind: kindPlaylist, DisplayName: "Chill Vibes", ContextURI: "spotify:playlist:p1"},
 			want: "Chill Vibes",
 		},
 		{
 			name: "album",
-			item: LibraryItem{Album: &api.SavedAlbum{Album: api.FullAlbum{Name: "After Hours"}}},
+			item: LibraryItem{kind: kindAlbum, DisplayName: "After Hours", ContextURI: "spotify:album:a1"},
 			want: "After Hours",
 		},
 		{
 			name: "liked track",
-			item: LibraryItem{LikedTrack: &api.SavedTrack{Track: api.Track{Name: "Blinding Lights"}}},
+			item: LibraryItem{kind: kindLikedTrack, DisplayName: "Blinding Lights", TrackURI: "spotify:track:t1"},
 			want: "Blinding Lights",
 		},
 		{
 			name: "play history",
-			item: LibraryItem{PlayHistory: &api.PlayHistory{Track: api.Track{Name: "Levitating"}}},
+			item: LibraryItem{kind: kindPlayHistory, DisplayName: "Levitating", TrackURI: "spotify:track:t2"},
 			want: "Levitating",
 		},
 		{
@@ -696,7 +626,7 @@ func TestLibraryItem_DisplayNames(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.item.displayName())
+			assert.Equal(t, tt.want, tt.item.DisplayName)
 		})
 	}
 }
@@ -709,29 +639,29 @@ func TestLibraryItem_TrackURI(t *testing.T) {
 	}{
 		{
 			name: "liked track",
-			item: LibraryItem{LikedTrack: &api.SavedTrack{Track: api.Track{URI: "spotify:track:t1"}}},
+			item: LibraryItem{kind: kindLikedTrack, TrackURI: "spotify:track:t1"},
 			want: "spotify:track:t1",
 		},
 		{
 			name: "play history",
-			item: LibraryItem{PlayHistory: &api.PlayHistory{Track: api.Track{URI: "spotify:track:t2"}}},
+			item: LibraryItem{kind: kindPlayHistory, TrackURI: "spotify:track:t2"},
 			want: "spotify:track:t2",
 		},
 		{
 			name: "playlist (no track URI)",
-			item: LibraryItem{Playlist: &api.SimplePlaylist{URI: "spotify:playlist:p1"}},
+			item: LibraryItem{kind: kindPlaylist, ContextURI: "spotify:playlist:p1"},
 			want: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.item.trackURI())
+			assert.Equal(t, tt.want, tt.item.TrackURI)
 		})
 	}
 }
 
-func TestLibraryItem_PlayableContextURI(t *testing.T) {
+func TestLibraryItem_ContextURI(t *testing.T) {
 	tests := []struct {
 		name string
 		item LibraryItem
@@ -739,24 +669,24 @@ func TestLibraryItem_PlayableContextURI(t *testing.T) {
 	}{
 		{
 			name: "playlist",
-			item: LibraryItem{Playlist: &api.SimplePlaylist{URI: "spotify:playlist:p1"}},
+			item: LibraryItem{kind: kindPlaylist, ContextURI: "spotify:playlist:p1"},
 			want: "spotify:playlist:p1",
 		},
 		{
 			name: "album",
-			item: LibraryItem{Album: &api.SavedAlbum{Album: api.FullAlbum{URI: "spotify:album:a1"}}},
+			item: LibraryItem{kind: kindAlbum, ContextURI: "spotify:album:a1"},
 			want: "spotify:album:a1",
 		},
 		{
 			name: "track (no context URI)",
-			item: LibraryItem{LikedTrack: &api.SavedTrack{Track: api.Track{URI: "spotify:track:t1"}}},
+			item: LibraryItem{kind: kindLikedTrack, TrackURI: "spotify:track:t1"},
 			want: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.item.playableContextURI())
+			assert.Equal(t, tt.want, tt.item.ContextURI)
 		})
 	}
 }
@@ -766,10 +696,9 @@ func TestLibraryPane_Update_A_NoTrackSelected(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Cursor is on section header (no track) — 'a' should return nil cmd
 	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
 	_ = m
-	assert.Nil(t, cmd, "'a' on section header should return nil cmd")
+	assert.Nil(t, cmd)
 }
 
 func TestLibraryPane_Update_L_NoTrackSelected(t *testing.T) {
@@ -777,13 +706,12 @@ func TestLibraryPane_Update_L_NoTrackSelected(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewLibraryPane(s, th, true)
 
-	// Cursor is on section header (no track) — 'l' should return nil cmd
 	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
 	_ = m
-	assert.Nil(t, cmd, "'l' on section header should return nil cmd")
+	assert.Nil(t, cmd)
 }
 
-func TestLibraryPane_Update_L_WithLibraryClient(t *testing.T) {
+func TestLibraryPane_Update_L_EmitsLikeRequest(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
@@ -794,12 +722,11 @@ func TestLibraryPane_Update_L_WithLibraryClient(t *testing.T) {
 	pane := NewLibraryPane(s, th, true)
 	pane.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
 
-	// Navigate to track
 	for i := 0; i < 15; i++ {
 		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		pane = m.(*LibraryPane)
 		item := pane.tree.SelectedItem()
-		if item != nil && item.PlayHistory != nil {
+		if item != nil && item.TrackURI != "" {
 			break
 		}
 	}
@@ -808,11 +735,43 @@ func TestLibraryPane_Update_L_WithLibraryClient(t *testing.T) {
 	_ = m
 	require.NotNil(t, cmd)
 
-	// Execute the command (library is nil, should return likeToggleResultMsg)
 	result := cmd()
-	likeResult, ok := result.(likeToggleResultMsg)
-	require.True(t, ok, "expected likeToggleResultMsg, got %T", result)
-	assert.Equal(t, "t1", likeResult.trackID)
+	likeReq, ok := result.(LikeTrackRequestMsg)
+	require.True(t, ok, "expected LikeTrackRequestMsg, got %T", result)
+	assert.Equal(t, "t1", likeReq.TrackID)
+}
+
+func TestLibraryPane_Update_L_LikedTrack_EmitsUnlike(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	s.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "t1", Name: "Song", URI: "spotify:track:t1"}},
+	})
+
+	pane := NewLibraryPane(s, th, true)
+	expandMsg := expandSectionMsg{section: SectionLikedSongs}
+	m, _ := pane.Update(expandMsg)
+	pane = m.(*LibraryPane)
+
+	for i := 0; i < 15; i++ {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		pane = m.(*LibraryPane)
+		item := pane.tree.SelectedItem()
+		if item != nil && item.kind == kindLikedTrack {
+			break
+		}
+	}
+
+	m, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	_ = m
+	require.NotNil(t, cmd)
+
+	result := cmd()
+	likeReq, ok := result.(LikeTrackRequestMsg)
+	require.True(t, ok, "expected LikeTrackRequestMsg, got %T", result)
+	assert.Equal(t, "t1", likeReq.TrackID)
+	assert.True(t, likeReq.Unlike, "l on liked track should request unlike")
 }
 
 // --- Helper functions ---

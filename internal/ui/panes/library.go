@@ -1,13 +1,11 @@
 package panes
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -26,71 +24,33 @@ const (
 	SectionRecentlyPlayed
 )
 
+// libraryItemKind distinguishes what kind of item a LibraryItem represents.
+type libraryItemKind int
+
+const (
+	kindPlaylist libraryItemKind = iota
+	kindAlbum
+	kindLikedTrack
+	kindPlayHistory
+)
+
 // LibraryItem represents a single row in the library tree.
-// Exactly one of the pointer fields is non-nil.
+// It holds only primitive strings needed for display and interaction.
+// NOTE: previously held api.* pointers; changed to primitives to eliminate api/ import.
 type LibraryItem struct {
-	// Playlist is set when this item is a playlist.
-	Playlist *api.SimplePlaylist
+	kind libraryItemKind
 
-	// Album is set when this item is a saved album.
-	Album *api.SavedAlbum
+	// DisplayName is the human-readable name shown in the tree.
+	DisplayName string
 
-	// LikedTrack is set when this item is a liked track.
-	LikedTrack *api.SavedTrack
+	// ContextURI is the Spotify context URI for playlists and albums.
+	ContextURI string
 
-	// PlayHistory is set when this item is a recently played track.
-	PlayHistory *api.PlayHistory
-}
+	// TrackURI is the Spotify track URI for liked songs and recently played.
+	TrackURI string
 
-// trackURI returns the Spotify URI for the item if it is a track, or empty string.
-func (li *LibraryItem) trackURI() string {
-	if li.LikedTrack != nil {
-		return li.LikedTrack.Track.URI
-	}
-	if li.PlayHistory != nil {
-		return li.PlayHistory.Track.URI
-	}
-	return ""
-}
-
-// trackID returns the Spotify ID for the item if it is a track, or empty string.
-func (li *LibraryItem) trackID() string {
-	if li.LikedTrack != nil {
-		return li.LikedTrack.Track.ID
-	}
-	if li.PlayHistory != nil {
-		return li.PlayHistory.Track.ID
-	}
-	return ""
-}
-
-// displayName returns the display name for the item.
-func (li *LibraryItem) displayName() string {
-	if li.Playlist != nil {
-		return li.Playlist.Name
-	}
-	if li.Album != nil {
-		return li.Album.Album.Name
-	}
-	if li.LikedTrack != nil {
-		return li.LikedTrack.Track.Name
-	}
-	if li.PlayHistory != nil {
-		return li.PlayHistory.Track.Name
-	}
-	return ""
-}
-
-// playableContextURI returns the Spotify context URI for playlist/album items.
-// Returns empty string for track items (use trackURI() instead).
-func (li *LibraryItem) playableContextURI() string {
-	if li.Playlist != nil {
-		return li.Playlist.URI
-	}
-	if li.Album != nil {
-		return li.Album.Album.URI
-	}
-	return ""
+	// TrackID is the Spotify track ID used for like/unlike operations.
+	TrackID string
 }
 
 // Section holds the state for one collapsible library section.
@@ -115,10 +75,9 @@ type Section struct {
 }
 
 // LibraryTree manages the collapsible section list and cursor position.
-// It is pane-local state and is never stored in the central Store.
 type LibraryTree struct {
 	sections  []Section
-	cursorPos int // absolute visible row index (0 = first row)
+	cursorPos int
 }
 
 // NewLibraryTree constructs a LibraryTree with the default section order.
@@ -143,11 +102,11 @@ func (t *LibraryTree) CursorPos() int {
 	return t.cursorPos
 }
 
-// visibleRows returns the total number of visible rows (section headers + expanded items).
+// visibleRows returns the total number of visible rows.
 func (t *LibraryTree) visibleRows() int {
 	count := 0
 	for _, s := range t.sections {
-		count++ // section header row
+		count++
 		if s.Expanded {
 			count += len(s.Items)
 		}
@@ -157,8 +116,8 @@ func (t *LibraryTree) visibleRows() int {
 
 // MoveDown moves the cursor one row down, clamped at the last row.
 func (t *LibraryTree) MoveDown() {
-	max := t.visibleRows() - 1
-	if t.cursorPos < max {
+	maxRow := t.visibleRows() - 1
+	if t.cursorPos < maxRow {
 		t.cursorPos++
 	}
 }
@@ -171,7 +130,6 @@ func (t *LibraryTree) MoveUp() {
 }
 
 // ToggleSection expands or collapses the section whose header is at the current cursor.
-// If the cursor is on an item (not a header), this is a no-op.
 func (t *LibraryTree) ToggleSection() {
 	row := 0
 	for i := range t.sections {
@@ -179,7 +137,7 @@ func (t *LibraryTree) ToggleSection() {
 			t.sections[i].Expanded = !t.sections[i].Expanded
 			return
 		}
-		row++ // header
+		row++
 		if t.sections[i].Expanded {
 			row += len(t.sections[i].Items)
 		}
@@ -212,10 +170,9 @@ func (t *LibraryTree) SelectedItem() *LibraryItem {
 	row := 0
 	for i := range t.sections {
 		if row == t.cursorPos {
-			// cursor is on section header
 			return nil
 		}
-		row++ // count the header
+		row++
 		if t.sections[i].Expanded {
 			for j := range t.sections[i].Items {
 				if row == t.cursorPos {
@@ -228,15 +185,14 @@ func (t *LibraryTree) SelectedItem() *LibraryItem {
 	return nil
 }
 
-// CurrentSectionType returns the SectionType of the section the cursor is currently in
-// (whether on the header or on an item within it).
+// CurrentSectionType returns the SectionType of the section the cursor is currently in.
 func (t *LibraryTree) CurrentSectionType() SectionType {
 	row := 0
 	for _, s := range t.sections {
 		if row == t.cursorPos {
 			return s.Type
 		}
-		row++ // header
+		row++
 		if s.Expanded {
 			for range s.Items {
 				if row == t.cursorPos {
@@ -260,7 +216,7 @@ func (t *LibraryTree) ItemIndexInSection() int {
 	row := 0
 	for _, s := range t.sections {
 		if row == t.cursorPos {
-			return -1 // on header
+			return -1
 		}
 		row++
 		if s.Expanded {
@@ -276,15 +232,19 @@ func (t *LibraryTree) ItemIndexInSection() int {
 }
 
 // UpdateFromStore refreshes section items from the store.
+// Copies only the primitive fields needed for display/interaction.
 func (t *LibraryTree) UpdateFromStore(s *state.Store) {
 	for i := range t.sections {
 		switch t.sections[i].Type {
 		case SectionPlaylists:
 			playlists := s.Playlists()
 			items := make([]LibraryItem, len(playlists))
-			for j := range playlists {
-				pl := playlists[j]
-				items[j] = LibraryItem{Playlist: &pl}
+			for j, pl := range playlists {
+				items[j] = LibraryItem{
+					kind:        kindPlaylist,
+					DisplayName: pl.Name,
+					ContextURI:  pl.URI,
+				}
 			}
 			t.sections[i].Items = items
 			t.sections[i].Total = s.PlaylistsTotal()
@@ -292,18 +252,25 @@ func (t *LibraryTree) UpdateFromStore(s *state.Store) {
 		case SectionAlbums:
 			albums := s.SavedAlbums()
 			items := make([]LibraryItem, len(albums))
-			for j := range albums {
-				al := albums[j]
-				items[j] = LibraryItem{Album: &al}
+			for j, al := range albums {
+				items[j] = LibraryItem{
+					kind:        kindAlbum,
+					DisplayName: al.Album.Name,
+					ContextURI:  al.Album.URI,
+				}
 			}
 			t.sections[i].Items = items
 
 		case SectionLikedSongs:
 			liked := s.LikedTracks()
 			items := make([]LibraryItem, len(liked))
-			for j := range liked {
-				lt := liked[j]
-				items[j] = LibraryItem{LikedTrack: &lt}
+			for j, lt := range liked {
+				items[j] = LibraryItem{
+					kind:        kindLikedTrack,
+					DisplayName: lt.Track.Name,
+					TrackURI:    lt.Track.URI,
+					TrackID:     lt.Track.ID,
+				}
 			}
 			t.sections[i].Items = items
 			t.sections[i].Total = s.LikedTotal()
@@ -311,70 +278,30 @@ func (t *LibraryTree) UpdateFromStore(s *state.Store) {
 		case SectionRecentlyPlayed:
 			recent := s.RecentlyPlayed()
 			items := make([]LibraryItem, len(recent))
-			for j := range recent {
-				ph := recent[j]
-				items[j] = LibraryItem{PlayHistory: &ph}
+			for j, ph := range recent {
+				items[j] = LibraryItem{
+					kind:        kindPlayHistory,
+					DisplayName: ph.Track.Name,
+					TrackURI:    ph.Track.URI,
+					TrackID:     ph.Track.ID,
+				}
 			}
 			t.sections[i].Items = items
 		}
 	}
 }
 
-// --- Message types ---
-
-// libraryLoadedMsg is sent when playlists have been loaded from the API.
-type libraryLoadedMsg struct {
-	playlists []api.SimplePlaylist
-	total     int
-}
-
-// savedAlbumsLoadedMsg is sent when saved albums have been loaded from the API.
-type savedAlbumsLoadedMsg struct {
-	albums []api.SavedAlbum
-}
-
-// likedTracksLoadedMsg is sent when liked tracks have been loaded from the API.
-type likedTracksLoadedMsg struct {
-	tracks []api.SavedTrack
-	total  int
-}
-
-// recentlyPlayedLoadedMsg is sent when recently played has been loaded from the API.
-type recentlyPlayedLoadedMsg struct {
-	items []api.PlayHistory
-}
-
-// PlayContextMsg is sent when the user selects a playlist or album to play.
-// The root app model receives this and dispatches a play command to the API.
-type PlayContextMsg struct {
-	ContextURI string
-}
-
-// PlayTrackMsg is sent when the user selects a specific track to play.
-// The root app model receives this and dispatches a play command to the API.
-type PlayTrackMsg struct {
-	TrackURI string
-}
-
-// AddToQueueMsg is sent when the user presses 'a' on a track.
-// The root app model receives this and dispatches an add-to-queue API call.
-type AddToQueueMsg struct {
-	TrackURI string
-}
-
-// likeToggleResultMsg carries the result of a like/unlike operation.
-type likeToggleResultMsg struct {
-	trackID string
-	err     error
-}
+// NOTE: Notification message types (LibraryLoadedMsg, AlbumsLoadedMsg,
+// LikedTracksLoadedMsg, RecentlyPlayedLoadedMsg, LikeToggleResultMsg)
+// are defined in messages.go as exported types because they are sent by
+// app.go commands after writing data to the store.
 
 // expandSectionMsg triggers expanding a section (used internally and in tests).
 type expandSectionMsg struct {
 	section SectionType
 }
 
-// LibraryExpandMsg creates an expandSectionMsg for use outside the panes package
-// (e.g., in integration tests or the root app model).
+// LibraryExpandMsg creates an expandSectionMsg for use outside the panes package.
 func LibraryExpandMsg(section SectionType) tea.Msg {
 	return expandSectionMsg{section: section}
 }
@@ -382,13 +309,12 @@ func LibraryExpandMsg(section SectionType) tea.Msg {
 // --- LibraryPane ---
 
 // LibraryPane is the left-pane Bubble Tea model for the library browser.
-// It renders the collapsible section tree and dispatches commands for
-// playback, likes, and queue additions.
-// It reads all data from the Store; it never stores API data in its own fields.
+// It renders the collapsible section tree and dispatches request messages for
+// playback, likes, queue additions, and data fetching.
+// It reads all data from the Store; it never imports or calls the API directly.
 type LibraryPane struct {
-	store   *state.Store
-	theme   theme.Theme
-	library *api.LibraryClient
+	store *state.Store
+	theme theme.Theme
 
 	tree    *LibraryTree
 	focused bool
@@ -397,7 +323,6 @@ type LibraryPane struct {
 }
 
 // NewLibraryPane creates a LibraryPane with the given store and theme.
-// The library client is nil initially — it is set by the root app via SetLibrary.
 func NewLibraryPane(s *state.Store, t theme.Theme, focused bool) *LibraryPane {
 	return &LibraryPane{
 		store:   s,
@@ -407,13 +332,7 @@ func NewLibraryPane(s *state.Store, t theme.Theme, focused bool) *LibraryPane {
 	}
 }
 
-// SetLibrary injects the API library client into the pane.
-// Called by the root app model after construction.
-func (p *LibraryPane) SetLibrary(library *api.LibraryClient) {
-	p.library = library
-}
-
-// SetSize updates the pane's dimensions (called by the root model on WindowSizeMsg).
+// SetSize updates the pane's dimensions.
 func (p *LibraryPane) SetSize(width, height int) {
 	p.width = width
 	p.height = height
@@ -424,44 +343,37 @@ func (p *LibraryPane) SetFocused(focused bool) {
 	p.focused = focused
 }
 
-// Init returns a batch command that fetches playlists and recently played on startup.
+// Init returns a batch command that requests playlists and recently played on startup.
 func (p *LibraryPane) Init() tea.Cmd {
 	return tea.Batch(
-		p.fetchPlaylistsCmd(0),
-		p.fetchRecentlyPlayedCmd(),
+		func() tea.Msg { return FetchPlaylistsRequestMsg{Offset: 0} },
+		func() tea.Msg { return FetchRecentlyPlayedRequestMsg{} },
 	)
 }
 
 // Update handles all messages for the LibraryPane.
 func (p *LibraryPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Keep tree in sync with store on every update so navigation sees current data.
 	p.tree.UpdateFromStore(p.store)
 
 	switch m := msg.(type) {
 	case expandSectionMsg:
 		return p.handleExpandSection(m.section)
 
-	case libraryLoadedMsg:
-		p.store.SetPlaylists(m.playlists)
-		p.store.SetPlaylistsTotal(m.total)
+	case LibraryLoadedMsg:
 		p.tree.UpdateFromStore(p.store)
 		return p, nil
 
-	case savedAlbumsLoadedMsg:
-		p.store.SetSavedAlbums(m.albums)
+	case AlbumsLoadedMsg:
 		p.tree.UpdateFromStore(p.store)
 		p.tree.SetSectionLoading(SectionAlbums, false)
 		return p, nil
 
-	case likedTracksLoadedMsg:
-		p.store.SetLikedTracks(m.tracks)
-		p.store.SetLikedTotal(m.total)
+	case LikedTracksLoadedMsg:
 		p.tree.UpdateFromStore(p.store)
 		p.tree.SetSectionLoading(SectionLikedSongs, false)
 		return p, nil
 
-	case recentlyPlayedLoadedMsg:
-		p.store.SetRecentlyPlayed(m.items)
+	case RecentlyPlayedLoadedMsg:
 		p.tree.UpdateFromStore(p.store)
 		return p, nil
 
@@ -475,9 +387,8 @@ func (p *LibraryPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-// View renders the library pane. It reads from the store and never calls the API.
+// View renders the library pane.
 func (p *LibraryPane) View() string {
-	// Refresh tree from store before rendering.
 	p.tree.UpdateFromStore(p.store)
 
 	headerStyle := lipgloss.NewStyle().Foreground(p.theme.SectionHeader()).Bold(true)
@@ -491,11 +402,10 @@ func (p *LibraryPane) View() string {
 
 	lines := []string{
 		headerStyle.Render("LIBRARY"),
-		strings.Repeat("─", maxInt(p.width-4, 20)),
+		strings.Repeat("─", paneMax(p.width-4, 20)),
 		"",
 	}
 
-	// Get current playing track URI for the playing indicator.
 	var playingURI string
 	if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil {
 		playingURI = ps.Item.URI
@@ -503,7 +413,6 @@ func (p *LibraryPane) View() string {
 
 	row := 0
 	for _, section := range p.tree.Sections() {
-		// Section header row
 		arrow := "▸"
 		if section.Expanded {
 			arrow = "▾"
@@ -529,11 +438,10 @@ func (p *LibraryPane) View() string {
 		lines = append(lines, headerRendered)
 		row++
 
-		// Items (only when expanded)
 		if section.Expanded {
 			for _, item := range section.Items {
-				name := item.displayName()
-				uri := item.trackURI()
+				name := item.DisplayName
+				uri := item.TrackURI
 
 				var indicator string
 				if uri != "" && uri == playingURI {
@@ -561,7 +469,7 @@ func (p *LibraryPane) View() string {
 	return strings.Join(lines, "\n")
 }
 
-// handleKey dispatches key events to the appropriate action.
+// handleKey dispatches key events.
 func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 	switch {
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "j",
@@ -578,7 +486,6 @@ func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 		return p.handleEnter()
 
 	case msg.Type == tea.KeyBackspace:
-		// Collapse current section and move to its header.
 		p.tree.SetSectionExpanded(p.tree.CurrentSectionType(), false)
 		return p, nil
 
@@ -595,14 +502,12 @@ func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "g":
-		// Jump to top
 		for p.tree.cursorPos > 0 {
 			p.tree.MoveUp()
 		}
 		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "G":
-		// Jump to bottom
 		for {
 			prev := p.tree.cursorPos
 			p.tree.MoveDown()
@@ -622,11 +527,10 @@ func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 	return p, nil
 }
 
-// handleEnter processes Enter key: expands/collapses sections or plays items.
+// handleEnter processes Enter key.
 func (p *LibraryPane) handleEnter() (*LibraryPane, tea.Cmd) {
 	if p.tree.IsOnSectionHeader() {
-		sectionType := p.tree.CurrentSectionType()
-		return p.handleExpandSection(sectionType)
+		return p.handleExpandSection(p.tree.CurrentSectionType())
 	}
 
 	item := p.tree.SelectedItem()
@@ -634,21 +538,14 @@ func (p *LibraryPane) handleEnter() (*LibraryPane, tea.Cmd) {
 		return p, nil
 	}
 
-	// Playlist or album: play with context URI
-	if uri := item.playableContextURI(); uri != "" {
-		return p, func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
+	if item.ContextURI != "" {
+		contextURI := item.ContextURI
+		return p, func() tea.Msg { return PlayContextMsg{ContextURI: contextURI} }
 	}
 
-	// Liked track: play with track URI
-	if item.LikedTrack != nil {
-		uri := item.LikedTrack.Track.URI
-		return p, func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
-	}
-
-	// Recently played track: play with track URI
-	if item.PlayHistory != nil {
-		uri := item.PlayHistory.Track.URI
-		return p, func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
+	if item.TrackURI != "" {
+		trackURI := item.TrackURI
+		return p, func() tea.Msg { return PlayTrackMsg{TrackURI: trackURI} }
 	}
 
 	return p, nil
@@ -662,49 +559,48 @@ func (p *LibraryPane) handleExpandSection(sectionType SectionType) (*LibraryPane
 	case SectionAlbums:
 		if !p.store.AlbumsLoaded() {
 			p.tree.SetSectionLoading(SectionAlbums, true)
-			return p, p.fetchAlbumsCmd(0)
+			return p, func() tea.Msg { return FetchAlbumsRequestMsg{Offset: 0} }
 		}
 
 	case SectionLikedSongs:
 		if !p.store.LikedLoaded() {
 			p.tree.SetSectionLoading(SectionLikedSongs, true)
-			return p, p.fetchLikedTracksCmd(0)
+			return p, func() tea.Msg { return FetchLikedTracksRequestMsg{Offset: 0} }
 		}
 	}
 
 	return p, nil
 }
 
-// handleAddToQueue handles the 'a' key — adds the selected track to queue.
+// handleAddToQueue handles the 'a' key.
 func (p *LibraryPane) handleAddToQueue() (*LibraryPane, tea.Cmd) {
 	item := p.tree.SelectedItem()
 	if item == nil {
 		return p, nil
 	}
-	uri := item.trackURI()
+	uri := item.TrackURI
 	if uri == "" {
 		return p, nil
 	}
 	return p, func() tea.Msg { return AddToQueueMsg{TrackURI: uri} }
 }
 
-// handleToggleLike handles the 'l' key — likes/unlikes the selected track.
+// handleToggleLike handles the 'l' key.
+// Emits LikeTrackRequestMsg; the root app model dispatches the API call.
 func (p *LibraryPane) handleToggleLike() (*LibraryPane, tea.Cmd) {
 	item := p.tree.SelectedItem()
 	if item == nil {
 		return p, nil
 	}
-	id := item.trackID()
+	id := item.TrackID
 	if id == "" {
 		return p, nil
 	}
-	library := p.library
+	unlike := item.kind == kindLikedTrack
+	capturedID := id
+	capturedUnlike := unlike
 	return p, func() tea.Msg {
-		if library == nil {
-			return likeToggleResultMsg{trackID: id}
-		}
-		err := library.LikeTrack(context.Background(), id)
-		return likeToggleResultMsg{trackID: id, err: err}
+		return LikeTrackRequestMsg{TrackID: capturedID, Unlike: capturedUnlike}
 	}
 }
 
@@ -727,86 +623,18 @@ func (p *LibraryPane) loadMoreIfNearBottom() tea.Cmd {
 				total := p.store.PlaylistsTotal()
 				loaded := len(p.store.Playlists())
 				if loaded < total {
-					return p.fetchPlaylistsCmd(loaded)
+					offset := loaded
+					return func() tea.Msg { return FetchPlaylistsRequestMsg{Offset: offset} }
 				}
 			case SectionLikedSongs:
 				total := p.store.LikedTotal()
 				loaded := len(p.store.LikedTracks())
 				if loaded < total {
-					return p.fetchLikedTracksCmd(loaded)
+					offset := loaded
+					return func() tea.Msg { return FetchLikedTracksRequestMsg{Offset: offset} }
 				}
 			}
 		}
 	}
 	return nil
-}
-
-// --- Fetch commands ---
-
-// fetchPlaylistsCmd creates a command that fetches playlists from the API.
-func (p *LibraryPane) fetchPlaylistsCmd(offset int) tea.Cmd {
-	library := p.library
-	return func() tea.Msg {
-		if library == nil {
-			return libraryLoadedMsg{}
-		}
-		playlists, err := library.GetPlaylists(context.Background(), 50, offset)
-		if err != nil {
-			return libraryLoadedMsg{}
-		}
-		return libraryLoadedMsg{playlists: playlists, total: len(playlists) + offset}
-	}
-}
-
-// fetchAlbumsCmd creates a command that fetches saved albums from the API.
-func (p *LibraryPane) fetchAlbumsCmd(offset int) tea.Cmd {
-	library := p.library
-	return func() tea.Msg {
-		if library == nil {
-			return savedAlbumsLoadedMsg{}
-		}
-		albums, err := library.GetSavedAlbums(context.Background(), 50, offset)
-		if err != nil {
-			return savedAlbumsLoadedMsg{}
-		}
-		return savedAlbumsLoadedMsg{albums: albums}
-	}
-}
-
-// fetchLikedTracksCmd creates a command that fetches liked tracks from the API.
-func (p *LibraryPane) fetchLikedTracksCmd(offset int) tea.Cmd {
-	library := p.library
-	return func() tea.Msg {
-		if library == nil {
-			return likedTracksLoadedMsg{}
-		}
-		tracks, err := library.GetLikedTracks(context.Background(), 50, offset)
-		if err != nil {
-			return likedTracksLoadedMsg{}
-		}
-		return likedTracksLoadedMsg{tracks: tracks, total: len(tracks) + offset}
-	}
-}
-
-// fetchRecentlyPlayedCmd creates a command that fetches recently played tracks.
-func (p *LibraryPane) fetchRecentlyPlayedCmd() tea.Cmd {
-	library := p.library
-	return func() tea.Msg {
-		if library == nil {
-			return recentlyPlayedLoadedMsg{}
-		}
-		items, err := library.GetRecentlyPlayed(context.Background(), 20)
-		if err != nil {
-			return recentlyPlayedLoadedMsg{}
-		}
-		return recentlyPlayedLoadedMsg{items: items}
-	}
-}
-
-// maxInt returns the larger of two ints.
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

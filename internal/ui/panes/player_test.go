@@ -1,9 +1,6 @@
 package panes
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -71,10 +68,10 @@ func TestPlayerPane_Update_Space_WhenPlaying(t *testing.T) {
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd, "space when playing should return a command")
-	// Execute the command and verify it returns a playbackCmdSentMsg.
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "space cmd should return PlaybackCmdSentMsg, got %T", msg)
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok, "space cmd should return PlaybackRequestMsg, got %T", msg)
+	assert.Equal(t, ActionPause, req.Action, "playing → space should request pause")
 }
 
 func TestPlayerPane_Update_Space_WhenPaused(t *testing.T) {
@@ -85,8 +82,9 @@ func TestPlayerPane_Update_Space_WhenPaused(t *testing.T) {
 
 	require.NotNil(t, cmd, "space when paused should return a command")
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "space cmd should return PlaybackCmdSentMsg, got %T", msg)
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok, "space cmd should return PlaybackRequestMsg, got %T", msg)
+	assert.Equal(t, ActionPlay, req.Action, "paused → space should request play")
 }
 
 func TestPlayerPane_Update_N_SkipsNext(t *testing.T) {
@@ -95,10 +93,11 @@ func TestPlayerPane_Update_N_SkipsNext(t *testing.T) {
 	nMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 	_, cmd := pane.Update(nMsg)
 
-	require.NotNil(t, cmd, "n key should return a command")
+	require.NotNil(t, cmd)
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "n cmd should return PlaybackCmdSentMsg")
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok)
+	assert.Equal(t, ActionNext, req.Action)
 }
 
 func TestPlayerPane_Update_P_SkipsPrev(t *testing.T) {
@@ -107,10 +106,11 @@ func TestPlayerPane_Update_P_SkipsPrev(t *testing.T) {
 	pMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
 	_, cmd := pane.Update(pMsg)
 
-	require.NotNil(t, cmd, "p key should return a command")
+	require.NotNil(t, cmd)
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "p cmd should return PlaybackCmdSentMsg")
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok)
+	assert.Equal(t, ActionPrevious, req.Action)
 }
 
 func TestPlayerPane_Update_Plus_VolUp(t *testing.T) {
@@ -119,10 +119,11 @@ func TestPlayerPane_Update_Plus_VolUp(t *testing.T) {
 	plusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}
 	_, cmd := pane.Update(plusMsg)
 
-	require.NotNil(t, cmd, "+ key should return a command")
+	require.NotNil(t, cmd)
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "+ cmd should return PlaybackCmdSentMsg")
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok)
+	assert.Equal(t, ActionVolumeUp, req.Action)
 }
 
 func TestPlayerPane_Update_Minus_VolDown(t *testing.T) {
@@ -131,10 +132,11 @@ func TestPlayerPane_Update_Minus_VolDown(t *testing.T) {
 	minusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}
 	_, cmd := pane.Update(minusMsg)
 
-	require.NotNil(t, cmd, "- key should return a command")
+	require.NotNil(t, cmd)
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "- cmd should return PlaybackCmdSentMsg")
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok)
+	assert.Equal(t, ActionVolumeDown, req.Action)
 }
 
 func TestPlayerPane_Update_S_TogglesShuffle(t *testing.T) {
@@ -143,21 +145,21 @@ func TestPlayerPane_Update_S_TogglesShuffle(t *testing.T) {
 	sMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}
 	_, cmd := pane.Update(sMsg)
 
-	require.NotNil(t, cmd, "s key should return a command")
+	require.NotNil(t, cmd)
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
-	assert.True(t, ok, "s cmd should return PlaybackCmdSentMsg")
+	req, ok := msg.(PlaybackRequestMsg)
+	assert.True(t, ok)
+	assert.Equal(t, ActionToggleShuffle, req.Action)
 }
 
 func TestPlayerPane_Update_R_CyclesRepeat(t *testing.T) {
 	tests := []struct {
-		name           string
-		startRepeat    string
-		expectedRepeat string
+		name        string
+		startRepeat string
 	}{
-		{"off to context", "off", "context"},
-		{"context to track", "context", "track"},
-		{"track to off", "track", "off"},
+		{"off", "off"},
+		{"context", "context"},
+		{"track", "track"},
 	}
 
 	for _, tt := range tests {
@@ -178,10 +180,13 @@ func TestPlayerPane_Update_R_CyclesRepeat(t *testing.T) {
 			pane := NewPlayerPane(s, th, true)
 
 			rMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
-			updatedModel, cmd := pane.Update(rMsg)
-			_ = updatedModel
+			_, cmd := pane.Update(rMsg)
 
-			require.NotNil(t, cmd, "r key should return a command")
+			require.NotNil(t, cmd)
+			msg := cmd()
+			req, ok := msg.(PlaybackRequestMsg)
+			assert.True(t, ok)
+			assert.Equal(t, ActionCycleRepeat, req.Action)
 		})
 	}
 }
@@ -189,6 +194,7 @@ func TestPlayerPane_Update_R_CyclesRepeat(t *testing.T) {
 func TestPlayerPane_Update_PlaybackFetched(t *testing.T) {
 	pane := newTestPlayerPaneWithState(true, true)
 
+	// Simulate app.go updating the store and sending PlaybackStateFetchedMsg.
 	newState := &api.PlaybackState{
 		IsPlaying:  true,
 		ProgressMs: 90000,
@@ -201,11 +207,11 @@ func TestPlayerPane_Update_PlaybackFetched(t *testing.T) {
 		},
 		Device: &api.Device{VolumePercent: 70},
 	}
+	pane.store.SetPlaybackState(newState)
 
-	fetchedMsg := PlaybackStateFetchedMsg{State: newState}
+	fetchedMsg := PlaybackStateFetchedMsg{}
 	updatedModel, _ := pane.Update(fetchedMsg)
 
-	// After update, store should reflect new state.
 	updatedPane, ok := updatedModel.(*PlayerPane)
 	require.True(t, ok)
 
@@ -217,8 +223,10 @@ func TestPlayerPane_Update_PlaybackFetched_NilState(t *testing.T) {
 	pane := newTestPlayerPaneWithState(true, true)
 	pane.localProgressMs = 60000
 
-	// Nil state (nothing playing).
-	fetchedMsg := PlaybackStateFetchedMsg{State: nil}
+	// Nil state (nothing playing) — store is cleared, then notification sent.
+	pane.store.SetPlaybackState(nil)
+
+	fetchedMsg := PlaybackStateFetchedMsg{}
 	updatedModel, _ := pane.Update(fetchedMsg)
 
 	updatedPane, ok := updatedModel.(*PlayerPane)
@@ -247,7 +255,6 @@ func TestPlayerPane_Update_TickIncrements(t *testing.T) {
 	updatedPane, ok := updatedModel.(*PlayerPane)
 	require.True(t, ok)
 
-	// When playing, localProgressMs should increment by 1000 on tick.
 	assert.Equal(t, 31000, updatedPane.localProgressMs)
 }
 
@@ -261,7 +268,6 @@ func TestPlayerPane_Update_TickNoIncrement_WhenPaused(t *testing.T) {
 	updatedPane, ok := updatedModel.(*PlayerPane)
 	require.True(t, ok)
 
-	// When paused, localProgressMs should NOT increment.
 	assert.Equal(t, 30000, updatedPane.localProgressMs)
 }
 
@@ -291,84 +297,18 @@ func TestPlayerPane_SetFocused(t *testing.T) {
 	assert.True(t, pane.focused)
 }
 
+func TestPlayerPane_IsFocused(t *testing.T) {
+	pane := newTestPlayerPane(false)
+	assert.False(t, pane.IsFocused())
+
+	pane.SetFocused(true)
+	assert.True(t, pane.IsFocused())
+}
+
 func TestPlayerPane_Init(t *testing.T) {
 	pane := newTestPlayerPane(true)
 	cmd := pane.Init()
-	// Init is a no-op — returns nil.
 	assert.Nil(t, cmd)
-}
-
-func TestPlayerPane_SetPlayer(t *testing.T) {
-	pane := newTestPlayerPane(true)
-	assert.Nil(t, pane.player)
-
-	p := api.NewPlayer("", "token")
-	pane.SetPlayer(p)
-	assert.NotNil(t, pane.player)
-}
-
-func TestFetchPlaybackStateCmd_NilPlayer(t *testing.T) {
-	s := state.New()
-	cmd := FetchPlaybackStateCmd(nil, s)
-	require.NotNil(t, cmd)
-
-	msg := cmd()
-	fetchedMsg, ok := msg.(PlaybackStateFetchedMsg)
-	require.True(t, ok)
-	assert.Nil(t, fetchedMsg.State)
-}
-
-func TestFetchPlaybackStateCmd_WithPlayer(t *testing.T) {
-	s := state.New()
-
-	fixture := api.PlaybackState{
-		IsPlaying:  true,
-		ProgressMs: 10000,
-		Item: &api.Track{
-			ID:         "t1",
-			Name:       "Test Song",
-			DurationMs: 200000,
-			Artists:    []api.Artist{{ID: "a1", Name: "Artist"}},
-			Album:      api.Album{ID: "alb1", Name: "Album"},
-		},
-		Device: &api.Device{ID: "d1", Name: "Test Device", VolumePercent: 50},
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(fixture)
-	}))
-	defer srv.Close()
-
-	player := api.NewPlayer(srv.URL, "test-token")
-	cmd := FetchPlaybackStateCmd(player, s)
-	require.NotNil(t, cmd)
-
-	msg := cmd()
-	fetchedMsg, ok := msg.(PlaybackStateFetchedMsg)
-	require.True(t, ok)
-	require.NotNil(t, fetchedMsg.State)
-	assert.Equal(t, "Test Song", fetchedMsg.State.Item.Name)
-}
-
-func TestFetchPlaybackStateCmd_PlayerError(t *testing.T) {
-	s := state.New()
-
-	// Server returns 503.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	defer srv.Close()
-
-	player := api.NewPlayer(srv.URL, "test-token")
-	cmd := FetchPlaybackStateCmd(player, s)
-
-	msg := cmd()
-	fetchedMsg, ok := msg.(PlaybackStateFetchedMsg)
-	require.True(t, ok)
-	// Error returns nil state.
-	assert.Nil(t, fetchedMsg.State)
 }
 
 func TestDeviceName_NoDevice(t *testing.T) {
@@ -384,135 +324,15 @@ func TestDeviceName_WithDevice(t *testing.T) {
 	assert.Contains(t, name, "MacBook Pro")
 }
 
-// TestPlayerPane_BuildPlaybackCmd_WithPlayer tests that buildPlaybackCmd sends
-// the correct API call when a real player is injected.
-func TestPlayerPane_BuildPlaybackCmd_WithPlayer(t *testing.T) {
-	tests := []struct {
-		name     string
-		key      rune
-		wantPath string
-		isPlay   bool
-	}{
-		{"next", 'n', "/v1/me/player/next", false},
-		{"previous", 'p', "/v1/me/player/previous", false},
-		{"shuffle toggle", 's', "/v1/me/player/shuffle", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var capturedPath string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedPath = r.URL.Path
-				w.WriteHeader(http.StatusNoContent)
-			}))
-			defer srv.Close()
-
-			s := state.New()
-			s.SetPlaybackState(&api.PlaybackState{
-				IsPlaying:    true,
-				RepeatState:  "off",
-				ShuffleState: false,
-				Item: &api.Track{
-					ID:         "t1",
-					Name:       "Track",
-					DurationMs: 200000,
-					Artists:    []api.Artist{{Name: "Artist"}},
-				},
-				Device: &api.Device{VolumePercent: 50},
-			})
-
-			th := theme.Load("black")
-			pane := NewPlayerPane(s, th, true)
-			pane.SetPlayer(api.NewPlayer(srv.URL, "test-token"))
-
-			keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tt.key}}
-			_, cmd := pane.Update(keyMsg)
-			require.NotNil(t, cmd)
-
-			msg := cmd()
-			result, ok := msg.(PlaybackCmdSentMsg)
-			require.True(t, ok)
-			assert.NoError(t, result.Err)
-			assert.Equal(t, tt.wantPath, capturedPath)
-		})
-	}
-}
-
-// TestPlayerPane_BuildPlaybackCmd_Volume tests volume up/down with a real player.
-func TestPlayerPane_BuildPlaybackCmd_Volume(t *testing.T) {
-	var capturedVol string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedVol = r.URL.Query().Get("volume_percent")
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
-
-	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
-		IsPlaying: true,
-		Item: &api.Track{
-			ID:         "t1",
-			Name:       "Track",
-			DurationMs: 200000,
-			Artists:    []api.Artist{{Name: "Artist"}},
-		},
-		Device: &api.Device{VolumePercent: 50},
-	})
-
-	th := theme.Load("black")
-	pane := NewPlayerPane(s, th, true)
-	pane.SetPlayer(api.NewPlayer(srv.URL, "test-token"))
-
-	plusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}
-	_, cmd := pane.Update(plusMsg)
-	require.NotNil(t, cmd)
-	cmd()
-
-	assert.Equal(t, "55", capturedVol, "volume up should send 50+5=55")
-}
-
-// TestPlayerPane_BuildPlaybackCmd_Repeat tests repeat cycling with a real player.
-func TestPlayerPane_BuildPlaybackCmd_Repeat(t *testing.T) {
-	var capturedMode string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedMode = r.URL.Query().Get("state")
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
-
-	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
-		IsPlaying:   true,
-		RepeatState: "off",
-		Item: &api.Track{
-			ID:         "t1",
-			Name:       "Track",
-			DurationMs: 200000,
-			Artists:    []api.Artist{{Name: "Artist"}},
-		},
-		Device: &api.Device{VolumePercent: 50},
-	})
-
-	th := theme.Load("black")
-	pane := NewPlayerPane(s, th, true)
-	pane.SetPlayer(api.NewPlayer(srv.URL, "test-token"))
-
-	rMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
-	_, cmd := pane.Update(rMsg)
-	require.NotNil(t, cmd)
-	cmd()
-
-	assert.Equal(t, "context", capturedMode, "repeat off → context on r key")
-}
-
 // TestPlayerPane_ArrowKeys tests left/right arrow keys for navigation.
 func TestPlayerPane_ArrowKeys(t *testing.T) {
 	tests := []struct {
-		name    string
-		keyType tea.KeyType
+		name       string
+		keyType    tea.KeyType
+		wantAction PlaybackAction
 	}{
-		{"right arrow skips next", tea.KeyRight},
-		{"left arrow skips prev", tea.KeyLeft},
+		{"right arrow skips next", tea.KeyRight, ActionNext},
+		{"left arrow skips prev", tea.KeyLeft, ActionPrevious},
 	}
 
 	for _, tt := range tests {
@@ -524,13 +344,14 @@ func TestPlayerPane_ArrowKeys(t *testing.T) {
 
 			require.NotNil(t, cmd)
 			msg := cmd()
-			_, ok := msg.(PlaybackCmdSentMsg)
+			req, ok := msg.(PlaybackRequestMsg)
 			assert.True(t, ok)
+			assert.Equal(t, tt.wantAction, req.Action)
 		})
 	}
 }
 
-// TestPlayerPane_Play_WhenNilState tests that pressing space with no state still returns cmd.
+// TestPlayerPane_Space_NilState tests that pressing space with no state still returns cmd.
 func TestPlayerPane_Space_NilState(t *testing.T) {
 	pane := newTestPlayerPane(true)
 
@@ -539,6 +360,7 @@ func TestPlayerPane_Space_NilState(t *testing.T) {
 
 	require.NotNil(t, cmd)
 	msg := cmd()
-	_, ok := msg.(PlaybackCmdSentMsg)
+	req, ok := msg.(PlaybackRequestMsg)
 	assert.True(t, ok)
+	assert.Equal(t, ActionPlay, req.Action, "nil state → space should request play")
 }
