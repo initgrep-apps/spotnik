@@ -245,7 +245,7 @@ func runApp(_ *cobra.Command, _ []string) error {
 	}
 
 	// App wires the theme into pane constructors at startup.
-	a := app.New(cfg)
+	a := app.New(cfg, app.AppOptions{})
 
 	// Inject the authenticated player client.
 	accessToken, _ := store.Get(keychain.KeyAccessToken)

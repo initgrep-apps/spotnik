@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -33,6 +34,7 @@ type viewMode int
 const (
 	viewSplash    viewMode = iota // Splash screen shown on startup
 	viewMain                      // three-pane Library | Player | Queue layout
+	viewAuth                      // Auth panel — shown when user needs to authenticate
 	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
 	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
 )
@@ -86,6 +88,13 @@ type App struct {
 
 	// volumeStep is the percentage change per volume up/down keypress.
 	volumeStep int
+
+	// Auth state — set at construction, used for splash→auth transition.
+	needsAuth  bool
+	clientID   string
+	tokenStore keychain.TokenStore
+	authURL    string // Spotify authorization URL, set when auth flow starts
+	authStatus string // Message shown in auth panel
 }
 
 // statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
@@ -94,8 +103,15 @@ type statusDismissMsg struct{}
 // splashDismissMsg is sent after 2 seconds to close the splash screen.
 type splashDismissMsg struct{}
 
+// AppOptions holds optional configuration for App construction.
+type AppOptions struct {
+	NeedsAuth  bool
+	ClientID   string
+	TokenStore keychain.TokenStore
+}
+
 // New creates a new App, loading the theme from cfg.UI.Theme.
-func New(cfg *config.Config) *App {
+func New(cfg *config.Config, opts AppOptions) *App {
 	t := theme.Load(cfg.UI.Theme)
 	s := state.New()
 
@@ -121,6 +137,9 @@ func New(cfg *config.Config) *App {
 		focus:       focusPlayer,
 		currentView: viewSplash,
 		volumeStep:  volStep,
+		needsAuth:   opts.NeedsAuth,
+		clientID:    opts.ClientID,
+		tokenStore:  opts.TokenStore,
 	}
 }
 
