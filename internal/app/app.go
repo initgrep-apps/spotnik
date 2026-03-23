@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,15 @@ const (
 	viewAuth                      // Auth panel shown when user needs to authenticate
 	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
 	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
+)
+
+const (
+	// playbackFetchInterval is how many ticks (seconds) between playback state polls.
+	playbackFetchInterval = 3
+	// queueFetchInterval is how many ticks (seconds) between queue polls.
+	queueFetchInterval = 9
+	// defaultBackoffTicks is how many ticks to pause polling after a 429 rate limit.
+	defaultBackoffTicks = 10
 )
 
 // App is the root application model. It owns the active theme, the central
@@ -85,6 +95,14 @@ type App struct {
 
 	// statusMsg is a transient error/info message shown in the status bar for 3–4 seconds.
 	statusMsg string
+
+	// tickCount increments every 1s tick. Used to throttle API polling:
+	// playback fetched every playbackFetchInterval ticks, queue every queueFetchInterval ticks.
+	tickCount int
+
+	// backoffTicks is the number of ticks to skip all API fetches after a 429 rate limit.
+	// Decremented each tick; when >0 no polling commands are dispatched.
+	backoffTicks int
 
 	// volumeStep is the percentage change per volume up/down keypress.
 	volumeStep int
@@ -205,6 +223,16 @@ func (a *App) PlaylistViewOpen() bool {
 // AuthViewOpen returns true while the auth panel is the active view.
 func (a *App) AuthViewOpen() bool {
 	return a.currentView == viewAuth
+}
+
+// TickCount returns the current tick counter (exported for testing).
+func (a *App) TickCount() int {
+	return a.tickCount
+}
+
+// BackoffTicks returns the remaining backoff ticks (exported for testing).
+func (a *App) BackoffTicks() int {
+	return a.backoffTicks
 }
 
 // SearchOpen returns true while the search overlay is visible.
@@ -560,17 +588,45 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case panes.TickMsg:
+		// Always forward to playerPane for progress bar animation.
 		updatedPane, _ := a.playerPane.Update(m)
 		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
 			a.playerPane = pp
 		}
-		return a, tea.Batch(
-			fetchPlaybackStateCmd(a.player, a.store),
-			fetchQueueCmd(a.player, a.store),
-			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
-				return panes.TickMsg{}
-			}),
-		)
+
+		nextTick := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+			return panes.TickMsg{}
+		})
+
+		// During backoff, skip all API fetches.
+		if a.backoffTicks > 0 {
+			a.backoffTicks--
+			a.tickCount++
+			return a, nextTick
+		}
+
+		// Throttled polling: playback every 3s, queue every 9s.
+		// Check before incrementing so tick 0 fires both fetches immediately.
+		var cmds []tea.Cmd
+		cmds = append(cmds, nextTick)
+		if a.tickCount%playbackFetchInterval == 0 {
+			cmds = append(cmds, fetchPlaybackStateCmd(a.player, a.store))
+		}
+		if a.tickCount%queueFetchInterval == 0 {
+			cmds = append(cmds, fetchQueueCmd(a.player, a.store))
+		}
+		a.tickCount++
+		return a, tea.Batch(cmds...)
+
+	case panes.RateLimitedMsg:
+		// 429 from Spotify — activate backoff and show status message.
+		backoff := m.RetryAfterSecs
+		if backoff < defaultBackoffTicks {
+			backoff = defaultBackoffTicks
+		}
+		a.backoffTicks = backoff
+		a.statusMsg = fmt.Sprintf("Rate limited — pausing requests for %ds", backoff)
+		return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
 
 	case panes.QueueLoadedMsg:
 		// Queue data is already in the store — no pane-specific handling needed here.
@@ -1160,6 +1216,9 @@ func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
 		}
 		qr, err := player.GetQueue(context.Background())
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetQueueError(err)
 			return panes.QueueLoadedMsg{}
 		}
@@ -1180,11 +1239,34 @@ func fetchPlaybackStateCmd(player *api.Player, store *state.Store) tea.Cmd {
 		}
 		ps, err := player.GetPlaybackState(context.Background())
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			return panes.PlaybackStateFetchedMsg{}
 		}
 		store.SetPlaybackState(ps)
 		return panes.PlaybackStateFetchedMsg{}
 	}
+}
+
+// parse429RetryAfter extracts the Retry-After seconds from a 429 error message.
+// Returns 0 if the error is not a 429 or parsing fails.
+func parse429RetryAfter(err error) int {
+	msg := err.Error()
+	if !strings.Contains(msg, "429") {
+		return 0
+	}
+	// Error format from api/player.go: "429 rate limited: retry after %s seconds"
+	parts := strings.Split(msg, "retry after ")
+	if len(parts) < 2 {
+		return defaultBackoffTicks
+	}
+	secStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), " seconds")
+	secs, parseErr := strconv.Atoi(secStr)
+	if parseErr != nil || secs <= 0 {
+		return defaultBackoffTicks
+	}
+	return secs
 }
 
 // View renders the full terminal UI.
