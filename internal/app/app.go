@@ -823,10 +823,10 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 		}
 		playlists, err := library.GetPlaylists(context.Background(), 50, offset)
 		if err != nil {
-			store.SetLibraryError(err)
+			store.SetPlaylistsFetchError(err)
 			return panes.LibraryLoadedMsg{}
 		}
-		store.ClearLibraryError()
+		store.ClearPlaylistsFetchError()
 		if offset == 0 {
 			store.SetPlaylists(playlists)
 		} else {
@@ -847,10 +847,10 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 		}
 		albums, err := library.GetSavedAlbums(context.Background(), 50, offset)
 		if err != nil {
-			store.SetLibraryError(err)
+			store.SetAlbumsFetchError(err)
 			return panes.AlbumsLoadedMsg{}
 		}
-		store.ClearLibraryError()
+		store.ClearAlbumsFetchError()
 		store.SetSavedAlbums(albums)
 		return panes.AlbumsLoadedMsg{}
 	}
@@ -866,10 +866,10 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 		}
 		tracks, err := library.GetLikedTracks(context.Background(), 50, offset)
 		if err != nil {
-			store.SetLibraryError(err)
+			store.SetLikedTracksFetchError(err)
 			return panes.LikedTracksLoadedMsg{}
 		}
-		store.ClearLibraryError()
+		store.ClearLikedTracksFetchError()
 		store.SetLikedTracks(tracks)
 		store.SetLikedTotal(len(tracks) + offset)
 		return panes.LikedTracksLoadedMsg{}
@@ -886,10 +886,10 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 		}
 		items, err := library.GetRecentlyPlayed(context.Background(), 20)
 		if err != nil {
-			store.SetLibraryError(err)
+			store.SetRecentPlayedFetchError(err)
 			return panes.RecentlyPlayedLoadedMsg{}
 		}
-		store.ClearLibraryError()
+		store.ClearRecentPlayedFetchError()
 		store.SetRecentlyPlayed(items)
 		return panes.RecentlyPlayedLoadedMsg{}
 	}

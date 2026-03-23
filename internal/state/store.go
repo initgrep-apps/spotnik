@@ -50,12 +50,16 @@ type Store struct {
 
 	// Error state — one per data-fetching feature.
 	// Set by build*Cmd on failure, cleared on successful retry.
-	searchError    error
-	statsError     error
-	devicesError   error
-	queueError     error
-	libraryError   error
-	playlistsError error
+	searchError          error
+	statsError           error
+	devicesError         error
+	queueError           error
+	playlistsFetchErr    error // playlists list fetch
+	albumsFetchErr       error // saved albums fetch
+	likedTracksFetchErr  error // liked tracks fetch
+	recentPlayedFetchErr error // recently played fetch
+	playlistsError       error // playlist manager (tracks, mutations)
+
 }
 
 // New returns an empty Store with no playback state.
@@ -420,25 +424,88 @@ func (s *Store) ClearQueueError() {
 	s.queueError = nil
 }
 
-// LibraryError returns the last library fetch error, or nil if successful.
-func (s *Store) LibraryError() error {
+// PlaylistsFetchError returns the last playlists list fetch error, or nil.
+func (s *Store) PlaylistsFetchError() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.libraryError
+	return s.playlistsFetchErr
 }
 
-// SetLibraryError records a library fetch failure.
-func (s *Store) SetLibraryError(err error) {
+// SetPlaylistsFetchError records a playlists list fetch failure.
+func (s *Store) SetPlaylistsFetchError(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.libraryError = err
+	s.playlistsFetchErr = err
 }
 
-// ClearLibraryError clears the library error state on successful retry.
-func (s *Store) ClearLibraryError() {
+// ClearPlaylistsFetchError clears the playlists list fetch error on successful retry.
+func (s *Store) ClearPlaylistsFetchError() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.libraryError = nil
+	s.playlistsFetchErr = nil
+}
+
+// AlbumsFetchError returns the last saved albums fetch error, or nil.
+func (s *Store) AlbumsFetchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.albumsFetchErr
+}
+
+// SetAlbumsFetchError records a saved albums fetch failure.
+func (s *Store) SetAlbumsFetchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.albumsFetchErr = err
+}
+
+// ClearAlbumsFetchError clears the saved albums fetch error on successful retry.
+func (s *Store) ClearAlbumsFetchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.albumsFetchErr = nil
+}
+
+// LikedTracksFetchError returns the last liked tracks fetch error, or nil.
+func (s *Store) LikedTracksFetchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedTracksFetchErr
+}
+
+// SetLikedTracksFetchError records a liked tracks fetch failure.
+func (s *Store) SetLikedTracksFetchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedTracksFetchErr = err
+}
+
+// ClearLikedTracksFetchError clears the liked tracks fetch error on successful retry.
+func (s *Store) ClearLikedTracksFetchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedTracksFetchErr = nil
+}
+
+// RecentPlayedFetchError returns the last recently played fetch error, or nil.
+func (s *Store) RecentPlayedFetchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.recentPlayedFetchErr
+}
+
+// SetRecentPlayedFetchError records a recently played fetch failure.
+func (s *Store) SetRecentPlayedFetchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recentPlayedFetchErr = err
+}
+
+// ClearRecentPlayedFetchError clears the recently played fetch error on successful retry.
+func (s *Store) ClearRecentPlayedFetchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recentPlayedFetchErr = nil
 }
 
 // PlaylistsError returns the last playlists fetch error, or nil if successful.

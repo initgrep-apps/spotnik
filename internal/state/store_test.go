@@ -321,10 +321,28 @@ func TestStore_ErrorState(t *testing.T) {
 			clear: func(s *Store) { s.ClearQueueError() },
 		},
 		{
-			name:  "LibraryError",
-			set:   func(s *Store) { s.SetLibraryError(testErr) },
-			get:   func(s *Store) error { return s.LibraryError() },
-			clear: func(s *Store) { s.ClearLibraryError() },
+			name:  "PlaylistsFetchError",
+			set:   func(s *Store) { s.SetPlaylistsFetchError(testErr) },
+			get:   func(s *Store) error { return s.PlaylistsFetchError() },
+			clear: func(s *Store) { s.ClearPlaylistsFetchError() },
+		},
+		{
+			name:  "AlbumsFetchError",
+			set:   func(s *Store) { s.SetAlbumsFetchError(testErr) },
+			get:   func(s *Store) error { return s.AlbumsFetchError() },
+			clear: func(s *Store) { s.ClearAlbumsFetchError() },
+		},
+		{
+			name:  "LikedTracksFetchError",
+			set:   func(s *Store) { s.SetLikedTracksFetchError(testErr) },
+			get:   func(s *Store) error { return s.LikedTracksFetchError() },
+			clear: func(s *Store) { s.ClearLikedTracksFetchError() },
+		},
+		{
+			name:  "RecentPlayedFetchError",
+			set:   func(s *Store) { s.SetRecentPlayedFetchError(testErr) },
+			get:   func(s *Store) error { return s.RecentPlayedFetchError() },
+			clear: func(s *Store) { s.ClearRecentPlayedFetchError() },
 		},
 		{
 			name:  "PlaylistsError",

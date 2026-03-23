@@ -2,6 +2,8 @@ package app_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,6 +15,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// errorServer returns an httptest.Server that always responds with 500.
+func errorServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"status":500,"message":"server error"}}`))
+	}))
+}
+
+// successServer returns an httptest.Server that responds with 200 and an empty JSON object/array
+// for any endpoint, to simulate a successful but empty response.
+func successServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[],"total":0,"tracks":{"items":[],"total":0},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0},"queue":[]}`))
+	}))
+}
 
 func TestAppNew_ReceivesTheme(t *testing.T) {
 	cfg := &config.Config{}
@@ -1525,4 +1545,165 @@ func TestApp_3KeyInStatsView_SwitchesToPlaylists(t *testing.T) {
 	a = model.(*app.App)
 	assert.True(t, a.PlaylistViewOpen(), "pressing 3 in stats should open playlists")
 	assert.False(t, a.StatsViewOpen(), "stats should be closed when playlists opens")
+}
+
+// --- Error state wiring tests ---
+// These verify that build*Cmd functions set/clear error state in the Store.
+
+func TestApp_BuildFetchPlaylistsCmd_SetsErrorOnFailure(t *testing.T) {
+	srv := errorServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
+	require.NotNil(t, cmd)
+	cmd() // execute the command
+
+	assert.Error(t, a.Store().PlaylistsFetchError(), "store should have playlists fetch error after API failure")
+}
+
+func TestApp_BuildFetchPlaylistsCmd_ClearsErrorOnSuccess(t *testing.T) {
+	srv := successServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Pre-set an error.
+	a.Store().SetPlaylistsFetchError(fmt.Errorf("previous error"))
+
+	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.NoError(t, a.Store().PlaylistsFetchError(), "store should clear playlists fetch error on success")
+}
+
+func TestApp_BuildSearchCmd_SetsErrorOnFailure(t *testing.T) {
+	srv := errorServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.Error(t, a.Store().SearchError(), "store should have search error after API failure")
+}
+
+func TestApp_BuildSearchCmd_ClearsErrorOnSuccess(t *testing.T) {
+	srv := successServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+	a.Store().SetSearchError(fmt.Errorf("previous error"))
+
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.NoError(t, a.Store().SearchError(), "store should clear search error on success")
+}
+
+func TestApp_BuildFetchDevicesCmd_SetsErrorOnFailure(t *testing.T) {
+	srv := errorServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.Error(t, a.Store().DevicesError(), "store should have devices error after API failure")
+}
+
+func TestApp_BuildFetchDevicesCmd_ClearsErrorOnSuccess(t *testing.T) {
+	srv := successServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
+	a.Store().SetDevicesError(fmt.Errorf("previous error"))
+
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.NoError(t, a.Store().DevicesError(), "store should clear devices error on success")
+}
+
+func TestApp_BuildFetchStatsCmd_SetsErrorOnFailure(t *testing.T) {
+	srv := errorServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetUserAPI(api.NewUserClient(srv.URL, "test-token"))
+
+	// Open stats view first (press 2).
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+
+	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.Error(t, a.Store().StatsError(), "store should have stats error after API failure")
+}
+
+func TestApp_BuildFetchStatsCmd_ClearsErrorOnSuccess(t *testing.T) {
+	srv := successServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetUserAPI(api.NewUserClient(srv.URL, "test-token"))
+	a.Store().SetStatsError(fmt.Errorf("previous error"))
+
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = model.(*app.App)
+
+	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
+	require.NotNil(t, cmd)
+	cmd()
+
+	assert.NoError(t, a.Store().StatsError(), "store should clear stats error on success")
+}
+
+func TestApp_FetchQueueCmd_SetsErrorOnFailure(t *testing.T) {
+	srv := errorServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg)
+	a.SetPlayer(api.NewPlayer(srv.URL, "test-token"))
+
+	// Tick triggers both playback and queue fetches.
+	_, cmd := a.Update(panes.TickMsg{})
+	require.NotNil(t, cmd)
+
+	// The tick returns a batch; execute the batch to run sub-commands.
+	msg := cmd()
+	if batchMsg, ok := msg.(tea.BatchMsg); ok {
+		for _, subCmd := range batchMsg {
+			if subCmd != nil {
+				subCmd()
+			}
+		}
+	}
+
+	assert.Error(t, a.Store().QueueError(), "store should have queue error after API failure")
 }
