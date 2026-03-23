@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -213,4 +214,40 @@ func TestDeviceOverlay_devicesLoadedMsg(t *testing.T) {
 	updated, ok := model.(*DeviceOverlay)
 	require.True(t, ok)
 	assert.Len(t, updated.devices, 3, "devices should be populated after devicesLoadedMsg")
+}
+
+func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
+	s := state.New()
+	s.SetDevicesError(fmt.Errorf("API error"))
+	th := theme.Load("black")
+	overlay := NewDeviceOverlay(s, th)
+	overlay.SetSize(60, 20)
+
+	output := overlay.View()
+	assert.Contains(t, output, "Failed to load devices", "should show error message")
+	assert.Contains(t, output, "Press d to retry", "should show retry hint")
+	assert.NotContains(t, output, "No devices found", "should not show empty state when error")
+}
+
+func TestDeviceOverlay_View_ShowsEmptyWhenNoError(t *testing.T) {
+	s := state.New()
+	// No error set, no devices loaded.
+	th := theme.Load("black")
+	overlay := NewDeviceOverlay(s, th)
+
+	output := overlay.View()
+	assert.Contains(t, output, "No devices found")
+}
+
+func TestDeviceOverlay_View_ShowsDevicesWhenNoError(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	overlay := NewDeviceOverlay(s, th)
+
+	devices := testDevices()
+	overlay.Update(devicesLoadedMsg{devices: devices})
+
+	output := overlay.View()
+	assert.Contains(t, output, "MacBook Pro")
+	assert.NotContains(t, output, "Failed to load devices")
 }
