@@ -21,15 +21,15 @@ Features must be built in order. Each depends on the previous being stable and t
 | 7 | Device Switcher | `07-devices.md` | ✅ Complete | Playback | #10 |
 | 8 | Stats Dashboard | `08-stats.md` | ✅ Complete | Auth | #11 |
 | 9 | Playlist Manager | `09-playlists.md` | ✅ Complete | Library | #12 |
-| 10 | Fix Library Display | `10-fix-library-display.md` | 🔲 Planned | — | — |
-| 11 | Fix Playback UX | `11-fix-playback-ux.md` | 🔲 Planned | — | — |
-| 12 | Fix Queue Overflow | `12-fix-queue-overflow.md` | 🔲 Planned | — | — |
-| 13 | Fix Devices Errors | `13-fix-devices-errors.md` | 🔲 Planned | 18 | — |
-| 14 | Fix Views Rendering | `14-fix-views-rendering.md` | 🔲 Planned | 18 | — |
-| 15 | Fix UX Polish | `15-fix-ux-polish.md` | 🔲 Planned | — | — |
-| 16 | Fix Search Results | `16-fix-search-results.md` | 🔲 Planned | — | — |
-| 17 | Fix Auth UX | `17-fix-auth-ux.md` | 🔲 Planned | — | — |
-| 18 | Fix Error Architecture | `18-fix-error-architecture.md` | 🔲 Planned | — | — |
+| 10 | Fix Library Display | `10-fix-library-display.md` | ✅ Complete | — | #15 |
+| 11 | Fix Playback UX | `11-fix-playback-ux.md` | ✅ Complete | — | #16 |
+| 12 | Fix Queue Overflow | `12-fix-queue-overflow.md` | ✅ Complete | — | #17 |
+| 13 | Fix Devices Errors | `13-fix-devices-errors.md` | ✅ Complete | 18 | #19 |
+| 14 | Fix Views Rendering | `14-fix-views-rendering.md` | ✅ Complete | 18 | #18 |
+| 15 | Fix UX Polish | `15-fix-ux-polish.md` | ✅ Complete | — | #18 |
+| 16 | Fix Search Results | `16-fix-search-results.md` | ✅ Complete | — | #20 |
+| 17 | Fix Auth UX | `17-fix-auth-ux.md` | ✅ Complete | — | #21 |
+| 18 | Fix Error Architecture | `18-fix-error-architecture.md` | ✅ Complete | — | #14 |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
