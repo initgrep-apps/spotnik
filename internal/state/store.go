@@ -47,6 +47,15 @@ type Store struct {
 	// playingPlaylistID is the Spotify playlist ID that is currently playing.
 	// Used by PlaylistManager to render the ▶ indicator next to the active playlist.
 	playingPlaylistID string
+
+	// Error state — one per data-fetching feature.
+	// Set by build*Cmd on failure, cleared on successful retry.
+	searchError    error
+	statsError     error
+	devicesError   error
+	queueError     error
+	libraryError   error
+	playlistsError error
 }
 
 // New returns an empty Store with no playback state.
@@ -323,4 +332,132 @@ func (s *Store) SetPlayingPlaylistID(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playingPlaylistID = id
+}
+
+// --- Error state accessors ---
+
+// SearchError returns the last search error, or nil if the last search succeeded.
+func (s *Store) SearchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchError
+}
+
+// SetSearchError records a search failure.
+func (s *Store) SetSearchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchError = err
+}
+
+// ClearSearchError clears the search error state on successful retry.
+func (s *Store) ClearSearchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchError = nil
+}
+
+// StatsError returns the last stats fetch error, or nil if successful.
+func (s *Store) StatsError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.statsError
+}
+
+// SetStatsError records a stats fetch failure.
+func (s *Store) SetStatsError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statsError = err
+}
+
+// ClearStatsError clears the stats error state on successful retry.
+func (s *Store) ClearStatsError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statsError = nil
+}
+
+// DevicesError returns the last devices fetch error, or nil if successful.
+func (s *Store) DevicesError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.devicesError
+}
+
+// SetDevicesError records a devices fetch failure.
+func (s *Store) SetDevicesError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devicesError = err
+}
+
+// ClearDevicesError clears the devices error state on successful retry.
+func (s *Store) ClearDevicesError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devicesError = nil
+}
+
+// QueueError returns the last queue fetch error, or nil if successful.
+func (s *Store) QueueError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.queueError
+}
+
+// SetQueueError records a queue fetch failure.
+func (s *Store) SetQueueError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.queueError = err
+}
+
+// ClearQueueError clears the queue error state on successful retry.
+func (s *Store) ClearQueueError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.queueError = nil
+}
+
+// LibraryError returns the last library fetch error, or nil if successful.
+func (s *Store) LibraryError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.libraryError
+}
+
+// SetLibraryError records a library fetch failure.
+func (s *Store) SetLibraryError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.libraryError = err
+}
+
+// ClearLibraryError clears the library error state on successful retry.
+func (s *Store) ClearLibraryError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.libraryError = nil
+}
+
+// PlaylistsError returns the last playlists fetch error, or nil if successful.
+func (s *Store) PlaylistsError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playlistsError
+}
+
+// SetPlaylistsError records a playlists fetch failure.
+func (s *Store) SetPlaylistsError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlistsError = err
+}
+
+// ClearPlaylistsError clears the playlists error state on successful retry.
+func (s *Store) ClearPlaylistsError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlistsError = nil
 }

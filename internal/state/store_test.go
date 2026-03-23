@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -284,4 +285,70 @@ func TestStore_SetGetPlayingPlaylistID(t *testing.T) {
 	s := New()
 	s.SetPlayingPlaylistID("pl-abc")
 	assert.Equal(t, "pl-abc", s.PlayingPlaylistID())
+}
+
+func TestStore_ErrorState(t *testing.T) {
+	testErr := fmt.Errorf("api error")
+
+	tests := []struct {
+		name  string
+		set   func(s *Store)
+		get   func(s *Store) error
+		clear func(s *Store)
+	}{
+		{
+			name:  "SearchError",
+			set:   func(s *Store) { s.SetSearchError(testErr) },
+			get:   func(s *Store) error { return s.SearchError() },
+			clear: func(s *Store) { s.ClearSearchError() },
+		},
+		{
+			name:  "StatsError",
+			set:   func(s *Store) { s.SetStatsError(testErr) },
+			get:   func(s *Store) error { return s.StatsError() },
+			clear: func(s *Store) { s.ClearStatsError() },
+		},
+		{
+			name:  "DevicesError",
+			set:   func(s *Store) { s.SetDevicesError(testErr) },
+			get:   func(s *Store) error { return s.DevicesError() },
+			clear: func(s *Store) { s.ClearDevicesError() },
+		},
+		{
+			name:  "QueueError",
+			set:   func(s *Store) { s.SetQueueError(testErr) },
+			get:   func(s *Store) error { return s.QueueError() },
+			clear: func(s *Store) { s.ClearQueueError() },
+		},
+		{
+			name:  "LibraryError",
+			set:   func(s *Store) { s.SetLibraryError(testErr) },
+			get:   func(s *Store) error { return s.LibraryError() },
+			clear: func(s *Store) { s.ClearLibraryError() },
+		},
+		{
+			name:  "PlaylistsError",
+			set:   func(s *Store) { s.SetPlaylistsError(testErr) },
+			get:   func(s *Store) error { return s.PlaylistsError() },
+			clear: func(s *Store) { s.ClearPlaylistsError() },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New()
+
+			// Initially nil.
+			assert.Nil(t, tt.get(s), "initial error should be nil")
+
+			// Set error.
+			tt.set(s)
+			require.Error(t, tt.get(s))
+			assert.Equal(t, testErr, tt.get(s))
+
+			// Clear error.
+			tt.clear(s)
+			assert.Nil(t, tt.get(s), "error should be nil after clear")
+		})
+	}
 }
