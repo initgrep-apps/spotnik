@@ -360,4 +360,3 @@ func HandleMissingClientID() error {
 func printSetupInstructions() {
 	_ = PrintMissingClientIDInstructions(os.Stdout)
 }
-
