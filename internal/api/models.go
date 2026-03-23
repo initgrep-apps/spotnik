@@ -2,6 +2,14 @@
 // and all typed API response models. It never imports ui/ — data flows via messages and store.
 package api
 
+import "encoding/json"
+
+// unmarshalJSON is a package-level helper used by custom UnmarshalJSON methods
+// to avoid import cycles when models.go needs encoding/json for custom unmarshaling.
+func unmarshalJSON(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
 // PlaybackState represents the full playback state returned by GET /me/player.
 // When Spotify returns 204 (nothing playing), this struct is nil in the store.
 type PlaybackState struct {
@@ -61,6 +69,112 @@ type Album struct {
 
 	// Name is the display name of the album.
 	Name string `json:"name"`
+}
+
+// SimplePlaylistOwner represents the owner of a playlist.
+type SimplePlaylistOwner struct {
+	// ID is the Spotify user ID of the owner.
+	ID string `json:"id"`
+
+	// DisplayName is the human-readable name of the owner.
+	DisplayName string `json:"display_name"`
+}
+
+// SimplePlaylist represents a simplified Spotify playlist as returned
+// in the GET /me/playlists response items.
+// NOTE: UnmarshalJSON is required because the Spotify API nests track count
+// under "tracks.total" rather than exposing it as a flat field.
+type SimplePlaylist struct {
+	// ID is the Spotify playlist ID.
+	ID string `json:"id"`
+
+	// Name is the display name of the playlist.
+	Name string `json:"name"`
+
+	// URI is the Spotify URI of the playlist.
+	URI string `json:"uri"`
+
+	// TrackCount is the total number of tracks in the playlist.
+	// Populated from the nested "tracks.total" field in the Spotify response.
+	TrackCount int `json:"-"`
+
+	// Owner is the playlist owner.
+	Owner SimplePlaylistOwner `json:"owner"`
+}
+
+// UnmarshalJSON implements custom unmarshaling to extract the nested tracks.total
+// into the flat TrackCount field.
+func (p *SimplePlaylist) UnmarshalJSON(data []byte) error {
+	// Use a raw struct (not alias) to capture both flat fields and nested tracks.
+	raw := &struct {
+		ID     string              `json:"id"`
+		Name   string              `json:"name"`
+		URI    string              `json:"uri"`
+		Owner  SimplePlaylistOwner `json:"owner"`
+		Tracks struct {
+			Total int `json:"total"`
+		} `json:"tracks"`
+	}{}
+	if err := unmarshalJSON(data, raw); err != nil {
+		return err
+	}
+	p.ID = raw.ID
+	p.Name = raw.Name
+	p.URI = raw.URI
+	p.Owner = raw.Owner
+	p.TrackCount = raw.Tracks.Total
+	return nil
+}
+
+// FullAlbum represents a Spotify album with full details, used within SavedAlbum.
+type FullAlbum struct {
+	// ID is the Spotify album ID.
+	ID string `json:"id"`
+
+	// Name is the display name of the album.
+	Name string `json:"name"`
+
+	// URI is the Spotify URI of the album.
+	URI string `json:"uri"`
+
+	// TotalTracks is the total number of tracks in the album.
+	TotalTracks int `json:"total_tracks"`
+
+	// ReleaseDate is the release date string (e.g. "2020-03-20").
+	ReleaseDate string `json:"release_date"`
+
+	// Artists is the list of artists for this album.
+	Artists []Artist `json:"artists"`
+}
+
+// SavedAlbum represents an album saved in the user's library,
+// as returned by GET /me/albums.
+type SavedAlbum struct {
+	// AddedAt is the ISO 8601 timestamp when the album was saved.
+	AddedAt string `json:"added_at"`
+
+	// Album contains the full album details.
+	Album FullAlbum `json:"album"`
+}
+
+// SavedTrack represents a track saved in the user's library,
+// as returned by GET /me/tracks.
+type SavedTrack struct {
+	// AddedAt is the ISO 8601 timestamp when the track was saved.
+	AddedAt string `json:"added_at"`
+
+	// Track contains the full track details.
+	Track Track `json:"track"`
+}
+
+// PlayHistory represents a recently played track item,
+// as returned by GET /me/player/recently-played.
+type PlayHistory struct {
+	// Track is the track that was played.
+	Track Track `json:"track"`
+
+	// PlayedAt is the ISO 8601 timestamp when the track was played.
+	PlayedAt string `json:"played_at"`
 }
 
 // Device represents a Spotify Connect playback device.

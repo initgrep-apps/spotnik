@@ -1,0 +1,19 @@
+{
+  "href": "https://api.spotify.com/v1/me/albums",
+  "limit": 50,
+  "offset": 0,
+  "total": 1,
+  "items": [
+    {
+      "added_at": "2024-01-15T10:30:00Z",
+      "album": {
+        "id": "album-after-hours",
+        "name": "After Hours",
+        "uri": "spotify:album:album-after-hours",
+        "total_tracks": 14,
+        "release_date": "2020-03-20",
+        "artists": [{"id": "artist-weeknd", "name": "The Weeknd"}]
+      }
+    }
+  ]
+}

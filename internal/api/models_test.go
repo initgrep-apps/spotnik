@@ -63,6 +63,70 @@ func TestTrack_Unmarshal(t *testing.T) {
 	assert.Equal(t, "After Hours", track.Album.Name)
 }
 
+// TestSimplePlaylist_Unmarshal verifies JSON fixture parsing for SimplePlaylist.
+func TestSimplePlaylist_Unmarshal(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/fixtures/simple_playlist.json")
+	require.NoError(t, err, "reading fixture file")
+
+	var pl SimplePlaylist
+	err = json.Unmarshal(data, &pl)
+	require.NoError(t, err, "unmarshaling SimplePlaylist")
+
+	assert.Equal(t, "playlist-abc123", pl.ID)
+	assert.Equal(t, "Chill Vibes", pl.Name)
+	assert.Equal(t, "spotify:playlist:playlist-abc123", pl.URI)
+	assert.Equal(t, 42, pl.TrackCount)
+	assert.Equal(t, "irshad", pl.Owner.DisplayName)
+}
+
+// TestSavedAlbum_Unmarshal verifies JSON fixture parsing for SavedAlbum.
+func TestSavedAlbum_Unmarshal(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/fixtures/saved_album.json")
+	require.NoError(t, err, "reading fixture file")
+
+	var sa SavedAlbum
+	err = json.Unmarshal(data, &sa)
+	require.NoError(t, err, "unmarshaling SavedAlbum")
+
+	assert.Equal(t, "2024-01-15T10:30:00Z", sa.AddedAt)
+	assert.Equal(t, "album-after-hours", sa.Album.ID)
+	assert.Equal(t, "After Hours", sa.Album.Name)
+	assert.Equal(t, "spotify:album:album-after-hours", sa.Album.URI)
+	assert.Equal(t, 14, sa.Album.TotalTracks)
+	require.Len(t, sa.Album.Artists, 1)
+	assert.Equal(t, "The Weeknd", sa.Album.Artists[0].Name)
+}
+
+// TestSavedTrack_Unmarshal verifies JSON fixture parsing for SavedTrack.
+func TestSavedTrack_Unmarshal(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/fixtures/saved_track.json")
+	require.NoError(t, err, "reading fixture file")
+
+	var st SavedTrack
+	err = json.Unmarshal(data, &st)
+	require.NoError(t, err, "unmarshaling SavedTrack")
+
+	assert.Equal(t, "2024-02-20T14:00:00Z", st.AddedAt)
+	assert.Equal(t, "track-xyz789", st.Track.ID)
+	assert.Equal(t, "Blinding Lights", st.Track.Name)
+	assert.Equal(t, "spotify:track:track-xyz789", st.Track.URI)
+	assert.Equal(t, 252000, st.Track.DurationMs)
+}
+
+// TestPlayHistory_Unmarshal verifies JSON fixture parsing for PlayHistory with played_at timestamp.
+func TestPlayHistory_Unmarshal(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/fixtures/play_history.json")
+	require.NoError(t, err, "reading fixture file")
+
+	var ph PlayHistory
+	err = json.Unmarshal(data, &ph)
+	require.NoError(t, err, "unmarshaling PlayHistory")
+
+	assert.Equal(t, "2024-03-01T22:15:00Z", ph.PlayedAt)
+	assert.Equal(t, "track-xyz789", ph.Track.ID)
+	assert.Equal(t, "Blinding Lights", ph.Track.Name)
+}
+
 func TestPlaybackState_NilItem(t *testing.T) {
 	// Simulate a 204-like scenario with a null item field.
 	raw := `{

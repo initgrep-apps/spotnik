@@ -1,0 +1,32 @@
+{
+  "href": "https://api.spotify.com/v1/me/playlists",
+  "limit": 50,
+  "offset": 0,
+  "total": 2,
+  "items": [
+    {
+      "id": "playlist-abc123",
+      "name": "Chill Vibes",
+      "uri": "spotify:playlist:playlist-abc123",
+      "owner": {
+        "id": "user-irshad",
+        "display_name": "irshad"
+      },
+      "tracks": {
+        "total": 42
+      }
+    },
+    {
+      "id": "playlist-def456",
+      "name": "Workout Mix",
+      "uri": "spotify:playlist:playlist-def456",
+      "owner": {
+        "id": "user-irshad",
+        "display_name": "irshad"
+      },
+      "tracks": {
+        "total": 18
+      }
+    }
+  ]
+}
