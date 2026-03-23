@@ -946,6 +946,7 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("Enter") + " play",
 			keyStyle.Render("a") + " queue",
 			keyStyle.Render("l") + " like",
+			keyStyle.Render("d") + " devices",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
@@ -954,6 +955,7 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("/") + " search",
 			keyStyle.Render("j/k") + " navigate",
 			keyStyle.Render("Enter") + " play",
+			keyStyle.Render("d") + " devices",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
@@ -965,6 +967,7 @@ func (a *App) renderStatusBar() string {
 			keyStyle.Render("+/-") + " vol",
 			keyStyle.Render("s") + " shuffle",
 			keyStyle.Render("r") + " repeat",
+			keyStyle.Render("d") + " devices",
 			keyStyle.Render("Tab") + " pane",
 			keyStyle.Render("q") + " quit",
 		}
