@@ -2,6 +2,14 @@
 // Config is read from ~/.config/spotnik/config.toml at startup.
 package config
 
+import (
+	"errors"
+	"fmt"
+	"os"
+
+	"github.com/BurntSushi/toml"
+)
+
 // UIConfig holds UI-related configuration settings.
 type UIConfig struct {
 	// Theme is the config key for the active colour theme.
@@ -10,9 +18,16 @@ type UIConfig struct {
 	Theme string `toml:"theme"`
 }
 
+// spotifyConfig holds Spotify-specific configuration.
+type spotifyConfig struct {
+	ClientID string `toml:"client_id"`
+}
+
 // Config holds all application configuration.
 type Config struct {
-	UI UIConfig `toml:"ui"`
+	// ClientID is the Spotify application client ID, required for auth.
+	ClientID string
+	UI       UIConfig `toml:"ui"`
 }
 
 // Default returns a Config populated with sensible defaults.
@@ -22,4 +37,58 @@ func Default() *Config {
 			Theme: "black",
 		},
 	}
+}
+
+// Load reads the config file at the given path and returns a populated Config.
+// If the file does not exist, Load returns Default() with no error.
+// If client_id is missing, Load returns a descriptive error.
+// If the TOML is malformed, Load returns a parse error with file path context.
+func Load(path string) (*Config, error) {
+	cfg := Default()
+
+	// Use a raw struct for TOML decoding so we can extract the nested spotify section.
+	raw := struct {
+		Spotify spotifyConfig `toml:"spotify"`
+		UI      UIConfig      `toml:"ui"`
+	}{
+		// Pre-populate UI with defaults so unset fields keep their defaults.
+		UI: cfg.UI,
+	}
+
+	_, err := toml.DecodeFile(path, &raw)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// Missing config file is not an error — use defaults.
+			return cfg, nil
+		}
+		return nil, fmt.Errorf("parsing config %s: %w", path, err)
+	}
+
+	// Apply parsed fields.
+	cfg.ClientID = raw.Spotify.ClientID
+	cfg.UI = raw.UI
+
+	// Ensure theme default is preserved if not set.
+	if cfg.UI.Theme == "" {
+		cfg.UI.Theme = "black"
+	}
+
+	// Validate required fields.
+	if cfg.ClientID == "" {
+		return nil, fmt.Errorf("missing client_id in [spotify] section of %s — "+
+			"create an app at https://developer.spotify.com/dashboard and add it to your config", path)
+	}
+
+	return cfg, nil
+}
+
+// DefaultConfigPath returns the default config file path.
+// It is ~/.config/spotnik/config.toml on all platforms.
+func DefaultConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to current directory if home is unavailable.
+		return "config.toml"
+	}
+	return fmt.Sprintf("%s/.config/spotnik/config.toml", home)
 }
