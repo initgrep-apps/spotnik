@@ -319,6 +319,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// When search overlay is open, forward non-key messages (debounce ticks,
+	// spinner ticks) to the search pane so they can be processed.
+	if a.searchOpen {
+		updated, cmd := a.searchPane.Update(msg)
+		if sp, ok := updated.(*panes.SearchOverlay); ok {
+			a.searchPane = sp
+		}
+		return a, cmd
+	}
+
 	// Forward unhandled messages to the library pane (notification msgs, etc.).
 	updated, cmd := a.libraryPane.Update(msg)
 	if lp, ok := updated.(*panes.LibraryPane); ok {

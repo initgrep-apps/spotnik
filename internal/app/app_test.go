@@ -693,3 +693,28 @@ func TestApp_StatusDismiss_ClearsMsg(t *testing.T) {
 	output := a.View()
 	assert.Contains(t, output, "error to dismiss", "status should persist until dismissed")
 }
+
+// TestApp_SearchDebounceRouted verifies that debounce messages reach the
+// search overlay when it is open (not swallowed by library pane default).
+func TestApp_SearchDebounceRouted(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Open search
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	// Type a character to set the query
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	a = model.(*app.App)
+
+	// Send the debounce message (simulates the 300ms tick firing)
+	debounceMsg := panes.SearchDebounceMsgForTest("x")
+	model, cmd := a.Update(debounceMsg)
+	a = model.(*app.App)
+
+	// The debounce should have been routed to the search overlay,
+	// which should emit a SearchRequestMsg command
+	assert.NotNil(t, cmd, "debounce msg should produce a search request command when routed to overlay")
+}
