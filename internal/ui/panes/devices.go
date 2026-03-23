@@ -240,3 +240,10 @@ func deviceTypeIcon(deviceType string) string {
 // FetchDevicesRequestMsg is emitted by DeviceOverlay.Init() to signal the root
 // app model to fetch the device list and then deliver a devicesLoadedMsg back.
 type FetchDevicesRequestMsg struct{}
+
+// NewDevicesLoadedMsg creates a devicesLoadedMsg to be dispatched by the root app
+// after fetching the device list. This constructor allows the root app to create
+// the unexported message type without importing internal pane details.
+func NewDevicesLoadedMsg(devices []api.Device, err error) tea.Msg {
+	return devicesLoadedMsg{devices: devices, err: err}
+}
