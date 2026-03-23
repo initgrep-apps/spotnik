@@ -1,14 +1,15 @@
+// Package panes contains the Bubble Tea pane models for the Spotnik TUI.
+// Panes read from the central Store and emit request messages for side effects.
+// Panes never call the API directly or import api/ — data flows through messages and store only.
 package panes
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -35,17 +36,13 @@ var timeRangeLabels = map[string]string{
 	"long_term":   "all",
 }
 
-// StatsLoadedMsg is sent when top tracks and top artists have been fetched
-// and written to the store for a given time range.
+// StatsLoadedMsg is sent by the root app when top tracks and top artists
+// have been fetched and written to the store for a given time range.
+// The pane reads the actual data from the store rather than from this message.
 type StatsLoadedMsg struct {
-	TopTracks  []api.Track
-	TopArtists []api.FullArtist
-	TimeRange  string
+	// TimeRange is the time range that was fetched ("short_term", "medium_term", "long_term").
+	TimeRange string
 }
-
-// statsTimeRangeChangedMsg is an internal message sent when the user
-// switches the time range and uncached data needs to be fetched.
-type statsTimeRangeChangedMsg struct{ timeRange string }
 
 // FetchStatsMsg is a request message emitted by StatsView to ask the root app
 // to fetch stats data for the given time range from the API.
@@ -57,10 +54,10 @@ type FetchStatsMsg struct {
 // StatsView is the Bubble Tea model for the stats dashboard.
 // It renders top tracks, top artists, and recently played in a two-pane layout.
 // Time range and section focus are pane-local state; data is read from the Store.
+// NOTE: StatsView never imports api/ — it reads all data through state.Store.
 type StatsView struct {
-	store   *state.Store
-	theme   theme.Theme
-	userAPI *api.UserClient
+	store *state.Store
+	theme theme.Theme
 
 	// activeSection is the currently focused section.
 	activeSection StatsSection
@@ -70,15 +67,6 @@ type StatsView struct {
 
 	// cursor is the selection cursor within the active section.
 	cursor int
-
-	// loading is true while data is being fetched.
-	loading bool
-
-	// topTracks holds the currently displayed top tracks (for the active time range).
-	topTracks []api.Track
-
-	// topArtists holds the currently displayed top artists (for the active time range).
-	topArtists []api.FullArtist
 
 	width  int
 	height int
@@ -94,94 +82,41 @@ func NewStatsView(store *state.Store, t theme.Theme) *StatsView {
 	}
 }
 
-// SetUserAPI injects the Spotify user API client so Init() can fetch data.
-// Called by the root app after construction.
-func (sv *StatsView) SetUserAPI(client *api.UserClient) {
-	sv.userAPI = client
-}
-
 // SetSize updates the view's rendering dimensions.
 func (sv *StatsView) SetSize(w, h int) {
 	sv.width = w
 	sv.height = h
 }
 
-// ActiveSection returns the currently focused section (for testing).
+// ActiveSection returns the currently focused section (exported for testing).
 func (sv *StatsView) ActiveSection() StatsSection {
 	return sv.activeSection
 }
 
-// TimeRange returns the active time range string (for testing).
+// TimeRange returns the active time range string (exported for testing).
 func (sv *StatsView) TimeRange() string {
 	return sv.timeRange
 }
 
-// Cursor returns the current cursor position within the active section (for testing).
+// Cursor returns the current cursor position within the active section (exported for testing).
 func (sv *StatsView) Cursor() int {
 	return sv.cursor
 }
 
-// Init fetches short_term top tracks, top artists, and recently played on first open.
+// Init requests short_term data and recently played from the root app on first open.
 func (sv *StatsView) Init() tea.Cmd {
-	sv.loading = true
+	// Emit request messages for the root app to handle — we never call the API directly.
 	return tea.Batch(
-		sv.fetchStatsCmd("short_term"),
-		sv.fetchRecentlyPlayedCmd(),
+		func() tea.Msg { return FetchStatsMsg{TimeRange: "short_term"} },
+		func() tea.Msg { return FetchRecentlyPlayedRequestMsg{} },
 	)
-}
-
-// fetchStatsCmd returns a command that fetches top tracks and artists for the given time range.
-// It writes results to the store and returns a StatsLoadedMsg.
-func (sv *StatsView) fetchStatsCmd(timeRange string) tea.Cmd {
-	userAPI := sv.userAPI
-	store := sv.store
-	return func() tea.Msg {
-		if userAPI == nil {
-			return StatsLoadedMsg{TimeRange: timeRange}
-		}
-		ctx := context.Background()
-		tracks, err := userAPI.GetTopTracks(ctx, timeRange, 25)
-		if err != nil {
-			return StatsLoadedMsg{TimeRange: timeRange}
-		}
-		artists, err := userAPI.GetTopArtists(ctx, timeRange, 25)
-		if err != nil {
-			return StatsLoadedMsg{TimeRange: timeRange}
-		}
-		store.SetTopTracks(timeRange, tracks)
-		store.SetTopArtists(timeRange, artists)
-		return StatsLoadedMsg{
-			TopTracks:  tracks,
-			TopArtists: artists,
-			TimeRange:  timeRange,
-		}
-	}
-}
-
-// fetchRecentlyPlayedCmd returns a command that fetches recently played tracks.
-func (sv *StatsView) fetchRecentlyPlayedCmd() tea.Cmd {
-	userAPI := sv.userAPI
-	store := sv.store
-	return func() tea.Msg {
-		if userAPI == nil {
-			return RecentlyPlayedLoadedMsg{}
-		}
-		items, err := userAPI.GetRecentlyPlayed(context.Background(), 50)
-		if err != nil {
-			return RecentlyPlayedLoadedMsg{}
-		}
-		store.SetRecentlyPlayed(items)
-		return RecentlyPlayedLoadedMsg{}
-	}
 }
 
 // Update handles all messages for the stats view.
 func (sv *StatsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case StatsLoadedMsg:
-		sv.loading = false
-		sv.topTracks = m.TopTracks
-		sv.topArtists = m.TopArtists
+		// Data is now in store; update local time range and reset cursor if range changed.
 		if m.TimeRange != "" {
 			sv.timeRange = m.TimeRange
 		}
@@ -248,9 +183,9 @@ func (sv *StatsView) moveCursorUp() {
 func (sv *StatsView) activeSectionLen() int {
 	switch sv.activeSection {
 	case StatsSectionTopTracks:
-		return len(sv.topTracks)
+		return len(sv.store.TopTracks(sv.timeRange))
 	case StatsSectionTopArtists:
-		return len(sv.topArtists)
+		return len(sv.store.TopArtists(sv.timeRange))
 	case StatsSectionRecentlyPlayed:
 		return len(sv.store.RecentlyPlayed())
 	}
@@ -261,27 +196,29 @@ func (sv *StatsView) activeSectionLen() int {
 func (sv *StatsView) handleEnter() (tea.Model, tea.Cmd) {
 	switch sv.activeSection {
 	case StatsSectionTopTracks:
-		if sv.cursor < len(sv.topTracks) {
-			track := sv.topTracks[sv.cursor]
+		tracks := sv.store.TopTracks(sv.timeRange)
+		if sv.cursor < len(tracks) {
+			uri := tracks[sv.cursor].URI
 			return sv, func() tea.Msg {
-				return PlayTrackMsg{TrackURI: track.URI}
+				return PlayTrackMsg{TrackURI: uri}
 			}
 		}
 
 	case StatsSectionTopArtists:
-		if sv.cursor < len(sv.topArtists) {
-			artist := sv.topArtists[sv.cursor]
+		artists := sv.store.TopArtists(sv.timeRange)
+		if sv.cursor < len(artists) {
+			uri := artists[sv.cursor].URI
 			return sv, func() tea.Msg {
-				return PlayContextMsg{ContextURI: artist.URI}
+				return PlayContextMsg{ContextURI: uri}
 			}
 		}
 
 	case StatsSectionRecentlyPlayed:
 		items := sv.store.RecentlyPlayed()
 		if sv.cursor < len(items) {
-			track := items[sv.cursor].Track
+			uri := items[sv.cursor].Track.URI
 			return sv, func() tea.Msg {
-				return PlayTrackMsg{TrackURI: track.URI}
+				return PlayTrackMsg{TrackURI: uri}
 			}
 		}
 	}
@@ -289,7 +226,8 @@ func (sv *StatsView) handleEnter() (tea.Model, tea.Cmd) {
 	return sv, nil
 }
 
-// handleCycleRange advances to the next time range, checking the cache first.
+// handleCycleRange advances to the next time range, checking the store cache first.
+// On a cache hit, renders immediately with no fetch. On a miss, emits FetchStatsMsg.
 func (sv *StatsView) handleCycleRange() (tea.Model, tea.Cmd) {
 	// Find current index in the cycle.
 	currentIdx := 0
@@ -303,34 +241,21 @@ func (sv *StatsView) handleCycleRange() (tea.Model, tea.Cmd) {
 	sv.timeRange = nextRange
 	sv.cursor = 0
 
-	// Check if data for this range is already cached.
+	// Check if data for this range is already cached in the store.
 	if sv.store.TopTracks(nextRange) != nil && sv.store.TopArtists(nextRange) != nil {
-		// Cache hit — load from store immediately, no fetch.
-		sv.topTracks = sv.store.TopTracks(nextRange)
-		sv.topArtists = sv.store.TopArtists(nextRange)
+		// Cache hit — data is in store, render immediately with no fetch command.
 		return sv, nil
 	}
 
-	// Cache miss — trigger fetch.
-	sv.loading = true
-	return sv, sv.fetchStatsCmd(nextRange)
+	// Cache miss — emit a request for the root app to fetch from the API.
+	timeRange := nextRange
+	return sv, func() tea.Msg { return FetchStatsMsg{TimeRange: timeRange} }
 }
 
 // View renders the stats dashboard. It is pure — no external calls.
+// Always renders the full dashboard structure; sections show empty states when data is absent.
 func (sv *StatsView) View() string {
-	if sv.loading && len(sv.topTracks) == 0 && len(sv.topArtists) == 0 {
-		return sv.renderLoading()
-	}
 	return sv.renderDashboard()
-}
-
-// renderLoading renders a loading spinner/message.
-func (sv *StatsView) renderLoading() string {
-	header := sv.renderSectionHeader("STATS", false)
-	spinner := lipgloss.NewStyle().
-		Foreground(sv.theme.TextMuted()).
-		Render("  Loading stats...")
-	return strings.Join([]string{header, spinner}, "\n")
 }
 
 // renderDashboard renders the full stats layout.
@@ -376,14 +301,15 @@ func (sv *StatsView) renderTopTracksSection() string {
 	sb.WriteString(sv.renderTimeRangeToggle(focused))
 	sb.WriteString("\n")
 
-	if len(sv.topTracks) == 0 {
+	tracks := sv.store.TopTracks(sv.timeRange)
+	if len(tracks) == 0 {
 		sb.WriteString(lipgloss.NewStyle().
 			Foreground(sv.theme.TextMuted()).
 			Render("  No listening data for this period"))
 		return sb.String()
 	}
 
-	for i, track := range sv.topTracks {
+	for i, track := range tracks {
 		artistName := ""
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
@@ -416,14 +342,15 @@ func (sv *StatsView) renderTopArtistsSection() string {
 	sb.WriteString(sv.renderTimeRangeToggle(focused))
 	sb.WriteString("\n")
 
-	if len(sv.topArtists) == 0 {
+	artists := sv.store.TopArtists(sv.timeRange)
+	if len(artists) == 0 {
 		sb.WriteString(lipgloss.NewStyle().
 			Foreground(sv.theme.TextMuted()).
 			Render("  No listening data for this period"))
 		return sb.String()
 	}
 
-	for i, artist := range sv.topArtists {
+	for i, artist := range artists {
 		row := fmt.Sprintf("  %2d  %s", i+1, artist.Name)
 
 		if focused && i == sv.cursor {

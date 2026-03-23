@@ -214,11 +214,8 @@ func (a *App) openStats() (*App, tea.Cmd) {
 	if a.statsPane == nil {
 		// First open: construct and init the stats pane.
 		sv := panes.NewStatsView(a.store, a.theme)
-		if a.userAPI != nil {
-			sv.SetUserAPI(a.userAPI)
-		}
 		if a.width > 0 {
-			sv.SetSize(a.width, a.height-4) // subtract header + status bar
+			sv.SetSize(a.width, a.height-4) // subtract header + status bar rows
 		}
 		a.statsPane = sv
 		return a, sv.Init()
@@ -854,11 +851,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 		}
 		store.SetTopTracks(timeRange, tracks)
 		store.SetTopArtists(timeRange, artists)
-		return panes.StatsLoadedMsg{
-			TopTracks:  tracks,
-			TopArtists: artists,
-			TimeRange:  timeRange,
-		}
+		return panes.StatsLoadedMsg{TimeRange: timeRange}
 	}
 }
 

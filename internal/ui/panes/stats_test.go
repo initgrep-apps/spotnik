@@ -50,12 +50,9 @@ func TestStatsView_Init_FetchesShortTerm(t *testing.T) {
 	cmd := sv.Init()
 	require.NotNil(t, cmd, "Init should return a non-nil batch command")
 
-	// The command is a batch — running it should produce a message.
-	// We verify that the command is not nil (indicating data fetching started).
-	msg := cmd()
-	// The command may be a batch, which returns nil on direct call.
-	// The key invariant is that Init() returns a command, not nil.
-	_ = msg
+	// The command is a batch; running it returns nil (batches are opaque).
+	// The key invariant is that Init() is non-nil (indicating requests were queued).
+	_ = cmd
 }
 
 // TestStatsView_View_TopTracks verifies the view renders a numbered track list.
@@ -63,12 +60,8 @@ func TestStatsView_View_TopTracks(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	// Send the stats loaded message.
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	// Notify the pane that data is loaded (data is in store).
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 	require.NotNil(t, sv)
 
@@ -83,11 +76,7 @@ func TestStatsView_View_TopArtists(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 	require.NotNil(t, sv)
 
@@ -102,11 +91,7 @@ func TestStatsView_View_RecentlyPlayed(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 
 	updated, _ = sv.Update(panes.RecentlyPlayedLoadedMsg{})
@@ -125,8 +110,7 @@ func TestStatsView_View_EmptySection(t *testing.T) {
 	view := sv.View()
 	// At minimum the view should render without crashing.
 	assert.NotEmpty(t, view)
-	// With no data, the view should show loading or empty state indicators.
-	// (At least one section header should be present.)
+	// With no data, the view should show section headers with no-data messages.
 	assert.Contains(t, view, "TOP TRACKS")
 }
 
@@ -136,11 +120,7 @@ func TestStatsView_Update_Tab(t *testing.T) {
 	prefillStatsStore(s)
 
 	// Load data.
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 	require.NotNil(t, sv)
 
@@ -169,11 +149,7 @@ func TestStatsView_Update_JK(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 	require.NotNil(t, sv)
 
@@ -203,11 +179,7 @@ func TestStatsView_Update_Enter_PlaysTrack(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 	require.NotNil(t, sv)
 
@@ -230,11 +202,7 @@ func TestStatsView_Update_Enter_PlaysArtist(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 
 	// Tab to artists section.
@@ -259,34 +227,36 @@ func TestStatsView_Update_F_CyclesRange(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 
 	assert.Equal(t, "short_term", sv.TimeRange())
 
 	fMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}
 
-	// f → medium_term.
+	// f → medium_term (cache miss — returns a FetchStatsMsg cmd).
 	updated, _ = sv.Update(fMsg)
 	sv, _ = updated.(*panes.StatsView)
 	assert.Equal(t, "medium_term", sv.TimeRange())
 
-	// f → long_term.
+	// Simulate medium_term data arriving.
+	s.SetTopTracks("medium_term", []api.Track{{ID: "mt1", Name: "Medium Track", URI: "spotify:track:mt1"}})
+	s.SetTopArtists("medium_term", []api.FullArtist{{ID: "ma1", Name: "Medium Artist", URI: "spotify:artist:ma1"}})
+	updated, _ = sv.Update(panes.StatsLoadedMsg{TimeRange: "medium_term"})
+	sv, _ = updated.(*panes.StatsView)
+
+	// f → long_term (cache miss).
 	updated, _ = sv.Update(fMsg)
 	sv, _ = updated.(*panes.StatsView)
 	assert.Equal(t, "long_term", sv.TimeRange())
 
-	// f → wraps back to short_term.
+	// f → wraps back to short_term (already in cache).
 	updated, _ = sv.Update(fMsg)
 	sv, _ = updated.(*panes.StatsView)
 	assert.Equal(t, "short_term", sv.TimeRange())
 }
 
-// TestStatsView_TimeRange_CacheHit verifies that when data is cached, no fetch is issued.
+// TestStatsView_TimeRange_CacheHit verifies that when data is cached, no fetch cmd is issued.
 func TestStatsView_TimeRange_CacheHit(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
@@ -300,11 +270,7 @@ func TestStatsView_TimeRange_CacheHit(t *testing.T) {
 	})
 
 	// Load initial short_term data.
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 
 	// Switch to medium_term via f key.
@@ -323,11 +289,7 @@ func TestStatsView_TimeRange_CacheMiss(t *testing.T) {
 	prefillStatsStore(s)
 
 	// Load initial short_term data.
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 
 	// Switch to medium_term (not cached).
@@ -335,23 +297,25 @@ func TestStatsView_TimeRange_CacheMiss(t *testing.T) {
 	_, cmd := sv.Update(fMsg)
 
 	// With cache miss, a fetch command should be issued.
-	assert.NotNil(t, cmd, "uncached range should issue a fetch command")
+	require.NotNil(t, cmd, "uncached range should issue a fetch command")
+
+	// The command should return a FetchStatsMsg.
+	msg := cmd()
+	fetchMsg, ok := msg.(panes.FetchStatsMsg)
+	require.True(t, ok, "uncached range cmd should return FetchStatsMsg, got %T", msg)
+	assert.Equal(t, "medium_term", fetchMsg.TimeRange)
 }
 
-// TestStatsView_View_ActiveRangeHighlighted verifies the active range label appears in the view.
+// TestStatsView_View_ActiveRangeHighlighted verifies the time range labels appear in the view.
 func TestStatsView_View_ActiveRangeHighlighted(t *testing.T) {
 	sv, s := newStatsView()
 	prefillStatsStore(s)
 
-	updated, _ := sv.Update(panes.StatsLoadedMsg{
-		TopTracks:  s.TopTracks("short_term"),
-		TopArtists: s.TopArtists("short_term"),
-		TimeRange:  "short_term",
-	})
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
 	sv, _ = updated.(*panes.StatsView)
 
 	view := sv.View()
-	// Active range label should appear in the view.
+	// All range labels should appear in the view.
 	assert.Contains(t, view, "4wk", "short_term should display as 4wk")
 	assert.Contains(t, view, "6mo", "medium_term should display as 6mo")
 	assert.Contains(t, view, "all", "long_term should display as all")
