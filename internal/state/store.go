@@ -27,6 +27,9 @@ type Store struct {
 	likedLoaded    bool
 	recentlyPlayed []api.PlayHistory
 
+	// Queue data
+	queue []api.Track
+
 	// Search data
 	searchResults *api.SearchResult
 	searchQuery   string
@@ -170,6 +173,20 @@ func (s *Store) SetRecentlyPlayed(items []api.PlayHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recentlyPlayed = items
+}
+
+// Queue returns the upcoming tracks in the user's play queue.
+func (s *Store) Queue() []api.Track {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.queue
+}
+
+// SetQueue updates the queue tracks in the store.
+func (s *Store) SetQueue(tracks []api.Track) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.queue = tracks
 }
 
 // SearchResults returns the most recent search result, or nil if no search has completed.
