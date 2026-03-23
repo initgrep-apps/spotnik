@@ -1718,7 +1718,7 @@ func TestApp_SplashScreen_ShownOnStartup(t *testing.T) {
 	assert.Contains(t, output, "v1.1.0", "splash should show version")
 }
 
-func TestApp_SplashScreen_DismissedOnPlaybackData(t *testing.T) {
+func TestApp_SplashScreen_StaysOnPlaybackData(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg)
 	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
@@ -1727,10 +1727,10 @@ func TestApp_SplashScreen_DismissedOnPlaybackData(t *testing.T) {
 	output := a.View()
 	assert.Contains(t, output, "v1.1.0")
 
-	// Playback data arrives — splash should dismiss.
+	// Playback data arrives — splash should STAY for the full 5s duration.
 	model, _ := a.Update(panes.PlaybackStateFetchedMsg{})
 	a = model.(*app.App)
 
 	output = a.View()
-	assert.NotContains(t, output, "v1.1.0", "splash should be dismissed after playback data")
+	assert.Contains(t, output, "v1.1.0", "splash should still be visible — only timer dismisses it")
 }

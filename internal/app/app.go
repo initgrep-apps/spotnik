@@ -484,10 +484,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
-		// Dismiss splash screen when first playback data arrives.
-		if a.currentView == viewSplash {
-			a.currentView = viewMain
-		}
+		// Data fetched during splash is stored but splash stays visible
+		// for the full 5s duration — the splashDismissMsg timer handles transition.
 		updatedPane, cmd := a.playerPane.Update(m)
 		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
 			a.playerPane = pp
