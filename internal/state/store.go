@@ -26,6 +26,11 @@ type Store struct {
 	likedTotal     int
 	likedLoaded    bool
 	recentlyPlayed []api.PlayHistory
+
+	// Search data
+	searchResults *api.SearchResult
+	searchQuery   string
+	searchLoading bool
 }
 
 // New returns an empty Store with no playback state.
@@ -165,4 +170,46 @@ func (s *Store) SetRecentlyPlayed(items []api.PlayHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recentlyPlayed = items
+}
+
+// SearchResults returns the most recent search result, or nil if no search has completed.
+func (s *Store) SearchResults() *api.SearchResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchResults
+}
+
+// SetSearchResults updates the search results in the store.
+func (s *Store) SetSearchResults(results *api.SearchResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchResults = results
+}
+
+// SearchQuery returns the most recent search query string.
+func (s *Store) SearchQuery() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchQuery
+}
+
+// SetSearchQuery updates the current search query string in the store.
+func (s *Store) SetSearchQuery(query string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchQuery = query
+}
+
+// SearchLoading returns true while a search API call is in flight.
+func (s *Store) SearchLoading() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchLoading
+}
+
+// SetSearchLoading sets the search loading flag.
+func (s *Store) SetSearchLoading(loading bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchLoading = loading
 }
