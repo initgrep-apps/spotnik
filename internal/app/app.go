@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -33,6 +34,7 @@ type viewMode int
 const (
 	viewSplash    viewMode = iota // Splash screen shown on startup
 	viewMain                      // three-pane Library | Player | Queue layout
+	viewAuth                      // Auth panel shown when user needs to authenticate
 	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
 	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
 )
@@ -86,6 +88,21 @@ type App struct {
 
 	// volumeStep is the percentage change per volume up/down keypress.
 	volumeStep int
+
+	// needsAuth is true when the user is not authenticated and must go through the auth flow.
+	needsAuth bool
+
+	// clientID is the Spotify OAuth client ID, needed for the TUI auth flow.
+	clientID string
+
+	// tokenStore is the keychain token store, needed for the TUI auth flow.
+	tokenStore keychain.TokenStore
+
+	// authURL is the Spotify authorization URL shown in the auth panel.
+	authURL string
+
+	// authStatus is the status message shown in the auth panel.
+	authStatus string
 }
 
 // statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
@@ -94,8 +111,16 @@ type statusDismissMsg struct{}
 // splashDismissMsg is sent after 2 seconds to close the splash screen.
 type splashDismissMsg struct{}
 
+// AppOptions carries optional startup configuration into the app.
+// Zero value means the user is already authenticated and no auth flow is needed.
+type AppOptions struct {
+	NeedsAuth  bool
+	ClientID   string
+	TokenStore keychain.TokenStore
+}
+
 // New creates a new App, loading the theme from cfg.UI.Theme.
-func New(cfg *config.Config) *App {
+func New(cfg *config.Config, opts AppOptions) *App {
 	t := theme.Load(cfg.UI.Theme)
 	s := state.New()
 
@@ -121,6 +146,9 @@ func New(cfg *config.Config) *App {
 		focus:       focusPlayer,
 		currentView: viewSplash,
 		volumeStep:  volStep,
+		needsAuth:   opts.NeedsAuth,
+		clientID:    opts.ClientID,
+		tokenStore:  opts.TokenStore,
 	}
 }
 
@@ -174,6 +202,11 @@ func (a *App) PlaylistViewOpen() bool {
 	return a.currentView == viewPlaylists
 }
 
+// AuthViewOpen returns true while the auth panel is the active view.
+func (a *App) AuthViewOpen() bool {
+	return a.currentView == viewAuth
+}
+
 // SearchOpen returns true while the search overlay is visible.
 func (a *App) SearchOpen() bool {
 	return a.searchOpen
@@ -199,17 +232,27 @@ func (a *App) QueueFocused() bool {
 	return a.focus == focusQueue
 }
 
-// Init starts the polling loop and fetches initial playback state.
+// Init starts the splash timer. If the user is already authenticated,
+// it also starts data fetching and the polling loop. If not, those are
+// deferred until auth succeeds.
 func (a *App) Init() tea.Cmd {
+	splashTimer := tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
+		return splashDismissMsg{}
+	})
+
+	if a.needsAuth {
+		// Unauthenticated: only show splash, defer everything else.
+		return splashTimer
+	}
+
+	// Authenticated: start data fetching alongside splash.
 	return tea.Batch(
 		fetchPlaybackStateCmd(a.player, a.store),
 		a.libraryPane.Init(),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
-		tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
-			return splashDismissMsg{}
-		}),
+		splashTimer,
 	)
 }
 
@@ -290,8 +333,51 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
+			if a.needsAuth {
+				a.currentView = viewAuth
+				a.authStatus = "Opening browser for authorization..."
+				return a, prepareAuthCmd(a.clientID)
+			}
 			a.currentView = viewMain
 		}
+		return a, nil
+
+	case authPreparedMsg:
+		a.authURL = m.authURL
+		if m.browserErr != nil {
+			a.authStatus = "Could not open browser. Please visit the URL above."
+		} else {
+			a.authStatus = "Waiting for authorization in browser..."
+		}
+		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh, m.serverClose)
+
+	case authSuccessMsg:
+		a.needsAuth = false
+		a.currentView = viewMain
+		// Inject API clients now that we have a token.
+		player := api.NewPlayer("", m.accessToken)
+		a.player = player
+		library := api.NewLibraryClient("", m.accessToken)
+		a.library = library
+		search := api.NewSearchClient("", m.accessToken)
+		a.search = search
+		devices := api.NewDevicesClient("", m.accessToken)
+		a.devices = devices
+		userAPI := api.NewUserClient("", m.accessToken)
+		a.userAPI = userAPI
+		playlistsAPI := api.NewPlaylistsClient("", m.accessToken)
+		a.playlistsAPI = playlistsAPI
+		// Start data fetching and tick loop.
+		return a, tea.Batch(
+			fetchPlaybackStateCmd(a.player, a.store),
+			a.libraryPane.Init(),
+			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+				return panes.TickMsg{}
+			}),
+		)
+
+	case authErrorMsg:
+		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
 		return a, nil
 
 	case panes.SearchClosedMsg:
@@ -364,6 +450,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchPane = sp
 			}
 			return a, cmd
+		}
+
+		// During auth, only allow quit keys — ignore everything else.
+		if a.currentView == viewAuth {
+			if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") || m.Type == tea.KeyEsc {
+				return a, tea.Quit
+			}
+			return a, nil
 		}
 
 		// Global: q always quits.
@@ -1106,6 +1200,11 @@ func (a *App) View() string {
 			return a.renderSplash()
 		}
 		// No size yet — fall through to main view for tests.
+	}
+
+	// Auth panel shown when the user needs to authenticate.
+	if a.currentView == viewAuth {
+		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
 	// Stats view replaces the three-pane layout when active.
