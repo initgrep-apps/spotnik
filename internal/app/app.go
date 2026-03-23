@@ -82,6 +82,9 @@ type App struct {
 
 	// statusMsg is a transient error/info message shown in the status bar for 3–4 seconds.
 	statusMsg string
+
+	// volumeStep is the percentage change per volume up/down keypress.
+	volumeStep int
 }
 
 // statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
@@ -98,6 +101,11 @@ func New(cfg *config.Config) *App {
 	searchPane := panes.NewSearchOverlay(s, t)
 	devicePane := panes.NewDeviceOverlay(s, t)
 
+	volStep := cfg.UI.VolumeStep
+	if volStep <= 0 {
+		volStep = 5
+	}
+
 	return &App{
 		theme:       t,
 		store:       s,
@@ -107,6 +115,7 @@ func New(cfg *config.Config) *App {
 		searchPane:  searchPane,
 		devicePane:  devicePane,
 		focus:       focusPlayer,
+		volumeStep:  volStep,
 	}
 }
 
@@ -468,7 +477,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.PlaybackCmdSentMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			errMsg := m.Err.Error()
+			if strings.Contains(errMsg, "403") {
+				a.statusMsg = "Playback control not available on this device"
+			} else {
+				a.statusMsg = fmt.Sprintf("✗ %s", errMsg)
+			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, a.store),
 				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
@@ -727,6 +741,8 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 	player := a.player
 	store := a.store
 
+	volStep := a.volumeStep
+
 	return func() tea.Msg {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{}
@@ -749,14 +765,22 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 			if ps != nil && ps.Device != nil {
 				vol = ps.Device.VolumePercent
 			}
-			err = player.SetVolume(ctx, vol+5)
+			newVol := vol + volStep
+			if newVol > 100 {
+				newVol = 100
+			}
+			err = player.SetVolume(ctx, newVol)
 		case panes.ActionVolumeDown:
 			ps := store.PlaybackState()
 			vol := 65
 			if ps != nil && ps.Device != nil {
 				vol = ps.Device.VolumePercent
 			}
-			err = player.SetVolume(ctx, vol-5)
+			newVol := vol - volStep
+			if newVol < 0 {
+				newVol = 0
+			}
+			err = player.SetVolume(ctx, newVol)
 		case panes.ActionToggleShuffle:
 			ps := store.PlaybackState()
 			shuffle := false

@@ -140,7 +140,7 @@ func (p *PlayerPane) View() string {
 	return strings.Join(lines, "\n")
 }
 
-// renderEmpty shows the "Nothing playing" empty state.
+// renderEmpty shows the "Nothing playing" empty state, centered in the pane.
 func (p *PlayerPane) renderEmpty() string {
 	headerStyle := lipgloss.NewStyle().Foreground(p.theme.SectionHeader()).Bold(true)
 	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
@@ -148,18 +148,19 @@ func (p *PlayerPane) renderEmpty() string {
 	header := headerStyle.Render("NOW PLAYING")
 	divider := strings.Repeat("─", paneMax(p.width-4, 20))
 
-	lines := []string{
-		header,
-		divider,
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		mutedStyle.Render("Nothing playing"),
 		"",
-		mutedStyle.Render("        Nothing playing"),
-		"",
-		mutedStyle.Render("   Open Spotify on a device"),
-		mutedStyle.Render("   and start playing music"),
-		"",
-	}
+		mutedStyle.Render("Open Spotify on a device"),
+		mutedStyle.Render("and start playing music"),
+	)
 
-	return strings.Join(lines, "\n")
+	// Center the content block within the available pane dimensions.
+	bodyHeight := paneMax(p.height-4, 6) // subtract header + divider + padding
+	centered := lipgloss.Place(paneMax(p.width-4, 20), bodyHeight,
+		lipgloss.Center, lipgloss.Center, content)
+
+	return header + "\n" + divider + "\n" + centered
 }
 
 // handleTick processes a TickMsg: increments local progress when playing.

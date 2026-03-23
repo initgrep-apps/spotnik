@@ -119,3 +119,8 @@ func TestDefaultConfigPath_ContainsSpotnik(t *testing.T) {
 			filepath.Base(path) == "config.toml",
 		"path should end with config.toml, got: %s", path)
 }
+
+func TestDefault_VolumeStep(t *testing.T) {
+	cfg := config.Default()
+	assert.Equal(t, 5, cfg.UI.VolumeStep, "default volume step should be 5")
+}
