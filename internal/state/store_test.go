@@ -63,3 +63,77 @@ func TestStore_SetGetActiveDevice(t *testing.T) {
 	assert.Equal(t, "MacBook Pro", got.Name)
 	assert.Equal(t, 70, got.VolumePercent)
 }
+
+func TestStore_SetGetPlaylists(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.Playlists())
+	assert.Equal(t, 0, s.PlaylistsTotal())
+
+	playlists := []api.SimplePlaylist{
+		{ID: "pl1", Name: "Chill Vibes", URI: "spotify:playlist:pl1"},
+		{ID: "pl2", Name: "Workout Mix", URI: "spotify:playlist:pl2"},
+	}
+	s.SetPlaylists(playlists)
+	s.SetPlaylistsTotal(42)
+
+	got := s.Playlists()
+	assert.Len(t, got, 2)
+	assert.Equal(t, "pl1", got[0].ID)
+	assert.Equal(t, "Chill Vibes", got[0].Name)
+	assert.Equal(t, 42, s.PlaylistsTotal())
+}
+
+func TestStore_SetGetSavedAlbums(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.SavedAlbums())
+	assert.False(t, s.AlbumsLoaded())
+
+	albums := []api.SavedAlbum{
+		{AddedAt: "2024-01-15T10:30:00Z", Album: api.FullAlbum{ID: "album-1", Name: "After Hours"}},
+	}
+	s.SetSavedAlbums(albums)
+
+	got := s.SavedAlbums()
+	assert.Len(t, got, 1)
+	assert.Equal(t, "album-1", got[0].Album.ID)
+	assert.True(t, s.AlbumsLoaded(), "AlbumsLoaded should be true after SetSavedAlbums")
+}
+
+func TestStore_SetGetLikedTracks(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.LikedTracks())
+	assert.False(t, s.LikedLoaded())
+	assert.Equal(t, 0, s.LikedTotal())
+
+	tracks := []api.SavedTrack{
+		{AddedAt: "2024-02-20T14:00:00Z", Track: api.Track{ID: "track-1", Name: "Blinding Lights"}},
+	}
+	s.SetLikedTracks(tracks)
+	s.SetLikedTotal(287)
+
+	got := s.LikedTracks()
+	assert.Len(t, got, 1)
+	assert.Equal(t, "track-1", got[0].Track.ID)
+	assert.True(t, s.LikedLoaded(), "LikedLoaded should be true after SetLikedTracks")
+	assert.Equal(t, 287, s.LikedTotal())
+}
+
+func TestStore_SetGetRecentlyPlayed(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.RecentlyPlayed())
+
+	items := []api.PlayHistory{
+		{PlayedAt: "2024-03-01T22:15:00Z", Track: api.Track{ID: "track-xyz", Name: "Blinding Lights"}},
+		{PlayedAt: "2024-03-01T22:10:00Z", Track: api.Track{ID: "track-abc", Name: "Save Your Tears"}},
+	}
+	s.SetRecentlyPlayed(items)
+
+	got := s.RecentlyPlayed()
+	assert.Len(t, got, 2)
+	assert.Equal(t, "track-xyz", got[0].Track.ID)
+	assert.Equal(t, "2024-03-01T22:15:00Z", got[0].PlayedAt)
+}

@@ -1,0 +1,13 @@
+{
+  "id": "playlist-abc123",
+  "name": "Chill Vibes",
+  "uri": "spotify:playlist:playlist-abc123",
+  "owner": {
+    "id": "user-irshad",
+    "display_name": "irshad"
+  },
+  "tracks": {
+    "total": 42
+  },
+  "public": true
+}

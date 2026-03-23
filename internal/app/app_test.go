@@ -177,3 +177,151 @@ func TestApp_StoreIsAccessible(t *testing.T) {
 	s.SetActiveDevice(&api.Device{Name: "Test Device"})
 	assert.Equal(t, "Test Device", a.Store().ActiveDevice().Name)
 }
+
+// TestApp_LibraryPaneRouting verifies Tab moves focus from player to library.
+func TestApp_LibraryPaneRouting(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// By default, player pane is focused. Press Tab to move to library.
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	updatedModel, _ := a.Update(tabMsg)
+
+	require.NotNil(t, updatedModel)
+	appModel := updatedModel.(*app.App)
+
+	// Library pane should now be focused
+	assert.True(t, appModel.LibraryFocused(), "Tab should move focus to library pane")
+	assert.False(t, appModel.PlayerFocused(), "Tab should unfocus player pane")
+}
+
+// TestApp_LibraryPlay_UpdatesPlayback verifies that Enter on a playlist in the
+// library produces a play command that flows through the root model.
+func TestApp_LibraryPlay_UpdatesPlayback(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Focus library pane
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	model, _ := a.Update(tabMsg)
+	a = model.(*app.App)
+
+	// Pre-populate playlists in store
+	a.Store().SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl1", Name: "Test Playlist", URI: "spotify:playlist:pl1"},
+	})
+
+	// Expand playlists section
+	expandMsg := panes.LibraryExpandMsg(panes.SectionPlaylists)
+	model, _ = a.Update(expandMsg)
+	a = model.(*app.App)
+
+	// Move down to playlist item and press Enter
+	model, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	a = model.(*app.App)
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// The command should be non-nil — play context was triggered
+	assert.NotNil(t, cmd, "Enter on library playlist should produce a play command")
+}
+
+// TestApp_LibraryPane_View_ShowsInOutput verifies that the library pane
+// appears in the app's View() output.
+func TestApp_LibraryPane_View_ShowsInOutput(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	output := a.View()
+	assert.Contains(t, output, "LIBRARY", "app view should include the library pane")
+}
+
+// TestApp_SetPlayer verifies that SetPlayer injects the player client.
+func TestApp_SetPlayer(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	player := api.NewPlayer("http://localhost", "test-token")
+	a.SetPlayer(player)
+
+	// No panic — player was set. Verify by pressing space (produces a command).
+	a.Store().SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		Item:      &api.Track{ID: "t1", Name: "Track", DurationMs: 200000, Artists: []api.Artist{{Name: "Artist"}}},
+		Device:    &api.Device{VolumePercent: 60},
+	})
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	assert.NotNil(t, cmd, "space key should produce a command when player is set")
+}
+
+// TestApp_SetLibrary verifies that SetLibrary injects the library client.
+func TestApp_SetLibrary(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	library := api.NewLibraryClient("http://localhost", "test-token")
+	a.SetLibrary(library)
+	// No panic — library was set
+}
+
+// TestApp_TabFocusRotation verifies Tab cycles focus between panes.
+func TestApp_TabFocusRotation(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Start: player focused
+	assert.True(t, a.PlayerFocused())
+	assert.False(t, a.LibraryFocused())
+
+	// Tab → library focused
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	m, _ := a.Update(tabMsg)
+	a = m.(*app.App)
+	assert.True(t, a.LibraryFocused())
+	assert.False(t, a.PlayerFocused())
+
+	// Tab again → player focused
+	m, _ = a.Update(tabMsg)
+	a = m.(*app.App)
+	assert.True(t, a.PlayerFocused())
+	assert.False(t, a.LibraryFocused())
+}
+
+// TestApp_PlayContextMsg_DispatchesPlayCmd verifies that a PlayContextMsg
+// from the library pane produces a play command.
+func TestApp_PlayContextMsg_DispatchesPlayCmd(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	playMsg := panes.PlayContextMsg{ContextURI: "spotify:playlist:pl1"}
+	_, cmd := a.Update(playMsg)
+
+	assert.NotNil(t, cmd, "PlayContextMsg should produce a play command")
+}
+
+// TestApp_PlayTrackMsg_DispatchesPlayCmd verifies that a PlayTrackMsg
+// from the library pane produces a play command.
+func TestApp_PlayTrackMsg_DispatchesPlayCmd(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	playMsg := panes.PlayTrackMsg{TrackURI: "spotify:track:t1"}
+	_, cmd := a.Update(playMsg)
+
+	assert.NotNil(t, cmd, "PlayTrackMsg should produce a play command")
+}
+
+// TestApp_LibraryLoadedMsg_ForwardedToLibraryPane verifies that library data messages
+// are forwarded to the library pane.
+func TestApp_LibraryLoadedMsg_ForwardedToLibraryPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg)
+
+	// Send a library expand message to the app — it should be forwarded
+	expandMsg := panes.LibraryExpandMsg(panes.SectionAlbums)
+	m, cmd := a.Update(expandMsg)
+	require.NotNil(t, m)
+	// Albums are not cached — should return a fetch command
+	assert.NotNil(t, cmd, "expanding uncached albums should return a fetch command")
+}

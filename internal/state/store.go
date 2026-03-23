@@ -16,6 +16,16 @@ type Store struct {
 	mu            sync.RWMutex
 	playbackState *api.PlaybackState
 	activeDevice  *api.Device
+
+	// Library data
+	playlists      []api.SimplePlaylist
+	playlistsTotal int
+	savedAlbums    []api.SavedAlbum
+	albumsLoaded   bool
+	likedTracks    []api.SavedTrack
+	likedTotal     int
+	likedLoaded    bool
+	recentlyPlayed []api.PlayHistory
 }
 
 // New returns an empty Store with no playback state.
@@ -53,4 +63,106 @@ func (s *Store) SetActiveDevice(device *api.Device) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.activeDevice = device
+}
+
+// Playlists returns the user's saved playlists.
+func (s *Store) Playlists() []api.SimplePlaylist {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playlists
+}
+
+// SetPlaylists updates the saved playlists in the store.
+func (s *Store) SetPlaylists(playlists []api.SimplePlaylist) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlists = playlists
+}
+
+// PlaylistsTotal returns the total number of playlists (for pagination).
+func (s *Store) PlaylistsTotal() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playlistsTotal
+}
+
+// SetPlaylistsTotal updates the total playlists count for pagination.
+func (s *Store) SetPlaylistsTotal(total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlistsTotal = total
+}
+
+// SavedAlbums returns the user's saved albums.
+func (s *Store) SavedAlbums() []api.SavedAlbum {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.savedAlbums
+}
+
+// SetSavedAlbums updates the saved albums in the store.
+// Also marks albumsLoaded = true.
+func (s *Store) SetSavedAlbums(albums []api.SavedAlbum) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.savedAlbums = albums
+	s.albumsLoaded = true
+}
+
+// AlbumsLoaded returns true if saved albums have been fetched at least once.
+func (s *Store) AlbumsLoaded() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.albumsLoaded
+}
+
+// LikedTracks returns the user's liked tracks.
+func (s *Store) LikedTracks() []api.SavedTrack {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedTracks
+}
+
+// SetLikedTracks updates the liked tracks in the store.
+// Also marks likedLoaded = true.
+func (s *Store) SetLikedTracks(tracks []api.SavedTrack) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedTracks = tracks
+	s.likedLoaded = true
+}
+
+// LikedTotal returns the total number of liked tracks (for pagination).
+func (s *Store) LikedTotal() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedTotal
+}
+
+// SetLikedTotal updates the total liked tracks count for pagination.
+func (s *Store) SetLikedTotal(total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedTotal = total
+}
+
+// LikedLoaded returns true if liked tracks have been fetched at least once.
+func (s *Store) LikedLoaded() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedLoaded
+}
+
+// RecentlyPlayed returns the recently played track history.
+func (s *Store) RecentlyPlayed() []api.PlayHistory {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.recentlyPlayed
+}
+
+// SetRecentlyPlayed updates the recently played history in the store.
+func (s *Store) SetRecentlyPlayed(items []api.PlayHistory) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recentlyPlayed = items
 }
