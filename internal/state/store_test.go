@@ -251,3 +251,37 @@ func TestStore_SetGetTopArtists(t *testing.T) {
 	// Different range should still be nil.
 	assert.Nil(t, s.TopArtists("long_term"))
 }
+
+func TestStore_PlaylistTracks_InitiallyNil(t *testing.T) {
+	s := New()
+	assert.Nil(t, s.PlaylistTracks("pl-1"), "before any set, PlaylistTracks should return nil")
+}
+
+func TestStore_SetGetPlaylistTracks(t *testing.T) {
+	s := New()
+
+	tracks := []api.Track{
+		{ID: "t1", Name: "Blinding Lights", URI: "spotify:track:t1"},
+		{ID: "t2", Name: "Levitating", URI: "spotify:track:t2"},
+	}
+	s.SetPlaylistTracks("pl-1", tracks)
+
+	got := s.PlaylistTracks("pl-1")
+	require.Len(t, got, 2)
+	assert.Equal(t, "Blinding Lights", got[0].Name)
+	assert.Equal(t, "Levitating", got[1].Name)
+
+	// Different playlist should still be nil.
+	assert.Nil(t, s.PlaylistTracks("pl-99"))
+}
+
+func TestStore_PlayingPlaylistID_Default(t *testing.T) {
+	s := New()
+	assert.Equal(t, "", s.PlayingPlaylistID(), "initial playing playlist ID should be empty")
+}
+
+func TestStore_SetGetPlayingPlaylistID(t *testing.T) {
+	s := New()
+	s.SetPlayingPlaylistID("pl-abc")
+	assert.Equal(t, "pl-abc", s.PlayingPlaylistID())
+}

@@ -153,3 +153,75 @@ type DeviceTransferredMsg struct {
 	DeviceID string
 	Err      error
 }
+
+// FetchPlaylistTracksRequestMsg is emitted by PlaylistManager when it needs to
+// load tracks for a specific playlist from the API.
+type FetchPlaylistTracksRequestMsg struct {
+	PlaylistID string
+}
+
+// PlaylistTracksLoadedMsg is sent by the root app after playlist tracks have been
+// fetched and written to the store. The PlaylistManager reads from store on receipt.
+type PlaylistTracksLoadedMsg struct {
+	PlaylistID string
+}
+
+// PlaylistCreateRequestMsg is emitted by PlaylistManager when the user submits
+// a new playlist name. The root app creates the playlist via the API.
+type PlaylistCreateRequestMsg struct {
+	Name        string
+	Description string
+}
+
+// PlaylistRenameRequestMsg is emitted by PlaylistManager when the user submits
+// a rename. The root app updates the playlist via the API.
+type PlaylistRenameRequestMsg struct {
+	PlaylistID string
+	NewName    string
+}
+
+// PlaylistCreatedMsg is returned after a create playlist API call completes.
+// Err is non-nil if the call failed.
+type PlaylistCreatedMsg struct {
+	PlaylistID string
+	Name       string
+	Err        error
+}
+
+// PlaylistRenamedMsg is returned after an update playlist API call completes.
+// Err is non-nil if the call failed.
+type PlaylistRenamedMsg struct {
+	PlaylistID string
+	NewName    string
+	Err        error
+}
+
+// PlaylistRemoveRequestMsg is emitted by PlaylistManager when the user confirms
+// removing a track from a playlist. The root app handles the API call.
+type PlaylistRemoveRequestMsg struct {
+	PlaylistID string
+	TrackURI   string
+}
+
+// PlaylistRemoveResultMsg is returned after a remove-track API call completes.
+// Err is non-nil if the call failed.
+type PlaylistRemoveResultMsg struct {
+	PlaylistID string
+	TrackURI   string
+	Err        error
+}
+
+// PlaylistReorderRequestMsg is emitted by PlaylistManager when the user reorders
+// a track via Shift+Up/Down. The root app handles the API call.
+type PlaylistReorderRequestMsg struct {
+	PlaylistID   string
+	RangeStart   int
+	InsertBefore int
+	RangeLength  int
+}
+
+// PlaylistReorderResultMsg is returned after a reorder-tracks API call completes.
+// Err is non-nil if the call failed; the pane reverts the optimistic update on error.
+type PlaylistReorderResultMsg struct {
+	Err error
+}

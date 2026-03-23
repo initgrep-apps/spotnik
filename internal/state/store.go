@@ -40,6 +40,13 @@ type Store struct {
 	// NOTE: cached on first fetch per range; not re-fetched until view is re-opened.
 	topTracks  map[string][]api.Track
 	topArtists map[string][]api.FullArtist
+
+	// Playlist Manager data: tracks for each playlist keyed by playlist ID.
+	playlistTracks map[string][]api.Track
+
+	// playingPlaylistID is the Spotify playlist ID that is currently playing.
+	// Used by PlaylistManager to render the ▶ indicator next to the active playlist.
+	playingPlaylistID string
 }
 
 // New returns an empty Store with no playback state.
@@ -279,4 +286,41 @@ func (s *Store) SetTopArtists(timeRange string, artists []api.FullArtist) {
 		s.topArtists = make(map[string][]api.FullArtist)
 	}
 	s.topArtists[timeRange] = artists
+}
+
+// PlaylistTracks returns the cached tracks for a given playlist ID,
+// or nil if the playlist has not been loaded yet.
+func (s *Store) PlaylistTracks(playlistID string) []api.Track {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.playlistTracks == nil {
+		return nil
+	}
+	return s.playlistTracks[playlistID]
+}
+
+// SetPlaylistTracks caches the tracks for a specific playlist in the store.
+func (s *Store) SetPlaylistTracks(playlistID string, tracks []api.Track) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.playlistTracks == nil {
+		s.playlistTracks = make(map[string][]api.Track)
+	}
+	s.playlistTracks[playlistID] = tracks
+}
+
+// PlayingPlaylistID returns the Spotify playlist ID that is currently playing.
+// Returns "" if no playlist is active or the ID is unknown.
+func (s *Store) PlayingPlaylistID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playingPlaylistID
+}
+
+// SetPlayingPlaylistID records the currently playing playlist ID.
+// This is set by the root app when a PlayContextMsg plays a playlist.
+func (s *Store) SetPlayingPlaylistID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playingPlaylistID = id
 }
