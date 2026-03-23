@@ -252,9 +252,15 @@ func (e *httpStatusError) Error() string {
 	return fmt.Sprintf("token endpoint returned %d: %s", e.StatusCode, e.Body)
 }
 
-// buildTokenEndpoint constructs the token endpoint URL.
-// If baseURL is empty, it uses the production Spotify token URL.
+// BuildTokenEndpoint constructs the token endpoint URL.
+// If baseURL is empty, it returns the production Spotify token URL.
 // Otherwise it appends /api/token to the base URL (for test mocks).
+// Exported for testing.
+func BuildTokenEndpoint(baseURL string) string {
+	return buildTokenEndpoint(baseURL)
+}
+
+// buildTokenEndpoint is the internal implementation of BuildTokenEndpoint.
 func buildTokenEndpoint(baseURL string) string {
 	if baseURL == "" {
 		return spotifyTokenURL

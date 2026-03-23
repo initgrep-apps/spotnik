@@ -106,3 +106,16 @@ client_id = "another-id"
 	// Theme not specified → must be default
 	assert.Equal(t, "black", cfg.UI.Theme)
 }
+
+// TestDefaultConfigPath_ContainsSpotnik verifies that the default config path
+// includes "spotnik" and ends with "config.toml".
+func TestDefaultConfigPath_ContainsSpotnik(t *testing.T) {
+	path := config.DefaultConfigPath()
+	assert.Contains(t, path, "spotnik")
+	assert.True(t, len(path) > 0, "path should not be empty")
+	// Path should end with config.toml.
+	assert.True(t,
+		path == "config.toml" || // fallback
+			filepath.Base(path) == "config.toml",
+		"path should end with config.toml, got: %s", path)
+}

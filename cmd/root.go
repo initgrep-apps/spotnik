@@ -116,82 +116,44 @@ func PrintAuthStatus(store keychain.TokenStore, w io.Writer) error {
 	return nil
 }
 
-// runApp is the main command handler. It loads config, checks auth state,
-// and launches the Bubble Tea application.
-func runApp(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-
-	store := keychain.NewKeychainTokenStore()
-	if err := ensureAuthenticated(cfg, store); err != nil {
-		return err
-	}
-
-	// App wires the theme into pane constructors at startup.
-	_ = app.New(cfg)
-
-	// TODO(03-playback): start the Bubble Tea program here.
-	fmt.Fprintln(os.Stderr, "spotnik: TUI not yet implemented — coming in Feature 03")
-	return nil
+// LoadConfig reads the config file at path and validates it.
+// Returns an error if client_id is missing or TOML is invalid.
+// Exported for testing — production code calls this via loadConfig().
+func LoadConfig(path string) (*config.Config, error) {
+	return config.Load(path)
 }
 
-// runAuth forces a fresh re-authentication flow.
-func runAuth(_ *cobra.Command, _ []string) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-
-	store := keychain.NewKeychainTokenStore()
-	// Delete existing tokens to force a fresh login.
-	_ = store.Delete()
-
-	return runAuthFlow(cfg, store)
-}
-
-// loadConfig reads the config file and validates it.
-// Prints setup instructions and exits if client_id is missing.
-func loadConfig() (*config.Config, error) {
-	path := config.DefaultConfigPath()
-	cfg, err := config.Load(path)
-	if err != nil {
-		// If client_id is missing, print clear setup instructions.
-		printSetupInstructions()
-		return nil, err
-	}
-	return cfg, nil
-}
-
-// ensureAuthenticated checks the token state and runs auth flow if needed.
-func ensureAuthenticated(cfg *config.Config, store keychain.TokenStore) error {
+// EnsureAuthenticated checks the token state and runs the auth flow if needed.
+// The tokenBaseURL parameter allows tests to override the Spotify token endpoint.
+// Pass "" for production (uses the real Spotify endpoint).
+// Exported for testing.
+func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBaseURL string) error {
 	access, err := store.Get(keychain.KeyAccessToken)
 	if err != nil || access == "" {
 		// No token — start auth flow.
-		return runAuthFlow(cfg, store)
+		return RunAuthFlow(cfg, store, tokenBaseURL)
 	}
 
 	expiringSoon, err := store.IsExpiringSoon()
 	if err != nil {
 		// Cannot determine expiry — start fresh auth.
-		return runAuthFlow(cfg, store)
+		return RunAuthFlow(cfg, store, tokenBaseURL)
 	}
 
 	if expiringSoon {
 		// Proactively refresh the token before it expires.
 		refreshToken, err := store.Get(keychain.KeyRefreshToken)
 		if err != nil || refreshToken == "" {
-			return runAuthFlow(cfg, store)
+			return RunAuthFlow(cfg, store, tokenBaseURL)
 		}
 
-		// Refresh using the production Spotify token endpoint ("" = default URL).
-		if err := api.Refresh(context.Background(), "", refreshToken, cfg.ClientID, store); err != nil {
+		// Refresh using the configured token endpoint.
+		if err := api.Refresh(context.Background(), tokenBaseURL, refreshToken, cfg.ClientID, store); err != nil {
 			if errors.Is(err, api.ErrInvalidGrant) {
 				// Refresh token rejected — delete tokens and force re-auth.
 				fmt.Fprintln(os.Stderr, "Session expired. Please re-authenticate.")
 				_ = store.Delete()
-				return runAuthFlow(cfg, store)
+				return RunAuthFlow(cfg, store, tokenBaseURL)
 			}
 			return fmt.Errorf("refreshing token: %w", err)
 		}
@@ -200,10 +162,12 @@ func ensureAuthenticated(cfg *config.Config, store keychain.TokenStore) error {
 	return nil
 }
 
-// runAuthFlow executes the full OAuth PKCE authorization flow.
+// RunAuthFlow executes the full OAuth PKCE authorization flow.
 // It generates PKCE credentials, starts the local callback server,
 // opens the browser, waits for the callback, and exchanges the code for tokens.
-func runAuthFlow(cfg *config.Config, store keychain.TokenStore) error {
+// The tokenBaseURL parameter allows tests to override the Spotify token endpoint.
+// Exported for testing.
+func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL string) error {
 	// Generate PKCE verifier and challenge.
 	verifier, err := api.GenerateCodeVerifier()
 	if err != nil {
@@ -249,10 +213,10 @@ func runAuthFlow(cfg *config.Config, store keychain.TokenStore) error {
 			return fmt.Errorf("authorization failed: %w", result.Err)
 		}
 
-		// Exchange code for tokens using the production endpoint.
+		// Exchange code for tokens using the configured endpoint.
 		_, err := api.ExchangeCode(
 			context.Background(),
-			"", // production endpoint
+			tokenBaseURL,
 			result.Code,
 			verifier,
 			redirectURI,
@@ -269,6 +233,54 @@ func runAuthFlow(cfg *config.Config, store keychain.TokenStore) error {
 	case <-ctx.Done():
 		return fmt.Errorf("authorization timed out after 5 minutes — please try again")
 	}
+}
+
+// runApp is the main command handler. It loads config, checks auth state,
+// and launches the Bubble Tea application.
+func runApp(_ *cobra.Command, _ []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	store := keychain.NewKeychainTokenStore()
+	if err := EnsureAuthenticated(cfg, store, ""); err != nil {
+		return err
+	}
+
+	// App wires the theme into pane constructors at startup.
+	_ = app.New(cfg)
+
+	// TODO(03-playback): start the Bubble Tea program here.
+	fmt.Fprintln(os.Stderr, "spotnik: TUI not yet implemented — coming in Feature 03")
+	return nil
+}
+
+// runAuth forces a fresh re-authentication flow.
+func runAuth(_ *cobra.Command, _ []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	store := keychain.NewKeychainTokenStore()
+	// Delete existing tokens to force a fresh login.
+	_ = store.Delete()
+
+	return RunAuthFlow(cfg, store, "")
+}
+
+// loadConfig reads the config file from the default path and validates it.
+// Prints setup instructions and exits if client_id is missing.
+func loadConfig() (*config.Config, error) {
+	path := config.DefaultConfigPath()
+	cfg, err := config.Load(path)
+	if err != nil {
+		// If client_id is missing, print clear setup instructions.
+		printSetupInstructions()
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // PrintMissingClientIDInstructions writes setup instructions when client_id is missing.

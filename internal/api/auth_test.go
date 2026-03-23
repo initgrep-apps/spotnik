@@ -288,3 +288,143 @@ func TestRefresh_NetworkError(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "refreshing token") || strings.Contains(err.Error(), "connection refused"),
 		"expected wrapped network error, got: %v", err)
 }
+
+// TestExchangeCode_NetworkError verifies a network error in ExchangeCode returns a wrapped error.
+func TestExchangeCode_NetworkError(t *testing.T) {
+	store := keychain.NewInMemoryTokenStore()
+	_, err := api.ExchangeCode(
+		context.Background(),
+		"http://localhost:1",
+		"code", "verifier", "http://localhost/callback", "client-id",
+		store,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exchanging code")
+}
+
+// TestCallbackServer_MissingCode verifies that a callback with neither code nor error
+// sends an error on the channel.
+func TestCallbackServer_MissingCode(t *testing.T) {
+	srv, codeCh, err := api.StartCallbackServer()
+	require.NoError(t, err)
+	defer srv.Close()
+
+	resp, err := http.Get(fmt.Sprintf("%s/callback", srv.URL))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	select {
+	case result := <-codeCh:
+		require.Error(t, result.Err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for error on channel")
+	}
+}
+
+// TestErrInvalidGrant_IsSentinel verifies ErrInvalidGrant is a well-typed sentinel error.
+func TestErrInvalidGrant_IsSentinel(t *testing.T) {
+	require.NotNil(t, api.ErrInvalidGrant)
+	assert.Contains(t, api.ErrInvalidGrant.Error(), "invalid grant")
+}
+
+// TestTokenPair_Fields verifies that a TokenPair struct holds the expected fields.
+func TestTokenPair_Fields(t *testing.T) {
+	pair := api.TokenPair{
+		AccessToken:  "at",
+		RefreshToken: "rt",
+		ExpiresIn:    3600,
+	}
+	assert.Equal(t, "at", pair.AccessToken)
+	assert.Equal(t, "rt", pair.RefreshToken)
+	assert.Equal(t, 3600, pair.ExpiresIn)
+}
+
+// TestExchangeCode_ZeroExpiresIn verifies exchange succeeds when expires_in is 0.
+// This tests the storeTokens path where no expiry is stored.
+func TestExchangeCode_ZeroExpiresIn(t *testing.T) {
+	tokenResp := map[string]interface{}{
+		"access_token":  "access-only",
+		"refresh_token": "refresh-only",
+		"expires_in":    0,
+		"token_type":    "Bearer",
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(tokenResp)
+	}))
+	defer srv.Close()
+
+	store := keychain.NewInMemoryTokenStore()
+	pair, err := api.ExchangeCode(
+		context.Background(),
+		srv.URL,
+		"code", "verifier", "http://localhost/callback", "client-id",
+		store,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "access-only", pair.AccessToken)
+
+	// Access and refresh tokens stored.
+	access, err := store.Get(keychain.KeyAccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, "access-only", access)
+}
+
+// TestRefresh_NoRefreshTokenInResponse verifies that when the refresh response
+// omits refresh_token (as Spotify sometimes does), only the access token is stored.
+func TestRefresh_NoRefreshTokenInResponse(t *testing.T) {
+	tokenResp := map[string]interface{}{
+		"access_token": "new-access",
+		"expires_in":   3600,
+		"token_type":   "Bearer",
+		// NOTE: no refresh_token — Spotify may omit it on refresh.
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(tokenResp)
+	}))
+	defer srv.Close()
+
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyRefreshToken, "old-refresh"))
+
+	err := api.Refresh(context.Background(), srv.URL, "old-refresh", "test-client", store)
+	require.NoError(t, err)
+
+	// Access token updated.
+	access, err := store.Get(keychain.KeyAccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, "new-access", access)
+
+	// Old refresh token still intact (no new one provided).
+	refresh, err := store.Get(keychain.KeyRefreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, "old-refresh", refresh)
+}
+
+// TestSpotifyScopes_NotEmpty verifies that the scopes constant is defined and non-empty.
+func TestSpotifyScopes_NotEmpty(t *testing.T) {
+	assert.NotEmpty(t, api.SpotifyScopes)
+	assert.Contains(t, api.SpotifyScopes, "user-read-playback-state")
+}
+
+// TestBuildTokenEndpoint_EmptyUsesProduction verifies that empty baseURL
+// returns the production Spotify token endpoint.
+func TestBuildTokenEndpoint_EmptyUsesProduction(t *testing.T) {
+	endpoint := api.BuildTokenEndpoint("")
+	assert.Contains(t, endpoint, "accounts.spotify.com")
+	assert.Contains(t, endpoint, "/api/token")
+}
+
+// TestBuildTokenEndpoint_CustomBaseURL verifies that a custom base URL
+// gets /api/token appended correctly.
+func TestBuildTokenEndpoint_CustomBaseURL(t *testing.T) {
+	endpoint := api.BuildTokenEndpoint("http://localhost:9090")
+	assert.Equal(t, "http://localhost:9090/api/token", endpoint)
+}
+
+// TestBuildTokenEndpoint_TrailingSlash verifies trailing slashes are trimmed.
+func TestBuildTokenEndpoint_TrailingSlash(t *testing.T) {
+	endpoint := api.BuildTokenEndpoint("http://localhost:9090/")
+	assert.Equal(t, "http://localhost:9090/api/token", endpoint)
+}
