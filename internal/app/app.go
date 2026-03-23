@@ -612,6 +612,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.backoffTicks > 0 {
 			a.backoffTicks--
 			a.tickCount++
+			// When backoff just expired, force an immediate fetch.
+			if a.backoffTicks == 0 {
+				a.tickCount = 0
+				return a, tea.Batch(
+					nextTick,
+					fetchPlaybackStateCmd(a.player, a.store),
+					fetchQueueCmd(a.player, a.store),
+				)
+			}
 			return a, nextTick
 		}
 

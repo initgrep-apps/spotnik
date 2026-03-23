@@ -1734,3 +1734,37 @@ func TestApp_SplashScreen_StaysOnPlaybackData(t *testing.T) {
 	output = a.View()
 	assert.Contains(t, output, "v1.1.0", "splash should still be visible — only timer dismisses it")
 }
+
+// TestApp_BackoffExpiry_ForcesImmediateFetch verifies that when backoff ticks
+// expire, the app immediately fires playback and queue fetch commands instead
+// of waiting for the next modulo-aligned tick.
+func TestApp_BackoffExpiry_ForcesImmediateFetch(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Set up a small backoff via RateLimitedMsg with RetryAfterSecs < default (10).
+	// The handler clamps to defaultBackoffTicks=10, so we use that.
+	rateLimitMsg := panes.RateLimitedMsg{RetryAfterSecs: 3}
+	model, _ := a.Update(rateLimitMsg)
+	a = model.(*app.App)
+
+	// Backoff should be set to defaultBackoffTicks (10).
+	assert.Equal(t, 10, a.BackoffTicks(), "backoff should be clamped to default 10")
+
+	// Send 9 ticks — backoff decrements each time but stays > 0.
+	for i := 0; i < 9; i++ {
+		model, cmd := a.Update(panes.TickMsg{})
+		a = model.(*app.App)
+		assert.NotNil(t, cmd, "tick during backoff should return nextTick")
+		assert.Greater(t, a.BackoffTicks(), 0, "backoff should still be active after tick %d", i)
+	}
+
+	// 10th tick: backoff expires → should return a batch (not just nextTick).
+	// The batch includes nextTick + fetchPlaybackState + fetchQueue = 3 commands.
+	model, cmd := a.Update(panes.TickMsg{})
+	a = model.(*app.App)
+
+	assert.Equal(t, 0, a.BackoffTicks(), "backoff should be zero after expiry tick")
+	assert.Equal(t, 0, a.TickCount(), "tickCount should be reset to 0 after backoff expiry")
+	assert.NotNil(t, cmd, "expiry tick should return a batch command for immediate fetch")
+}
