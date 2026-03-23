@@ -31,7 +31,7 @@ build:
 	$(GO) build $(GOFLAGS) \
 		-ldflags="$(LDFLAGS) -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)" \
 		-o $(BINARY_DIR)/$(BINARY_NAME) \
-		./...
+		.
 	@echo "✓ Built: $(BINARY_DIR)/$(BINARY_NAME)"
 	@ls -lh $(BINARY_DIR)/$(BINARY_NAME)
 
@@ -125,7 +125,7 @@ release:
 		$(GO) build $(GOFLAGS) \
 			-ldflags="$(LDFLAGS) -X main.version=$(VERSION)" \
 			-o $(BINARY_DIR)/release/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) \
-			./...; \
+			.; \
 	)
 	@ls -lh $(BINARY_DIR)/release/
 	@echo "✓ Release binaries built"
