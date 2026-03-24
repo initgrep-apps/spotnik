@@ -5,7 +5,7 @@ import "context"
 // PlayerAPI defines all Spotify playback control operations.
 // Concrete implementation: *Player.
 type PlayerAPI interface {
-	GetPlaybackState(ctx context.Context) (*PlaybackState, error)
+	PlaybackState(ctx context.Context) (*PlaybackState, error)
 	Play(ctx context.Context, opts PlayOptions) error
 	Pause(ctx context.Context) error
 	Next(ctx context.Context) error
@@ -15,7 +15,7 @@ type PlayerAPI interface {
 	SetShuffle(ctx context.Context, state bool) error
 	SetRepeat(ctx context.Context, mode string) error
 	AddToQueue(ctx context.Context, trackURI string) error
-	GetQueue(ctx context.Context) (*QueueResponse, error)
+	Queue(ctx context.Context) (*QueueResponse, error)
 }
 
 // Compile-time assertion: *Player must implement PlayerAPI.

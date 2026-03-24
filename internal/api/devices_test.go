@@ -29,7 +29,7 @@ func TestGetDevices_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := NewDevicesClient(srv.URL, "test-token")
-	devices, err := client.GetDevices(context.Background())
+	devices, err := client.Devices(context.Background())
 	require.NoError(t, err)
 	require.Len(t, devices, 3)
 
@@ -62,7 +62,7 @@ func TestGetDevices_Empty(t *testing.T) {
 	defer srv.Close()
 
 	client := NewDevicesClient(srv.URL, "test-token")
-	devices, err := client.GetDevices(context.Background())
+	devices, err := client.Devices(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, devices, "expected empty device slice, got non-empty")
 }
@@ -74,7 +74,7 @@ func TestGetDevices_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	client := NewDevicesClient(srv.URL, "test-token")
-	devices, err := client.GetDevices(context.Background())
+	devices, err := client.Devices(context.Background())
 	require.Error(t, err, "expected error on server error")
 	assert.Nil(t, devices)
 	assert.Contains(t, err.Error(), "getting devices")
@@ -161,7 +161,7 @@ func TestGetDevices_InvalidJSON(t *testing.T) {
 	defer srv.Close()
 
 	client := NewDevicesClient(srv.URL, "test-token")
-	devices, err := client.GetDevices(context.Background())
+	devices, err := client.Devices(context.Background())
 	require.Error(t, err)
 	assert.Nil(t, devices)
 	assert.True(t, strings.Contains(err.Error(), "decoding") || strings.Contains(err.Error(), "getting devices"),

@@ -34,7 +34,7 @@ func TestGetTopTracks_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	tracks, err := client.GetTopTracks(context.Background(), "short_term", 25)
+	tracks, err := client.TopTracks(context.Background(), "short_term", 25)
 	require.NoError(t, err)
 	require.Len(t, tracks, 2)
 	assert.Equal(t, "track-001", tracks[0].ID)
@@ -52,7 +52,7 @@ func TestGetTopTracks_EmptyResults(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	tracks, err := client.GetTopTracks(context.Background(), "short_term", 25)
+	tracks, err := client.TopTracks(context.Background(), "short_term", 25)
 	require.NoError(t, err)
 	assert.NotNil(t, tracks, "empty result should be empty slice not nil")
 	assert.Empty(t, tracks)
@@ -74,7 +74,7 @@ func TestGetTopArtists_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	artists, err := client.GetTopArtists(context.Background(), "medium_term", 25)
+	artists, err := client.TopArtists(context.Background(), "medium_term", 25)
 	require.NoError(t, err)
 	require.Len(t, artists, 2)
 	assert.Equal(t, "artist-weeknd", artists[0].ID)
@@ -93,7 +93,7 @@ func TestGetTopArtists_EmptyResults(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	artists, err := client.GetTopArtists(context.Background(), "short_term", 25)
+	artists, err := client.TopArtists(context.Background(), "short_term", 25)
 	require.NoError(t, err)
 	assert.NotNil(t, artists, "empty result should be empty slice not nil")
 	assert.Empty(t, artists)
@@ -114,7 +114,7 @@ func TestGetRecentlyPlayed_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	history, err := client.GetRecentlyPlayed(context.Background(), 50)
+	history, err := client.RecentlyPlayed(context.Background(), 50)
 	require.NoError(t, err)
 	require.Len(t, history, 2)
 	assert.Equal(t, "Blinding Lights", history[0].Track.Name)
@@ -155,7 +155,7 @@ func TestGetTopTracks_ErrorWrapped(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	_, err := client.GetTopTracks(context.Background(), "short_term", 25)
+	_, err := client.TopTracks(context.Background(), "short_term", 25)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting top tracks")
 }
@@ -169,7 +169,7 @@ func TestGetTopArtists_ErrorWrapped(t *testing.T) {
 	defer srv.Close()
 
 	client := newUserClient(srv.URL)
-	_, err := client.GetTopArtists(context.Background(), "short_term", 25)
+	_, err := client.TopArtists(context.Background(), "short_term", 25)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting top artists")
 }

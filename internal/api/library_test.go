@@ -34,7 +34,7 @@ func TestGetPlaylists_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	playlists, err := client.GetPlaylists(context.Background(), 50, 0)
+	playlists, err := client.Playlists(context.Background(), 50, 0)
 
 	require.NoError(t, err)
 	require.Len(t, playlists, 2)
@@ -45,7 +45,7 @@ func TestGetPlaylists_Success(t *testing.T) {
 	assert.Equal(t, "Workout Mix", playlists[1].Name)
 }
 
-// TestGetPlaylists_Empty verifies that GetPlaylists returns empty slice, no error.
+// TestGetPlaylists_Empty verifies that Playlists returns empty slice, no error.
 func TestGetPlaylists_Empty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -55,7 +55,7 @@ func TestGetPlaylists_Empty(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	playlists, err := client.GetPlaylists(context.Background(), 50, 0)
+	playlists, err := client.Playlists(context.Background(), 50, 0)
 
 	require.NoError(t, err)
 	assert.Empty(t, playlists)
@@ -78,7 +78,7 @@ func TestGetPlaylistTracks_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	tracks, err := client.GetPlaylistTracks(context.Background(), "playlist-abc123", 50, 0)
+	tracks, err := client.PlaylistTracks(context.Background(), "playlist-abc123", 50, 0)
 
 	require.NoError(t, err)
 	assert.Equal(t, "/v1/playlists/playlist-abc123/tracks", capturedPath)
@@ -102,7 +102,7 @@ func TestGetSavedAlbums_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	albums, err := client.GetSavedAlbums(context.Background(), 50, 0)
+	albums, err := client.SavedAlbums(context.Background(), 50, 0)
 
 	require.NoError(t, err)
 	require.Len(t, albums, 1)
@@ -126,7 +126,7 @@ func TestGetLikedTracks_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	tracks, err := client.GetLikedTracks(context.Background(), 50, 0)
+	tracks, err := client.LikedTracks(context.Background(), 50, 0)
 
 	require.NoError(t, err)
 	require.Len(t, tracks, 2)
@@ -151,7 +151,7 @@ func TestGetRecentlyPlayed_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	items, err := client.GetRecentlyPlayed(context.Background(), 20)
+	items, err := client.RecentlyPlayed(context.Background(), 20)
 
 	require.NoError(t, err)
 	require.Len(t, items, 2)
@@ -211,7 +211,7 @@ func TestLibraryClient_RateLimited(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	_, err := client.GetPlaylists(context.Background(), 50, 0)
+	_, err := client.Playlists(context.Background(), 50, 0)
 
 	require.Error(t, err)
 	var rlErr *RateLimitError
@@ -227,7 +227,7 @@ func TestLibraryClient_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	_, err := client.GetPlaylists(context.Background(), 50, 0)
+	_, err := client.Playlists(context.Background(), 50, 0)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")

@@ -5,7 +5,7 @@ import "context"
 // DevicesAPI defines all Spotify Connect device operations.
 // Concrete implementation: *DevicesClient.
 type DevicesAPI interface {
-	GetDevices(ctx context.Context) ([]Device, error)
+	Devices(ctx context.Context) ([]Device, error)
 	TransferPlayback(ctx context.Context, deviceID string, play bool) error
 }
 

@@ -148,7 +148,7 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 		if library == nil {
 			return panes.LibraryLoadedMsg{}
 		}
-		playlists, err := library.GetPlaylists(context.Background(), 50, offset)
+		playlists, err := library.Playlists(context.Background(), 50, offset)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -178,7 +178,7 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 		if library == nil {
 			return panes.AlbumsLoadedMsg{}
 		}
-		albums, err := library.GetSavedAlbums(context.Background(), 50, offset)
+		albums, err := library.SavedAlbums(context.Background(), 50, offset)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -203,7 +203,7 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 		if library == nil {
 			return panes.LikedTracksLoadedMsg{}
 		}
-		tracks, err := library.GetLikedTracks(context.Background(), 50, offset)
+		tracks, err := library.LikedTracks(context.Background(), 50, offset)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -229,7 +229,7 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 		if library == nil {
 			return panes.RecentlyPlayedLoadedMsg{}
 		}
-		items, err := library.GetRecentlyPlayed(context.Background(), 20)
+		items, err := library.RecentlyPlayed(context.Background(), 20)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -313,7 +313,7 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 			// Deliver empty list when no client is injected (tests / uninitialized).
 			return panes.NewDevicesLoadedMsg(nil, nil)
 		}
-		devList, err := devices.GetDevices(context.Background())
+		devList, err := devices.Devices(context.Background())
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -380,7 +380,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
 		ctx := context.Background()
-		tracks, err := userAPI.GetTopTracks(ctx, timeRange, 25)
+		tracks, err := userAPI.TopTracks(ctx, timeRange, 25)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -391,7 +391,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
-		artists, err := userAPI.GetTopArtists(ctx, timeRange, 25)
+		artists, err := userAPI.TopArtists(ctx, timeRange, 25)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -416,7 +416,7 @@ func fetchQueueCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 		if player == nil {
 			return panes.QueueLoadedMsg{}
 		}
-		qr, err := player.GetQueue(context.Background())
+		qr, err := player.Queue(context.Background())
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -442,7 +442,7 @@ func fetchPlaybackStateCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 		if player == nil {
 			return panes.PlaybackStateFetchedMsg{}
 		}
-		ps, err := player.GetPlaybackState(context.Background())
+		ps, err := player.PlaybackState(context.Background())
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -509,7 +509,7 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 		if library == nil {
 			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
 		}
-		tracks, err := library.GetPlaylistTracks(context.Background(), playlistID, 100, 0)
+		tracks, err := library.PlaylistTracks(context.Background(), playlistID, 100, 0)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
