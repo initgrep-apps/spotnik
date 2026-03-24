@@ -82,7 +82,7 @@ func (a *App) renderWithDeviceOverlay(background string) string {
 		lipgloss.Right, lipgloss.Top,
 		overlay,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+		lipgloss.WithWhitespaceForeground(a.theme.Base()),
 	)
 	return centered
 }
@@ -103,7 +103,7 @@ func (a *App) renderWithSearchOverlay(background string) string {
 		lipgloss.Center, lipgloss.Center,
 		overlay,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+		lipgloss.WithWhitespaceForeground(a.theme.Base()),
 	)
 	return centered
 }
