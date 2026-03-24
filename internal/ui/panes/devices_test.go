@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -14,11 +13,11 @@ import (
 )
 
 // testDevices returns a set of test devices for use in table tests.
-func testDevices() []api.Device {
-	return []api.Device{
-		{ID: "abc123", Name: "MacBook Pro Speakers", Type: "Computer", IsActive: true, VolumePercent: 80},
-		{ID: "def456", Name: "iPhone 14", Type: "Smartphone", IsActive: false, VolumePercent: 50},
-		{ID: "ghi789", Name: "Kitchen Speaker", Type: "Speaker", IsActive: false, VolumePercent: 60},
+func testDevices() []DeviceInfo {
+	return []DeviceInfo{
+		{ID: "abc123", Name: "MacBook Pro Speakers", Type: "Computer", IsActive: true},
+		{ID: "def456", Name: "iPhone 14", Type: "Smartphone", IsActive: false},
+		{ID: "ghi789", Name: "Kitchen Speaker", Type: "Speaker", IsActive: false},
 	}
 }
 
@@ -60,7 +59,7 @@ func TestDeviceOverlay_View_ActiveDevice(t *testing.T) {
 
 func TestDeviceOverlay_View_EmptyList(t *testing.T) {
 	overlay := newTestDeviceOverlay()
-	overlay.devices = []api.Device{}
+	overlay.devices = []DeviceInfo{}
 
 	view := overlay.View()
 
@@ -190,7 +189,7 @@ func TestDeviceOverlay_DeviceTypeIcon(t *testing.T) {
 
 func TestDeviceOverlay_View_DeviceTypeIcons(t *testing.T) {
 	overlay := newTestDeviceOverlay()
-	overlay.devices = []api.Device{
+	overlay.devices = []DeviceInfo{
 		{ID: "a", Name: "My Computer", Type: "Computer", IsActive: false},
 		{ID: "b", Name: "My Phone", Type: "Smartphone", IsActive: false},
 		{ID: "c", Name: "My Speaker", Type: "Speaker", IsActive: false},
