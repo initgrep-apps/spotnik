@@ -30,6 +30,9 @@ func NewBaseClient(baseURL, accessToken string) BaseClient {
 // to obtain a fresh access token. Use this when you need per-request token
 // resolution (e.g. a RefreshableTokenProvider).
 func NewBaseClientWithProvider(baseURL string, tp TokenProvider) BaseClient {
+	if tp == nil {
+		panic("api: TokenProvider must not be nil")
+	}
 	base := baseURL
 	if base == "" {
 		base = spotifyAPIBaseURL
