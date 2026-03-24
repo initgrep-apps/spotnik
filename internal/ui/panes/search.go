@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -51,14 +50,12 @@ type SearchRequestMsg struct {
 	Query string
 }
 
-// SearchResultsMsg is sent by the root app model after a search completes,
-// carrying the parsed results written into the store.
-type SearchResultsMsg struct {
-	Err error
-}
-
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
 type searchSpinnerTickMsg spinner.TickMsg
+
+// NOTE: SearchResultsMsg is defined in messages.go alongside all other shared
+// message types. Search result data types (SearchResultData, SearchTrackItem, etc.)
+// are also in messages.go.
 
 // SearchOverlay is the floating search UI model. It is layered above the
 // three-pane view while open — it does not replace any pane.
@@ -69,6 +66,10 @@ type SearchOverlay struct {
 	spinner spinner.Model
 	width   int
 	height  int
+
+	// results holds the most recent search results delivered via SearchResultsMsg.
+	// This avoids reading api.SearchResult from the store, keeping the ui/api boundary clean.
+	results *SearchResultData
 
 	// activeSection is which section (Tracks/Artists/Albums/Playlists) has focus.
 	activeSection searchSection
@@ -145,7 +146,8 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return o.handleDebounce(m)
 
 	case SearchResultsMsg:
-		// Results are in the store; reset cursor to top of first section with results.
+		// Save results locally so we never read api types from the store.
+		o.results = m.Results
 		o.cursorPos = 0
 		o.activeSection = sectionTracks
 		return o, nil
@@ -247,11 +249,10 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 // handleAddToQueue adds the currently selected track to the queue.
 // Only valid when the active section is Tracks.
 func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
-	results := o.store.SearchResults()
-	if results == nil || o.activeSection != sectionTracks {
+	if o.results == nil || o.activeSection != sectionTracks {
 		return o, nil
 	}
-	items := clampedTrackItems(results)
+	items := clampedTrackItems(o.results)
 	if o.cursorPos >= len(items) {
 		return o, nil
 	}
@@ -295,19 +296,18 @@ func (o *SearchOverlay) moveCursorUp() (tea.Model, tea.Cmd) {
 
 // maxCursorForActiveSection returns the count of items in the current section.
 func (o *SearchOverlay) maxCursorForActiveSection() int {
-	results := o.store.SearchResults()
-	if results == nil {
+	if o.results == nil {
 		return 0
 	}
 	switch o.activeSection {
 	case sectionTracks:
-		return len(clampedTrackItems(results))
+		return len(clampedTrackItems(o.results))
 	case sectionArtists:
-		return len(clampedArtistItems(results))
+		return len(clampedArtistItems(o.results))
 	case sectionAlbums:
-		return len(clampedAlbumItems(results))
+		return len(clampedAlbumItems(o.results))
 	case sectionPlaylists:
-		return len(clampedPlaylistItems(results))
+		return len(clampedPlaylistItems(o.results))
 	}
 	return 0
 }
@@ -315,29 +315,28 @@ func (o *SearchOverlay) maxCursorForActiveSection() int {
 // selectedURI returns the URI for the currently selected result item,
 // and whether it is a track (vs. a context URI).
 func (o *SearchOverlay) selectedURI() (uri string, isTrack bool) {
-	results := o.store.SearchResults()
-	if results == nil {
+	if o.results == nil {
 		return "", false
 	}
 
 	switch o.activeSection {
 	case sectionTracks:
-		items := clampedTrackItems(results)
+		items := clampedTrackItems(o.results)
 		if o.cursorPos < len(items) {
 			return items[o.cursorPos].URI, true
 		}
 	case sectionArtists:
-		items := clampedArtistItems(results)
+		items := clampedArtistItems(o.results)
 		if o.cursorPos < len(items) {
 			return items[o.cursorPos].URI, false
 		}
 	case sectionAlbums:
-		items := clampedAlbumItems(results)
+		items := clampedAlbumItems(o.results)
 		if o.cursorPos < len(items) {
 			return items[o.cursorPos].URI, false
 		}
 	case sectionPlaylists:
-		items := clampedPlaylistItems(results)
+		items := clampedPlaylistItems(o.results)
 		if o.cursorPos < len(items) {
 			return items[o.cursorPos].URI, false
 		}
@@ -383,7 +382,6 @@ func (o *SearchOverlay) View() string {
 func (o *SearchOverlay) renderResults(overlayWidth int) string {
 	query := o.store.SearchQuery()
 	loading := o.store.SearchLoading()
-	results := o.store.SearchResults()
 
 	if loading {
 		return fmt.Sprintf("%s Searching...\n", o.spinner.View())
@@ -402,17 +400,17 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 			Render("Type to search tracks, artists, albums...")
 	}
 
-	if results == nil {
+	if o.results == nil {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Render("Type to search tracks, artists, albums...")
 	}
 
 	// Check if all sections are empty
-	totalItems := len(clampedTrackItems(results)) +
-		len(clampedArtistItems(results)) +
-		len(clampedAlbumItems(results)) +
-		len(clampedPlaylistItems(results))
+	totalItems := len(clampedTrackItems(o.results)) +
+		len(clampedArtistItems(o.results)) +
+		len(clampedAlbumItems(o.results)) +
+		len(clampedPlaylistItems(o.results))
 
 	if totalItems == 0 {
 		return lipgloss.NewStyle().
@@ -426,10 +424,10 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(o.renderSection(sectionTracks, clampedTrackItemsAsRows(results, contentWidth), contentWidth))
-	sb.WriteString(o.renderSection(sectionArtists, clampedArtistItemsAsRows(results, contentWidth), contentWidth))
-	sb.WriteString(o.renderSection(sectionAlbums, clampedAlbumItemsAsRows(results, contentWidth), contentWidth))
-	sb.WriteString(o.renderSection(sectionPlaylists, clampedPlaylistItemsAsRows(results, contentWidth), contentWidth))
+	sb.WriteString(o.renderSection(sectionTracks, clampedTrackItemsAsRows(o.results, contentWidth), contentWidth))
+	sb.WriteString(o.renderSection(sectionArtists, clampedArtistItemsAsRows(o.results, contentWidth), contentWidth))
+	sb.WriteString(o.renderSection(sectionAlbums, clampedAlbumItemsAsRows(o.results, contentWidth), contentWidth))
+	sb.WriteString(o.renderSection(sectionPlaylists, clampedPlaylistItemsAsRows(o.results, contentWidth), contentWidth))
 	return sb.String()
 }
 
@@ -495,32 +493,32 @@ func debounceSearch(query string) tea.Cmd {
 
 // --- Clamping helpers (max 5 per section) ---
 
-func clampedTrackItems(r *api.SearchResult) []api.Track {
-	items := r.Tracks.Items
+func clampedTrackItems(r *SearchResultData) []SearchTrackItem {
+	items := r.Tracks
 	if len(items) > maxResultsPerSection {
 		items = items[:maxResultsPerSection]
 	}
 	return items
 }
 
-func clampedArtistItems(r *api.SearchResult) []api.SearchArtist {
-	items := r.Artists.Items
+func clampedArtistItems(r *SearchResultData) []SearchArtistItem {
+	items := r.Artists
 	if len(items) > maxResultsPerSection {
 		items = items[:maxResultsPerSection]
 	}
 	return items
 }
 
-func clampedAlbumItems(r *api.SearchResult) []api.SearchAlbum {
-	items := r.Albums.Items
+func clampedAlbumItems(r *SearchResultData) []SearchAlbumItem {
+	items := r.Albums
 	if len(items) > maxResultsPerSection {
 		items = items[:maxResultsPerSection]
 	}
 	return items
 }
 
-func clampedPlaylistItems(r *api.SearchResult) []api.SearchPlaylist {
-	items := r.Playlists.Items
+func clampedPlaylistItems(r *SearchResultData) []SearchPlaylistItem {
+	items := r.Playlists
 	if len(items) > maxResultsPerSection {
 		items = items[:maxResultsPerSection]
 	}
@@ -529,21 +527,17 @@ func clampedPlaylistItems(r *api.SearchResult) []api.SearchPlaylist {
 
 // --- Row string builders for each section ---
 
-func clampedTrackItemsAsRows(r *api.SearchResult, width int) []string {
+func clampedTrackItemsAsRows(r *SearchResultData, width int) []string {
 	items := clampedTrackItems(r)
 	rows := make([]string, len(items))
 	for i, t := range items {
-		artist := ""
-		if len(t.Artists) > 0 {
-			artist = t.Artists[0].Name
-		}
-		row := fmt.Sprintf("%-*s  %s", width/2, truncate(t.Name, width/2), truncate(artist, width/2-4))
+		row := fmt.Sprintf("%-*s  %s", width/2, truncate(t.Name, width/2), truncate(t.Artist, width/2-4))
 		rows[i] = truncate(row, width-2)
 	}
 	return rows
 }
 
-func clampedArtistItemsAsRows(r *api.SearchResult, width int) []string {
+func clampedArtistItemsAsRows(r *SearchResultData, width int) []string {
 	items := clampedArtistItems(r)
 	rows := make([]string, len(items))
 	for i, a := range items {
@@ -552,26 +546,21 @@ func clampedArtistItemsAsRows(r *api.SearchResult, width int) []string {
 	return rows
 }
 
-func clampedAlbumItemsAsRows(r *api.SearchResult, width int) []string {
+func clampedAlbumItemsAsRows(r *SearchResultData, width int) []string {
 	items := clampedAlbumItems(r)
 	rows := make([]string, len(items))
 	for i, a := range items {
-		artist := ""
-		if len(a.Artists) > 0 {
-			artist = a.Artists[0].Name
-		}
-		row := fmt.Sprintf("%-*s  %s", width/2, truncate(a.Name, width/2), truncate(artist, width/2-4))
+		row := fmt.Sprintf("%-*s  %s", width/2, truncate(a.Name, width/2), truncate(a.Artist, width/2-4))
 		rows[i] = truncate(row, width-2)
 	}
 	return rows
 }
 
-func clampedPlaylistItemsAsRows(r *api.SearchResult, width int) []string {
+func clampedPlaylistItemsAsRows(r *SearchResultData, width int) []string {
 	items := clampedPlaylistItems(r)
 	rows := make([]string, len(items))
 	for i, p := range items {
-		owner := p.Owner.DisplayName
-		row := fmt.Sprintf("%-*s  %s", width/2, truncate(p.Name, width/2), truncate(owner, width/2-4))
+		row := fmt.Sprintf("%-*s  %s", width/2, truncate(p.Name, width/2), truncate(p.Owner, width/2-4))
 		rows[i] = truncate(row, width-2)
 	}
 	return rows

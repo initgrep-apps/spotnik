@@ -245,3 +245,58 @@ type PlaylistReorderResultMsg struct {
 // The root app model handles this by clearing search results and query in the store.
 // Panes must never write to the store directly — they emit messages instead.
 type SearchClearedMsg struct{}
+
+// SearchResultData is the UI-facing representation of search results.
+// It carries only the fields the overlay needs for rendering, pre-converted
+// from api.SearchResult in commands.go so that search.go never imports api/.
+type SearchResultData struct {
+	Tracks    []SearchTrackItem
+	Artists   []SearchArtistItem
+	Albums    []SearchAlbumItem
+	Playlists []SearchPlaylistItem
+}
+
+// SearchTrackItem holds the display fields for a single track search result.
+type SearchTrackItem struct {
+	// URI is the Spotify track URI used for playback and queue commands.
+	URI string
+	// Name is the track display name.
+	Name string
+	// Artist is the pre-formatted first artist name.
+	Artist string
+}
+
+// SearchArtistItem holds the display fields for a single artist search result.
+type SearchArtistItem struct {
+	// URI is the Spotify artist URI used for playback context.
+	URI string
+	// Name is the artist display name.
+	Name string
+}
+
+// SearchAlbumItem holds the display fields for a single album search result.
+type SearchAlbumItem struct {
+	// URI is the Spotify album URI used for playback context.
+	URI string
+	// Name is the album display name.
+	Name string
+	// Artist is the pre-formatted first artist name.
+	Artist string
+}
+
+// SearchPlaylistItem holds the display fields for a single playlist search result.
+type SearchPlaylistItem struct {
+	// URI is the Spotify playlist URI used for playback context.
+	URI string
+	// Name is the playlist display name.
+	Name string
+	// Owner is the pre-formatted playlist owner display name.
+	Owner string
+}
+
+// SearchResultsMsg is sent by the root app model after a search completes.
+// Results carries the pre-converted UI data; Err is non-nil if the search failed.
+type SearchResultsMsg struct {
+	Results *SearchResultData
+	Err     error
+}

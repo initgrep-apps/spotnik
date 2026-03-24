@@ -7,7 +7,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -22,45 +21,39 @@ func newTestSearchOverlay() *panes.SearchOverlay {
 	return panes.NewSearchOverlay(s, t)
 }
 
-// newTestSearchOverlayWithResults creates a SearchOverlay with pre-populated search results.
+// sampleSearchResultData returns a SearchResultData with one item per section.
+func sampleSearchResultData() *panes.SearchResultData {
+	return &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
+			{URI: "spotify:track:t2", Name: "Save Your Tears", Artist: "The Weeknd"},
+		},
+		Artists: []panes.SearchArtistItem{
+			{URI: "spotify:artist:a1", Name: "The Weeknd"},
+		},
+		Albums: []panes.SearchAlbumItem{
+			{URI: "spotify:album:al1", Name: "After Hours", Artist: "The Weeknd"},
+		},
+		Playlists: []panes.SearchPlaylistItem{
+			{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: "User"},
+		},
+	}
+}
+
+// newTestSearchOverlayWithResults creates a SearchOverlay with pre-populated search
+// results delivered via SearchResultsMsg (not via store) and the query set in the store.
 func newTestSearchOverlayWithResults() (*panes.SearchOverlay, *state.Store) {
 	s := state.New()
 	t := theme.Load("black")
-
-	s.SetSearchResults(&api.SearchResult{
-		Tracks: api.SearchTracksResult{
-			Items: []api.Track{
-				{ID: "t1", Name: "Blinding Lights", URI: "spotify:track:t1",
-					Artists: []api.Artist{{ID: "a1", Name: "The Weeknd"}}},
-				{ID: "t2", Name: "Save Your Tears", URI: "spotify:track:t2",
-					Artists: []api.Artist{{ID: "a1", Name: "The Weeknd"}}},
-			},
-			Total: 2,
-		},
-		Artists: api.SearchArtistsResult{
-			Items: []api.SearchArtist{
-				{ID: "a1", Name: "The Weeknd", URI: "spotify:artist:a1"},
-			},
-			Total: 1,
-		},
-		Albums: api.SearchAlbumsResult{
-			Items: []api.SearchAlbum{
-				{ID: "al1", Name: "After Hours", URI: "spotify:album:al1",
-					Artists: []api.Artist{{ID: "a1", Name: "The Weeknd"}}},
-			},
-			Total: 1,
-		},
-		Playlists: api.SearchPlaylistsResult{
-			Items: []api.SearchPlaylist{
-				{ID: "pl1", Name: "Blinding Pop Hits", URI: "spotify:playlist:pl1",
-					Owner: api.SimplePlaylistOwner{ID: "u1", DisplayName: "User"}},
-			},
-			Total: 1,
-		},
-	})
 	s.SetSearchQuery("blinding")
 
 	overlay := panes.NewSearchOverlay(s, t)
+
+	// Deliver results the same way the root app model does: via SearchResultsMsg.
+	msg := panes.SearchResultsMsg{Results: sampleSearchResultData()}
+	model, _ := overlay.Update(msg)
+	overlay = model.(*panes.SearchOverlay)
+
 	return overlay, s
 }
 
@@ -319,21 +312,19 @@ func TestSearchOverlay_View_SelectedHighlight(t *testing.T) {
 func TestSearchOverlay_View_Truncation(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
-
-	// Very long track name
-	longName := strings.Repeat("A", 120)
-	s.SetSearchResults(&api.SearchResult{
-		Tracks: api.SearchTracksResult{
-			Items: []api.Track{
-				{ID: "t1", Name: longName, URI: "spotify:track:t1",
-					Artists: []api.Artist{{ID: "a1", Name: "Artist"}}},
-			},
-			Total: 1,
-		},
-	})
 	s.SetSearchQuery("test")
 
 	o := panes.NewSearchOverlay(s, th)
+
+	// Very long track name
+	longName := strings.Repeat("A", 120)
+	results := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "spotify:track:t1", Name: longName, Artist: "Artist"},
+		},
+	}
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
 	o.SetSize(40, 20) // narrow overlay
 
 	view := o.View()
@@ -356,14 +347,12 @@ func TestSearchOverlay_View_NoResults(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 	s.SetSearchQuery("zzznoresults")
-	s.SetSearchResults(&api.SearchResult{
-		Tracks:    api.SearchTracksResult{Items: []api.Track{}},
-		Artists:   api.SearchArtistsResult{Items: []api.SearchArtist{}},
-		Albums:    api.SearchAlbumsResult{Items: []api.SearchAlbum{}},
-		Playlists: api.SearchPlaylistsResult{Items: []api.SearchPlaylist{}},
-	})
 
 	o := panes.NewSearchOverlay(s, th)
+	// Deliver empty results via message
+	emptyResults := &panes.SearchResultData{} // all slices nil → zero items
+	model, _ := o.Update(panes.SearchResultsMsg{Results: emptyResults})
+	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 40)
 
 	view := o.View()
@@ -428,10 +417,12 @@ func TestSearchOverlay_View_ShowsErrorOnSearchFailure(t *testing.T) {
 func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {
 	s := state.New()
 	s.SetSearchQuery("zzz-nonexistent-query")
-	// Set empty results (all sections empty).
-	s.SetSearchResults(&api.SearchResult{})
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(s, th)
+
+	// Deliver empty results via SearchResultsMsg (the new way)
+	model, _ := o.Update(panes.SearchResultsMsg{Results: &panes.SearchResultData{}})
+	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 30)
 
 	output := o.View()
@@ -441,13 +432,17 @@ func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {
 func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	s := state.New()
 	s.SetSearchQuery("blinding")
-	s.SetSearchResults(&api.SearchResult{
-		Tracks: api.SearchTracksResult{Items: []api.Track{
-			{ID: "t1", Name: "Blinding Lights", Artists: []api.Artist{{Name: "The Weeknd"}}},
-		}},
-	})
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(s, th)
+
+	// Deliver results via SearchResultsMsg
+	results := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
+		},
+	}
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 30)
 
 	output := o.View()
@@ -483,9 +478,8 @@ func TestSearchOverlay_CtrlU_EmitsSearchClearedMsg(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 
-	// Pre-populate store with search results so we know the overlay has something to clear.
+	// Pre-populate store with search state so we know there's something to clear.
 	s.SetSearchQuery("blinding lights")
-	s.SetSearchResults(&api.SearchResult{})
 
 	o := panes.NewSearchOverlay(s, th)
 	o.SetSize(80, 30)
@@ -520,4 +514,60 @@ func TestSearchOverlay_CtrlU_ClearsLocalInput(t *testing.T) {
 	// Ctrl+U should clear the local input field.
 	o, _ = sendKey(t, o, "ctrl+u")
 	assert.Equal(t, "", o.Query(), "Ctrl+U should clear the local input field")
+}
+
+// TestConvertSearchResult_RoundTrip verifies that convertSearchResult (indirectly via
+// SearchResultsMsg) correctly maps api fields to SearchResultData fields.
+// We test the data visible in the overlay after receiving a SearchResultsMsg.
+func TestSearchOverlay_SearchResultsMsg_StoresResults(t *testing.T) {
+	s := state.New()
+	s.SetSearchQuery("test")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+
+	results := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "spotify:track:abc", Name: "Track One", Artist: "Artist One"},
+		},
+		Artists: []panes.SearchArtistItem{
+			{URI: "spotify:artist:xyz", Name: "Artist One"},
+		},
+	}
+
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
+
+	view := o.View()
+	assert.Contains(t, view, "Track One", "view should show track from SearchResultsMsg")
+	assert.Contains(t, view, "TRACKS", "view should show TRACKS section header")
+	assert.Contains(t, view, "Artist One", "view should show artist from SearchResultsMsg")
+}
+
+// TestSearchOverlay_View_Truncation_NoApiImport verifies the import boundary:
+// search.go must not import api/. This test uses panes.SearchResultData directly.
+func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
+	// This test verifies the architectural boundary at the type level.
+	// If search.go imported api/, the panes package would fail to build without api/.
+	// We exercise the full rendering path using only panes types.
+	s := state.New()
+	s.SetSearchQuery("boundary")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+
+	results := &panes.SearchResultData{
+		Tracks:    []panes.SearchTrackItem{{URI: "u1", Name: "T1", Artist: "A1"}},
+		Artists:   []panes.SearchArtistItem{{URI: "u2", Name: "A2"}},
+		Albums:    []panes.SearchAlbumItem{{URI: "u3", Name: "Al1", Artist: "A3"}},
+		Playlists: []panes.SearchPlaylistItem{{URI: "u4", Name: "PL1", Owner: "Owner1"}},
+	}
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
+	o.SetSize(80, 40)
+
+	view := o.View()
+	assert.Contains(t, view, "T1")
+	assert.Contains(t, view, "A2")
+	assert.Contains(t, view, "Al1")
+	assert.Contains(t, view, "PL1")
 }

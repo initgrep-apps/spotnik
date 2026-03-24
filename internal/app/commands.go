@@ -267,7 +267,8 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	}
 }
 
-// buildSearchCmd creates a command that calls the Spotify search API and writes results to store.
+// buildSearchCmd creates a command that calls the Spotify search API and delivers
+// pre-converted results via SearchResultsMsg so search.go never imports api/.
 func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
 	store := a.store
@@ -299,8 +300,58 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 		store.ClearSearchError()
 		store.SetSearchResults(results)
 		store.SetSearchLoading(false)
-		return panes.SearchResultsMsg{}
+		return panes.SearchResultsMsg{Results: convertSearchResult(results)}
 	}
+}
+
+// convertSearchResult converts *api.SearchResult to *panes.SearchResultData,
+// extracting only the fields the UI needs. This is the sole place where api
+// search types cross the app/ui boundary.
+func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
+	if r == nil {
+		return nil
+	}
+
+	data := &panes.SearchResultData{}
+
+	for _, t := range r.Tracks.Items {
+		item := panes.SearchTrackItem{
+			URI:  t.URI,
+			Name: t.Name,
+		}
+		if len(t.Artists) > 0 {
+			item.Artist = t.Artists[0].Name
+		}
+		data.Tracks = append(data.Tracks, item)
+	}
+
+	for _, a := range r.Artists.Items {
+		data.Artists = append(data.Artists, panes.SearchArtistItem{
+			URI:  a.URI,
+			Name: a.Name,
+		})
+	}
+
+	for _, a := range r.Albums.Items {
+		item := panes.SearchAlbumItem{
+			URI:  a.URI,
+			Name: a.Name,
+		}
+		if len(a.Artists) > 0 {
+			item.Artist = a.Artists[0].Name
+		}
+		data.Albums = append(data.Albums, item)
+	}
+
+	for _, p := range r.Playlists.Items {
+		data.Playlists = append(data.Playlists, panes.SearchPlaylistItem{
+			URI:   p.URI,
+			Name:  p.Name,
+			Owner: p.Owner.DisplayName,
+		})
+	}
+
+	return data
 }
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices
