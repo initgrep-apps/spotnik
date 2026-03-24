@@ -1346,6 +1346,60 @@ func TestApp_PlaylistViewHandlesRemoveRequest(t *testing.T) {
 	_ = a
 }
 
+// TestApp_CloseSearch_RestoresPrevFocus verifies that closing the search overlay
+// restores the focus that was active before the overlay was opened.
+func TestApp_CloseSearch_RestoresPrevFocus(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Move focus to queue pane (Tab twice: player → library → queue).
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	require.True(t, a.QueueFocused(), "setup: queue should be focused before opening overlay")
+
+	// Open search overlay — this saves prevFocus = queue.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = m.(*app.App)
+	require.True(t, a.SearchOpen(), "search overlay should be open")
+
+	// Close the search overlay.
+	m, _ = a.Update(panes.SearchClosedMsg{})
+	a = m.(*app.App)
+
+	assert.False(t, a.SearchOpen(), "overlay should be closed")
+	assert.True(t, a.QueueFocused(), "closing search should restore focus to queue")
+	assert.False(t, a.PlayerFocused(), "player should not be focused after restoring queue focus")
+	assert.False(t, a.LibraryFocused(), "library should not be focused after restoring queue focus")
+}
+
+// TestApp_CloseDeviceOverlay_RestoresPrevFocus verifies that closing the device overlay
+// restores the focus that was active before the overlay was opened.
+func TestApp_CloseDeviceOverlay_RestoresPrevFocus(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Move focus to library pane (Tab once: player → library).
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	a = m.(*app.App)
+	require.True(t, a.LibraryFocused(), "setup: library should be focused before opening overlay")
+
+	// Open device overlay — this saves prevFocus = library.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = m.(*app.App)
+	require.True(t, a.DeviceOverlayOpen(), "device overlay should be open")
+
+	// Close the device overlay.
+	m, _ = a.Update(panes.DeviceOverlayClosedMsg{})
+	a = m.(*app.App)
+
+	assert.False(t, a.DeviceOverlayOpen(), "overlay should be closed")
+	assert.True(t, a.LibraryFocused(), "closing device overlay should restore focus to library")
+	assert.False(t, a.PlayerFocused(), "player should not be focused after restoring library focus")
+	assert.False(t, a.QueueFocused(), "queue should not be focused after restoring library focus")
+}
+
 // TestApp_PlaylistViewHandlesReorderRequest verifies PlaylistReorderRequestMsg is handled.
 func TestApp_PlaylistViewHandlesReorderRequest(t *testing.T) {
 	cfg := &config.Config{}

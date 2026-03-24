@@ -30,6 +30,15 @@ Features must be built in order. Each depends on the previous being stable and t
 | 16 | Fix Search Results | `16-fix-search-results.md` | ✅ Complete | — | #20 |
 | 17 | Fix Auth UX | `17-fix-auth-ux.md` | ✅ Complete | — | #21 |
 | 18 | Fix Error Architecture | `18-fix-error-architecture.md` | ✅ Complete | — | #14 |
+| 19 | P0 Correctness Fixes | `19-p0-correctness-fixes.md` | Planned | — | — |
+| 20 | Elm Architecture Purity | `20-elm-architecture-purity.md` | Planned | 19 | — |
+| 21 | Import Boundary Fixes | `21-import-boundary-fixes.md` | Planned | 19 | — |
+| 22 | app.go Decomposition | `22-app-decomposition.md` | Planned | 20 | — |
+| 23 | API Interfaces & Mocks | `23-api-interfaces-mocks.md` | Planned | — | — |
+| 24 | Typed Errors & TokenProvider | `24-typed-errors-token-provider.md` | Planned | 23 | — |
+| 25 | API DRY Refactoring | `25-api-dry-refactoring.md` | Planned | 23, 24 | — |
+| 26 | View Height Enforcement | `26-view-height-enforcement.md` | Planned | — | — |
+| 27 | Error Resilience | `27-error-resilience.md` | Planned | 24 | — |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
@@ -111,6 +120,26 @@ Bug fix features should be implemented in this order:
 
 ---
 
+## Architecture Improvement Execution Order
+
+Improvements from the architecture review (2026-03-23). Implement in this order:
+
+1. `19-p0-correctness-fixes.md` — Focus restoration, View() purity, dead code
+2. `20-elm-architecture-purity.md` — Store mutation fixes, hardcoded hex (depends on 19)
+3. `21-import-boundary-fixes.md` — Remove ui/→api/ imports (depends on 19)
+4. `22-app-decomposition.md` — Split app.go into commands.go + render.go (depends on 20)
+5. `23-api-interfaces-mocks.md` — Define interfaces, create mocks (independent)
+6. `24-typed-errors-token-provider.md` — Typed errors, TokenProvider (depends on 23)
+7. `25-api-dry-refactoring.md` — BaseClient, fetchAll, Get prefix (depends on 23, 24)
+8. `26-view-height-enforcement.md` — Height capping for 3 panes (independent)
+9. `27-error-resilience.md` — 401 retry, 429/403 extension (depends on 24)
+
+> **Parallelism:** Features 19, 23, 26 have no dependencies and can start in parallel.
+> After 19 completes, 20+21 can run in parallel. After 23, 24 can start.
+> After 24, 25+27 can run in parallel.
+
+---
+
 ## Versioning
 
 | Version | Includes |
@@ -121,6 +150,7 @@ Bug fix features should be implemented in this order:
 | v0.4.0 | Feature 8 (stats) |
 | v1.0.0 | Feature 9 (playlist manager) + polish |
 | v1.1.0 | Features 10-18 (bug fixes + error architecture + UX polish) |
+| v2.0.0 | Features 19-27 (architecture improvements from review) |
 
 ---
 

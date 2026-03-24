@@ -271,24 +271,6 @@ func TestPlayerPane_Update_TickNoIncrement_WhenPaused(t *testing.T) {
 	assert.Equal(t, 30000, updatedPane.localProgressMs)
 }
 
-func TestNextRepeatMode(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"off", "context"},
-		{"context", "track"},
-		{"track", "off"},
-		{"unknown", "off"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := nextRepeatMode(tt.input)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestPlayerPane_SetFocused(t *testing.T) {
 	pane := newTestPlayerPane(false)
 	assert.False(t, pane.focused)

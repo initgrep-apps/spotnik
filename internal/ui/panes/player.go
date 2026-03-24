@@ -227,18 +227,6 @@ func emitPlaybackRequest(action PlaybackAction) tea.Cmd {
 	}
 }
 
-// nextRepeatMode returns the next repeat mode in the cycle off→context→track→off.
-func nextRepeatMode(current string) string {
-	switch current {
-	case "off":
-		return "context"
-	case "context":
-		return "track"
-	default:
-		return "off"
-	}
-}
-
 // paneMax returns the larger of two ints.
 func paneMax(a, b int) int {
 	if a > b {
