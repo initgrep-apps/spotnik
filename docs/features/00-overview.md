@@ -30,14 +30,14 @@ Features must be built in order. Each depends on the previous being stable and t
 | 16 | Fix Search Results | `16-fix-search-results.md` | ✅ Complete | — | #20 |
 | 17 | Fix Auth UX | `17-fix-auth-ux.md` | ✅ Complete | — | #21 |
 | 18 | Fix Error Architecture | `18-fix-error-architecture.md` | ✅ Complete | — | #14 |
-| 19 | P0 Correctness Fixes | `19-p0-correctness-fixes.md` | Planned | — | — |
-| 20 | Elm Architecture Purity | `20-elm-architecture-purity.md` | Planned | 19 | — |
-| 21 | Import Boundary Fixes | `21-import-boundary-fixes.md` | Planned | 19 | — |
-| 22 | app.go Decomposition | `22-app-decomposition.md` | Planned | 20 | — |
-| 23 | API Interfaces & Mocks | `23-api-interfaces-mocks.md` | Planned | — | — |
-| 24 | Typed Errors & TokenProvider | `24-typed-errors-token-provider.md` | Planned | 23 | — |
+| 19 | P0 Correctness Fixes | `19-p0-correctness-fixes.md` | ✅ Complete | — | #24 |
+| 20 | Elm Architecture Purity | `20-elm-architecture-purity.md` | ✅ Complete | 19 | #26 |
+| 21 | Import Boundary Fixes | `21-import-boundary-fixes.md` | ✅ Partial | 19 | #29 |
+| 22 | app.go Decomposition | `22-app-decomposition.md` | ✅ Complete | 20 | #27 |
+| 23 | API Interfaces & Mocks | `23-api-interfaces-mocks.md` | ✅ Complete | — | #25 |
+| 24 | Typed Errors & TokenProvider | `24-typed-errors-token-provider.md` | ✅ Partial | 23 | #30 |
 | 25 | API DRY Refactoring | `25-api-dry-refactoring.md` | Planned | 23, 24 | — |
-| 26 | View Height Enforcement | `26-view-height-enforcement.md` | Planned | — | — |
+| 26 | View Height Enforcement | `26-view-height-enforcement.md` | ✅ Complete | — | #28 |
 | 27 | Error Resilience | `27-error-resilience.md` | Planned | 24 | — |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
