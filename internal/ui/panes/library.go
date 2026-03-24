@@ -320,6 +320,9 @@ type LibraryPane struct {
 	focused bool
 	width   int
 	height  int
+
+	// scrollOffset is the first visible row index in the flattened tree.
+	scrollOffset int
 }
 
 // NewLibraryPane creates a LibraryPane with the given store and theme.
@@ -396,7 +399,8 @@ func (p *LibraryPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-// View renders the library pane.
+// View renders the library pane. Only renders rows within the visible window
+// to enforce height capping per the DESIGN.md requirement.
 func (p *LibraryPane) View() string {
 	headerStyle := lipgloss.NewStyle().Foreground(p.theme.SectionHeader()).Bold(true)
 	sectionStyle := lipgloss.NewStyle().Foreground(p.theme.SectionHeader())
@@ -413,67 +417,121 @@ func (p *LibraryPane) View() string {
 		"",
 	}
 
+	// Fixed header takes 3 lines; the rest is available for tree rows + indicators.
+	visibleCount := p.visibleItemCount()
+	totalRows := p.tree.visibleRows()
+
 	var playingURI string
 	if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil {
 		playingURI = ps.Item.URI
 	}
 
+	// Scroll-up indicator when content exists above the visible window.
+	if p.scrollOffset > 0 {
+		lines = append(lines, mutedStyle.Render("  ▲ more above"))
+	}
+
+	endRow := p.scrollOffset + visibleCount
+	if endRow > totalRows {
+		endRow = totalRows
+	}
+
 	row := 0
 	for _, section := range p.tree.Sections() {
-		arrow := "▸"
-		if section.Expanded {
-			arrow = "▾"
-		}
-		countStr := ""
-		if section.Total > 0 {
-			countStr = fmt.Sprintf(" (%d)", section.Total)
-		} else if len(section.Items) > 0 {
-			countStr = fmt.Sprintf(" (%d)", len(section.Items))
-		}
-		if section.Loading {
-			countStr = " ..."
-		}
+		// Section header row.
+		if row >= p.scrollOffset && row < endRow {
+			arrow := "▸"
+			if section.Expanded {
+				arrow = "▾"
+			}
+			countStr := ""
+			if section.Total > 0 {
+				countStr = fmt.Sprintf(" (%d)", section.Total)
+			} else if len(section.Items) > 0 {
+				countStr = fmt.Sprintf(" (%d)", len(section.Items))
+			}
+			if section.Loading {
+				countStr = " ..."
+			}
 
-		headerText := fmt.Sprintf("%s %s%s", arrow, section.Name, countStr)
+			headerText := fmt.Sprintf("%s %s%s", arrow, section.Name, countStr)
 
-		var headerRendered string
-		if row == p.tree.cursorPos {
-			headerRendered = selectedStyle.Render(headerText)
-		} else {
-			headerRendered = sectionStyle.Render(headerText)
+			var headerRendered string
+			if row == p.tree.cursorPos {
+				headerRendered = selectedStyle.Render(headerText)
+			} else {
+				headerRendered = sectionStyle.Render(headerText)
+			}
+			lines = append(lines, headerRendered)
 		}
-		lines = append(lines, headerRendered)
 		row++
 
 		if section.Expanded {
 			for _, item := range section.Items {
-				name := item.DisplayName
-				uri := item.TrackURI
+				if row >= p.scrollOffset && row < endRow {
+					name := item.DisplayName
+					uri := item.TrackURI
 
-				var indicator string
-				if uri != "" && uri == playingURI {
-					indicator = playingStyle.Render("▶") + " "
-				} else {
-					indicator = "  "
+					var indicator string
+					if uri != "" && uri == playingURI {
+						indicator = playingStyle.Render("▶") + " "
+					} else {
+						indicator = "  "
+					}
+
+					itemText := fmt.Sprintf("  %s%s", indicator, name)
+
+					var rendered string
+					if row == p.tree.cursorPos {
+						rendered = selectedStyle.Render(itemText)
+					} else if uri != "" && uri == playingURI {
+						rendered = primaryStyle.Render(itemText)
+					} else {
+						rendered = mutedStyle.Render(itemText)
+					}
+					lines = append(lines, rendered)
 				}
-
-				itemText := fmt.Sprintf("  %s%s", indicator, name)
-
-				var rendered string
-				if row == p.tree.cursorPos {
-					rendered = selectedStyle.Render(itemText)
-				} else if uri != "" && uri == playingURI {
-					rendered = primaryStyle.Render(itemText)
-				} else {
-					rendered = mutedStyle.Render(itemText)
-				}
-				lines = append(lines, rendered)
 				row++
 			}
 		}
 	}
 
+	// Scroll-down indicator when content exists below the visible window.
+	if endRow < totalRows {
+		lines = append(lines, mutedStyle.Render("  ▼ more below"))
+	}
+
 	return strings.Join(lines, "\n")
+}
+
+// visibleItemCount returns the number of tree rows that fit in the visible area.
+// Fixed UI overhead (LIBRARY header + divider + blank line) takes 3 lines.
+// We also reserve 1 line for a potential scroll indicator (▲ or ▼).
+func (p *LibraryPane) visibleItemCount() int {
+	if p.height <= 0 {
+		return 10 // safe default for tests with no size set
+	}
+	// 3 fixed header lines + 1 reserved for scroll indicator.
+	available := p.height - 4
+	if available <= 0 {
+		return 1
+	}
+	return available
+}
+
+// ensureCursorVisible adjusts scrollOffset so the cursor row is within the visible window.
+func (p *LibraryPane) ensureCursorVisible() {
+	visible := p.visibleItemCount()
+	cursor := p.tree.cursorPos
+	if cursor < p.scrollOffset {
+		p.scrollOffset = cursor
+	}
+	if cursor >= p.scrollOffset+visible {
+		p.scrollOffset = cursor - visible + 1
+	}
+	if p.scrollOffset < 0 {
+		p.scrollOffset = 0
+	}
 }
 
 // handleKey dispatches key events.
@@ -482,11 +540,13 @@ func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "j",
 		msg.Type == tea.KeyDown:
 		p.tree.MoveDown()
+		p.ensureCursorVisible()
 		return p, p.loadMoreIfNearBottom()
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "k",
 		msg.Type == tea.KeyUp:
 		p.tree.MoveUp()
+		p.ensureCursorVisible()
 		return p, nil
 
 	case msg.Type == tea.KeyEnter:
