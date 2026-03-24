@@ -76,6 +76,14 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 			err = player.SetRepeat(ctx, mode)
 		}
 
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
 		return panes.PlaybackCmdSentMsg{Err: err}
 	}
 }
@@ -100,6 +108,14 @@ func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
 			return panes.PlaybackCmdSentMsg{}
 		}
 		err := player.Play(context.Background(), api.PlayOptions{ContextURI: contextURI})
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
 		return panes.PlaybackCmdSentMsg{Err: err}
 	}
 }
@@ -112,6 +128,14 @@ func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
 			return panes.PlaybackCmdSentMsg{}
 		}
 		err := player.Play(context.Background(), api.PlayOptions{URIs: []string{trackURI}})
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
 		return panes.PlaybackCmdSentMsg{Err: err}
 	}
 }
@@ -231,6 +255,14 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 			return panes.AddToQueueResultMsg{TrackName: trackName}
 		}
 		err := player.AddToQueue(context.Background(), trackURI)
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
 		return panes.AddToQueueResultMsg{Err: err, TrackName: trackName}
 	}
 }
