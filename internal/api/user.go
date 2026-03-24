@@ -3,10 +3,8 @@ package api
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 // FullArtist represents a Spotify artist with full details, as returned by
@@ -33,31 +31,21 @@ type FullArtist struct {
 }
 
 // UserClient provides Spotify API calls for user-specific data: top tracks,
-// top artists, and recently played history. It uses the same base URL pattern
-// as Player and LibraryClient — pass "" for the production Spotify API.
+// top artists, and recently played history. It embeds BaseClient for shared
+// HTTP functionality.
 type UserClient struct {
-	baseURL     string
-	accessToken string
-	client      *http.Client
+	BaseClient
 }
 
 // NewUserClient constructs a UserClient using the given base URL and access token.
 // Pass "" for baseURL to use the production Spotify API.
 func NewUserClient(baseURL, accessToken string) *UserClient {
-	base := baseURL
-	if base == "" {
-		base = spotifyAPIBaseURL
-	}
-	return &UserClient{
-		baseURL:     strings.TrimRight(base, "/"),
-		accessToken: accessToken,
-		client:      &http.Client{},
-	}
+	return &UserClient{BaseClient: NewBaseClient(baseURL, accessToken)}
 }
 
 // SetHTTPClient overrides the default HTTP client used for API calls.
 func (u *UserClient) SetHTTPClient(c *http.Client) {
-	u.client = c
+	u.setHTTPClient(c)
 }
 
 // GetTopTracks fetches the user's top tracks via GET /me/top/tracks.
@@ -135,45 +123,4 @@ func (u *UserClient) GetRecentlyPlayed(ctx context.Context, limit int) ([]PlayHi
 		return []PlayHistory{}, nil
 	}
 	return response.Items, nil
-}
-
-// newRequest builds an HTTP request with the Authorization header set.
-func (u *UserClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	url := u.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+u.accessToken)
-	return req, nil
-}
-
-// doJSON executes req, checks for a 2xx status, then decodes the JSON body into out.
-func (u *UserClient) doJSON(req *http.Request, out interface{}) error {
-	resp, err := u.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		retryAfter := resp.Header.Get("Retry-After")
-		return fmt.Errorf("429 rate limited: retry after %s seconds", retryAfter)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	if err := unmarshalJSON(body, out); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	return nil
 }
