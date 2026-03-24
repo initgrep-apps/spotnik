@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -171,24 +170,9 @@ func (s *SearchClient) Search(ctx context.Context, query string, types []string,
 	q.Set("market", "from_token")
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sending search request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading search response body: %w", err)
-	}
-
-	if err := checkResponseStatus(resp, body); err != nil {
-		return nil, err
-	}
-
 	var result SearchResult
-	if err := unmarshalJSON(body, &result); err != nil {
-		return nil, fmt.Errorf("parsing search response: %w", err)
+	if err := s.doJSON(req, &result); err != nil {
+		return nil, fmt.Errorf("search: %w", err)
 	}
 
 	return &result, nil

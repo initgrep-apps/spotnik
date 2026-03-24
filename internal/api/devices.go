@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -42,24 +41,9 @@ func (c *DevicesClient) GetDevices(ctx context.Context) ([]Device, error) {
 		return nil, fmt.Errorf("getting devices: creating request: %w", err)
 	}
 
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("getting devices: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("getting devices: reading response: %w", err)
-	}
-
-	if err := checkResponseStatus(resp, body); err != nil {
-		return nil, fmt.Errorf("getting devices: %w", err)
-	}
-
 	var result devicesResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("getting devices: decoding response: %w", err)
+	if err := c.doJSON(req, &result); err != nil {
+		return nil, fmt.Errorf("getting devices: %w", err)
 	}
 
 	if result.Devices == nil {
@@ -92,16 +76,8 @@ func (c *DevicesClient) TransferPlayback(ctx context.Context, deviceID string, p
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.http.Do(req)
-	if err != nil {
+	if err := c.doNoContent(req); err != nil {
 		return fmt.Errorf("transferring playback: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// 204 No Content is the success response for transfer
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("transferring playback: unexpected status %d", resp.StatusCode)
-	}
-
 	return nil
 }
