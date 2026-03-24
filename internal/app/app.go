@@ -113,6 +113,10 @@ type App struct {
 	// tokenStore is the keychain token store, needed for the TUI auth flow.
 	tokenStore keychain.TokenStore
 
+	// tokenBaseURL overrides the Spotify token endpoint for tests.
+	// Empty string means use the real production Spotify endpoint.
+	tokenBaseURL string
+
 	// authURL is the Spotify authorization URL shown in the auth panel.
 	authURL string
 
@@ -126,12 +130,26 @@ type statusDismissMsg struct{}
 // splashDismissMsg is sent after 2 seconds to close the splash screen.
 type splashDismissMsg struct{}
 
+// unauthorizedMsg is sent by any build*Cmd or fetch*Cmd when the Spotify API returns 401.
+// The app handles it by attempting a token refresh.
+type unauthorizedMsg struct{}
+
+// tokenRefreshedMsg is sent when a token refresh attempt completes.
+// newToken is non-empty on success; err is non-nil on failure.
+type tokenRefreshedMsg struct {
+	newToken string
+	err      error
+}
+
 // AppOptions carries optional startup configuration into the app.
 // Zero value means the user is already authenticated and no auth flow is needed.
 type AppOptions struct {
 	NeedsAuth  bool
 	ClientID   string
 	TokenStore keychain.TokenStore
+	// TokenBaseURL overrides the Spotify token endpoint for tests.
+	// Leave empty for production (uses the real Spotify endpoint).
+	TokenBaseURL string
 }
 
 // New creates a new App, loading the theme from cfg.UI.Theme.
@@ -151,19 +169,20 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	}
 
 	return &App{
-		theme:       t,
-		store:       s,
-		playerPane:  playerPane,
-		libraryPane: libraryPane,
-		queuePane:   queuePane,
-		searchPane:  searchPane,
-		devicePane:  devicePane,
-		focus:       focusPlayer,
-		currentView: viewSplash,
-		volumeStep:  volStep,
-		needsAuth:   opts.NeedsAuth,
-		clientID:    opts.ClientID,
-		tokenStore:  opts.TokenStore,
+		theme:        t,
+		store:        s,
+		playerPane:   playerPane,
+		libraryPane:  libraryPane,
+		queuePane:    queuePane,
+		searchPane:   searchPane,
+		devicePane:   devicePane,
+		focus:        focusPlayer,
+		currentView:  viewSplash,
+		volumeStep:   volStep,
+		needsAuth:    opts.NeedsAuth,
+		clientID:     opts.ClientID,
+		tokenStore:   opts.TokenStore,
+		tokenBaseURL: opts.TokenBaseURL,
 	}
 }
 
@@ -511,6 +530,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statusMsg = fmt.Sprintf("Rate limited — pausing requests for %ds", backoff)
 		return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
 
+	case unauthorizedMsg:
+		// 401 from any Spotify API call — attempt a token refresh.
+		// If tokenStore is nil or has no refresh token, skip to show expired message.
+		return a, buildRefreshTokenCmd(a.tokenStore, a.clientID, a.tokenBaseURL)
+
+	case tokenRefreshedMsg:
+		if m.err != nil {
+			// Refresh failed — user must re-authenticate manually.
+			a.statusMsg = "Session expired. Run: spotnik auth"
+			return a, tea.Tick(5*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		}
+		// Refresh succeeded — re-initialize all API clients with the new token.
+		a.initAPIClients(m.newToken)
+		return a, nil
+
 	case panes.QueueLoadedMsg:
 		// Queue data is already in the store — no pane-specific handling needed here.
 		// QueuePane reads directly from store on View().
@@ -562,7 +596,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.AddToQueueResultMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				a.statusMsg = fmt.Sprintf("✗ %s", forbiddenErr.Message)
+			} else {
+				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			}
 			return a, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
 		}
 		if m.TrackName != "" {
