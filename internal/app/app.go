@@ -296,6 +296,7 @@ func (a *App) openSearch() (*App, tea.Cmd) {
 // closeSearch closes the search overlay and restores the previous pane focus.
 func (a *App) closeSearch() (*App, tea.Cmd) {
 	a.searchOpen = false
+	a.focus = a.prevFocus
 	return a, nil
 }
 
@@ -310,6 +311,7 @@ func (a *App) openDeviceOverlay() (*App, tea.Cmd) {
 // closeDeviceOverlay closes the device switcher overlay and restores previous focus.
 func (a *App) closeDeviceOverlay() (*App, tea.Cmd) {
 	a.deviceOverlayOpen = false
+	a.focus = a.prevFocus
 	return a, nil
 }
 
