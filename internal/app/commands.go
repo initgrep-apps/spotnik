@@ -125,6 +125,9 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 		}
 		playlists, err := library.GetPlaylists(context.Background(), 50, offset)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetPlaylistsFetchError(err)
 			return panes.LibraryLoadedMsg{}
 		}
@@ -149,6 +152,9 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 		}
 		albums, err := library.GetSavedAlbums(context.Background(), 50, offset)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetAlbumsFetchError(err)
 			return panes.AlbumsLoadedMsg{}
 		}
@@ -168,6 +174,9 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 		}
 		tracks, err := library.GetLikedTracks(context.Background(), 50, offset)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetLikedTracksFetchError(err)
 			return panes.LikedTracksLoadedMsg{}
 		}
@@ -188,6 +197,9 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 		}
 		items, err := library.GetRecentlyPlayed(context.Background(), 20)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetRecentPlayedFetchError(err)
 			return panes.RecentlyPlayedLoadedMsg{}
 		}
@@ -230,6 +242,9 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 		)
 		if err != nil {
 			store.SetSearchLoading(false)
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetSearchError(err)
 			return panes.SearchResultsMsg{Err: err}
 		}
@@ -252,6 +267,9 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 		}
 		devList, err := devices.GetDevices(context.Background())
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetDevicesError(err)
 		} else {
 			store.ClearDevicesError()
@@ -313,11 +331,17 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 		ctx := context.Background()
 		tracks, err := userAPI.GetTopTracks(ctx, timeRange, 25)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
 		artists, err := userAPI.GetTopArtists(ctx, timeRange, 25)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
@@ -394,6 +418,9 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 		}
 		tracks, err := library.GetPlaylistTracks(context.Background(), playlistID, 100, 0)
 		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
 			store.SetPlaylistsError(err)
 			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
 		}

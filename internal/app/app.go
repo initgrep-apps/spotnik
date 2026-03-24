@@ -562,7 +562,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.AddToQueueResultMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				a.statusMsg = fmt.Sprintf("✗ %s", forbiddenErr.Message)
+			} else {
+				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+			}
 			return a, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
 		}
 		if m.TrackName != "" {
