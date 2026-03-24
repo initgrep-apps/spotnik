@@ -2,6 +2,7 @@ package panes_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -465,4 +466,104 @@ func TestStatsView_NetLog_JK_MovesCursor(t *testing.T) {
 	updated, _ = sv.Update(kMsg)
 	sv = updated.(*panes.StatsView)
 	assert.Equal(t, 18, sv.Cursor())
+}
+
+// --- Height enforcement tests ---
+
+// TestStatsView_View_HeightCapped verifies View() line count does not exceed SetSize height.
+func TestStatsView_View_HeightCapped(t *testing.T) {
+	sv, s := newStatsView()
+	const height = 20
+	sv.SetSize(80, height)
+
+	// Fill store with many tracks and artists so the list is long.
+	tracks := make([]api.Track, 50)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			URI:     fmt.Sprintf("spotify:track:t%d", i),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	artists := make([]api.FullArtist, 50)
+	for i := range artists {
+		artists[i] = api.FullArtist{
+			ID:   fmt.Sprintf("a%d", i),
+			Name: fmt.Sprintf("Artist %d", i+1),
+			URI:  fmt.Sprintf("spotify:artist:a%d", i),
+		}
+	}
+	s.SetTopTracks("short_term", tracks)
+	s.SetTopArtists("short_term", artists)
+
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+	require.NotNil(t, sv)
+
+	view := sv.View()
+	lines := strings.Split(view, "\n")
+	assert.LessOrEqual(t, len(lines), height, "View() must not exceed SetSize height")
+}
+
+// TestStatsView_View_ScrollIndicators verifies scroll indicators appear when content overflows.
+func TestStatsView_View_ScrollIndicators(t *testing.T) {
+	sv, s := newStatsView()
+	sv.SetSize(80, 20) // small height to force overflow
+
+	tracks := make([]api.Track, 30)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			URI:     fmt.Sprintf("spotify:track:t%d", i),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetTopTracks("short_term", tracks)
+	s.SetTopArtists("short_term", []api.FullArtist{})
+
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+	require.NotNil(t, sv)
+
+	view := sv.View()
+	// With 30 tracks and small height, there should be a down indicator.
+	assert.Contains(t, view, "▼", "should show down scroll indicator when content overflows")
+}
+
+// TestStatsView_View_ScrollingWorks verifies that navigating down past the visible window
+// updates the scroll position so cursor stays visible.
+func TestStatsView_View_ScrollingWorks(t *testing.T) {
+	sv, s := newStatsView()
+	sv.SetSize(80, 15) // small height
+
+	tracks := make([]api.Track, 30)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			URI:     fmt.Sprintf("spotify:track:t%d", i),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetTopTracks("short_term", tracks)
+	s.SetTopArtists("short_term", []api.FullArtist{})
+
+	updated, _ := sv.Update(panes.StatsLoadedMsg{TimeRange: "short_term"})
+	sv, _ = updated.(*panes.StatsView)
+	require.NotNil(t, sv)
+
+	// Navigate down many times to force scrolling.
+	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	for i := 0; i < 20; i++ {
+		updated, _ = sv.Update(jMsg)
+		sv, _ = updated.(*panes.StatsView)
+	}
+
+	// The view should show the cursor is within view (view contains the cursor track name).
+	view := sv.View()
+	cursorIdx := sv.Cursor()
+	cursorTrack := fmt.Sprintf("Track %d", cursorIdx+1)
+	assert.Contains(t, view, cursorTrack, "cursor track should be visible after scrolling")
 }
