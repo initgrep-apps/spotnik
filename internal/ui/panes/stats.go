@@ -73,6 +73,9 @@ type StatsView struct {
 	// cursor is the selection cursor within the active section.
 	cursor int
 
+	// scrollOffset is the first visible item index in the active section.
+	scrollOffset int
+
 	width  int
 	height int
 }
@@ -143,11 +146,13 @@ func (sv *StatsView) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.Type == tea.KeyTab:
 		sv.activeSection = (sv.activeSection + 1) % statsSectionCount
+		sv.scrollOffset = 0
 		// Auto-scroll: when entering NetLog, jump cursor to newest entry.
 		if sv.activeSection == StatsSectionNetLog {
 			entries := sv.store.NetLogEntries()
 			if len(entries) > 0 {
 				sv.cursor = len(entries) - 1
+				sv.ensureCursorVisible()
 			} else {
 				sv.cursor = 0
 			}
@@ -184,6 +189,7 @@ func (sv *StatsView) moveCursorDown() {
 	}
 	if sv.cursor < max {
 		sv.cursor++
+		sv.ensureCursorVisible()
 	}
 }
 
@@ -191,7 +197,55 @@ func (sv *StatsView) moveCursorDown() {
 func (sv *StatsView) moveCursorUp() {
 	if sv.cursor > 0 {
 		sv.cursor--
+		sv.ensureCursorVisible()
 	}
+}
+
+// visibleItemCount returns the number of items that fit in the visible area
+// for a section. The stats layout splits the available height across sections,
+// so we use a conservative estimate: half the height for top sections
+// (tracks/artists share space horizontally), full height minus header for others.
+// NOTE: This is a per-section calculation, not a global one.
+func (sv *StatsView) visibleItemCount() int {
+	if sv.height <= 0 {
+		return 10 // safe default for tests with no size set
+	}
+	switch sv.activeSection {
+	case StatsSectionTopTracks, StatsSectionTopArtists:
+		// Top row shares height: header (1) + range toggle (1) + items, roughly half the page.
+		available := sv.height/2 - 3
+		if available <= 0 {
+			return 1
+		}
+		return available
+	default:
+		// Bottom sections: subtract header rows (section header + divider).
+		available := sv.height - sv.height/2 - 3
+		if available <= 0 {
+			return 1
+		}
+		return available
+	}
+}
+
+// ensureCursorVisible adjusts scrollOffset so the cursor is within the visible window.
+func (sv *StatsView) ensureCursorVisible() {
+	visible := sv.visibleItemCount()
+	if sv.cursor < sv.scrollOffset {
+		sv.scrollOffset = sv.cursor
+	}
+	if sv.cursor >= sv.scrollOffset+visible {
+		sv.scrollOffset = sv.cursor - visible + 1
+	}
+	if sv.scrollOffset < 0 {
+		sv.scrollOffset = 0
+	}
+
+}
+
+// ScrollOffset returns the current scroll offset (exported for testing).
+func (sv *StatsView) ScrollOffset() int {
+	return sv.scrollOffset
 }
 
 // activeSectionLen returns the number of items in the currently focused section.
@@ -318,7 +372,7 @@ func (sv *StatsView) renderDashboard() string {
 	return sb.String()
 }
 
-// renderTopTracksSection renders the TOP TRACKS section.
+// renderTopTracksSection renders the TOP TRACKS section with height capping.
 func (sv *StatsView) renderTopTracksSection() string {
 	focused := sv.activeSection == StatsSectionTopTracks
 	var sb strings.Builder
@@ -336,7 +390,27 @@ func (sv *StatsView) renderTopTracksSection() string {
 		return sb.String()
 	}
 
-	for i, track := range tracks {
+	// Calculate scroll window for top-tracks section.
+	scrollOffset := 0
+	if focused {
+		scrollOffset = sv.scrollOffset
+	}
+	visibleCount := sv.visibleItemCount()
+	endIdx := scrollOffset + visibleCount
+	if endIdx > len(tracks) {
+		endIdx = len(tracks)
+	}
+
+	// Scroll-up indicator.
+	if scrollOffset > 0 {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▲"))
+		sb.WriteString("\n")
+	}
+
+	for i := scrollOffset; i < endIdx; i++ {
+		track := tracks[i]
 		artistName := ""
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
@@ -356,10 +430,18 @@ func (sv *StatsView) renderTopTracksSection() string {
 		sb.WriteString("\n")
 	}
 
+	// Scroll-down indicator.
+	if endIdx < len(tracks) {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▼"))
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 
-// renderTopArtistsSection renders the TOP ARTISTS section.
+// renderTopArtistsSection renders the TOP ARTISTS section with height capping.
 func (sv *StatsView) renderTopArtistsSection() string {
 	focused := sv.activeSection == StatsSectionTopArtists
 	var sb strings.Builder
@@ -377,7 +459,27 @@ func (sv *StatsView) renderTopArtistsSection() string {
 		return sb.String()
 	}
 
-	for i, artist := range artists {
+	// Calculate scroll window for top-artists section.
+	scrollOffset := 0
+	if focused {
+		scrollOffset = sv.scrollOffset
+	}
+	visibleCount := sv.visibleItemCount()
+	endIdx := scrollOffset + visibleCount
+	if endIdx > len(artists) {
+		endIdx = len(artists)
+	}
+
+	// Scroll-up indicator.
+	if scrollOffset > 0 {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▲"))
+		sb.WriteString("\n")
+	}
+
+	for i := scrollOffset; i < endIdx; i++ {
+		artist := artists[i]
 		row := fmt.Sprintf("  %2d  %s", i+1, artist.Name)
 
 		if focused && i == sv.cursor {
@@ -393,10 +495,18 @@ func (sv *StatsView) renderTopArtistsSection() string {
 		sb.WriteString("\n")
 	}
 
+	// Scroll-down indicator.
+	if endIdx < len(artists) {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▼"))
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 
-// renderRecentlyPlayedSection renders the RECENTLY PLAYED section.
+// renderRecentlyPlayedSection renders the RECENTLY PLAYED section with height capping.
 func (sv *StatsView) renderRecentlyPlayedSection() string {
 	focused := sv.activeSection == StatsSectionRecentlyPlayed
 	var sb strings.Builder
@@ -412,7 +522,27 @@ func (sv *StatsView) renderRecentlyPlayedSection() string {
 		return sb.String()
 	}
 
-	for i, item := range items {
+	// Calculate scroll window for this section.
+	scrollOffset := 0
+	if focused {
+		scrollOffset = sv.scrollOffset
+	}
+	visibleCount := sv.visibleItemCount()
+	endIdx := scrollOffset + visibleCount
+	if endIdx > len(items) {
+		endIdx = len(items)
+	}
+
+	// Scroll-up indicator.
+	if scrollOffset > 0 {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▲"))
+		sb.WriteString("\n")
+	}
+
+	for i := scrollOffset; i < endIdx; i++ {
+		item := items[i]
 		artistName := ""
 		if len(item.Track.Artists) > 0 {
 			artistName = item.Track.Artists[0].Name
@@ -435,6 +565,14 @@ func (sv *StatsView) renderRecentlyPlayedSection() string {
 				Foreground(sv.theme.TextPrimary()).
 				Render(row))
 		}
+		sb.WriteString("\n")
+	}
+
+	// Scroll-down indicator.
+	if endIdx < len(items) {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▼"))
 		sb.WriteString("\n")
 	}
 
@@ -516,8 +654,8 @@ func formatPlayedAt(playedAt string) string {
 	return FormatRelativeTime(t)
 }
 
-// renderNetLogSection renders the NETWORK LOG section with cursor-based highlighting.
-// Uses the same pattern as renderTopTracksSection — pure View, no state mutation.
+// renderNetLogSection renders the NETWORK LOG section with cursor-based highlighting
+// and height capping.
 func (sv *StatsView) renderNetLogSection() string {
 	focused := sv.activeSection == StatsSectionNetLog
 	var sb strings.Builder
@@ -542,8 +680,28 @@ func (sv *StatsView) renderNetLogSection() string {
 		return sb.String()
 	}
 
+	// Calculate scroll window for net log section.
+	scrollOffset := 0
+	if focused {
+		scrollOffset = sv.scrollOffset
+	}
+	visibleCount := sv.visibleItemCount()
+	endIdx := scrollOffset + visibleCount
+	if endIdx > len(entries) {
+		endIdx = len(entries)
+	}
+
+	// Scroll-up indicator.
+	if scrollOffset > 0 {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▲"))
+		sb.WriteString("\n")
+	}
+
 	// Chronological order (oldest first), cursor highlights current row.
-	for i, entry := range entries {
+	for i := scrollOffset; i < endIdx; i++ {
+		entry := entries[i]
 		timeStr := entry.Timestamp.Format("15:04:05")
 		row := fmt.Sprintf("  %-8s %-6s %-36s %6d %6dms",
 			timeStr, entry.Method, truncate(entry.Path, 36),
@@ -567,6 +725,14 @@ func (sv *StatsView) renderNetLogSection() string {
 			}
 			sb.WriteString(style.Render(row))
 		}
+		sb.WriteString("\n")
+	}
+
+	// Scroll-down indicator.
+	if endIdx < len(entries) {
+		sb.WriteString(lipgloss.NewStyle().
+			Foreground(sv.theme.TextMuted()).
+			Render("  ▼"))
 		sb.WriteString("\n")
 	}
 

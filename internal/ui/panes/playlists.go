@@ -47,6 +47,9 @@ type PlaylistManager struct {
 	// leftCursor is the selected playlist index.
 	leftCursor int
 
+	// leftScrollOffset is the first visible playlist index in the left pane.
+	leftScrollOffset int
+
 	// selectedPlaylistID is the ID of the playlist whose tracks are shown on the right.
 	selectedPlaylistID string
 
@@ -60,6 +63,9 @@ type PlaylistManager struct {
 
 	// rightCursor is the selected track index in the right pane.
 	rightCursor int
+
+	// rightScrollOffset is the first visible track index in the right pane.
+	rightScrollOffset int
 
 	// nameInput is the textinput used for create/rename operations.
 	nameInput textinput.Model
@@ -302,6 +308,7 @@ func (pm *PlaylistManager) handleLeftKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		selected := playlists[pm.leftCursor]
 		pm.selectedPlaylistID = selected.ID
 		pm.rightCursor = 0
+		pm.rightScrollOffset = 0
 		// Load from store if available, otherwise request fetch.
 		tracks := pm.store.PlaylistTracks(selected.ID)
 		if tracks != nil {
@@ -316,10 +323,12 @@ func (pm *PlaylistManager) handleLeftKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "j":
 			if pm.leftCursor < len(playlists)-1 {
 				pm.leftCursor++
+				pm.ensureLeftCursorVisible()
 			}
 		case "k":
 			if pm.leftCursor > 0 {
 				pm.leftCursor--
+				pm.ensureLeftCursorVisible()
 			}
 		case "n":
 			pm.openInput(inputModeCreate, "")
@@ -331,10 +340,12 @@ func (pm *PlaylistManager) handleLeftKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyDown:
 		if pm.leftCursor < len(playlists)-1 {
 			pm.leftCursor++
+			pm.ensureLeftCursorVisible()
 		}
 	case tea.KeyUp:
 		if pm.leftCursor > 0 {
 			pm.leftCursor--
+			pm.ensureLeftCursorVisible()
 		}
 	}
 	return pm, nil
@@ -352,10 +363,12 @@ func (pm *PlaylistManager) handleRightKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "j":
 			if pm.rightCursor < len(pm.tracks)-1 {
 				pm.rightCursor++
+				pm.ensureRightCursorVisible()
 			}
 		case "k":
 			if pm.rightCursor > 0 {
 				pm.rightCursor--
+				pm.ensureRightCursorVisible()
 			}
 		case "x":
 			if len(pm.tracks) > 0 {
@@ -381,11 +394,13 @@ func (pm *PlaylistManager) handleRightKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyDown:
 		if pm.rightCursor < len(pm.tracks)-1 {
 			pm.rightCursor++
+			pm.ensureRightCursorVisible()
 		}
 
 	case tea.KeyUp:
 		if pm.rightCursor > 0 {
 			pm.rightCursor--
+			pm.ensureRightCursorVisible()
 		}
 
 	case tea.KeyEnter:
@@ -512,6 +527,60 @@ func (pm *PlaylistManager) loadTracksFromStore() {
 	}
 }
 
+// visiblePlaylistCount returns the number of playlists visible in the left pane.
+// Subtracts fixed chrome: border(2) + header(1) + divider(1) + scroll indicator(1) + padding(1).
+func (pm *PlaylistManager) visiblePlaylistCount() int {
+	if pm.height <= 0 {
+		return 10 // safe default
+	}
+	available := pm.height - 6
+	if available <= 0 {
+		return 1
+	}
+	return available
+}
+
+// visibleTrackCount returns the number of tracks visible in the right pane.
+// Subtracts fixed chrome: border(2) + header(1) + divider(1) + footer lines(2) + indicator(1) + padding(1).
+func (pm *PlaylistManager) visibleTrackCount() int {
+	if pm.height <= 0 {
+		return 10 // safe default
+	}
+	available := pm.height - 8
+	if available <= 0 {
+		return 1
+	}
+	return available
+}
+
+// ensureLeftCursorVisible adjusts leftScrollOffset so leftCursor is within the visible window.
+func (pm *PlaylistManager) ensureLeftCursorVisible() {
+	visible := pm.visiblePlaylistCount()
+	if pm.leftCursor < pm.leftScrollOffset {
+		pm.leftScrollOffset = pm.leftCursor
+	}
+	if pm.leftCursor >= pm.leftScrollOffset+visible {
+		pm.leftScrollOffset = pm.leftCursor - visible + 1
+	}
+	if pm.leftScrollOffset < 0 {
+		pm.leftScrollOffset = 0
+	}
+}
+
+// ensureRightCursorVisible adjusts rightScrollOffset so rightCursor is within the visible window.
+func (pm *PlaylistManager) ensureRightCursorVisible() {
+	visible := pm.visibleTrackCount()
+	if pm.rightCursor < pm.rightScrollOffset {
+		pm.rightScrollOffset = pm.rightCursor
+	}
+	if pm.rightCursor >= pm.rightScrollOffset+visible {
+		pm.rightScrollOffset = pm.rightCursor - visible + 1
+	}
+	if pm.rightScrollOffset < 0 {
+		pm.rightScrollOffset = 0
+	}
+}
+
 // View renders the full Playlist Manager view.
 // If the store has a PlaylistsError, renders an error box instead of the playlist layout.
 // NOTE: only app.go renders the status bar — no pane-level hint bar here.
@@ -591,7 +660,7 @@ func (pm *PlaylistManager) findTrackName(uri string) string {
 	return "track"
 }
 
-// renderLeft renders the playlist list panel.
+// renderLeft renders the playlist list panel with height-capped scrolling.
 func (pm *PlaylistManager) renderLeft(width, height int) string {
 	playlists := pm.store.Playlists()
 	playingID := pm.store.PlayingPlaylistID()
@@ -618,7 +687,19 @@ func (pm *PlaylistManager) renderLeft(width, height int) string {
 	sb.WriteString(headerStyle.Render("MY PLAYLISTS") + "\n")
 	sb.WriteString(strings.Repeat("─", width-2) + "\n")
 
-	for i, pl := range playlists {
+	// Scroll-up indicator.
+	if pm.leftScrollOffset > 0 {
+		sb.WriteString(mutedStyle.Render("  ▲") + "\n")
+	}
+
+	visibleCount := pm.visiblePlaylistCount()
+	endIdx := pm.leftScrollOffset + visibleCount
+	if endIdx > len(playlists) {
+		endIdx = len(playlists)
+	}
+
+	for i := pm.leftScrollOffset; i < endIdx; i++ {
+		pl := playlists[i]
 		isSelected := i == pm.leftCursor
 		isPlaying := pl.ID == playingID
 
@@ -642,23 +723,36 @@ func (pm *PlaylistManager) renderLeft(width, height int) string {
 		}
 	}
 
+	// Scroll-down indicator.
+	if endIdx < len(playlists) {
+		sb.WriteString(mutedStyle.Render("  ▼") + "\n")
+	}
+
 	// Padding to fill height.
-	lines := 2 + len(playlists)
-	for lines < height {
+	rendered := 2 + (endIdx - pm.leftScrollOffset)
+	if pm.leftScrollOffset > 0 {
+		rendered++
+	}
+	if endIdx < len(playlists) {
+		rendered++
+	}
+	for rendered < height {
 		sb.WriteString("\n")
-		lines++
+		rendered++
 	}
 
 	borderColor := pm.theme.InactiveBorder()
 	if pm.focus == playlistFocusLeft {
 		borderColor = pm.theme.ActiveBorder()
 	}
+	// Trim trailing newline so lipgloss Height() counts lines correctly.
+	content := strings.TrimRight(sb.String(), "\n")
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Render(sb.String())
+		Render(content)
 }
 
 // renderRight renders the track list panel.
@@ -700,9 +794,26 @@ func (pm *PlaylistManager) renderRight(width, height int) string {
 	sb.WriteString(headerStyle.Render(playlistName) + "\n")
 	sb.WriteString(strings.Repeat("─", width-4) + "\n")
 
+	// Calculate scroll window for the track list.
+	visibleCount := pm.visibleTrackCount()
+	endIdx := pm.rightScrollOffset + visibleCount
+	if endIdx > len(pm.tracks) {
+		endIdx = len(pm.tracks)
+	}
+
+	// Total duration across all tracks (not just visible).
 	var totalMs int
-	for i, t := range pm.tracks {
+	for _, t := range pm.tracks {
 		totalMs += t.durationMs
+	}
+
+	// Scroll-up indicator.
+	if pm.rightScrollOffset > 0 {
+		sb.WriteString(mutedStyle.Render("  ▲") + "\n")
+	}
+
+	for i := pm.rightScrollOffset; i < endIdx; i++ {
+		t := pm.tracks[i]
 		isSelected := i == pm.rightCursor
 
 		num := mutedStyle.Render(fmt.Sprintf("%3d", i+1))
@@ -733,6 +844,11 @@ func (pm *PlaylistManager) renderRight(width, height int) string {
 		}
 	}
 
+	// Scroll-down indicator.
+	if endIdx < len(pm.tracks) {
+		sb.WriteString(mutedStyle.Render("  ▼") + "\n")
+	}
+
 	// Footer.
 	totalMin := totalMs / 1000 / 60
 	totalSec := (totalMs / 1000) % 60
@@ -753,12 +869,14 @@ func (pm *PlaylistManager) renderRight(width, height int) string {
 	if pm.focus == playlistFocusRight {
 		borderColor = pm.theme.ActiveBorder()
 	}
+	// Trim trailing newline so lipgloss Height() counts lines correctly.
+	content := strings.TrimRight(sb.String(), "\n")
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Render(sb.String())
+		Render(content)
 }
 
 // renderInputLine renders the text input prompt at the bottom of the view.

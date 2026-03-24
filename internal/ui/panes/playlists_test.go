@@ -723,3 +723,154 @@ func TestPlaylistManager_Init_NoFetchWhenDataLoaded(t *testing.T) {
 	cmd := pm.Init()
 	assert.Nil(t, cmd, "Init should return nil when playlists already loaded")
 }
+
+// --- Height enforcement tests ---
+
+// TestPlaylistManager_View_HeightCapped verifies View() line count does not exceed SetSize height.
+func TestPlaylistManager_View_HeightCapped(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+
+	// Create many playlists so the list is long.
+	playlists := make([]api.SimplePlaylist, 50)
+	for i := range playlists {
+		playlists[i] = api.SimplePlaylist{
+			ID:         fmt.Sprintf("pl-%d", i),
+			Name:       fmt.Sprintf("Playlist %d", i+1),
+			URI:        fmt.Sprintf("spotify:playlist:pl-%d", i),
+			TrackCount: 10,
+		}
+	}
+	s.SetPlaylists(playlists)
+
+	pm := panes.NewPlaylistManager(s, th)
+	const height = 20
+	pm.SetSize(80, height)
+
+	view := pm.View()
+	// Trim trailing empty line caused by strings.Split on trailing newline.
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	assert.LessOrEqual(t, len(lines), height, "View() must not exceed SetSize height")
+}
+
+// TestPlaylistManager_TrackList_HeightCapped verifies the track list in the right pane
+// does not overflow when a playlist has many tracks.
+func TestPlaylistManager_TrackList_HeightCapped(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Big Playlist", URI: "spotify:playlist:pl-1", TrackCount: 100},
+	})
+
+	// Create 100 tracks.
+	tracks := make([]api.Track, 100)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			URI:     fmt.Sprintf("spotify:track:t%d", i),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetPlaylistTracks("pl-1", tracks)
+
+	pm := panes.NewPlaylistManager(s, th)
+	const height = 20
+	pm.SetSize(80, height)
+
+	// Open the playlist.
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updated, _ := pm.Update(enterMsg)
+	pm, _ = updated.(*panes.PlaylistManager)
+
+	view := pm.View()
+	// Trim trailing empty line caused by strings.Split on trailing newline.
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	assert.LessOrEqual(t, len(lines), height, "View() must not exceed SetSize height with many tracks")
+}
+
+// TestPlaylistManager_TrackList_ScrollIndicators verifies scroll indicators appear
+// when the track list overflows.
+func TestPlaylistManager_TrackList_ScrollIndicators(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Big Playlist", URI: "spotify:playlist:pl-1", TrackCount: 50},
+	})
+
+	tracks := make([]api.Track, 50)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			URI:     fmt.Sprintf("spotify:track:t%d", i),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetPlaylistTracks("pl-1", tracks)
+
+	pm := panes.NewPlaylistManager(s, th)
+	pm.SetSize(80, 15) // small height to force overflow
+
+	// Open the playlist.
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updated, _ := pm.Update(enterMsg)
+	pm, _ = updated.(*panes.PlaylistManager)
+
+	view := pm.View()
+	assert.Contains(t, view, "▼", "should show down scroll indicator when track list overflows")
+}
+
+// TestPlaylistManager_TrackList_ScrollingWorks verifies navigating down past the visible
+// window scrolls the track list.
+func TestPlaylistManager_TrackList_ScrollingWorks(t *testing.T) {
+	t.Helper()
+	th := theme.Load("black")
+	s := state.New()
+
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl-1", Name: "Big Playlist", URI: "spotify:playlist:pl-1", TrackCount: 50},
+	})
+
+	tracks := make([]api.Track, 50)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			URI:     fmt.Sprintf("spotify:track:t%d", i),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetPlaylistTracks("pl-1", tracks)
+
+	pm := panes.NewPlaylistManager(s, th)
+	pm.SetSize(80, 15)
+
+	// Open the playlist.
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updated, _ := pm.Update(enterMsg)
+	pm, _ = updated.(*panes.PlaylistManager)
+
+	// Tab to right pane.
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	updated, _ = pm.Update(tabMsg)
+	pm, _ = updated.(*panes.PlaylistManager)
+
+	// Navigate down many times.
+	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	for i := 0; i < 20; i++ {
+		updated, _ = pm.Update(jMsg)
+		pm, _ = updated.(*panes.PlaylistManager)
+	}
+
+	// The cursor track should be visible in the view.
+	view := pm.View()
+	cursorIdx := pm.RightCursor()
+	cursorTrack := fmt.Sprintf("Track %d", cursorIdx+1)
+	assert.Contains(t, view, cursorTrack, "cursor track should be visible after scrolling")
+}

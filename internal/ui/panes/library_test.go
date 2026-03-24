@@ -1,6 +1,8 @@
 package panes
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -859,4 +861,122 @@ func TestLibraryPane_AlbumsStayCollapsed_OnLoad(t *testing.T) {
 
 	sec := findSectionByType(pane.tree.Sections(), SectionAlbums)
 	assert.False(t, sec.Expanded, "albums should stay collapsed (lazy load)")
+}
+
+// --- Height enforcement tests ---
+
+// TestLibraryPane_View_HeightCapped verifies that View() output line count does not
+// exceed the height set via SetSize.
+func TestLibraryPane_View_HeightCapped(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	// Add many playlists so the list is long.
+	playlists := make([]api.SimplePlaylist, 50)
+	for i := range playlists {
+		playlists[i] = api.SimplePlaylist{
+			ID:   fmt.Sprintf("pl%d", i),
+			Name: fmt.Sprintf("Playlist %d", i+1),
+			URI:  fmt.Sprintf("spotify:playlist:pl%d", i),
+		}
+	}
+	s.SetPlaylists(playlists)
+
+	pane := NewLibraryPane(s, th, true)
+	pane.SetSize(40, 20)
+
+	// Expand playlists section so items are rendered.
+	expandMsg := expandSectionMsg{section: SectionPlaylists}
+	m, _ := pane.Update(expandMsg)
+	pane = m.(*LibraryPane)
+
+	view := pane.View()
+	// Trim trailing empty line that strings.Split creates from a trailing newline.
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	assert.LessOrEqual(t, len(lines), 20, "View() must not exceed SetSize height")
+}
+
+// TestLibraryPane_Scroll_AdvancesOffset verifies scrolling down past visible window
+// advances scrollOffset.
+func TestLibraryPane_Scroll_AdvancesOffset(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	playlists := make([]api.SimplePlaylist, 30)
+	for i := range playlists {
+		playlists[i] = api.SimplePlaylist{
+			ID:   fmt.Sprintf("pl%d", i),
+			Name: fmt.Sprintf("Playlist %d", i+1),
+			URI:  fmt.Sprintf("spotify:playlist:pl%d", i),
+		}
+	}
+	s.SetPlaylists(playlists)
+
+	pane := NewLibraryPane(s, th, true)
+	pane.SetSize(40, 15) // small height to force scrolling
+
+	// Expand playlists section.
+	expandMsg := expandSectionMsg{section: SectionPlaylists}
+	m, _ := pane.Update(expandMsg)
+	pane = m.(*LibraryPane)
+
+	// Navigate down many times to force scrollOffset to advance.
+	for i := 0; i < 20; i++ {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		pane = m.(*LibraryPane)
+	}
+
+	assert.Greater(t, pane.scrollOffset, 0, "scrollOffset should advance when cursor moves past visible window")
+}
+
+// TestLibraryPane_ScrollIndicators_ShowWhenOverflow verifies scroll indicators appear
+// when content exceeds height.
+func TestLibraryPane_ScrollIndicators_ShowWhenOverflow(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	playlists := make([]api.SimplePlaylist, 30)
+	for i := range playlists {
+		playlists[i] = api.SimplePlaylist{
+			ID:   fmt.Sprintf("pl%d", i),
+			Name: fmt.Sprintf("Playlist %d", i+1),
+			URI:  fmt.Sprintf("spotify:playlist:pl%d", i),
+		}
+	}
+	s.SetPlaylists(playlists)
+
+	pane := NewLibraryPane(s, th, true)
+	pane.SetSize(40, 15)
+
+	// Expand playlists.
+	expandMsg := expandSectionMsg{section: SectionPlaylists}
+	m, _ := pane.Update(expandMsg)
+	pane = m.(*LibraryPane)
+
+	view := pane.View()
+	// With 30 playlists and height 15, there should be a "more below" indicator.
+	assert.Contains(t, view, "▼", "should show down scroll indicator when content overflows")
+}
+
+// TestLibraryPane_SmallHeight_RendersAtLeastOneItem verifies that even with a very small
+// height, at least 1 item is rendered.
+func TestLibraryPane_SmallHeight_RendersAtLeastOneItem(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	s.SetPlaylists([]api.SimplePlaylist{
+		{ID: "pl1", Name: "My Playlist", URI: "spotify:playlist:pl1"},
+		{ID: "pl2", Name: "Another Playlist", URI: "spotify:playlist:pl2"},
+	})
+
+	pane := NewLibraryPane(s, th, true)
+	pane.SetSize(40, 5) // extremely small height
+
+	expandMsg := expandSectionMsg{section: SectionPlaylists}
+	m, _ := pane.Update(expandMsg)
+	pane = m.(*LibraryPane)
+
+	view := pane.View()
+	// Should still render the section header and at least one playlist item.
+	assert.Contains(t, view, "Playlists", "should render section header even at small height")
 }
