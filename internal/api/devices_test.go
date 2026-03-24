@@ -147,7 +147,7 @@ func TestDevice_Unmarshal(t *testing.T) {
 func TestNewDevicesClient_Fields(t *testing.T) {
 	client := NewDevicesClient("http://example.com", "my-token")
 	assert.Equal(t, "http://example.com", client.baseURL)
-	assert.Equal(t, "my-token", client.accessToken)
+	assert.NotNil(t, client.token)
 	assert.NotNil(t, client.http)
 }
 

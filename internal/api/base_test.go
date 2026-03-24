@@ -15,11 +15,7 @@ import (
 
 // newTestBaseClient creates a BaseClient pointed at the given base URL with a fixed token.
 func newTestBaseClient(baseURL, token string) BaseClient {
-	return BaseClient{
-		baseURL:     strings.TrimRight(baseURL, "/"),
-		accessToken: token,
-		http:        &http.Client{},
-	}
+	return NewBaseClient(strings.TrimRight(baseURL, "/"), token)
 }
 
 func TestBaseClient_NewRequest_SetsAuthHeader(t *testing.T) {
