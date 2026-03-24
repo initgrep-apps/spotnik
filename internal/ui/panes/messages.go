@@ -3,7 +3,10 @@
 //
 // Design: panes never import api/. Instead they emit request messages that the
 // root app model handles by dispatching actual API commands.
+// Messages that carry data use domain/ types so that ui/ never imports api/.
 package panes
+
+import "github.com/initgrep-apps/spotnik/internal/domain"
 
 // TickMsg is sent every second by the polling tick loop.
 // It drives both progress interpolation and playback state refresh.
@@ -15,10 +18,14 @@ type RateLimitedMsg struct {
 	RetryAfterSecs int
 }
 
-// PlaybackStateFetchedMsg notifies the player pane that the store has been
-// updated with a fresh playback state. The pane reads from the store directly.
-// NOTE: no api payload — store is the single source of truth.
-type PlaybackStateFetchedMsg struct{}
+// PlaybackStateFetchedMsg is returned by the playback polling command.
+// State carries the fetched playback state on success (may be nil if 204 — nothing playing).
+// Err is non-nil if a non-rate-limit, non-401 error occurred.
+// Update() writes State to the store; panes read from store directly.
+type PlaybackStateFetchedMsg struct {
+	State *domain.PlaybackState
+	Err   error
+}
 
 // PlaybackCmdSentMsg is returned after any playback control command completes.
 // Err is non-nil if the API returned an error.
@@ -105,21 +112,40 @@ type AddToQueueMsg struct {
 	TrackName string
 }
 
-// LibraryLoadedMsg is sent by the root app model after playlists have been loaded
-// into the store. The library pane reads from store directly on receipt.
-type LibraryLoadedMsg struct{}
+// LibraryLoadedMsg is sent by the root app model after playlists have been fetched.
+// Items carries the raw page of playlists; Offset indicates whether to replace (0)
+// or append (>0) to existing playlists. Err is non-nil on failure.
+// Update() handles pagination and writes to the store.
+type LibraryLoadedMsg struct {
+	Items  []domain.SimplePlaylist
+	Offset int
+	Err    error
+}
 
-// AlbumsLoadedMsg is sent by the root app model after saved albums have been loaded
-// into the store.
-type AlbumsLoadedMsg struct{}
+// AlbumsLoadedMsg is sent after saved albums have been fetched.
+// Items carries the albums; Err is non-nil on failure.
+// Update() writes Items to the store.
+type AlbumsLoadedMsg struct {
+	Items []domain.SavedAlbum
+	Err   error
+}
 
-// LikedTracksLoadedMsg is sent by the root app model after liked tracks have been
-// loaded into the store.
-type LikedTracksLoadedMsg struct{}
+// LikedTracksLoadedMsg is sent after liked tracks have been fetched.
+// Items carries the tracks; Offset indicates the page offset for total calculation.
+// Err is non-nil on failure. Update() writes Items to the store.
+type LikedTracksLoadedMsg struct {
+	Items  []domain.SavedTrack
+	Offset int
+	Err    error
+}
 
-// RecentlyPlayedLoadedMsg is sent by the root app model after recently played tracks
-// have been loaded into the store.
-type RecentlyPlayedLoadedMsg struct{}
+// RecentlyPlayedLoadedMsg is sent after recently played tracks have been fetched.
+// Items carries the play history; Err is non-nil on failure.
+// Update() writes Items to the store.
+type RecentlyPlayedLoadedMsg struct {
+	Items []domain.PlayHistory
+	Err   error
+}
 
 // LikeToggleResultMsg carries the result of a like/unlike operation.
 // TrackID identifies which track was affected. Err is non-nil on failure.
@@ -136,10 +162,13 @@ type AddToQueueResultMsg struct {
 	TrackName string
 }
 
-// QueueLoadedMsg is sent by the root app model after the queue has been fetched
-// from the Spotify API and written to the store.
-// The QueuePane reads from store directly on receipt.
-type QueueLoadedMsg struct{}
+// QueueLoadedMsg is returned by the queue fetch command.
+// Tracks carries the fetched queue on success; Err is non-nil on failure.
+// Update() writes Tracks to the store; QueuePane reads from store directly.
+type QueueLoadedMsg struct {
+	Tracks []domain.Track
+	Err    error
+}
 
 // DeviceInfo is the UI-facing representation of a Spotify device.
 // It mirrors the fields needed for rendering without importing api/.
@@ -175,10 +204,14 @@ type FetchPlaylistTracksRequestMsg struct {
 	PlaylistID string
 }
 
-// PlaylistTracksLoadedMsg is sent by the root app after playlist tracks have been
-// fetched and written to the store. The PlaylistManager reads from store on receipt.
+// PlaylistTracksLoadedMsg is returned by the playlist tracks fetch command.
+// PlaylistID identifies which playlist's tracks were fetched.
+// Tracks carries the fetched tracks on success; Err is non-nil on failure.
+// Update() writes Tracks to the store; PlaylistManager reads from store.
 type PlaylistTracksLoadedMsg struct {
 	PlaylistID string
+	Tracks     []domain.Track
+	Err        error
 }
 
 // PlaylistCreateRequestMsg is emitted by PlaylistManager when the user submits

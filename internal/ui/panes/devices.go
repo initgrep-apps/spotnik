@@ -63,7 +63,11 @@ func (d *DeviceOverlay) Init() tea.Cmd {
 func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case devicesLoadedMsg:
-		if m.err == nil {
+		// Write error state to store from Msg payload — only Update() may mutate store.
+		if m.err != nil {
+			d.store.SetDevicesError(m.err)
+		} else {
+			d.store.ClearDevicesError()
 			d.devices = m.devices
 		}
 		return d, nil

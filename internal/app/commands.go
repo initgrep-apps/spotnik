@@ -2,16 +2,22 @@
 // All functions in this file are methods on *App or package-level helpers that
 // create tea.Cmd values. No routing or state-mutation logic lives here — this
 // file is a pure command factory for the Spotify API calls.
+//
+// Elm Architecture contract: build*Cmd and fetch*Cmd functions MUST NOT write
+// to the Store. All Store mutations happen in Update() when the returned Msg
+// is processed. Commands return data in Msg payloads; Update() decides what to
+// store.
 package app
 
 import (
 	"context"
 	"errors"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
 
@@ -33,7 +39,7 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		case panes.ActionPause:
 			err = player.Pause(ctx)
 		case panes.ActionPlay:
-			err = player.Play(ctx, api.PlayOptions{})
+			err = player.Play(ctx, domain.PlayOptions{})
 		case panes.ActionNext:
 			err = player.Next(ctx)
 		case panes.ActionPrevious:
@@ -107,7 +113,7 @@ func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{}
 		}
-		err := player.Play(context.Background(), api.PlayOptions{ContextURI: contextURI})
+		err := player.Play(context.Background(), domain.PlayOptions{ContextURI: contextURI})
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -127,7 +133,7 @@ func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{}
 		}
-		err := player.Play(context.Background(), api.PlayOptions{URIs: []string{trackURI}})
+		err := player.Play(context.Background(), domain.PlayOptions{URIs: []string{trackURI}})
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -140,13 +146,14 @@ func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
 	}
 }
 
-// buildFetchPlaylistsCmd creates a command that fetches playlists and writes to store.
+// buildFetchPlaylistsCmd creates a command that fetches playlists and returns them
+// in the LibraryLoadedMsg payload. No Store writes occur in the command — Update()
+// handles pagination and writes to the store.
 func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 	library := a.library
-	store := a.store
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LibraryLoadedMsg{}
+			return panes.LibraryLoadedMsg{Offset: offset}
 		}
 		playlists, err := library.Playlists(context.Background(), 50, offset)
 		if err != nil {
@@ -156,24 +163,16 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetPlaylistsFetchError(err)
-			return panes.LibraryLoadedMsg{}
+			return panes.LibraryLoadedMsg{Offset: offset, Err: err}
 		}
-		store.ClearPlaylistsFetchError()
-		if offset == 0 {
-			store.SetPlaylists(playlists)
-		} else {
-			store.SetPlaylists(append(store.Playlists(), playlists...))
-		}
-		store.SetPlaylistsTotal(len(store.Playlists()))
-		return panes.LibraryLoadedMsg{}
+		return panes.LibraryLoadedMsg{Items: playlists, Offset: offset}
 	}
 }
 
-// buildFetchAlbumsCmd creates a command that fetches saved albums and writes to store.
+// buildFetchAlbumsCmd creates a command that fetches saved albums and returns them
+// in AlbumsLoadedMsg. No Store writes occur — Update() writes to the store.
 func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 	library := a.library
-	store := a.store
 	return func() tea.Msg {
 		if library == nil {
 			return panes.AlbumsLoadedMsg{}
@@ -186,22 +185,19 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetAlbumsFetchError(err)
-			return panes.AlbumsLoadedMsg{}
+			return panes.AlbumsLoadedMsg{Err: err}
 		}
-		store.ClearAlbumsFetchError()
-		store.SetSavedAlbums(albums)
-		return panes.AlbumsLoadedMsg{}
+		return panes.AlbumsLoadedMsg{Items: albums}
 	}
 }
 
-// buildFetchLikedTracksCmd creates a command that fetches liked tracks and writes to store.
+// buildFetchLikedTracksCmd creates a command that fetches liked tracks and returns them
+// in LikedTracksLoadedMsg. No Store writes occur — Update() writes to the store.
 func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 	library := a.library
-	store := a.store
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LikedTracksLoadedMsg{}
+			return panes.LikedTracksLoadedMsg{Offset: offset}
 		}
 		tracks, err := library.LikedTracks(context.Background(), 50, offset)
 		if err != nil {
@@ -211,20 +207,16 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetLikedTracksFetchError(err)
-			return panes.LikedTracksLoadedMsg{}
+			return panes.LikedTracksLoadedMsg{Offset: offset, Err: err}
 		}
-		store.ClearLikedTracksFetchError()
-		store.SetLikedTracks(tracks)
-		store.SetLikedTotal(len(tracks) + offset)
-		return panes.LikedTracksLoadedMsg{}
+		return panes.LikedTracksLoadedMsg{Items: tracks, Offset: offset}
 	}
 }
 
-// buildFetchRecentlyPlayedCmd creates a command that fetches recently played and writes to store.
+// buildFetchRecentlyPlayedCmd creates a command that fetches recently played tracks
+// and returns them in RecentlyPlayedLoadedMsg. No Store writes occur — Update() writes.
 func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 	library := a.library
-	store := a.store
 	return func() tea.Msg {
 		if library == nil {
 			return panes.RecentlyPlayedLoadedMsg{}
@@ -237,12 +229,9 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetRecentPlayedFetchError(err)
-			return panes.RecentlyPlayedLoadedMsg{}
+			return panes.RecentlyPlayedLoadedMsg{Err: err}
 		}
-		store.ClearRecentPlayedFetchError()
-		store.SetRecentlyPlayed(items)
-		return panes.RecentlyPlayedLoadedMsg{}
+		return panes.RecentlyPlayedLoadedMsg{Items: items}
 	}
 }
 
@@ -269,15 +258,12 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 
 // buildSearchCmd creates a command that calls the Spotify search API and delivers
 // pre-converted results via SearchResultsMsg so search.go never imports api/.
+// NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
+// before this command is dispatched — not inside the closure.
 func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
-	store := a.store
-	store.SetSearchQuery(query)
-	store.SetSearchLoading(true)
-
 	return func() tea.Msg {
 		if search == nil {
-			store.SetSearchLoading(false)
 			return panes.SearchResultsMsg{}
 		}
 		results, err := search.Search(
@@ -287,19 +273,14 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			5,
 		)
 		if err != nil {
-			store.SetSearchLoading(false)
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetSearchError(err)
 			return panes.SearchResultsMsg{Err: err}
 		}
-		store.ClearSearchError()
-		store.SetSearchResults(results)
-		store.SetSearchLoading(false)
 		return panes.SearchResultsMsg{Results: convertSearchResult(results)}
 	}
 }
@@ -356,9 +337,9 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices
 // and delivers them back to the DeviceOverlay via devicesLoadedMsg.
+// No Store writes occur — Update() handles any error state.
 func (a *App) buildFetchDevicesCmd() tea.Cmd {
 	devices := a.devices
-	store := a.store
 	return func() tea.Msg {
 		if devices == nil {
 			// Deliver empty list when no client is injected (tests / uninitialized).
@@ -372,9 +353,6 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetDevicesError(err)
-		} else {
-			store.ClearDevicesError()
 		}
 		// Convert api.Device to panes.DeviceInfo to respect ui/ -> api/ boundary.
 		var infos []panes.DeviceInfo
@@ -421,48 +399,71 @@ func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 	}
 }
 
-// buildFetchStatsCmd creates a command that fetches top tracks and artists for
-// the given time range, writes to the store, and returns a StatsLoadedMsg.
+// buildFetchStatsCmd creates a command that fetches top tracks and top artists
+// concurrently for the given time range and returns them in a StatsLoadedMsg payload.
+// No Store writes occur — Update() writes data to the store when it receives the Msg.
 func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 	userAPI := a.userAPI
-	store := a.store
 	return func() tea.Msg {
 		if userAPI == nil {
-			return panes.StatsLoadedMsg{TimeRange: timeRange}
+			return panes.StatsLoadedMsg{
+				TimeRange:  timeRange,
+				TopTracks:  []domain.Track{},
+				TopArtists: []domain.FullArtist{},
+			}
 		}
 		ctx := context.Background()
-		tracks, err := userAPI.TopTracks(ctx, timeRange, 25)
-		if err != nil {
-			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+
+		// Fetch top tracks and top artists concurrently using sync.WaitGroup.
+		// NOTE: errgroup is not used because CLAUDE.md restricts dependencies
+		// to stdlib only. sync.WaitGroup provides the same fan-out pattern.
+		var wg sync.WaitGroup
+		var tracks []domain.Track
+		var artists []domain.FullArtist
+		var tracksErr, artistsErr error
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			tracks, tracksErr = userAPI.TopTracks(ctx, timeRange, 25)
+		}()
+		go func() {
+			defer wg.Done()
+			artists, artistsErr = userAPI.TopArtists(ctx, timeRange, 25)
+		}()
+		wg.Wait()
+
+		// Rate limit errors take priority — return immediately so backoff kicks in.
+		if tracksErr != nil {
+			if retryAfter := parse429RetryAfter(tracksErr); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
-			if isUnauthorizedError(err) {
+			if isUnauthorizedError(tracksErr) {
 				return unauthorizedMsg{}
 			}
-			store.SetStatsError(err)
-			return panes.StatsLoadedMsg{TimeRange: timeRange}
+			return panes.StatsLoadedMsg{TimeRange: timeRange, Err: tracksErr}
 		}
-		artists, err := userAPI.TopArtists(ctx, timeRange, 25)
-		if err != nil {
-			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+		if artistsErr != nil {
+			if retryAfter := parse429RetryAfter(artistsErr); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
-			if isUnauthorizedError(err) {
+			if isUnauthorizedError(artistsErr) {
 				return unauthorizedMsg{}
 			}
-			store.SetStatsError(err)
-			return panes.StatsLoadedMsg{TimeRange: timeRange}
+			return panes.StatsLoadedMsg{TimeRange: timeRange, Err: artistsErr}
 		}
-		store.ClearStatsError()
-		store.SetTopTracks(timeRange, tracks)
-		store.SetTopArtists(timeRange, artists)
-		return panes.StatsLoadedMsg{TimeRange: timeRange}
+
+		return panes.StatsLoadedMsg{
+			TimeRange:  timeRange,
+			TopTracks:  tracks,
+			TopArtists: artists,
+		}
 	}
 }
 
-// fetchQueueCmd creates a command that fetches the current play queue,
-// writes the queue tracks to the store, and notifies panes via QueueLoadedMsg.
-func fetchQueueCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
+// fetchQueueCmd creates a command that fetches the current play queue and returns
+// the tracks in the QueueLoadedMsg payload. No Store writes occur — Update() writes.
+func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
 			return panes.QueueLoadedMsg{}
@@ -475,20 +476,19 @@ func fetchQueueCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetQueueError(err)
-			return panes.QueueLoadedMsg{}
+			return panes.QueueLoadedMsg{Err: err}
 		}
-		store.ClearQueueError()
 		if qr != nil {
-			store.SetQueue(qr.Queue)
+			return panes.QueueLoadedMsg{Tracks: qr.Queue}
 		}
 		return panes.QueueLoadedMsg{}
 	}
 }
 
-// fetchPlaybackStateCmd creates a command that fetches the current playback state,
-// writes directly to the store, and notifies panes via PlaybackStateFetchedMsg.
-func fetchPlaybackStateCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
+// fetchPlaybackStateCmd creates a command that fetches the current playback state
+// and returns it in the PlaybackStateFetchedMsg payload. No Store writes occur —
+// Update() writes State to the store when the Msg is received.
+func fetchPlaybackStateCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
 			return panes.PlaybackStateFetchedMsg{}
@@ -501,10 +501,9 @@ func fetchPlaybackStateCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.PlaybackStateFetchedMsg{}
+			return panes.PlaybackStateFetchedMsg{Err: err}
 		}
-		store.SetPlaybackState(ps)
-		return panes.PlaybackStateFetchedMsg{}
+		return panes.PlaybackStateFetchedMsg{State: ps}
 	}
 }
 
@@ -552,10 +551,9 @@ func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL stri
 }
 
 // buildFetchPlaylistTracksCmd creates a command that fetches tracks for a playlist
-// and writes them to the store, then sends PlaylistTracksLoadedMsg.
+// and returns them in PlaylistTracksLoadedMsg. No Store writes occur — Update() writes.
 func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 	library := a.library
-	store := a.store
 	return func() tea.Msg {
 		if library == nil {
 			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
@@ -568,12 +566,9 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			store.SetPlaylistsError(err)
-			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Err: err}
 		}
-		store.ClearPlaylistsError()
-		store.SetPlaylistTracks(playlistID, tracks)
-		return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+		return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Tracks: tracks}
 	}
 }
 
