@@ -39,6 +39,7 @@ Features must be built in order. Each depends on the previous being stable and t
 | 25 | API DRY Refactoring | `25-api-dry-refactoring.md` | ✅ Complete | 23, 24 | #31 |
 | 26 | View Height Enforcement | `26-view-height-enforcement.md` | ✅ Complete | — | #28 |
 | 27 | Error Resilience | `27-error-resilience.md` | ✅ Complete | 24 | #32 |
+| 28 | API Cleanup Follow-up | `28-api-cleanup-followup.md` | Planned | 21, 24, 25 | — |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
