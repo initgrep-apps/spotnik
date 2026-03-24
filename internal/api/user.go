@@ -7,29 +7,6 @@ import (
 	"strconv"
 )
 
-// FullArtist represents a Spotify artist with full details, as returned by
-// the top-artists and search endpoints. It extends the basic Artist struct
-// with genre, popularity, and external URL fields.
-type FullArtist struct {
-	// ID is the Spotify artist ID.
-	ID string `json:"id"`
-
-	// Name is the display name of the artist.
-	Name string `json:"name"`
-
-	// URI is the Spotify URI of the artist (e.g. "spotify:artist:...").
-	URI string `json:"uri"`
-
-	// Genres is the list of musical genres associated with this artist.
-	Genres []string `json:"genres"`
-
-	// Popularity is the artist's popularity score (0–100).
-	Popularity int `json:"popularity"`
-
-	// ExternalURLs maps service name to external URL (e.g. "spotify" → URL).
-	ExternalURLs map[string]string `json:"external_urls"`
-}
-
 // UserClient provides Spotify API calls for user-specific data: top tracks,
 // top artists, and recently played history. It embeds BaseClient for shared
 // HTTP functionality.

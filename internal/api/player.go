@@ -14,16 +14,6 @@ import (
 // Tests override this via NewPlayer/NewBaseClient baseURL parameter.
 const spotifyAPIBaseURL = "https://api.spotify.com"
 
-// PlayOptions specifies what to play. Provide ContextURI for albums/playlists,
-// or URIs for specific tracks.
-type PlayOptions struct {
-	// ContextURI is a Spotify URI for an album, playlist, or artist context.
-	ContextURI string `json:"context_uri,omitempty"`
-
-	// URIs is a list of Spotify track URIs to play directly.
-	URIs []string `json:"uris,omitempty"`
-}
-
 // Player provides all Spotify playback control API calls.
 // It embeds BaseClient for shared HTTP functionality.
 type Player struct {
