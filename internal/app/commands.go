@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
@@ -128,6 +129,9 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
 			store.SetPlaylistsFetchError(err)
 			return panes.LibraryLoadedMsg{}
 		}
@@ -155,6 +159,9 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
 			store.SetAlbumsFetchError(err)
 			return panes.AlbumsLoadedMsg{}
 		}
@@ -176,6 +183,9 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
 			}
 			store.SetLikedTracksFetchError(err)
 			return panes.LikedTracksLoadedMsg{}
@@ -199,6 +209,9 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
 			}
 			store.SetRecentPlayedFetchError(err)
 			return panes.RecentlyPlayedLoadedMsg{}
@@ -245,6 +258,9 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
 			store.SetSearchError(err)
 			return panes.SearchResultsMsg{Err: err}
 		}
@@ -269,6 +285,9 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
 			}
 			store.SetDevicesError(err)
 		} else {
@@ -334,6 +353,9 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
 			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
 		}
@@ -341,6 +363,9 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
 			}
 			store.SetStatsError(err)
 			return panes.StatsLoadedMsg{TimeRange: timeRange}
@@ -363,6 +388,9 @@ func fetchQueueCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
 			}
 			store.SetQueueError(err)
 			return panes.QueueLoadedMsg{}
@@ -387,6 +415,9 @@ func fetchPlaybackStateCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
 			return panes.PlaybackStateFetchedMsg{}
 		}
 		store.SetPlaybackState(ps)
@@ -407,6 +438,36 @@ func parse429RetryAfter(err error) int {
 	return 0
 }
 
+// isUnauthorizedError returns true if err is a *api.UnauthorizedError (401).
+func isUnauthorizedError(err error) bool {
+	var unauthErr *api.UnauthorizedError
+	return errors.As(err, &unauthErr)
+}
+
+// buildRefreshTokenCmd creates a command that attempts to refresh the access token.
+// If the token store is nil or has no refresh token, it immediately returns
+// a tokenRefreshedMsg with an error. Otherwise it calls api.Refresh and
+// returns the new access token on success.
+func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL string) tea.Cmd {
+	return func() tea.Msg {
+		if store == nil {
+			return tokenRefreshedMsg{err: errors.New("no token store configured")}
+		}
+		refreshToken, err := store.Get(keychain.KeyRefreshToken)
+		if err != nil || refreshToken == "" {
+			return tokenRefreshedMsg{err: errors.New("no refresh token available")}
+		}
+		if err := api.Refresh(context.Background(), tokenBaseURL, refreshToken, clientID, store); err != nil {
+			return tokenRefreshedMsg{err: err}
+		}
+		newToken, err := store.Get(keychain.KeyAccessToken)
+		if err != nil {
+			return tokenRefreshedMsg{err: err}
+		}
+		return tokenRefreshedMsg{newToken: newToken}
+	}
+}
+
 // buildFetchPlaylistTracksCmd creates a command that fetches tracks for a playlist
 // and writes them to the store, then sends PlaylistTracksLoadedMsg.
 func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
@@ -420,6 +481,9 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
 			}
 			store.SetPlaylistsError(err)
 			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}

@@ -2,10 +2,12 @@ package app_test
 
 // error_resilience_test.go — Tests for Feature 27: Error Resilience
 //
+// Task 1: 401 token refresh + show "Session expired" when refresh fails
 // Task 2: All build*Cmd functions emit RateLimitedMsg on 429
 // Task 3: AddToQueueResultMsg handler checks ForbiddenError
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -263,4 +266,146 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer(t *testing.T) {
 	appModel := model.(*app.App)
 	output := appModel.View()
 	assert.Contains(t, output, "Premium", "403 AddToQueue should show Premium message in status bar")
+}
+
+// --- Task 1: 401 token refresh ---
+
+// unauthorizedServer returns an httptest.Server that always responds with 401.
+func unauthorizedServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"status":401,"message":"No token provided"}}`))
+	}))
+}
+
+// TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired verifies that a 401 from
+// the playlists endpoint, when the token store has no refresh token, shows the
+// "Session expired" message after the full command chain runs.
+func TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired(t *testing.T) {
+	srv := unauthorizedServer()
+	defer srv.Close()
+
+	cfg := &config.Config{ClientID: "test-client-id"}
+	// InMemoryTokenStore with no refresh token — refresh will fail.
+	store := keychain.NewInMemoryTokenStore()
+
+	a := app.New(cfg, app.AppOptions{TokenStore: store})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Step 1: FetchPlaylistsRequestMsg → buildFetchPlaylistsCmd dispatched.
+	model, fetchCmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	// Step 2: Execute the fetch command — gets unauthorizedMsg{} back.
+	unauthorizedMsgResult := fetchCmd()
+
+	// Step 3: Feed unauthorizedMsg to Update — dispatches buildRefreshTokenCmd.
+	model, refreshCmd := a.Update(unauthorizedMsgResult)
+	a = model.(*app.App)
+	require.NotNil(t, refreshCmd, "unauthorizedMsg should dispatch a refresh command")
+
+	// Step 4: Execute the refresh command — fails because no refresh token.
+	refreshResult := refreshCmd()
+
+	// Step 5: Feed tokenRefreshedMsg(err) to Update — shows session expired.
+	model, _ = a.Update(refreshResult)
+	a = model.(*app.App)
+
+	output := a.View()
+	assert.Contains(t, output, "Session expired", "401 with no refresh token should show session expired message")
+}
+
+// TestBuildSearchCmd_401_ShowsSessionExpired verifies the same pattern for search.
+func TestBuildSearchCmd_401_ShowsSessionExpired(t *testing.T) {
+	srv := unauthorizedServer()
+	defer srv.Close()
+
+	cfg := &config.Config{ClientID: "test-client-id"}
+	store := keychain.NewInMemoryTokenStore()
+
+	a := app.New(cfg, app.AppOptions{TokenStore: store})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	model, fetchCmd := a.Update(panes.SearchRequestMsg{Query: "test"})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	unauthorizedMsgResult := fetchCmd()
+
+	model, refreshCmd := a.Update(unauthorizedMsgResult)
+	a = model.(*app.App)
+	require.NotNil(t, refreshCmd)
+
+	refreshResult := refreshCmd()
+
+	model, _ = a.Update(refreshResult)
+	a = model.(*app.App)
+
+	output := a.View()
+	assert.Contains(t, output, "Session expired", "401 search with no refresh token should show session expired message")
+}
+
+// TestApp_401_WithValidRefreshToken_ReInitializesClients verifies that when a 401
+// occurs and a valid refresh token is present, the app attempts to refresh and
+// re-initializes the API clients on success.
+func TestApp_401_WithValidRefreshToken_ReInitializesClients(t *testing.T) {
+	// Set up a mock token endpoint that accepts refresh_token grants.
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if r.FormValue("grant_type") != "refresh_token" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"unsupported_grant_type"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"access_token":"new-access-token","expires_in":3600}`))
+	}))
+	defer tokenSrv.Close()
+
+	// Set up an unauthorized API server.
+	apiSrv := unauthorizedServer()
+	defer apiSrv.Close()
+
+	cfg := &config.Config{ClientID: "test-client-id"}
+	// Seed the store with a valid refresh token.
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyRefreshToken, "valid-refresh-token"))
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "old-access-token"))
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", 9999999999)))
+
+	a := app.New(cfg, app.AppOptions{TokenStore: store, ClientID: "test-client-id", TokenBaseURL: tokenSrv.URL})
+	a.SetLibrary(api.NewLibraryClient(apiSrv.URL, "old-access-token"))
+
+	// Step 1: Trigger the 401 via a fetch command.
+	model, fetchCmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	// Step 2: Execute fetch — gets unauthorizedMsg{}.
+	unauthorizedMsgResult := fetchCmd()
+
+	// Step 3: Feed to Update — dispatches refresh command.
+	model, refreshCmd := a.Update(unauthorizedMsgResult)
+	a = model.(*app.App)
+	require.NotNil(t, refreshCmd)
+
+	// Step 4: Execute refresh — should succeed with new token.
+	refreshResult := refreshCmd()
+
+	// Step 5: Feed tokenRefreshedMsg(success) to Update — re-inits clients.
+	model, _ = a.Update(refreshResult)
+	a = model.(*app.App)
+
+	output := a.View()
+	assert.NotContains(t, output, "Session expired", "successful refresh should not show session expired")
+
+	// Verify the token store was updated with the new access token.
+	newToken, err := store.Get(keychain.KeyAccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, "new-access-token", newToken, "store should have new access token after refresh")
 }
