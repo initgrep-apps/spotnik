@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -95,6 +96,32 @@ func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, re
 			return authErrorMsg{err: fmt.Errorf("authorization timed out after 5 minutes")}
 		}
 	}
+}
+
+// initAPIClients constructs all Spotify API clients with a shared logging HTTP
+// transport and injects them into the app. Called after a successful auth flow.
+func (a *App) initAPIClients(token string) {
+	loggingClient := &http.Client{
+		Transport: api.NewLoggingTransport(http.DefaultTransport, a.store),
+	}
+	player := api.NewPlayer("", token)
+	player.SetHTTPClient(loggingClient)
+	a.player = player
+	library := api.NewLibraryClient("", token)
+	library.SetHTTPClient(loggingClient)
+	a.library = library
+	search := api.NewSearchClient("", token)
+	search.SetHTTPClient(loggingClient)
+	a.search = search
+	devices := api.NewDevicesClient("", token)
+	devices.SetHTTPClient(loggingClient)
+	a.devices = devices
+	userAPI := api.NewUserClient("", token)
+	userAPI.SetHTTPClient(loggingClient)
+	a.userAPI = userAPI
+	playlistsAPI := api.NewPlaylistsClient("", token)
+	playlistsAPI.SetHTTPClient(loggingClient)
+	a.playlistsAPI = playlistsAPI
 }
 
 // renderAuthPanel renders a centered auth prompt box.
