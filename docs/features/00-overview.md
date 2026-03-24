@@ -40,6 +40,11 @@ Features must be built in order. Each depends on the previous being stable and t
 | 26 | View Height Enforcement | `26-view-height-enforcement.md` | ✅ Complete | — | #28 |
 | 27 | Error Resilience | `27-error-resilience.md` | ✅ Complete | 24 | #32 |
 | 28 | API Cleanup Follow-up | `28-api-cleanup-followup.md` | Planned | 21, 24, 25 | — |
+| 29 | Elm Purity: Data-Carrying Msgs | `29-elm-purity-data-carrying-msgs.md` | Planned | — | — |
+| 30 | API Gateway | `30-api-gateway.md` | Planned | — | — |
+| 31 | Notifications + Error Routing | `31-notifications-error-routing.md` | Planned | 29 | — |
+| 32 | Staleness Tracking | `32-staleness-tracking.md` | Planned | 29 | — |
+| 33 | Idle Polling Backoff | `33-idle-polling-backoff.md` | Planned | 29 | — |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
@@ -141,6 +146,30 @@ Improvements from the architecture review (2026-03-23). Implement in this order:
 
 ---
 
+## Architecture Baseline Execution Order
+
+Architecture baseline features from gap analysis (2026-03-24). See
+`docs/superpowers/plans/2026-03-24-architecture-baseline.md` for the full analysis.
+
+```
+F29: Elm Purity ──────┬──→ F31: Notifications + Error Routing
+                      ├──→ F32: Staleness Tracking
+                      └──→ F33: Idle Polling Backoff
+
+F30: API Gateway ─────────→ (independent, can parallel with F29)
+```
+
+1. `29-elm-purity-data-carrying-msgs.md` — Data-carrying Msgs, Store writes only in Update() (independent)
+2. `30-api-gateway.md` — Rate limiting, dedup, concurrency, priority (independent, parallel with 29)
+3. `31-notifications-error-routing.md` — BubbleUp toasts, replace statusMsg, error routing (depends on 29)
+4. `32-staleness-tracking.md` — fetchedAt timestamps, TTL-based refresh (depends on 29)
+5. `33-idle-polling-backoff.md` — Adaptive polling intervals based on idle/playback state (depends on 29)
+
+> **Parallelism:** Features 29 and 30 have no dependencies and can start in parallel.
+> After 29 completes, 31+32+33 can run in parallel.
+
+---
+
 ## Versioning
 
 | Version | Includes |
@@ -152,6 +181,7 @@ Improvements from the architecture review (2026-03-23). Implement in this order:
 | v1.0.0 | Feature 9 (playlist manager) + polish |
 | v1.1.0 | Features 10-18 (bug fixes + error architecture + UX polish) |
 | v2.0.0 | Features 19-27 (architecture improvements from review) |
+| v3.0.0 | Features 29-33 (architecture baseline: Elm purity, gateway, notifications, staleness, idle backoff) |
 
 ---
 
@@ -183,4 +213,4 @@ Brief insights from implementing all 9 features:
 
 ---
 
-*Last updated: 2026-03-23*
+*Last updated: 2026-03-25*
