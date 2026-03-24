@@ -511,8 +511,8 @@ func (p *LibraryPane) visibleItemCount() int {
 	if p.height <= 0 {
 		return 10 // safe default for tests with no size set
 	}
-	// 3 fixed header lines + 1 reserved for scroll indicator.
-	available := p.height - 4
+	// 3 fixed header lines + 2 reserved for scroll indicators (▲ and ▼).
+	available := p.height - 5
 	if available <= 0 {
 		return 1
 	}
@@ -560,18 +560,21 @@ func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 		for i := 0; i < 10; i++ {
 			p.tree.MoveDown()
 		}
+		p.ensureCursorVisible()
 		return p, nil
 
 	case msg.Type == tea.KeyPgUp:
 		for i := 0; i < 10; i++ {
 			p.tree.MoveUp()
 		}
+		p.ensureCursorVisible()
 		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "g":
 		for p.tree.cursorPos > 0 {
 			p.tree.MoveUp()
 		}
+		p.ensureCursorVisible()
 		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "G":
@@ -582,6 +585,7 @@ func (p *LibraryPane) handleKey(msg tea.KeyMsg) (*LibraryPane, tea.Cmd) {
 				break
 			}
 		}
+		p.ensureCursorVisible()
 		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "a":
