@@ -6,8 +6,7 @@ package app
 
 import (
 	"context"
-	"strconv"
-	"strings"
+	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -371,24 +370,17 @@ func fetchPlaybackStateCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 	}
 }
 
-// parse429RetryAfter extracts the Retry-After seconds from a 429 error message.
-// Returns 0 if the error is not a 429 or parsing fails.
+// parse429RetryAfter checks if err is a RateLimitError and extracts RetryAfter.
+// Returns 0 if the error is not a rate limit error.
 func parse429RetryAfter(err error) int {
-	msg := err.Error()
-	if !strings.Contains(msg, "429") {
-		return 0
+	var rateLimitErr *api.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		if rateLimitErr.RetryAfter <= 0 {
+			return defaultBackoffTicks
+		}
+		return rateLimitErr.RetryAfter
 	}
-	// Error format from api/player.go: "429 rate limited: retry after %s seconds"
-	parts := strings.Split(msg, "retry after ")
-	if len(parts) < 2 {
-		return defaultBackoffTicks
-	}
-	secStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), " seconds")
-	secs, parseErr := strconv.Atoi(secStr)
-	if parseErr != nil || secs <= 0 {
-		return defaultBackoffTicks
-	}
-	return secs
+	return 0
 }
 
 // buildFetchPlaylistTracksCmd creates a command that fetches tracks for a playlist

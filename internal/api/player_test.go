@@ -68,7 +68,9 @@ func TestGetPlaybackState_429(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, state)
-	assert.Contains(t, err.Error(), "429")
+	var rateLimitErr *RateLimitError
+	require.ErrorAs(t, err, &rateLimitErr)
+	assert.Equal(t, 5, rateLimitErr.RetryAfter)
 }
 
 func TestPlay_SendsCorrectBody(t *testing.T) {
@@ -327,7 +329,8 @@ func TestAddToQueue_ServerError(t *testing.T) {
 	err := player.AddToQueue(context.Background(), "spotify:track:abc123")
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "403", "error should include status code")
+	var forbiddenErr *ForbiddenError
+	assert.ErrorAs(t, err, &forbiddenErr, "error should be ForbiddenError")
 }
 
 // TestGetQueue_Success verifies GetQueue parses the queue JSON correctly.

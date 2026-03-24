@@ -73,19 +73,13 @@ func (p *Player) GetPlaybackState(ctx context.Context) (*PlaybackState, error) {
 		return nil, nil
 	}
 
-	if resp.StatusCode == http.StatusTooManyRequests {
-		retryAfter := resp.Header.Get("Retry-After")
-		return nil, fmt.Errorf("429 rate limited: retry after %s seconds", retryAfter)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get playback state: unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading playback state response: %w", err)
+	}
+
+	if err := checkResponseStatus(resp, body); err != nil {
+		return nil, err
 	}
 
 	var state PlaybackState
@@ -284,10 +278,6 @@ func (p *Player) doNoContent(req *http.Request) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
-	return nil
+	body, _ := io.ReadAll(resp.Body)
+	return checkResponseStatus(resp, body)
 }
