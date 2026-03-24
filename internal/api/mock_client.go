@@ -20,15 +20,15 @@ type MockPlayer struct {
 	QueueResult         *QueueResponse
 	QueueErr            error
 
-	PlayCalled          bool
-	PauseCalled         bool
-	NextCalled          bool
-	PreviousCalled      bool
-	SeekCalled          bool
-	SetVolumeCalled     bool
-	SetShuffleCalled    bool
-	SetRepeatCalled     bool
-	AddToQueueCalled    bool
+	PlayCalled       bool
+	PauseCalled      bool
+	NextCalled       bool
+	PreviousCalled   bool
+	SeekCalled       bool
+	SetVolumeCalled  bool
+	SetShuffleCalled bool
+	SetRepeatCalled  bool
+	AddToQueueCalled bool
 }
 
 // Compile-time assertion: *MockPlayer must implement PlayerAPI.
@@ -100,18 +100,18 @@ func (m *MockPlayer) GetQueue(_ context.Context) (*QueueResponse, error) {
 
 // MockLibrary is a test double for LibraryAPI.
 type MockLibrary struct {
-	PlaylistsResult       []SimplePlaylist
-	PlaylistsErr          error
-	PlaylistTracksResult  []Track
-	PlaylistTracksErr     error
-	SavedAlbumsResult     []SavedAlbum
-	SavedAlbumsErr        error
-	LikedTracksResult     []SavedTrack
-	LikedTracksErr        error
-	RecentlyPlayedResult  []PlayHistory
-	RecentlyPlayedErr     error
-	LikeErr               error
-	UnlikeErr             error
+	PlaylistsResult      []SimplePlaylist
+	PlaylistsErr         error
+	PlaylistTracksResult []Track
+	PlaylistTracksErr    error
+	SavedAlbumsResult    []SavedAlbum
+	SavedAlbumsErr       error
+	LikedTracksResult    []SavedTrack
+	LikedTracksErr       error
+	RecentlyPlayedResult []PlayHistory
+	RecentlyPlayedErr    error
+	LikeErr              error
+	UnlikeErr            error
 
 	LikeTrackCalled   bool
 	UnlikeTrackCalled bool
