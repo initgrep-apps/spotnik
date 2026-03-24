@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -18,7 +17,7 @@ import (
 // has been fetched from the Spotify API. It is unexported because it is only
 // ever produced by the command returned from DeviceOverlay.Init().
 type devicesLoadedMsg struct {
-	devices []api.Device
+	devices []DeviceInfo
 	err     error
 }
 
@@ -28,7 +27,7 @@ type devicesLoadedMsg struct {
 type DeviceOverlay struct {
 	store   *state.Store
 	theme   theme.Theme
-	devices []api.Device
+	devices []DeviceInfo
 	cursor  int
 	width   int
 	height  int
@@ -182,7 +181,7 @@ func (d *DeviceOverlay) View() string {
 }
 
 // renderDevice renders a single device row with the appropriate symbol and label.
-func (d *DeviceOverlay) renderDevice(idx int, dev api.Device) string {
+func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 	isCursor := idx == d.cursor
 
 	var bullet string
@@ -249,6 +248,6 @@ type FetchDevicesRequestMsg struct{}
 // NewDevicesLoadedMsg creates a devicesLoadedMsg to be dispatched by the root app
 // after fetching the device list. This constructor allows the root app to create
 // the unexported message type without importing internal pane details.
-func NewDevicesLoadedMsg(devices []api.Device, err error) tea.Msg {
+func NewDevicesLoadedMsg(devices []DeviceInfo, err error) tea.Msg {
 	return devicesLoadedMsg{devices: devices, err: err}
 }

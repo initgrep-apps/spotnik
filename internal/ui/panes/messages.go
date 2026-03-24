@@ -141,6 +141,15 @@ type AddToQueueResultMsg struct {
 // The QueuePane reads from store directly on receipt.
 type QueueLoadedMsg struct{}
 
+// DeviceInfo is the UI-facing representation of a Spotify device.
+// It mirrors the fields needed for rendering without importing api/.
+type DeviceInfo struct {
+	ID       string
+	Name     string
+	Type     string
+	IsActive bool
+}
+
 // DeviceOverlayClosedMsg is emitted by DeviceOverlay when the user presses Esc,
 // signalling the root app model to close the overlay and restore the previous focus.
 type DeviceOverlayClosedMsg struct{}

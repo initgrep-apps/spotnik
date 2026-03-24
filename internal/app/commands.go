@@ -257,7 +257,17 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 		} else {
 			store.ClearDevicesError()
 		}
-		return panes.NewDevicesLoadedMsg(devList, err)
+		// Convert api.Device to panes.DeviceInfo to respect ui/ -> api/ boundary.
+		var infos []panes.DeviceInfo
+		for _, d := range devList {
+			infos = append(infos, panes.DeviceInfo{
+				ID:       d.ID,
+				Name:     d.Name,
+				Type:     d.Type,
+				IsActive: d.IsActive,
+			})
+		}
+		return panes.NewDevicesLoadedMsg(infos, err)
 	}
 }
 
