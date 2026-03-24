@@ -4,8 +4,8 @@
 package app
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -527,11 +527,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.PlaybackCmdSentMsg:
 		if m.Err != nil {
-			errMsg := m.Err.Error()
-			if strings.Contains(errMsg, "403") {
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
 				a.statusMsg = "Playback control not available on this device"
 			} else {
-				a.statusMsg = fmt.Sprintf("✗ %s", errMsg)
+				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, a.store),
