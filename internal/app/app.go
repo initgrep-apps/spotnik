@@ -56,11 +56,11 @@ const (
 type App struct {
 	theme   theme.Theme
 	store   *state.Store
-	player  *api.Player
-	library *api.LibraryClient
-	search  *api.SearchClient
-	devices *api.DevicesClient
-	userAPI *api.UserClient
+	player  api.PlayerAPI
+	library api.LibraryAPI
+	search  api.SearchAPI
+	devices api.DevicesAPI
+	userAPI api.UserAPI
 
 	playerPane  *panes.PlayerPane
 	libraryPane *panes.LibraryPane
@@ -75,7 +75,7 @@ type App struct {
 	playlistPane *panes.PlaylistManager
 
 	// playlistsAPI is the Spotify playlists mutation client.
-	playlistsAPI *api.PlaylistsClient
+	playlistsAPI api.PlaylistsAPI
 
 	// currentView tracks which top-level view is displayed.
 	currentView viewMode
@@ -182,32 +182,32 @@ func (a *App) Store() *state.Store {
 }
 
 // SetPlayer injects the Spotify API player client into the app.
-func (a *App) SetPlayer(player *api.Player) {
+func (a *App) SetPlayer(player api.PlayerAPI) {
 	a.player = player
 }
 
 // SetLibrary injects the Spotify API library client into the app.
-func (a *App) SetLibrary(library *api.LibraryClient) {
+func (a *App) SetLibrary(library api.LibraryAPI) {
 	a.library = library
 }
 
 // SetSearch injects the Spotify API search client into the app.
-func (a *App) SetSearch(search *api.SearchClient) {
+func (a *App) SetSearch(search api.SearchAPI) {
 	a.search = search
 }
 
 // SetDevices injects the Spotify Connect devices API client into the app.
-func (a *App) SetDevices(devices *api.DevicesClient) {
+func (a *App) SetDevices(devices api.DevicesAPI) {
 	a.devices = devices
 }
 
 // SetUserAPI injects the Spotify user stats API client into the app.
-func (a *App) SetUserAPI(userAPI *api.UserClient) {
+func (a *App) SetUserAPI(userAPI api.UserAPI) {
 	a.userAPI = userAPI
 }
 
 // SetPlaylistsAPI injects the Spotify playlists mutation client into the app.
-func (a *App) SetPlaylistsAPI(p *api.PlaylistsClient) {
+func (a *App) SetPlaylistsAPI(p api.PlaylistsAPI) {
 	a.playlistsAPI = p
 }
 
@@ -1230,7 +1230,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 
 // fetchQueueCmd creates a command that fetches the current play queue,
 // writes the queue tracks to the store, and notifies panes via QueueLoadedMsg.
-func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
+func fetchQueueCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
 			return panes.QueueLoadedMsg{}
@@ -1253,7 +1253,7 @@ func fetchQueueCmd(player *api.Player, store *state.Store) tea.Cmd {
 
 // fetchPlaybackStateCmd creates a command that fetches the current playback state,
 // writes directly to the store, and notifies panes via PlaybackStateFetchedMsg.
-func fetchPlaybackStateCmd(player *api.Player, store *state.Store) tea.Cmd {
+func fetchPlaybackStateCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
 			return panes.PlaybackStateFetchedMsg{}
