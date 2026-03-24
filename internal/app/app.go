@@ -400,8 +400,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// Debounce fired — dispatch search API call.
+		// Debounce fired — set store state here (in Update) before dispatching.
+		// Store writes belong in Update, not inside command builders.
+		a.store.SetSearchQuery(m.Query)
+		a.store.SetSearchLoading(true)
 		return a, a.buildSearchCmd(m.Query)
+
+	case panes.SearchClearedMsg:
+		// SearchOverlay emitted this when the user pressed Ctrl+U.
+		// Handle store writes here in Update, not inside the pane.
+		a.store.SetSearchResults(nil)
+		a.store.SetSearchQuery("")
+		return a, nil
 
 	case panes.SearchResultsMsg:
 		// Search results are in the store; notify the overlay.
