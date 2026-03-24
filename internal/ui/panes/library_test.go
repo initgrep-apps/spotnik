@@ -119,6 +119,7 @@ func TestLibraryPane_View_PlayingIndicator(t *testing.T) {
 
 	pane := NewLibraryPane(s, th, true)
 	pane.tree.SetSectionExpanded(SectionRecentlyPlayed, true)
+	pane.tree.UpdateFromStore(s) // Simulate Update() cycle which syncs tree with store
 
 	view := pane.View()
 

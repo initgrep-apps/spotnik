@@ -398,8 +398,6 @@ func (p *LibraryPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the library pane.
 func (p *LibraryPane) View() string {
-	p.tree.UpdateFromStore(p.store)
-
 	headerStyle := lipgloss.NewStyle().Foreground(p.theme.SectionHeader()).Bold(true)
 	sectionStyle := lipgloss.NewStyle().Foreground(p.theme.SectionHeader())
 	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
