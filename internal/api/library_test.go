@@ -202,7 +202,7 @@ func TestUnlikeTrack_SendsDELETE(t *testing.T) {
 	assert.Equal(t, "/v1/me/tracks", capturedPath)
 }
 
-// TestLibraryClient_RateLimited verifies 429 response returns appropriate error.
+// TestLibraryClient_RateLimited verifies 429 response returns a typed RateLimitError.
 func TestLibraryClient_RateLimited(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "10")
@@ -214,7 +214,8 @@ func TestLibraryClient_RateLimited(t *testing.T) {
 	_, err := client.GetPlaylists(context.Background(), 50, 0)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "429")
+	var rlErr *RateLimitError
+	assert.ErrorAs(t, err, &rlErr, "expected *RateLimitError for 429")
 }
 
 // TestLibraryClient_ServerError verifies non-2xx non-429 returns an error.
@@ -232,7 +233,7 @@ func TestLibraryClient_ServerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "500")
 }
 
-// TestLibraryClient_DoNoContent_ServerError verifies non-2xx for LikeTrack.
+// TestLibraryClient_DoNoContent_ServerError verifies 403 returns a typed ForbiddenError.
 func TestLibraryClient_DoNoContent_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -244,7 +245,8 @@ func TestLibraryClient_DoNoContent_ServerError(t *testing.T) {
 	err := client.LikeTrack(context.Background(), "track-xyz789")
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "403")
+	var forbErr *ForbiddenError
+	assert.ErrorAs(t, err, &forbErr, "expected *ForbiddenError for 403")
 }
 
 // TestNewLibraryClient_DefaultBaseURL verifies production URL is used when baseURL is empty.

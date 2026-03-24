@@ -5,38 +5,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 // LibraryClient provides all Spotify library API calls: playlists, saved albums,
 // liked tracks, recently played, and track like/unlike.
-// It shares the same base URL pattern as Player — pass "" for production Spotify.
+// It embeds BaseClient for shared HTTP functionality.
 type LibraryClient struct {
-	baseURL     string
-	accessToken string
-	client      *http.Client
+	BaseClient
 }
 
 // NewLibraryClient constructs a LibraryClient using the given base URL and access token.
 // Pass "" for baseURL to use the production Spotify API.
 func NewLibraryClient(baseURL, accessToken string) *LibraryClient {
-	base := baseURL
-	if base == "" {
-		base = spotifyAPIBaseURL
-	}
-	return &LibraryClient{
-		baseURL:     strings.TrimRight(base, "/"),
-		accessToken: accessToken,
-		client:      &http.Client{},
-	}
+	return &LibraryClient{BaseClient: NewBaseClient(baseURL, accessToken)}
 }
 
 // SetHTTPClient overrides the default HTTP client used for API calls.
 func (l *LibraryClient) SetHTTPClient(c *http.Client) {
-	l.client = c
+	l.setHTTPClient(c)
 }
 
 // GetPlaylists fetches the user's saved playlists via GET /me/playlists.
@@ -200,62 +188,4 @@ func (l *LibraryClient) UnlikeTrack(ctx context.Context, trackID string) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	return l.doNoContent(req)
-}
-
-// newRequest builds an HTTP request with the Authorization header set.
-func (l *LibraryClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	u := l.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+l.accessToken)
-	return req, nil
-}
-
-// doJSON executes req, checks for a 2xx status, then decodes the JSON body into out.
-func (l *LibraryClient) doJSON(req *http.Request, out interface{}) error {
-	resp, err := l.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		retryAfter := resp.Header.Get("Retry-After")
-		return fmt.Errorf("429 rate limited: retry after %s seconds", retryAfter)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	return nil
-}
-
-// doNoContent executes req and returns nil if the response is 2xx.
-// Returns an error for non-2xx responses.
-func (l *LibraryClient) doNoContent(req *http.Request) error {
-	resp, err := l.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
-	return nil
 }

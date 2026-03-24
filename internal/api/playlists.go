@@ -5,37 +5,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 )
 
 // PlaylistsClient provides Spotify playlist mutation API calls:
 // create, rename, add/remove tracks, and reorder tracks.
-// It uses the same base URL pattern as LibraryClient — pass "" for production Spotify.
+// It embeds BaseClient for shared HTTP functionality.
 type PlaylistsClient struct {
-	baseURL     string
-	accessToken string
-	client      *http.Client
+	BaseClient
 }
 
 // NewPlaylistsClient constructs a PlaylistsClient using the given base URL and access token.
 // Pass "" for baseURL to use the production Spotify API.
 func NewPlaylistsClient(baseURL, accessToken string) *PlaylistsClient {
-	base := baseURL
-	if base == "" {
-		base = spotifyAPIBaseURL
-	}
-	return &PlaylistsClient{
-		baseURL:     strings.TrimRight(base, "/"),
-		accessToken: accessToken,
-		client:      &http.Client{},
-	}
+	return &PlaylistsClient{BaseClient: NewBaseClient(baseURL, accessToken)}
 }
 
 // SetHTTPClient overrides the default HTTP client used for API calls.
 func (p *PlaylistsClient) SetHTTPClient(c *http.Client) {
-	p.client = c
+	p.setHTTPClient(c)
 }
 
 // CreatePlaylist creates a new playlist for the current user via POST /me/playlists.
@@ -176,63 +164,5 @@ func (p *PlaylistsClient) ReorderPlaylistTracks(ctx context.Context, id string, 
 	if err := p.doJSON(req, &result); err != nil {
 		return fmt.Errorf("reordering playlist tracks: %w", err)
 	}
-	return nil
-}
-
-// newRequest builds an HTTP request with the Authorization header set.
-func (p *PlaylistsClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	u := p.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+p.accessToken)
-	return req, nil
-}
-
-// doJSON executes req, checks for a 2xx status, then decodes the JSON body into out.
-func (p *PlaylistsClient) doJSON(req *http.Request, out interface{}) error {
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		retryAfter := resp.Header.Get("Retry-After")
-		return fmt.Errorf("429 rate limited: retry after %s seconds", retryAfter)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	return nil
-}
-
-// doNoContent executes req and returns nil if the response is 2xx.
-// Returns an error for non-2xx responses.
-func (p *PlaylistsClient) doNoContent(req *http.Request) error {
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
 	return nil
 }

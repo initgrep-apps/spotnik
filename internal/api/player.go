@@ -8,11 +8,10 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 // spotifyAPIBaseURL is the Spotify Web API base.
-// Tests override this via Player.baseURL.
+// Tests override this via NewPlayer/NewBaseClient baseURL parameter.
 const spotifyAPIBaseURL = "https://api.spotify.com"
 
 // PlayOptions specifies what to play. Provide ContextURI for albums/playlists,
@@ -26,31 +25,21 @@ type PlayOptions struct {
 }
 
 // Player provides all Spotify playback control API calls.
-// It holds the base URL (overridable for tests) and the Bearer access token.
+// It embeds BaseClient for shared HTTP functionality.
 type Player struct {
-	baseURL     string
-	accessToken string
-	client      *http.Client
+	BaseClient
 }
 
 // NewPlayer constructs a Player using the given base URL and access token.
 // Pass "" for baseURL to use the production Spotify API.
 func NewPlayer(baseURL, accessToken string) *Player {
-	base := baseURL
-	if base == "" {
-		base = spotifyAPIBaseURL
-	}
-	return &Player{
-		baseURL:     strings.TrimRight(base, "/"),
-		accessToken: accessToken,
-		client:      &http.Client{},
-	}
+	return &Player{BaseClient: NewBaseClient(baseURL, accessToken)}
 }
 
 // SetHTTPClient overrides the default HTTP client used for API calls.
 // Used to inject a LoggingTransport for network call recording.
 func (p *Player) SetHTTPClient(c *http.Client) {
-	p.client = c
+	p.setHTTPClient(c)
 }
 
 // GetPlaybackState fetches the current playback state from GET /me/player.
@@ -62,7 +51,7 @@ func (p *Player) GetPlaybackState(ctx context.Context) (*PlaybackState, error) {
 		return nil, fmt.Errorf("creating get playback state request: %w", err)
 	}
 
-	resp, err := p.client.Do(req)
+	resp, err := p.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getting playback state: %w", err)
 	}
@@ -208,7 +197,7 @@ func (p *Player) GetQueue(ctx context.Context) (*QueueResponse, error) {
 		return nil, fmt.Errorf("creating get queue request: %w", err)
 	}
 
-	resp, err := p.client.Do(req)
+	resp, err := p.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue: %w", err)
 	}
@@ -218,14 +207,13 @@ func (p *Player) GetQueue(ctx context.Context) (*QueueResponse, error) {
 		return nil, nil
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get queue: unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading queue response: %w", err)
+	}
+
+	if err := checkResponseStatus(resp, body); err != nil {
+		return nil, err
 	}
 
 	var qr QueueResponse
@@ -256,28 +244,4 @@ func (p *Player) SetRepeat(ctx context.Context, mode string) error {
 	req.URL.RawQuery = q.Encode()
 
 	return p.doNoContent(req)
-}
-
-// newRequest builds an HTTP request with the Authorization header set.
-func (p *Player) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	u := p.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+p.accessToken)
-	return req, nil
-}
-
-// doNoContent executes req and returns nil if the response is 2xx.
-// Returns an error for non-2xx responses.
-func (p *Player) doNoContent(req *http.Request) error {
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	return checkResponseStatus(resp, body)
 }

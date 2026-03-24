@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -138,31 +137,20 @@ type SearchResult struct {
 }
 
 // SearchClient provides the Spotify search API call.
-// It shares the same base URL pattern as Player and LibraryClient —
-// pass "" for baseURL to use the production Spotify API.
+// It embeds BaseClient for shared HTTP functionality.
 type SearchClient struct {
-	baseURL     string
-	accessToken string
-	client      *http.Client
+	BaseClient
 }
 
 // NewSearchClient constructs a SearchClient using the given base URL and access token.
 // Pass "" for baseURL to use the production Spotify API.
 func NewSearchClient(baseURL, accessToken string) *SearchClient {
-	base := baseURL
-	if base == "" {
-		base = spotifyAPIBaseURL
-	}
-	return &SearchClient{
-		baseURL:     strings.TrimRight(base, "/"),
-		accessToken: accessToken,
-		client:      &http.Client{},
-	}
+	return &SearchClient{BaseClient: NewBaseClient(baseURL, accessToken)}
 }
 
 // SetHTTPClient overrides the default HTTP client used for API calls.
 func (s *SearchClient) SetHTTPClient(c *http.Client) {
-	s.client = c
+	s.setHTTPClient(c)
 }
 
 // Search calls GET /v1/search with the given query, types, and per-type limit.
@@ -170,11 +158,10 @@ func (s *SearchClient) SetHTTPClient(c *http.Client) {
 // types should contain one or more of: "track", "artist", "album", "playlist".
 // Returns a fully populated SearchResult on success.
 func (s *SearchClient) Search(ctx context.Context, query string, types []string, limit int) (*SearchResult, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.baseURL+"/v1/search", nil)
+	req, err := s.newRequest(ctx, http.MethodGet, "/v1/search", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating search request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+s.accessToken)
 
 	q := req.URL.Query()
 	q.Set("q", query)
@@ -183,30 +170,9 @@ func (s *SearchClient) Search(ctx context.Context, query string, types []string,
 	q.Set("market", "from_token")
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sending search request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		retryAfter := resp.Header.Get("Retry-After")
-		return nil, fmt.Errorf("429 rate limited: retry after %s seconds", retryAfter)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s %s: unexpected status %d: %s", req.Method, req.URL.Path, resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading search response body: %w", err)
-	}
-
 	var result SearchResult
-	if err := unmarshalJSON(body, &result); err != nil {
-		return nil, fmt.Errorf("parsing search response: %w", err)
+	if err := s.doJSON(req, &result); err != nil {
+		return nil, fmt.Errorf("search: %w", err)
 	}
 
 	return &result, nil
