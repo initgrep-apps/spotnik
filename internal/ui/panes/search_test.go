@@ -473,3 +473,51 @@ func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
 	_, ok := msg.(panes.SearchRequestMsg)
 	assert.True(t, ok, "debounce cmd should produce SearchRequestMsg, got %T", msg)
 }
+
+// --- Feature 20: Elm Architecture Purity tests ---
+
+// TestSearchOverlay_CtrlU_EmitsSearchClearedMsg verifies that pressing Ctrl+U
+// returns a command producing SearchClearedMsg instead of writing to the store directly.
+func TestSearchOverlay_CtrlU_EmitsSearchClearedMsg(t *testing.T) {
+	t.Helper()
+	s := state.New()
+	th := theme.Load("black")
+
+	// Pre-populate store with search results so we know the overlay has something to clear.
+	s.SetSearchQuery("blinding lights")
+	s.SetSearchResults(&api.SearchResult{})
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 30)
+
+	// Press Ctrl+U — should NOT write to store directly, but emit SearchClearedMsg.
+	_, cmd := sendKey(t, o, "ctrl+u")
+
+	require.NotNil(t, cmd, "Ctrl+U should return a command (SearchClearedMsg)")
+	msg := cmd()
+	_, ok := msg.(panes.SearchClearedMsg)
+	assert.True(t, ok, "Ctrl+U command should produce SearchClearedMsg, got %T", msg)
+
+	// The store should NOT have been mutated directly by the overlay.
+	// (Actual clearing happens in app.go when SearchClearedMsg is handled.)
+	assert.Equal(t, "blinding lights", s.SearchQuery(), "overlay must not write to store directly on Ctrl+U")
+}
+
+// TestSearchOverlay_CtrlU_ClearsLocalInput verifies that Ctrl+U clears the local
+// input field (cosmetic) even though the store write is deferred to the root app.
+func TestSearchOverlay_CtrlU_ClearsLocalInput(t *testing.T) {
+	t.Helper()
+	s := state.New()
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 30)
+
+	// Type some text first.
+	o, _ = sendKey(t, o, "b")
+	o, _ = sendKey(t, o, "l")
+	require.Equal(t, "bl", o.Query(), "input should be 'bl' after typing")
+
+	// Ctrl+U should clear the local input field.
+	o, _ = sendKey(t, o, "ctrl+u")
+	assert.Equal(t, "", o.Query(), "Ctrl+U should clear the local input field")
+}

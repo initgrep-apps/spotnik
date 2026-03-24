@@ -425,8 +425,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// Debounce fired — dispatch search API call.
+		// Debounce fired — set store state here (in Update) before dispatching.
+		// Store writes belong in Update, not inside command builders.
+		a.store.SetSearchQuery(m.Query)
+		a.store.SetSearchLoading(true)
 		return a, a.buildSearchCmd(m.Query)
+
+	case panes.SearchClearedMsg:
+		// SearchOverlay emitted this when the user pressed Ctrl+U.
+		// Handle store writes here in Update, not inside the pane.
+		a.store.SetSearchResults(nil)
+		a.store.SetSearchQuery("")
+		return a, nil
 
 	case panes.SearchResultsMsg:
 		// Search results are in the store; notify the overlay.
@@ -1121,11 +1131,11 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 }
 
 // buildSearchCmd creates a command that calls the Spotify search API and writes results to store.
+// NOTE: store writes (SetSearchQuery, SetSearchLoading) are done in Update() before calling this.
+// This function only builds the command closure — no side effects here.
 func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
 	store := a.store
-	store.SetSearchQuery(query)
-	store.SetSearchLoading(true)
 
 	return func() tea.Msg {
 		if search == nil {
@@ -1362,7 +1372,7 @@ func (a *App) renderWithDeviceOverlay(background string) string {
 		lipgloss.Right, lipgloss.Top,
 		overlay,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+		lipgloss.WithWhitespaceForeground(a.theme.Base()),
 	)
 	return centered
 }
@@ -1376,14 +1386,14 @@ func (a *App) renderWithSearchOverlay(background string) string {
 		return dimmed + "\n" + overlay
 	}
 
-	// Center the overlay on a consistent black background so the dimmed
-	// three-pane view is replaced with a uniform dark surface behind the modal.
+	// Center the overlay on a surface using the theme's base color so the dimmed
+	// three-pane view is replaced with a uniform themed surface behind the modal.
 	centered := lipgloss.Place(
 		a.width, a.height,
 		lipgloss.Center, lipgloss.Center,
 		overlay,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+		lipgloss.WithWhitespaceForeground(a.theme.Base()),
 	)
 	return centered
 }

@@ -231,3 +231,8 @@ type PlaylistReorderRequestMsg struct {
 type PlaylistReorderResultMsg struct {
 	Err error
 }
+
+// SearchClearedMsg is emitted by SearchOverlay when the user presses Ctrl+U.
+// The root app model handles this by clearing search results and query in the store.
+// Panes must never write to the store directly — they emit messages instead.
+type SearchClearedMsg struct{}
