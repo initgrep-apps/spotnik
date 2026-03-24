@@ -42,10 +42,10 @@ func (p *Player) SetHTTPClient(c *http.Client) {
 	p.setHTTPClient(c)
 }
 
-// GetPlaybackState fetches the current playback state from GET /me/player.
+// PlaybackState fetches the current playback state from GET /me/player.
 // Returns nil, nil when Spotify returns 204 (nothing playing).
 // Returns an error on 429 or other non-2xx status codes.
-func (p *Player) GetPlaybackState(ctx context.Context) (*PlaybackState, error) {
+func (p *Player) PlaybackState(ctx context.Context) (*PlaybackState, error) {
 	req, err := p.newRequest(ctx, http.MethodGet, "/v1/me/player", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get playback state request: %w", err)
@@ -188,10 +188,10 @@ func (p *Player) AddToQueue(ctx context.Context, trackURI string) error {
 	return p.doNoContent(req)
 }
 
-// GetQueue fetches the current play queue from GET /me/player/queue.
+// Queue fetches the current play queue from GET /me/player/queue.
 // Returns the currently playing track and the list of upcoming tracks.
 // Returns nil, nil when Spotify returns 204 (nothing playing).
-func (p *Player) GetQueue(ctx context.Context) (*QueueResponse, error) {
+func (p *Player) Queue(ctx context.Context) (*QueueResponse, error) {
 	req, err := p.newRequest(ctx, http.MethodGet, "/v1/me/player/queue", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get queue request: %w", err)

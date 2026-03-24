@@ -13,22 +13,34 @@ import (
 // All six Spotify API clients embed BaseClient to avoid duplicating
 // newRequest/doJSON/doNoContent across each client file.
 type BaseClient struct {
-	baseURL     string
-	accessToken string
-	http        *http.Client
+	baseURL string
+	token   TokenProvider
+	http    *http.Client
 }
 
 // NewBaseClient creates a BaseClient with sensible defaults.
+// The access token string is wrapped in a StaticTokenProvider so all existing
+// client constructors remain unchanged.
 // Pass "" for baseURL to use the production Spotify API.
 func NewBaseClient(baseURL, accessToken string) BaseClient {
+	return NewBaseClientWithProvider(baseURL, &StaticTokenProvider{Token: accessToken})
+}
+
+// NewBaseClientWithProvider creates a BaseClient that calls tp for every request
+// to obtain a fresh access token. Use this when you need per-request token
+// resolution (e.g. a RefreshableTokenProvider).
+func NewBaseClientWithProvider(baseURL string, tp TokenProvider) BaseClient {
+	if tp == nil {
+		panic("api: TokenProvider must not be nil")
+	}
 	base := baseURL
 	if base == "" {
 		base = spotifyAPIBaseURL
 	}
 	return BaseClient{
-		baseURL:     strings.TrimRight(base, "/"),
-		accessToken: accessToken,
-		http:        &http.Client{},
+		baseURL: strings.TrimRight(base, "/"),
+		token:   tp,
+		http:    &http.Client{},
 	}
 }
 
@@ -39,13 +51,20 @@ func (b *BaseClient) setHTTPClient(c *http.Client) {
 }
 
 // newRequest builds an authenticated HTTP request with the Authorization header set.
+// It calls b.token.AccessToken(ctx) per-request so that a RefreshableTokenProvider
+// can silently update the token without restarting the client.
 func (b *BaseClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	token, err := b.token.AccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolving access token: %w", err)
+	}
+
 	u := b.baseURL + path
 	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+b.accessToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	return req, nil
 }
 

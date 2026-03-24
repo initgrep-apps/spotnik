@@ -38,8 +38,8 @@ type MockPlayer struct {
 // Compile-time assertion: *MockPlayer must implement PlayerAPI.
 var _ api.PlayerAPI = (*MockPlayer)(nil)
 
-// GetPlaybackState returns the configured PlaybackStateResult and error.
-func (m *MockPlayer) GetPlaybackState(_ context.Context) (*api.PlaybackState, error) {
+// PlaybackState returns the configured PlaybackStateResult and error.
+func (m *MockPlayer) PlaybackState(_ context.Context) (*api.PlaybackState, error) {
 	return m.PlaybackStateResult, m.PlaybackStateErr
 }
 
@@ -97,8 +97,8 @@ func (m *MockPlayer) AddToQueue(_ context.Context, _ string) error {
 	return m.AddToQueueErr
 }
 
-// GetQueue returns the configured QueueResult and error.
-func (m *MockPlayer) GetQueue(_ context.Context) (*api.QueueResponse, error) {
+// Queue returns the configured QueueResult and error.
+func (m *MockPlayer) Queue(_ context.Context) (*api.QueueResponse, error) {
 	return m.QueueResult, m.QueueErr
 }
 
@@ -124,28 +124,28 @@ type MockLibrary struct {
 // Compile-time assertion: *MockLibrary must implement LibraryAPI.
 var _ api.LibraryAPI = (*MockLibrary)(nil)
 
-// GetPlaylists returns the configured result and error.
-func (m *MockLibrary) GetPlaylists(_ context.Context, _, _ int) ([]api.SimplePlaylist, error) {
+// Playlists returns the configured result and error.
+func (m *MockLibrary) Playlists(_ context.Context, _, _ int) ([]api.SimplePlaylist, error) {
 	return m.PlaylistsResult, m.PlaylistsErr
 }
 
-// GetPlaylistTracks returns the configured result and error.
-func (m *MockLibrary) GetPlaylistTracks(_ context.Context, _ string, _, _ int) ([]api.Track, error) {
+// PlaylistTracks returns the configured result and error.
+func (m *MockLibrary) PlaylistTracks(_ context.Context, _ string, _, _ int) ([]api.Track, error) {
 	return m.PlaylistTracksResult, m.PlaylistTracksErr
 }
 
-// GetSavedAlbums returns the configured result and error.
-func (m *MockLibrary) GetSavedAlbums(_ context.Context, _, _ int) ([]api.SavedAlbum, error) {
+// SavedAlbums returns the configured result and error.
+func (m *MockLibrary) SavedAlbums(_ context.Context, _, _ int) ([]api.SavedAlbum, error) {
 	return m.SavedAlbumsResult, m.SavedAlbumsErr
 }
 
-// GetLikedTracks returns the configured result and error.
-func (m *MockLibrary) GetLikedTracks(_ context.Context, _, _ int) ([]api.SavedTrack, error) {
+// LikedTracks returns the configured result and error.
+func (m *MockLibrary) LikedTracks(_ context.Context, _, _ int) ([]api.SavedTrack, error) {
 	return m.LikedTracksResult, m.LikedTracksErr
 }
 
-// GetRecentlyPlayed returns the configured result and error.
-func (m *MockLibrary) GetRecentlyPlayed(_ context.Context, _ int) ([]api.PlayHistory, error) {
+// RecentlyPlayed returns the configured result and error.
+func (m *MockLibrary) RecentlyPlayed(_ context.Context, _ int) ([]api.PlayHistory, error) {
 	return m.RecentlyPlayedResult, m.RecentlyPlayedErr
 }
 
@@ -186,8 +186,8 @@ type MockDevices struct {
 // Compile-time assertion: *MockDevices must implement DevicesAPI.
 var _ api.DevicesAPI = (*MockDevices)(nil)
 
-// GetDevices returns the configured result and error.
-func (m *MockDevices) GetDevices(_ context.Context) ([]api.Device, error) {
+// Devices returns the configured result and error.
+func (m *MockDevices) Devices(_ context.Context) ([]api.Device, error) {
 	return m.DevicesResult, m.DevicesErr
 }
 
@@ -210,18 +210,18 @@ type MockUser struct {
 // Compile-time assertion: *MockUser must implement UserAPI.
 var _ api.UserAPI = (*MockUser)(nil)
 
-// GetTopTracks returns the configured result and error.
-func (m *MockUser) GetTopTracks(_ context.Context, _ string, _ int) ([]api.Track, error) {
+// TopTracks returns the configured result and error.
+func (m *MockUser) TopTracks(_ context.Context, _ string, _ int) ([]api.Track, error) {
 	return m.TopTracksResult, m.TopTracksErr
 }
 
-// GetTopArtists returns the configured result and error.
-func (m *MockUser) GetTopArtists(_ context.Context, _ string, _ int) ([]api.FullArtist, error) {
+// TopArtists returns the configured result and error.
+func (m *MockUser) TopArtists(_ context.Context, _ string, _ int) ([]api.FullArtist, error) {
 	return m.TopArtistsResult, m.TopArtistsErr
 }
 
-// GetRecentlyPlayed returns the configured result and error.
-func (m *MockUser) GetRecentlyPlayed(_ context.Context, _ int) ([]api.PlayHistory, error) {
+// RecentlyPlayed returns the configured result and error.
+func (m *MockUser) RecentlyPlayed(_ context.Context, _ int) ([]api.PlayHistory, error) {
 	return m.RecentlyPlayedResult, m.RecentlyPlayedErr
 }
 

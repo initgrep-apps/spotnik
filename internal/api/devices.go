@@ -33,9 +33,9 @@ type devicesResponse struct {
 	Devices []Device `json:"devices"`
 }
 
-// GetDevices fetches all available Spotify Connect devices for the current user.
+// Devices fetches all available Spotify Connect devices for the current user.
 // Returns an empty (non-nil) slice when Spotify reports no devices.
-func (c *DevicesClient) GetDevices(ctx context.Context) ([]Device, error) {
+func (c *DevicesClient) Devices(ctx context.Context) ([]Device, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, "/v1/me/player/devices", nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting devices: creating request: %w", err)

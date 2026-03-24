@@ -33,7 +33,7 @@ func TestGetPlaybackState_Success(t *testing.T) {
 	defer srv.Close()
 
 	player := newTestPlayer(srv.URL, "test-token")
-	state, err := player.GetPlaybackState(context.Background())
+	state, err := player.PlaybackState(context.Background())
 
 	require.NoError(t, err)
 	require.NotNil(t, state)
@@ -50,7 +50,7 @@ func TestGetPlaybackState_204(t *testing.T) {
 	defer srv.Close()
 
 	player := newTestPlayer(srv.URL, "test-token")
-	state, err := player.GetPlaybackState(context.Background())
+	state, err := player.PlaybackState(context.Background())
 
 	require.NoError(t, err, "204 should return nil state, not error")
 	assert.Nil(t, state, "nil state expected for 204 response")
@@ -64,7 +64,7 @@ func TestGetPlaybackState_429(t *testing.T) {
 	defer srv.Close()
 
 	player := newTestPlayer(srv.URL, "test-token")
-	state, err := player.GetPlaybackState(context.Background())
+	state, err := player.PlaybackState(context.Background())
 
 	require.Error(t, err)
 	assert.Nil(t, state)
@@ -349,7 +349,7 @@ func TestGetQueue_Success(t *testing.T) {
 	defer srv.Close()
 
 	player := newTestPlayer(srv.URL, "test-token")
-	queueResp, err := player.GetQueue(context.Background())
+	queueResp, err := player.Queue(context.Background())
 
 	require.NoError(t, err)
 	require.NotNil(t, queueResp)
@@ -359,7 +359,7 @@ func TestGetQueue_Success(t *testing.T) {
 	assert.Equal(t, "Starboy", queueResp.Queue[1].Name)
 }
 
-// TestGetQueue_ServerError verifies GetQueue returns an error on non-2xx.
+// TestGetQueue_ServerError verifies Queue returns an error on non-2xx.
 func TestGetQueue_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -368,7 +368,7 @@ func TestGetQueue_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	player := newTestPlayer(srv.URL, "test-token")
-	queueResp, err := player.GetQueue(context.Background())
+	queueResp, err := player.Queue(context.Background())
 
 	require.Error(t, err)
 	assert.Nil(t, queueResp)

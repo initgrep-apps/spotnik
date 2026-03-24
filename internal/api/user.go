@@ -48,10 +48,10 @@ func (u *UserClient) SetHTTPClient(c *http.Client) {
 	u.setHTTPClient(c)
 }
 
-// GetTopTracks fetches the user's top tracks via GET /me/top/tracks.
+// TopTracks fetches the user's top tracks via GET /me/top/tracks.
 // timeRange must be "short_term", "medium_term", or "long_term".
 // Returns a slice of Track. Errors are wrapped with context.
-func (u *UserClient) GetTopTracks(ctx context.Context, timeRange string, limit int) ([]Track, error) {
+func (u *UserClient) TopTracks(ctx context.Context, timeRange string, limit int) ([]Track, error) {
 	req, err := u.newRequest(ctx, http.MethodGet, "/v1/me/top/tracks", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get top tracks request: %w", err)
@@ -74,10 +74,10 @@ func (u *UserClient) GetTopTracks(ctx context.Context, timeRange string, limit i
 	return response.Items, nil
 }
 
-// GetTopArtists fetches the user's top artists via GET /me/top/artists.
+// TopArtists fetches the user's top artists via GET /me/top/artists.
 // timeRange must be "short_term", "medium_term", or "long_term".
 // Returns a slice of FullArtist. Errors are wrapped with context.
-func (u *UserClient) GetTopArtists(ctx context.Context, timeRange string, limit int) ([]FullArtist, error) {
+func (u *UserClient) TopArtists(ctx context.Context, timeRange string, limit int) ([]FullArtist, error) {
 	req, err := u.newRequest(ctx, http.MethodGet, "/v1/me/top/artists", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get top artists request: %w", err)
@@ -100,10 +100,10 @@ func (u *UserClient) GetTopArtists(ctx context.Context, timeRange string, limit 
 	return response.Items, nil
 }
 
-// GetRecentlyPlayed fetches the user's recently played tracks via
+// RecentlyPlayed fetches the user's recently played tracks via
 // GET /me/player/recently-played. Returns a slice of PlayHistory items.
 // Errors are wrapped with context.
-func (u *UserClient) GetRecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error) {
+func (u *UserClient) RecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error) {
 	req, err := u.newRequest(ctx, http.MethodGet, "/v1/me/player/recently-played", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get recently played request: %w", err)

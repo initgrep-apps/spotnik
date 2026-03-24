@@ -27,9 +27,9 @@ func (l *LibraryClient) SetHTTPClient(c *http.Client) {
 	l.setHTTPClient(c)
 }
 
-// GetPlaylists fetches the user's saved playlists via GET /me/playlists.
+// Playlists fetches the user's saved playlists via GET /me/playlists.
 // Returns a slice of SimplePlaylist. Errors are wrapped with context.
-func (l *LibraryClient) GetPlaylists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error) {
+func (l *LibraryClient) Playlists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error) {
 	req, err := l.newRequest(ctx, http.MethodGet, "/v1/me/playlists", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get playlists request: %w", err)
@@ -52,9 +52,9 @@ func (l *LibraryClient) GetPlaylists(ctx context.Context, limit, offset int) ([]
 	return response.Items, nil
 }
 
-// GetPlaylistTracks fetches tracks for a specific playlist via GET /playlists/{id}/tracks.
+// PlaylistTracks fetches tracks for a specific playlist via GET /playlists/{id}/tracks.
 // Returns a slice of Track. Errors are wrapped with context.
-func (l *LibraryClient) GetPlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, error) {
+func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, error) {
 	path := fmt.Sprintf("/v1/playlists/%s/tracks", playlistID)
 	req, err := l.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -82,9 +82,9 @@ func (l *LibraryClient) GetPlaylistTracks(ctx context.Context, playlistID string
 	return tracks, nil
 }
 
-// GetSavedAlbums fetches the user's saved albums via GET /me/albums.
+// SavedAlbums fetches the user's saved albums via GET /me/albums.
 // Returns a slice of SavedAlbum. Errors are wrapped with context.
-func (l *LibraryClient) GetSavedAlbums(ctx context.Context, limit, offset int) ([]SavedAlbum, error) {
+func (l *LibraryClient) SavedAlbums(ctx context.Context, limit, offset int) ([]SavedAlbum, error) {
 	req, err := l.newRequest(ctx, http.MethodGet, "/v1/me/albums", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get saved albums request: %w", err)
@@ -107,9 +107,9 @@ func (l *LibraryClient) GetSavedAlbums(ctx context.Context, limit, offset int) (
 	return response.Items, nil
 }
 
-// GetLikedTracks fetches the user's liked tracks via GET /me/tracks.
+// LikedTracks fetches the user's liked tracks via GET /me/tracks.
 // Returns a slice of SavedTrack. Errors are wrapped with context.
-func (l *LibraryClient) GetLikedTracks(ctx context.Context, limit, offset int) ([]SavedTrack, error) {
+func (l *LibraryClient) LikedTracks(ctx context.Context, limit, offset int) ([]SavedTrack, error) {
 	req, err := l.newRequest(ctx, http.MethodGet, "/v1/me/tracks", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get liked tracks request: %w", err)
@@ -132,9 +132,9 @@ func (l *LibraryClient) GetLikedTracks(ctx context.Context, limit, offset int) (
 	return response.Items, nil
 }
 
-// GetRecentlyPlayed fetches recently played tracks via GET /me/player/recently-played.
+// RecentlyPlayed fetches recently played tracks via GET /me/player/recently-played.
 // Returns a slice of PlayHistory items. Errors are wrapped with context.
-func (l *LibraryClient) GetRecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error) {
+func (l *LibraryClient) RecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error) {
 	req, err := l.newRequest(ctx, http.MethodGet, "/v1/me/player/recently-played", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get recently played request: %w", err)

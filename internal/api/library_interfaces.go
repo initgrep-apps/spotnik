@@ -5,11 +5,11 @@ import "context"
 // LibraryAPI defines all Spotify library read and like/unlike operations.
 // Concrete implementation: *LibraryClient.
 type LibraryAPI interface {
-	GetPlaylists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error)
-	GetPlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, error)
-	GetSavedAlbums(ctx context.Context, limit, offset int) ([]SavedAlbum, error)
-	GetLikedTracks(ctx context.Context, limit, offset int) ([]SavedTrack, error)
-	GetRecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error)
+	Playlists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error)
+	PlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, error)
+	SavedAlbums(ctx context.Context, limit, offset int) ([]SavedAlbum, error)
+	LikedTracks(ctx context.Context, limit, offset int) ([]SavedTrack, error)
+	RecentlyPlayed(ctx context.Context, limit int) ([]PlayHistory, error)
 	LikeTrack(ctx context.Context, trackID string) error
 	UnlikeTrack(ctx context.Context, trackID string) error
 }
