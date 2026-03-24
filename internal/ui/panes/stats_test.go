@@ -502,7 +502,8 @@ func TestStatsView_View_HeightCapped(t *testing.T) {
 	require.NotNil(t, sv)
 
 	view := sv.View()
-	lines := strings.Split(view, "\n")
+	// Trim trailing empty line that strings.Split creates from a trailing newline.
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
 	assert.LessOrEqual(t, len(lines), height, "View() must not exceed SetSize height")
 }
 
