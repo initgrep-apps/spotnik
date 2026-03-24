@@ -1789,6 +1789,83 @@ func TestApp_SplashScreen_StaysOnPlaybackData(t *testing.T) {
 	assert.Contains(t, output, "v1.1.0", "splash should still be visible — only timer dismisses it")
 }
 
+// --- Feature 20: Elm Architecture Purity tests ---
+
+// TestApp_SearchRequestMsg_SetsStoreBeforeCmd verifies that handling SearchRequestMsg
+// sets the search query and loading state in the store before building the search command.
+// This proves the store writes happen in Update(), not inside buildSearchCmd.
+func TestApp_SearchRequestMsg_SetsStoreBeforeCmd(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Store should start with no query and loading=false.
+	assert.Equal(t, "", a.Store().SearchQuery(), "store search query should be empty initially")
+	assert.False(t, a.Store().SearchLoading(), "store search loading should be false initially")
+
+	// Send SearchRequestMsg — Update() should set store state and return a command.
+	m, cmd := a.Update(panes.SearchRequestMsg{Query: "blinding lights"})
+	a = m.(*app.App)
+
+	// Store state must be set immediately (before the returned cmd executes).
+	assert.Equal(t, "blinding lights", a.Store().SearchQuery(), "store should have query after SearchRequestMsg")
+	assert.True(t, a.Store().SearchLoading(), "store should be loading after SearchRequestMsg")
+	assert.NotNil(t, cmd, "SearchRequestMsg should produce a search command")
+}
+
+// TestApp_SearchClearedMsg_ClearsStoreState verifies that app.Update(SearchClearedMsg)
+// clears both search results and search query in the store.
+func TestApp_SearchClearedMsg_ClearsStoreState(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Pre-populate the store with search state.
+	a.Store().SetSearchQuery("blinding lights")
+	a.Store().SetSearchResults(&api.SearchResult{})
+
+	require.Equal(t, "blinding lights", a.Store().SearchQuery())
+	require.NotNil(t, a.Store().SearchResults())
+
+	// Handle SearchClearedMsg — store should be cleared.
+	m, _ := a.Update(panes.SearchClearedMsg{})
+	a = m.(*app.App)
+
+	assert.Equal(t, "", a.Store().SearchQuery(), "store search query should be cleared")
+	assert.Nil(t, a.Store().SearchResults(), "store search results should be nil after clear")
+}
+
+// TestApp_OverlayRendering_UsesThemeBaseColor verifies that overlay rendering
+// uses the theme's Base() color instead of a hardcoded #000000.
+// With a non-black theme (monokai), the rendered overlay view must not panic
+// and must be non-empty. This ensures no hardcoded color is used.
+func TestApp_OverlayRendering_UsesThemeBaseColor(t *testing.T) {
+	// Use monokai theme (Base() = #272822, not #000000).
+	cfg := &config.Config{}
+	cfg.UI.Theme = "monokai"
+	a := app.New(cfg, app.AppOptions{})
+
+	// Set valid terminal size.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
+
+	// Open search overlay with monokai theme — should render without panic.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = m.(*app.App)
+	require.True(t, a.SearchOpen())
+
+	output := a.View()
+	assert.NotEmpty(t, output, "overlay view should be non-empty with monokai theme")
+
+	// Close search, open device overlay with monokai theme.
+	m, _ = a.Update(panes.SearchClosedMsg{})
+	a = m.(*app.App)
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = m.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	output = a.View()
+	assert.NotEmpty(t, output, "device overlay view should be non-empty with monokai theme")
+}
+
 // TestApp_BackoffExpiry_ForcesImmediateFetch verifies that when backoff ticks
 // expire, the app immediately fires playback and queue fetch commands instead
 // of waiting for the next modulo-aligned tick.

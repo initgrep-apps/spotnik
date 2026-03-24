@@ -202,11 +202,11 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o.handleAddToQueue()
 
 	case tea.KeyCtrlU:
+		// Clear local input and cursor — visual reset happens immediately.
+		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
 		o.input.SetValue("")
-		o.store.SetSearchResults(nil)
-		o.store.SetSearchQuery("")
 		o.cursorPos = 0
-		return o, nil
+		return o, func() tea.Msg { return SearchClearedMsg{} }
 
 	case tea.KeyBackspace:
 		// Let textinput handle backspace normally.
