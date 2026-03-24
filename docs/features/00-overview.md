@@ -36,9 +36,9 @@ Features must be built in order. Each depends on the previous being stable and t
 | 22 | app.go Decomposition | `22-app-decomposition.md` | ✅ Complete | 20 | #27 |
 | 23 | API Interfaces & Mocks | `23-api-interfaces-mocks.md` | ✅ Complete | — | #25 |
 | 24 | Typed Errors & TokenProvider | `24-typed-errors-token-provider.md` | ✅ Partial | 23 | #30 |
-| 25 | API DRY Refactoring | `25-api-dry-refactoring.md` | Planned | 23, 24 | — |
+| 25 | API DRY Refactoring | `25-api-dry-refactoring.md` | ✅ Complete | 23, 24 | #31 |
 | 26 | View Height Enforcement | `26-view-height-enforcement.md` | ✅ Complete | — | #28 |
-| 27 | Error Resilience | `27-error-resilience.md` | Planned | 24 | — |
+| 27 | Error Resilience | `27-error-resilience.md` | ✅ Complete | 24 | #32 |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
