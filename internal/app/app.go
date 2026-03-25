@@ -472,9 +472,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSearchLoading(false)
 		if m.Err != nil {
 			a.store.SetSearchError(m.Err)
-		} else {
-			a.store.ClearSearchError()
+			// Route search error through toast; search overlay shows loading→empty (not error).
+			updated, _ := a.searchPane.Update(m)
+			if sp, ok := updated.(*panes.SearchOverlay); ok {
+				a.searchPane = sp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Search failed")
 		}
+		a.store.ClearSearchError()
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp
@@ -510,12 +515,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Stats data fetched — write to store, then forward to stats pane.
 		if m.Err != nil {
 			a.store.SetStatsError(m.Err)
-		} else {
-			a.store.ClearStatsError()
-			if m.TimeRange != "" {
-				a.store.SetTopTracks(m.TimeRange, m.TopTracks)
-				a.store.SetTopArtists(m.TimeRange, m.TopArtists)
+			if a.statsPane != nil {
+				updated, _ := a.statsPane.Update(m)
+				if sv, ok := updated.(*panes.StatsView); ok {
+					a.statsPane = sv
+				}
 			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load stats. Press f to retry")
+		}
+		a.store.ClearStatsError()
+		if m.TimeRange != "" {
+			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
+			a.store.SetTopArtists(m.TimeRange, m.TopArtists)
 		}
 		if a.statsPane != nil {
 			updated, cmd := a.statsPane.Update(m)
@@ -601,10 +612,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write queue data to store from Msg payload (Elm Architecture: only Update writes store).
 		if m.Err != nil {
 			a.store.SetQueueError(m.Err)
-		} else {
-			a.store.ClearQueueError()
-			a.store.SetQueue(m.Tracks)
+			return a, a.alerts.NewAlertCmd("error", "Queue update failed")
 		}
+		a.store.ClearQueueError()
+		a.store.SetQueue(m.Tracks)
 		// QueuePane reads directly from store on View().
 		return a, nil
 
@@ -681,15 +692,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write playlist data to store from Msg payload (Elm Architecture: only Update writes store).
 		if m.Err != nil {
 			a.store.SetPlaylistsFetchError(m.Err)
-		} else {
-			a.store.ClearPlaylistsFetchError()
-			if m.Offset == 0 {
-				a.store.SetPlaylists(m.Items)
-			} else {
-				a.store.SetPlaylists(append(a.store.Playlists(), m.Items...))
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
 			}
-			a.store.SetPlaylistsTotal(len(a.store.Playlists()))
+			return a, a.alerts.NewAlertCmd("error", "Failed to load playlists. Press Tab to retry")
 		}
+		a.store.ClearPlaylistsFetchError()
+		if m.Offset == 0 {
+			a.store.SetPlaylists(m.Items)
+		} else {
+			a.store.SetPlaylists(append(a.store.Playlists(), m.Items...))
+		}
+		a.store.SetPlaylistsTotal(len(a.store.Playlists()))
 		// Forward to library pane so it can refresh from store.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -704,10 +719,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write album data to store from Msg payload.
 		if m.Err != nil {
 			a.store.SetAlbumsFetchError(m.Err)
-		} else {
-			a.store.ClearAlbumsFetchError()
-			a.store.SetSavedAlbums(m.Items)
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load albums. Press Tab to retry")
 		}
+		a.store.ClearAlbumsFetchError()
+		a.store.SetSavedAlbums(m.Items)
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -722,11 +741,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write liked tracks to store from Msg payload.
 		if m.Err != nil {
 			a.store.SetLikedTracksFetchError(m.Err)
-		} else {
-			a.store.ClearLikedTracksFetchError()
-			a.store.SetLikedTracks(m.Items)
-			a.store.SetLikedTotal(len(m.Items) + m.Offset)
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load liked tracks. Press Tab to retry")
 		}
+		a.store.ClearLikedTracksFetchError()
+		a.store.SetLikedTracks(m.Items)
+		a.store.SetLikedTotal(len(m.Items) + m.Offset)
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -741,10 +764,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write recently played to store from Msg payload.
 		if m.Err != nil {
 			a.store.SetRecentPlayedFetchError(m.Err)
-		} else {
-			a.store.ClearRecentPlayedFetchError()
-			a.store.SetRecentlyPlayed(m.Items)
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load recently played. Press Tab to retry")
 		}
+		a.store.ClearRecentPlayedFetchError()
+		a.store.SetRecentlyPlayed(m.Items)
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {

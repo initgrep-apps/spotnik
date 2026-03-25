@@ -223,9 +223,11 @@ func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
 	overlay.SetSize(60, 20)
 
 	output := overlay.View()
-	assert.Contains(t, output, "Failed to load devices", "should show error message")
-	assert.Contains(t, output, "Press d to retry", "should show retry hint")
-	assert.NotContains(t, output, "No devices found", "should not show empty state when error")
+	// Errors route through toast notifications, not inline pane rendering.
+	// Store error is preserved for retry logic but never read in View().
+	assert.NotContains(t, output, "Failed to load devices", "inline error rendering removed — toasts handle this")
+	// With no devices loaded, the empty state renders normally.
+	assert.Contains(t, output, "No devices found", "empty state shows when no devices loaded")
 }
 
 func TestDeviceOverlay_View_ShowsEmptyWhenNoError(t *testing.T) {

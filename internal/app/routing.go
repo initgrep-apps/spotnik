@@ -200,10 +200,16 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// Write playlist tracks to store from Msg payload (Elm Architecture: only Update writes store).
 		if m.Err != nil {
 			a.store.SetPlaylistsError(m.Err)
-		} else {
-			a.store.ClearPlaylistsError()
-			a.store.SetPlaylistTracks(m.PlaylistID, m.Tracks)
+			if a.playlistPane != nil {
+				updated, _ := a.playlistPane.Update(m)
+				if pm, ok := updated.(*panes.PlaylistManager); ok {
+					a.playlistPane = pm
+				}
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load playlist tracks. Press Enter to retry"), true
 		}
+		a.store.ClearPlaylistsError()
+		a.store.SetPlaylistTracks(m.PlaylistID, m.Tracks)
 		// Forward to playlist pane so it can refresh from store.
 		if a.playlistPane != nil {
 			updated, cmd := a.playlistPane.Update(m)

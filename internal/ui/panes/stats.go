@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -332,17 +331,10 @@ func (sv *StatsView) handleCycleRange() (tea.Model, tea.Cmd) {
 }
 
 // View renders the stats dashboard. It is pure — no external calls.
-// If the store has a StatsError, renders an error box instead of the dashboard.
 // NOTE: only app.go renders the status bar — no pane-level hint bar here.
+// Errors are routed through toast notifications (app.go); store.StatsError()
+// is preserved for retry logic but no longer read in View().
 func (sv *StatsView) View() string {
-	if err := sv.store.StatsError(); err != nil {
-		return components.RenderError(
-			sv.theme,
-			sv.width, sv.height,
-			"Failed to load stats",
-			"Press f to retry",
-		)
-	}
 	return sv.renderDashboard()
 }
 

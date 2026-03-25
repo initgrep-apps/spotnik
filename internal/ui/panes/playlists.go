@@ -12,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -582,18 +581,10 @@ func (pm *PlaylistManager) ensureRightCursorVisible() {
 }
 
 // View renders the full Playlist Manager view.
-// If the store has a PlaylistsError, renders an error box instead of the playlist layout.
 // NOTE: only app.go renders the status bar — no pane-level hint bar here.
+// Errors are routed through toast notifications (app.go); store.PlaylistsError()
+// is preserved for retry logic but no longer read in View().
 func (pm *PlaylistManager) View() string {
-	if err := pm.store.PlaylistsError(); err != nil {
-		return components.RenderError(
-			pm.theme,
-			pm.width, pm.height,
-			"Failed to load playlists",
-			"Press 3 to retry",
-		)
-	}
-
 	if pm.width <= 0 || pm.height <= 0 {
 		return pm.renderSimple()
 	}
