@@ -536,7 +536,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.SearchResultsMsg:
 		// Search command returned — write error state to store, then deliver results to overlay.
 		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
-		// *api.SearchResult stored in store.SearchResults(). The overlay stores results in its
+		// *domain.SearchResult stored in store.SearchResults(). The overlay stores results in its
 		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
 		// in production rendering and can be ignored here.
 		a.store.SetSearchLoading(false)

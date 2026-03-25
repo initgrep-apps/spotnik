@@ -288,9 +288,9 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 	}
 }
 
-// convertSearchResult converts *api.SearchResult to *panes.SearchResultData,
-// extracting only the fields the UI needs. This is the sole place where api
-// search types cross the app/ui boundary.
+// convertSearchResult converts *api.SearchResult (= *domain.SearchResult) to *panes.SearchResultData,
+// extracting only the fields the UI needs. This is the sole place where search
+// types cross the app/ui boundary.
 func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 	if r == nil {
 		return nil

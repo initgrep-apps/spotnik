@@ -314,7 +314,7 @@ type SearchClearedMsg struct{}
 
 // SearchResultData is the UI-facing representation of search results.
 // It carries only the fields the overlay needs for rendering, pre-converted
-// from api.SearchResult in commands.go so that search.go never imports api/.
+// from domain.SearchResult in commands.go so that search.go never imports api/.
 type SearchResultData struct {
 	Tracks    []SearchTrackItem
 	Artists   []SearchArtistItem

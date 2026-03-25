@@ -52,3 +52,28 @@ type PlayOptions = domain.PlayOptions
 
 // FullArtist re-exports domain.FullArtist for backward compatibility.
 type FullArtist = domain.FullArtist
+
+// SearchArtist re-exports domain.SearchArtist for backward compatibility.
+type SearchArtist = domain.SearchArtist
+
+// SearchAlbum re-exports domain.SearchAlbum for backward compatibility.
+type SearchAlbum = domain.SearchAlbum
+
+// SearchPlaylist re-exports domain.SearchPlaylist for backward compatibility.
+type SearchPlaylist = domain.SearchPlaylist
+
+// SearchTracksResult re-exports domain.SearchTracksResult for backward compatibility.
+type SearchTracksResult = domain.SearchTracksResult
+
+// SearchArtistsResult re-exports domain.SearchArtistsResult for backward compatibility.
+type SearchArtistsResult = domain.SearchArtistsResult
+
+// SearchAlbumsResult re-exports domain.SearchAlbumsResult for backward compatibility.
+type SearchAlbumsResult = domain.SearchAlbumsResult
+
+// SearchPlaylistsResult re-exports domain.SearchPlaylistsResult for backward compatibility.
+type SearchPlaylistsResult = domain.SearchPlaylistsResult
+
+// SearchResult re-exports domain.SearchResult for backward compatibility.
+// state/ should import domain.SearchResult directly rather than api.SearchResult.
+type SearchResult = domain.SearchResult

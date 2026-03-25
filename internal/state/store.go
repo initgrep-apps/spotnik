@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
@@ -65,8 +64,8 @@ type Store struct {
 	// Queue data
 	queue []domain.Track
 
-	// Search data — searchResults holds the raw api response for the SearchClearedMsg handler.
-	searchResults *api.SearchResult
+	// Search data — searchResults holds the raw search response for the SearchClearedMsg handler.
+	searchResults *domain.SearchResult
 	searchQuery   string
 	searchLoading bool
 
@@ -269,14 +268,14 @@ func (s *Store) SetQueue(tracks []domain.Track) {
 }
 
 // SearchResults returns the most recent search result, or nil if no search has completed.
-func (s *Store) SearchResults() *api.SearchResult {
+func (s *Store) SearchResults() *domain.SearchResult {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.searchResults
 }
 
 // SetSearchResults updates the search results in the store.
-func (s *Store) SetSearchResults(results *api.SearchResult) {
+func (s *Store) SetSearchResults(results *domain.SearchResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.searchResults = results

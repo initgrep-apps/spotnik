@@ -68,7 +68,7 @@ type SearchOverlay struct {
 	height  int
 
 	// results holds the most recent search results delivered via SearchResultsMsg.
-	// This avoids reading api.SearchResult from the store, keeping the ui/api boundary clean.
+	// This avoids reading domain.SearchResult from the store, keeping the ui/api boundary clean.
 	results *SearchResultData
 
 	// activeSection is which section (Tracks/Artists/Albums/Playlists) has focus.
