@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 )
 
 // BaseClient provides shared HTTP functionality for all API clients.
@@ -16,7 +17,9 @@ type BaseClient struct {
 	baseURL string
 	token   TokenProvider
 	http    *http.Client
-	gateway *Gateway // optional; when set, all requests route through it
+	// gateway is accessed via atomic load/store to be safe for concurrent
+	// calls to SetGateway and doJSON (e.g. during token refresh).
+	gateway atomic.Pointer[Gateway]
 }
 
 // NewBaseClient creates a BaseClient with sensible defaults.
@@ -54,8 +57,9 @@ func (b *BaseClient) setHTTPClient(c *http.Client) {
 // SetGateway attaches a Gateway to the BaseClient. When set, all requests
 // are routed through the gateway for rate limiting, concurrency capping, and dedup.
 // The priority is read from the request context via PriorityFromContext.
+// Safe to call concurrently with doJSON/doNoContent.
 func (b *BaseClient) SetGateway(gw *Gateway) {
-	b.gateway = gw
+	b.gateway.Store(gw)
 }
 
 // newRequest builds an authenticated HTTP request with the Authorization header set.
@@ -83,10 +87,10 @@ func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
 	var resp *http.Response
 	var err error
 
-	if b.gateway != nil {
+	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path}
-		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
 	} else {
@@ -122,10 +126,10 @@ func (b *BaseClient) doJSONOptional(req *http.Request, out interface{}) (bool, e
 	var resp *http.Response
 	var err error
 
-	if b.gateway != nil {
+	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path}
-		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
 	} else {
@@ -164,10 +168,10 @@ func (b *BaseClient) doNoContent(req *http.Request) error {
 	var resp *http.Response
 	var err error
 
-	if b.gateway != nil {
+	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path}
-		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
 	} else {
@@ -179,6 +183,9 @@ func (b *BaseClient) doNoContent(req *http.Request) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("reading response body: %w", readErr)
+	}
 	return checkResponseStatus(resp, body)
 }
