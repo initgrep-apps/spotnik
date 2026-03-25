@@ -11,7 +11,16 @@ import (
 )
 
 // View renders the full terminal UI.
+// IMPORTANT: The final step calls a.alerts.Render(view) to overlay any active
+// toast notification on top of the complete rendered view. Never call alerts.View()
+// — BubbleUp's View() returns empty string by design.
 func (a *App) View() string {
+	return a.alerts.Render(a.buildView())
+}
+
+// buildView renders the full terminal UI content without the alert overlay.
+// Called by View() which applies alerts.Render() as the final step.
+func (a *App) buildView() string {
 	// DESIGN.md: minimum terminal size check.
 	if a.width > 0 && a.height > 0 && (a.width < 100 || a.height < 24) {
 		return a.renderTooSmall()

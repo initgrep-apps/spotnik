@@ -13,8 +13,10 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"go.dalton.dog/bubbleup"
 )
 
 // focusedPane identifies which pane currently has keyboard focus.
@@ -50,8 +52,11 @@ const (
 // store, the API clients, and all pane models. It is the ONLY layer that
 // calls the Spotify API — panes emit request messages and app.go dispatches them.
 type App struct {
-	theme   theme.Theme
-	store   *state.Store
+	theme  theme.Theme
+	store  *state.Store
+	alerts bubbleup.AlertModel // BubbleUp toast notification model
+	// NOTE: alerts.Render(content) must be called in View() — never alerts.View().
+	// BubbleUp's View() returns empty string by design; Render() overlays alerts.
 	gateway *api.Gateway // centralized HTTP gateway shared across all API clients
 	player  api.PlayerAPI
 	library api.LibraryAPI
@@ -177,6 +182,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	return &App{
 		theme:        t,
 		store:        s,
+		alerts:       *components.NewNotifications(t),
 		gateway:      gw,
 		playerPane:   playerPane,
 		libraryPane:  libraryPane,
@@ -291,6 +297,10 @@ func (a *App) Init() tea.Cmd {
 		return splashDismissMsg{}
 	})
 
+	// NOTE: a.alerts.Init() returns nil by design — BubbleUp starts its
+	// internal tick only when an alert is triggered, not at startup.
+	_ = a.alerts.Init()
+
 	if a.needsAuth {
 		// Unauthenticated: only show splash, defer everything else.
 		return splashTimer
@@ -382,7 +392,25 @@ func (a *App) closePlaylists() (*App, tea.Cmd) {
 }
 
 // Update handles all messages routed through the root model.
+// It delegates to handleMsg for application logic, then forwards the message to
+// the BubbleUp alerts model so alert lifecycle timers (auto-dismiss) keep running.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, mainCmd := a.handleMsg(msg)
+
+	// Forward message to BubbleUp alerts for lifecycle management.
+	// This ensures the auto-dismiss timer keeps ticking while any alert is active,
+	// regardless of which other message is being processed.
+	updatedAlerts, alertCmd := a.alerts.Update(msg)
+	if am, ok := updatedAlerts.(bubbleup.AlertModel); ok {
+		a.alerts = am
+	}
+
+	return model, tea.Batch(mainCmd, alertCmd)
+}
+
+// handleMsg contains the core application message routing logic.
+// It is called by Update() which also forwards messages to the alerts model.
+func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
