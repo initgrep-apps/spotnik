@@ -163,6 +163,27 @@ func TestFetchAlbumsRequest_IndependentOfPlaylists(t *testing.T) {
 	assert.NotNil(t, cmd, "albums should still be stale even when playlists are fresh")
 }
 
+// --- Device fetch staleness: FetchDevicesRequestMsg ---
+
+// TestFetchDevicesRequest_WhenStale_DispatchesFetch verifies device fetch is dispatched
+// when the device list has never been fetched (store fetchedAt is zero).
+func TestFetchDevicesRequest_WhenStale_DispatchesFetch(t *testing.T) {
+	a := newTestApp()
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	assert.NotNil(t, cmd, "FetchDevicesRequestMsg when stale should dispatch a fetch command")
+}
+
+// TestFetchDevicesRequest_WhenFresh_SkipsFetch verifies device fetch is skipped when
+// the store already has a recent devicesFetchedAt timestamp (within DevicesTTL).
+func TestFetchDevicesRequest_WhenFresh_SkipsFetch(t *testing.T) {
+	a := newTestApp()
+	// Stamp as recently fetched so the store is within DevicesTTL.
+	a.Store().SetDevicesFetchedAt(time.Now())
+
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	assert.Nil(t, cmd, "FetchDevicesRequestMsg when fresh should return nil command (skip fetch)")
+}
+
 // TestStalenessTTLConstants verifies that the exported TTL constants match the spec values.
 // This acts as a regression guard against accidental constant changes.
 func TestStalenessTTLConstants(t *testing.T) {

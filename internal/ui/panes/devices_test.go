@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/state"
@@ -290,4 +291,35 @@ func TestDeviceOverlay_View_ShowsDevicesWhenNoError(t *testing.T) {
 	output := overlay.View()
 	assert.Contains(t, output, "MacBook Pro")
 	assert.NotContains(t, output, "Failed to load devices")
+}
+
+// TestDeviceOverlay_devicesLoadedMsg_StampsFetchedAt verifies that a successful
+// devicesLoadedMsg stamps the store's devicesFetchedAt timestamp.
+// This is required for DevicesStale() to return false after a successful load.
+func TestDeviceOverlay_devicesLoadedMsg_StampsFetchedAt(t *testing.T) {
+	s := state.New()
+	overlay := NewDeviceOverlay(s, theme.Load("black"))
+
+	// Before load, fetchedAt should be zero (stale).
+	assert.True(t, s.DevicesFetchedAt().IsZero(), "DevicesFetchedAt should be zero before load")
+
+	before := time.Now()
+	overlay.Update(devicesLoadedMsg{devices: testDevices()})
+	after := time.Now()
+
+	fetchedAt := s.DevicesFetchedAt()
+	assert.False(t, fetchedAt.IsZero(), "DevicesFetchedAt should be stamped after successful load")
+	assert.False(t, before.After(fetchedAt), "fetchedAt should be >= before")
+	assert.False(t, after.Before(fetchedAt), "fetchedAt should be <= after")
+}
+
+// TestDeviceOverlay_devicesLoadedMsg_ErrorDoesNotStampFetchedAt verifies that an
+// error response does NOT stamp devicesFetchedAt — the data was not loaded successfully.
+func TestDeviceOverlay_devicesLoadedMsg_ErrorDoesNotStampFetchedAt(t *testing.T) {
+	s := state.New()
+	overlay := NewDeviceOverlay(s, theme.Load("black"))
+
+	overlay.Update(devicesLoadedMsg{err: fmt.Errorf("network error")})
+
+	assert.True(t, s.DevicesFetchedAt().IsZero(), "DevicesFetchedAt must remain zero on error")
 }

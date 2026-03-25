@@ -818,6 +818,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchDevicesRequestMsg:
 		// Device overlay is requesting the device list from the API.
+		// Skip fetch if the device list is still within DevicesTTL (30s).
+		if !a.store.DevicesStale() {
+			return a, nil
+		}
 		return a, a.buildFetchDevicesCmd()
 
 	case panes.TransferPlaybackMsg:
