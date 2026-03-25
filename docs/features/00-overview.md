@@ -45,12 +45,12 @@ Features must be built in order. Each depends on the previous being stable and t
 | 31 | Notifications + Error Routing | `31-notifications-error-routing.md` | ✅ Complete | 29 | #36 |
 | 32 | Staleness Tracking | `32-staleness-tracking.md` | ✅ Complete | 29 | #37 |
 | 33 | Idle Polling Backoff | `33-idle-polling-backoff.md` | ✅ Complete | 29 | #38 |
-| 34 | Docs, Dead Code & Init | `34-docs-dead-code-init.md` | Planned | — | — |
-| 35 | Type Design Alignment | `35-type-design-alignment.md` | Planned | 34 | — |
-| 36 | Command Safety & Errors | `36-command-safety-errors.md` | Planned | 35 | — |
-| 37 | Gateway Hardening | `37-gateway-hardening.md` | Planned | — | — |
-| 38 | Notification & Staleness Hardening | `38-notification-staleness-hardening.md` | Planned | 36 | — |
-| 39 | Idle Polish & Test Gaps | `39-idle-polish-test-gaps.md` | Planned | 38 | — |
+| 34 | Docs, Dead Code & Init | `34-docs-dead-code-init.md` | ✅ Complete | — | #39 |
+| 35 | Type Design Alignment | `35-type-design-alignment.md` | ✅ Complete | 34 | #40 |
+| 36 | Command Safety & Errors | `36-command-safety-errors.md` | ✅ Complete | 35 | #41 |
+| 37 | Gateway Hardening | `37-gateway-hardening.md` | ✅ Complete | — | #42 |
+| 38 | Notification & Staleness Hardening | `38-notification-staleness-hardening.md` | ✅ Complete | 36 | #43 |
+| 39 | Idle Polish & Test Gaps | `39-idle-polish-test-gaps.md` | ✅ Complete | 38 | #44 |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
