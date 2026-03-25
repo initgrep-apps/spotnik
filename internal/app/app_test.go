@@ -1919,3 +1919,40 @@ func TestApp_BackoffExpiry_ForcesImmediateFetch(t *testing.T) {
 	assert.Equal(t, 0, a.TickCount(), "tickCount should be reset to 0 after backoff expiry")
 	assert.NotNil(t, cmd, "expiry tick should return a batch command for immediate fetch")
 }
+
+// TestApp_AlbumsLoadedMsg_Offset0_ReplacesAlbums verifies that Offset=0 replaces albums in store.
+func TestApp_AlbumsLoadedMsg_Offset0_ReplacesAlbums(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	existing := []api.SavedAlbum{{Album: api.FullAlbum{ID: "existing", Name: "Old"}}}
+	a.Store().SetSavedAlbums(existing)
+
+	newAlbums := []api.SavedAlbum{{Album: api.FullAlbum{ID: "new1", Name: "New1"}}}
+	msg := panes.AlbumsLoadedMsg{Items: newAlbums, Offset: 0}
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
+
+	got := a.Store().SavedAlbums()
+	require.Len(t, got, 1, "Offset=0 should replace albums, not append")
+	assert.Equal(t, "new1", got[0].Album.ID)
+}
+
+// TestApp_AlbumsLoadedMsg_OffsetPositive_AppendsAlbums verifies that Offset>0 appends albums.
+func TestApp_AlbumsLoadedMsg_OffsetPositive_AppendsAlbums(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	existing := []api.SavedAlbum{{Album: api.FullAlbum{ID: "existing", Name: "Old"}}}
+	a.Store().SetSavedAlbums(existing)
+
+	moreAlbums := []api.SavedAlbum{{Album: api.FullAlbum{ID: "new1", Name: "New1"}}}
+	msg := panes.AlbumsLoadedMsg{Items: moreAlbums, Offset: 50}
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
+
+	got := a.Store().SavedAlbums()
+	require.Len(t, got, 2, "Offset>0 should append to existing albums")
+	assert.Equal(t, "existing", got[0].Album.ID)
+	assert.Equal(t, "new1", got[1].Album.ID)
+}

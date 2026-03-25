@@ -123,11 +123,12 @@ type LibraryLoadedMsg struct {
 }
 
 // AlbumsLoadedMsg is sent after saved albums have been fetched.
-// Items carries the albums; Err is non-nil on failure.
-// Update() writes Items to the store.
+// Items carries the albums; Offset indicates whether to replace (0) or append (>0)
+// to existing albums. Err is non-nil on failure. Update() writes Items to the store.
 type AlbumsLoadedMsg struct {
-	Items []domain.SavedAlbum
-	Err   error
+	Items  []domain.SavedAlbum
+	Offset int
+	Err    error
 }
 
 // LikedTracksLoadedMsg is sent after liked tracks have been fetched.

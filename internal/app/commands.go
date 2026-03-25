@@ -176,7 +176,7 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.AlbumsLoadedMsg{}
+			return panes.AlbumsLoadedMsg{Offset: offset}
 		}
 		albums, err := library.SavedAlbums(context.Background(), 50, offset)
 		if err != nil {
@@ -186,9 +186,9 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.AlbumsLoadedMsg{Err: err}
+			return panes.AlbumsLoadedMsg{Offset: offset, Err: err}
 		}
-		return panes.AlbumsLoadedMsg{Items: albums}
+		return panes.AlbumsLoadedMsg{Items: albums, Offset: offset}
 	}
 }
 

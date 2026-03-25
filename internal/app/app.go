@@ -817,7 +817,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.alerts.NewAlertCmd("error", "Failed to load albums. Press Tab to retry")
 		}
 		a.store.ClearAlbumsFetchError()
-		a.store.SetSavedAlbums(m.Items)
+		if m.Offset == 0 {
+			a.store.SetSavedAlbums(m.Items)
+		} else {
+			a.store.SetSavedAlbums(append(a.store.SavedAlbums(), m.Items...))
+		}
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
