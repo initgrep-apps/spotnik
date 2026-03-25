@@ -545,11 +545,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// *domain.SearchResult stored in store.SearchResults(). The overlay stores results in its
 		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
 		// in production rendering and can be ignored here.
-		a.store.SetSearchLoading(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+		}
+		a.store.SetSearchLoading(false)
+		if m.Err != nil {
 			a.store.SetSearchError(m.Err)
 			// Route search error through toast; search overlay shows loading→empty (not error).
 			updated, _ := a.searchPane.Update(m)
@@ -597,6 +599,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.StatsLoadedMsg:
 		// Stats data fetched — write to store, then forward to stats pane.
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			a.store.SetStatsError(m.Err)
 			if a.statsPane != nil {
 				updated, _ := a.statsPane.Update(m)
@@ -719,6 +724,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		//   b) a transient error (m.Err != nil).
 		// In both cases we leave the existing store state unchanged.
 		if m.Err != nil {
+			// errNilClient means the API client is not yet initialized (pre-auth startup).
+			// Skip silently — must come BEFORE the counter so startup doesn't increment it.
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			a.consecutivePlaybackErrors++
 			// Emit a warning toast only on the exact 5th consecutive failure to avoid
 			// flooding the user with toasts at 1-3s polling intervals. The counter
@@ -742,6 +752,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.PlaybackCmdSentMsg:
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
@@ -778,6 +791,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.AddToQueueResultMsg:
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, a.alerts.NewAlertCmd("error", forbiddenErr.Message)
@@ -926,6 +942,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.LikeToggleResultMsg:
 		// Like/unlike result — no action needed unless there's an error.
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
 		}
 		return a, nil
@@ -946,6 +965,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Device list fetched — write store state here (Elm purity: only root Update writes store).
 		// Then forward to DeviceOverlay so it can update its local devices list for rendering.
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			a.store.SetDevicesError(m.Err)
 			// Forward to overlay so it can update its render state.
 			if a.deviceOverlayOpen {
@@ -977,6 +999,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.DeviceTransferredMsg:
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player),
 				a.alerts.NewAlertCmd("error", m.Err.Error()),

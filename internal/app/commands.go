@@ -115,7 +115,7 @@ func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackCmdSentMsg{}
+			return panes.PlaybackCmdSentMsg{Err: errNilClient}
 		}
 		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{ContextURI: contextURI})
 		if err != nil {
@@ -135,7 +135,7 @@ func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackCmdSentMsg{}
+			return panes.PlaybackCmdSentMsg{Err: errNilClient}
 		}
 		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{URIs: []string{trackURI}})
 		if err != nil {
@@ -245,7 +245,7 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.AddToQueueResultMsg{TrackName: trackName}
+			return panes.AddToQueueResultMsg{Err: errNilClient, TrackName: trackName}
 		}
 		// Add to queue is user-triggered — bypass token bucket.
 		err := player.AddToQueue(api.WithPriority(context.Background(), api.Interactive), trackURI)
@@ -348,8 +348,7 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 	devices := a.devices
 	return func() tea.Msg {
 		if devices == nil {
-			// Deliver empty list when no client is injected (tests / uninitialized).
-			return panes.DevicesLoadedMsg{}
+			return panes.DevicesLoadedMsg{Err: errNilClient}
 		}
 		devList, err := devices.Devices(context.Background())
 		if err != nil {
@@ -382,7 +381,7 @@ func (a *App) buildTransferPlaybackCmd(deviceID string) tea.Cmd {
 	devices := a.devices
 	return func() tea.Msg {
 		if devices == nil {
-			return panes.DeviceTransferredMsg{DeviceID: deviceID}
+			return panes.DeviceTransferredMsg{Err: errNilClient, DeviceID: deviceID}
 		}
 		// Transfer playback is user-triggered — bypass token bucket.
 		err := devices.TransferPlayback(api.WithPriority(context.Background(), api.Interactive), deviceID, true)
@@ -395,7 +394,7 @@ func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LikeToggleResultMsg{TrackID: trackID}
+			return panes.LikeToggleResultMsg{Err: errNilClient, TrackID: trackID}
 		}
 		// Like/unlike is user-triggered — bypass token bucket.
 		ctx := api.WithPriority(context.Background(), api.Interactive)
@@ -416,11 +415,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 	userAPI := a.userAPI
 	return func() tea.Msg {
 		if userAPI == nil {
-			return panes.StatsLoadedMsg{
-				TimeRange:  timeRange,
-				TopTracks:  []domain.Track{},
-				TopArtists: []domain.FullArtist{},
-			}
+			return panes.StatsLoadedMsg{Err: errNilClient}
 		}
 		ctx := context.Background()
 
@@ -501,7 +496,7 @@ func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 func fetchPlaybackStateCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackStateFetchedMsg{}
+			return panes.PlaybackStateFetchedMsg{Err: errNilClient}
 		}
 		ps, err := player.PlaybackState(context.Background())
 		if err != nil {
@@ -566,7 +561,7 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+			return panes.PlaylistTracksLoadedMsg{Err: errNilClient, PlaylistID: playlistID}
 		}
 		tracks, err := library.PlaylistTracks(context.Background(), playlistID, 100, 0)
 		if err != nil {
@@ -588,8 +583,7 @@ func (a *App) buildCreatePlaylistCmd(name, description string) tea.Cmd {
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			// No API client in tests — return a success with empty playlist.
-			return panes.PlaylistCreatedMsg{Name: name}
+			return panes.PlaylistCreatedMsg{Err: errNilClient, Name: name}
 		}
 		playlist, err := playlistsAPI.CreatePlaylist(api.WithPriority(context.Background(), api.Interactive), name, description, false)
 		if err != nil {
@@ -605,7 +599,7 @@ func (a *App) buildRenamePlaylistCmd(playlistID, newName string) tea.Cmd {
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName}
+			return panes.PlaylistRenamedMsg{Err: errNilClient, PlaylistID: playlistID, NewName: newName}
 		}
 		err := playlistsAPI.UpdatePlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, newName, "")
 		return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName, Err: err}
@@ -618,7 +612,7 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI}
+			return panes.PlaylistRemoveResultMsg{Err: errNilClient, PlaylistID: playlistID, TrackURI: trackURI}
 		}
 		err := playlistsAPI.RemoveTracksFromPlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, []string{trackURI})
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
@@ -631,7 +625,7 @@ func (a *App) buildReorderPlaylistTracksCmd(playlistID string, rangeStart, inser
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			return panes.PlaylistReorderResultMsg{}
+			return panes.PlaylistReorderResultMsg{Err: errNilClient}
 		}
 		err := playlistsAPI.ReorderPlaylistTracks(api.WithPriority(context.Background(), api.Interactive), playlistID, rangeStart, insertBefore, rangeLength)
 		return panes.PlaylistReorderResultMsg{Err: err}
