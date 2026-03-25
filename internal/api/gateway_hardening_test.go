@@ -225,9 +225,9 @@ func TestGateway_429_DedupWaitersGetRateLimitError(t *testing.T) {
 	}
 }
 
-// TestGateway_429_DedupWaiterCanReadBody verifies that dedup waiters can read
-// the response body on 429 when entry.resp is cloned.
-// (This is a secondary check — the primary check is that waiters get an error.)
+// TestGateway_429_PrimaryAndWaiterConsistentError verifies that both the primary
+// caller and a dedup waiter receive a RateLimitError with identical RetryAfter values
+// on a 429 response. This ensures the cloned entry.resp carries the correct header.
 func TestGateway_429_PrimaryAndWaiterConsistentError(t *testing.T) {
 	gw := NewGateway()
 

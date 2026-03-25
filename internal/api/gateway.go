@@ -333,9 +333,9 @@ func (g *Gateway) waitForBackoff(ctx context.Context) error {
 		// Use time.NewTimer instead of time.After to prevent timer leaks
 		// when ctx is cancelled before the timer fires.
 		timer := time.NewTimer(remaining)
-		defer timer.Stop()
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
 		case <-timer.C:
 			return nil
