@@ -415,7 +415,11 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 	userAPI := a.userAPI
 	return func() tea.Msg {
 		if userAPI == nil {
-			return panes.StatsLoadedMsg{Err: errNilClient}
+			// Include TimeRange so the StatsLoadedMsg handler can clear the
+			// in-flight sentinel. Without it, the conditional guard
+			// "if m.TimeRange != """ skips the clear, leaving the sentinel
+			// stuck true and blocking all future fetches for this range.
+			return panes.StatsLoadedMsg{TimeRange: timeRange, Err: errNilClient}
 		}
 		ctx := context.Background()
 

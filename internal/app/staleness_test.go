@@ -289,3 +289,22 @@ func TestFetchDevicesRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	assert.Nil(t, cmd, "FetchDevicesRequestMsg should be skipped when already fetching")
 }
+
+// TestFetchStats_NilClient_ClearsSentinel verifies that when buildFetchStatsCmd returns
+// a StatsLoadedMsg with errNilClient, the fetching sentinel is cleared by the handler.
+// Without this, a nil-client startup sequence would leave the sentinel stuck true,
+// permanently blocking all future fetches for that time range.
+func TestFetchStats_NilClient_ClearsSentinel(t *testing.T) {
+	a := newTestApp()
+	// Dispatch a stats fetch (no API client set — will return errNilClient).
+	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
+	assert.NotNil(t, cmd, "stale stats should dispatch a fetch cmd")
+
+	// Execute the cmd — nil client returns StatsLoadedMsg{TimeRange:"short_term", Err: errNilClient}.
+	msg := cmd()
+	_, _ = a.Update(msg)
+
+	// Sentinel must be cleared so a subsequent fetch can proceed.
+	assert.False(t, a.Store().StatsFetching("short_term"),
+		"stats sentinel must be cleared after errNilClient StatsLoadedMsg")
+}
