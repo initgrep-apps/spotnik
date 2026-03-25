@@ -820,12 +820,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.alerts.NewAlertCmd("success", "Added to queue")
 
 	case panes.FetchPlaylistsRequestMsg:
-		// For non-paginated (Offset=0) requests: skip if fresh OR already in-flight.
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && (!a.store.PlaylistsStale() || a.store.PlaylistsFetching()) {
-			return a, nil
-		}
 		if m.Offset == 0 {
+			if !a.store.PlaylistsStale() {
+				// Data is fresh — send cached playlists so the pane can initialize
+				// without waiting for a redundant API round-trip.
+				cached := a.store.Playlists()
+				return a, func() tea.Msg {
+					return panes.LibraryLoadedMsg{Items: cached, Offset: 0}
+				}
+			}
+			if a.store.PlaylistsFetching() {
+				// Fetch already in-flight — skip to prevent TOCTOU duplicates.
+				return a, nil
+			}
 			a.store.SetPlaylistsFetching(true)
 		}
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
@@ -862,12 +870,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchAlbumsRequestMsg:
-		// For non-paginated (Offset=0) requests: skip if fresh OR already in-flight.
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && (!a.store.AlbumsStale() || a.store.AlbumsFetching()) {
-			return a, nil
-		}
 		if m.Offset == 0 {
+			if !a.store.AlbumsStale() {
+				// Data is fresh — send cached albums so the pane can initialize.
+				cached := a.store.SavedAlbums()
+				return a, func() tea.Msg {
+					return panes.AlbumsLoadedMsg{Items: cached, Offset: 0}
+				}
+			}
+			if a.store.AlbumsFetching() {
+				return a, nil
+			}
 			a.store.SetAlbumsFetching(true)
 		}
 		return a, a.buildFetchAlbumsCmd(m.Offset)
@@ -901,12 +915,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchLikedTracksRequestMsg:
-		// For non-paginated (Offset=0) requests: skip if fresh OR already in-flight.
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && (!a.store.LikedTracksStale() || a.store.LikedFetching()) {
-			return a, nil
-		}
 		if m.Offset == 0 {
+			if !a.store.LikedTracksStale() {
+				// Data is fresh — send cached liked tracks so the pane can initialize.
+				cached := a.store.LikedTracks()
+				return a, func() tea.Msg {
+					return panes.LikedTracksLoadedMsg{Items: cached, Offset: 0}
+				}
+			}
+			if a.store.LikedFetching() {
+				return a, nil
+			}
 			a.store.SetLikedFetching(true)
 		}
 		return a, a.buildFetchLikedTracksCmd(m.Offset)
@@ -937,9 +957,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchRecentlyPlayedRequestMsg:
-		// Skip if fresh OR if a fetch is already in-flight (prevents TOCTOU duplicates).
-		// NOTE: recently-played has no pagination, so no Offset check needed here.
-		if !a.store.RecentlyPlayedStale() || a.store.RecentFetching() {
+		// NOTE: recently-played has no pagination.
+		if !a.store.RecentlyPlayedStale() {
+			// Data is fresh — send cached recently-played so the pane can initialize.
+			cached := a.store.RecentlyPlayed()
+			return a, func() tea.Msg {
+				return panes.RecentlyPlayedLoadedMsg{Items: cached}
+			}
+		}
+		if a.store.RecentFetching() {
+			// Fetch already in-flight — skip to prevent TOCTOU duplicates.
 			return a, nil
 		}
 		a.store.SetRecentFetching(true)
