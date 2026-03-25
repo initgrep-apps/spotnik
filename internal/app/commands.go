@@ -12,6 +12,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,17 +22,39 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
 
-// buildPlaybackAPICmd dispatches the Spotify API call for the given playback action.
-func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
-	player := a.player
-	store := a.store
+// errNilClient is returned when a command is built but the required API client is nil.
+// This typically means authentication has not completed yet.
+// Update() handlers that receive this error skip silently (no toast) — it is an
+// expected startup condition, not a user-facing failure.
+var errNilClient = fmt.Errorf("API client not initialized")
 
+// buildPlaybackAPICmd dispatches the Spotify API call for the given playback action.
+// Store values are snapshotted here in Update() context (which is safe) before the
+// closure is returned. The closure must never read from the Store — only use snapshots.
+// Reading Store inside the closure would be a data race because closures execute
+// asynchronously while Update() may be writing.
+func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
+	if a.player == nil {
+		return func() tea.Msg { return panes.PlaybackCmdSentMsg{Err: errNilClient} }
+	}
+	player := a.player
 	volStep := a.volumeStep
 
-	return func() tea.Msg {
-		if player == nil {
-			return panes.PlaybackCmdSentMsg{}
+	// Snapshot store values in Update() context (thread-safe).
+	// The closure uses these captured values instead of calling store.PlaybackState() later.
+	ps := a.store.PlaybackState()
+	currentVolume := 65 // default when no device info is available
+	isShuffled := false
+	repeatMode := "off"
+	if ps != nil {
+		if ps.Device != nil {
+			currentVolume = ps.Device.VolumePercent
 		}
+		isShuffled = ps.ShuffleState
+		repeatMode = ps.RepeatState
+	}
+
+	return func() tea.Msg {
 		// Playback controls are user-triggered — bypass token bucket.
 		ctx := api.WithPriority(context.Background(), api.Interactive)
 		var err error
@@ -46,41 +69,21 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		case panes.ActionPrevious:
 			err = player.Previous(ctx)
 		case panes.ActionVolumeUp:
-			ps := store.PlaybackState()
-			vol := 65
-			if ps != nil && ps.Device != nil {
-				vol = ps.Device.VolumePercent
-			}
-			newVol := vol + volStep
+			newVol := currentVolume + volStep
 			if newVol > 100 {
 				newVol = 100
 			}
 			err = player.SetVolume(ctx, newVol)
 		case panes.ActionVolumeDown:
-			ps := store.PlaybackState()
-			vol := 65
-			if ps != nil && ps.Device != nil {
-				vol = ps.Device.VolumePercent
-			}
-			newVol := vol - volStep
+			newVol := currentVolume - volStep
 			if newVol < 0 {
 				newVol = 0
 			}
 			err = player.SetVolume(ctx, newVol)
 		case panes.ActionToggleShuffle:
-			ps := store.PlaybackState()
-			shuffle := false
-			if ps != nil {
-				shuffle = !ps.ShuffleState
-			}
-			err = player.SetShuffle(ctx, shuffle)
+			err = player.SetShuffle(ctx, !isShuffled)
 		case panes.ActionCycleRepeat:
-			ps := store.PlaybackState()
-			mode := "off"
-			if ps != nil {
-				mode = nextRepeatMode(ps.RepeatState)
-			}
-			err = player.SetRepeat(ctx, mode)
+			err = player.SetRepeat(ctx, nextRepeatMode(repeatMode))
 		}
 
 		if err != nil {
@@ -154,7 +157,7 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LibraryLoadedMsg{Offset: offset}
+			return panes.LibraryLoadedMsg{Offset: offset, Err: errNilClient}
 		}
 		playlists, err := library.Playlists(context.Background(), 50, offset)
 		if err != nil {
@@ -176,7 +179,7 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.AlbumsLoadedMsg{Offset: offset}
+			return panes.AlbumsLoadedMsg{Offset: offset, Err: errNilClient}
 		}
 		albums, err := library.SavedAlbums(context.Background(), 50, offset)
 		if err != nil {
@@ -198,7 +201,7 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LikedTracksLoadedMsg{Offset: offset}
+			return panes.LikedTracksLoadedMsg{Offset: offset, Err: errNilClient}
 		}
 		tracks, err := library.LikedTracks(context.Background(), 50, offset)
 		if err != nil {
@@ -220,7 +223,7 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.RecentlyPlayedLoadedMsg{}
+			return panes.RecentlyPlayedLoadedMsg{Err: errNilClient}
 		}
 		items, err := library.RecentlyPlayed(context.Background(), 20)
 		if err != nil {
@@ -266,7 +269,7 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
-			return panes.SearchResultsMsg{}
+			return panes.SearchResultsMsg{Err: errNilClient}
 		}
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
 		results, err := search.Search(
@@ -473,7 +476,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
-			return panes.QueueLoadedMsg{}
+			return panes.QueueLoadedMsg{Err: errNilClient}
 		}
 		qr, err := player.Queue(context.Background())
 		if err != nil {
