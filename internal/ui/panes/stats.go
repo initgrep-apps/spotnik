@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -39,21 +38,6 @@ var timeRangeLabels = map[string]string{
 	"short_term":  "4wk",
 	"medium_term": "6mo",
 	"long_term":   "all",
-}
-
-// StatsLoadedMsg is returned by the stats fetch command.
-// TimeRange identifies which range was fetched.
-// TopTracks and TopArtists carry the fetched data on success.
-// Err is non-nil on failure. Update() writes data to the store; pane reads from store.
-type StatsLoadedMsg struct {
-	// TimeRange is the time range that was fetched ("short_term", "medium_term", "long_term").
-	TimeRange string
-	// TopTracks contains the fetched top tracks for the time range.
-	TopTracks []domain.Track
-	// TopArtists contains the fetched top artists for the time range.
-	TopArtists []domain.FullArtist
-	// Err is non-nil if the fetch failed.
-	Err error
 }
 
 // FetchStatsMsg is a request message emitted by StatsView to ask the root app

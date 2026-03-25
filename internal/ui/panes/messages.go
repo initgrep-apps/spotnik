@@ -170,6 +170,21 @@ type QueueLoadedMsg struct {
 	Err    error
 }
 
+// StatsLoadedMsg is returned by the stats fetch command.
+// TimeRange identifies which range was fetched.
+// TopTracks and TopArtists carry the fetched data on success.
+// Err is non-nil on failure. Update() writes data to the store; pane reads from store.
+type StatsLoadedMsg struct {
+	// TimeRange is the time range that was fetched ("short_term", "medium_term", "long_term").
+	TimeRange string
+	// TopTracks contains the fetched top tracks for the time range.
+	TopTracks []domain.Track
+	// TopArtists contains the fetched top artists for the time range.
+	TopArtists []domain.FullArtist
+	// Err is non-nil if the fetch failed.
+	Err error
+}
+
 // DeviceInfo is the UI-facing representation of a Spotify device.
 // It mirrors the fields needed for rendering without importing api/.
 type DeviceInfo struct {
