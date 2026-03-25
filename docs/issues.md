@@ -42,19 +42,19 @@
 
 ### Error Handling
 
-- [ ] **Double 429 parsing with inconsistent error wrapping** — Gateway converts 429 to `RateLimitError`, then `doJSON` wraps it with "sending request:" prefix. Dedup waiters get unwrapped error. Consider having gateway set backoff only, let `checkResponseStatus` handle the error.
-- [ ] **`doNoContent` discards `io.ReadAll` error** (pre-existing) — Line 139 in base.go: `body, _ := io.ReadAll(resp.Body)` silently drops read errors.
-- [ ] **Unparseable `Retry-After` header silently defaults** — Non-integer values (e.g., HTTP-date format per RFC 7231) are silently ignored with 5s default. Consider logging parse failures.
+- [x] **Double 429 parsing with inconsistent error wrapping** — Fixed in Feature 37: extracted `parseRetryAfter` helper shared by gateway.go and errors.go. Gateway sets backoff and creates `RateLimitError` directly so dedup waiters receive consistent errors. Body always cloned for all responses.
+- [x] **`doNoContent` discards `io.ReadAll` error** (pre-existing) — Fixed in Feature 37: `body, readErr := io.ReadAll(resp.Body)` now checked; returns `fmt.Errorf("reading response body: %w", readErr)` on failure.
+- [x] **Unparseable `Retry-After` header silently defaults** — Fixed in Feature 37: `parseRetryAfter` documents the intentional behaviour with a comment explaining HTTP-date format is not supported and the 5s default is used.
 
 ### Thread Safety
 
-- [ ] **`SetGateway` not thread-safe** — `base.go` line 57-59 writes to `b.gateway` without synchronization. Could race with concurrent `doJSON` calls during token refresh. Consider `atomic.Pointer[Gateway]`.
+- [x] **`SetGateway` not thread-safe** — Fixed in Feature 37: `gateway *Gateway` field changed to `gateway atomic.Pointer[Gateway]`. `SetGateway` uses `.Store()`, all reads use `.Load()`.
 
 ### Robustness
 
-- [ ] **`time.After` timer leaks on context cancellation** — `tokenBucket.wait()` and `waitForBackoff()` use `time.After` which leaks timers when ctx is cancelled. Use `time.NewTimer` + explicit `Stop()`.
-- [ ] **nil response from `fn()` causes panic** — If HTTP transport returns `(nil, nil)`, gateway will nil-pointer dereference on `resp.Body`. Add nil check after `fn()`.
-- [ ] **429 path leaves `resp.Body` unreadable for dedup waiters** — On 429, `entry.resp.Body` is consumed but not replaced with a clone. Currently safe because waiters check `entry.err` first, but fragile for future maintenance.
+- [x] **`time.After` timer leaks on context cancellation** — Fixed in Feature 37: `tokenBucket.wait()` and `waitForBackoff()` now use `time.NewTimer` with explicit `Stop()` on cancellation.
+- [x] **nil response from `fn()` causes panic** — Fixed in Feature 37: nil guard added after `fn()` call in `Gateway.Do()`.
+- [x] **429 path leaves `resp.Body` unreadable for dedup waiters** — Fixed in Feature 37 as part of Task 5: body is now always cloned for all responses (not just non-429), so dedup waiters always get a readable body.
 
 ---
 
