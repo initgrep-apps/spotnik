@@ -130,3 +130,12 @@
 ### Dead Code
 
 - [x] **DevicesLoadErrorMsg now dead** — Fixed in Feature 36: type removed from messages.go, handler removed from app.go, test removed from toast_routing_test.go.
+
+---
+
+## From PR #42 Review — Gateway Hardening (2026-03-25)
+
+### Robustness
+
+- [ ] **Unbounded Retry-After accepted** — `parseRetryAfter` in gateway.go accepts any integer including negative or very large values. A malicious proxy sending `Retry-After: 999999` would cause ~11.5 day backoff. Add bounds: `v > 0 && v <= 300`.
+- [ ] **entry.resp set on 429 path** — gateway.go stores both resp and err for dedup waiters on 429 path. Currently safe because waiters check err first, but fragile. Consider setting `entry.resp = nil` when err != nil.
