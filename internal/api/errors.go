@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 )
 
 // RateLimitError is returned when the Spotify API responds with 429.
@@ -51,13 +50,7 @@ func checkResponseStatus(resp *http.Response, body []byte) error {
 		return &ForbiddenError{Message: msg}
 
 	case http.StatusTooManyRequests:
-		retryAfter := 5 // default
-		if ra := resp.Header.Get("Retry-After"); ra != "" {
-			if v, err := strconv.Atoi(ra); err == nil {
-				retryAfter = v
-			}
-		}
-		return &RateLimitError{RetryAfter: retryAfter}
+		return &RateLimitError{RetryAfter: parseRetryAfter(resp)}
 
 	default:
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
