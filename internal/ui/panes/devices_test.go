@@ -1,10 +1,9 @@
 package panes
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/state"
@@ -12,6 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// errMake is a test helper to create simple errors inline.
+func errMake(msg string) error { return errors.New(msg) }
 
 // testDevices returns a set of test devices for use in table tests.
 func testDevices() []DeviceInfo {
@@ -205,59 +207,36 @@ func TestDeviceOverlay_View_DeviceTypeIcons(t *testing.T) {
 		"Smartphone icon should appear in view")
 }
 
-func TestDeviceOverlay_devicesLoadedMsg(t *testing.T) {
+func TestDeviceOverlay_DevicesLoadedMsg_PopulatesDevices(t *testing.T) {
 	overlay := newTestDeviceOverlay()
 	assert.Empty(t, overlay.devices, "devices should be empty before load")
 
 	devices := testDevices()
-	model, _ := overlay.Update(devicesLoadedMsg{devices: devices})
+	// DevicesLoadedMsg is now exported; root app.Update() handles store mutations.
+	model, cmd := overlay.Update(DevicesLoadedMsg{Devices: devices})
 	updated, ok := model.(*DeviceOverlay)
 	require.True(t, ok)
-	assert.Len(t, updated.devices, 3, "devices should be populated after devicesLoadedMsg")
+	assert.Len(t, updated.devices, 3, "devices should be populated after DevicesLoadedMsg")
+	assert.Nil(t, cmd, "DeviceOverlay should not return a command on success")
 }
 
-func TestDeviceOverlay_devicesLoadedMsg_ErrorEmitsDevicesLoadErrorMsg(t *testing.T) {
-	// When devicesLoadedMsg carries an error, Update() must return a command
-	// that emits DevicesLoadErrorMsg so the root app can show a toast.
+func TestDeviceOverlay_DevicesLoadedMsg_ErrorDoesNotPopulateDevices(t *testing.T) {
+	// When DevicesLoadedMsg carries an error, DeviceOverlay.Update() must NOT
+	// populate its local device list. Store mutations are handled by root app.Update().
 	overlay := newTestDeviceOverlay()
-	loadErr := fmt.Errorf("network error")
+	overlay.devices = testDevices() // pre-populate
 
-	_, cmd := overlay.Update(devicesLoadedMsg{err: loadErr})
-
-	require.NotNil(t, cmd, "devicesLoadedMsg with error must return a command")
-	msg := cmd()
-	errMsg, ok := msg.(DevicesLoadErrorMsg)
-	require.True(t, ok, "command must return DevicesLoadErrorMsg, got %T", msg)
-	assert.Equal(t, loadErr, errMsg.Err, "DevicesLoadErrorMsg must carry the original error")
-}
-
-func TestDeviceOverlay_devicesLoadedMsg_ErrorSetsStoreError(t *testing.T) {
-	// When devicesLoadedMsg carries an error, the store must record it for retry logic.
-	s := state.New()
-	overlay := NewDeviceOverlay(s, theme.Load("black"))
-	loadErr := fmt.Errorf("timeout")
-
-	overlay.Update(devicesLoadedMsg{err: loadErr})
-
-	assert.Equal(t, loadErr, s.DevicesError(), "store must record the device load error")
-}
-
-func TestDeviceOverlay_devicesLoadedMsg_NoErrorClearsStoreError(t *testing.T) {
-	// When devicesLoadedMsg has no error, any prior store error must be cleared.
-	s := state.New()
-	s.SetDevicesError(fmt.Errorf("prior error"))
-	overlay := NewDeviceOverlay(s, theme.Load("black"))
-	devices := testDevices()
-
-	_, cmd := overlay.Update(devicesLoadedMsg{devices: devices})
-
-	assert.NoError(t, s.DevicesError(), "store error must be cleared on successful load")
-	assert.Nil(t, cmd, "successful load must not return an error command")
+	model, cmd := overlay.Update(DevicesLoadedMsg{Devices: nil, Err: errMake("network error")})
+	updated, ok := model.(*DeviceOverlay)
+	require.True(t, ok)
+	// On error, devices should remain as they were (not wiped, not updated).
+	assert.Len(t, updated.devices, 3, "devices should be unchanged on error")
+	assert.Nil(t, cmd, "DeviceOverlay should not return a command on error")
 }
 
 func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
 	s := state.New()
-	s.SetDevicesError(fmt.Errorf("API error"))
+	s.SetDevicesError(errMake("API error"))
 	th := theme.Load("black")
 	overlay := NewDeviceOverlay(s, th)
 	overlay.SetSize(60, 20)
@@ -286,40 +265,10 @@ func TestDeviceOverlay_View_ShowsDevicesWhenNoError(t *testing.T) {
 	overlay := NewDeviceOverlay(s, th)
 
 	devices := testDevices()
-	overlay.Update(devicesLoadedMsg{devices: devices})
+	// Use exported DevicesLoadedMsg; store mutations are handled by root app.Update().
+	overlay.Update(DevicesLoadedMsg{Devices: devices})
 
 	output := overlay.View()
 	assert.Contains(t, output, "MacBook Pro")
 	assert.NotContains(t, output, "Failed to load devices")
-}
-
-// TestDeviceOverlay_devicesLoadedMsg_StampsFetchedAt verifies that a successful
-// devicesLoadedMsg stamps the store's devicesFetchedAt timestamp.
-// This is required for DevicesStale() to return false after a successful load.
-func TestDeviceOverlay_devicesLoadedMsg_StampsFetchedAt(t *testing.T) {
-	s := state.New()
-	overlay := NewDeviceOverlay(s, theme.Load("black"))
-
-	// Before load, fetchedAt should be zero (stale).
-	assert.True(t, s.DevicesFetchedAt().IsZero(), "DevicesFetchedAt should be zero before load")
-
-	before := time.Now()
-	overlay.Update(devicesLoadedMsg{devices: testDevices()})
-	after := time.Now()
-
-	fetchedAt := s.DevicesFetchedAt()
-	assert.False(t, fetchedAt.IsZero(), "DevicesFetchedAt should be stamped after successful load")
-	assert.False(t, before.After(fetchedAt), "fetchedAt should be >= before")
-	assert.False(t, after.Before(fetchedAt), "fetchedAt should be <= after")
-}
-
-// TestDeviceOverlay_devicesLoadedMsg_ErrorDoesNotStampFetchedAt verifies that an
-// error response does NOT stamp devicesFetchedAt — the data was not loaded successfully.
-func TestDeviceOverlay_devicesLoadedMsg_ErrorDoesNotStampFetchedAt(t *testing.T) {
-	s := state.New()
-	overlay := NewDeviceOverlay(s, theme.Load("black"))
-
-	overlay.Update(devicesLoadedMsg{err: fmt.Errorf("network error")})
-
-	assert.True(t, s.DevicesFetchedAt().IsZero(), "DevicesFetchedAt must remain zero on error")
 }

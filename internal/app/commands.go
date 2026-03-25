@@ -176,7 +176,7 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.AlbumsLoadedMsg{}
+			return panes.AlbumsLoadedMsg{Offset: offset}
 		}
 		albums, err := library.SavedAlbums(context.Background(), 50, offset)
 		if err != nil {
@@ -186,9 +186,9 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.AlbumsLoadedMsg{Err: err}
+			return panes.AlbumsLoadedMsg{Offset: offset, Err: err}
 		}
-		return panes.AlbumsLoadedMsg{Items: albums}
+		return panes.AlbumsLoadedMsg{Items: albums, Offset: offset}
 	}
 }
 
@@ -288,9 +288,9 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 	}
 }
 
-// convertSearchResult converts *api.SearchResult to *panes.SearchResultData,
-// extracting only the fields the UI needs. This is the sole place where api
-// search types cross the app/ui boundary.
+// convertSearchResult converts *api.SearchResult (= *domain.SearchResult) to *panes.SearchResultData,
+// extracting only the fields the UI needs. This is the sole place where search
+// types cross the app/ui boundary.
 func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 	if r == nil {
 		return nil
@@ -339,15 +339,14 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 }
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices
-// and delivers them back to the DeviceOverlay via devicesLoadedMsg.
-// No Store writes occur in the command — DeviceOverlay.Update() writes error state to the
-// store when it receives devicesLoadedMsg (since devicesLoadedMsg is unexported to app/).
+// and delivers them back via DevicesLoadedMsg. Store mutations (error state, fetchedAt stamp)
+// are handled by app.Update() when it receives DevicesLoadedMsg — not inside this command.
 func (a *App) buildFetchDevicesCmd() tea.Cmd {
 	devices := a.devices
 	return func() tea.Msg {
 		if devices == nil {
 			// Deliver empty list when no client is injected (tests / uninitialized).
-			return panes.NewDevicesLoadedMsg(nil, nil)
+			return panes.DevicesLoadedMsg{}
 		}
 		devList, err := devices.Devices(context.Background())
 		if err != nil {
@@ -357,8 +356,8 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			// Non-retryable, non-auth error: deliver error to overlay and stop.
-			return panes.NewDevicesLoadedMsg(nil, err)
+			// Non-retryable, non-auth error: deliver error via message.
+			return panes.DevicesLoadedMsg{Err: err}
 		}
 		// Convert api.Device to panes.DeviceInfo to respect ui/ -> api/ boundary.
 		var infos []panes.DeviceInfo
@@ -370,7 +369,7 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 				IsActive: d.IsActive,
 			})
 		}
-		return panes.NewDevicesLoadedMsg(infos, nil)
+		return panes.DevicesLoadedMsg{Devices: infos}
 	}
 }
 

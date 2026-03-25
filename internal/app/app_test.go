@@ -1021,7 +1021,7 @@ func TestApp_DeviceTransferredMsg_ErrorShown(t *testing.T) {
 }
 
 // TestApp_FetchDevicesRequestMsg_NilDevices verifies FetchDevicesRequestMsg with
-// nil devices client returns devicesLoadedMsg with empty list.
+// nil devices client returns DevicesLoadedMsg with empty list.
 func TestApp_FetchDevicesRequestMsg_NilDevices(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -1030,7 +1030,7 @@ func TestApp_FetchDevicesRequestMsg_NilDevices(t *testing.T) {
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	require.NotNil(t, cmd, "FetchDevicesRequestMsg should produce a command")
 
-	// Execute the command — it should return a devicesLoadedMsg (or similar)
+	// Execute the command — it should return DevicesLoadedMsg.
 	msg := cmd()
 	require.NotNil(t, msg)
 }
@@ -1670,14 +1670,14 @@ func TestApp_BuildFetchDevicesCmd_SetsErrorOnFailure(t *testing.T) {
 	a := app.New(cfg, app.AppOptions{})
 	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
 
-	// Open device overlay first so the devicesLoadedMsg is routed to the DeviceOverlay.
+	// Open device overlay so the command is dispatched.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	a = m.(*app.App)
 
 	// FetchDevicesRequestMsg is sent by DeviceOverlay.Init(); simulate it.
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	require.NotNil(t, cmd)
-	// Execute command, feed result back to Update() — DeviceOverlay.Update() writes store.
+	// Execute command, feed result back to Update() — root app.Update() writes store.
 	msg := cmd()
 	m, _ = a.Update(msg)
 	a = m.(*app.App)
@@ -1694,14 +1694,14 @@ func TestApp_BuildFetchDevicesCmd_ClearsErrorOnSuccess(t *testing.T) {
 	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
 	a.Store().SetDevicesError(fmt.Errorf("previous error"))
 
-	// Open device overlay first so the devicesLoadedMsg is routed to the DeviceOverlay.
+	// Open device overlay so the command is dispatched.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	a = m.(*app.App)
 
 	// FetchDevicesRequestMsg is sent by DeviceOverlay.Init(); simulate it.
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	require.NotNil(t, cmd)
-	// Execute command, feed result back to Update() — DeviceOverlay.Update() writes store.
+	// Execute command, feed result back to Update() — root app.Update() writes store.
 	msg := cmd()
 	m, _ = a.Update(msg)
 	a = m.(*app.App)
@@ -1918,4 +1918,81 @@ func TestApp_BackoffExpiry_ForcesImmediateFetch(t *testing.T) {
 	assert.Equal(t, 0, a.BackoffTicks(), "backoff should be zero after expiry tick")
 	assert.Equal(t, 0, a.TickCount(), "tickCount should be reset to 0 after backoff expiry")
 	assert.NotNil(t, cmd, "expiry tick should return a batch command for immediate fetch")
+}
+
+// TestApp_DevicesLoadedMsg_NilError_PopulatesDeviceList verifies that DevicesLoadedMsg
+// with no error sets the device list in the overlay (no store write needed for device list).
+func TestApp_DevicesLoadedMsg_NilError_PopulatesDeviceList(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Open device overlay so the message is routed appropriately.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = m.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	devices := []panes.DeviceInfo{{ID: "dev1", Name: "MacBook", Type: "Computer", IsActive: true}}
+	msg := panes.DevicesLoadedMsg{Devices: devices, Err: nil}
+	m, _ = a.Update(msg)
+	a = m.(*app.App)
+
+	// On success: store error should be cleared, fetchedAt stamped (non-zero).
+	assert.NoError(t, a.Store().DevicesError(), "store should have no device error on success")
+	assert.False(t, a.Store().DevicesFetchedAt().IsZero(), "DevicesFetchedAt should be stamped on success")
+}
+
+// TestApp_DevicesLoadedMsg_WithError_EmitsToastAndSetsError verifies that DevicesLoadedMsg
+// with an error sets the store error and routes to toast notification.
+func TestApp_DevicesLoadedMsg_WithError_EmitsToastAndSetsError(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Open device overlay.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = m.(*app.App)
+	require.True(t, a.DeviceOverlayOpen())
+
+	msg := panes.DevicesLoadedMsg{Devices: nil, Err: fmt.Errorf("devices unavailable")}
+	m, cmd := a.Update(msg)
+	a = m.(*app.App)
+
+	assert.Error(t, a.Store().DevicesError(), "store should record devices error")
+	assert.NotNil(t, cmd, "error should produce a toast command")
+}
+
+// TestApp_AlbumsLoadedMsg_Offset0_ReplacesAlbums verifies that Offset=0 replaces albums in store.
+func TestApp_AlbumsLoadedMsg_Offset0_ReplacesAlbums(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	existing := []api.SavedAlbum{{Album: api.FullAlbum{ID: "existing", Name: "Old"}}}
+	a.Store().SetSavedAlbums(existing)
+
+	newAlbums := []api.SavedAlbum{{Album: api.FullAlbum{ID: "new1", Name: "New1"}}}
+	msg := panes.AlbumsLoadedMsg{Items: newAlbums, Offset: 0}
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
+
+	got := a.Store().SavedAlbums()
+	require.Len(t, got, 1, "Offset=0 should replace albums, not append")
+	assert.Equal(t, "new1", got[0].Album.ID)
+}
+
+// TestApp_AlbumsLoadedMsg_OffsetPositive_AppendsAlbums verifies that Offset>0 appends albums.
+func TestApp_AlbumsLoadedMsg_OffsetPositive_AppendsAlbums(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	existing := []api.SavedAlbum{{Album: api.FullAlbum{ID: "existing", Name: "Old"}}}
+	a.Store().SetSavedAlbums(existing)
+
+	moreAlbums := []api.SavedAlbum{{Album: api.FullAlbum{ID: "new1", Name: "New1"}}}
+	msg := panes.AlbumsLoadedMsg{Items: moreAlbums, Offset: 50}
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
+
+	got := a.Store().SavedAlbums()
+	require.Len(t, got, 2, "Offset>0 should append to existing albums")
+	assert.Equal(t, "existing", got[0].Album.ID)
+	assert.Equal(t, "new1", got[1].Album.ID)
 }

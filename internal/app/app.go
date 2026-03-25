@@ -536,7 +536,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.SearchResultsMsg:
 		// Search command returned — write error state to store, then deliver results to overlay.
 		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
-		// *api.SearchResult stored in store.SearchResults(). The overlay stores results in its
+		// *domain.SearchResult stored in store.SearchResults(). The overlay stores results in its
 		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
 		// in production rendering and can be ignored here.
 		a.store.SetSearchLoading(false)
@@ -817,7 +817,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.alerts.NewAlertCmd("error", "Failed to load albums. Press Tab to retry")
 		}
 		a.store.ClearAlbumsFetchError()
-		a.store.SetSavedAlbums(m.Items)
+		if m.Offset == 0 {
+			a.store.SetSavedAlbums(m.Items)
+		} else {
+			a.store.SetSavedAlbums(append(a.store.SavedAlbums(), m.Items...))
+		}
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -900,6 +904,31 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		return a, a.buildFetchDevicesCmd()
+
+	case panes.DevicesLoadedMsg:
+		// Device list fetched — write store state here (Elm purity: only root Update writes store).
+		// Then forward to DeviceOverlay so it can update its local devices list for rendering.
+		if m.Err != nil {
+			a.store.SetDevicesError(m.Err)
+			// Forward to overlay so it can update its render state.
+			if a.deviceOverlayOpen {
+				updated, _ := a.devicePane.Update(m)
+				if dp, ok := updated.(*panes.DeviceOverlay); ok {
+					a.devicePane = dp
+				}
+			}
+			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load devices: %s", m.Err.Error()))
+		}
+		a.store.ClearDevicesError()
+		a.store.SetDevicesFetchedAt(time.Now())
+		// Forward to overlay to update its local device list.
+		if a.deviceOverlayOpen {
+			updated, _ := a.devicePane.Update(m)
+			if dp, ok := updated.(*panes.DeviceOverlay); ok {
+				a.devicePane = dp
+			}
+		}
+		return a, nil
 
 	case panes.TransferPlaybackMsg:
 		// User selected a device; show info toast and dispatch transfer API call.

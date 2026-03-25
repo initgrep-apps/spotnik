@@ -123,11 +123,12 @@ type LibraryLoadedMsg struct {
 }
 
 // AlbumsLoadedMsg is sent after saved albums have been fetched.
-// Items carries the albums; Err is non-nil on failure.
-// Update() writes Items to the store.
+// Items carries the albums; Offset indicates whether to replace (0) or append (>0)
+// to existing albums. Err is non-nil on failure. Update() writes Items to the store.
 type AlbumsLoadedMsg struct {
-	Items []domain.SavedAlbum
-	Err   error
+	Items  []domain.SavedAlbum
+	Offset int
+	Err    error
 }
 
 // LikedTracksLoadedMsg is sent after liked tracks have been fetched.
@@ -170,6 +171,21 @@ type QueueLoadedMsg struct {
 	Err    error
 }
 
+// StatsLoadedMsg is returned by the stats fetch command.
+// TimeRange identifies which range was fetched.
+// TopTracks and TopArtists carry the fetched data on success.
+// Err is non-nil on failure. Update() writes data to the store; pane reads from store.
+type StatsLoadedMsg struct {
+	// TimeRange is the time range that was fetched ("short_term", "medium_term", "long_term").
+	TimeRange string
+	// TopTracks contains the fetched top tracks for the time range.
+	TopTracks []domain.Track
+	// TopArtists contains the fetched top artists for the time range.
+	TopArtists []domain.FullArtist
+	// Err is non-nil if the fetch failed.
+	Err error
+}
+
 // DeviceInfo is the UI-facing representation of a Spotify device.
 // It mirrors the fields needed for rendering without importing api/.
 type DeviceInfo struct {
@@ -177,6 +193,16 @@ type DeviceInfo struct {
 	Name     string
 	Type     string
 	IsActive bool
+}
+
+// DevicesLoadedMsg is returned by the fetch-devices command after the device list
+// has been fetched from the Spotify API. All other data-carrying messages are exported;
+// this type follows the same convention. The root app.Update() handles store mutations.
+type DevicesLoadedMsg struct {
+	// Devices is the list of available Spotify Connect devices on success.
+	Devices []DeviceInfo
+	// Err is non-nil if the fetch failed.
+	Err error
 }
 
 // DeviceOverlayClosedMsg is emitted by DeviceOverlay when the user presses Esc,
@@ -198,9 +224,9 @@ type DeviceTransferredMsg struct {
 	Err      error
 }
 
-// DevicesLoadErrorMsg is emitted by DeviceOverlay.Update() when a devicesLoadedMsg
-// carries a non-nil error. The root app model intercepts it and emits a toast
-// notification. Panes cannot call alerts directly — they request via messages.
+// DevicesLoadErrorMsg may be emitted by handlers when a device fetch fails.
+// The root app model uses the DevicesLoadedMsg.Err field directly for toast
+// notifications; this type is retained for any remaining callers.
 type DevicesLoadErrorMsg struct {
 	Err error
 }
@@ -288,7 +314,7 @@ type SearchClearedMsg struct{}
 
 // SearchResultData is the UI-facing representation of search results.
 // It carries only the fields the overlay needs for rendering, pre-converted
-// from api.SearchResult in commands.go so that search.go never imports api/.
+// from domain.SearchResult in commands.go so that search.go never imports api/.
 type SearchResultData struct {
 	Tracks    []SearchTrackItem
 	Artists   []SearchArtistItem
