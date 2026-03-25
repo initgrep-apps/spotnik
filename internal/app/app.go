@@ -96,9 +96,6 @@ type App struct {
 	// so it can be restored when the overlay closes.
 	prevFocus focusedPane
 
-	// statusMsg is a transient error/info message shown in the status bar for 3–4 seconds.
-	statusMsg string
-
 	// tickCount increments every 1s tick. Used to throttle API polling:
 	// playback fetched every playbackFetchInterval ticks, queue every queueFetchInterval ticks.
 	tickCount int
@@ -129,9 +126,6 @@ type App struct {
 	// authStatus is the status message shown in the auth panel.
 	authStatus string
 }
-
-// statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
-type statusDismissMsg struct{}
 
 // throttleExpiredMsg is sent when the 429 backoff period has elapsed.
 // It clears the throttle observability state in the store.
@@ -576,7 +570,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	case panes.RateLimitedMsg:
-		// 429 from Spotify — activate backoff and show status message.
+		// 429 from Spotify — activate backoff and emit a ratelimit toast.
 		backoff := m.RetryAfterSecs
 		if backoff < defaultBackoffTicks {
 			backoff = defaultBackoffTicks
@@ -584,9 +578,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.backoffTicks = backoff
 		// Update store throttle observability so UI components can read gateway state.
 		a.store.SetThrottle(true, m.RetryAfterSecs, time.Now())
-		a.statusMsg = fmt.Sprintf("Rate limited — pausing requests for %ds", backoff)
 		return a, tea.Batch(
-			tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+			a.alerts.NewAlertCmd("ratelimit", fmt.Sprintf("Rate limited, retrying in %ds", backoff)),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
 		)
 
@@ -598,8 +591,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tokenRefreshedMsg:
 		if m.err != nil {
 			// Refresh failed — user must re-authenticate manually.
-			a.statusMsg = "Session expired. Run: spotnik auth"
-			return a, tea.Tick(5*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+			return a, a.alerts.NewAlertCmd("error", "Session expired. Run: spotnik auth")
 		}
 		// Refresh succeeded — re-initialize all API clients with the new token.
 		a.initAPIClients(m.newToken)
@@ -637,13 +629,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Err != nil {
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
-				a.statusMsg = "Playback control not available on this device"
-			} else {
-				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+				return a, tea.Batch(
+					fetchPlaybackStateCmd(a.player),
+					a.alerts.NewAlertCmd("warning", "Playback control not available on this device"),
+				)
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player),
-				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+				a.alerts.NewAlertCmd("error", m.Err.Error()),
 			)
 		}
 		return a, fetchPlaybackStateCmd(a.player)
@@ -672,18 +665,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Err != nil {
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
-				a.statusMsg = fmt.Sprintf("✗ %s", forbiddenErr.Message)
-			} else {
-				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+				return a, a.alerts.NewAlertCmd("error", forbiddenErr.Message)
 			}
-			return a, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
 		}
 		if m.TrackName != "" {
-			a.statusMsg = fmt.Sprintf("✓ Added to queue: %s", m.TrackName)
-		} else {
-			a.statusMsg = "✓ Added to queue"
+			return a, a.alerts.NewAlertCmd("success", fmt.Sprintf("Added to queue: %s", m.TrackName))
 		}
-		return a, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		return a, a.alerts.NewAlertCmd("success", "Added to queue")
 
 	case panes.FetchPlaylistsRequestMsg:
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
@@ -769,8 +758,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.LikeToggleResultMsg:
 		// Like/unlike result — no action needed unless there's an error.
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
-			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
 		}
 		return a, nil
 
@@ -783,28 +771,22 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildFetchDevicesCmd()
 
 	case panes.TransferPlaybackMsg:
-		// User selected a device; show status and dispatch transfer API call.
-		a.statusMsg = fmt.Sprintf("Switching to %s...", m.DeviceName)
+		// User selected a device; show info toast and dispatch transfer API call.
 		a.deviceOverlayOpen = false
 		return a, tea.Batch(
 			a.buildTransferPlaybackCmd(m.DeviceID),
-			tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+			a.alerts.NewAlertCmd("info", fmt.Sprintf("Switching to %s...", m.DeviceName)),
 		)
 
 	case panes.DeviceTransferredMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player),
-				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+				a.alerts.NewAlertCmd("error", m.Err.Error()),
 			)
 		}
 		// Transfer succeeded — next poll will update the header.
 		return a, fetchPlaybackStateCmd(a.player)
-
-	case statusDismissMsg:
-		a.statusMsg = ""
-		return a, nil
 
 	case throttleExpiredMsg:
 		// Clear throttle state in the store once the backoff period expires.

@@ -5,9 +5,6 @@
 package app
 
 import (
-	"fmt"
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
@@ -222,8 +219,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case panes.PlaylistCreatedMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
-			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }), true
+			return a, a.alerts.NewAlertCmd("error", m.Err.Error()), true
 		}
 		// Re-fetch playlists so the new one appears.
 		return a, a.buildFetchPlaylistsCmd(0), true
@@ -233,14 +229,13 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case panes.PlaylistRenamedMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
 			if a.playlistPane != nil {
 				updated, _ := a.playlistPane.Update(m)
 				if pm, ok := updated.(*panes.PlaylistManager); ok {
 					a.playlistPane = pm
 				}
 			}
-			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }), true
+			return a, a.alerts.NewAlertCmd("error", m.Err.Error()), true
 		}
 		// Re-fetch playlists to reflect rename.
 		return a, a.buildFetchPlaylistsCmd(0), true
@@ -255,8 +250,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				a.playlistPane = pm
 			}
 			if m.Err != nil {
-				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
-				return a, tea.Batch(cmd, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })), true
+				return a, tea.Batch(cmd, a.alerts.NewAlertCmd("error", m.Err.Error())), true
 			}
 			return a, cmd, true
 		}
@@ -272,8 +266,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				a.playlistPane = pm
 			}
 			if m.Err != nil {
-				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
-				return a, tea.Batch(cmd, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })), true
+				return a, tea.Batch(cmd, a.alerts.NewAlertCmd("error", m.Err.Error())), true
 			}
 			return a, cmd, true
 		}

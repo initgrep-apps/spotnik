@@ -200,17 +200,12 @@ func (a *App) renderHeader(label string) string {
 	return appName + "  " + deviceStr
 }
 
-// renderStatusBar renders the bottom status bar. If a.statusMsg is set it takes
-// priority over hints. hints is a pre-built slice of rendered key-hint strings;
+// renderStatusBar renders the bottom status bar with keybinding hints.
+// Toast notifications are shown as overlays via alerts.Render() — they no longer
+// appear in the status bar. The status bar is now always hints-only.
+// hints is a pre-built slice of rendered key-hint strings;
 // use mainHints(), statsHints(), or playlistsHints() to obtain the right set.
 func (a *App) renderStatusBar(hints []string) string {
-	if a.statusMsg != "" {
-		return lipgloss.NewStyle().
-			Background(a.theme.StatusBarBg()).
-			Foreground(a.theme.Error()).
-			Render("  " + a.statusMsg)
-	}
-
 	style := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.StatusBarFg())
