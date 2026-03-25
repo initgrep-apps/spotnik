@@ -697,4 +697,55 @@ Target: under 15MB. Check with `ls -lh bin/spotnik` after each build.
 
 ---
 
-*Last updated: 2026-03-23*
+---
+
+## API Gateway
+
+All outbound HTTP traffic to Spotify routes through `internal/api/Gateway` (Feature 30).
+The gateway provides four services in order:
+
+### 1. Token Bucket Rate Limiter
+
+A classic token-bucket (10 tokens/second, burst of 10) limits the total request throughput.
+Background requests (polling, prefetch) are throttled through the bucket.
+Interactive requests (user key presses) bypass the bucket entirely.
+
+### 2. Concurrency Cap
+
+A buffered channel of size 5 acts as a semaphore. At most 5 HTTP calls are in-flight
+at any time. A 6th request blocks until one of the 5 completes or the context is cancelled.
+
+### 3. In-Flight Request Deduplication
+
+If two goroutines issue a request with the same `(Method, Path)` key simultaneously,
+only one HTTP call is made. The second goroutine waits on a `done` channel and receives
+a copy of the buffered response body. This prevents tick-storm duplicates during polling.
+
+### 4. 429 Backoff with Priority Bypass
+
+When Spotify returns a 429 response:
+- The gateway sets `backoffUntil = now + Retry-After seconds`.
+- Background requests are rejected immediately with `*RateLimitError`.
+- Interactive requests wait (blocking) for the backoff to expire then proceed.
+
+The app receives `RateLimitedMsg` and updates `store.SetThrottle()` for UI observability.
+A `throttleExpiredMsg` fires after Retry-After seconds to clear the store throttle state.
+
+### Priority Context
+
+Callers tag a context with `api.WithPriority(ctx, api.Interactive)` for user actions.
+Background is the default; `api.PriorityFromContext(ctx)` reads it in `BaseClient`.
+
+Command builders in `internal/app/commands.go` set `Interactive` for:
+play, pause, next, previous, volume, shuffle, repeat, search, add-to-queue,
+like/unlike, transfer playback, create/rename/remove/reorder playlist.
+
+### Integration Points
+
+- `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority
+- `internal/api/base.go` — `BaseClient.SetGateway()`, `doJSON`/`doNoContent` routing
+- `internal/app/app.go` — Gateway created in `New()`, `throttleExpiredMsg` handler
+- `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()` on every client
+- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`
+
+*Last updated: 2026-03-25*
