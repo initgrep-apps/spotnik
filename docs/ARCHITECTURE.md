@@ -504,6 +504,29 @@ The root model's 1-second tick loop is the single polling mechanism in the app.
 - No feature other than 03 and 06 should add recurring poll commands to the tick cycle
 - Library/stats use **staleness-based refresh**, not polling — see "Staleness Tracking" in State Management
 
+### Idle Polling Backoff (Feature 33)
+
+The actual polling intervals adapt based on user activity and playback state. This is
+**Layer 1** (proactive) rate management; Feature 30 (API Gateway) is **Layer 2** (reactive).
+
+| State | Playback Interval | Queue Interval |
+|---|---|---|
+| Active + Playing | 3s | 9s |
+| Active + Paused | 10s | 30s |
+| Idle + Playing | 10s | 30s |
+| Idle + Paused | 30s | 60s |
+
+"Active" means a `tea.KeyMsg` was received within the last 60 seconds.
+"Idle" means no `tea.KeyMsg` for 60+ seconds.
+
+**Implementation:**
+- `App.lastInteraction` (type `time.Time`) is set to `time.Now()` in the `tea.KeyMsg` handler
+- `App.isIdle()` returns `time.Since(lastInteraction) > idleThreshold` (60s)
+- `App.pollIntervals()` reads `isIdle()` and `store.PlaybackState().IsPlaying` to pick intervals
+- The tick handler calls `a.pollIntervals()` on every tick to get current intervals
+- When a `KeyMsg` arrives after idle (`wasIdle && now active`), `tickCount` is reset to 0 to
+  force an immediate fetch on the next tick — gives instant feedback on return from idle
+
 ---
 
 ## Configuration

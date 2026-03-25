@@ -40,12 +40,23 @@ const (
 )
 
 const (
-	// playbackFetchInterval is how many ticks (seconds) between playback state polls.
-	playbackFetchInterval = 3
-	// queueFetchInterval is how many ticks (seconds) between queue polls.
-	queueFetchInterval = 9
 	// defaultBackoffTicks is how many ticks to pause polling after a 429 rate limit.
 	defaultBackoffTicks = 10
+
+	// idleThresholdSecs is the number of seconds without a KeyMsg before the app
+	// is considered idle. Polling intervals increase when idle.
+	idleThresholdSecs = 60
+
+	// Polling intervals (in ticks = seconds) for the 4-state matrix.
+	// Active + playing: full speed.
+	activePlayingPlaybackInterval = 3
+	activePlayingQueueInterval    = 9
+	// Active + paused OR idle + playing: reduced speed.
+	reducedPlaybackInterval = 10
+	reducedQueueInterval    = 30
+	// Idle + paused: slowest speed.
+	idlePlaybackInterval = 30
+	idleQueueInterval    = 60
 )
 
 // App is the root application model. It owns the active theme, the central
@@ -97,8 +108,15 @@ type App struct {
 	prevFocus focusedPane
 
 	// tickCount increments every 1s tick. Used to throttle API polling:
-	// playback fetched every playbackFetchInterval ticks, queue every queueFetchInterval ticks.
+	// intervals are computed dynamically by pollIntervals() based on idle state and playback.
 	tickCount int
+
+	// lastInteraction is the last time a tea.KeyMsg was received.
+	// Used to determine idle state for polling backoff.
+	lastInteraction time.Time
+
+	// idleThreshold is how long without input before the app is considered idle.
+	idleThreshold time.Duration
 
 	// backoffTicks is the number of ticks to skip all API fetches after a 429 rate limit.
 	// Decremented each tick; when >0 no polling commands are dispatched.
@@ -174,22 +192,24 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	}
 
 	return &App{
-		theme:        t,
-		store:        s,
-		alerts:       *components.NewNotifications(t),
-		gateway:      gw,
-		playerPane:   playerPane,
-		libraryPane:  libraryPane,
-		queuePane:    queuePane,
-		searchPane:   searchPane,
-		devicePane:   devicePane,
-		focus:        focusPlayer,
-		currentView:  viewSplash,
-		volumeStep:   volStep,
-		needsAuth:    opts.NeedsAuth,
-		clientID:     opts.ClientID,
-		tokenStore:   opts.TokenStore,
-		tokenBaseURL: opts.TokenBaseURL,
+		theme:           t,
+		store:           s,
+		alerts:          *components.NewNotifications(t),
+		gateway:         gw,
+		playerPane:      playerPane,
+		libraryPane:     libraryPane,
+		queuePane:       queuePane,
+		searchPane:      searchPane,
+		devicePane:      devicePane,
+		focus:           focusPlayer,
+		currentView:     viewSplash,
+		volumeStep:      volStep,
+		needsAuth:       opts.NeedsAuth,
+		clientID:        opts.ClientID,
+		tokenStore:      opts.TokenStore,
+		tokenBaseURL:    opts.TokenBaseURL,
+		lastInteraction: time.Now(),
+		idleThreshold:   idleThresholdSecs * time.Second,
 	}
 }
 
@@ -256,6 +276,56 @@ func (a *App) TickCount() int {
 // BackoffTicks returns the remaining backoff ticks (exported for testing).
 func (a *App) BackoffTicks() int {
 	return a.backoffTicks
+}
+
+// IsIdle returns true if no user input has been received within idleThreshold.
+// Exported for testing.
+func (a *App) IsIdle() bool {
+	return a.isIdle()
+}
+
+// SetLastInteraction sets the lastInteraction timestamp (exported for testing).
+func (a *App) SetLastInteraction(t time.Time) {
+	a.lastInteraction = t
+}
+
+// PollIntervals returns the current playback and queue polling intervals based
+// on user activity and playback state. Exported for testing.
+func (a *App) PollIntervals() (playbackInterval, queueInterval int) {
+	return a.pollIntervals()
+}
+
+// isIdle returns true if no user input has been received within idleThreshold.
+func (a *App) isIdle() bool {
+	return time.Since(a.lastInteraction) > a.idleThreshold
+}
+
+// pollIntervals returns the current playback and queue polling intervals
+// based on user activity and playback state.
+//
+// Four-state matrix:
+//
+//	Active + Playing  →  3s / 9s   (full speed)
+//	Active + Paused   → 10s / 30s  (reduced)
+//	Idle   + Playing  → 10s / 30s  (reduced)
+//	Idle   + Paused   → 30s / 60s  (slowest)
+func (a *App) pollIntervals() (playbackInterval, queueInterval int) {
+	idle := a.isIdle()
+	playing := false
+	if ps := a.store.PlaybackState(); ps != nil {
+		playing = ps.IsPlaying
+	}
+
+	switch {
+	case !idle && playing:
+		return activePlayingPlaybackInterval, activePlayingQueueInterval
+	case !idle && !playing:
+		return reducedPlaybackInterval, reducedQueueInterval
+	case idle && playing:
+		return reducedPlaybackInterval, reducedQueueInterval
+	default: // idle && !playing
+		return idlePlaybackInterval, idleQueueInterval
+	}
 }
 
 // SearchOpen returns true while the search overlay is visible.
@@ -542,6 +612,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		wasIdle := a.isIdle()
+		a.lastInteraction = time.Now()
+		if wasIdle {
+			// User returned from idle — force immediate poll on the next tick.
+			a.tickCount = 0
+		}
 		return a.handleKeyMsg(m)
 
 	case panes.TickMsg:
@@ -571,14 +647,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nextTick
 		}
 
-		// Throttled polling: playback every 3s, queue every 9s.
+		// Adaptive polling: intervals computed dynamically based on idle state and playback.
 		// Check before incrementing so tick 0 fires both fetches immediately.
+		playbackInterval, queueInterval := a.pollIntervals()
 		var cmds []tea.Cmd
 		cmds = append(cmds, nextTick)
-		if a.tickCount%playbackFetchInterval == 0 {
+		if a.tickCount%playbackInterval == 0 {
 			cmds = append(cmds, fetchPlaybackStateCmd(a.player))
 		}
-		if a.tickCount%queueFetchInterval == 0 {
+		if a.tickCount%queueInterval == 0 {
 			cmds = append(cmds, fetchQueueCmd(a.player))
 		}
 		a.tickCount++
