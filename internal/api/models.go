@@ -1,8 +1,17 @@
 // Package api provides the Spotify HTTP client, OAuth authentication flow,
 // and all typed API response models. It never imports ui/ — data flows via messages and store.
+//
+// NOTE: Core domain types (Track, PlaybackState, Device, etc.) now live in
+// internal/domain/types.go. They are re-exported here as type aliases so that
+// existing code referencing api.Track, api.PlaybackState, etc. continues to work
+// without changes. New code should import internal/domain directly.
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/initgrep-apps/spotnik/internal/domain"
+)
 
 // unmarshalJSON is a package-level helper used by custom UnmarshalJSON methods
 // to avoid import cycles when models.go needs encoding/json for custom unmarshaling.
@@ -10,203 +19,44 @@ func unmarshalJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
-// PlaybackState represents the full playback state returned by GET /me/player.
-// When Spotify returns 204 (nothing playing), this struct is nil in the store.
-type PlaybackState struct {
-	// IsPlaying indicates whether Spotify is actively playing audio.
-	IsPlaying bool `json:"is_playing"`
+// PlaybackState re-exports domain.PlaybackState for backward compatibility.
+type PlaybackState = domain.PlaybackState
 
-	// ProgressMs is the current playback position in milliseconds.
-	ProgressMs int `json:"progress_ms"`
+// Track re-exports domain.Track for backward compatibility.
+type Track = domain.Track
 
-	// ShuffleState indicates whether shuffle is enabled.
-	ShuffleState bool `json:"shuffle_state"`
+// Artist re-exports domain.Artist for backward compatibility.
+type Artist = domain.Artist
 
-	// RepeatState is one of "off", "context", or "track".
-	RepeatState string `json:"repeat_state"`
+// Album re-exports domain.Album for backward compatibility.
+type Album = domain.Album
 
-	// Item is the currently playing track. May be nil if nothing is playing.
-	Item *Track `json:"item"`
+// SimplePlaylistOwner re-exports domain.SimplePlaylistOwner for backward compatibility.
+type SimplePlaylistOwner = domain.SimplePlaylistOwner
 
-	// Device is the currently active playback device. May be nil if no device.
-	Device *Device `json:"device"`
-}
+// SimplePlaylist re-exports domain.SimplePlaylist for backward compatibility.
+type SimplePlaylist = domain.SimplePlaylist
 
-// Track represents a Spotify track item returned in the playback state.
-type Track struct {
-	// ID is the Spotify track ID.
-	ID string `json:"id"`
+// FullAlbum re-exports domain.FullAlbum for backward compatibility.
+type FullAlbum = domain.FullAlbum
 
-	// Name is the display name of the track.
-	Name string `json:"name"`
+// SavedAlbum re-exports domain.SavedAlbum for backward compatibility.
+type SavedAlbum = domain.SavedAlbum
 
-	// URI is the Spotify URI of the track (e.g. "spotify:track:...").
-	URI string `json:"uri"`
+// SavedTrack re-exports domain.SavedTrack for backward compatibility.
+type SavedTrack = domain.SavedTrack
 
-	// DurationMs is the total duration of the track in milliseconds.
-	DurationMs int `json:"duration_ms"`
+// PlayHistory re-exports domain.PlayHistory for backward compatibility.
+type PlayHistory = domain.PlayHistory
 
-	// Artists is the list of artists for this track.
-	Artists []Artist `json:"artists"`
+// QueueResponse re-exports domain.QueueResponse for backward compatibility.
+type QueueResponse = domain.QueueResponse
 
-	// Album is the album this track belongs to.
-	Album Album `json:"album"`
-}
+// Device re-exports domain.Device for backward compatibility.
+type Device = domain.Device
 
-// Artist represents a Spotify artist.
-type Artist struct {
-	// ID is the Spotify artist ID.
-	ID string `json:"id"`
+// PlayOptions re-exports domain.PlayOptions for backward compatibility.
+type PlayOptions = domain.PlayOptions
 
-	// Name is the display name of the artist.
-	Name string `json:"name"`
-}
-
-// Album represents a simplified Spotify album (as returned within track objects).
-type Album struct {
-	// ID is the Spotify album ID.
-	ID string `json:"id"`
-
-	// Name is the display name of the album.
-	Name string `json:"name"`
-}
-
-// SimplePlaylistOwner represents the owner of a playlist.
-type SimplePlaylistOwner struct {
-	// ID is the Spotify user ID of the owner.
-	ID string `json:"id"`
-
-	// DisplayName is the human-readable name of the owner.
-	DisplayName string `json:"display_name"`
-}
-
-// SimplePlaylist represents a simplified Spotify playlist as returned
-// in the GET /me/playlists response items.
-// NOTE: UnmarshalJSON is required because the Spotify API nests track count
-// under "tracks.total" rather than exposing it as a flat field.
-type SimplePlaylist struct {
-	// ID is the Spotify playlist ID.
-	ID string `json:"id"`
-
-	// Name is the display name of the playlist.
-	Name string `json:"name"`
-
-	// URI is the Spotify URI of the playlist.
-	URI string `json:"uri"`
-
-	// TrackCount is the total number of tracks in the playlist.
-	// Populated from the nested "tracks.total" field in the Spotify response.
-	TrackCount int `json:"-"`
-
-	// Owner is the playlist owner.
-	Owner SimplePlaylistOwner `json:"owner"`
-}
-
-// UnmarshalJSON implements custom unmarshaling to extract the nested tracks.total
-// into the flat TrackCount field.
-func (p *SimplePlaylist) UnmarshalJSON(data []byte) error {
-	// Use a raw struct (not alias) to capture both flat fields and nested tracks.
-	raw := &struct {
-		ID     string              `json:"id"`
-		Name   string              `json:"name"`
-		URI    string              `json:"uri"`
-		Owner  SimplePlaylistOwner `json:"owner"`
-		Tracks struct {
-			Total int `json:"total"`
-		} `json:"tracks"`
-	}{}
-	if err := unmarshalJSON(data, raw); err != nil {
-		return err
-	}
-	p.ID = raw.ID
-	p.Name = raw.Name
-	p.URI = raw.URI
-	p.Owner = raw.Owner
-	p.TrackCount = raw.Tracks.Total
-	return nil
-}
-
-// FullAlbum represents a Spotify album with full details, used within SavedAlbum.
-type FullAlbum struct {
-	// ID is the Spotify album ID.
-	ID string `json:"id"`
-
-	// Name is the display name of the album.
-	Name string `json:"name"`
-
-	// URI is the Spotify URI of the album.
-	URI string `json:"uri"`
-
-	// TotalTracks is the total number of tracks in the album.
-	TotalTracks int `json:"total_tracks"`
-
-	// ReleaseDate is the release date string (e.g. "2020-03-20").
-	ReleaseDate string `json:"release_date"`
-
-	// Artists is the list of artists for this album.
-	Artists []Artist `json:"artists"`
-}
-
-// SavedAlbum represents an album saved in the user's library,
-// as returned by GET /me/albums.
-type SavedAlbum struct {
-	// AddedAt is the ISO 8601 timestamp when the album was saved.
-	AddedAt string `json:"added_at"`
-
-	// Album contains the full album details.
-	Album FullAlbum `json:"album"`
-}
-
-// SavedTrack represents a track saved in the user's library,
-// as returned by GET /me/tracks.
-type SavedTrack struct {
-	// AddedAt is the ISO 8601 timestamp when the track was saved.
-	AddedAt string `json:"added_at"`
-
-	// Track contains the full track details.
-	Track Track `json:"track"`
-}
-
-// PlayHistory represents a recently played track item,
-// as returned by GET /me/player/recently-played.
-type PlayHistory struct {
-	// Track is the track that was played.
-	Track Track `json:"track"`
-
-	// PlayedAt is the ISO 8601 timestamp when the track was played.
-	PlayedAt string `json:"played_at"`
-}
-
-// QueueResponse represents the response from GET /me/player/queue.
-// It contains the currently playing track and the list of queued tracks.
-type QueueResponse struct {
-	// CurrentlyPlaying is the track currently playing (may be zero-value if nothing is playing).
-	CurrentlyPlaying Track `json:"currently_playing"`
-
-	// Queue contains the upcoming tracks in the user's play queue.
-	Queue []Track `json:"queue"`
-}
-
-// Device represents a Spotify Connect playback device.
-type Device struct {
-	// ID is the Spotify device ID.
-	ID string `json:"id"`
-
-	// IsActive indicates whether this device is the currently active one.
-	IsActive bool `json:"is_active"`
-
-	// IsPrivateSession indicates if the session is private.
-	IsPrivateSession bool `json:"is_private_session"`
-
-	// IsRestricted indicates if device is restricted (no web API control).
-	IsRestricted bool `json:"is_restricted"`
-
-	// Name is the human-readable device name (e.g. "MacBook Pro").
-	Name string `json:"name"`
-
-	// Type is the device type (e.g. "Computer", "Smartphone", "Speaker").
-	Type string `json:"type"`
-
-	// VolumePercent is the current volume as a percentage (0–100).
-	VolumePercent int `json:"volume_percent"`
-}
+// FullArtist re-exports domain.FullArtist for backward compatibility.
+type FullArtist = domain.FullArtist

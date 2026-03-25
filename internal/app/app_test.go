@@ -136,8 +136,9 @@ func TestApp_HeaderShowsDevice(t *testing.T) {
 }
 
 // TestPollingLoop_FetchesAndUpdatesStore tests that a PlaybackStateFetchedMsg
-// (zero-payload) causes the player pane to sync from the store.
-// The store is written by app.go before the notification is sent.
+// with a data payload causes Update() to write the state to the store.
+// After Feature 29, PlaybackStateFetchedMsg carries the fetched state in its
+// State field, and Update() is responsible for writing it to the store.
 func TestPollingLoop_FetchesAndUpdatesStore(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -145,7 +146,7 @@ func TestPollingLoop_FetchesAndUpdatesStore(t *testing.T) {
 	s := a.Store()
 	assert.Nil(t, s.PlaybackState(), "store should start empty")
 
-	// Simulate app.go writing to the store and then sending the notification.
+	// Send data-carrying PlaybackStateFetchedMsg — Update() writes to store.
 	newState := &api.PlaybackState{
 		IsPlaying:  true,
 		ProgressMs: 50000,
@@ -157,10 +158,7 @@ func TestPollingLoop_FetchesAndUpdatesStore(t *testing.T) {
 		},
 		Device: &api.Device{VolumePercent: 80},
 	}
-	s.SetPlaybackState(newState)
-
-	// PlaybackStateFetchedMsg is zero-payload — the pane reads from the store.
-	fetchedMsg := panes.PlaybackStateFetchedMsg{}
+	fetchedMsg := panes.PlaybackStateFetchedMsg{State: newState}
 	_, _ = a.Update(fetchedMsg)
 
 	got := s.PlaybackState()
@@ -759,17 +757,16 @@ func TestApp_QueueUpdate_StoreReflectsQueueData(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Simulate fetchQueueCmd writing to store and sending QueueLoadedMsg.
-	a.Store().SetQueue([]api.Track{
-		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+	// Send QueueLoadedMsg carrying data — app.Update() writes to store.
+	m, cmd := a.Update(panes.QueueLoadedMsg{
+		Tracks: []api.Track{
+			{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+		},
 	})
-
-	// Send QueueLoadedMsg — app should handle it without crashing.
-	m, cmd := a.Update(panes.QueueLoadedMsg{})
 	require.NotNil(t, m)
 	assert.Nil(t, cmd, "QueueLoadedMsg should produce no follow-up command")
 
-	// Store should still reflect the queue data.
+	// Store should reflect the queue data written by Update().
 	got := a.Store().Queue()
 	require.Len(t, got, 1)
 	assert.Equal(t, "Save Your Tears", got[0].Name)
@@ -1614,7 +1611,10 @@ func TestApp_BuildFetchPlaylistsCmd_SetsErrorOnFailure(t *testing.T) {
 
 	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
 	require.NotNil(t, cmd)
-	cmd() // execute the command
+	// Execute command, feed result back to Update() — store writes happen in Update().
+	msg := cmd()
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
 
 	assert.Error(t, a.Store().PlaylistsFetchError(), "store should have playlists fetch error after API failure")
 }
@@ -1632,7 +1632,10 @@ func TestApp_BuildFetchPlaylistsCmd_ClearsErrorOnSuccess(t *testing.T) {
 
 	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — store writes happen in Update().
+	msg := cmd()
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
 
 	assert.NoError(t, a.Store().PlaylistsFetchError(), "store should clear playlists fetch error on success")
 }
@@ -1647,7 +1650,10 @@ func TestApp_BuildSearchCmd_SetsErrorOnFailure(t *testing.T) {
 
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — store writes happen in Update().
+	msg := cmd()
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
 
 	assert.Error(t, a.Store().SearchError(), "store should have search error after API failure")
 }
@@ -1663,7 +1669,10 @@ func TestApp_BuildSearchCmd_ClearsErrorOnSuccess(t *testing.T) {
 
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — store writes happen in Update().
+	msg := cmd()
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
 
 	assert.NoError(t, a.Store().SearchError(), "store should clear search error on success")
 }
@@ -1676,9 +1685,17 @@ func TestApp_BuildFetchDevicesCmd_SetsErrorOnFailure(t *testing.T) {
 	a := app.New(cfg, app.AppOptions{})
 	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
 
+	// Open device overlay first so the devicesLoadedMsg is routed to the DeviceOverlay.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = m.(*app.App)
+
+	// FetchDevicesRequestMsg is sent by DeviceOverlay.Init(); simulate it.
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — DeviceOverlay.Update() writes store.
+	msg := cmd()
+	m, _ = a.Update(msg)
+	a = m.(*app.App)
 
 	assert.Error(t, a.Store().DevicesError(), "store should have devices error after API failure")
 }
@@ -1692,9 +1709,17 @@ func TestApp_BuildFetchDevicesCmd_ClearsErrorOnSuccess(t *testing.T) {
 	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
 	a.Store().SetDevicesError(fmt.Errorf("previous error"))
 
+	// Open device overlay first so the devicesLoadedMsg is routed to the DeviceOverlay.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	a = m.(*app.App)
+
+	// FetchDevicesRequestMsg is sent by DeviceOverlay.Init(); simulate it.
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — DeviceOverlay.Update() writes store.
+	msg := cmd()
+	m, _ = a.Update(msg)
+	a = m.(*app.App)
 
 	assert.NoError(t, a.Store().DevicesError(), "store should clear devices error on success")
 }
@@ -1713,7 +1738,10 @@ func TestApp_BuildFetchStatsCmd_SetsErrorOnFailure(t *testing.T) {
 
 	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — store writes happen in Update().
+	msg := cmd()
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
 
 	assert.Error(t, a.Store().StatsError(), "store should have stats error after API failure")
 }
@@ -1732,7 +1760,10 @@ func TestApp_BuildFetchStatsCmd_ClearsErrorOnSuccess(t *testing.T) {
 
 	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
 	require.NotNil(t, cmd)
-	cmd()
+	// Execute command, feed result back to Update() — store writes happen in Update().
+	msg := cmd()
+	m, _ := a.Update(msg)
+	a = m.(*app.App)
 
 	assert.NoError(t, a.Store().StatsError(), "store should clear stats error on success")
 }
@@ -1749,12 +1780,16 @@ func TestApp_FetchQueueCmd_SetsErrorOnFailure(t *testing.T) {
 	_, cmd := a.Update(panes.TickMsg{})
 	require.NotNil(t, cmd)
 
-	// The tick returns a batch; execute the batch to run sub-commands.
+	// The tick returns a batch; execute each sub-command and feed results back to Update().
 	msg := cmd()
 	if batchMsg, ok := msg.(tea.BatchMsg); ok {
 		for _, subCmd := range batchMsg {
 			if subCmd != nil {
-				subCmd()
+				subMsg := subCmd()
+				if subMsg != nil {
+					m, _ := a.Update(subMsg)
+					a = m.(*app.App)
+				}
 			}
 		}
 	}

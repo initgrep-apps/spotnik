@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
 // Store is the central application state. All panes read from here; only
@@ -15,23 +16,24 @@ import (
 // accessor methods to ensure safe concurrent access.
 type Store struct {
 	mu            sync.RWMutex
-	playbackState *api.PlaybackState
-	activeDevice  *api.Device
+	playbackState *domain.PlaybackState
+	activeDevice  *domain.Device
 
 	// Library data
-	playlists      []api.SimplePlaylist
+	playlists      []domain.SimplePlaylist
 	playlistsTotal int
-	savedAlbums    []api.SavedAlbum
+	savedAlbums    []domain.SavedAlbum
 	albumsLoaded   bool
-	likedTracks    []api.SavedTrack
+	likedTracks    []domain.SavedTrack
 	likedTotal     int
 	likedLoaded    bool
-	recentlyPlayed []api.PlayHistory
+	recentlyPlayed []domain.PlayHistory
 
 	// Queue data
-	queue []api.Track
+	queue []domain.Track
 
-	// Search data
+	// Search data — searchResults holds the raw api response for the SearchClearedMsg handler.
+	// After Task 3 this field will be removed and results will flow only through messages.
 	searchResults *api.SearchResult
 	searchQuery   string
 	searchLoading bool
@@ -39,11 +41,11 @@ type Store struct {
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
 	// NOTE: cached on first fetch per range; not re-fetched until view is re-opened.
-	topTracks  map[string][]api.Track
-	topArtists map[string][]api.FullArtist
+	topTracks  map[string][]domain.Track
+	topArtists map[string][]domain.FullArtist
 
 	// Playlist Manager data: tracks for each playlist keyed by playlist ID.
-	playlistTracks map[string][]api.Track
+	playlistTracks map[string][]domain.Track
 
 	// playingPlaylistID is the Spotify playlist ID that is currently playing.
 	// Used by PlaylistManager to render the ▶ indicator next to the active playlist.
@@ -74,7 +76,7 @@ func New() *Store {
 }
 
 // PlaybackState returns the current playback state, or nil if nothing is playing.
-func (s *Store) PlaybackState() *api.PlaybackState {
+func (s *Store) PlaybackState() *domain.PlaybackState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.playbackState
@@ -82,7 +84,7 @@ func (s *Store) PlaybackState() *api.PlaybackState {
 
 // SetPlaybackState updates the playback state. Pass nil to clear (204 response).
 // Also updates the active device from the state's Device field.
-func (s *Store) SetPlaybackState(state *api.PlaybackState) {
+func (s *Store) SetPlaybackState(state *domain.PlaybackState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playbackState = state
@@ -92,28 +94,28 @@ func (s *Store) SetPlaybackState(state *api.PlaybackState) {
 }
 
 // ActiveDevice returns the currently active Spotify device, or nil if unknown.
-func (s *Store) ActiveDevice() *api.Device {
+func (s *Store) ActiveDevice() *domain.Device {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.activeDevice
 }
 
 // SetActiveDevice updates the active device independently of playback state.
-func (s *Store) SetActiveDevice(device *api.Device) {
+func (s *Store) SetActiveDevice(device *domain.Device) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.activeDevice = device
 }
 
 // Playlists returns the user's saved playlists.
-func (s *Store) Playlists() []api.SimplePlaylist {
+func (s *Store) Playlists() []domain.SimplePlaylist {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.playlists
 }
 
 // SetPlaylists updates the saved playlists in the store.
-func (s *Store) SetPlaylists(playlists []api.SimplePlaylist) {
+func (s *Store) SetPlaylists(playlists []domain.SimplePlaylist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlists = playlists
@@ -134,7 +136,7 @@ func (s *Store) SetPlaylistsTotal(total int) {
 }
 
 // SavedAlbums returns the user's saved albums.
-func (s *Store) SavedAlbums() []api.SavedAlbum {
+func (s *Store) SavedAlbums() []domain.SavedAlbum {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.savedAlbums
@@ -142,7 +144,7 @@ func (s *Store) SavedAlbums() []api.SavedAlbum {
 
 // SetSavedAlbums updates the saved albums in the store.
 // Also marks albumsLoaded = true.
-func (s *Store) SetSavedAlbums(albums []api.SavedAlbum) {
+func (s *Store) SetSavedAlbums(albums []domain.SavedAlbum) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.savedAlbums = albums
@@ -157,7 +159,7 @@ func (s *Store) AlbumsLoaded() bool {
 }
 
 // LikedTracks returns the user's liked tracks.
-func (s *Store) LikedTracks() []api.SavedTrack {
+func (s *Store) LikedTracks() []domain.SavedTrack {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.likedTracks
@@ -165,7 +167,7 @@ func (s *Store) LikedTracks() []api.SavedTrack {
 
 // SetLikedTracks updates the liked tracks in the store.
 // Also marks likedLoaded = true.
-func (s *Store) SetLikedTracks(tracks []api.SavedTrack) {
+func (s *Store) SetLikedTracks(tracks []domain.SavedTrack) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.likedTracks = tracks
@@ -194,28 +196,28 @@ func (s *Store) LikedLoaded() bool {
 }
 
 // RecentlyPlayed returns the recently played track history.
-func (s *Store) RecentlyPlayed() []api.PlayHistory {
+func (s *Store) RecentlyPlayed() []domain.PlayHistory {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.recentlyPlayed
 }
 
 // SetRecentlyPlayed updates the recently played history in the store.
-func (s *Store) SetRecentlyPlayed(items []api.PlayHistory) {
+func (s *Store) SetRecentlyPlayed(items []domain.PlayHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recentlyPlayed = items
 }
 
 // Queue returns the upcoming tracks in the user's play queue.
-func (s *Store) Queue() []api.Track {
+func (s *Store) Queue() []domain.Track {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.queue
 }
 
 // SetQueue updates the queue tracks in the store.
-func (s *Store) SetQueue(tracks []api.Track) {
+func (s *Store) SetQueue(tracks []domain.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.queue = tracks
@@ -266,7 +268,7 @@ func (s *Store) SetSearchLoading(loading bool) {
 // TopTracks returns the cached top tracks for the given time range,
 // or nil if that range has not been fetched yet.
 // timeRange should be "short_term", "medium_term", or "long_term".
-func (s *Store) TopTracks(timeRange string) []api.Track {
+func (s *Store) TopTracks(timeRange string) []domain.Track {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.topTracks == nil {
@@ -276,11 +278,11 @@ func (s *Store) TopTracks(timeRange string) []api.Track {
 }
 
 // SetTopTracks caches top tracks for a specific time range in the store.
-func (s *Store) SetTopTracks(timeRange string, tracks []api.Track) {
+func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.topTracks == nil {
-		s.topTracks = make(map[string][]api.Track)
+		s.topTracks = make(map[string][]domain.Track)
 	}
 	s.topTracks[timeRange] = tracks
 }
@@ -288,7 +290,7 @@ func (s *Store) SetTopTracks(timeRange string, tracks []api.Track) {
 // TopArtists returns the cached top artists for the given time range,
 // or nil if that range has not been fetched yet.
 // timeRange should be "short_term", "medium_term", or "long_term".
-func (s *Store) TopArtists(timeRange string) []api.FullArtist {
+func (s *Store) TopArtists(timeRange string) []domain.FullArtist {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.topArtists == nil {
@@ -298,18 +300,18 @@ func (s *Store) TopArtists(timeRange string) []api.FullArtist {
 }
 
 // SetTopArtists caches top artists for a specific time range in the store.
-func (s *Store) SetTopArtists(timeRange string, artists []api.FullArtist) {
+func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.topArtists == nil {
-		s.topArtists = make(map[string][]api.FullArtist)
+		s.topArtists = make(map[string][]domain.FullArtist)
 	}
 	s.topArtists[timeRange] = artists
 }
 
 // PlaylistTracks returns the cached tracks for a given playlist ID,
 // or nil if the playlist has not been loaded yet.
-func (s *Store) PlaylistTracks(playlistID string) []api.Track {
+func (s *Store) PlaylistTracks(playlistID string) []domain.Track {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.playlistTracks == nil {
@@ -319,11 +321,11 @@ func (s *Store) PlaylistTracks(playlistID string) []api.Track {
 }
 
 // SetPlaylistTracks caches the tracks for a specific playlist in the store.
-func (s *Store) SetPlaylistTracks(playlistID string, tracks []api.Track) {
+func (s *Store) SetPlaylistTracks(playlistID string, tracks []domain.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.playlistTracks == nil {
-		s.playlistTracks = make(map[string][]api.Track)
+		s.playlistTracks = make(map[string][]domain.Track)
 	}
 	s.playlistTracks[playlistID] = tracks
 }

@@ -291,7 +291,7 @@ func (a *App) Init() tea.Cmd {
 
 	// Authenticated: start data fetching alongside splash.
 	return tea.Batch(
-		fetchPlaybackStateCmd(a.player, a.store),
+		fetchPlaybackStateCmd(a.player),
 		a.libraryPane.Init(),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
@@ -403,7 +403,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.initAPIClients(m.accessToken)
 		// Start data fetching and tick loop.
 		return a, tea.Batch(
-			fetchPlaybackStateCmd(a.player, a.store),
+			fetchPlaybackStateCmd(a.player),
 			a.libraryPane.Init(),
 			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 				return panes.TickMsg{}
@@ -427,14 +427,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
-		// Handle store writes here in Update, not inside the pane.
+		// Clear search state in store — store writes belong in Update, not in panes.
+		// NOTE: store.SetSearchResults(nil) is kept for symmetry with SetSearchQuery;
+		// store.SearchResults() is not used in production rendering (overlay uses o.results).
 		a.store.SetSearchResults(nil)
 		a.store.SetSearchQuery("")
 		return a, nil
 
 	case panes.SearchResultsMsg:
-		// Search results are in the store; notify the overlay.
+		// Search command returned — write error state to store, then deliver results to overlay.
+		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
+		// *api.SearchResult stored in store.SearchResults(). The overlay stores results in its
+		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
+		// in production rendering and can be ignored here.
 		a.store.SetSearchLoading(false)
+		if m.Err != nil {
+			a.store.SetSearchError(m.Err)
+		} else {
+			a.store.ClearSearchError()
+		}
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp
@@ -467,7 +478,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildFetchStatsCmd(m.TimeRange)
 
 	case panes.StatsLoadedMsg:
-		// Stats data fetched — forward to stats pane.
+		// Stats data fetched — write to store, then forward to stats pane.
+		if m.Err != nil {
+			a.store.SetStatsError(m.Err)
+		} else {
+			a.store.ClearStatsError()
+			if m.TimeRange != "" {
+				a.store.SetTopTracks(m.TimeRange, m.TopTracks)
+				a.store.SetTopArtists(m.TimeRange, m.TopArtists)
+			}
+		}
 		if a.statsPane != nil {
 			updated, cmd := a.statsPane.Update(m)
 			if sv, ok := updated.(*panes.StatsView); ok {
@@ -500,8 +520,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.tickCount = 0
 				return a, tea.Batch(
 					nextTick,
-					fetchPlaybackStateCmd(a.player, a.store),
-					fetchQueueCmd(a.player, a.store),
+					fetchPlaybackStateCmd(a.player),
+					fetchQueueCmd(a.player),
 				)
 			}
 			return a, nextTick
@@ -512,10 +532,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmds []tea.Cmd
 		cmds = append(cmds, nextTick)
 		if a.tickCount%playbackFetchInterval == 0 {
-			cmds = append(cmds, fetchPlaybackStateCmd(a.player, a.store))
+			cmds = append(cmds, fetchPlaybackStateCmd(a.player))
 		}
 		if a.tickCount%queueFetchInterval == 0 {
-			cmds = append(cmds, fetchQueueCmd(a.player, a.store))
+			cmds = append(cmds, fetchQueueCmd(a.player))
 		}
 		a.tickCount++
 		return a, tea.Batch(cmds...)
@@ -546,11 +566,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.QueueLoadedMsg:
-		// Queue data is already in the store — no pane-specific handling needed here.
+		// Write queue data to store from Msg payload (Elm Architecture: only Update writes store).
+		if m.Err != nil {
+			a.store.SetQueueError(m.Err)
+		} else {
+			a.store.ClearQueueError()
+			a.store.SetQueue(m.Tracks)
+		}
 		// QueuePane reads directly from store on View().
 		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
+		// Write state to store from Msg payload (Elm Architecture: only Update writes store).
+		// Only write to store when State is non-nil — nil State means either:
+		//   a) player == nil (no API client injected), or
+		//   b) a transient error (m.Err != nil).
+		// In both cases we leave the existing store state unchanged.
+		if m.State != nil {
+			a.store.SetPlaybackState(m.State)
+		}
 		// Data fetched during splash is stored but splash stays visible
 		// for the full 5s duration — the splashDismissMsg timer handles transition.
 		updatedPane, cmd := a.playerPane.Update(m)
@@ -568,11 +602,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
 			}
 			return a, tea.Batch(
-				fetchPlaybackStateCmd(a.player, a.store),
+				fetchPlaybackStateCmd(a.player),
 				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
 			)
 		}
-		return a, fetchPlaybackStateCmd(a.player, a.store)
+		return a, fetchPlaybackStateCmd(a.player)
 
 	case panes.PlaybackRequestMsg:
 		return a, a.buildPlaybackAPICmd(m.Action)
@@ -614,14 +648,80 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.FetchPlaylistsRequestMsg:
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
 
+	case panes.LibraryLoadedMsg:
+		// Write playlist data to store from Msg payload (Elm Architecture: only Update writes store).
+		if m.Err != nil {
+			a.store.SetPlaylistsFetchError(m.Err)
+		} else {
+			a.store.ClearPlaylistsFetchError()
+			if m.Offset == 0 {
+				a.store.SetPlaylists(m.Items)
+			} else {
+				a.store.SetPlaylists(append(a.store.Playlists(), m.Items...))
+			}
+			a.store.SetPlaylistsTotal(len(a.store.Playlists()))
+		}
+		// Forward to library pane so it can refresh from store.
+		updated, cmd := a.libraryPane.Update(m)
+		if lp, ok := updated.(*panes.LibraryPane); ok {
+			a.libraryPane = lp
+		}
+		return a, cmd
+
 	case panes.FetchAlbumsRequestMsg:
 		return a, a.buildFetchAlbumsCmd(m.Offset)
+
+	case panes.AlbumsLoadedMsg:
+		// Write album data to store from Msg payload.
+		if m.Err != nil {
+			a.store.SetAlbumsFetchError(m.Err)
+		} else {
+			a.store.ClearAlbumsFetchError()
+			a.store.SetSavedAlbums(m.Items)
+		}
+		// Forward to library pane.
+		updated, cmd := a.libraryPane.Update(m)
+		if lp, ok := updated.(*panes.LibraryPane); ok {
+			a.libraryPane = lp
+		}
+		return a, cmd
 
 	case panes.FetchLikedTracksRequestMsg:
 		return a, a.buildFetchLikedTracksCmd(m.Offset)
 
+	case panes.LikedTracksLoadedMsg:
+		// Write liked tracks to store from Msg payload.
+		if m.Err != nil {
+			a.store.SetLikedTracksFetchError(m.Err)
+		} else {
+			a.store.ClearLikedTracksFetchError()
+			a.store.SetLikedTracks(m.Items)
+			a.store.SetLikedTotal(len(m.Items) + m.Offset)
+		}
+		// Forward to library pane.
+		updated, cmd := a.libraryPane.Update(m)
+		if lp, ok := updated.(*panes.LibraryPane); ok {
+			a.libraryPane = lp
+		}
+		return a, cmd
+
 	case panes.FetchRecentlyPlayedRequestMsg:
 		return a, a.buildFetchRecentlyPlayedCmd()
+
+	case panes.RecentlyPlayedLoadedMsg:
+		// Write recently played to store from Msg payload.
+		if m.Err != nil {
+			a.store.SetRecentPlayedFetchError(m.Err)
+		} else {
+			a.store.ClearRecentPlayedFetchError()
+			a.store.SetRecentlyPlayed(m.Items)
+		}
+		// Forward to library pane.
+		updated, cmd := a.libraryPane.Update(m)
+		if lp, ok := updated.(*panes.LibraryPane); ok {
+			a.libraryPane = lp
+		}
+		return a, cmd
 
 	case panes.LikeTrackRequestMsg:
 		return a, a.buildToggleLikeCmd(m.TrackID, m.Unlike)
@@ -655,12 +755,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Err != nil {
 			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
 			return a, tea.Batch(
-				fetchPlaybackStateCmd(a.player, a.store),
+				fetchPlaybackStateCmd(a.player),
 				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
 			)
 		}
 		// Transfer succeeded — next poll will update the header.
-		return a, fetchPlaybackStateCmd(a.player, a.store)
+		return a, fetchPlaybackStateCmd(a.player)
 
 	case statusDismissMsg:
 		a.statusMsg = ""

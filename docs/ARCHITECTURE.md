@@ -74,13 +74,56 @@ app.Update(keyMsg)
                   tea.Cmd runs async
                        │
                        ▼
-                  Returns tea.Msg
+                  Returns tea.Msg with DATA payload
                        │
                        ▼
               app.Update(resultMsg)
                        │
-                       └── Update store, re-render
+                       ├── Write data from msg payload to Store
+                       └── Forward to pane, re-render
 ```
+
+### Data-Carrying Messages (Elm Architecture Purity)
+
+**Rule: `build*Cmd` / `fetch*Cmd` functions MUST NOT write to the Store.** Only `Update()` may mutate the Store.
+
+Commands return data in their Msg payloads. `Update()` reads the payload and writes to the Store. This is the Elm Architecture contract.
+
+**Before (violation):**
+```go
+// WRONG — Store write inside goroutine closure
+func fetchQueueCmd(player api.PlayerAPI, store *state.Store) tea.Cmd {
+    return func() tea.Msg {
+        qr, err := player.Queue(ctx)
+        store.SetQueue(qr.Queue)   // ← violates Elm contract
+        store.ClearQueueError()
+        return panes.QueueLoadedMsg{} // empty notification
+    }
+}
+```
+
+**After (correct):**
+```go
+// CORRECT — data in payload, Store write in Update()
+func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
+    return func() tea.Msg {
+        qr, err := player.Queue(ctx)
+        if err != nil { return panes.QueueLoadedMsg{Err: err} }
+        return panes.QueueLoadedMsg{Tracks: qr.Queue} // data-carrying
+    }
+}
+
+// In app.go Update():
+case panes.QueueLoadedMsg:
+    if m.Err != nil {
+        a.store.SetQueueError(m.Err)
+    } else {
+        a.store.ClearQueueError()
+        a.store.SetQueue(m.Tracks) // ← Store write only here
+    }
+```
+
+All message types in `internal/ui/panes/messages.go` carry their data payload and an `Err error` field. `Update()` is the sole writer to the Store.
 
 ---
 
