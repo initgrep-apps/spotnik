@@ -905,6 +905,31 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, a.buildFetchDevicesCmd()
 
+	case panes.DevicesLoadedMsg:
+		// Device list fetched — write store state here (Elm purity: only root Update writes store).
+		// Then forward to DeviceOverlay so it can update its local devices list for rendering.
+		if m.Err != nil {
+			a.store.SetDevicesError(m.Err)
+			// Forward to overlay so it can update its render state.
+			if a.deviceOverlayOpen {
+				updated, _ := a.devicePane.Update(m)
+				if dp, ok := updated.(*panes.DeviceOverlay); ok {
+					a.devicePane = dp
+				}
+			}
+			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load devices: %s", m.Err.Error()))
+		}
+		a.store.ClearDevicesError()
+		a.store.SetDevicesFetchedAt(time.Now())
+		// Forward to overlay to update its local device list.
+		if a.deviceOverlayOpen {
+			updated, _ := a.devicePane.Update(m)
+			if dp, ok := updated.(*panes.DeviceOverlay); ok {
+				a.devicePane = dp
+			}
+		}
+		return a, nil
+
 	case panes.TransferPlaybackMsg:
 		// User selected a device; show info toast and dispatch transfer API call.
 		a.deviceOverlayOpen = false

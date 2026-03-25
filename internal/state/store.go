@@ -66,7 +66,6 @@ type Store struct {
 	queue []domain.Track
 
 	// Search data — searchResults holds the raw api response for the SearchClearedMsg handler.
-	// After Task 3 this field will be removed and results will flow only through messages.
 	searchResults *api.SearchResult
 	searchQuery   string
 	searchLoading bool
@@ -96,7 +95,7 @@ type Store struct {
 	}
 
 	// Error state — one per data-fetching feature.
-	// Set by build*Cmd on failure, cleared on successful retry.
+	// Set by Update() handlers on failure, cleared on successful retry.
 	searchError          error
 	statsError           error
 	devicesError         error

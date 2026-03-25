@@ -195,6 +195,16 @@ type DeviceInfo struct {
 	IsActive bool
 }
 
+// DevicesLoadedMsg is returned by the fetch-devices command after the device list
+// has been fetched from the Spotify API. All other data-carrying messages are exported;
+// this type follows the same convention. The root app.Update() handles store mutations.
+type DevicesLoadedMsg struct {
+	// Devices is the list of available Spotify Connect devices on success.
+	Devices []DeviceInfo
+	// Err is non-nil if the fetch failed.
+	Err error
+}
+
 // DeviceOverlayClosedMsg is emitted by DeviceOverlay when the user presses Esc,
 // signalling the root app model to close the overlay and restore the previous focus.
 type DeviceOverlayClosedMsg struct{}
@@ -214,9 +224,9 @@ type DeviceTransferredMsg struct {
 	Err      error
 }
 
-// DevicesLoadErrorMsg is emitted by DeviceOverlay.Update() when a devicesLoadedMsg
-// carries a non-nil error. The root app model intercepts it and emits a toast
-// notification. Panes cannot call alerts directly — they request via messages.
+// DevicesLoadErrorMsg may be emitted by handlers when a device fetch fails.
+// The root app model uses the DevicesLoadedMsg.Err field directly for toast
+// notifications; this type is retained for any remaining callers.
 type DevicesLoadErrorMsg struct {
 	Err error
 }

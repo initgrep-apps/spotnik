@@ -5,21 +5,12 @@ package panes
 
 import (
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
-
-// devicesLoadedMsg is sent by the fetchDevices command after the device list
-// has been fetched from the Spotify API. It is unexported because it is only
-// ever produced by the command returned from DeviceOverlay.Init().
-type devicesLoadedMsg struct {
-	devices []DeviceInfo
-	err     error
-}
 
 // DeviceOverlay is the floating device-switcher overlay model.
 // It renders a navigable list of Spotify Connect devices and dispatches
@@ -62,18 +53,13 @@ func (d *DeviceOverlay) Init() tea.Cmd {
 // Update handles messages for the DeviceOverlay.
 func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
-	case devicesLoadedMsg:
-		// Write error state to store from Msg payload — only Update() may mutate store.
-		if m.err != nil {
-			d.store.SetDevicesError(m.err)
-			// Emit an error message so the root app can show a toast notification.
-			// DeviceOverlay cannot call alerts directly — it signals via exported messages.
-			errMsg := m.err
-			return d, func() tea.Msg { return DevicesLoadErrorMsg{Err: errMsg} }
+	case DevicesLoadedMsg:
+		// Store mutations (SetDevicesError, ClearDevicesError, SetDevicesFetchedAt) are
+		// handled by root app.Update() per Elm purity rule — panes must not mutate store.
+		// This handler only updates the local devices list for rendering.
+		if m.Err == nil {
+			d.devices = m.Devices
 		}
-		d.store.ClearDevicesError()
-		d.store.SetDevicesFetchedAt(time.Now())
-		d.devices = m.devices
 		return d, nil
 
 	case tea.KeyMsg:
@@ -248,12 +234,5 @@ func deviceTypeIcon(deviceType string) string {
 }
 
 // FetchDevicesRequestMsg is emitted by DeviceOverlay.Init() to signal the root
-// app model to fetch the device list and then deliver a devicesLoadedMsg back.
+// app model to fetch the device list and then deliver a DevicesLoadedMsg back.
 type FetchDevicesRequestMsg struct{}
-
-// NewDevicesLoadedMsg creates a devicesLoadedMsg to be dispatched by the root app
-// after fetching the device list. This constructor allows the root app to create
-// the unexported message type without importing internal pane details.
-func NewDevicesLoadedMsg(devices []DeviceInfo, err error) tea.Msg {
-	return devicesLoadedMsg{devices: devices, err: err}
-}
