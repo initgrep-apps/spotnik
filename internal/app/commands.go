@@ -12,6 +12,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,17 +22,39 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
 
-// buildPlaybackAPICmd dispatches the Spotify API call for the given playback action.
-func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
-	player := a.player
-	store := a.store
+// errNilClient is returned when a command is built but the required API client is nil.
+// This typically means authentication has not completed yet.
+// Update() handlers that receive this error skip silently (no toast) — it is an
+// expected startup condition, not a user-facing failure.
+var errNilClient = fmt.Errorf("API client not initialized")
 
+// buildPlaybackAPICmd dispatches the Spotify API call for the given playback action.
+// Store values are snapshotted here in Update() context (which is safe) before the
+// closure is returned. The closure must never read from the Store — only use snapshots.
+// Reading Store inside the closure would be a data race because closures execute
+// asynchronously while Update() may be writing.
+func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
+	if a.player == nil {
+		return func() tea.Msg { return panes.PlaybackCmdSentMsg{Err: errNilClient} }
+	}
+	player := a.player
 	volStep := a.volumeStep
 
-	return func() tea.Msg {
-		if player == nil {
-			return panes.PlaybackCmdSentMsg{}
+	// Snapshot store values in Update() context (thread-safe).
+	// The closure uses these captured values instead of calling store.PlaybackState() later.
+	ps := a.store.PlaybackState()
+	currentVolume := 65 // default when no device info is available
+	isShuffled := false
+	repeatMode := "off"
+	if ps != nil {
+		if ps.Device != nil {
+			currentVolume = ps.Device.VolumePercent
 		}
+		isShuffled = ps.ShuffleState
+		repeatMode = ps.RepeatState
+	}
+
+	return func() tea.Msg {
 		// Playback controls are user-triggered — bypass token bucket.
 		ctx := api.WithPriority(context.Background(), api.Interactive)
 		var err error
@@ -46,41 +69,21 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		case panes.ActionPrevious:
 			err = player.Previous(ctx)
 		case panes.ActionVolumeUp:
-			ps := store.PlaybackState()
-			vol := 65
-			if ps != nil && ps.Device != nil {
-				vol = ps.Device.VolumePercent
-			}
-			newVol := vol + volStep
+			newVol := currentVolume + volStep
 			if newVol > 100 {
 				newVol = 100
 			}
 			err = player.SetVolume(ctx, newVol)
 		case panes.ActionVolumeDown:
-			ps := store.PlaybackState()
-			vol := 65
-			if ps != nil && ps.Device != nil {
-				vol = ps.Device.VolumePercent
-			}
-			newVol := vol - volStep
+			newVol := currentVolume - volStep
 			if newVol < 0 {
 				newVol = 0
 			}
 			err = player.SetVolume(ctx, newVol)
 		case panes.ActionToggleShuffle:
-			ps := store.PlaybackState()
-			shuffle := false
-			if ps != nil {
-				shuffle = !ps.ShuffleState
-			}
-			err = player.SetShuffle(ctx, shuffle)
+			err = player.SetShuffle(ctx, !isShuffled)
 		case panes.ActionCycleRepeat:
-			ps := store.PlaybackState()
-			mode := "off"
-			if ps != nil {
-				mode = nextRepeatMode(ps.RepeatState)
-			}
-			err = player.SetRepeat(ctx, mode)
+			err = player.SetRepeat(ctx, nextRepeatMode(repeatMode))
 		}
 
 		if err != nil {
@@ -112,7 +115,7 @@ func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackCmdSentMsg{}
+			return panes.PlaybackCmdSentMsg{Err: errNilClient}
 		}
 		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{ContextURI: contextURI})
 		if err != nil {
@@ -132,7 +135,7 @@ func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackCmdSentMsg{}
+			return panes.PlaybackCmdSentMsg{Err: errNilClient}
 		}
 		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{URIs: []string{trackURI}})
 		if err != nil {
@@ -154,7 +157,7 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LibraryLoadedMsg{Offset: offset}
+			return panes.LibraryLoadedMsg{Offset: offset, Err: errNilClient}
 		}
 		playlists, err := library.Playlists(context.Background(), 50, offset)
 		if err != nil {
@@ -176,7 +179,7 @@ func (a *App) buildFetchAlbumsCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.AlbumsLoadedMsg{Offset: offset}
+			return panes.AlbumsLoadedMsg{Offset: offset, Err: errNilClient}
 		}
 		albums, err := library.SavedAlbums(context.Background(), 50, offset)
 		if err != nil {
@@ -198,7 +201,7 @@ func (a *App) buildFetchLikedTracksCmd(offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LikedTracksLoadedMsg{Offset: offset}
+			return panes.LikedTracksLoadedMsg{Offset: offset, Err: errNilClient}
 		}
 		tracks, err := library.LikedTracks(context.Background(), 50, offset)
 		if err != nil {
@@ -220,7 +223,7 @@ func (a *App) buildFetchRecentlyPlayedCmd() tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.RecentlyPlayedLoadedMsg{}
+			return panes.RecentlyPlayedLoadedMsg{Err: errNilClient}
 		}
 		items, err := library.RecentlyPlayed(context.Background(), 20)
 		if err != nil {
@@ -242,7 +245,7 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.AddToQueueResultMsg{TrackName: trackName}
+			return panes.AddToQueueResultMsg{Err: errNilClient, TrackName: trackName}
 		}
 		// Add to queue is user-triggered — bypass token bucket.
 		err := player.AddToQueue(api.WithPriority(context.Background(), api.Interactive), trackURI)
@@ -266,7 +269,7 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
-			return panes.SearchResultsMsg{}
+			return panes.SearchResultsMsg{Err: errNilClient}
 		}
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
 		results, err := search.Search(
@@ -345,8 +348,7 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 	devices := a.devices
 	return func() tea.Msg {
 		if devices == nil {
-			// Deliver empty list when no client is injected (tests / uninitialized).
-			return panes.DevicesLoadedMsg{}
+			return panes.DevicesLoadedMsg{Err: errNilClient}
 		}
 		devList, err := devices.Devices(context.Background())
 		if err != nil {
@@ -379,7 +381,7 @@ func (a *App) buildTransferPlaybackCmd(deviceID string) tea.Cmd {
 	devices := a.devices
 	return func() tea.Msg {
 		if devices == nil {
-			return panes.DeviceTransferredMsg{DeviceID: deviceID}
+			return panes.DeviceTransferredMsg{Err: errNilClient, DeviceID: deviceID}
 		}
 		// Transfer playback is user-triggered — bypass token bucket.
 		err := devices.TransferPlayback(api.WithPriority(context.Background(), api.Interactive), deviceID, true)
@@ -392,7 +394,7 @@ func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.LikeToggleResultMsg{TrackID: trackID}
+			return panes.LikeToggleResultMsg{Err: errNilClient, TrackID: trackID}
 		}
 		// Like/unlike is user-triggered — bypass token bucket.
 		ctx := api.WithPriority(context.Background(), api.Interactive)
@@ -413,11 +415,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 	userAPI := a.userAPI
 	return func() tea.Msg {
 		if userAPI == nil {
-			return panes.StatsLoadedMsg{
-				TimeRange:  timeRange,
-				TopTracks:  []domain.Track{},
-				TopArtists: []domain.FullArtist{},
-			}
+			return panes.StatsLoadedMsg{Err: errNilClient}
 		}
 		ctx := context.Background()
 
@@ -473,7 +471,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
-			return panes.QueueLoadedMsg{}
+			return panes.QueueLoadedMsg{Err: errNilClient}
 		}
 		qr, err := player.Queue(context.Background())
 		if err != nil {
@@ -498,7 +496,7 @@ func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 func fetchPlaybackStateCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackStateFetchedMsg{}
+			return panes.PlaybackStateFetchedMsg{Err: errNilClient}
 		}
 		ps, err := player.PlaybackState(context.Background())
 		if err != nil {
@@ -563,7 +561,7 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
 		if library == nil {
-			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID}
+			return panes.PlaylistTracksLoadedMsg{Err: errNilClient, PlaylistID: playlistID}
 		}
 		tracks, err := library.PlaylistTracks(context.Background(), playlistID, 100, 0)
 		if err != nil {
@@ -585,8 +583,7 @@ func (a *App) buildCreatePlaylistCmd(name, description string) tea.Cmd {
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			// No API client in tests — return a success with empty playlist.
-			return panes.PlaylistCreatedMsg{Name: name}
+			return panes.PlaylistCreatedMsg{Err: errNilClient, Name: name}
 		}
 		playlist, err := playlistsAPI.CreatePlaylist(api.WithPriority(context.Background(), api.Interactive), name, description, false)
 		if err != nil {
@@ -602,7 +599,7 @@ func (a *App) buildRenamePlaylistCmd(playlistID, newName string) tea.Cmd {
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName}
+			return panes.PlaylistRenamedMsg{Err: errNilClient, PlaylistID: playlistID, NewName: newName}
 		}
 		err := playlistsAPI.UpdatePlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, newName, "")
 		return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName, Err: err}
@@ -615,7 +612,7 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI}
+			return panes.PlaylistRemoveResultMsg{Err: errNilClient, PlaylistID: playlistID, TrackURI: trackURI}
 		}
 		err := playlistsAPI.RemoveTracksFromPlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, []string{trackURI})
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
@@ -628,7 +625,7 @@ func (a *App) buildReorderPlaylistTracksCmd(playlistID string, rangeStart, inser
 	playlistsAPI := a.playlistsAPI
 	return func() tea.Msg {
 		if playlistsAPI == nil {
-			return panes.PlaylistReorderResultMsg{}
+			return panes.PlaylistReorderResultMsg{Err: errNilClient}
 		}
 		err := playlistsAPI.ReorderPlaylistTracks(api.WithPriority(context.Background(), api.Interactive), playlistID, rangeStart, insertBefore, rangeLength)
 		return panes.PlaylistReorderResultMsg{Err: err}

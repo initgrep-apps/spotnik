@@ -445,7 +445,7 @@ func (s *Store) DevicesFetchedAt() time.Time {
 }
 
 // SetDevicesFetchedAt stamps the time when devices were last successfully loaded.
-// Called by DeviceOverlay.Update() after a successful devicesLoadedMsg.
+// Called by root app.Update() after a successful DevicesLoadedMsg.
 func (s *Store) SetDevicesFetchedAt(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

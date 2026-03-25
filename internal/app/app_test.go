@@ -581,6 +581,8 @@ func TestApp_QuitKey(t *testing.T) {
 }
 
 // TestApp_AddToQueueMsg_DispatchesAPICmd verifies AddToQueueMsg produces a queue command.
+// With no player injected, the command returns errNilClient in the message Err field
+// so the Update() handler can silently skip it (no toast during pre-auth startup).
 func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -592,7 +594,7 @@ func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	msg := cmd()
 	resultMsg, ok := msg.(panes.AddToQueueResultMsg)
 	assert.True(t, ok, "nil player should return AddToQueueResultMsg, got %T", msg)
-	assert.Nil(t, resultMsg.Err, "nil player should return no error")
+	assert.Error(t, resultMsg.Err, "nil player must set Err on AddToQueueResultMsg (errNilClient)")
 }
 
 // TestApp_AddToQueueResultMsg_Success verifies success emits a toast cmd.

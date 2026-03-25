@@ -5,6 +5,8 @@
 package app
 
 import (
+	"errors"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
@@ -199,6 +201,9 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case panes.PlaylistTracksLoadedMsg:
 		// Write playlist tracks to store from Msg payload (Elm Architecture: only Update writes store).
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil, true
+			}
 			a.store.SetPlaylistsError(m.Err)
 			if a.playlistPane != nil {
 				updated, _ := a.playlistPane.Update(m)
@@ -225,6 +230,9 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case panes.PlaylistCreatedMsg:
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil, true
+			}
 			return a, a.alerts.NewAlertCmd("error", m.Err.Error()), true
 		}
 		// Re-fetch playlists so the new one appears.
@@ -235,6 +243,9 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case panes.PlaylistRenamedMsg:
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil, true
+			}
 			if a.playlistPane != nil {
 				updated, _ := a.playlistPane.Update(m)
 				if pm, ok := updated.(*panes.PlaylistManager); ok {
@@ -250,6 +261,9 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return a, a.buildRemovePlaylistTrackCmd(m.PlaylistID, m.TrackURI), true
 
 	case panes.PlaylistRemoveResultMsg:
+		if m.Err != nil && errors.Is(m.Err, errNilClient) {
+			return a, nil, true
+		}
 		if a.playlistPane != nil {
 			updated, cmd := a.playlistPane.Update(m)
 			if pm, ok := updated.(*panes.PlaylistManager); ok {
@@ -266,6 +280,9 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return a, a.buildReorderPlaylistTracksCmd(m.PlaylistID, m.RangeStart, m.InsertBefore, m.RangeLength), true
 
 	case panes.PlaylistReorderResultMsg:
+		if m.Err != nil && errors.Is(m.Err, errNilClient) {
+			return a, nil, true
+		}
 		if a.playlistPane != nil {
 			updated, cmd := a.playlistPane.Update(m)
 			if pm, ok := updated.(*panes.PlaylistManager); ok {

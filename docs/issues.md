@@ -18,10 +18,10 @@
 
 ### Error Handling (pre-existing)
 
-- [ ] **`PlaybackStateFetchedMsg.Err` never checked** — The most frequently fired message (every 1-3s). When Err is non-nil, the handler silently skips. Consider tracking consecutive errors and showing a transient notification after N failures.
+- [x] **`PlaybackStateFetchedMsg.Err` never checked** — Fixed in Feature 36: `consecutivePlaybackErrors` counter added to App struct. Toast emitted on exactly the 5th consecutive error; counter resets on success.
 - [x] **`buildFetchDevicesCmd` error fallthrough** — Verified in Feature 34: already handles errors correctly with early return. No fix needed.
-- [ ] **Nil-client fallbacks return empty messages with no error** — Seven command builders return zero-value messages when their API client is nil. Consider returning an error message instead of silent empty data.
-- [ ] **Store reads in `buildPlaybackAPICmd` goroutine closures** — Lines 48, 59, 70, 77 in commands.go read store inside goroutines. This is a data race — snapshot values in Update() and pass as parameters.
+- [x] **Nil-client fallbacks return empty messages with no error** — Fixed in Feature 36: `errNilClient` sentinel added; all 7 nil-client fallbacks now set `Err: errNilClient`. Update() handlers skip silently (no toast) for this sentinel — it is an expected startup condition.
+- [x] **Store reads in `buildPlaybackAPICmd` goroutine closures** — Fixed in Feature 36: store values snapshotted in `buildPlaybackAPICmd` body (Update() context, thread-safe). Closures now use captured values only.
 
 ### Test Coverage Gaps
 
@@ -72,7 +72,7 @@
 
 ### Consistency
 
-- [ ] **`PlaybackStateFetchedMsg` errors still silent** — Despite "all errors via toast" rule, playback errors are silently skipped. Consider throttled toast after N consecutive failures, or document as intentional exception.
+- [x] **`PlaybackStateFetchedMsg` errors still silent** — Fixed in Feature 36: throttled toast after 5 consecutive failures via `consecutivePlaybackErrors` counter.
 
 ---
 
@@ -124,9 +124,9 @@
 
 ### Documentation
 
-- [ ] **SetDevicesFetchedAt comment stale** — `store.go:448` still says "Called by DeviceOverlay.Update()" but caller is now root app.Update(). Update comment.
-- [ ] **ARCHITECTURE.md stale devicesLoadedMsg reference** — `docs/ARCHITECTURE.md:279` references unexported `devicesLoadedMsg` which is now `DevicesLoadedMsg`.
+- [x] **SetDevicesFetchedAt comment stale** — Fixed in Feature 36: comment updated to "Called by root app.Update() after a successful DevicesLoadedMsg."
+- [x] **ARCHITECTURE.md stale devicesLoadedMsg reference** — Fixed in Feature 36: updated to `DevicesLoadedMsg` with exported type signature.
 
 ### Dead Code
 
-- [ ] **DevicesLoadErrorMsg now dead** — Superseded by `DevicesLoadedMsg.Err`. Handler at `app.go:941-943` and test at `toast_routing_test.go:113-121` are unreachable in normal flow. Remove type, handler, and test.
+- [x] **DevicesLoadErrorMsg now dead** — Fixed in Feature 36: type removed from messages.go, handler removed from app.go, test removed from toast_routing_test.go.
