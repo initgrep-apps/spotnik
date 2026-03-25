@@ -477,7 +477,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp
 			}
-			return a, a.alerts.NewAlertCmd("error", "Search failed")
+			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
 		}
 		a.store.ClearSearchError()
 		updated, cmd := a.searchPane.Update(m)
@@ -804,6 +804,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.buildTransferPlaybackCmd(m.DeviceID),
 			a.alerts.NewAlertCmd("info", fmt.Sprintf("Switching to %s...", m.DeviceName)),
 		)
+
+	case panes.DevicesLoadErrorMsg:
+		// Device fetch failed — show error toast so the user knows why the overlay is empty.
+		return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load devices: %s", m.Err.Error()))
 
 	case panes.DeviceTransferredMsg:
 		if m.Err != nil {

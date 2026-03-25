@@ -65,10 +65,13 @@ func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write error state to store from Msg payload — only Update() may mutate store.
 		if m.err != nil {
 			d.store.SetDevicesError(m.err)
-		} else {
-			d.store.ClearDevicesError()
-			d.devices = m.devices
+			// Emit an error message so the root app can show a toast notification.
+			// DeviceOverlay cannot call alerts directly — it signals via exported messages.
+			errMsg := m.err
+			return d, func() tea.Msg { return DevicesLoadErrorMsg{Err: errMsg} }
 		}
+		d.store.ClearDevicesError()
+		d.devices = m.devices
 		return d, nil
 
 	case tea.KeyMsg:

@@ -215,6 +215,45 @@ func TestDeviceOverlay_devicesLoadedMsg(t *testing.T) {
 	assert.Len(t, updated.devices, 3, "devices should be populated after devicesLoadedMsg")
 }
 
+func TestDeviceOverlay_devicesLoadedMsg_ErrorEmitsDevicesLoadErrorMsg(t *testing.T) {
+	// When devicesLoadedMsg carries an error, Update() must return a command
+	// that emits DevicesLoadErrorMsg so the root app can show a toast.
+	overlay := newTestDeviceOverlay()
+	loadErr := fmt.Errorf("network error")
+
+	_, cmd := overlay.Update(devicesLoadedMsg{err: loadErr})
+
+	require.NotNil(t, cmd, "devicesLoadedMsg with error must return a command")
+	msg := cmd()
+	errMsg, ok := msg.(DevicesLoadErrorMsg)
+	require.True(t, ok, "command must return DevicesLoadErrorMsg, got %T", msg)
+	assert.Equal(t, loadErr, errMsg.Err, "DevicesLoadErrorMsg must carry the original error")
+}
+
+func TestDeviceOverlay_devicesLoadedMsg_ErrorSetsStoreError(t *testing.T) {
+	// When devicesLoadedMsg carries an error, the store must record it for retry logic.
+	s := state.New()
+	overlay := NewDeviceOverlay(s, theme.Load("black"))
+	loadErr := fmt.Errorf("timeout")
+
+	overlay.Update(devicesLoadedMsg{err: loadErr})
+
+	assert.Equal(t, loadErr, s.DevicesError(), "store must record the device load error")
+}
+
+func TestDeviceOverlay_devicesLoadedMsg_NoErrorClearsStoreError(t *testing.T) {
+	// When devicesLoadedMsg has no error, any prior store error must be cleared.
+	s := state.New()
+	s.SetDevicesError(fmt.Errorf("prior error"))
+	overlay := NewDeviceOverlay(s, theme.Load("black"))
+	devices := testDevices()
+
+	_, cmd := overlay.Update(devicesLoadedMsg{devices: devices})
+
+	assert.NoError(t, s.DevicesError(), "store error must be cleared on successful load")
+	assert.Nil(t, cmd, "successful load must not return an error command")
+}
+
 func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
 	s := state.New()
 	s.SetDevicesError(fmt.Errorf("API error"))
