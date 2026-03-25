@@ -2042,3 +2042,66 @@ func TestApp_WindowSizeMsg_ResetsTickCountWhenIdle(t *testing.T) {
 
 	assert.Equal(t, 0, updated.TickCount(), "WindowSizeMsg while idle should reset tickCount to 0")
 }
+
+// TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast verifies that
+// when the user returns from idle while a 429 backoff is active, a ratelimit toast
+// is emitted to explain the stale data.
+func TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// Activate a backoff by sending RateLimitedMsg.
+	m, _ := a.Update(panes.RateLimitedMsg{RetryAfterSecs: 15})
+	a = m.(*app.App)
+	require.Greater(t, a.BackoffTicks(), 0, "backoff should be active")
+
+	// Now return from idle via a key press — should emit ratelimit toast.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	require.NotNil(t, cmd, "returning from idle during backoff should produce a cmd")
+
+	// Two-pass: execute the cmd batch to find the alert message.
+	alertMsg := cmd()
+	_, alertCmd := a.Update(alertMsg)
+	// alertCmd may be nil if alertMsg was the toast; forward until the toast renders.
+	if alertCmd != nil {
+		nextMsg := alertCmd()
+		if nextMsg != nil {
+			a.Update(nextMsg)
+		}
+	}
+	view := a.View()
+	assert.Contains(t, view, "Rate limited", "toast should mention rate limiting")
+	assert.Contains(t, view, "resuming in", "toast should show countdown")
+}
+
+// TestApp_KeyMsg_ReturnFromIdleWithoutBackoff_NoToast verifies that returning from
+// idle without an active backoff does NOT emit a ratelimit toast.
+func TestApp_KeyMsg_ReturnFromIdleWithoutBackoff_NoToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Ensure no backoff is active.
+	require.Equal(t, 0, a.BackoffTicks(), "no backoff should be active")
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// Return from idle via key press — should NOT emit a ratelimit toast.
+	m, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	a = m.(*app.App)
+
+	// If cmd is non-nil, feed it through and check view has no ratelimit mention.
+	if cmd != nil {
+		msg := cmd()
+		if msg != nil {
+			a.Update(msg)
+		}
+	}
+	view := a.View()
+	assert.NotContains(t, view, "resuming in", "no backoff means no ratelimit toast")
+}

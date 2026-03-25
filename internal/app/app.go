@@ -684,6 +684,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if wasIdle {
 			// User returned from idle — force immediate poll on the next tick.
 			a.tickCount = 0
+			if a.backoffTicks > 0 {
+				// Active 429 backoff prevents any fetches after idle return.
+				// Emit a ratelimit toast so the user knows data is stale and why.
+				toastCmd := a.alerts.NewAlertCmd("ratelimit",
+					fmt.Sprintf("Rate limited — resuming in %ds", a.backoffTicks))
+				updated, keyCmd := a.handleKeyMsg(m)
+				return updated, tea.Batch(toastCmd, keyCmd)
+			}
 		}
 		return a.handleKeyMsg(m)
 
