@@ -1,5 +1,3 @@
-// Package domain — search result types used by the Spotify search API.
-// These types live in domain/ so that state/ can reference them without importing api/.
 package domain
 
 import "encoding/json"
