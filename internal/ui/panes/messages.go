@@ -198,6 +198,13 @@ type DeviceTransferredMsg struct {
 	Err      error
 }
 
+// DevicesLoadErrorMsg is emitted by DeviceOverlay.Update() when a devicesLoadedMsg
+// carries a non-nil error. The root app model intercepts it and emits a toast
+// notification. Panes cannot call alerts directly — they request via messages.
+type DevicesLoadErrorMsg struct {
+	Err error
+}
+
 // FetchPlaylistTracksRequestMsg is emitted by PlaylistManager when it needs to
 // load tracks for a specific playlist from the API.
 type FetchPlaylistTracksRequestMsg struct {

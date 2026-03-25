@@ -387,12 +387,8 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 		return fmt.Sprintf("%s Searching...\n", o.spinner.View())
 	}
 
-	// Show search error state if API call failed.
-	if err := o.store.SearchError(); err != nil && query != "" {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.Error()).
-			Render(fmt.Sprintf("Search failed: %s", err.Error()))
-	}
+	// NOTE: Search errors are now routed through toast notifications (app.go).
+	// store.SearchError() is preserved for retry logic but no longer read in View().
 
 	if query == "" {
 		return lipgloss.NewStyle().

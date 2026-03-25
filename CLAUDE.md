@@ -87,6 +87,7 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 - **`ui/` never imports `api/`** — data flows through messages and store only
 - **`api/` never imports `ui/`** — one-way dependency enforced
 - **Commands must not mutate the Store** — return data in Msg payloads; only `Update()` writes to Store. Msg types carry `Data` + `Err error` fields. See `docs/ARCHITECTURE.md` "Data-Carrying Messages" section for before/after examples.
+- **All API errors route through toast notifications** — use `a.alerts.NewAlertCmd(type, msg)` from `app.go` Update handlers. Pane `View()` methods must never render inline error boxes or read store error fields for display.
 
 ---
 
@@ -94,9 +95,9 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 
 - Playback state: poll every **1000ms** via `tea.Tick` — never `time.Sleep`
 - Search: **300ms debounce** after last keypress — never fire on every keystroke
-- On `429`: back off for `Retry-After` seconds, show status bar message
+- On `429`: back off for `Retry-After` seconds, emit `"ratelimit"` toast via `a.alerts.NewAlertCmd`
 - On `401`: refresh token immediately, retry once
-- On `403`: show "Spotify Premium required"
+- On `403`: emit `"warning"` toast "Spotify Premium required"
 - Always wrap errors with context: `fmt.Errorf("getting track: %w", err)`
 - **All requests go through the API Gateway** — `BaseClient.doJSON`/`doNoContent` route through `*Gateway` when attached; never bypass with `http.Client.Do` directly in API methods
 - Use `api.WithPriority(ctx, api.Interactive)` for user-triggered commands; `Background` is the default for polling and prefetch
@@ -190,6 +191,7 @@ Follow this sequence exactly for every feature — no shortcuts.
 11. Add a theme without implementing every method of the `Theme` interface
 12. Work directly on `main` — always use a feature branch
 13. Merge a PR — that is the owner's action only
+14. Render inline error boxes in pane `View()` methods — all API errors go through toast notifications via `a.alerts.NewAlertCmd`
 
 ---
 

@@ -652,7 +652,8 @@ func TestPlaylistManager_FormatDuration(t *testing.T) {
 }
 
 // TestPlaylistManager_View_ErrorState verifies that when the store has a PlaylistsError,
-// the view shows "Failed to load playlists" with a retry hint (B16 fix).
+// the view does NOT show inline error text — errors are routed via toast notifications.
+// The store error field is preserved for retry logic but never read in View().
 func TestPlaylistManager_View_ErrorState(t *testing.T) {
 	t.Helper()
 	th := theme.Load("black")
@@ -662,8 +663,8 @@ func TestPlaylistManager_View_ErrorState(t *testing.T) {
 	pm.SetSize(120, 30)
 
 	view := pm.View()
-	assert.Contains(t, view, "Failed to load playlists", "error state must show failure message")
-	assert.Contains(t, view, "retry", "error state must show retry hint")
+	// Errors route through toast notifications, not inline pane rendering.
+	assert.NotContains(t, view, "Failed to load playlists", "error state must not show inline error — toasts handle this")
 }
 
 // TestPlaylistManager_View_ErrorCleared verifies that once PlaylistsError is cleared,
@@ -676,9 +677,9 @@ func TestPlaylistManager_View_ErrorCleared(t *testing.T) {
 	pm := panes.NewPlaylistManager(s, th)
 	pm.SetSize(120, 30)
 
-	// Error present — error view renders.
+	// Error present — but View() must not show inline error text (toast handles it).
 	view := pm.View()
-	assert.Contains(t, view, "Failed to load playlists")
+	assert.NotContains(t, view, "Failed to load playlists", "inline error rendering removed — toasts handle this")
 
 	// Clear error and populate data.
 	s.ClearPlaylistsError()

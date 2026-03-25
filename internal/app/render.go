@@ -11,7 +11,16 @@ import (
 )
 
 // View renders the full terminal UI.
+// IMPORTANT: The final step calls a.alerts.Render(view) to overlay any active
+// toast notification on top of the complete rendered view. Never call alerts.View()
+// — BubbleUp's View() returns empty string by design.
 func (a *App) View() string {
+	return a.alerts.Render(a.buildView())
+}
+
+// buildView renders the full terminal UI content without the alert overlay.
+// Called by View() which applies alerts.Render() as the final step.
+func (a *App) buildView() string {
 	// DESIGN.md: minimum terminal size check.
 	if a.width > 0 && a.height > 0 && (a.width < 100 || a.height < 24) {
 		return a.renderTooSmall()
@@ -191,17 +200,12 @@ func (a *App) renderHeader(label string) string {
 	return appName + "  " + deviceStr
 }
 
-// renderStatusBar renders the bottom status bar. If a.statusMsg is set it takes
-// priority over hints. hints is a pre-built slice of rendered key-hint strings;
+// renderStatusBar renders the bottom status bar with keybinding hints.
+// Toast notifications are shown as overlays via alerts.Render() — they no longer
+// appear in the status bar. The status bar is now always hints-only.
+// hints is a pre-built slice of rendered key-hint strings;
 // use mainHints(), statsHints(), or playlistsHints() to obtain the right set.
 func (a *App) renderStatusBar(hints []string) string {
-	if a.statusMsg != "" {
-		return lipgloss.NewStyle().
-			Background(a.theme.StatusBarBg()).
-			Foreground(a.theme.Error()).
-			Render("  " + a.statusMsg)
-	}
-
 	style := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.StatusBarFg())

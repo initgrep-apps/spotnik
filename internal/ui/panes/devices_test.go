@@ -215,6 +215,45 @@ func TestDeviceOverlay_devicesLoadedMsg(t *testing.T) {
 	assert.Len(t, updated.devices, 3, "devices should be populated after devicesLoadedMsg")
 }
 
+func TestDeviceOverlay_devicesLoadedMsg_ErrorEmitsDevicesLoadErrorMsg(t *testing.T) {
+	// When devicesLoadedMsg carries an error, Update() must return a command
+	// that emits DevicesLoadErrorMsg so the root app can show a toast.
+	overlay := newTestDeviceOverlay()
+	loadErr := fmt.Errorf("network error")
+
+	_, cmd := overlay.Update(devicesLoadedMsg{err: loadErr})
+
+	require.NotNil(t, cmd, "devicesLoadedMsg with error must return a command")
+	msg := cmd()
+	errMsg, ok := msg.(DevicesLoadErrorMsg)
+	require.True(t, ok, "command must return DevicesLoadErrorMsg, got %T", msg)
+	assert.Equal(t, loadErr, errMsg.Err, "DevicesLoadErrorMsg must carry the original error")
+}
+
+func TestDeviceOverlay_devicesLoadedMsg_ErrorSetsStoreError(t *testing.T) {
+	// When devicesLoadedMsg carries an error, the store must record it for retry logic.
+	s := state.New()
+	overlay := NewDeviceOverlay(s, theme.Load("black"))
+	loadErr := fmt.Errorf("timeout")
+
+	overlay.Update(devicesLoadedMsg{err: loadErr})
+
+	assert.Equal(t, loadErr, s.DevicesError(), "store must record the device load error")
+}
+
+func TestDeviceOverlay_devicesLoadedMsg_NoErrorClearsStoreError(t *testing.T) {
+	// When devicesLoadedMsg has no error, any prior store error must be cleared.
+	s := state.New()
+	s.SetDevicesError(fmt.Errorf("prior error"))
+	overlay := NewDeviceOverlay(s, theme.Load("black"))
+	devices := testDevices()
+
+	_, cmd := overlay.Update(devicesLoadedMsg{devices: devices})
+
+	assert.NoError(t, s.DevicesError(), "store error must be cleared on successful load")
+	assert.Nil(t, cmd, "successful load must not return an error command")
+}
+
 func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
 	s := state.New()
 	s.SetDevicesError(fmt.Errorf("API error"))
@@ -223,9 +262,11 @@ func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
 	overlay.SetSize(60, 20)
 
 	output := overlay.View()
-	assert.Contains(t, output, "Failed to load devices", "should show error message")
-	assert.Contains(t, output, "Press d to retry", "should show retry hint")
-	assert.NotContains(t, output, "No devices found", "should not show empty state when error")
+	// Errors route through toast notifications, not inline pane rendering.
+	// Store error is preserved for retry logic but never read in View().
+	assert.NotContains(t, output, "Failed to load devices", "inline error rendering removed — toasts handle this")
+	// With no devices loaded, the empty state renders normally.
+	assert.Contains(t, output, "No devices found", "empty state shows when no devices loaded")
 }
 
 func TestDeviceOverlay_View_ShowsEmptyWhenNoError(t *testing.T) {

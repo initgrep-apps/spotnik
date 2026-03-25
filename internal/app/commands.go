@@ -357,6 +357,8 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
+			// Non-retryable, non-auth error: deliver error to overlay and stop.
+			return panes.NewDevicesLoadedMsg(nil, err)
 		}
 		// Convert api.Device to panes.DeviceInfo to respect ui/ -> api/ boundary.
 		var infos []panes.DeviceInfo
@@ -368,7 +370,7 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 				IsActive: d.IsActive,
 			})
 		}
-		return panes.NewDevicesLoadedMsg(infos, err)
+		return panes.NewDevicesLoadedMsg(infos, nil)
 	}
 }
 

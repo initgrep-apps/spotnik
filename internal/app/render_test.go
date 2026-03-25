@@ -58,19 +58,19 @@ func TestRenderHeader_DifferentLabelsProduceDifferentOutput(t *testing.T) {
 	assert.NotEqual(t, stats, playlists, "different labels must produce different headers")
 }
 
-func TestRenderStatusBar_StatusMsgOverridesHints(t *testing.T) {
+func TestRenderStatusBar_AlwaysShowsHints(t *testing.T) {
+	// After removing statusMsg, renderStatusBar always shows hints.
+	// Toast notifications appear via alerts.Render() overlay, not in the status bar.
 	a := newRenderTestApp()
-	a.statusMsg = "Rate limited!"
-	hints := []string{"Tab help", "q quit"}
+	hints := []string{"/ search", "q quit"}
 	result := a.renderStatusBar(hints)
 
-	assert.Contains(t, result, "Rate limited!", "status message should take priority over hints")
-	assert.NotContains(t, result, "Tab help", "hints should not appear when status message is set")
+	assert.Contains(t, result, "/ search")
+	assert.Contains(t, result, "q quit")
 }
 
 func TestRenderStatusBar_ShowsHints(t *testing.T) {
 	a := newRenderTestApp()
-	// statusMsg is empty — hints should appear.
 	hints := []string{"/ search", "q quit"}
 	result := a.renderStatusBar(hints)
 

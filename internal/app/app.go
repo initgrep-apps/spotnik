@@ -13,8 +13,10 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"go.dalton.dog/bubbleup"
 )
 
 // focusedPane identifies which pane currently has keyboard focus.
@@ -50,8 +52,11 @@ const (
 // store, the API clients, and all pane models. It is the ONLY layer that
 // calls the Spotify API — panes emit request messages and app.go dispatches them.
 type App struct {
-	theme   theme.Theme
-	store   *state.Store
+	theme  theme.Theme
+	store  *state.Store
+	alerts bubbleup.AlertModel // BubbleUp toast notification model
+	// NOTE: alerts.Render(content) must be called in View() — never alerts.View().
+	// BubbleUp's View() returns empty string by design; Render() overlays alerts.
 	gateway *api.Gateway // centralized HTTP gateway shared across all API clients
 	player  api.PlayerAPI
 	library api.LibraryAPI
@@ -91,9 +96,6 @@ type App struct {
 	// so it can be restored when the overlay closes.
 	prevFocus focusedPane
 
-	// statusMsg is a transient error/info message shown in the status bar for 3–4 seconds.
-	statusMsg string
-
 	// tickCount increments every 1s tick. Used to throttle API polling:
 	// playback fetched every playbackFetchInterval ticks, queue every queueFetchInterval ticks.
 	tickCount int
@@ -124,9 +126,6 @@ type App struct {
 	// authStatus is the status message shown in the auth panel.
 	authStatus string
 }
-
-// statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
-type statusDismissMsg struct{}
 
 // throttleExpiredMsg is sent when the 429 backoff period has elapsed.
 // It clears the throttle observability state in the store.
@@ -177,6 +176,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	return &App{
 		theme:        t,
 		store:        s,
+		alerts:       *components.NewNotifications(t),
 		gateway:      gw,
 		playerPane:   playerPane,
 		libraryPane:  libraryPane,
@@ -291,6 +291,10 @@ func (a *App) Init() tea.Cmd {
 		return splashDismissMsg{}
 	})
 
+	// NOTE: a.alerts.Init() returns nil by design — BubbleUp starts its
+	// internal tick only when an alert is triggered, not at startup.
+	_ = a.alerts.Init()
+
 	if a.needsAuth {
 		// Unauthenticated: only show splash, defer everything else.
 		return splashTimer
@@ -382,7 +386,25 @@ func (a *App) closePlaylists() (*App, tea.Cmd) {
 }
 
 // Update handles all messages routed through the root model.
+// It delegates to handleMsg for application logic, then forwards the message to
+// the BubbleUp alerts model so alert lifecycle timers (auto-dismiss) keep running.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, mainCmd := a.handleMsg(msg)
+
+	// Forward message to BubbleUp alerts for lifecycle management.
+	// This ensures the auto-dismiss timer keeps ticking while any alert is active,
+	// regardless of which other message is being processed.
+	updatedAlerts, alertCmd := a.alerts.Update(msg)
+	if am, ok := updatedAlerts.(bubbleup.AlertModel); ok {
+		a.alerts = am
+	}
+
+	return model, tea.Batch(mainCmd, alertCmd)
+}
+
+// handleMsg contains the core application message routing logic.
+// It is called by Update() which also forwards messages to the alerts model.
+func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
@@ -450,9 +472,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSearchLoading(false)
 		if m.Err != nil {
 			a.store.SetSearchError(m.Err)
-		} else {
-			a.store.ClearSearchError()
+			// Route search error through toast; search overlay shows loading→empty (not error).
+			updated, _ := a.searchPane.Update(m)
+			if sp, ok := updated.(*panes.SearchOverlay); ok {
+				a.searchPane = sp
+			}
+			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
 		}
+		a.store.ClearSearchError()
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp
@@ -488,12 +515,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Stats data fetched — write to store, then forward to stats pane.
 		if m.Err != nil {
 			a.store.SetStatsError(m.Err)
-		} else {
-			a.store.ClearStatsError()
-			if m.TimeRange != "" {
-				a.store.SetTopTracks(m.TimeRange, m.TopTracks)
-				a.store.SetTopArtists(m.TimeRange, m.TopArtists)
+			if a.statsPane != nil {
+				updated, _ := a.statsPane.Update(m)
+				if sv, ok := updated.(*panes.StatsView); ok {
+					a.statsPane = sv
+				}
 			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load stats. Press f to retry")
+		}
+		a.store.ClearStatsError()
+		if m.TimeRange != "" {
+			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
+			a.store.SetTopArtists(m.TimeRange, m.TopArtists)
 		}
 		if a.statsPane != nil {
 			updated, cmd := a.statsPane.Update(m)
@@ -548,7 +581,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	case panes.RateLimitedMsg:
-		// 429 from Spotify — activate backoff and show status message.
+		// 429 from Spotify — activate backoff and emit a ratelimit toast.
 		backoff := m.RetryAfterSecs
 		if backoff < defaultBackoffTicks {
 			backoff = defaultBackoffTicks
@@ -556,9 +589,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.backoffTicks = backoff
 		// Update store throttle observability so UI components can read gateway state.
 		a.store.SetThrottle(true, m.RetryAfterSecs, time.Now())
-		a.statusMsg = fmt.Sprintf("Rate limited — pausing requests for %ds", backoff)
 		return a, tea.Batch(
-			tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+			a.alerts.NewAlertCmd("ratelimit", fmt.Sprintf("Rate limited, retrying in %ds", backoff)),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
 		)
 
@@ -570,8 +602,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tokenRefreshedMsg:
 		if m.err != nil {
 			// Refresh failed — user must re-authenticate manually.
-			a.statusMsg = "Session expired. Run: spotnik auth"
-			return a, tea.Tick(5*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+			return a, a.alerts.NewAlertCmd("error", "Session expired. Run: spotnik auth")
 		}
 		// Refresh succeeded — re-initialize all API clients with the new token.
 		a.initAPIClients(m.newToken)
@@ -581,10 +612,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write queue data to store from Msg payload (Elm Architecture: only Update writes store).
 		if m.Err != nil {
 			a.store.SetQueueError(m.Err)
-		} else {
-			a.store.ClearQueueError()
-			a.store.SetQueue(m.Tracks)
+			return a, a.alerts.NewAlertCmd("error", "Queue update failed")
 		}
+		a.store.ClearQueueError()
+		a.store.SetQueue(m.Tracks)
 		// QueuePane reads directly from store on View().
 		return a, nil
 
@@ -609,13 +640,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Err != nil {
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
-				a.statusMsg = "Playback control not available on this device"
-			} else {
-				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+				return a, tea.Batch(
+					fetchPlaybackStateCmd(a.player),
+					a.alerts.NewAlertCmd("warning", "Playback control not available on this device"),
+				)
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player),
-				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+				a.alerts.NewAlertCmd("error", m.Err.Error()),
 			)
 		}
 		return a, fetchPlaybackStateCmd(a.player)
@@ -644,18 +676,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Err != nil {
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
-				a.statusMsg = fmt.Sprintf("✗ %s", forbiddenErr.Message)
-			} else {
-				a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
+				return a, a.alerts.NewAlertCmd("error", forbiddenErr.Message)
 			}
-			return a, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
 		}
 		if m.TrackName != "" {
-			a.statusMsg = fmt.Sprintf("✓ Added to queue: %s", m.TrackName)
-		} else {
-			a.statusMsg = "✓ Added to queue"
+			return a, a.alerts.NewAlertCmd("success", fmt.Sprintf("Added to queue: %s", m.TrackName))
 		}
-		return a, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		return a, a.alerts.NewAlertCmd("success", "Added to queue")
 
 	case panes.FetchPlaylistsRequestMsg:
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
@@ -664,15 +692,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write playlist data to store from Msg payload (Elm Architecture: only Update writes store).
 		if m.Err != nil {
 			a.store.SetPlaylistsFetchError(m.Err)
-		} else {
-			a.store.ClearPlaylistsFetchError()
-			if m.Offset == 0 {
-				a.store.SetPlaylists(m.Items)
-			} else {
-				a.store.SetPlaylists(append(a.store.Playlists(), m.Items...))
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
 			}
-			a.store.SetPlaylistsTotal(len(a.store.Playlists()))
+			return a, a.alerts.NewAlertCmd("error", "Failed to load playlists. Press Tab to retry")
 		}
+		a.store.ClearPlaylistsFetchError()
+		if m.Offset == 0 {
+			a.store.SetPlaylists(m.Items)
+		} else {
+			a.store.SetPlaylists(append(a.store.Playlists(), m.Items...))
+		}
+		a.store.SetPlaylistsTotal(len(a.store.Playlists()))
 		// Forward to library pane so it can refresh from store.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -687,10 +719,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write album data to store from Msg payload.
 		if m.Err != nil {
 			a.store.SetAlbumsFetchError(m.Err)
-		} else {
-			a.store.ClearAlbumsFetchError()
-			a.store.SetSavedAlbums(m.Items)
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load albums. Press Tab to retry")
 		}
+		a.store.ClearAlbumsFetchError()
+		a.store.SetSavedAlbums(m.Items)
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -705,11 +741,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write liked tracks to store from Msg payload.
 		if m.Err != nil {
 			a.store.SetLikedTracksFetchError(m.Err)
-		} else {
-			a.store.ClearLikedTracksFetchError()
-			a.store.SetLikedTracks(m.Items)
-			a.store.SetLikedTotal(len(m.Items) + m.Offset)
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load liked tracks. Press Tab to retry")
 		}
+		a.store.ClearLikedTracksFetchError()
+		a.store.SetLikedTracks(m.Items)
+		a.store.SetLikedTotal(len(m.Items) + m.Offset)
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -724,10 +764,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write recently played to store from Msg payload.
 		if m.Err != nil {
 			a.store.SetRecentPlayedFetchError(m.Err)
-		} else {
-			a.store.ClearRecentPlayedFetchError()
-			a.store.SetRecentlyPlayed(m.Items)
+			updated, _ := a.libraryPane.Update(m)
+			if lp, ok := updated.(*panes.LibraryPane); ok {
+				a.libraryPane = lp
+			}
+			return a, a.alerts.NewAlertCmd("error", "Failed to load recently played. Press Tab to retry")
 		}
+		a.store.ClearRecentPlayedFetchError()
+		a.store.SetRecentlyPlayed(m.Items)
 		// Forward to library pane.
 		updated, cmd := a.libraryPane.Update(m)
 		if lp, ok := updated.(*panes.LibraryPane); ok {
@@ -741,8 +785,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.LikeToggleResultMsg:
 		// Like/unlike result — no action needed unless there's an error.
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
-			return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
 		}
 		return a, nil
 
@@ -755,28 +798,26 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildFetchDevicesCmd()
 
 	case panes.TransferPlaybackMsg:
-		// User selected a device; show status and dispatch transfer API call.
-		a.statusMsg = fmt.Sprintf("Switching to %s...", m.DeviceName)
+		// User selected a device; show info toast and dispatch transfer API call.
 		a.deviceOverlayOpen = false
 		return a, tea.Batch(
 			a.buildTransferPlaybackCmd(m.DeviceID),
-			tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+			a.alerts.NewAlertCmd("info", fmt.Sprintf("Switching to %s...", m.DeviceName)),
 		)
+
+	case panes.DevicesLoadErrorMsg:
+		// Device fetch failed — show error toast so the user knows why the overlay is empty.
+		return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load devices: %s", m.Err.Error()))
 
 	case panes.DeviceTransferredMsg:
 		if m.Err != nil {
-			a.statusMsg = fmt.Sprintf("✗ %s", m.Err.Error())
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player),
-				tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+				a.alerts.NewAlertCmd("error", m.Err.Error()),
 			)
 		}
 		// Transfer succeeded — next poll will update the header.
 		return a, fetchPlaybackStateCmd(a.player)
-
-	case statusDismissMsg:
-		a.statusMsg = ""
-		return a, nil
 
 	case throttleExpiredMsg:
 		// Clear throttle state in the store once the backoff period expires.

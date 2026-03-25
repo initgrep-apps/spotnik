@@ -384,7 +384,8 @@ func TestStatsView_View_NoHelpBar(t *testing.T) {
 }
 
 // TestStatsView_View_ErrorState verifies that when the store has a StatsError,
-// the pane shows "Failed to load stats" and a retry hint (B12 fix).
+// the pane does NOT show inline error text — errors route via toast notifications.
+// The store error field is preserved for retry logic but never read in View().
 func TestStatsView_View_ErrorState(t *testing.T) {
 	t.Helper()
 	sv, s := newStatsView()
@@ -394,8 +395,8 @@ func TestStatsView_View_ErrorState(t *testing.T) {
 	sv.SetSize(120, 30)
 	view := sv.View()
 
-	assert.Contains(t, view, "Failed to load stats", "error state must show failure message")
-	assert.Contains(t, view, "f to retry", "error state must show retry hint")
+	// Errors route through toast notifications, not inline pane rendering.
+	assert.NotContains(t, view, "Failed to load stats", "error state must not show inline error — toasts handle this")
 }
 
 // TestStatsView_View_ErrorCleared verifies that once the error is cleared,
@@ -406,9 +407,9 @@ func TestStatsView_View_ErrorCleared(t *testing.T) {
 	s.SetStatsError(fmt.Errorf("transient error"))
 	sv.SetSize(120, 30)
 
-	// Error is present — error view renders.
+	// Error is present — but View() must not show inline error text (toast handles it).
 	view := sv.View()
-	assert.Contains(t, view, "Failed to load stats")
+	assert.NotContains(t, view, "Failed to load stats", "inline error rendering removed — toasts handle this")
 
 	// Clear the error and fill data.
 	s.ClearStatsError()

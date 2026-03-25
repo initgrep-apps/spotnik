@@ -219,8 +219,8 @@ func TestApp_RateLimitedMsg_ActivatesBackoff(t *testing.T) {
 // --- Task 3: 403 handling for AddToQueueResultMsg ---
 
 // TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage verifies that
-// a 403 ForbiddenError from AddToQueue shows the ForbiddenError.Message directly,
-// not the full "forbidden: ..." formatted string from ForbiddenError.Error().
+// a 403 ForbiddenError from AddToQueue emits an error toast with ForbiddenError.Message
+// (not the raw ForbiddenError.Error() string with "forbidden:" prefix).
 func TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -231,18 +231,23 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage(t *testing.T
 
 	model, cmd := a.Update(resultMsg)
 	require.NotNil(t, model)
-	assert.NotNil(t, cmd, "error result should schedule dismiss timer")
+	// An error alert toast cmd is returned — non-nil indicates the toast was dispatched.
+	assert.NotNil(t, cmd, "error result should emit an alert toast cmd")
 
-	appModel := model.(*app.App)
+	// Execute the alertCmd to get the internal alertMsg and feed to Update.
+	// This activates the BubbleUp alert, which then appears in View() via Render().
+	alertMsg := cmd()
+	updated, _ := a.Update(alertMsg)
+	appModel := updated.(*app.App)
 	output := appModel.View()
-	// Should show "Spotify Premium required" from ForbiddenError.Message,
+	// Alert should show "Spotify Premium required" from ForbiddenError.Message,
 	// NOT the raw "forbidden: Spotify Premium required" from ForbiddenError.Error().
-	assert.Contains(t, output, "Spotify Premium required", "status bar should show ForbiddenError.Message on 403")
-	assert.NotContains(t, output, "forbidden:", "status bar should NOT use the raw ForbiddenError.Error() prefix")
+	assert.Contains(t, output, "Spotify Premium required", "toast should show ForbiddenError.Message on 403")
+	assert.NotContains(t, output, "forbidden:", "toast should NOT use the raw ForbiddenError.Error() prefix")
 }
 
 // TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer verifies the end-to-end
-// flow: a 403 from the actual HTTP call reaches the handler and shows a Premium message.
+// flow: a 403 from the actual HTTP call reaches the handler and emits a Premium toast.
 func TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer(t *testing.T) {
 	srv := forbiddenServer()
 	defer srv.Close()
@@ -261,11 +266,17 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer(t *testing.T) {
 	require.True(t, ok, "expected AddToQueueResultMsg, got %T", resultMsg)
 	require.Error(t, addToQueueResult.Err)
 
-	// Feed the result back to Update — should show Premium message.
-	model, _ := a.Update(resultMsg)
-	appModel := model.(*app.App)
+	// Feed the result back to Update — should emit an error toast alert cmd.
+	model, alertCmd := a.Update(resultMsg)
+	require.NotNil(t, model)
+	require.NotNil(t, alertCmd, "403 AddToQueue should emit a toast alert cmd")
+
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	appModel := updated.(*app.App)
 	output := appModel.View()
-	assert.Contains(t, output, "Premium", "403 AddToQueue should show Premium message in status bar")
+	assert.Contains(t, output, "Premium", "403 AddToQueue should show Premium message in toast overlay")
 }
 
 // --- Task 1: 401 token refresh ---
@@ -308,12 +319,17 @@ func TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired(t *testing.T) {
 	// Step 4: Execute the refresh command — fails because no refresh token.
 	refreshResult := refreshCmd()
 
-	// Step 5: Feed tokenRefreshedMsg(err) to Update — shows session expired.
-	model, _ = a.Update(refreshResult)
+	// Step 5: Feed tokenRefreshedMsg(err) to Update — emits an error toast alert cmd.
+	model, alertCmd := a.Update(refreshResult)
 	a = model.(*app.App)
+	require.NotNil(t, alertCmd, "session expired should emit an error toast alert cmd")
 
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	a = updated.(*app.App)
 	output := a.View()
-	assert.Contains(t, output, "Session expired", "401 with no refresh token should show session expired message")
+	assert.Contains(t, output, "Session expired", "401 with no refresh token should show session expired toast")
 }
 
 // TestBuildSearchCmd_401_ShowsSessionExpired verifies the same pattern for search.
@@ -339,11 +355,16 @@ func TestBuildSearchCmd_401_ShowsSessionExpired(t *testing.T) {
 
 	refreshResult := refreshCmd()
 
-	model, _ = a.Update(refreshResult)
+	model, alertCmd := a.Update(refreshResult)
 	a = model.(*app.App)
+	require.NotNil(t, alertCmd, "session expired should emit an error toast alert cmd")
 
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	a = updated.(*app.App)
 	output := a.View()
-	assert.Contains(t, output, "Session expired", "401 search with no refresh token should show session expired message")
+	assert.Contains(t, output, "Session expired", "401 search with no refresh token should show session expired toast")
 }
 
 // TestApp_401_WithValidRefreshToken_ReInitializesClients verifies that when a 401

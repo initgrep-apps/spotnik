@@ -411,7 +411,9 @@ func TestSearchOverlay_View_ShowsErrorOnSearchFailure(t *testing.T) {
 	o.SetSize(80, 30)
 
 	output := o.View()
-	assert.Contains(t, output, "Search failed", "should show error message when search fails")
+	// Errors route through toast notifications, not inline pane rendering.
+	// Store error is preserved for retry logic but never read in View().
+	assert.NotContains(t, output, "Search failed", "inline error rendering removed — toasts handle this")
 }
 
 func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -66,10 +65,13 @@ func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Write error state to store from Msg payload — only Update() may mutate store.
 		if m.err != nil {
 			d.store.SetDevicesError(m.err)
-		} else {
-			d.store.ClearDevicesError()
-			d.devices = m.devices
+			// Emit an error message so the root app can show a toast notification.
+			// DeviceOverlay cannot call alerts directly — it signals via exported messages.
+			errMsg := m.err
+			return d, func() tea.Msg { return DevicesLoadErrorMsg{Err: errMsg} }
 		}
+		d.store.ClearDevicesError()
+		d.devices = m.devices
 		return d, nil
 
 	case tea.KeyMsg:
@@ -163,11 +165,9 @@ func (d *DeviceOverlay) View() string {
 		sb.WriteString("\n")
 	}
 
-	if err := d.store.DevicesError(); err != nil {
-		errView := components.RenderError(d.theme, minWidth-4, 4,
-			"Failed to load devices", "Press d to retry")
-		sb.WriteString(errView)
-	} else if len(d.devices) == 0 {
+	// NOTE: Device errors are routed through toast notifications (app.go).
+	// store.DevicesError() is preserved for retry logic but no longer read in View().
+	if len(d.devices) == 0 {
 		emptyStyle := lipgloss.NewStyle().
 			Foreground(d.theme.TextMuted()).
 			Background(d.theme.SurfaceAlt())
