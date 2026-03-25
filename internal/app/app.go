@@ -150,6 +150,12 @@ type App struct {
 	// continues to increment (so exactly the 5th triggers the toast, not subsequent ones).
 	// The counter resets to 0 on any successful fetch.
 	consecutivePlaybackErrors int
+
+	// nilPlaybackStateTicks counts successive PlaybackStateFetchedMsg deliveries where
+	// State is nil and Err is nil. After 30 consecutive nil states a warning toast fires
+	// once to surface a possible stuck/disconnected state. The counter resets to 0 when
+	// a non-nil State is received.
+	nilPlaybackStateTicks int
 }
 
 // throttleExpiredMsg is sent when the 429 backoff period has elapsed.
@@ -811,6 +817,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.consecutivePlaybackErrors = 0
 		if m.State != nil {
 			a.store.SetPlaybackState(m.State)
+			// A non-nil state means the connection is healthy — reset the nil-state counter.
+			a.nilPlaybackStateTicks = 0
+		} else {
+			// Nil State + nil Err means 204 (nothing playing) or no API client.
+			// Track how long we've been in this state to surface stuck connections.
+			a.nilPlaybackStateTicks++
+			// Warn once at exactly the 30th tick (~30-90s depending on polling interval).
+			// Avoids flooding toasts on startup; only fires once since the counter is not reset here.
+			if a.nilPlaybackStateTicks == 30 {
+				return a, a.alerts.NewAlertCmd("warning", "No playback state received — check Spotify connection")
+			}
 		}
 		// Data fetched during splash is stored but splash stays visible
 		// for the full 5s duration — the splashDismissMsg timer handles transition.

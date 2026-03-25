@@ -11,6 +11,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -2104,4 +2105,78 @@ func TestApp_KeyMsg_ReturnFromIdleWithoutBackoff_NoToast(t *testing.T) {
 	}
 	view := a.View()
 	assert.NotContains(t, view, "resuming in", "no backoff means no ratelimit toast")
+}
+
+// TestApp_NilPlaybackState_NoWarnBefore30Ticks verifies that repeated nil PlaybackState
+// results in no toast before the 30-tick threshold is reached.
+func TestApp_NilPlaybackState_NoWarnBefore30Ticks(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Ensure PlaybackState is nil (no player injected, so fetchPlaybackStateCmd returns nil state).
+	require.Nil(t, a.Store().PlaybackState(), "playback state should start nil")
+
+	// Feed 29 nil-state PlaybackStateFetchedMsg messages — no toast should fire.
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+
+	// View should not contain warning text.
+	assert.NotContains(t, a.View(), "No playback state", "warning should not fire before 30 ticks")
+}
+
+// TestApp_NilPlaybackState_WarnAtTick30 verifies that a warning toast is emitted
+// exactly when the 30th consecutive nil PlaybackState is received.
+func TestApp_NilPlaybackState_WarnAtTick30(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	require.Nil(t, a.Store().PlaybackState(), "playback state should start nil")
+
+	// Feed 29 nil-state messages first.
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+
+	// The 30th nil-state message should emit the warning toast.
+	_, cmd := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+	require.NotNil(t, cmd, "30th nil state should emit a warning toast cmd")
+
+	// Two-pass: execute cmd to get alert message, feed through Update.
+	alertMsg := cmd()
+	_, alertCmd := a.Update(alertMsg)
+	if alertCmd != nil {
+		nextMsg := alertCmd()
+		if nextMsg != nil {
+			a.Update(nextMsg)
+		}
+	}
+	assert.Contains(t, a.View(), "No playback state", "warning toast should be visible at tick 30")
+}
+
+// TestApp_NilPlaybackState_CounterResets verifies that the nil-state counter resets
+// when a non-nil PlaybackState is received, preventing repeat warnings.
+func TestApp_NilPlaybackState_CounterResets(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Build up 29 nil ticks.
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+
+	// Receive a valid state — counter should reset.
+	validState := &domain.PlaybackState{IsPlaying: true, Item: &domain.Track{ID: "t1"}}
+	m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: validState})
+	a = m.(*app.App)
+
+	// Now send 29 more nil states — should NOT fire a warning (counter was reset).
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+	assert.NotContains(t, a.View(), "No playback state", "counter reset should prevent re-warn before 30 ticks")
 }
