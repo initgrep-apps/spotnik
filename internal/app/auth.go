@@ -99,28 +99,40 @@ func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, re
 }
 
 // initAPIClients constructs all Spotify API clients with a shared logging HTTP
-// transport and injects them into the app. Called after a successful auth flow.
+// transport and the centralized API gateway, then injects them into the app.
+// Called after a successful auth flow or token refresh.
 func (a *App) initAPIClients(token string) {
 	loggingClient := &http.Client{
 		Transport: api.NewLoggingTransport(http.DefaultTransport, a.store),
 	}
 	player := api.NewPlayer("", token)
 	player.SetHTTPClient(loggingClient)
+	player.SetGateway(a.gateway)
 	a.player = player
+
 	library := api.NewLibraryClient("", token)
 	library.SetHTTPClient(loggingClient)
+	library.SetGateway(a.gateway)
 	a.library = library
+
 	search := api.NewSearchClient("", token)
 	search.SetHTTPClient(loggingClient)
+	search.SetGateway(a.gateway)
 	a.search = search
+
 	devices := api.NewDevicesClient("", token)
 	devices.SetHTTPClient(loggingClient)
+	devices.SetGateway(a.gateway)
 	a.devices = devices
+
 	userAPI := api.NewUserClient("", token)
 	userAPI.SetHTTPClient(loggingClient)
+	userAPI.SetGateway(a.gateway)
 	a.userAPI = userAPI
+
 	playlistsAPI := api.NewPlaylistsClient("", token)
 	playlistsAPI.SetHTTPClient(loggingClient)
+	playlistsAPI.SetGateway(a.gateway)
 	a.playlistsAPI = playlistsAPI
 }
 

@@ -52,6 +52,7 @@ const (
 type App struct {
 	theme   theme.Theme
 	store   *state.Store
+	gateway *api.Gateway // centralized HTTP gateway shared across all API clients
 	player  api.PlayerAPI
 	library api.LibraryAPI
 	search  api.SearchAPI
@@ -127,6 +128,10 @@ type App struct {
 // statusDismissMsg is sent after 4 seconds to clear a transient status bar message.
 type statusDismissMsg struct{}
 
+// throttleExpiredMsg is sent when the 429 backoff period has elapsed.
+// It clears the throttle observability state in the store.
+type throttleExpiredMsg struct{}
+
 // splashDismissMsg is sent after 2 seconds to close the splash screen.
 type splashDismissMsg struct{}
 
@@ -156,6 +161,7 @@ type AppOptions struct {
 func New(cfg *config.Config, opts AppOptions) *App {
 	t := theme.Load(cfg.UI.Theme)
 	s := state.New()
+	gw := api.NewGateway()
 
 	playerPane := panes.NewPlayerPane(s, t, true)
 	libraryPane := panes.NewLibraryPane(s, t, false)
@@ -171,6 +177,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	return &App{
 		theme:        t,
 		store:        s,
+		gateway:      gw,
 		playerPane:   playerPane,
 		libraryPane:  libraryPane,
 		queuePane:    queuePane,
@@ -547,8 +554,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			backoff = defaultBackoffTicks
 		}
 		a.backoffTicks = backoff
+		// Update store throttle observability so UI components can read gateway state.
+		a.store.SetThrottle(true, m.RetryAfterSecs, time.Now())
 		a.statusMsg = fmt.Sprintf("Rate limited — pausing requests for %ds", backoff)
-		return a, tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} })
+		return a, tea.Batch(
+			tea.Tick(4*time.Second, func(_ time.Time) tea.Msg { return statusDismissMsg{} }),
+			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
+		)
 
 	case unauthorizedMsg:
 		// 401 from any Spotify API call — attempt a token refresh.
@@ -764,6 +776,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statusDismissMsg:
 		a.statusMsg = ""
+		return a, nil
+
+	case throttleExpiredMsg:
+		// Clear throttle state in the store once the backoff period expires.
+		a.store.SetThrottle(false, 0, time.Time{})
 		return a, nil
 	}
 

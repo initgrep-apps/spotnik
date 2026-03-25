@@ -32,7 +32,8 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{}
 		}
-		ctx := context.Background()
+		// Playback controls are user-triggered — bypass token bucket.
+		ctx := api.WithPriority(context.Background(), api.Interactive)
 		var err error
 
 		switch action {
@@ -113,7 +114,7 @@ func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{}
 		}
-		err := player.Play(context.Background(), domain.PlayOptions{ContextURI: contextURI})
+		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{ContextURI: contextURI})
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -133,7 +134,7 @@ func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{}
 		}
-		err := player.Play(context.Background(), domain.PlayOptions{URIs: []string{trackURI}})
+		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{URIs: []string{trackURI}})
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -243,7 +244,8 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 		if player == nil {
 			return panes.AddToQueueResultMsg{TrackName: trackName}
 		}
-		err := player.AddToQueue(context.Background(), trackURI)
+		// Add to queue is user-triggered — bypass token bucket.
+		err := player.AddToQueue(api.WithPriority(context.Background(), api.Interactive), trackURI)
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -266,8 +268,9 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 		if search == nil {
 			return panes.SearchResultsMsg{}
 		}
+		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
 		results, err := search.Search(
-			context.Background(),
+			api.WithPriority(context.Background(), api.Interactive),
 			query,
 			[]string{"track", "artist", "album", "playlist"},
 			5,
@@ -377,7 +380,8 @@ func (a *App) buildTransferPlaybackCmd(deviceID string) tea.Cmd {
 		if devices == nil {
 			return panes.DeviceTransferredMsg{DeviceID: deviceID}
 		}
-		err := devices.TransferPlayback(context.Background(), deviceID, true)
+		// Transfer playback is user-triggered — bypass token bucket.
+		err := devices.TransferPlayback(api.WithPriority(context.Background(), api.Interactive), deviceID, true)
 		return panes.DeviceTransferredMsg{DeviceID: deviceID, Err: err}
 	}
 }
@@ -389,7 +393,8 @@ func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
 		if library == nil {
 			return panes.LikeToggleResultMsg{TrackID: trackID}
 		}
-		ctx := context.Background()
+		// Like/unlike is user-triggered — bypass token bucket.
+		ctx := api.WithPriority(context.Background(), api.Interactive)
 		var err error
 		if unlike {
 			err = library.UnlikeTrack(ctx, trackID)
@@ -582,7 +587,7 @@ func (a *App) buildCreatePlaylistCmd(name, description string) tea.Cmd {
 			// No API client in tests — return a success with empty playlist.
 			return panes.PlaylistCreatedMsg{Name: name}
 		}
-		playlist, err := playlistsAPI.CreatePlaylist(context.Background(), name, description, false)
+		playlist, err := playlistsAPI.CreatePlaylist(api.WithPriority(context.Background(), api.Interactive), name, description, false)
 		if err != nil {
 			return panes.PlaylistCreatedMsg{Name: name, Err: err}
 		}
@@ -598,7 +603,7 @@ func (a *App) buildRenamePlaylistCmd(playlistID, newName string) tea.Cmd {
 		if playlistsAPI == nil {
 			return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName}
 		}
-		err := playlistsAPI.UpdatePlaylist(context.Background(), playlistID, newName, "")
+		err := playlistsAPI.UpdatePlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, newName, "")
 		return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName, Err: err}
 	}
 }
@@ -611,7 +616,7 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 		if playlistsAPI == nil {
 			return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI}
 		}
-		err := playlistsAPI.RemoveTracksFromPlaylist(context.Background(), playlistID, []string{trackURI})
+		err := playlistsAPI.RemoveTracksFromPlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, []string{trackURI})
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
 	}
 }
@@ -624,7 +629,7 @@ func (a *App) buildReorderPlaylistTracksCmd(playlistID string, rangeStart, inser
 		if playlistsAPI == nil {
 			return panes.PlaylistReorderResultMsg{}
 		}
-		err := playlistsAPI.ReorderPlaylistTracks(context.Background(), playlistID, rangeStart, insertBefore, rangeLength)
+		err := playlistsAPI.ReorderPlaylistTracks(api.WithPriority(context.Background(), api.Interactive), playlistID, rangeStart, insertBefore, rangeLength)
 		return panes.PlaylistReorderResultMsg{Err: err}
 	}
 }
