@@ -197,3 +197,77 @@ func TestStalenessTTLConstants(t *testing.T) {
 	assert.Equal(t, 10*time.Minute, state.StatsTTL, "StatsTTL should be 10 minutes")
 	assert.Equal(t, 30*time.Second, state.DevicesTTL, "DevicesTTL should be 30 seconds")
 }
+
+// --- Fetching sentinels: TOCTOU prevention (Task 5) ---
+
+// TestFetchPlaylistsRequest_WhenFetching_SkipsDuplicateDispatch verifies that a second
+// FetchPlaylistsRequestMsg is not dispatched when a fetch is already in-flight.
+func TestFetchPlaylistsRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	// Playlists are stale (never fetched), but fetching sentinel is set.
+	a.Store().SetPlaylistsFetching(true)
+
+	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
+	assert.Nil(t, cmd, "FetchPlaylistsRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchPlaylistsRequest_PaginatedOffset_IgnoresFetchingSentinel verifies that
+// paginated requests (offset > 0) bypass the fetching sentinel.
+func TestFetchPlaylistsRequest_PaginatedOffset_IgnoresFetchingSentinel(t *testing.T) {
+	a := newTestApp()
+	// Even with fetching sentinel set, offset > 0 should always dispatch.
+	a.Store().SetPlaylistsFetching(true)
+
+	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 20})
+	assert.NotNil(t, cmd, "paginated FetchPlaylistsRequestMsg must bypass fetching sentinel")
+}
+
+// TestFetchAlbumsRequest_WhenFetching_SkipsDuplicateDispatch verifies the albums
+// fetching sentinel prevents duplicate dispatches.
+func TestFetchAlbumsRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetAlbumsFetching(true)
+
+	_, cmd := a.Update(panes.FetchAlbumsRequestMsg{Offset: 0})
+	assert.Nil(t, cmd, "FetchAlbumsRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchLikedTracksRequest_WhenFetching_SkipsDuplicateDispatch verifies the liked
+// tracks fetching sentinel prevents duplicate dispatches.
+func TestFetchLikedTracksRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetLikedFetching(true)
+
+	_, cmd := a.Update(panes.FetchLikedTracksRequestMsg{Offset: 0})
+	assert.Nil(t, cmd, "FetchLikedTracksRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchRecentlyPlayed_WhenFetching_SkipsDuplicateDispatch verifies the recently-played
+// fetching sentinel prevents duplicate dispatches.
+func TestFetchRecentlyPlayed_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetRecentFetching(true)
+
+	_, cmd := a.Update(panes.FetchRecentlyPlayedRequestMsg{})
+	assert.Nil(t, cmd, "FetchRecentlyPlayedRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchStats_WhenFetching_SkipsDuplicateDispatch verifies the stats fetching
+// sentinel prevents duplicate dispatches.
+func TestFetchStats_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetStatsFetching("short_term", true)
+
+	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
+	assert.Nil(t, cmd, "FetchStatsMsg should be skipped when already fetching for that range")
+}
+
+// TestFetchDevicesRequest_WhenFetching_SkipsDuplicateDispatch verifies the devices
+// fetching sentinel prevents duplicate dispatches.
+func TestFetchDevicesRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetDevicesFetching(true)
+
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	assert.Nil(t, cmd, "FetchDevicesRequestMsg should be skipped when already fetching")
+}

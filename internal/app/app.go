@@ -596,14 +596,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchStatsMsg:
 		// Stats view requesting data for a time range.
-		// Skip fetch if the store already has fresh stats for this range (within StatsTTL).
-		if !a.store.StatsStale(m.TimeRange) {
+		// Skip if fresh OR if a fetch is already in-flight (prevents TOCTOU duplicates).
+		if !a.store.StatsStale(m.TimeRange) || a.store.StatsFetching(m.TimeRange) {
 			return a, nil
 		}
+		a.store.SetStatsFetching(m.TimeRange, true)
 		return a, a.buildFetchStatsCmd(m.TimeRange)
 
 	case panes.StatsLoadedMsg:
-		// Stats data fetched — write to store, then forward to stats pane.
+		// Stats data fetched — clear fetching sentinel, write to store, forward to pane.
+		if m.TimeRange != "" {
+			a.store.SetStatsFetching(m.TimeRange, false)
+		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -816,15 +820,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.alerts.NewAlertCmd("success", "Added to queue")
 
 	case panes.FetchPlaylistsRequestMsg:
-		// Skip fetch if playlists are fresh and this is an initial (non-paginated) load.
-		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && !a.store.PlaylistsStale() {
+		// For non-paginated (Offset=0) requests: skip if fresh OR already in-flight.
+		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 && (!a.store.PlaylistsStale() || a.store.PlaylistsFetching()) {
 			return a, nil
+		}
+		if m.Offset == 0 {
+			a.store.SetPlaylistsFetching(true)
 		}
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
 
 	case panes.LibraryLoadedMsg:
 		// Write playlist data to store from Msg payload (Elm Architecture: only Update writes store).
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetPlaylistsFetching(false)
 		if m.Err != nil {
 			// errNilClient means the API client is not yet initialized (pre-auth startup).
 			// Skip silently — no toast, no store error — to avoid noisy startup messages.
@@ -853,15 +862,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchAlbumsRequestMsg:
-		// Skip fetch if albums are fresh and this is an initial (non-paginated) load.
-		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && !a.store.AlbumsStale() {
+		// For non-paginated (Offset=0) requests: skip if fresh OR already in-flight.
+		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 && (!a.store.AlbumsStale() || a.store.AlbumsFetching()) {
 			return a, nil
+		}
+		if m.Offset == 0 {
+			a.store.SetAlbumsFetching(true)
 		}
 		return a, a.buildFetchAlbumsCmd(m.Offset)
 
 	case panes.AlbumsLoadedMsg:
 		// Write album data to store from Msg payload.
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetAlbumsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -887,15 +901,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchLikedTracksRequestMsg:
-		// Skip fetch if liked tracks are fresh and this is an initial (non-paginated) load.
-		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && !a.store.LikedTracksStale() {
+		// For non-paginated (Offset=0) requests: skip if fresh OR already in-flight.
+		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 && (!a.store.LikedTracksStale() || a.store.LikedFetching()) {
 			return a, nil
+		}
+		if m.Offset == 0 {
+			a.store.SetLikedFetching(true)
 		}
 		return a, a.buildFetchLikedTracksCmd(m.Offset)
 
 	case panes.LikedTracksLoadedMsg:
 		// Write liked tracks to store from Msg payload.
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetLikedFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -918,14 +937,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchRecentlyPlayedRequestMsg:
-		// Skip fetch if recently played data is fresh (within RecentlyPlayedTTL).
-		if !a.store.RecentlyPlayedStale() {
+		// Skip if fresh OR if a fetch is already in-flight (prevents TOCTOU duplicates).
+		// NOTE: recently-played has no pagination, so no Offset check needed here.
+		if !a.store.RecentlyPlayedStale() || a.store.RecentFetching() {
 			return a, nil
 		}
+		a.store.SetRecentFetching(true)
 		return a, a.buildFetchRecentlyPlayedCmd()
 
 	case panes.RecentlyPlayedLoadedMsg:
 		// Write recently played to store from Msg payload.
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetRecentFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -965,15 +988,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchDevicesRequestMsg:
 		// Device overlay is requesting the device list from the API.
-		// Skip fetch if the device list is still within DevicesTTL (30s).
-		if !a.store.DevicesStale() {
+		// Skip if fresh OR if a fetch is already in-flight (prevents TOCTOU duplicates).
+		if !a.store.DevicesStale() || a.store.DevicesFetching() {
 			return a, nil
 		}
+		a.store.SetDevicesFetching(true)
 		return a, a.buildFetchDevicesCmd()
 
 	case panes.DevicesLoadedMsg:
 		// Device list fetched — write store state here (Elm purity: only root Update writes store).
-		// Then forward to DeviceOverlay so it can update its local devices list for rendering.
+		// Clear fetching sentinel, then forward to DeviceOverlay for rendering.
+		a.store.SetDevicesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil

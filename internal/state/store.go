@@ -61,6 +61,19 @@ type Store struct {
 	statsFetchedAt        map[string]time.Time // keyed by time range
 	devicesFetchedAt      time.Time
 
+	// Fetching sentinels — true while an in-flight fetch is outstanding.
+	// Checked in Update() staleness gates to prevent TOCTOU duplicate fetches:
+	// between the staleness check and fetch completion a second identical request
+	// could also pass the gate. Set to true just before dispatch, cleared in the
+	// corresponding loaded-message handler. Paginated requests (Offset > 0) bypass
+	// these guards since they are explicitly page-by-page continuation fetches.
+	playlistsFetching bool
+	albumsFetching    bool
+	likedFetching     bool
+	recentFetching    bool
+	statsFetching     map[string]bool // keyed by time range
+	devicesFetching   bool
+
 	// Queue data
 	queue []domain.Track
 
@@ -114,6 +127,7 @@ func New() *Store {
 	return &Store{
 		netLog:         NewNetLog(),
 		statsFetchedAt: make(map[string]time.Time),
+		statsFetching:  make(map[string]bool),
 	}
 }
 
@@ -522,6 +536,92 @@ func (s *Store) DevicesStale() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return IsStale(s.devicesFetchedAt, DevicesTTL)
+}
+
+// --- Fetching sentinel accessors ---
+
+// PlaylistsFetching returns true while a playlists fetch is in-flight.
+func (s *Store) PlaylistsFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playlistsFetching
+}
+
+// SetPlaylistsFetching sets or clears the in-flight playlists fetch sentinel.
+func (s *Store) SetPlaylistsFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlistsFetching = f
+}
+
+// AlbumsFetching returns true while a saved-albums fetch is in-flight.
+func (s *Store) AlbumsFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.albumsFetching
+}
+
+// SetAlbumsFetching sets or clears the in-flight albums fetch sentinel.
+func (s *Store) SetAlbumsFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.albumsFetching = f
+}
+
+// LikedFetching returns true while a liked-tracks fetch is in-flight.
+func (s *Store) LikedFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedFetching
+}
+
+// SetLikedFetching sets or clears the in-flight liked-tracks fetch sentinel.
+func (s *Store) SetLikedFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedFetching = f
+}
+
+// RecentFetching returns true while a recently-played fetch is in-flight.
+func (s *Store) RecentFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.recentFetching
+}
+
+// SetRecentFetching sets or clears the in-flight recently-played fetch sentinel.
+func (s *Store) SetRecentFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recentFetching = f
+}
+
+// StatsFetching returns true while a stats fetch for the given time range is in-flight.
+func (s *Store) StatsFetching(timeRange string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.statsFetching[timeRange]
+}
+
+// SetStatsFetching sets or clears the in-flight stats fetch sentinel for a time range.
+func (s *Store) SetStatsFetching(timeRange string, f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statsFetching[timeRange] = f
+}
+
+// DevicesFetching returns true while a devices fetch is in-flight.
+func (s *Store) DevicesFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.devicesFetching
+}
+
+// SetDevicesFetching sets or clears the in-flight devices fetch sentinel.
+func (s *Store) SetDevicesFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devicesFetching = f
 }
 
 // --- Error state accessors ---

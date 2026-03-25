@@ -631,3 +631,85 @@ func TestStore_SetThrottle_ClearsState(t *testing.T) {
 	assert.False(t, s.IsThrottled())
 	assert.Equal(t, 0, s.ThrottleRetryAfterSecs())
 }
+
+// --- Fetching sentinels (Task 5) ---
+
+func TestStore_PlaylistsFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.PlaylistsFetching(), "playlistsFetching should be false initially")
+}
+
+func TestStore_SetPlaylistsFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetPlaylistsFetching(true)
+	assert.True(t, s.PlaylistsFetching(), "PlaylistsFetching should be true after Set(true)")
+	s.SetPlaylistsFetching(false)
+	assert.False(t, s.PlaylistsFetching(), "PlaylistsFetching should be false after Set(false)")
+}
+
+func TestStore_AlbumsFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.AlbumsFetching(), "albumsFetching should be false initially")
+}
+
+func TestStore_SetAlbumsFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetAlbumsFetching(true)
+	assert.True(t, s.AlbumsFetching())
+	s.SetAlbumsFetching(false)
+	assert.False(t, s.AlbumsFetching())
+}
+
+func TestStore_LikedFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.LikedFetching(), "likedFetching should be false initially")
+}
+
+func TestStore_SetLikedFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetLikedFetching(true)
+	assert.True(t, s.LikedFetching())
+	s.SetLikedFetching(false)
+	assert.False(t, s.LikedFetching())
+}
+
+func TestStore_RecentFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.RecentFetching(), "recentFetching should be false initially")
+}
+
+func TestStore_SetRecentFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetRecentFetching(true)
+	assert.True(t, s.RecentFetching())
+	s.SetRecentFetching(false)
+	assert.False(t, s.RecentFetching())
+}
+
+func TestStore_StatsFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.StatsFetching("short_term"), "statsFetching should be false initially")
+	assert.False(t, s.StatsFetching("medium_term"), "statsFetching should be false for all ranges")
+}
+
+func TestStore_SetStatsFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetStatsFetching("short_term", true)
+	assert.True(t, s.StatsFetching("short_term"))
+	assert.False(t, s.StatsFetching("medium_term"), "other ranges should be unaffected")
+	s.SetStatsFetching("short_term", false)
+	assert.False(t, s.StatsFetching("short_term"))
+}
+
+func TestStore_DevicesFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.DevicesFetching(), "devicesFetching should be false initially")
+}
+
+func TestStore_SetDevicesFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetDevicesFetching(true)
+	assert.True(t, s.DevicesFetching())
+	s.SetDevicesFetching(false)
+	assert.False(t, s.DevicesFetching())
+}
