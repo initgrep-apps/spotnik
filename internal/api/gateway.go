@@ -91,11 +91,14 @@ func (tb *tokenBucket) wait(ctx context.Context) error {
 		waitFor := time.Duration((1.0-tb.tokens)/tb.rate*1000) * time.Millisecond
 		tb.mu.Unlock()
 
-		// Wait for the next token or context cancellation.
+		// Use time.NewTimer instead of time.After to prevent timer leaks
+		// when ctx is cancelled before the timer fires.
+		timer := time.NewTimer(waitFor)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
-		case <-time.After(waitFor):
+		case <-timer.C:
 			// Loop back and try again.
 		}
 	}
@@ -265,6 +268,12 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	// Execute the actual HTTP call.
 	resp, err := fn()
 
+	// Guard against the rare (nil, nil) return from a transport implementation.
+	// Without this check, resp.Body would panic with a nil-pointer dereference.
+	if resp == nil && err == nil {
+		err = fmt.Errorf("HTTP transport returned nil response")
+	}
+
 	// Buffer the response body so waiters can read it.
 	if err == nil {
 		body, readErr := io.ReadAll(resp.Body)
@@ -272,25 +281,27 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		if readErr != nil {
 			err = fmt.Errorf("buffering response body: %w", readErr)
 		} else {
+			// Always replace the body with a readable clone so the primary
+			// caller can read it regardless of status code.
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+
 			if entry != nil {
 				entry.body = body
 			}
-			// Check for 429 from the real response.
+
+			// On 429: set the gateway backoff and create a RateLimitError.
+			// We do NOT suppress the error here — checkResponseStatus in
+			// doJSON/doNoContent would also create one, but dedup waiters
+			// bypass checkResponseStatus. By creating the error here, all
+			// callers (primary + dedup waiters) receive a consistent
+			// RateLimitError with the correct RetryAfter value.
 			if resp.StatusCode == http.StatusTooManyRequests {
-				retryAfter := 5
-				if ra := resp.Header.Get("Retry-After"); ra != "" {
-					if v, err2 := strconv.Atoi(ra); err2 == nil {
-						retryAfter = v
-					}
-				}
+				retryAfter := parseRetryAfter(resp)
 				g.mu.Lock()
 				g.retryAfter = retryAfter
 				g.backoffUntil = time.Now().Add(time.Duration(retryAfter) * time.Second)
 				g.mu.Unlock()
 				err = &RateLimitError{RetryAfter: retryAfter}
-			} else {
-				// Replace body with a readable clone for the primary caller.
-				resp.Body = io.NopCloser(bytes.NewReader(body))
 			}
 		}
 	}
@@ -319,10 +330,14 @@ func (g *Gateway) waitForBackoff(ctx context.Context) error {
 			return nil
 		}
 
+		// Use time.NewTimer instead of time.After to prevent timer leaks
+		// when ctx is cancelled before the timer fires.
+		timer := time.NewTimer(remaining)
+		defer timer.Stop()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(remaining):
+		case <-timer.C:
 			return nil
 		}
 	}
@@ -334,4 +349,24 @@ func cloneResponseWithBody(resp *http.Response, body []byte) *http.Response {
 	clone := *resp
 	clone.Body = io.NopCloser(bytes.NewReader(body))
 	return &clone
+}
+
+// defaultRetryAfterSecs is the fallback wait duration when no parseable
+// Retry-After header is present in a 429 response.
+const defaultRetryAfterSecs = 5
+
+// parseRetryAfter extracts the Retry-After value (in seconds) from a 429 response.
+// If the header is missing or not a plain integer (e.g. HTTP-date format per RFC 7231),
+// it returns defaultRetryAfterSecs.
+// NOTE: Spotify always sends integer seconds; HTTP-date values are intentionally
+// not supported — falling back to the default is the correct behaviour.
+func parseRetryAfter(resp *http.Response) int {
+	if ra := resp.Header.Get("Retry-After"); ra != "" {
+		if v, err := strconv.Atoi(ra); err == nil {
+			return v
+		}
+		// Non-integer Retry-After (possibly HTTP-date format per RFC 7231).
+		// Fall through to default — we don't support date-based values.
+	}
+	return defaultRetryAfterSecs
 }
