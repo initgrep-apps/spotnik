@@ -117,3 +117,16 @@
 - [x] **DeviceOverlay.Update() writes to Store directly** — Fixed in Feature 35: moved SetDevicesError, ClearDevicesError, SetDevicesFetchedAt from DeviceOverlay.Update() to root app.Update() via DevicesLoadedMsg handler.
 - [x] **Store error state comment stale** — Fixed in Feature 35: updated comment to "Set by Update() handlers on failure".
 - [x] **Orphaned "After Task 3" TODO** — Fixed in Feature 35: removed the stale comment from store.go.
+
+---
+
+## From PR #40 Review — Type Design Alignment (2026-03-25)
+
+### Documentation
+
+- [ ] **SetDevicesFetchedAt comment stale** — `store.go:448` still says "Called by DeviceOverlay.Update()" but caller is now root app.Update(). Update comment.
+- [ ] **ARCHITECTURE.md stale devicesLoadedMsg reference** — `docs/ARCHITECTURE.md:279` references unexported `devicesLoadedMsg` which is now `DevicesLoadedMsg`.
+
+### Dead Code
+
+- [ ] **DevicesLoadErrorMsg now dead** — Superseded by `DevicesLoadedMsg.Err`. Handler at `app.go:941-943` and test at `toast_routing_test.go:113-121` are unreachable in normal flow. Remove type, handler, and test.
