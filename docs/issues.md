@@ -107,3 +107,13 @@
 ### Observability
 
 - [ ] **Nil PlaybackState unlogged** — `pollIntervals()` silently defaults to "paused" when `store.PlaybackState()` returns nil. If this persists beyond startup, it indicates a bug but produces no log/toast. Consider adding observability after N ticks with nil state.
+
+---
+
+## From PR #39 Review — Docs & Init Cleanup (2026-03-25)
+
+### Documentation (pre-existing, surfaced by review)
+
+- [ ] **DeviceOverlay.Update() writes to Store directly** — `devices.go` lines 68, 74-75 call `store.SetDevicesError()`, `store.ClearDevicesError()`, `store.SetDevicesFetchedAt()` from a pane Update(), contradicting the package doc "only root app.Update() writes". Move these mutations to root app via messages, or soften the doc. Tracked for F35 (devices.go changes).
+- [ ] **Store error state comment stale** — `store.go` line 98-99 says "Set by build*Cmd on failure" but errors are set by Update() handlers, not commands. Update comment.
+- [ ] **Orphaned "After Task 3" TODO** — `store.go` line 68-69 references a task number with no feature context. Update to `TODO(feature-name)` format or remove if task is complete.

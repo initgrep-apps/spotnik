@@ -45,6 +45,12 @@ Features must be built in order. Each depends on the previous being stable and t
 | 31 | Notifications + Error Routing | `31-notifications-error-routing.md` | ✅ Complete | 29 | #36 |
 | 32 | Staleness Tracking | `32-staleness-tracking.md` | ✅ Complete | 29 | #37 |
 | 33 | Idle Polling Backoff | `33-idle-polling-backoff.md` | ✅ Complete | 29 | #38 |
+| 34 | Docs, Dead Code & Init | `34-docs-dead-code-init.md` | Planned | — | — |
+| 35 | Type Design Alignment | `35-type-design-alignment.md` | Planned | 34 | — |
+| 36 | Command Safety & Errors | `36-command-safety-errors.md` | Planned | 35 | — |
+| 37 | Gateway Hardening | `37-gateway-hardening.md` | Planned | — | — |
+| 38 | Notification & Staleness Hardening | `38-notification-staleness-hardening.md` | Planned | 36 | — |
+| 39 | Idle Polish & Test Gaps | `39-idle-polish-test-gaps.md` | Planned | 38 | — |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
@@ -170,6 +176,29 @@ F30: API Gateway ─────────→ (independent, can parallel with 
 
 ---
 
+## Issues Cleanup Execution Order
+
+Fixes from PR reviews of features 29-33 (2026-03-25). See
+`docs/superpowers/plans/2026-03-25-issues-cleanup.md` for the full analysis.
+
+```
+F34: Docs/Init ──→ F35: Type Alignment ──→ F36: Command Safety ──→ F38: Notif/Staleness ──→ F39: Idle/Tests
+
+F37: Gateway Hardening ──→ (independent, can parallel with F34-F36)
+```
+
+1. `34-docs-dead-code-init.md` — Stale docs, dead unmarshalJSON, statsFetchedAt init (independent)
+2. `35-type-design-alignment.md` — SearchResult→domain, StatsLoadedMsg move, AlbumsLoadedMsg Offset, DevicesLoadedMsg export (depends on 34)
+3. `36-command-safety-errors.md` — Data race fix, nil-client errors, playback error toast (depends on 35)
+4. `37-gateway-hardening.md` — Thread safety, timer leaks, nil response, 429 cleanup (independent)
+5. `38-notification-staleness-hardening.md` — Alert safety, fetchedAt guards, stats stamp, TOCTOU, cached data (depends on 36)
+6. `39-idle-polish-test-gaps.md` — WindowSizeMsg idle, backoff toast, nil state, test gaps (depends on 38)
+
+> **Parallelism:** Features 34 and 37 have no dependencies and can start in parallel.
+> After 34, 35→36→38→39 are sequential. However, all features should be implemented sequentially per project rules.
+
+---
+
 ## Versioning
 
 | Version | Includes |
@@ -182,6 +211,7 @@ F30: API Gateway ─────────→ (independent, can parallel with 
 | v1.1.0 | Features 10-18 (bug fixes + error architecture + UX polish) |
 | v2.0.0 | Features 19-27 (architecture improvements from review) |
 | v3.0.0 | Features 29-33 (architecture baseline: Elm purity, gateway, notifications, staleness, idle backoff) |
+| v3.1.0 | Features 34-39 (issues cleanup: docs, types, safety, gateway, staleness, tests) |
 
 ---
 
