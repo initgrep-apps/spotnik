@@ -110,9 +110,12 @@ type Store struct {
 }
 
 // New returns an empty Store with no playback state.
+// statsFetchedAt is pre-allocated so callers never encounter a nil map panic
+// when reading stats staleness before any fetch has completed.
 func New() *Store {
 	return &Store{
-		netLog: NewNetLog(),
+		netLog:         NewNetLog(),
+		statsFetchedAt: make(map[string]time.Time),
 	}
 }
 
@@ -329,9 +332,6 @@ func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 		s.topTracks = make(map[string][]domain.Track)
 	}
 	s.topTracks[timeRange] = tracks
-	if s.statsFetchedAt == nil {
-		s.statsFetchedAt = make(map[string]time.Time)
-	}
 	s.statsFetchedAt[timeRange] = time.Now()
 }
 
@@ -356,9 +356,6 @@ func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 		s.topArtists = make(map[string][]domain.FullArtist)
 	}
 	s.topArtists[timeRange] = artists
-	if s.statsFetchedAt == nil {
-		s.statsFetchedAt = make(map[string]time.Time)
-	}
 	s.statsFetchedAt[timeRange] = time.Now()
 }
 
@@ -438,9 +435,6 @@ func (s *Store) RecentPlayedFetchedAt() time.Time {
 func (s *Store) StatsFetchedAt(timeRange string) time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.statsFetchedAt == nil {
-		return time.Time{}
-	}
 	return s.statsFetchedAt[timeRange]
 }
 
@@ -494,9 +488,6 @@ func (s *Store) RecentlyPlayedStale() bool {
 func (s *Store) StatsStale(timeRange string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.statsFetchedAt == nil {
-		return true
-	}
 	return IsStale(s.statsFetchedAt[timeRange], StatsTTL)
 }
 

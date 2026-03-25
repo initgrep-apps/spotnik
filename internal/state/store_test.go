@@ -548,6 +548,24 @@ func TestStore_DevicesStale_AfterTTL(t *testing.T) {
 	assert.True(t, s.DevicesStale(), "DevicesStale should be true after TTL")
 }
 
+// --- statsFetchedAt initialization ---
+
+// TestStore_New_HasInitializedStatsFetchedAt verifies that New() initializes the
+// statsFetchedAt map so callers do not need to guard against nil before reading.
+func TestStore_New_HasInitializedStatsFetchedAt(t *testing.T) {
+	s := New()
+	// Access the unexported field directly — we are in package state.
+	assert.NotNil(t, s.statsFetchedAt, "New() must initialize statsFetchedAt to a non-nil map")
+}
+
+// TestStore_StatsStale_OnFreshStore_NoPanic verifies that StatsStale does not panic
+// on a brand-new Store before any Set* call has been made.
+func TestStore_StatsStale_OnFreshStore_NoPanic(t *testing.T) {
+	s := New()
+	// Should not panic; fresh store has no fetched-at stamp so result must be true.
+	assert.True(t, s.StatsStale("short_term"), "fresh store should report stats as stale")
+}
+
 // --- Throttle observability ---
 
 func TestStore_Throttle_InitiallyFalse(t *testing.T) {
