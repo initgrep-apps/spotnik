@@ -367,13 +367,15 @@ func (a *App) Init() tea.Cmd {
 		return splashDismissMsg{}
 	})
 
-	// NOTE: a.alerts.Init() returns nil by design — BubbleUp starts its
-	// internal tick only when an alert is triggered, not at startup.
-	_ = a.alerts.Init()
+	// Batch alerts.Init() into the returned commands. BubbleUp currently returns
+	// nil by design — it starts its internal tick only when an alert fires, not at
+	// startup. Batching it here ensures a future BubbleUp upgrade that returns a
+	// setup command is picked up automatically without code changes.
+	alertsInitCmd := a.alerts.Init()
 
 	if a.needsAuth {
 		// Unauthenticated: only show splash, defer everything else.
-		return splashTimer
+		return tea.Batch(splashTimer, alertsInitCmd)
 	}
 
 	// Authenticated: start data fetching alongside splash.
@@ -384,6 +386,7 @@ func (a *App) Init() tea.Cmd {
 			return panes.TickMsg{}
 		}),
 		splashTimer,
+		alertsInitCmd,
 	)
 }
 
@@ -471,6 +474,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This ensures the auto-dismiss timer keeps ticking while any alert is active,
 	// regardless of which other message is being processed.
 	updatedAlerts, alertCmd := a.alerts.Update(msg)
+	// BubbleUp.AlertModel.Update always returns AlertModel (value type). If this
+	// assertion fails, it indicates a BubbleUp library bug — alert state freezes
+	// but the app continues working without crashing.
 	if am, ok := updatedAlerts.(bubbleup.AlertModel); ok {
 		a.alerts = am
 	}
