@@ -427,20 +427,24 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
-		// Handle store writes here in Update, not inside the pane.
+		// Clear search state in store — store writes belong in Update, not in panes.
+		// NOTE: store.SetSearchResults(nil) is kept for symmetry with SetSearchQuery;
+		// store.SearchResults() is not used in production rendering (overlay uses o.results).
 		a.store.SetSearchResults(nil)
 		a.store.SetSearchQuery("")
 		return a, nil
 
 	case panes.SearchResultsMsg:
-		// Search command returned — write results/error to store, then notify the overlay.
+		// Search command returned — write error state to store, then deliver results to overlay.
+		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
+		// *api.SearchResult stored in store.SearchResults(). The overlay stores results in its
+		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
+		// in production rendering and can be ignored here.
 		a.store.SetSearchLoading(false)
 		if m.Err != nil {
 			a.store.SetSearchError(m.Err)
 		} else {
 			a.store.ClearSearchError()
-			// Keep searchResults in store for SearchClearedMsg handler.
-			// Results are also delivered via message payload for the overlay.
 		}
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {

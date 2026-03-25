@@ -337,7 +337,8 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices
 // and delivers them back to the DeviceOverlay via devicesLoadedMsg.
-// No Store writes occur — Update() handles any error state.
+// No Store writes occur in the command — DeviceOverlay.Update() writes error state to the
+// store when it receives devicesLoadedMsg (since devicesLoadedMsg is unexported to app/).
 func (a *App) buildFetchDevicesCmd() tea.Cmd {
 	devices := a.devices
 	return func() tea.Msg {
