@@ -9,17 +9,17 @@
 
 ### Documentation
 
-- [ ] **store.go package doc stale** — Line 2-3 says "Only Commands write to the store" but the new rule (since F29) is "only Update() writes to the store via data-carrying Msg payloads." Update to match.
-- [ ] **Store struct doc stale** — Line 14-15 says "tea.Cmd callbacks write to it" — should say "the root app.Update() writes to it."
+- [x] **store.go package doc stale** — Fixed in Feature 34: updated package doc and Store struct doc to reflect Elm purity rule.
+- [x] **Store struct doc stale** — Fixed in Feature 34: updated to "the root app.Update() writes to it via Msg payloads."
 
 ### Dead Code
 
-- [ ] **Dead `unmarshalJSON` in api/models.go** — The helper function at line ~18 is no longer used since all types with custom unmarshalers moved to `internal/domain/`. Remove it.
+- [x] **Dead `unmarshalJSON` in api/models.go** — Fixed in Feature 34: removed helper; inlined json.Unmarshal in the one remaining caller (SearchPlaylist.UnmarshalJSON in search.go).
 
 ### Error Handling (pre-existing)
 
 - [ ] **`PlaybackStateFetchedMsg.Err` never checked** — The most frequently fired message (every 1-3s). When Err is non-nil, the handler silently skips. Consider tracking consecutive errors and showing a transient notification after N failures.
-- [ ] **`buildFetchDevicesCmd` error fallthrough** — When the error is not 429 or 401, code falls through to data conversion instead of returning early with the error. Add `return panes.NewDevicesLoadedMsg(nil, err)` after the unauthorized check.
+- [x] **`buildFetchDevicesCmd` error fallthrough** — Verified in Feature 34: already handles errors correctly with early return. No fix needed.
 - [ ] **Nil-client fallbacks return empty messages with no error** — Seven command builders return zero-value messages when their API client is nil. Consider returning an error message instead of silent empty data.
 - [ ] **Store reads in `buildPlaybackAPICmd` goroutine closures** — Lines 48, 59, 70, 77 in commands.go read store inside goroutines. This is a data race — snapshot values in Update() and pass as parameters.
 
@@ -89,7 +89,7 @@
 
 ### Initialization
 
-- [ ] **`statsFetchedAt` map not initialized in `New()`** — Lazy initialization in `SetTopTracks`/`SetTopArtists` is correct but fragile. Initialize `statsFetchedAt: make(map[string]time.Time)` in `New()` for safety.
+- [x] **`statsFetchedAt` map not initialized in `New()`** — Fixed in Feature 34: pre-allocated in New(), removed lazy-init nil guards from SetTopTracks, SetTopArtists, StatsFetchedAt, and StatsStale.
 
 ### UX
 
