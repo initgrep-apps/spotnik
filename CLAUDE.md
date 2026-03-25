@@ -98,6 +98,8 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 - On `401`: refresh token immediately, retry once
 - On `403`: show "Spotify Premium required"
 - Always wrap errors with context: `fmt.Errorf("getting track: %w", err)`
+- **All requests go through the API Gateway** — `BaseClient.doJSON`/`doNoContent` route through `*Gateway` when attached; never bypass with `http.Client.Do` directly in API methods
+- Use `api.WithPriority(ctx, api.Interactive)` for user-triggered commands; `Background` is the default for polling and prefetch
 
 ---
 

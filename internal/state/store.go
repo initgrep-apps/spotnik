@@ -54,6 +54,14 @@ type Store struct {
 	// netLog records all API calls for the network log panel.
 	netLog *NetLog
 
+	// throttle holds rate-limit observability state updated by the API Gateway.
+	// The UI status bar reads these to show a "Rate limited" indicator.
+	throttle struct {
+		isThrottled    bool
+		retryAfterSecs int
+		last429At      time.Time
+	}
+
 	// Error state — one per data-fetching feature.
 	// Set by build*Cmd on failure, cleared on successful retry.
 	searchError          error
@@ -559,4 +567,37 @@ func (s *Store) NetLogEntries() []NetLogEntry {
 // NetLog returns the underlying NetLog ring buffer.
 func (s *Store) NetLog() *NetLog {
 	return s.netLog
+}
+
+// --- Throttle observability ---
+
+// SetThrottle records the current rate-limit state from the API Gateway.
+// Called after a 429 response; cleared when the backoff period expires.
+func (s *Store) SetThrottle(isThrottled bool, retryAfterSecs int, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.throttle.isThrottled = isThrottled
+	s.throttle.retryAfterSecs = retryAfterSecs
+	s.throttle.last429At = at
+}
+
+// IsThrottled returns true if the gateway is currently in a 429 backoff period.
+func (s *Store) IsThrottled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.throttle.isThrottled
+}
+
+// ThrottleRetryAfterSecs returns the Retry-After seconds from the last 429 response.
+func (s *Store) ThrottleRetryAfterSecs() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.throttle.retryAfterSecs
+}
+
+// ThrottleLast429At returns the time of the most recent 429 response.
+func (s *Store) ThrottleLast429At() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.throttle.last429At
 }

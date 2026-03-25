@@ -16,6 +16,7 @@ type BaseClient struct {
 	baseURL string
 	token   TokenProvider
 	http    *http.Client
+	gateway *Gateway // optional; when set, all requests route through it
 }
 
 // NewBaseClient creates a BaseClient with sensible defaults.
@@ -50,6 +51,13 @@ func (b *BaseClient) setHTTPClient(c *http.Client) {
 	b.http = c
 }
 
+// SetGateway attaches a Gateway to the BaseClient. When set, all requests
+// are routed through the gateway for rate limiting, concurrency capping, and dedup.
+// The priority is read from the request context via PriorityFromContext.
+func (b *BaseClient) SetGateway(gw *Gateway) {
+	b.gateway = gw
+}
+
 // newRequest builds an authenticated HTTP request with the Authorization header set.
 // It calls b.token.AccessToken(ctx) per-request so that a RefreshableTokenProvider
 // can silently update the token without restarting the client.
@@ -70,8 +78,21 @@ func (b *BaseClient) newRequest(ctx context.Context, method, path string, body i
 
 // doJSON executes req, checks for a known error status, then decodes the JSON body into out.
 // Returns typed errors for 401, 403, and 429 responses.
+// When a Gateway is attached, the request is routed through it for rate limiting and dedup.
 func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
-	resp, err := b.http.Do(req)
+	var resp *http.Response
+	var err error
+
+	if b.gateway != nil {
+		priority := PriorityFromContext(req.Context())
+		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+			return b.http.Do(req)
+		})
+	} else {
+		resp, err = b.http.Do(req)
+	}
+
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
 	}
@@ -93,10 +114,66 @@ func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
 	return nil
 }
 
+// doJSONOptional executes req and routes through the gateway when attached.
+// It returns (nil, nil) for 204 No Content responses, which differs from doJSON
+// which treats any non-2xx as an error. Used by endpoints like PlaybackState and
+// Queue that legitimately return 204 when nothing is active.
+func (b *BaseClient) doJSONOptional(req *http.Request, out interface{}) (bool, error) {
+	var resp *http.Response
+	var err error
+
+	if b.gateway != nil {
+		priority := PriorityFromContext(req.Context())
+		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+			return b.http.Do(req)
+		})
+	} else {
+		resp, err = b.http.Do(req)
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("sending request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return false, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if err := checkResponseStatus(resp, body); err != nil {
+		return false, err
+	}
+
+	if err := json.Unmarshal(body, out); err != nil {
+		return false, fmt.Errorf("parsing response: %w", err)
+	}
+
+	return true, nil
+}
+
 // doNoContent executes req and returns nil if the response is 2xx.
 // Returns typed errors for 401, 403, and 429 responses; a generic error otherwise.
+// When a Gateway is attached, the request is routed through it for rate limiting and dedup.
 func (b *BaseClient) doNoContent(req *http.Request) error {
-	resp, err := b.http.Do(req)
+	var resp *http.Response
+	var err error
+
+	if b.gateway != nil {
+		priority := PriorityFromContext(req.Context())
+		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+			return b.http.Do(req)
+		})
+	} else {
+		resp, err = b.http.Do(req)
+	}
+
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
 	}

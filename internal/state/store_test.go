@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/stretchr/testify/assert"
@@ -369,4 +370,37 @@ func TestStore_ErrorState(t *testing.T) {
 			assert.Nil(t, tt.get(s), "error should be nil after clear")
 		})
 	}
+}
+
+// --- Throttle observability ---
+
+func TestStore_Throttle_InitiallyFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.IsThrottled(), "store should not be throttled initially")
+	assert.Equal(t, 0, s.ThrottleRetryAfterSecs(), "retry-after should be 0 initially")
+	assert.True(t, s.ThrottleLast429At().IsZero(), "last 429 time should be zero initially")
+}
+
+func TestStore_SetThrottle_SetsAllFields(t *testing.T) {
+	s := New()
+
+	now := time.Now()
+	s.SetThrottle(true, 30, now)
+
+	assert.True(t, s.IsThrottled())
+	assert.Equal(t, 30, s.ThrottleRetryAfterSecs())
+	assert.Equal(t, now.Unix(), s.ThrottleLast429At().Unix())
+}
+
+func TestStore_SetThrottle_ClearsState(t *testing.T) {
+	s := New()
+
+	// Set throttle.
+	s.SetThrottle(true, 30, time.Now())
+	assert.True(t, s.IsThrottled())
+
+	// Clear by setting isThrottled=false.
+	s.SetThrottle(false, 0, time.Time{})
+	assert.False(t, s.IsThrottled())
+	assert.Equal(t, 0, s.ThrottleRetryAfterSecs())
 }

@@ -170,3 +170,75 @@ func TestNewBaseClient_UsesProvidedURL(t *testing.T) {
 	bc := NewBaseClient("https://mock.example.com", "my-token")
 	assert.Equal(t, "https://mock.example.com", bc.baseURL)
 }
+
+// --- Gateway integration into BaseClient ---
+
+func TestBaseClient_WithGateway_RoutesDoJSON(t *testing.T) {
+	// When a Gateway is attached, doJSON should route through the gateway
+	// (i.e. the request still reaches the server and returns the correct result).
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"name":"test"}`))
+	}))
+	defer srv.Close()
+
+	bc := NewBaseClient(srv.URL, "test-token")
+	gw := NewGateway()
+	bc.SetGateway(gw)
+
+	req, err := bc.newRequest(context.Background(), http.MethodGet, "/v1/test", nil)
+	require.NoError(t, err)
+
+	var out struct {
+		Name string `json:"name"`
+	}
+	err = bc.doJSON(req, &out)
+	require.NoError(t, err)
+	assert.Equal(t, "test", out.Name)
+	assert.Equal(t, 1, callCount)
+}
+
+func TestBaseClient_WithGateway_RoutesDoNoContent(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	bc := NewBaseClient(srv.URL, "test-token")
+	gw := NewGateway()
+	bc.SetGateway(gw)
+
+	req, err := bc.newRequest(context.Background(), http.MethodPut, "/v1/test", nil)
+	require.NoError(t, err)
+	err = bc.doNoContent(req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, callCount)
+}
+
+func TestBaseClient_WithoutGateway_WorksAsBeforeGateway(t *testing.T) {
+	// Backward compat: without a gateway the client works exactly as before.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"name":"compat"}`))
+	}))
+	defer srv.Close()
+
+	bc := NewBaseClient(srv.URL, "test-token")
+	// No SetGateway call.
+
+	req, err := bc.newRequest(context.Background(), http.MethodGet, "/v1/compat", nil)
+	require.NoError(t, err)
+
+	var out struct {
+		Name string `json:"name"`
+	}
+	err = bc.doJSON(req, &out)
+	require.NoError(t, err)
+	assert.Equal(t, "compat", out.Name)
+}
