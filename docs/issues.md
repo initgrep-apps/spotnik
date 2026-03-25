@@ -31,10 +31,10 @@
 
 ### Type Design
 
-- [ ] **Inconsistent message encapsulation** — `devicesLoadedMsg` uses unexported type + constructor pattern. Other data-carrying messages are fully exported. Consider aligning over time.
-- [ ] **store.go still imports `api/` for `SearchResult`** — Breaks the clean domain boundary. Track migration of `SearchResult` to `domain/` package.
-- [ ] **`StatsLoadedMsg` defined in stats.go, not messages.go** — Breaks convention that all shared message types live in messages.go.
-- [ ] **`AlbumsLoadedMsg` missing Offset field** — Unlike `LibraryLoadedMsg` and `LikedTracksLoadedMsg`, albums messages don't carry pagination offset.
+- [x] **Inconsistent message encapsulation** — Fixed in Feature 35: `devicesLoadedMsg` exported to `DevicesLoadedMsg`, moved to messages.go, constructor removed. Store mutations moved from DeviceOverlay.Update() to root app.Update().
+- [x] **store.go still imports `api/` for `SearchResult`** — Fixed in Feature 35: `SearchResult` and supporting types moved to `internal/domain/search.go`. Type aliases in `api/models.go` for backward compat. `state/store.go` no longer imports `api/`.
+- [x] **`StatsLoadedMsg` defined in stats.go, not messages.go** — Fixed in Feature 35: moved to messages.go alongside all other shared message types.
+- [x] **`AlbumsLoadedMsg` missing Offset field** — Fixed in Feature 35: `Offset int` field added, handler updated to append vs replace like LibraryLoadedMsg and LikedTracksLoadedMsg.
 
 ---
 
@@ -114,6 +114,6 @@
 
 ### Documentation (pre-existing, surfaced by review)
 
-- [ ] **DeviceOverlay.Update() writes to Store directly** — `devices.go` lines 68, 74-75 call `store.SetDevicesError()`, `store.ClearDevicesError()`, `store.SetDevicesFetchedAt()` from a pane Update(), contradicting the package doc "only root app.Update() writes". Move these mutations to root app via messages, or soften the doc. Tracked for F35 (devices.go changes).
-- [ ] **Store error state comment stale** — `store.go` line 98-99 says "Set by build*Cmd on failure" but errors are set by Update() handlers, not commands. Update comment.
-- [ ] **Orphaned "After Task 3" TODO** — `store.go` line 68-69 references a task number with no feature context. Update to `TODO(feature-name)` format or remove if task is complete.
+- [x] **DeviceOverlay.Update() writes to Store directly** — Fixed in Feature 35: moved SetDevicesError, ClearDevicesError, SetDevicesFetchedAt from DeviceOverlay.Update() to root app.Update() via DevicesLoadedMsg handler.
+- [x] **Store error state comment stale** — Fixed in Feature 35: updated comment to "Set by Update() handlers on failure".
+- [x] **Orphaned "After Task 3" TODO** — Fixed in Feature 35: removed the stale comment from store.go.
