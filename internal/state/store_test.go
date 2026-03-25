@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -416,31 +417,48 @@ func TestStore_SetSavedAlbums_UpdatesFetchedAt(t *testing.T) {
 	assert.True(t, ts.Before(after) || ts.Equal(after))
 }
 
-func TestStore_SetTopTracks_UpdatesStatsFetchedAt(t *testing.T) {
+func TestStore_SetTopTracks_DoesNotStampStatsFetchedAt(t *testing.T) {
+	// Task 4: SetTopTracks must NOT stamp statsFetchedAt anymore.
+	// Only StampStatsFetchedAt (called once after both setters) stamps it.
 	s := New()
-	before := time.Now()
 	s.SetTopTracks("short_term", []api.Track{{ID: "t1", Name: "Track 1"}})
+
+	ts := s.StatsFetchedAt("short_term")
+	assert.True(t, ts.IsZero(), "SetTopTracks must NOT stamp statsFetchedAt (use StampStatsFetchedAt)")
+}
+
+func TestStore_SetTopArtists_DoesNotStampStatsFetchedAt(t *testing.T) {
+	// Task 4: SetTopArtists must NOT stamp statsFetchedAt anymore.
+	s := New()
+	s.SetTopArtists("long_term", []api.FullArtist{{ID: "a1", Name: "Artist 1"}})
+
+	ts := s.StatsFetchedAt("long_term")
+	assert.True(t, ts.IsZero(), "SetTopArtists must NOT stamp statsFetchedAt (use StampStatsFetchedAt)")
+}
+
+func TestStore_StampStatsFetchedAt_UpdatesTimestamp(t *testing.T) {
+	// Task 4: StampStatsFetchedAt must stamp the timestamp for the given range.
+	s := New()
+	s.SetTopTracks("short_term", []api.Track{{ID: "t1"}})
+	s.SetTopArtists("short_term", []api.FullArtist{{ID: "a1"}})
+
+	// Before stamping — stale.
+	assert.True(t, s.StatsStale("short_term"), "StatsStale must return true before StampStatsFetchedAt")
+
+	before := time.Now()
+	s.StampStatsFetchedAt("short_term")
 	after := time.Now()
 
 	ts := s.StatsFetchedAt("short_term")
-	assert.False(t, ts.IsZero(), "StatsFetchedAt should be set after SetTopTracks")
+	assert.False(t, ts.IsZero(), "StampStatsFetchedAt must stamp statsFetchedAt")
 	assert.True(t, ts.After(before) || ts.Equal(before))
 	assert.True(t, ts.Before(after) || ts.Equal(after))
 
 	// Other ranges are unaffected.
 	assert.True(t, s.StatsFetchedAt("medium_term").IsZero(), "other ranges should remain zero")
-}
 
-func TestStore_SetTopArtists_UpdatesStatsFetchedAt(t *testing.T) {
-	s := New()
-	before := time.Now()
-	s.SetTopArtists("long_term", []api.FullArtist{{ID: "a1", Name: "Artist 1"}})
-	after := time.Now()
-
-	ts := s.StatsFetchedAt("long_term")
-	assert.False(t, ts.IsZero(), "StatsFetchedAt should be set after SetTopArtists")
-	assert.True(t, ts.After(before) || ts.Equal(before))
-	assert.True(t, ts.Before(after) || ts.Equal(after))
+	// After stamping — not stale.
+	assert.False(t, s.StatsStale("short_term"), "StatsStale must return false after StampStatsFetchedAt")
 }
 
 func TestStore_FetchedAt_Accessors(t *testing.T) {
@@ -454,15 +472,25 @@ func TestStore_FetchedAt_Accessors(t *testing.T) {
 	assert.True(t, s.DevicesFetchedAt().IsZero(), "DevicesFetchedAt initially zero")
 	assert.True(t, s.StatsFetchedAt("short_term").IsZero(), "StatsFetchedAt initially zero")
 
-	// Set each domain.
+	// Nil/empty sets do NOT stamp fetchedAt (F38: guard against empty data resetting TTL).
 	s.SetPlaylists(nil)
-	assert.False(t, s.PlaylistsFetchedAt().IsZero())
+	assert.True(t, s.PlaylistsFetchedAt().IsZero(), "SetPlaylists(nil) must not stamp fetchedAt")
 
 	s.SetLikedTracks(nil)
-	assert.False(t, s.LikedTracksFetchedAt().IsZero())
+	assert.True(t, s.LikedTracksFetchedAt().IsZero(), "SetLikedTracks(nil) must not stamp fetchedAt")
 
 	s.SetRecentlyPlayed(nil)
-	assert.False(t, s.RecentPlayedFetchedAt().IsZero())
+	assert.True(t, s.RecentPlayedFetchedAt().IsZero(), "SetRecentlyPlayed(nil) must not stamp fetchedAt")
+
+	// Non-empty sets DO stamp fetchedAt.
+	s.SetPlaylists([]domain.SimplePlaylist{{ID: "pl1", Name: "My Playlist"}})
+	assert.False(t, s.PlaylistsFetchedAt().IsZero(), "SetPlaylists(nonEmpty) must stamp fetchedAt")
+
+	s.SetLikedTracks([]domain.SavedTrack{{AddedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
+	assert.False(t, s.LikedTracksFetchedAt().IsZero(), "SetLikedTracks(nonEmpty) must stamp fetchedAt")
+
+	s.SetRecentlyPlayed([]domain.PlayHistory{{PlayedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
+	assert.False(t, s.RecentPlayedFetchedAt().IsZero(), "SetRecentlyPlayed(nonEmpty) must stamp fetchedAt")
 }
 
 // --- TTL-based staleness convenience methods ---
@@ -483,7 +511,8 @@ func TestStore_PlaylistsStale_AfterTTL(t *testing.T) {
 
 func TestStore_PlaylistsStale_WithinTTL(t *testing.T) {
 	s := New()
-	s.SetPlaylists(nil) // stamps fetchedAt = now
+	// Non-empty slice required to stamp fetchedAt (nil does not stamp per Task 3 guard).
+	s.SetPlaylists([]domain.SimplePlaylist{{ID: "pl1", Name: "Test"}})
 	assert.False(t, s.PlaylistsStale(), "PlaylistsStale should be false within TTL")
 }
 
@@ -494,7 +523,8 @@ func TestStore_AlbumsStale_NeverFetched(t *testing.T) {
 
 func TestStore_AlbumsStale_WithinTTL(t *testing.T) {
 	s := New()
-	s.SetSavedAlbums(nil) // stamps fetchedAt = now
+	// Non-empty slice required to stamp fetchedAt (nil does not stamp per Task 3 guard).
+	s.SetSavedAlbums([]domain.SavedAlbum{{AddedAt: "2024-01-01", Album: domain.FullAlbum{ID: "a1"}}})
 	assert.False(t, s.AlbumsStale(), "AlbumsStale should be false within TTL")
 }
 
@@ -505,7 +535,8 @@ func TestStore_LikedTracksStale_NeverFetched(t *testing.T) {
 
 func TestStore_LikedTracksStale_WithinTTL(t *testing.T) {
 	s := New()
-	s.SetLikedTracks(nil) // stamps fetchedAt = now
+	// Non-empty slice required to stamp fetchedAt (nil does not stamp per Task 3 guard).
+	s.SetLikedTracks([]domain.SavedTrack{{AddedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
 	assert.False(t, s.LikedTracksStale(), "LikedTracksStale should be false within TTL")
 }
 
@@ -516,7 +547,8 @@ func TestStore_RecentlyPlayedStale_NeverFetched(t *testing.T) {
 
 func TestStore_RecentlyPlayedStale_WithinTTL(t *testing.T) {
 	s := New()
-	s.SetRecentlyPlayed(nil) // stamps fetchedAt = now
+	// Non-empty slice required to stamp fetchedAt (nil does not stamp per Task 3 guard).
+	s.SetRecentlyPlayed([]domain.PlayHistory{{PlayedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
 	assert.False(t, s.RecentlyPlayedStale(), "RecentlyPlayedStale should be false within TTL")
 }
 
@@ -527,7 +559,8 @@ func TestStore_StatsStale_NeverFetched(t *testing.T) {
 
 func TestStore_StatsStale_WithinTTL(t *testing.T) {
 	s := New()
-	s.SetTopTracks("short_term", nil) // stamps fetchedAt = now
+	// StampStatsFetchedAt is now the only way to mark stats as fresh (Task 4).
+	s.StampStatsFetchedAt("short_term")
 	assert.False(t, s.StatsStale("short_term"), "StatsStale should be false within TTL")
 }
 

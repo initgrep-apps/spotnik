@@ -37,9 +37,12 @@ func TestFetchStatsMsg_WhenStale_DispatchesFetch(t *testing.T) {
 // the store already has fresh stats for that time range.
 func TestFetchStatsMsg_WhenFresh_SkipsFetch(t *testing.T) {
 	a := newTestApp()
-	// Pre-populate stats data so the range is within TTL.
+	// Pre-populate stats data AND stamp so the range is within TTL.
+	// SetTopTracks/SetTopArtists no longer stamp statsFetchedAt (Task 4);
+	// StampStatsFetchedAt must be called explicitly after both setters.
 	a.Store().SetTopTracks("short_term", []domain.Track{{ID: "t1", Name: "Song"}})
 	a.Store().SetTopArtists("short_term", []domain.FullArtist{{ID: "a1", Name: "Artist"}})
+	a.Store().StampStatsFetchedAt("short_term")
 
 	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
 	assert.Nil(t, cmd, "FetchStatsMsg when fresh should return nil command (skip fetch)")

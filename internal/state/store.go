@@ -156,12 +156,17 @@ func (s *Store) Playlists() []domain.SimplePlaylist {
 	return s.playlists
 }
 
-// SetPlaylists updates the saved playlists in the store and stamps the fetch time.
+// SetPlaylists updates the saved playlists in the store.
+// fetchedAt is only stamped when the slice is non-empty, preventing an empty
+// (nil-client or error-fallback) response from resetting the TTL and blocking
+// retries for the full cache duration.
 func (s *Store) SetPlaylists(playlists []domain.SimplePlaylist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlists = playlists
-	s.playlistsFetchedAt = time.Now()
+	if len(playlists) > 0 {
+		s.playlistsFetchedAt = time.Now()
+	}
 }
 
 // PlaylistsTotal returns the total number of playlists (for pagination).
@@ -185,12 +190,16 @@ func (s *Store) SavedAlbums() []domain.SavedAlbum {
 	return s.savedAlbums
 }
 
-// SetSavedAlbums updates the saved albums in the store and stamps the fetch time.
+// SetSavedAlbums updates the saved albums in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
 func (s *Store) SetSavedAlbums(albums []domain.SavedAlbum) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.savedAlbums = albums
-	s.albumsFetchedAt = time.Now()
+	if len(albums) > 0 {
+		s.albumsFetchedAt = time.Now()
+	}
 }
 
 // AlbumsLoaded returns true if saved albums have been fetched at least once.
@@ -208,12 +217,16 @@ func (s *Store) LikedTracks() []domain.SavedTrack {
 	return s.likedTracks
 }
 
-// SetLikedTracks updates the liked tracks in the store and stamps the fetch time.
+// SetLikedTracks updates the liked tracks in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
 func (s *Store) SetLikedTracks(tracks []domain.SavedTrack) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.likedTracks = tracks
-	s.likedTracksFetchedAt = time.Now()
+	if len(tracks) > 0 {
+		s.likedTracksFetchedAt = time.Now()
+	}
 }
 
 // LikedTotal returns the total number of liked tracks (for pagination).
@@ -245,12 +258,16 @@ func (s *Store) RecentlyPlayed() []domain.PlayHistory {
 	return s.recentlyPlayed
 }
 
-// SetRecentlyPlayed updates the recently played history in the store and stamps the fetch time.
+// SetRecentlyPlayed updates the recently played history in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
 func (s *Store) SetRecentlyPlayed(items []domain.PlayHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recentlyPlayed = items
-	s.recentPlayedFetchedAt = time.Now()
+	if len(items) > 0 {
+		s.recentPlayedFetchedAt = time.Now()
+	}
 }
 
 // Queue returns the upcoming tracks in the user's play queue.
@@ -321,8 +338,10 @@ func (s *Store) TopTracks(timeRange string) []domain.Track {
 	return s.topTracks[timeRange]
 }
 
-// SetTopTracks caches top tracks for a specific time range in the store
-// and stamps the fetch time for that range.
+// SetTopTracks caches top tracks for a specific time range in the store.
+// It does NOT stamp statsFetchedAt — call StampStatsFetchedAt after both
+// SetTopTracks and SetTopArtists succeed so the range is only marked fresh
+// when both datasets are written (avoids partial-data false-fresh state).
 func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -330,7 +349,6 @@ func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 		s.topTracks = make(map[string][]domain.Track)
 	}
 	s.topTracks[timeRange] = tracks
-	s.statsFetchedAt[timeRange] = time.Now()
 }
 
 // TopArtists returns the cached top artists for the given time range,
@@ -345,8 +363,10 @@ func (s *Store) TopArtists(timeRange string) []domain.FullArtist {
 	return s.topArtists[timeRange]
 }
 
-// SetTopArtists caches top artists for a specific time range in the store
-// and stamps the fetch time for that range.
+// SetTopArtists caches top artists for a specific time range in the store.
+// It does NOT stamp statsFetchedAt — call StampStatsFetchedAt after both
+// SetTopTracks and SetTopArtists succeed so the range is only marked fresh
+// when both datasets are written (avoids partial-data false-fresh state).
 func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -354,6 +374,14 @@ func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 		s.topArtists = make(map[string][]domain.FullArtist)
 	}
 	s.topArtists[timeRange] = artists
+}
+
+// StampStatsFetchedAt records the time when stats for a time range were fully
+// loaded. Call this once after both SetTopTracks and SetTopArtists succeed so
+// that StatsStale only returns false when both datasets are present.
+func (s *Store) StampStatsFetchedAt(timeRange string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.statsFetchedAt[timeRange] = time.Now()
 }
 

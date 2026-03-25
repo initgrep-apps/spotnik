@@ -621,6 +621,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.TimeRange != "" {
 			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
 			a.store.SetTopArtists(m.TimeRange, m.TopArtists)
+			// Stamp once after both setters so StatsStale only returns false when
+			// both datasets are present. Stamping inside each setter would mark the
+			// range fresh after only one write, hiding partial-data state.
+			a.store.StampStatsFetchedAt(m.TimeRange)
 		}
 		if a.statsPane != nil {
 			updated, cmd := a.statsPane.Update(m)
