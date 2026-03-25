@@ -11,6 +11,26 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
+// TTL constants define how long each data domain is considered fresh.
+// After the TTL expires, Update() should trigger a re-fetch from the Spotify API.
+const (
+	// PlaylistsTTL is the cache lifetime for the user's playlist list.
+	PlaylistsTTL = 5 * time.Minute
+	// AlbumsTTL is the cache lifetime for the user's saved albums.
+	AlbumsTTL = 5 * time.Minute
+	// LikedTracksTTL is the cache lifetime for the user's liked tracks.
+	LikedTracksTTL = 5 * time.Minute
+	// RecentlyPlayedTTL is the cache lifetime for recently played tracks.
+	// Shorter than library data because it changes with every playback event.
+	RecentlyPlayedTTL = 2 * time.Minute
+	// StatsTTL is the cache lifetime for user stats (top tracks/artists).
+	// Long because Spotify updates these slowly.
+	StatsTTL = 10 * time.Minute
+	// DevicesTTL is the cache lifetime for the available device list.
+	// Short because the user may switch devices at any time.
+	DevicesTTL = 30 * time.Second
+)
+
 // IsStale returns true if fetchedAt is zero (never fetched) or older than ttl.
 // Use this to decide whether to re-fetch cached data from the Spotify API.
 func IsStale(fetchedAt time.Time, ttl time.Duration) bool {
@@ -29,10 +49,8 @@ type Store struct {
 	playlists      []domain.SimplePlaylist
 	playlistsTotal int
 	savedAlbums    []domain.SavedAlbum
-	albumsLoaded   bool
 	likedTracks    []domain.SavedTrack
 	likedTotal     int
-	likedLoaded    bool
 	recentlyPlayed []domain.PlayHistory
 
 	// Staleness tracking — set to time.Now() on successful data write.
@@ -165,21 +183,20 @@ func (s *Store) SavedAlbums() []domain.SavedAlbum {
 	return s.savedAlbums
 }
 
-// SetSavedAlbums updates the saved albums in the store.
-// Also marks albumsLoaded = true and stamps the fetch time.
+// SetSavedAlbums updates the saved albums in the store and stamps the fetch time.
 func (s *Store) SetSavedAlbums(albums []domain.SavedAlbum) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.savedAlbums = albums
-	s.albumsLoaded = true
 	s.albumsFetchedAt = time.Now()
 }
 
 // AlbumsLoaded returns true if saved albums have been fetched at least once.
+// Replaces the former albumsLoaded boolean sentinel — derived from albumsFetchedAt.
 func (s *Store) AlbumsLoaded() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.albumsLoaded
+	return !s.albumsFetchedAt.IsZero()
 }
 
 // LikedTracks returns the user's liked tracks.
@@ -189,13 +206,11 @@ func (s *Store) LikedTracks() []domain.SavedTrack {
 	return s.likedTracks
 }
 
-// SetLikedTracks updates the liked tracks in the store.
-// Also marks likedLoaded = true and stamps the fetch time.
+// SetLikedTracks updates the liked tracks in the store and stamps the fetch time.
 func (s *Store) SetLikedTracks(tracks []domain.SavedTrack) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.likedTracks = tracks
-	s.likedLoaded = true
 	s.likedTracksFetchedAt = time.Now()
 }
 
@@ -214,10 +229,11 @@ func (s *Store) SetLikedTotal(total int) {
 }
 
 // LikedLoaded returns true if liked tracks have been fetched at least once.
+// Replaces the former likedLoaded boolean sentinel — derived from likedTracksFetchedAt.
 func (s *Store) LikedLoaded() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.likedLoaded
+	return !s.likedTracksFetchedAt.IsZero()
 }
 
 // RecentlyPlayed returns the recently played track history.
@@ -441,6 +457,53 @@ func (s *Store) SetDevicesFetchedAt(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.devicesFetchedAt = t
+}
+
+// --- TTL-based staleness convenience methods ---
+
+// PlaylistsStale returns true if the playlists list is stale and should be re-fetched.
+func (s *Store) PlaylistsStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.playlistsFetchedAt, PlaylistsTTL)
+}
+
+// AlbumsStale returns true if the saved albums are stale and should be re-fetched.
+func (s *Store) AlbumsStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.albumsFetchedAt, AlbumsTTL)
+}
+
+// LikedTracksStale returns true if the liked tracks are stale and should be re-fetched.
+func (s *Store) LikedTracksStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.likedTracksFetchedAt, LikedTracksTTL)
+}
+
+// RecentlyPlayedStale returns true if the recently played list is stale and should be re-fetched.
+func (s *Store) RecentlyPlayedStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.recentPlayedFetchedAt, RecentlyPlayedTTL)
+}
+
+// StatsStale returns true if stats for the given time range are stale and should be re-fetched.
+func (s *Store) StatsStale(timeRange string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.statsFetchedAt == nil {
+		return true
+	}
+	return IsStale(s.statsFetchedAt[timeRange], StatsTTL)
+}
+
+// DevicesStale returns true if the device list is stale and should be re-fetched.
+func (s *Store) DevicesStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.devicesFetchedAt, DevicesTTL)
 }
 
 // --- Error state accessors ---
