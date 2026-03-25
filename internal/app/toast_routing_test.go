@@ -110,16 +110,6 @@ func TestApp_TransferPlaybackMsg_EmitsInfoToast(t *testing.T) {
 	require.NotNil(t, cmd, "TransferPlaybackMsg must return non-nil cmd")
 }
 
-func TestApp_DevicesLoadErrorMsg_EmitsErrorToast(t *testing.T) {
-	// DevicesLoadErrorMsg (emitted by DeviceOverlay on device fetch failure) must
-	// produce a non-nil command so the root app emits an error toast notification.
-	a := newToastTestApp()
-	loadErr := errors.New("network timeout")
-	_, cmd := a.Update(panes.DevicesLoadErrorMsg{Err: loadErr})
-
-	require.NotNil(t, cmd, "DevicesLoadErrorMsg must return non-nil cmd for toast")
-}
-
 func TestApp_SearchResultsMsg_ErrorToastIncludesDetail(t *testing.T) {
 	// SearchResultsMsg with error must trigger a toast cmd; the error detail is
 	// carried in the alert so the user can diagnose the failure.

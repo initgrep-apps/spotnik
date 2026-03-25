@@ -276,7 +276,7 @@ type queueAddedMsg   struct{ uri string }
 type queueAddErrMsg  struct{ err error }
 
 // Device messages (Feature 07)
-type devicesLoadedMsg       struct{ devices []api.Device }
+type DevicesLoadedMsg       struct{ Devices []DeviceInfo; Err error }
 type deviceTransferredMsg   struct{ deviceID string }
 
 // Stats messages (Feature 08)

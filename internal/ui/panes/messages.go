@@ -224,13 +224,6 @@ type DeviceTransferredMsg struct {
 	Err      error
 }
 
-// DevicesLoadErrorMsg may be emitted by handlers when a device fetch fails.
-// The root app model uses the DevicesLoadedMsg.Err field directly for toast
-// notifications; this type is retained for any remaining callers.
-type DevicesLoadErrorMsg struct {
-	Err error
-}
-
 // FetchPlaylistTracksRequestMsg is emitted by PlaylistManager when it needs to
 // load tracks for a specific playlist from the API.
 type FetchPlaylistTracksRequestMsg struct {
