@@ -425,17 +425,23 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 	}
 }
 
-// TestApp_LikeToggleResultMsg_WithError verifies that a like error emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_LikeToggleResultMsg_WithError verifies that a like error emits a toast with the error text.
+// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_LikeToggleResultMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	errMsg := panes.LikeToggleResultMsg{TrackID: "t1", Err: fmt.Errorf("like failed")}
-	m, cmd := a.Update(errMsg)
-	require.NotNil(t, m)
-	// Toasts are emitted as a non-nil cmd — the alert appears after alertCmd is processed.
-	assert.NotNil(t, cmd, "error result should produce an alert toast cmd")
+	_, cmd := a.Update(errMsg)
+	require.NotNil(t, cmd, "error result should produce an alert toast cmd")
+
+	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "like failed", "error toast should show the error text")
 }
 
 // TestApp_LikeToggleResultMsg_NoError verifies a successful like clears status.
@@ -449,17 +455,32 @@ func TestApp_LikeToggleResultMsg_NoError(t *testing.T) {
 	assert.Nil(t, cmd, "successful like should not produce a cmd")
 }
 
-// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast with the error text.
+// Uses the two-pass pattern: execute the batch cmd and feed alert messages back to render the toast.
 func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	errMsg := panes.PlaybackCmdSentMsg{Err: fmt.Errorf("playback failed")}
-	m, cmd := a.Update(errMsg)
-	require.NotNil(t, m)
-	// Error path returns Batch(fetchPlaybackStateCmd, alertCmd) — always non-nil.
-	assert.NotNil(t, cmd, "error result should produce refetch + alert toast cmd")
+	_, cmd := a.Update(errMsg)
+	require.NotNil(t, cmd, "error result should produce refetch + alert toast cmd")
+
+	// Two-pass: the batch contains fetchPlaybackStateCmd + alertCmd.
+	// Execute the batch and feed each sub-message back to Update so the alert renders.
+	batchMsg := cmd()
+	if bm, ok := batchMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if msg := c(); msg != nil {
+				a.Update(msg)
+			}
+		}
+	} else if batchMsg != nil {
+		a.Update(batchMsg)
+	}
+	assert.Contains(t, a.View(), "playback failed", "error toast should show the error text")
 }
 
 // TestApp_PlaybackCmdSentMsg_NoError verifies that a successful playback cmd triggers refetch.
@@ -599,30 +620,42 @@ func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	assert.Error(t, resultMsg.Err, "nil player must set Err on AddToQueueResultMsg (errNilClient)")
 }
 
-// TestApp_AddToQueueResultMsg_Success verifies success emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_AddToQueueResultMsg_Success verifies success emits a "Added to queue" toast.
+// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	successMsg := panes.AddToQueueResultMsg{Err: nil}
-	m, cmd := a.Update(successMsg)
-	require.NotNil(t, m)
-	// Success path emits a "success" alert toast cmd — always non-nil.
-	assert.NotNil(t, cmd, "success should emit a toast alert cmd")
+	_, cmd := a.Update(successMsg)
+	require.NotNil(t, cmd, "success should emit a toast alert cmd")
+
+	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "Added to queue", "success toast should mention queue addition")
 }
 
-// TestApp_AddToQueueResultMsg_Error verifies error emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_AddToQueueResultMsg_Error verifies error emits a toast with the error text.
+// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("queue failed")}
-	m, cmd := a.Update(errMsg)
-	require.NotNil(t, m)
-	// Error path emits an "error" alert toast cmd — always non-nil.
-	assert.NotNil(t, cmd, "error result should emit an alert toast cmd")
+	_, cmd := a.Update(errMsg)
+	require.NotNil(t, cmd, "error result should emit an alert toast cmd")
+
+	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "queue failed", "error toast should show the error text")
 }
 
 // TestApp_SlashOpensSearch verifies '/' opens the search overlay.
@@ -1000,16 +1033,33 @@ func TestApp_DeviceOverlay_EscCloses(t *testing.T) {
 	assert.False(t, a.DeviceOverlayOpen(), "DeviceOverlayClosedMsg should close the overlay")
 }
 
-// TestApp_DeviceTransfer_EmitsInfoToast verifies that a transfer command
-// emits an info toast and dispatches the API call. Toast appears via overlay.
+// TestApp_DeviceTransfer_ShowsStatusMessage verifies that a transfer command
+// emits an info toast showing the target device name.
+// Uses the two-pass pattern: execute the batch cmd and verify toast text in View().
 func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	transferMsg := panes.TransferPlaybackMsg{DeviceID: "def456", DeviceName: "iPhone 14"}
 	_, cmd := a.Update(transferMsg)
-	// Transfer emits Batch(buildTransferPlaybackCmd, infoAlertCmd) — always non-nil.
-	assert.NotNil(t, cmd, "transfer should produce an API command + info toast")
+	require.NotNil(t, cmd, "transfer should produce an API command + info toast")
+
+	// Two-pass: the batch contains buildTransferPlaybackCmd + infoAlertCmd.
+	// Execute the batch and feed each sub-message back to Update so the alert renders.
+	batchMsg := cmd()
+	if bm, ok := batchMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if msg := c(); msg != nil {
+				a.Update(msg)
+			}
+		}
+	} else if batchMsg != nil {
+		a.Update(batchMsg)
+	}
+	assert.Contains(t, a.View(), "Switching to iPhone 14", "info toast should name the target device")
 }
 
 // TestApp_DeviceTransferredMsg_ErrorEmitsToast verifies transfer errors emit an error toast.
