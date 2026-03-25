@@ -86,6 +86,7 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 - **Panes never talk to each other** — only through messages routed via root model
 - **`ui/` never imports `api/`** — data flows through messages and store only
 - **`api/` never imports `ui/`** — one-way dependency enforced
+- **Commands must not mutate the Store** — return data in Msg payloads; only `Update()` writes to Store. Msg types carry `Data` + `Err error` fields. See `docs/ARCHITECTURE.md` "Data-Carrying Messages" section for before/after examples.
 
 ---
 
