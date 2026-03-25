@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 )
@@ -35,37 +34,22 @@ func (p *Player) SetHTTPClient(c *http.Client) {
 // PlaybackState fetches the current playback state from GET /me/player.
 // Returns nil, nil when Spotify returns 204 (nothing playing).
 // Returns an error on 429 or other non-2xx status codes.
+// Routes through the gateway when one is attached for rate limiting and dedup.
 func (p *Player) PlaybackState(ctx context.Context) (*PlaybackState, error) {
 	req, err := p.newRequest(ctx, http.MethodGet, "/v1/me/player", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get playback state request: %w", err)
 	}
 
-	resp, err := p.http.Do(req)
+	var state PlaybackState
+	ok, err := p.doJSONOptional(req, &state)
 	if err != nil {
 		return nil, fmt.Errorf("getting playback state: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNoContent {
+	if !ok {
 		// 204: nothing is playing.
 		return nil, nil
 	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading playback state response: %w", err)
-	}
-
-	if err := checkResponseStatus(resp, body); err != nil {
-		return nil, err
-	}
-
-	var state PlaybackState
-	if err := json.Unmarshal(body, &state); err != nil {
-		return nil, fmt.Errorf("parsing playback state: %w", err)
-	}
-
 	return &state, nil
 }
 
@@ -181,36 +165,22 @@ func (p *Player) AddToQueue(ctx context.Context, trackURI string) error {
 // Queue fetches the current play queue from GET /me/player/queue.
 // Returns the currently playing track and the list of upcoming tracks.
 // Returns nil, nil when Spotify returns 204 (nothing playing).
+// Routes through the gateway when one is attached for rate limiting and dedup.
 func (p *Player) Queue(ctx context.Context) (*QueueResponse, error) {
 	req, err := p.newRequest(ctx, http.MethodGet, "/v1/me/player/queue", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating get queue request: %w", err)
 	}
 
-	resp, err := p.http.Do(req)
+	var qr QueueResponse
+	ok, err := p.doJSONOptional(req, &qr)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNoContent {
+	if !ok {
+		// 204: nothing is playing.
 		return nil, nil
 	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading queue response: %w", err)
-	}
-
-	if err := checkResponseStatus(resp, body); err != nil {
-		return nil, err
-	}
-
-	var qr QueueResponse
-	if err := json.Unmarshal(body, &qr); err != nil {
-		return nil, fmt.Errorf("parsing queue response: %w", err)
-	}
-
 	return &qr, nil
 }
 

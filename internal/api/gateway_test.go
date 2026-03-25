@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -386,4 +388,146 @@ func TestGateway_IsThrottled(t *testing.T) {
 
 	assert.True(t, gw.IsThrottled(), "should be throttled after 429")
 	assert.Equal(t, 30, gw.RetryAfterSecs())
+}
+
+// --- GET-only dedup safety ---
+
+// TestGateway_Dedup_OnlyForGET verifies that POST requests with the same key
+// are NOT deduplicated — each must trigger an independent HTTP call.
+func TestGateway_Dedup_OnlyForGET(t *testing.T) {
+	gw := NewGateway()
+
+	var callCount int64
+	release := make(chan struct{})
+	key := RequestKey{Method: http.MethodPost, Path: "/me/player/next"}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				<-release
+				// Use channel-based counting to avoid races in test closures.
+				atomic.AddInt64(&callCount, 1)
+				return newFakeResponse(204, ""), nil
+			})
+		}()
+	}
+
+	// Give both goroutines time to be in-flight simultaneously.
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	assert.Equal(t, int64(2), atomic.LoadInt64(&callCount), "POST requests must not be deduplicated — each should fire independently")
+}
+
+// TestGateway_Dedup_WaitersDoNotConsumeSlots verifies that dedup waiters
+// do not hold semaphore slots, preventing deadlock when all slots are taken.
+// With 5 slots, 5 primary callers fill all slots. Then 5 more goroutines for
+// the same keys should be able to join as dedup waiters (without needing slots)
+// and get results when the primaries finish.
+func TestGateway_Dedup_WaitersDoNotConsumeSlots(t *testing.T) {
+	gw := NewGateway()
+
+	const concurrency = 5
+	release := make(chan struct{})
+	var callCount int64
+
+	// Launch 5 primary goroutines that each hold a semaphore slot.
+	// Each uses a unique key so they are distinct in-flight entries.
+	var wgPrimary sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wgPrimary.Add(1)
+		go func(i int) {
+			defer wgPrimary.Done()
+			key := RequestKey{Method: http.MethodGet, Path: fmt.Sprintf("/tracks/%d", i)}
+			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				<-release
+				atomic.AddInt64(&callCount, 1)
+				return newFakeResponse(200, "data"), nil
+			})
+		}(i)
+	}
+
+	// Give primaries time to acquire semaphore slots and register in inflight map.
+	time.Sleep(30 * time.Millisecond)
+
+	// Now launch 5 dedup waiters with the same keys. They should NOT need slots.
+	waiterDone := make(chan struct{}, concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func(i int) {
+			key := RequestKey{Method: http.MethodGet, Path: fmt.Sprintf("/tracks/%d", i)}
+			resp, err := gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				// This fn should never be called — dedup waiter reuses the result.
+				t.Error("dedup waiter should not make a new HTTP call")
+				return newFakeResponse(200, "data"), nil
+			})
+			if err == nil && resp != nil {
+				waiterDone <- struct{}{}
+			}
+		}(i)
+	}
+
+	// Give waiters time to register against the inflight entries.
+	time.Sleep(30 * time.Millisecond)
+
+	// Release all primaries — waiters should complete shortly after.
+	close(release)
+	wgPrimary.Wait()
+
+	// All 5 waiters should receive results within a short timeout.
+	for i := 0; i < concurrency; i++ {
+		select {
+		case <-waiterDone:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("waiter %d did not complete after primaries finished", i)
+		}
+	}
+
+	// Only the 5 primary calls should have been made.
+	assert.Equal(t, int64(concurrency), atomic.LoadInt64(&callCount), "expected exactly 5 HTTP calls (one per key)")
+}
+
+// TestGateway_PlaybackState_RoutedThroughGateway verifies that the Player's
+// PlaybackState method routes through the gateway when one is attached,
+// so that dedup and rate limiting apply to the most-polled endpoint.
+func TestGateway_PlaybackState_RoutedThroughGateway(t *testing.T) {
+	callCount := 0
+	release := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent) // nothing playing
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	p := NewPlayer(srv.URL, "test-token")
+	p.SetGateway(gw)
+
+	// Two concurrent calls for the same endpoint should only hit the server once.
+	var wg sync.WaitGroup
+	results := make([]*PlaybackState, 2)
+	errs := make([]error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			results[idx], errs[idx] = p.PlaybackState(context.Background())
+		}(i)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	require.NoError(t, errs[0])
+	require.NoError(t, errs[1])
+	assert.Nil(t, results[0], "204 should yield nil state")
+	assert.Nil(t, results[1], "204 should yield nil state")
+	assert.Equal(t, 1, callCount, "dedup should result in exactly one HTTP call")
 }

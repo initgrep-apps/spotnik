@@ -114,6 +114,49 @@ func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
 	return nil
 }
 
+// doJSONOptional executes req and routes through the gateway when attached.
+// It returns (nil, nil) for 204 No Content responses, which differs from doJSON
+// which treats any non-2xx as an error. Used by endpoints like PlaybackState and
+// Queue that legitimately return 204 when nothing is active.
+func (b *BaseClient) doJSONOptional(req *http.Request, out interface{}) (bool, error) {
+	var resp *http.Response
+	var err error
+
+	if b.gateway != nil {
+		priority := PriorityFromContext(req.Context())
+		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		resp, err = b.gateway.Do(req.Context(), priority, key, func() (*http.Response, error) {
+			return b.http.Do(req)
+		})
+	} else {
+		resp, err = b.http.Do(req)
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("sending request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return false, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if err := checkResponseStatus(resp, body); err != nil {
+		return false, err
+	}
+
+	if err := json.Unmarshal(body, out); err != nil {
+		return false, fmt.Errorf("parsing response: %w", err)
+	}
+
+	return true, nil
+}
+
 // doNoContent executes req and returns nil if the response is 2xx.
 // Returns typed errors for 401, 403, and 429 responses; a generic error otherwise.
 // When a Gateway is attached, the request is routed through it for rate limiting and dedup.

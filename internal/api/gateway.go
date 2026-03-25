@@ -197,7 +197,31 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		}
 	}
 
-	// Phase 2: concurrency semaphore.
+	// Phase 2: in-flight deduplication for GET requests only.
+	// Dedup waiters do NOT consume a semaphore slot — they wait for the primary
+	// caller (which holds a slot) to finish, then reuse its result.
+	// Mutating requests (POST/PUT/DELETE) are never deduplicated because each
+	// side-effect must fire independently.
+	if key.Method == http.MethodGet {
+		g.mu.Lock()
+		if entry, ok := g.inflight[key]; ok {
+			// A matching GET is already in flight — wait without holding a slot.
+			g.mu.Unlock()
+			select {
+			case <-entry.done:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			if entry.err != nil {
+				return nil, entry.err
+			}
+			// Clone the buffered body so each caller gets their own reader.
+			return cloneResponseWithBody(entry.resp, entry.body), nil
+		}
+		g.mu.Unlock()
+	}
+
+	// Phase 3: concurrency semaphore (only primary callers reach here).
 	select {
 	case g.semaphore <- struct{}{}:
 		defer func() { <-g.semaphore }()
@@ -205,28 +229,38 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		return nil, ctx.Err()
 	}
 
-	// Phase 3: in-flight deduplication.
-	g.mu.Lock()
-	if entry, ok := g.inflight[key]; ok {
-		// A matching request is already in flight — wait for it.
+	// Phase 4: register in inflight map for GET requests, then execute.
+	// Double-check: another goroutine may have registered between our check
+	// and acquiring the semaphore.
+	var entry *inflightEntry
+	if key.Method == http.MethodGet {
+		g.mu.Lock()
+		if existing, ok := g.inflight[key]; ok {
+			// Lost the race — become a waiter (semaphore slot is held via defer).
+			// We release the slot in the defer above and join as a waiter result.
+			g.mu.Unlock()
+			select {
+			case <-existing.done:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			if existing.err != nil {
+				return nil, existing.err
+			}
+			return cloneResponseWithBody(existing.resp, existing.body), nil
+		}
+		entry = &inflightEntry{done: make(chan struct{})}
+		g.inflight[key] = entry
 		g.mu.Unlock()
-		select {
-		case <-entry.done:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		if entry.err != nil {
-			return nil, entry.err
-		}
-		// Clone the buffered body so each caller gets their own reader.
-		resp := cloneResponseWithBody(entry.resp, entry.body)
-		return resp, nil
-	}
 
-	// No matching request in flight — register this one.
-	entry := &inflightEntry{done: make(chan struct{})}
-	g.inflight[key] = entry
-	g.mu.Unlock()
+		// Ensure the entry is always closed and removed, even on panic.
+		defer func() {
+			close(entry.done)
+			g.mu.Lock()
+			delete(g.inflight, key)
+			g.mu.Unlock()
+		}()
+	}
 
 	// Execute the actual HTTP call.
 	resp, err := fn()
@@ -238,7 +272,9 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		if readErr != nil {
 			err = fmt.Errorf("buffering response body: %w", readErr)
 		} else {
-			entry.body = body
+			if entry != nil {
+				entry.body = body
+			}
 			// Check for 429 from the real response.
 			if resp.StatusCode == http.StatusTooManyRequests {
 				retryAfter := 5
@@ -259,14 +295,11 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		}
 	}
 
-	entry.resp = resp
-	entry.err = err
-	close(entry.done)
-
-	// Clean up the in-flight entry.
-	g.mu.Lock()
-	delete(g.inflight, key)
-	g.mu.Unlock()
+	if entry != nil {
+		entry.resp = resp
+		entry.err = err
+		// entry.done is closed by the deferred cleanup above.
+	}
 
 	if err != nil {
 		return nil, err
