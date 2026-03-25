@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -74,7 +75,7 @@ func (p *SearchPlaylist) UnmarshalJSON(data []byte) error {
 			Total int `json:"total"`
 		} `json:"tracks"`
 	}{}
-	if err := unmarshalJSON(data, raw); err != nil {
+	if err := json.Unmarshal(data, raw); err != nil {
 		return err
 	}
 	p.ID = raw.ID

@@ -8,16 +8,8 @@
 package api
 
 import (
-	"encoding/json"
-
 	"github.com/initgrep-apps/spotnik/internal/domain"
 )
-
-// unmarshalJSON is a package-level helper used by custom UnmarshalJSON methods
-// to avoid import cycles when models.go needs encoding/json for custom unmarshaling.
-func unmarshalJSON(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
-}
 
 // PlaybackState re-exports domain.PlaybackState for backward compatibility.
 type PlaybackState = domain.PlaybackState
