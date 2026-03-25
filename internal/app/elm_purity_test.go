@@ -522,7 +522,7 @@ func TestSearchResultsMsg_ClearPath(t *testing.T) {
 	assert.Equal(t, "jazz", a.Store().SearchQuery(), "query should be set after SearchRequestMsg")
 	assert.True(t, a.Store().SearchLoading(), "loading should be true after SearchRequestMsg")
 
-	// SearchClearedMsg should clear both query and loading.
+	// SearchClearedMsg should clear query and results (loading is cleared by SearchResultsMsg handler).
 	_, _ = a.Update(panes.SearchClearedMsg{})
 	assert.Equal(t, "", a.Store().SearchQuery(), "SearchClearedMsg should clear the search query")
 	assert.Nil(t, a.Store().SearchResults(), "SearchClearedMsg should clear search results")
