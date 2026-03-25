@@ -72,7 +72,7 @@ type Store struct {
 
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
-	// NOTE: cached on first fetch per range; not re-fetched until view is re-opened.
+	// NOTE: cached per range and re-fetched after StatsTTL (10 min) via staleness check in Update().
 	topTracks  map[string][]domain.Track
 	topArtists map[string][]domain.FullArtist
 

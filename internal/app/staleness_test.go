@@ -15,7 +15,6 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // newTestApp creates a fresh App for staleness tests.
@@ -150,23 +149,27 @@ func TestFetchRecentlyPlayedRequest_WhenFresh_SkipsFetch(t *testing.T) {
 	assert.Nil(t, cmd, "FetchRecentlyPlayedRequestMsg when fresh should return nil command (skip fetch)")
 }
 
-// --- StalenessForcedRefetch: data re-fetched after TTL expiry ---
+// --- Cross-domain isolation ---
 
-// TestFetchAlbumsRequest_AfterTTL_DispatchesFetch verifies that after the AlbumsTTL expires,
-// a FetchAlbumsRequestMsg dispatches a fresh fetch.
-func TestFetchAlbumsRequest_AfterTTL_DispatchesFetch(t *testing.T) {
+// TestFetchAlbumsRequest_IndependentOfPlaylists verifies that albums and playlists
+// are tracked independently — a fresh playlists store does not affect album staleness.
+func TestFetchAlbumsRequest_IndependentOfPlaylists(t *testing.T) {
 	a := newTestApp()
-	// Manually backdate the albumsFetchedAt to simulate TTL expiry.
-	// We do this by setting albums and then manipulating the store.
-	// Since we can't directly set the timestamp, we use the staleness method to verify.
-	s := a.Store()
-	s.SetSavedAlbums(nil) // stamps now
+	// Fresh playlists should not affect album staleness.
+	a.Store().SetPlaylists([]domain.SimplePlaylist{{ID: "pl1", Name: "My Playlist"}})
 
-	// Verify it's fresh immediately after.
-	require.False(t, s.AlbumsStale(), "albums should be fresh right after setting")
+	// Albums are still stale (never fetched) — fetch should proceed.
+	_, cmd := a.Update(panes.FetchAlbumsRequestMsg{Offset: 0})
+	assert.NotNil(t, cmd, "albums should still be stale even when playlists are fresh")
+}
 
-	// We can't fast-forward time in tests, but we can verify the stale path via
-	// the store's IsStale helper with a zero time, which is the "never fetched" case.
-	var zero time.Time
-	assert.True(t, state.IsStale(zero, state.AlbumsTTL), "zero time should be stale")
+// TestStalenessTTLConstants verifies that the exported TTL constants match the spec values.
+// This acts as a regression guard against accidental constant changes.
+func TestStalenessTTLConstants(t *testing.T) {
+	assert.Equal(t, 5*time.Minute, state.PlaylistsTTL, "PlaylistsTTL should be 5 minutes")
+	assert.Equal(t, 5*time.Minute, state.AlbumsTTL, "AlbumsTTL should be 5 minutes")
+	assert.Equal(t, 5*time.Minute, state.LikedTracksTTL, "LikedTracksTTL should be 5 minutes")
+	assert.Equal(t, 2*time.Minute, state.RecentlyPlayedTTL, "RecentlyPlayedTTL should be 2 minutes")
+	assert.Equal(t, 10*time.Minute, state.StatsTTL, "StatsTTL should be 10 minutes")
+	assert.Equal(t, 30*time.Second, state.DevicesTTL, "DevicesTTL should be 30 seconds")
 }
