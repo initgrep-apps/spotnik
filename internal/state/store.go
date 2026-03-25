@@ -1,6 +1,7 @@
 // Package state provides the central Store — the single source of truth for all
-// application data. Panes read from the store via accessor methods. Only Commands
-// write to the store, never pane Update() or View() directly.
+// application data. Panes read from the store via accessor methods. Only the root
+// app.Update() writes to the store via data-carrying Msg payloads, never Commands,
+// pane Update(), or View() directly.
 package state
 
 import (
@@ -38,8 +39,8 @@ func IsStale(fetchedAt time.Time, ttl time.Duration) bool {
 }
 
 // Store is the central application state. All panes read from here; only
-// tea.Cmd callbacks write to it. Fields are never accessed directly — use the
-// accessor methods to ensure safe concurrent access.
+// the root app.Update() writes to it via Msg payloads. Fields are never accessed
+// directly — use the accessor methods to ensure safe concurrent access.
 type Store struct {
 	mu            sync.RWMutex
 	playbackState *domain.PlaybackState
