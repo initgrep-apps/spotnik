@@ -439,25 +439,39 @@ All animations are **purely cosmetic** and must be implemented as `tea.Tick`-bas
 - Show spinner in results area during the 300ms wait
 
 ### Error Messages
-- Appear in the status bar area (bottom)
-- Color: `Error()` token
-- Auto-dismiss after **4 seconds** using `tea.Tick`
+- Appear as toast notifications overlaid on the current view (bottom-right)
+- Color: `Error()` token (`✗` prefix)
+- Auto-dismiss after a fixed duration (configured in `components/notifications.go`)
+- Routed exclusively through `app.go` — panes never render inline error text
+
+---
+
+## Toast Notifications
+
+API errors and user feedback surface as floating toast overlays positioned at the bottom-right
+of the terminal, rendered by `go.dalton.dog/bubbleup` via `internal/ui/components.NewNotifications`.
+
+| Alert type | Prefix | Color | Trigger |
+|---|---|---|---|
+| `success` | `✓` | `Success()` | Successful actions (add to queue, device transfer) |
+| `error` | `✗` | `Error()` | API failures, auth errors |
+| `warning` | `!` | `Warning()` | Soft failures (Premium required) |
+| `info` | `→` | `KeyHint()` | Informational (transfer in progress) |
+| `ratelimit` | `⧖` | `Warning()` | 429 rate-limit back-off |
+
+Toasts auto-dismiss after a fixed duration. No user action required.
 
 ---
 
 ## Status Bar
 
-The bottom status bar is **always visible**. It has two modes:
+The bottom status bar is **always visible** and shows keybinding hints:
 
-**Normal mode** — shows keybinding hints:
 ```
   /search   j/k move   Space play   Tab pane   d devices   ? help   q quit
 ```
 
-**Error mode** — shows error message (4s, then reverts):
-```
-  ✗ Spotify Premium required for playback control
-```
+The status bar no longer has an "error mode" — errors appear as toast overlays.
 
 **Context mode** — hints change based on active pane:
 - Library pane: show `Enter play  a queue  l like  2 stats  3 playlists`
@@ -513,12 +527,15 @@ Panes with variable-length content MUST implement height-capped scrolling with s
 
 ## Error State Rendering
 
-Every overlay and pane that fetches data MUST render an error state, not just an empty state.
+All API errors are routed through the toast notification system (`internal/ui/components`).
 
-- If an API call fails, show a styled error message with a retry hint
-- Never show "No data" or "No devices found" when the real issue is an API error
-- Use the reusable `RenderError` component from `components/errorview.go`
-- Error states auto-clear on successful retry
+- Pane `View()` methods MUST NOT render inline error boxes or check store error fields
+- Store error fields (e.g. `store.DevicesError()`, `store.StatsError()`) are preserved for
+  retry logic only — panes check them to decide whether to re-request on `f`/`Enter`
+- `RenderError` from `components/errorview.go` is deprecated for pane error display; use
+  `a.alerts.NewAlertCmd("error", message)` in `app.go` Update handlers instead
+- The `DeviceOverlay`, `StatsView`, `PlaylistManager`, and `SearchOverlay` render their
+  empty state (e.g. "No devices found") when no data is loaded — the toast informs the user why
 
 ---
 

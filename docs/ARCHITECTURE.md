@@ -591,27 +591,94 @@ state updates across panes, and end-to-end user workflows with mocked HTTP.
 
 ---
 
+## Notification System
+
+All user-facing notifications use `go.dalton.dog/bubbleup` toast notifications rendered
+by `internal/ui/components.NewNotifications`. Toast alerts overlay the current view and
+auto-dismiss after a configurable duration.
+
+### Toast Alert Types
+
+| Key | Theme Token | Prefix | Use |
+|---|---|---|---|
+| `"success"` | `Success()` | `✓` | Successful user actions (queue add, transfer) |
+| `"error"` | `Error()` | `✗` | API errors, failures |
+| `"warning"` | `Warning()` | `!` | Soft failures (Premium required) |
+| `"info"` | `KeyHint()` | `→` | Informational messages (device transfer initiated) |
+| `"ratelimit"` | `Warning()` | `⧖` | 429 rate-limit back-off |
+
+### How to Emit a Toast
+
+Return `a.alerts.NewAlertCmd(alertType, message)` from any `Update()` handler:
+
+```go
+case SomeFailedMsg:
+    if m.Err != nil {
+        return a, a.alerts.NewAlertCmd("error", m.Err.Error())
+    }
+    return a, nil
+```
+
+### BubbleUp Integration Pattern
+
+`App.Update()` wraps `handleMsg()` and forwards every message to `alerts.Update()`:
+
+```go
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    model, mainCmd := a.handleMsg(msg)
+    updatedAlerts, alertCmd := a.alerts.Update(msg)
+    if am, ok := updatedAlerts.(bubbleup.AlertModel); ok {
+        a.alerts = am
+    }
+    return model, tea.Batch(mainCmd, alertCmd)
+}
+```
+
+`App.View()` wraps the full layout with `alerts.Render()`:
+
+```go
+func (a *App) View() string {
+    return a.alerts.Render(a.buildView())
+}
+```
+
+**Important:** `AlertModel.View()` always returns `""`. Only `Render(content)` produces output.
+Toast activation requires two Update passes: the first pass returns an `alertCmd`; executing
+that `alertCmd` returns the internal `alertMsg`; feeding `alertMsg` to Update activates display.
+
+---
+
 ## Error Handling Conventions
 
 ### Error Handling in build*Cmd Functions
 
-API errors in `build*Cmd` functions MUST be surfaced to the user via status bar or in-pane
-error state. **Silent swallowing is prohibited.**
+API errors in `build*Cmd` functions MUST be surfaced to the user via toast notification.
+**Silent swallowing is prohibited.**
 
 Pattern:
 ```go
-// On failure — MUST set error state
+// On failure — MUST set error state AND return msg with error
 store.SetXxxError(err)
-return XxxLoadedMsg{err: err}
+return XxxLoadedMsg{Err: err}
 
 // On success — MUST clear error state
 store.ClearXxxError()
 store.SetXxx(data)
-return XxxLoadedMsg{data: data}
+return XxxLoadedMsg{Data: data}
 ```
 
-Every pane that reads data from the store MUST check the corresponding error state in `View()`
-and render an error view (using `components.RenderError`) instead of an empty state.
+The root `app.go` `handleMsg()` handler for `XxxLoadedMsg` emits a toast when `Err != nil`:
+
+```go
+case XxxLoadedMsg:
+    if m.Err != nil {
+        return a, a.alerts.NewAlertCmd("error", m.Err.Error())
+    }
+    ...
+```
+
+Store error fields are **preserved** for retry logic (panes check them to decide whether to
+re-request data on `f`/`Enter`) but are **never read in `View()`** — that is the toast's job.
 
 ### Pane Rendering Constraints
 
@@ -621,31 +688,18 @@ items in a loop without height capping is a bug.
 
 ### User-Facing Errors
 
-Errors shown in the status bar. Keep them short and actionable.
+All errors surface as toast notifications. Keep messages short and actionable.
 
-| Error | User Message |
-|---|---|
-| 401 (re-auth needed) | `Session expired. Run: spotnik auth` |
-| 403 (no premium) | `Spotify Premium required for playback` |
-| 429 (rate limited) | `Too many requests. Retrying in 5s...` |
-| 503 (Spotify down) | `Spotify is unavailable. Retrying...` |
-| Network error | `No connection to Spotify` |
+| Error | Toast Type | User Message |
+|---|---|---|
+| 401 (re-auth needed) | `"error"` | `Session expired. Run: spotnik auth` |
+| 403 (no premium) | `"warning"` | `Spotify Premium required for playback` |
+| 429 (rate limited) | `"ratelimit"` | `Too many requests. Retrying in Ns...` |
+| 503 (Spotify down) | `"error"` | `Spotify is unavailable. Retrying...` |
+| Network error | `"error"` | `No connection to Spotify` |
 
-### Error Display Lifecycle
-
-```go
-// Show error
-m.store.SetError(msg)
-
-// Schedule dismissal (4s)
-return m, tea.Tick(4*time.Second, func(t time.Time) tea.Msg {
-    return errorDismissMsg{}
-})
-
-// On dismiss
-case errorDismissMsg:
-    m.store.ClearError()
-```
+Toasts auto-dismiss after `notificationDuration` (defined in `components/notifications.go`).
+No manual dismissal timer or `statusDismissMsg` pattern is needed.
 
 ---
 
