@@ -23,6 +23,21 @@ func newFakeResponse(statusCode int, body string) *http.Response {
 	}
 }
 
+// --- Priority context helpers ---
+
+func TestWithPriority_AndPriorityFromContext(t *testing.T) {
+	ctx := context.Background()
+	// Default is Background.
+	assert.Equal(t, Background, PriorityFromContext(ctx))
+
+	// Set Interactive.
+	ctx2 := WithPriority(ctx, Interactive)
+	assert.Equal(t, Interactive, PriorityFromContext(ctx2))
+
+	// Original context is unchanged.
+	assert.Equal(t, Background, PriorityFromContext(ctx))
+}
+
 // --- tokenBucket tests ---
 // NOTE: tokenBucket and Gateway are in the same package (api) so we access unexported types directly.
 
