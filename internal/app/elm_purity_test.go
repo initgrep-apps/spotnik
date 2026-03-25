@@ -435,6 +435,133 @@ func TestBuildStatsCmd_RunsConcurrently(t *testing.T) {
 	assert.NotNil(t, statsMsg.TopArtists)
 }
 
+// --- Feature 39: Additional Elm purity and coverage gap tests ---
+
+// TestBuildSearchCmd_DoesNotWriteToStore verifies that the command closure returned by
+// buildSearchCmd does NOT write to the store. Store mutations belong in Update(), not in
+// command closures (Elm Architecture purity rule). The command only returns a SearchResultsMsg
+// payload; only Update() writes to the store when it receives that message.
+func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Return a minimal search response with one track result.
+		_, _ = w.Write([]byte(`{
+			"tracks":{"items":[{"id":"t1","name":"Found Track","uri":"spotify:track:t1","artists":[{"name":"Artist"}]}],"total":1},
+			"artists":{"items":[],"total":0},
+			"albums":{"items":[],"total":0},
+			"playlists":{"items":[],"total":0}
+		}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Trigger SearchRequestMsg to get the buildSearchCmd closure.
+	// NOTE: SearchRequestMsg handler intentionally writes SetSearchQuery and SetSearchLoading
+	// to the store BEFORE dispatching the command — this is correct Update() behaviour.
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
+	require.NotNil(t, cmd, "SearchRequestMsg should return a search command")
+
+	// Snapshot store state AFTER the Update() handler wrote its fields.
+	beforeQuery := a.Store().SearchQuery()
+	beforeLoading := a.Store().SearchLoading()
+
+	// Execute the command closure. This performs the HTTP call and returns SearchResultsMsg.
+	// The closure must NOT touch the store.
+	resultMsg := cmd()
+	require.NotNil(t, resultMsg, "search command should return a message")
+
+	// Store state must be unchanged by the command execution.
+	assert.Equal(t, beforeQuery, a.Store().SearchQuery(),
+		"buildSearchCmd closure must not modify store.SearchQuery")
+	assert.Equal(t, beforeLoading, a.Store().SearchLoading(),
+		"buildSearchCmd closure must not modify store.SearchLoading")
+	assert.Nil(t, a.Store().SearchResults(),
+		"buildSearchCmd closure must not write search results to store (only Update() may do that)")
+
+	// Verify the message carries the results — Update() will write them when it receives the msg.
+	searchMsg, ok := resultMsg.(panes.SearchResultsMsg)
+	require.True(t, ok, "command should return SearchResultsMsg, got %T", resultMsg)
+	assert.NotNil(t, searchMsg.Results, "SearchResultsMsg should carry results payload")
+}
+
+// TestSearchResultsMsg_ErrorPath verifies that SearchResultsMsg with a non-nil error
+// does NOT update store search results and emits an error toast.
+func TestSearchResultsMsg_ErrorPath(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Pre-populate store with existing results to verify they are not cleared on error.
+	// (We can't set store.SearchResults directly in tests, so we just verify it stays nil.)
+	require.Nil(t, a.Store().SearchResults(), "search results should start nil")
+
+	searchErr := errors.New("search timed out")
+	_, cmd := a.Update(panes.SearchResultsMsg{Err: searchErr})
+	require.NotNil(t, cmd, "error path should emit an error toast cmd")
+
+	// Store search results must remain nil — error does not clear or set them.
+	assert.Nil(t, a.Store().SearchResults(),
+		"SearchResultsMsg with error must not write to store search results")
+
+	// Two-pass: verify the toast contains the error detail.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "search timed out", "error toast should include the error text")
+}
+
+// TestSearchResultsMsg_ClearPath verifies that SearchClearedMsg clears store search state.
+func TestSearchResultsMsg_ClearPath(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Set search state via SearchRequestMsg (the sanctioned Update() path).
+	_, _ = a.Update(panes.SearchRequestMsg{Query: "jazz"})
+	assert.Equal(t, "jazz", a.Store().SearchQuery(), "query should be set after SearchRequestMsg")
+	assert.True(t, a.Store().SearchLoading(), "loading should be true after SearchRequestMsg")
+
+	// SearchClearedMsg should clear query and results (loading is cleared by SearchResultsMsg handler).
+	_, _ = a.Update(panes.SearchClearedMsg{})
+	assert.Equal(t, "", a.Store().SearchQuery(), "SearchClearedMsg should clear the search query")
+	assert.Nil(t, a.Store().SearchResults(), "SearchClearedMsg should clear search results")
+}
+
+// TestStatsLoadedMsg_PartialFailure verifies that when a StatsLoadedMsg carries
+// an error, the store does not update with stale data and an error toast is emitted.
+// This covers the partial-failure case: TopTracks may be populated but if Err is set,
+// the store should not be stamped and the pane should receive an error signal.
+func TestStatsLoadedMsg_PartialFailure(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Open the stats pane so the StatsLoadedMsg is forwarded to it.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	a = m.(*app.App)
+
+	tracks := []domain.Track{{ID: "t1", Name: "Top Track"}}
+	// Partial failure: TopTracks populated but Err set (TopArtists fetch failed).
+	msg := panes.StatsLoadedMsg{
+		TimeRange: "short_term",
+		TopTracks: tracks,
+		Err:       errors.New("artists fetch failed"),
+	}
+	_, cmd := a.Update(msg)
+
+	// Store should NOT be updated when Err is set.
+	assert.Nil(t, a.Store().TopTracks("short_term"),
+		"TopTracks must not be written to store when StatsLoadedMsg.Err is set")
+	assert.Nil(t, a.Store().TopArtists("short_term"),
+		"TopArtists must not be written to store when StatsLoadedMsg.Err is set")
+
+	// An error toast must be emitted.
+	require.NotNil(t, cmd, "partial failure should emit an error toast cmd")
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "Failed to load stats", "error toast should mention stats failure")
+}
+
 // --- Helpers ---
 
 // runFetchPlaybackCmd runs the app tick loop and extracts the PlaybackStateFetchedMsg.

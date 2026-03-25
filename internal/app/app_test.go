@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -423,17 +425,23 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 	}
 }
 
-// TestApp_LikeToggleResultMsg_WithError verifies that a like error emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_LikeToggleResultMsg_WithError verifies that a like error emits a toast with the error text.
+// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_LikeToggleResultMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	errMsg := panes.LikeToggleResultMsg{TrackID: "t1", Err: fmt.Errorf("like failed")}
-	m, cmd := a.Update(errMsg)
-	require.NotNil(t, m)
-	// Toasts are emitted as a non-nil cmd — the alert appears after alertCmd is processed.
-	assert.NotNil(t, cmd, "error result should produce an alert toast cmd")
+	_, cmd := a.Update(errMsg)
+	require.NotNil(t, cmd, "error result should produce an alert toast cmd")
+
+	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "like failed", "error toast should show the error text")
 }
 
 // TestApp_LikeToggleResultMsg_NoError verifies a successful like clears status.
@@ -447,17 +455,32 @@ func TestApp_LikeToggleResultMsg_NoError(t *testing.T) {
 	assert.Nil(t, cmd, "successful like should not produce a cmd")
 }
 
-// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast with the error text.
+// Uses the two-pass pattern: execute the batch cmd and feed alert messages back to render the toast.
 func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	errMsg := panes.PlaybackCmdSentMsg{Err: fmt.Errorf("playback failed")}
-	m, cmd := a.Update(errMsg)
-	require.NotNil(t, m)
-	// Error path returns Batch(fetchPlaybackStateCmd, alertCmd) — always non-nil.
-	assert.NotNil(t, cmd, "error result should produce refetch + alert toast cmd")
+	_, cmd := a.Update(errMsg)
+	require.NotNil(t, cmd, "error result should produce refetch + alert toast cmd")
+
+	// Two-pass: the batch contains fetchPlaybackStateCmd + alertCmd.
+	// Execute the batch and feed each sub-message back to Update so the alert renders.
+	batchMsg := cmd()
+	if bm, ok := batchMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if msg := c(); msg != nil {
+				a.Update(msg)
+			}
+		}
+	} else if batchMsg != nil {
+		a.Update(batchMsg)
+	}
+	assert.Contains(t, a.View(), "playback failed", "error toast should show the error text")
 }
 
 // TestApp_PlaybackCmdSentMsg_NoError verifies that a successful playback cmd triggers refetch.
@@ -597,30 +620,42 @@ func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	assert.Error(t, resultMsg.Err, "nil player must set Err on AddToQueueResultMsg (errNilClient)")
 }
 
-// TestApp_AddToQueueResultMsg_Success verifies success emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_AddToQueueResultMsg_Success verifies success emits a "Added to queue" toast.
+// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	successMsg := panes.AddToQueueResultMsg{Err: nil}
-	m, cmd := a.Update(successMsg)
-	require.NotNil(t, m)
-	// Success path emits a "success" alert toast cmd — always non-nil.
-	assert.NotNil(t, cmd, "success should emit a toast alert cmd")
+	_, cmd := a.Update(successMsg)
+	require.NotNil(t, cmd, "success should emit a toast alert cmd")
+
+	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "Added to queue", "success toast should mention queue addition")
 }
 
-// TestApp_AddToQueueResultMsg_Error verifies error emits a toast cmd.
-// Toast messages appear via alerts.Render() overlay — not directly in status bar.
+// TestApp_AddToQueueResultMsg_Error verifies error emits a toast with the error text.
+// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("queue failed")}
-	m, cmd := a.Update(errMsg)
-	require.NotNil(t, m)
-	// Error path emits an "error" alert toast cmd — always non-nil.
-	assert.NotNil(t, cmd, "error result should emit an alert toast cmd")
+	_, cmd := a.Update(errMsg)
+	require.NotNil(t, cmd, "error result should emit an alert toast cmd")
+
+	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
+	alertMsg := cmd()
+	_, _ = a.Update(alertMsg)
+	assert.Contains(t, a.View(), "queue failed", "error toast should show the error text")
 }
 
 // TestApp_SlashOpensSearch verifies '/' opens the search overlay.
@@ -998,16 +1033,33 @@ func TestApp_DeviceOverlay_EscCloses(t *testing.T) {
 	assert.False(t, a.DeviceOverlayOpen(), "DeviceOverlayClosedMsg should close the overlay")
 }
 
-// TestApp_DeviceTransfer_EmitsInfoToast verifies that a transfer command
-// emits an info toast and dispatches the API call. Toast appears via overlay.
+// TestApp_DeviceTransfer_ShowsStatusMessage verifies that a transfer command
+// emits an info toast showing the target device name.
+// Uses the two-pass pattern: execute the batch cmd and verify toast text in View().
 func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Set a window size large enough for the main view so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
 
 	transferMsg := panes.TransferPlaybackMsg{DeviceID: "def456", DeviceName: "iPhone 14"}
 	_, cmd := a.Update(transferMsg)
-	// Transfer emits Batch(buildTransferPlaybackCmd, infoAlertCmd) — always non-nil.
-	assert.NotNil(t, cmd, "transfer should produce an API command + info toast")
+	require.NotNil(t, cmd, "transfer should produce an API command + info toast")
+
+	// Two-pass: the batch contains buildTransferPlaybackCmd + infoAlertCmd.
+	// Execute the batch and feed each sub-message back to Update so the alert renders.
+	batchMsg := cmd()
+	if bm, ok := batchMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if msg := c(); msg != nil {
+				a.Update(msg)
+			}
+		}
+	} else if batchMsg != nil {
+		a.Update(batchMsg)
+	}
+	assert.Contains(t, a.View(), "Switching to iPhone 14", "info toast should name the target device")
 }
 
 // TestApp_DeviceTransferredMsg_ErrorEmitsToast verifies transfer errors emit an error toast.
@@ -1997,4 +2049,218 @@ func TestApp_AlbumsLoadedMsg_OffsetPositive_AppendsAlbums(t *testing.T) {
 	require.Len(t, got, 2, "Offset>0 should append to existing albums")
 	assert.Equal(t, "existing", got[0].Album.ID)
 	assert.Equal(t, "new1", got[1].Album.ID)
+}
+
+// --- Feature 39: Idle Polish & Test Coverage ---
+
+// TestApp_WindowSizeMsg_ResetsLastInteraction verifies that a terminal resize resets
+// lastInteraction, signalling user presence the same way a key press does.
+func TestApp_WindowSizeMsg_ResetsLastInteraction(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Make the app idle by pushing lastInteraction into the past.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle after 120s without interaction")
+
+	// A terminal resize should reset the idle state.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated := m.(*app.App)
+
+	assert.False(t, updated.IsIdle(), "WindowSizeMsg should reset idle state")
+}
+
+// TestApp_WindowSizeMsg_ResetsTickCountWhenIdle verifies that when the app is idle
+// and receives a WindowSizeMsg, tickCount resets to 0 to force an immediate poll.
+func TestApp_WindowSizeMsg_ResetsTickCountWhenIdle(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Advance the tick count so we can verify it gets reset.
+	for i := 0; i < 5; i++ {
+		m, _ := a.Update(panes.TickMsg{})
+		a = m.(*app.App)
+	}
+	require.Equal(t, 5, a.TickCount(), "tick count should have advanced to 5")
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// WindowSizeMsg while idle should reset tickCount.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated := m.(*app.App)
+
+	assert.Equal(t, 0, updated.TickCount(), "WindowSizeMsg while idle should reset tickCount to 0")
+}
+
+// TestApp_WindowSizeMsg_ReturnFromIdleDuringBackoff_EmitsToast verifies that when a
+// terminal resize returns the app from idle while a 429 backoff is active, a ratelimit
+// toast is emitted — matching the same behaviour as the KeyMsg idle-return path.
+func TestApp_WindowSizeMsg_ReturnFromIdleDuringBackoff_EmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// Activate a backoff by sending RateLimitedMsg.
+	m, _ := a.Update(panes.RateLimitedMsg{RetryAfterSecs: 15})
+	a = m.(*app.App)
+	require.Greater(t, a.BackoffTicks(), 0, "backoff should be active")
+
+	// Now return from idle via a resize — should emit ratelimit toast.
+	_, cmd := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	require.NotNil(t, cmd, "returning from idle during backoff via resize should produce a cmd")
+
+	// Two-pass: execute the cmd to find the alert message.
+	alertMsg := cmd()
+	_, alertCmd := a.Update(alertMsg)
+	if alertCmd != nil {
+		nextMsg := alertCmd()
+		if nextMsg != nil {
+			a.Update(nextMsg)
+		}
+	}
+	view := a.View()
+	assert.Contains(t, view, "Rate limited", "toast should mention rate limiting")
+	assert.Contains(t, view, "resuming in", "toast should show countdown")
+}
+
+// TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast verifies that
+// when the user returns from idle while a 429 backoff is active, a ratelimit toast
+// is emitted to explain the stale data.
+func TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// Activate a backoff by sending RateLimitedMsg.
+	m, _ := a.Update(panes.RateLimitedMsg{RetryAfterSecs: 15})
+	a = m.(*app.App)
+	require.Greater(t, a.BackoffTicks(), 0, "backoff should be active")
+
+	// Now return from idle via a key press — should emit ratelimit toast.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	require.NotNil(t, cmd, "returning from idle during backoff should produce a cmd")
+
+	// Two-pass: execute the cmd batch to find the alert message.
+	alertMsg := cmd()
+	_, alertCmd := a.Update(alertMsg)
+	// alertCmd may be nil if alertMsg was the toast; forward until the toast renders.
+	if alertCmd != nil {
+		nextMsg := alertCmd()
+		if nextMsg != nil {
+			a.Update(nextMsg)
+		}
+	}
+	view := a.View()
+	assert.Contains(t, view, "Rate limited", "toast should mention rate limiting")
+	assert.Contains(t, view, "resuming in", "toast should show countdown")
+}
+
+// TestApp_KeyMsg_ReturnFromIdleWithoutBackoff_NoToast verifies that returning from
+// idle without an active backoff does NOT emit a ratelimit toast.
+func TestApp_KeyMsg_ReturnFromIdleWithoutBackoff_NoToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Ensure no backoff is active.
+	require.Equal(t, 0, a.BackoffTicks(), "no backoff should be active")
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// Return from idle via key press — should NOT emit a ratelimit toast.
+	m, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	a = m.(*app.App)
+
+	// If cmd is non-nil, feed it through and check view has no ratelimit mention.
+	if cmd != nil {
+		msg := cmd()
+		if msg != nil {
+			a.Update(msg)
+		}
+	}
+	view := a.View()
+	assert.NotContains(t, view, "resuming in", "no backoff means no ratelimit toast")
+}
+
+// TestApp_NilPlaybackState_NoWarnBefore30Ticks verifies that repeated nil PlaybackState
+// results in no toast before the 30-tick threshold is reached.
+func TestApp_NilPlaybackState_NoWarnBefore30Ticks(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Ensure PlaybackState is nil (no player injected, so fetchPlaybackStateCmd returns nil state).
+	require.Nil(t, a.Store().PlaybackState(), "playback state should start nil")
+
+	// Feed 29 nil-state PlaybackStateFetchedMsg messages — no toast should fire.
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+
+	// View should not contain warning text.
+	assert.NotContains(t, a.View(), "No playback state", "warning should not fire before 30 ticks")
+}
+
+// TestApp_NilPlaybackState_WarnAtTick30 verifies that a warning toast is emitted
+// exactly when the 30th consecutive nil PlaybackState is received.
+func TestApp_NilPlaybackState_WarnAtTick30(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	require.Nil(t, a.Store().PlaybackState(), "playback state should start nil")
+
+	// Feed 29 nil-state messages first.
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+
+	// The 30th nil-state message should emit the warning toast.
+	_, cmd := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+	require.NotNil(t, cmd, "30th nil state should emit a warning toast cmd")
+
+	// Two-pass: execute cmd to get alert message, feed through Update.
+	alertMsg := cmd()
+	_, alertCmd := a.Update(alertMsg)
+	if alertCmd != nil {
+		nextMsg := alertCmd()
+		if nextMsg != nil {
+			a.Update(nextMsg)
+		}
+	}
+	assert.Contains(t, a.View(), "No playback state", "warning toast should be visible at tick 30")
+}
+
+// TestApp_NilPlaybackState_CounterResets verifies that the nil-state counter resets
+// when a non-nil PlaybackState is received, preventing repeat warnings.
+func TestApp_NilPlaybackState_CounterResets(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Build up 29 nil ticks.
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+
+	// Receive a valid state — counter should reset.
+	validState := &domain.PlaybackState{IsPlaying: true, Item: &domain.Track{ID: "t1"}}
+	m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: validState})
+	a = m.(*app.App)
+
+	// Now send 29 more nil states — should NOT fire a warning (counter was reset).
+	for i := 0; i < 29; i++ {
+		m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: nil})
+		a = m.(*app.App)
+	}
+	assert.NotContains(t, a.View(), "No playback state", "counter reset should prevent re-warn before 30 ticks")
 }

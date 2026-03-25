@@ -25,9 +25,9 @@
 
 ### Test Coverage Gaps
 
-- [ ] **`buildSearchCmd` store isolation untested** — No test verifies the command itself does NOT write to store.
-- [ ] **`SearchResultsMsg` error path missing from elm_purity_test.go** — Unlike all other message types, SearchResultsMsg error/clear paths are only tested indirectly.
-- [ ] **Concurrent stats partial failure untested** — When TopTracks succeeds but TopArtists fails (or vice versa), the behavior is untested.
+- [x] **`buildSearchCmd` store isolation untested** — Fixed in Feature 39: `TestBuildSearchCmd_DoesNotWriteToStore` added to elm_purity_test.go.
+- [x] **`SearchResultsMsg` error path missing from elm_purity_test.go** — Fixed in Feature 39: `TestSearchResultsMsg_ErrorPath` and `TestSearchResultsMsg_ClearPath` added.
+- [x] **Concurrent stats partial failure untested** — Fixed in Feature 39: `TestStatsLoadedMsg_PartialFailure` added.
 
 ### Type Design
 
@@ -62,7 +62,7 @@
 
 ### Test Quality
 
-- [ ] **Tests weakened to `cmd != nil`** — Several tests (LikeToggleResultMsg, PlaybackCmdSentMsg, AddToQueueResultMsg, DeviceTransfer) only assert `cmd != nil` instead of verifying toast content and type. Should use the two-pass pattern: `alertMsg := cmd(); a.Update(alertMsg); assert.Contains(a.View(), "expected text")`.
+- [x] **Tests weakened to `cmd != nil`** — Fixed in Feature 39: five tests (LikeToggleResultMsg, PlaybackCmdSentMsg, AddToQueueResultMsg, AddToQueueResultMsg error, DeviceTransfer) now use the two-pass pattern to verify toast content and type.
 
 ### Robustness
 
@@ -101,12 +101,12 @@
 
 ### UX
 
-- [ ] **Only `tea.KeyMsg` resets idle, not `tea.WindowSizeMsg`** — Terminal resize implies user presence but does not reset idle state. User who resizes but doesn't press keys continues at idle polling rates.
-- [ ] **Backoff + idle-return interaction** — If user returns from idle during active 429 backoff, tickCount resets to 0 but backoff guard prevents any fetches. No status indicator shown. User sees stale data with no explanation until backoff expires.
+- [x] **Only `tea.KeyMsg` resets idle, not `tea.WindowSizeMsg`** — Fixed in Feature 39: WindowSizeMsg handler now resets lastInteraction and tickCount (when idle) identically to KeyMsg.
+- [x] **Backoff + idle-return interaction** — Fixed in Feature 39: KeyMsg handler now emits a "ratelimit" toast with remaining seconds when user returns from idle during an active 429 backoff.
 
 ### Observability
 
-- [ ] **Nil PlaybackState unlogged** — `pollIntervals()` silently defaults to "paused" when `store.PlaybackState()` returns nil. If this persists beyond startup, it indicates a bug but produces no log/toast. Consider adding observability after N ticks with nil state.
+- [x] **Nil PlaybackState unlogged** — Fixed in Feature 39: `nilPlaybackStateTicks` counter added. A "warning" toast fires on the 30th consecutive nil-state, reset to 0 on any non-nil state.
 
 ---
 
