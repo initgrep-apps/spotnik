@@ -601,9 +601,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Terminal resize implies user presence — reset idle state the same way KeyMsg does.
 		wasIdle := a.isIdle()
 		a.lastInteraction = time.Now()
+		var toastCmd tea.Cmd
 		if wasIdle {
 			// User returned from idle via resize — force immediate poll on the next tick.
 			a.tickCount = 0
+			if a.backoffTicks > 0 {
+				// Active 429 backoff prevents any fetches after idle return.
+				// Emit a ratelimit toast so the user knows data is stale and why.
+				toastCmd = a.alerts.NewAlertCmd("ratelimit",
+					fmt.Sprintf("Rate limited — resuming in %ds", a.backoffTicks))
+			}
 		}
 		a.width = m.Width
 		a.height = m.Height
@@ -622,6 +629,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.playlistPane != nil {
 			a.playlistPane.SetSize(m.Width, m.Height-4)
+		}
+		if toastCmd != nil {
+			return a, toastCmd
 		}
 		return a, nil
 

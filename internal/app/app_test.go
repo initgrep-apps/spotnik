@@ -2094,6 +2094,40 @@ func TestApp_WindowSizeMsg_ResetsTickCountWhenIdle(t *testing.T) {
 	assert.Equal(t, 0, updated.TickCount(), "WindowSizeMsg while idle should reset tickCount to 0")
 }
 
+// TestApp_WindowSizeMsg_ReturnFromIdleDuringBackoff_EmitsToast verifies that when a
+// terminal resize returns the app from idle while a 429 backoff is active, a ratelimit
+// toast is emitted — matching the same behaviour as the KeyMsg idle-return path.
+func TestApp_WindowSizeMsg_ReturnFromIdleDuringBackoff_EmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// Activate a backoff by sending RateLimitedMsg.
+	m, _ := a.Update(panes.RateLimitedMsg{RetryAfterSecs: 15})
+	a = m.(*app.App)
+	require.Greater(t, a.BackoffTicks(), 0, "backoff should be active")
+
+	// Now return from idle via a resize — should emit ratelimit toast.
+	_, cmd := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	require.NotNil(t, cmd, "returning from idle during backoff via resize should produce a cmd")
+
+	// Two-pass: execute the cmd to find the alert message.
+	alertMsg := cmd()
+	_, alertCmd := a.Update(alertMsg)
+	if alertCmd != nil {
+		nextMsg := alertCmd()
+		if nextMsg != nil {
+			a.Update(nextMsg)
+		}
+	}
+	view := a.View()
+	assert.Contains(t, view, "Rate limited", "toast should mention rate limiting")
+	assert.Contains(t, view, "resuming in", "toast should show countdown")
+}
+
 // TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast verifies that
 // when the user returns from idle while a 429 backoff is active, a ratelimit toast
 // is emitted to explain the stale data.
