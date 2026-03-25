@@ -39,12 +39,12 @@ Features must be built in order. Each depends on the previous being stable and t
 | 25 | API DRY Refactoring | `25-api-dry-refactoring.md` | ✅ Complete | 23, 24 | #31 |
 | 26 | View Height Enforcement | `26-view-height-enforcement.md` | ✅ Complete | — | #28 |
 | 27 | Error Resilience | `27-error-resilience.md` | ✅ Complete | 24 | #32 |
-| 28 | API Cleanup Follow-up | `28-api-cleanup-followup.md` | Planned | 21, 24, 25 | — |
-| 29 | Elm Purity: Data-Carrying Msgs | `29-elm-purity-data-carrying-msgs.md` | Planned | — | — |
-| 30 | API Gateway | `30-api-gateway.md` | Planned | — | — |
-| 31 | Notifications + Error Routing | `31-notifications-error-routing.md` | Planned | 29 | — |
-| 32 | Staleness Tracking | `32-staleness-tracking.md` | Planned | 29 | — |
-| 33 | Idle Polling Backoff | `33-idle-polling-backoff.md` | Planned | 29 | — |
+| 28 | API Cleanup Follow-up | `28-api-cleanup-followup.md` | ✅ Complete | 21, 24, 25 | #33 |
+| 29 | Elm Purity: Data-Carrying Msgs | `29-elm-purity-data-carrying-msgs.md` | ✅ Complete | — | #34 |
+| 30 | API Gateway | `30-api-gateway.md` | ✅ Complete | — | #35 |
+| 31 | Notifications + Error Routing | `31-notifications-error-routing.md` | ✅ Complete | 29 | #36 |
+| 32 | Staleness Tracking | `32-staleness-tracking.md` | ✅ Complete | 29 | #37 |
+| 33 | Idle Polling Backoff | `33-idle-polling-backoff.md` | ✅ Complete | 29 | #38 |
 
 > **Note on 1:** Theme System (01) and Auth (02) have no dependencies on each other and can be
 > built in parallel by separate agents. Both must be complete before Feature 03 begins.
