@@ -45,6 +45,11 @@ type Store struct {
 	playbackState *domain.PlaybackState
 	activeDevice  *domain.Device
 
+	// Device list — the most recent list of Spotify Connect devices returned by the API.
+	// Populated by the DevicesLoadedMsg handler so the staleness gate can return cached
+	// data on subsequent FetchDevicesRequestMsg calls without a redundant API round-trip.
+	devices []domain.Device
+
 	// Library data
 	playlists      []domain.SimplePlaylist
 	playlistsTotal int
@@ -60,6 +65,19 @@ type Store struct {
 	recentPlayedFetchedAt time.Time
 	statsFetchedAt        map[string]time.Time // keyed by time range
 	devicesFetchedAt      time.Time
+
+	// Fetching sentinels — true while an in-flight fetch is outstanding.
+	// Checked in Update() staleness gates to prevent TOCTOU duplicate fetches:
+	// between the staleness check and fetch completion a second identical request
+	// could also pass the gate. Set to true just before dispatch, cleared in the
+	// corresponding loaded-message handler. Paginated requests (Offset > 0) bypass
+	// these guards since they are explicitly page-by-page continuation fetches.
+	playlistsFetching bool
+	albumsFetching    bool
+	likedFetching     bool
+	recentFetching    bool
+	statsFetching     map[string]bool // keyed by time range
+	devicesFetching   bool
 
 	// Queue data
 	queue []domain.Track
@@ -114,6 +132,7 @@ func New() *Store {
 	return &Store{
 		netLog:         NewNetLog(),
 		statsFetchedAt: make(map[string]time.Time),
+		statsFetching:  make(map[string]bool),
 	}
 }
 
@@ -149,6 +168,23 @@ func (s *Store) SetActiveDevice(device *domain.Device) {
 	s.activeDevice = device
 }
 
+// Devices returns the most recently fetched list of Spotify Connect devices,
+// or nil if the list has not been fetched yet.
+func (s *Store) Devices() []domain.Device {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.devices
+}
+
+// SetDevices replaces the cached device list. Called by app.Update() after a
+// successful DevicesLoadedMsg so that subsequent FetchDevicesRequestMsg calls
+// can return cached data when the store is still within DevicesTTL.
+func (s *Store) SetDevices(devices []domain.Device) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devices = devices
+}
+
 // Playlists returns the user's saved playlists.
 func (s *Store) Playlists() []domain.SimplePlaylist {
 	s.mu.RLock()
@@ -156,12 +192,17 @@ func (s *Store) Playlists() []domain.SimplePlaylist {
 	return s.playlists
 }
 
-// SetPlaylists updates the saved playlists in the store and stamps the fetch time.
+// SetPlaylists updates the saved playlists in the store.
+// fetchedAt is only stamped when the slice is non-empty, preventing an empty
+// (nil-client or error-fallback) response from resetting the TTL and blocking
+// retries for the full cache duration.
 func (s *Store) SetPlaylists(playlists []domain.SimplePlaylist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlists = playlists
-	s.playlistsFetchedAt = time.Now()
+	if len(playlists) > 0 {
+		s.playlistsFetchedAt = time.Now()
+	}
 }
 
 // PlaylistsTotal returns the total number of playlists (for pagination).
@@ -185,12 +226,16 @@ func (s *Store) SavedAlbums() []domain.SavedAlbum {
 	return s.savedAlbums
 }
 
-// SetSavedAlbums updates the saved albums in the store and stamps the fetch time.
+// SetSavedAlbums updates the saved albums in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
 func (s *Store) SetSavedAlbums(albums []domain.SavedAlbum) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.savedAlbums = albums
-	s.albumsFetchedAt = time.Now()
+	if len(albums) > 0 {
+		s.albumsFetchedAt = time.Now()
+	}
 }
 
 // AlbumsLoaded returns true if saved albums have been fetched at least once.
@@ -208,12 +253,16 @@ func (s *Store) LikedTracks() []domain.SavedTrack {
 	return s.likedTracks
 }
 
-// SetLikedTracks updates the liked tracks in the store and stamps the fetch time.
+// SetLikedTracks updates the liked tracks in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
 func (s *Store) SetLikedTracks(tracks []domain.SavedTrack) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.likedTracks = tracks
-	s.likedTracksFetchedAt = time.Now()
+	if len(tracks) > 0 {
+		s.likedTracksFetchedAt = time.Now()
+	}
 }
 
 // LikedTotal returns the total number of liked tracks (for pagination).
@@ -245,12 +294,16 @@ func (s *Store) RecentlyPlayed() []domain.PlayHistory {
 	return s.recentlyPlayed
 }
 
-// SetRecentlyPlayed updates the recently played history in the store and stamps the fetch time.
+// SetRecentlyPlayed updates the recently played history in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
 func (s *Store) SetRecentlyPlayed(items []domain.PlayHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recentlyPlayed = items
-	s.recentPlayedFetchedAt = time.Now()
+	if len(items) > 0 {
+		s.recentPlayedFetchedAt = time.Now()
+	}
 }
 
 // Queue returns the upcoming tracks in the user's play queue.
@@ -321,8 +374,10 @@ func (s *Store) TopTracks(timeRange string) []domain.Track {
 	return s.topTracks[timeRange]
 }
 
-// SetTopTracks caches top tracks for a specific time range in the store
-// and stamps the fetch time for that range.
+// SetTopTracks caches top tracks for a specific time range in the store.
+// It does NOT stamp statsFetchedAt — call StampStatsFetchedAt after both
+// SetTopTracks and SetTopArtists succeed so the range is only marked fresh
+// when both datasets are written (avoids partial-data false-fresh state).
 func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -330,7 +385,6 @@ func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 		s.topTracks = make(map[string][]domain.Track)
 	}
 	s.topTracks[timeRange] = tracks
-	s.statsFetchedAt[timeRange] = time.Now()
 }
 
 // TopArtists returns the cached top artists for the given time range,
@@ -345,8 +399,10 @@ func (s *Store) TopArtists(timeRange string) []domain.FullArtist {
 	return s.topArtists[timeRange]
 }
 
-// SetTopArtists caches top artists for a specific time range in the store
-// and stamps the fetch time for that range.
+// SetTopArtists caches top artists for a specific time range in the store.
+// It does NOT stamp statsFetchedAt — call StampStatsFetchedAt after both
+// SetTopTracks and SetTopArtists succeed so the range is only marked fresh
+// when both datasets are written (avoids partial-data false-fresh state).
 func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -354,6 +410,14 @@ func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 		s.topArtists = make(map[string][]domain.FullArtist)
 	}
 	s.topArtists[timeRange] = artists
+}
+
+// StampStatsFetchedAt records the time when stats for a time range were fully
+// loaded. Call this once after both SetTopTracks and SetTopArtists succeed so
+// that StatsStale only returns false when both datasets are present.
+func (s *Store) StampStatsFetchedAt(timeRange string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.statsFetchedAt[timeRange] = time.Now()
 }
 
@@ -494,6 +558,92 @@ func (s *Store) DevicesStale() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return IsStale(s.devicesFetchedAt, DevicesTTL)
+}
+
+// --- Fetching sentinel accessors ---
+
+// PlaylistsFetching returns true while a playlists fetch is in-flight.
+func (s *Store) PlaylistsFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playlistsFetching
+}
+
+// SetPlaylistsFetching sets or clears the in-flight playlists fetch sentinel.
+func (s *Store) SetPlaylistsFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlistsFetching = f
+}
+
+// AlbumsFetching returns true while a saved-albums fetch is in-flight.
+func (s *Store) AlbumsFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.albumsFetching
+}
+
+// SetAlbumsFetching sets or clears the in-flight albums fetch sentinel.
+func (s *Store) SetAlbumsFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.albumsFetching = f
+}
+
+// LikedFetching returns true while a liked-tracks fetch is in-flight.
+func (s *Store) LikedFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedFetching
+}
+
+// SetLikedFetching sets or clears the in-flight liked-tracks fetch sentinel.
+func (s *Store) SetLikedFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedFetching = f
+}
+
+// RecentFetching returns true while a recently-played fetch is in-flight.
+func (s *Store) RecentFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.recentFetching
+}
+
+// SetRecentFetching sets or clears the in-flight recently-played fetch sentinel.
+func (s *Store) SetRecentFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recentFetching = f
+}
+
+// StatsFetching returns true while a stats fetch for the given time range is in-flight.
+func (s *Store) StatsFetching(timeRange string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.statsFetching[timeRange]
+}
+
+// SetStatsFetching sets or clears the in-flight stats fetch sentinel for a time range.
+func (s *Store) SetStatsFetching(timeRange string, f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statsFetching[timeRange] = f
+}
+
+// DevicesFetching returns true while a devices fetch is in-flight.
+func (s *Store) DevicesFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.devicesFetching
+}
+
+// SetDevicesFetching sets or clears the in-flight devices fetch sentinel.
+func (s *Store) SetDevicesFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devicesFetching = f
 }
 
 // --- Error state accessors ---

@@ -33,16 +33,29 @@ func TestFetchStatsMsg_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchStatsMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchStatsMsg_WhenFresh_SkipsFetch verifies that a FetchStatsMsg is skipped when
-// the store already has fresh stats for that time range.
-func TestFetchStatsMsg_WhenFresh_SkipsFetch(t *testing.T) {
+// TestFetchStatsMsg_WhenFresh_ReturnsSyntheticCmd verifies that when stats are fresh,
+// a FetchStatsMsg returns a synthetic command delivering cached data (not nil) so the
+// stats view can initialize without waiting for a redundant API round-trip.
+func TestFetchStatsMsg_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
 	a := newTestApp()
-	// Pre-populate stats data so the range is within TTL.
+	// Pre-populate stats data AND stamp so the range is within TTL.
+	// SetTopTracks/SetTopArtists no longer stamp statsFetchedAt (Task 4);
+	// StampStatsFetchedAt must be called explicitly after both setters.
 	a.Store().SetTopTracks("short_term", []domain.Track{{ID: "t1", Name: "Song"}})
 	a.Store().SetTopArtists("short_term", []domain.FullArtist{{ID: "a1", Name: "Artist"}})
+	a.Store().StampStatsFetchedAt("short_term")
 
 	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
-	assert.Nil(t, cmd, "FetchStatsMsg when fresh should return nil command (skip fetch)")
+	assert.NotNil(t, cmd, "FetchStatsMsg when fresh should return a synthetic cmd (not nil)")
+	msg := cmd()
+	loaded, ok := msg.(panes.StatsLoadedMsg)
+	assert.True(t, ok, "synthetic cmd should produce StatsLoadedMsg, got %T", msg)
+	assert.Equal(t, "short_term", loaded.TimeRange)
+	assert.Nil(t, loaded.Err, "synthetic StatsLoadedMsg should have nil Err")
+	assert.Len(t, loaded.TopTracks, 1, "synthetic StatsLoadedMsg should carry cached tracks")
+	assert.Equal(t, "t1", loaded.TopTracks[0].ID)
+	assert.Len(t, loaded.TopArtists, 1, "synthetic StatsLoadedMsg should carry cached artists")
+	assert.Equal(t, "a1", loaded.TopArtists[0].ID)
 }
 
 // TestFetchStatsMsg_DifferentRange_AlwaysFetches verifies that a different time range
@@ -67,15 +80,21 @@ func TestFetchPlaylistsRequest_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchPlaylistsRequestMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchPlaylistsRequest_WhenFresh_SkipsFetch verifies playlist fetch is skipped when
-// the store already has fresh playlist data.
-func TestFetchPlaylistsRequest_WhenFresh_SkipsFetch(t *testing.T) {
+// TestFetchPlaylistsRequest_WhenFresh_ReturnsSyntheticCmd verifies that when playlists
+// are fresh, a FetchPlaylistsRequestMsg returns a synthetic command with cached data
+// (Task 6: cached data delivery so pane can initialize without a redundant API call).
+func TestFetchPlaylistsRequest_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
 	a := newTestApp()
 	// Pre-populate fresh playlists.
 	a.Store().SetPlaylists([]domain.SimplePlaylist{{ID: "pl1", Name: "My Playlist"}})
 
 	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
-	assert.Nil(t, cmd, "FetchPlaylistsRequestMsg when fresh should return nil command (skip fetch)")
+	// Task 6: now returns a synthetic cmd delivering cached data, not nil.
+	assert.NotNil(t, cmd, "FetchPlaylistsRequestMsg when fresh should return a synthetic cmd (not nil)")
+	msg := cmd()
+	loaded, ok := msg.(panes.LibraryLoadedMsg)
+	assert.True(t, ok, "synthetic cmd should produce LibraryLoadedMsg")
+	assert.Nil(t, loaded.Err, "synthetic LibraryLoadedMsg should have nil Err")
 }
 
 // TestFetchPlaylistsRequest_PaginatedOffset_AlwaysFetches verifies that paginated
@@ -99,14 +118,18 @@ func TestFetchAlbumsRequest_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchAlbumsRequestMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchAlbumsRequest_WhenFresh_SkipsFetch verifies album fetch is skipped when
-// the store already has fresh album data.
-func TestFetchAlbumsRequest_WhenFresh_SkipsFetch(t *testing.T) {
+// TestFetchAlbumsRequest_WhenFresh_ReturnsSyntheticCmd verifies that when albums are fresh,
+// a FetchAlbumsRequestMsg returns a synthetic command with cached data (Task 6).
+func TestFetchAlbumsRequest_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
 	a := newTestApp()
 	a.Store().SetSavedAlbums([]domain.SavedAlbum{{AddedAt: "2024-01-01", Album: domain.FullAlbum{ID: "a1"}}})
 
 	_, cmd := a.Update(panes.FetchAlbumsRequestMsg{Offset: 0})
-	assert.Nil(t, cmd, "FetchAlbumsRequestMsg when fresh should return nil command (skip fetch)")
+	assert.NotNil(t, cmd, "FetchAlbumsRequestMsg when fresh should return a synthetic cmd")
+	msg := cmd()
+	loaded, ok := msg.(panes.AlbumsLoadedMsg)
+	assert.True(t, ok, "synthetic cmd should produce AlbumsLoadedMsg")
+	assert.Nil(t, loaded.Err)
 }
 
 // --- Library fetch staleness: FetchLikedTracksRequestMsg ---
@@ -119,14 +142,18 @@ func TestFetchLikedTracksRequest_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchLikedTracksRequestMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchLikedTracksRequest_WhenFresh_SkipsFetch verifies liked tracks fetch is skipped
-// when the store already has fresh liked tracks data.
-func TestFetchLikedTracksRequest_WhenFresh_SkipsFetch(t *testing.T) {
+// TestFetchLikedTracksRequest_WhenFresh_ReturnsSyntheticCmd verifies that when liked tracks
+// are fresh, a FetchLikedTracksRequestMsg returns a synthetic command with cached data (Task 6).
+func TestFetchLikedTracksRequest_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
 	a := newTestApp()
 	a.Store().SetLikedTracks([]domain.SavedTrack{{AddedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
 
 	_, cmd := a.Update(panes.FetchLikedTracksRequestMsg{Offset: 0})
-	assert.Nil(t, cmd, "FetchLikedTracksRequestMsg when fresh should return nil command (skip fetch)")
+	assert.NotNil(t, cmd, "FetchLikedTracksRequestMsg when fresh should return a synthetic cmd")
+	msg := cmd()
+	loaded, ok := msg.(panes.LikedTracksLoadedMsg)
+	assert.True(t, ok, "synthetic cmd should produce LikedTracksLoadedMsg")
+	assert.Nil(t, loaded.Err)
 }
 
 // --- Library fetch staleness: FetchRecentlyPlayedRequestMsg ---
@@ -139,14 +166,18 @@ func TestFetchRecentlyPlayedRequest_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchRecentlyPlayedRequestMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchRecentlyPlayedRequest_WhenFresh_SkipsFetch verifies recently played fetch is
-// skipped when the store already has fresh data.
-func TestFetchRecentlyPlayedRequest_WhenFresh_SkipsFetch(t *testing.T) {
+// TestFetchRecentlyPlayedRequest_WhenFresh_ReturnsSyntheticCmd verifies that when recently
+// played data is fresh, a FetchRecentlyPlayedRequestMsg returns a synthetic cmd (Task 6).
+func TestFetchRecentlyPlayedRequest_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
 	a := newTestApp()
 	a.Store().SetRecentlyPlayed([]domain.PlayHistory{{PlayedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
 
 	_, cmd := a.Update(panes.FetchRecentlyPlayedRequestMsg{})
-	assert.Nil(t, cmd, "FetchRecentlyPlayedRequestMsg when fresh should return nil command (skip fetch)")
+	assert.NotNil(t, cmd, "FetchRecentlyPlayedRequestMsg when fresh should return a synthetic cmd")
+	msg := cmd()
+	loaded, ok := msg.(panes.RecentlyPlayedLoadedMsg)
+	assert.True(t, ok, "synthetic cmd should produce RecentlyPlayedLoadedMsg")
+	assert.Nil(t, loaded.Err)
 }
 
 // --- Cross-domain isolation ---
@@ -173,15 +204,28 @@ func TestFetchDevicesRequest_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchDevicesRequestMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchDevicesRequest_WhenFresh_SkipsFetch verifies device fetch is skipped when
-// the store already has a recent devicesFetchedAt timestamp (within DevicesTTL).
-func TestFetchDevicesRequest_WhenFresh_SkipsFetch(t *testing.T) {
+// TestFetchDevicesRequest_WhenFresh_ReturnsSyntheticCmd verifies device fetch returns a
+// synthetic command delivering cached data when the store is within DevicesTTL, so the
+// device overlay can initialize without a redundant API round-trip.
+func TestFetchDevicesRequest_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
 	a := newTestApp()
-	// Stamp as recently fetched so the store is within DevicesTTL.
+	// Stamp as recently fetched so the store is within DevicesTTL,
+	// and pre-populate the cached device list in the store.
 	a.Store().SetDevicesFetchedAt(time.Now())
+	a.Store().SetDevices([]domain.Device{
+		{ID: "dev1", Name: "MacBook Pro", Type: "Computer", IsActive: true},
+	})
 
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
-	assert.Nil(t, cmd, "FetchDevicesRequestMsg when fresh should return nil command (skip fetch)")
+	assert.NotNil(t, cmd, "FetchDevicesRequestMsg when fresh should return a synthetic cmd (not nil)")
+	msg := cmd()
+	loaded, ok := msg.(panes.DevicesLoadedMsg)
+	assert.True(t, ok, "synthetic cmd should produce DevicesLoadedMsg, got %T", msg)
+	assert.Nil(t, loaded.Err, "synthetic DevicesLoadedMsg should have nil Err")
+	assert.Len(t, loaded.Devices, 1)
+	assert.Equal(t, "dev1", loaded.Devices[0].ID)
+	assert.Equal(t, "MacBook Pro", loaded.Devices[0].Name)
+	assert.True(t, loaded.Devices[0].IsActive)
 }
 
 // TestStalenessTTLConstants verifies that the exported TTL constants match the spec values.
@@ -193,4 +237,97 @@ func TestStalenessTTLConstants(t *testing.T) {
 	assert.Equal(t, 2*time.Minute, state.RecentlyPlayedTTL, "RecentlyPlayedTTL should be 2 minutes")
 	assert.Equal(t, 10*time.Minute, state.StatsTTL, "StatsTTL should be 10 minutes")
 	assert.Equal(t, 30*time.Second, state.DevicesTTL, "DevicesTTL should be 30 seconds")
+}
+
+// --- Fetching sentinels: TOCTOU prevention (Task 5) ---
+
+// TestFetchPlaylistsRequest_WhenFetching_SkipsDuplicateDispatch verifies that a second
+// FetchPlaylistsRequestMsg is not dispatched when a fetch is already in-flight.
+func TestFetchPlaylistsRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	// Playlists are stale (never fetched), but fetching sentinel is set.
+	a.Store().SetPlaylistsFetching(true)
+
+	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 0})
+	assert.Nil(t, cmd, "FetchPlaylistsRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchPlaylistsRequest_PaginatedOffset_IgnoresFetchingSentinel verifies that
+// paginated requests (offset > 0) bypass the fetching sentinel.
+func TestFetchPlaylistsRequest_PaginatedOffset_IgnoresFetchingSentinel(t *testing.T) {
+	a := newTestApp()
+	// Even with fetching sentinel set, offset > 0 should always dispatch.
+	a.Store().SetPlaylistsFetching(true)
+
+	_, cmd := a.Update(panes.FetchPlaylistsRequestMsg{Offset: 20})
+	assert.NotNil(t, cmd, "paginated FetchPlaylistsRequestMsg must bypass fetching sentinel")
+}
+
+// TestFetchAlbumsRequest_WhenFetching_SkipsDuplicateDispatch verifies the albums
+// fetching sentinel prevents duplicate dispatches.
+func TestFetchAlbumsRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetAlbumsFetching(true)
+
+	_, cmd := a.Update(panes.FetchAlbumsRequestMsg{Offset: 0})
+	assert.Nil(t, cmd, "FetchAlbumsRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchLikedTracksRequest_WhenFetching_SkipsDuplicateDispatch verifies the liked
+// tracks fetching sentinel prevents duplicate dispatches.
+func TestFetchLikedTracksRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetLikedFetching(true)
+
+	_, cmd := a.Update(panes.FetchLikedTracksRequestMsg{Offset: 0})
+	assert.Nil(t, cmd, "FetchLikedTracksRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchRecentlyPlayed_WhenFetching_SkipsDuplicateDispatch verifies the recently-played
+// fetching sentinel prevents duplicate dispatches.
+func TestFetchRecentlyPlayed_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetRecentFetching(true)
+
+	_, cmd := a.Update(panes.FetchRecentlyPlayedRequestMsg{})
+	assert.Nil(t, cmd, "FetchRecentlyPlayedRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchStats_WhenFetching_SkipsDuplicateDispatch verifies the stats fetching
+// sentinel prevents duplicate dispatches.
+func TestFetchStats_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetStatsFetching("short_term", true)
+
+	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
+	assert.Nil(t, cmd, "FetchStatsMsg should be skipped when already fetching for that range")
+}
+
+// TestFetchDevicesRequest_WhenFetching_SkipsDuplicateDispatch verifies the devices
+// fetching sentinel prevents duplicate dispatches.
+func TestFetchDevicesRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
+	a := newTestApp()
+	a.Store().SetDevicesFetching(true)
+
+	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
+	assert.Nil(t, cmd, "FetchDevicesRequestMsg should be skipped when already fetching")
+}
+
+// TestFetchStats_NilClient_ClearsSentinel verifies that when buildFetchStatsCmd returns
+// a StatsLoadedMsg with errNilClient, the fetching sentinel is cleared by the handler.
+// Without this, a nil-client startup sequence would leave the sentinel stuck true,
+// permanently blocking all future fetches for that time range.
+func TestFetchStats_NilClient_ClearsSentinel(t *testing.T) {
+	a := newTestApp()
+	// Dispatch a stats fetch (no API client set — will return errNilClient).
+	_, cmd := a.Update(panes.FetchStatsMsg{TimeRange: "short_term"})
+	assert.NotNil(t, cmd, "stale stats should dispatch a fetch cmd")
+
+	// Execute the cmd — nil client returns StatsLoadedMsg{TimeRange:"short_term", Err: errNilClient}.
+	msg := cmd()
+	_, _ = a.Update(msg)
+
+	// Sentinel must be cleared so a subsequent fetch can proceed.
+	assert.False(t, a.Store().StatsFetching("short_term"),
+		"stats sentinel must be cleared after errNilClient StatsLoadedMsg")
 }

@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
@@ -367,13 +368,15 @@ func (a *App) Init() tea.Cmd {
 		return splashDismissMsg{}
 	})
 
-	// NOTE: a.alerts.Init() returns nil by design — BubbleUp starts its
-	// internal tick only when an alert is triggered, not at startup.
-	_ = a.alerts.Init()
+	// Batch alerts.Init() into the returned commands. BubbleUp currently returns
+	// nil by design — it starts its internal tick only when an alert fires, not at
+	// startup. Batching it here ensures a future BubbleUp upgrade that returns a
+	// setup command is picked up automatically without code changes.
+	alertsInitCmd := a.alerts.Init()
 
 	if a.needsAuth {
 		// Unauthenticated: only show splash, defer everything else.
-		return splashTimer
+		return tea.Batch(splashTimer, alertsInitCmd)
 	}
 
 	// Authenticated: start data fetching alongside splash.
@@ -384,6 +387,7 @@ func (a *App) Init() tea.Cmd {
 			return panes.TickMsg{}
 		}),
 		splashTimer,
+		alertsInitCmd,
 	)
 }
 
@@ -461,6 +465,23 @@ func (a *App) closePlaylists() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
+// Called from RateLimitedMsg and unauthorizedMsg handlers, which short-circuit
+// the normal command → loaded-message path, so the loaded-message handler never
+// runs to clear the sentinel itself. Leaving sentinels true would permanently
+// block the staleness gate for those domains.
+func (a *App) clearAllFetchingSentinels() {
+	a.store.SetPlaylistsFetching(false)
+	a.store.SetAlbumsFetching(false)
+	a.store.SetLikedFetching(false)
+	a.store.SetRecentFetching(false)
+	a.store.SetDevicesFetching(false)
+	// Stats sentinels are keyed by time range — clear all known ranges.
+	for _, r := range []string{"short_term", "medium_term", "long_term"} {
+		a.store.SetStatsFetching(r, false)
+	}
+}
+
 // Update handles all messages routed through the root model.
 // It delegates to handleMsg for application logic, then forwards the message to
 // the BubbleUp alerts model so alert lifecycle timers (auto-dismiss) keep running.
@@ -471,6 +492,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This ensures the auto-dismiss timer keeps ticking while any alert is active,
 	// regardless of which other message is being processed.
 	updatedAlerts, alertCmd := a.alerts.Update(msg)
+	// BubbleUp.AlertModel.Update always returns AlertModel (value type). If this
+	// assertion fails, it indicates a BubbleUp library bug — alert state freezes
+	// but the app continues working without crashing.
 	if am, ok := updatedAlerts.(bubbleup.AlertModel); ok {
 		a.alerts = am
 	}
@@ -590,14 +614,32 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchStatsMsg:
 		// Stats view requesting data for a time range.
-		// Skip fetch if the store already has fresh stats for this range (within StatsTTL).
-		if !a.store.StatsStale(m.TimeRange) {
+		// If a fetch is already in-flight, silently skip to prevent TOCTOU duplicates.
+		if a.store.StatsFetching(m.TimeRange) {
 			return a, nil
 		}
+		// If data is fresh, return cached data so the view can initialize without
+		// waiting for a redundant API round-trip.
+		if !a.store.StatsStale(m.TimeRange) {
+			cachedTracks := a.store.TopTracks(m.TimeRange)
+			cachedArtists := a.store.TopArtists(m.TimeRange)
+			timeRange := m.TimeRange
+			return a, func() tea.Msg {
+				return panes.StatsLoadedMsg{
+					TimeRange:  timeRange,
+					TopTracks:  cachedTracks,
+					TopArtists: cachedArtists,
+				}
+			}
+		}
+		a.store.SetStatsFetching(m.TimeRange, true)
 		return a, a.buildFetchStatsCmd(m.TimeRange)
 
 	case panes.StatsLoadedMsg:
-		// Stats data fetched — write to store, then forward to stats pane.
+		// Stats data fetched — clear fetching sentinel, write to store, forward to pane.
+		if m.TimeRange != "" {
+			a.store.SetStatsFetching(m.TimeRange, false)
+		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -615,6 +657,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.TimeRange != "" {
 			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
 			a.store.SetTopArtists(m.TimeRange, m.TopArtists)
+			// Stamp once after both setters so StatsStale only returns false when
+			// both datasets are present. Stamping inside each setter would mark the
+			// range fresh after only one write, hiding partial-data state.
+			a.store.StampStatsFetchedAt(m.TimeRange)
 		}
 		if a.statsPane != nil {
 			updated, cmd := a.statsPane.Update(m)
@@ -684,6 +730,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.backoffTicks = backoff
 		// Update store throttle observability so UI components can read gateway state.
 		a.store.SetThrottle(true, m.RetryAfterSecs, time.Now())
+		// Clear all fetching sentinels so the staleness gate can re-dispatch after backoff.
+		// When a rate-limited command fires, it returns RateLimitedMsg instead of a domain
+		// loaded message, so the loaded-message handler never runs to clear the sentinel.
+		// Without this, any domain with a sentinel set at the time of the 429 would be
+		// permanently blocked from fetching again.
+		a.clearAllFetchingSentinels()
 		return a, tea.Batch(
 			a.alerts.NewAlertCmd("ratelimit", fmt.Sprintf("Rate limited, retrying in %ds", backoff)),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
@@ -691,6 +743,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case unauthorizedMsg:
 		// 401 from any Spotify API call — attempt a token refresh.
+		// Clear sentinels for the same reason as RateLimitedMsg: the domain loaded-message
+		// handler never fires when the command short-circuits to unauthorizedMsg.
+		a.clearAllFetchingSentinels()
 		// If tokenStore is nil or has no refresh token, skip to show expired message.
 		return a, buildRefreshTokenCmd(a.tokenStore, a.clientID, a.tokenBaseURL)
 
@@ -806,15 +861,28 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.alerts.NewAlertCmd("success", "Added to queue")
 
 	case panes.FetchPlaylistsRequestMsg:
-		// Skip fetch if playlists are fresh and this is an initial (non-paginated) load.
-		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && !a.store.PlaylistsStale() {
-			return a, nil
+		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 {
+			if !a.store.PlaylistsStale() {
+				// Data is fresh — send cached playlists so the pane can initialize
+				// without waiting for a redundant API round-trip.
+				cached := a.store.Playlists()
+				return a, func() tea.Msg {
+					return panes.LibraryLoadedMsg{Items: cached, Offset: 0}
+				}
+			}
+			if a.store.PlaylistsFetching() {
+				// Fetch already in-flight — skip to prevent TOCTOU duplicates.
+				return a, nil
+			}
+			a.store.SetPlaylistsFetching(true)
 		}
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
 
 	case panes.LibraryLoadedMsg:
 		// Write playlist data to store from Msg payload (Elm Architecture: only Update writes store).
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetPlaylistsFetching(false)
 		if m.Err != nil {
 			// errNilClient means the API client is not yet initialized (pre-auth startup).
 			// Skip silently — no toast, no store error — to avoid noisy startup messages.
@@ -843,15 +911,26 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchAlbumsRequestMsg:
-		// Skip fetch if albums are fresh and this is an initial (non-paginated) load.
-		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && !a.store.AlbumsStale() {
-			return a, nil
+		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 {
+			if !a.store.AlbumsStale() {
+				// Data is fresh — send cached albums so the pane can initialize.
+				cached := a.store.SavedAlbums()
+				return a, func() tea.Msg {
+					return panes.AlbumsLoadedMsg{Items: cached, Offset: 0}
+				}
+			}
+			if a.store.AlbumsFetching() {
+				return a, nil
+			}
+			a.store.SetAlbumsFetching(true)
 		}
 		return a, a.buildFetchAlbumsCmd(m.Offset)
 
 	case panes.AlbumsLoadedMsg:
 		// Write album data to store from Msg payload.
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetAlbumsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -877,15 +956,26 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchLikedTracksRequestMsg:
-		// Skip fetch if liked tracks are fresh and this is an initial (non-paginated) load.
-		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
-		if m.Offset == 0 && !a.store.LikedTracksStale() {
-			return a, nil
+		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 {
+			if !a.store.LikedTracksStale() {
+				// Data is fresh — send cached liked tracks so the pane can initialize.
+				cached := a.store.LikedTracks()
+				return a, func() tea.Msg {
+					return panes.LikedTracksLoadedMsg{Items: cached, Offset: 0}
+				}
+			}
+			if a.store.LikedFetching() {
+				return a, nil
+			}
+			a.store.SetLikedFetching(true)
 		}
 		return a, a.buildFetchLikedTracksCmd(m.Offset)
 
 	case panes.LikedTracksLoadedMsg:
 		// Write liked tracks to store from Msg payload.
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetLikedFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -908,14 +998,25 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchRecentlyPlayedRequestMsg:
-		// Skip fetch if recently played data is fresh (within RecentlyPlayedTTL).
+		// NOTE: recently-played has no pagination.
 		if !a.store.RecentlyPlayedStale() {
+			// Data is fresh — send cached recently-played so the pane can initialize.
+			cached := a.store.RecentlyPlayed()
+			return a, func() tea.Msg {
+				return panes.RecentlyPlayedLoadedMsg{Items: cached}
+			}
+		}
+		if a.store.RecentFetching() {
+			// Fetch already in-flight — skip to prevent TOCTOU duplicates.
 			return a, nil
 		}
+		a.store.SetRecentFetching(true)
 		return a, a.buildFetchRecentlyPlayedCmd()
 
 	case panes.RecentlyPlayedLoadedMsg:
 		// Write recently played to store from Msg payload.
+		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
+		a.store.SetRecentFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -955,15 +1056,34 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchDevicesRequestMsg:
 		// Device overlay is requesting the device list from the API.
-		// Skip fetch if the device list is still within DevicesTTL (30s).
-		if !a.store.DevicesStale() {
+		// If a fetch is already in-flight, silently skip to prevent TOCTOU duplicates.
+		if a.store.DevicesFetching() {
 			return a, nil
 		}
+		// If data is fresh, return cached device list so the overlay can initialize
+		// without a redundant API round-trip.
+		if !a.store.DevicesStale() {
+			cached := a.store.Devices()
+			infos := make([]panes.DeviceInfo, 0, len(cached))
+			for _, d := range cached {
+				infos = append(infos, panes.DeviceInfo{
+					ID:       d.ID,
+					Name:     d.Name,
+					Type:     d.Type,
+					IsActive: d.IsActive,
+				})
+			}
+			return a, func() tea.Msg {
+				return panes.DevicesLoadedMsg{Devices: infos}
+			}
+		}
+		a.store.SetDevicesFetching(true)
 		return a, a.buildFetchDevicesCmd()
 
 	case panes.DevicesLoadedMsg:
 		// Device list fetched — write store state here (Elm purity: only root Update writes store).
-		// Then forward to DeviceOverlay so it can update its local devices list for rendering.
+		// Clear fetching sentinel, then forward to DeviceOverlay for rendering.
+		a.store.SetDevicesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -980,6 +1100,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearDevicesError()
 		a.store.SetDevicesFetchedAt(time.Now())
+		// Cache the raw domain device list so the staleness gate can return
+		// cached data on subsequent FetchDevicesRequestMsg calls within DevicesTTL.
+		// Reverse-convert panes.DeviceInfo → domain.Device (same fields, lossless).
+		rawDevices := make([]domain.Device, 0, len(m.Devices))
+		for _, info := range m.Devices {
+			rawDevices = append(rawDevices, domain.Device{
+				ID:       info.ID,
+				Name:     info.Name,
+				Type:     info.Type,
+				IsActive: info.IsActive,
+			})
+		}
+		a.store.SetDevices(rawDevices)
 		// Forward to overlay to update its local device list.
 		if a.deviceOverlayOpen {
 			updated, _ := a.devicePane.Update(m)

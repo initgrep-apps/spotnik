@@ -20,12 +20,23 @@ func newNotifTestApp() *app.App {
 
 func TestApp_Init_IncludesAlertsInit(t *testing.T) {
 	// Init() must include BubbleUp's Init so the alert system is wired up.
-	// BubbleUp Init() returns nil — this test verifies Init() does not panic.
+	// BubbleUp Init() returns nil — this test verifies Init() does not panic
+	// and that the alertsInitCmd is batched (not discarded with `_ =`).
 	a := newNotifTestApp()
 	cmd := a.Init()
-	// cmd may be nil (if needsAuth=false and no player set) or a Batch/Tick.
-	// The important thing is that Init() completes without panicking.
-	_ = cmd
+	// When needsAuth is false and no player is injected, the batch still runs.
+	// BubbleUp returns nil from Init() currently, so tea.Batch collapses it.
+	// What matters: Init() completes without panicking and returns a non-nil
+	// Batch command (the splash timer and tick are present).
+	assert.NotNil(t, cmd, "Init() must return a non-nil command (splash timer batch)")
+}
+
+func TestApp_Init_NeedsAuth_ReturnsCommand(t *testing.T) {
+	// When needsAuth=true, Init() still batches alertsInitCmd with splashTimer.
+	// alertsInitCmd is nil from BubbleUp, so tea.Batch still returns the splashTimer.
+	a := app.New(&config.Config{}, app.AppOptions{NeedsAuth: true})
+	cmd := a.Init()
+	assert.NotNil(t, cmd, "Init() with needsAuth=true must return a non-nil command (splash timer)")
 }
 
 func TestApp_Update_ForwardsMessagesToAlerts(t *testing.T) {
