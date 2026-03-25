@@ -713,3 +713,30 @@ func TestStore_SetDevicesFetching_SetsAndClears(t *testing.T) {
 	s.SetDevicesFetching(false)
 	assert.False(t, s.DevicesFetching())
 }
+
+func TestStore_Devices_InitiallyNil(t *testing.T) {
+	s := New()
+	assert.Nil(t, s.Devices(), "Devices should return nil before any SetDevices call")
+}
+
+func TestStore_SetDevices_StoresAndRetrieves(t *testing.T) {
+	s := New()
+	devices := []domain.Device{
+		{ID: "dev1", Name: "MacBook Pro", Type: "Computer", IsActive: true},
+		{ID: "dev2", Name: "iPhone 15", Type: "Smartphone", IsActive: false},
+	}
+	s.SetDevices(devices)
+	got := s.Devices()
+	assert.Len(t, got, 2)
+	assert.Equal(t, "dev1", got[0].ID)
+	assert.Equal(t, "dev2", got[1].ID)
+}
+
+func TestStore_SetDevices_ReplacesExistingList(t *testing.T) {
+	s := New()
+	s.SetDevices([]domain.Device{{ID: "old", Name: "Old Device", Type: "Computer"}})
+	s.SetDevices([]domain.Device{{ID: "new", Name: "New Device", Type: "Smartphone"}})
+	got := s.Devices()
+	assert.Len(t, got, 1, "SetDevices should replace the old list")
+	assert.Equal(t, "new", got[0].ID)
+}

@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
@@ -464,6 +465,23 @@ func (a *App) closePlaylists() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
+// Called from RateLimitedMsg and unauthorizedMsg handlers, which short-circuit
+// the normal command → loaded-message path, so the loaded-message handler never
+// runs to clear the sentinel itself. Leaving sentinels true would permanently
+// block the staleness gate for those domains.
+func (a *App) clearAllFetchingSentinels() {
+	a.store.SetPlaylistsFetching(false)
+	a.store.SetAlbumsFetching(false)
+	a.store.SetLikedFetching(false)
+	a.store.SetRecentFetching(false)
+	a.store.SetDevicesFetching(false)
+	// Stats sentinels are keyed by time range — clear all known ranges.
+	for _, r := range []string{"short_term", "medium_term", "long_term"} {
+		a.store.SetStatsFetching(r, false)
+	}
+}
+
 // Update handles all messages routed through the root model.
 // It delegates to handleMsg for application logic, then forwards the message to
 // the BubbleUp alerts model so alert lifecycle timers (auto-dismiss) keep running.
@@ -596,9 +614,23 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchStatsMsg:
 		// Stats view requesting data for a time range.
-		// Skip if fresh OR if a fetch is already in-flight (prevents TOCTOU duplicates).
-		if !a.store.StatsStale(m.TimeRange) || a.store.StatsFetching(m.TimeRange) {
+		// If a fetch is already in-flight, silently skip to prevent TOCTOU duplicates.
+		if a.store.StatsFetching(m.TimeRange) {
 			return a, nil
+		}
+		// If data is fresh, return cached data so the view can initialize without
+		// waiting for a redundant API round-trip.
+		if !a.store.StatsStale(m.TimeRange) {
+			cachedTracks := a.store.TopTracks(m.TimeRange)
+			cachedArtists := a.store.TopArtists(m.TimeRange)
+			timeRange := m.TimeRange
+			return a, func() tea.Msg {
+				return panes.StatsLoadedMsg{
+					TimeRange:  timeRange,
+					TopTracks:  cachedTracks,
+					TopArtists: cachedArtists,
+				}
+			}
 		}
 		a.store.SetStatsFetching(m.TimeRange, true)
 		return a, a.buildFetchStatsCmd(m.TimeRange)
@@ -698,6 +730,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.backoffTicks = backoff
 		// Update store throttle observability so UI components can read gateway state.
 		a.store.SetThrottle(true, m.RetryAfterSecs, time.Now())
+		// Clear all fetching sentinels so the staleness gate can re-dispatch after backoff.
+		// When a rate-limited command fires, it returns RateLimitedMsg instead of a domain
+		// loaded message, so the loaded-message handler never runs to clear the sentinel.
+		// Without this, any domain with a sentinel set at the time of the 429 would be
+		// permanently blocked from fetching again.
+		a.clearAllFetchingSentinels()
 		return a, tea.Batch(
 			a.alerts.NewAlertCmd("ratelimit", fmt.Sprintf("Rate limited, retrying in %ds", backoff)),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
@@ -705,6 +743,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case unauthorizedMsg:
 		// 401 from any Spotify API call — attempt a token refresh.
+		// Clear sentinels for the same reason as RateLimitedMsg: the domain loaded-message
+		// handler never fires when the command short-circuits to unauthorizedMsg.
+		a.clearAllFetchingSentinels()
 		// If tokenStore is nil or has no refresh token, skip to show expired message.
 		return a, buildRefreshTokenCmd(a.tokenStore, a.clientID, a.tokenBaseURL)
 
@@ -1015,9 +1056,26 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchDevicesRequestMsg:
 		// Device overlay is requesting the device list from the API.
-		// Skip if fresh OR if a fetch is already in-flight (prevents TOCTOU duplicates).
-		if !a.store.DevicesStale() || a.store.DevicesFetching() {
+		// If a fetch is already in-flight, silently skip to prevent TOCTOU duplicates.
+		if a.store.DevicesFetching() {
 			return a, nil
+		}
+		// If data is fresh, return cached device list so the overlay can initialize
+		// without a redundant API round-trip.
+		if !a.store.DevicesStale() {
+			cached := a.store.Devices()
+			infos := make([]panes.DeviceInfo, 0, len(cached))
+			for _, d := range cached {
+				infos = append(infos, panes.DeviceInfo{
+					ID:       d.ID,
+					Name:     d.Name,
+					Type:     d.Type,
+					IsActive: d.IsActive,
+				})
+			}
+			return a, func() tea.Msg {
+				return panes.DevicesLoadedMsg{Devices: infos}
+			}
 		}
 		a.store.SetDevicesFetching(true)
 		return a, a.buildFetchDevicesCmd()
@@ -1042,6 +1100,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearDevicesError()
 		a.store.SetDevicesFetchedAt(time.Now())
+		// Cache the raw domain device list so the staleness gate can return
+		// cached data on subsequent FetchDevicesRequestMsg calls within DevicesTTL.
+		// Reverse-convert panes.DeviceInfo → domain.Device (same fields, lossless).
+		rawDevices := make([]domain.Device, 0, len(m.Devices))
+		for _, info := range m.Devices {
+			rawDevices = append(rawDevices, domain.Device{
+				ID:       info.ID,
+				Name:     info.Name,
+				Type:     info.Type,
+				IsActive: info.IsActive,
+			})
+		}
+		a.store.SetDevices(rawDevices)
 		// Forward to overlay to update its local device list.
 		if a.deviceOverlayOpen {
 			updated, _ := a.devicePane.Update(m)

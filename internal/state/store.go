@@ -45,6 +45,11 @@ type Store struct {
 	playbackState *domain.PlaybackState
 	activeDevice  *domain.Device
 
+	// Device list — the most recent list of Spotify Connect devices returned by the API.
+	// Populated by the DevicesLoadedMsg handler so the staleness gate can return cached
+	// data on subsequent FetchDevicesRequestMsg calls without a redundant API round-trip.
+	devices []domain.Device
+
 	// Library data
 	playlists      []domain.SimplePlaylist
 	playlistsTotal int
@@ -161,6 +166,23 @@ func (s *Store) SetActiveDevice(device *domain.Device) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.activeDevice = device
+}
+
+// Devices returns the most recently fetched list of Spotify Connect devices,
+// or nil if the list has not been fetched yet.
+func (s *Store) Devices() []domain.Device {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.devices
+}
+
+// SetDevices replaces the cached device list. Called by app.Update() after a
+// successful DevicesLoadedMsg so that subsequent FetchDevicesRequestMsg calls
+// can return cached data when the store is still within DevicesTTL.
+func (s *Store) SetDevices(devices []domain.Device) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devices = devices
 }
 
 // Playlists returns the user's saved playlists.
