@@ -628,13 +628,13 @@ func (p *LibraryPane) handleExpandSection(sectionType SectionType) (*LibraryPane
 
 	switch sectionType {
 	case SectionAlbums:
-		if !p.store.AlbumsLoaded() {
+		if p.store.AlbumsStale() {
 			p.tree.SetSectionLoading(SectionAlbums, true)
 			return p, func() tea.Msg { return FetchAlbumsRequestMsg{Offset: 0} }
 		}
 
 	case SectionLikedSongs:
-		if !p.store.LikedLoaded() {
+		if p.store.LikedTracksStale() {
 			p.tree.SetSectionLoading(SectionLikedSongs, true)
 			return p, func() tea.Msg { return FetchLikedTracksRequestMsg{Offset: 0} }
 		}

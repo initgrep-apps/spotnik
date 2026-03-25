@@ -5,6 +5,7 @@ package panes
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -71,6 +72,7 @@ func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return d, func() tea.Msg { return DevicesLoadErrorMsg{Err: errMsg} }
 		}
 		d.store.ClearDevicesError()
+		d.store.SetDevicesFetchedAt(time.Now())
 		d.devices = m.devices
 		return d, nil
 

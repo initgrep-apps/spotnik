@@ -11,6 +11,32 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
+// TTL constants define how long each data domain is considered fresh.
+// After the TTL expires, Update() should trigger a re-fetch from the Spotify API.
+const (
+	// PlaylistsTTL is the cache lifetime for the user's playlist list.
+	PlaylistsTTL = 5 * time.Minute
+	// AlbumsTTL is the cache lifetime for the user's saved albums.
+	AlbumsTTL = 5 * time.Minute
+	// LikedTracksTTL is the cache lifetime for the user's liked tracks.
+	LikedTracksTTL = 5 * time.Minute
+	// RecentlyPlayedTTL is the cache lifetime for recently played tracks.
+	// Shorter than library data because it changes with every playback event.
+	RecentlyPlayedTTL = 2 * time.Minute
+	// StatsTTL is the cache lifetime for user stats (top tracks/artists).
+	// Long because Spotify updates these slowly.
+	StatsTTL = 10 * time.Minute
+	// DevicesTTL is the cache lifetime for the available device list.
+	// Short because the user may switch devices at any time.
+	DevicesTTL = 30 * time.Second
+)
+
+// IsStale returns true if fetchedAt is zero (never fetched) or older than ttl.
+// Use this to decide whether to re-fetch cached data from the Spotify API.
+func IsStale(fetchedAt time.Time, ttl time.Duration) bool {
+	return fetchedAt.IsZero() || time.Since(fetchedAt) > ttl
+}
+
 // Store is the central application state. All panes read from here; only
 // tea.Cmd callbacks write to it. Fields are never accessed directly — use the
 // accessor methods to ensure safe concurrent access.
@@ -23,11 +49,17 @@ type Store struct {
 	playlists      []domain.SimplePlaylist
 	playlistsTotal int
 	savedAlbums    []domain.SavedAlbum
-	albumsLoaded   bool
 	likedTracks    []domain.SavedTrack
 	likedTotal     int
-	likedLoaded    bool
 	recentlyPlayed []domain.PlayHistory
+
+	// Staleness tracking — set to time.Now() on successful data write.
+	playlistsFetchedAt    time.Time
+	albumsFetchedAt       time.Time
+	likedTracksFetchedAt  time.Time
+	recentPlayedFetchedAt time.Time
+	statsFetchedAt        map[string]time.Time // keyed by time range
+	devicesFetchedAt      time.Time
 
 	// Queue data
 	queue []domain.Track
@@ -40,7 +72,7 @@ type Store struct {
 
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
-	// NOTE: cached on first fetch per range; not re-fetched until view is re-opened.
+	// NOTE: cached per range and re-fetched after StatsTTL (10 min) via staleness check in Update().
 	topTracks  map[string][]domain.Track
 	topArtists map[string][]domain.FullArtist
 
@@ -122,11 +154,12 @@ func (s *Store) Playlists() []domain.SimplePlaylist {
 	return s.playlists
 }
 
-// SetPlaylists updates the saved playlists in the store.
+// SetPlaylists updates the saved playlists in the store and stamps the fetch time.
 func (s *Store) SetPlaylists(playlists []domain.SimplePlaylist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlists = playlists
+	s.playlistsFetchedAt = time.Now()
 }
 
 // PlaylistsTotal returns the total number of playlists (for pagination).
@@ -150,20 +183,20 @@ func (s *Store) SavedAlbums() []domain.SavedAlbum {
 	return s.savedAlbums
 }
 
-// SetSavedAlbums updates the saved albums in the store.
-// Also marks albumsLoaded = true.
+// SetSavedAlbums updates the saved albums in the store and stamps the fetch time.
 func (s *Store) SetSavedAlbums(albums []domain.SavedAlbum) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.savedAlbums = albums
-	s.albumsLoaded = true
+	s.albumsFetchedAt = time.Now()
 }
 
 // AlbumsLoaded returns true if saved albums have been fetched at least once.
+// Replaces the former albumsLoaded boolean sentinel — derived from albumsFetchedAt.
 func (s *Store) AlbumsLoaded() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.albumsLoaded
+	return !s.albumsFetchedAt.IsZero()
 }
 
 // LikedTracks returns the user's liked tracks.
@@ -173,13 +206,12 @@ func (s *Store) LikedTracks() []domain.SavedTrack {
 	return s.likedTracks
 }
 
-// SetLikedTracks updates the liked tracks in the store.
-// Also marks likedLoaded = true.
+// SetLikedTracks updates the liked tracks in the store and stamps the fetch time.
 func (s *Store) SetLikedTracks(tracks []domain.SavedTrack) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.likedTracks = tracks
-	s.likedLoaded = true
+	s.likedTracksFetchedAt = time.Now()
 }
 
 // LikedTotal returns the total number of liked tracks (for pagination).
@@ -197,10 +229,11 @@ func (s *Store) SetLikedTotal(total int) {
 }
 
 // LikedLoaded returns true if liked tracks have been fetched at least once.
+// Replaces the former likedLoaded boolean sentinel — derived from likedTracksFetchedAt.
 func (s *Store) LikedLoaded() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.likedLoaded
+	return !s.likedTracksFetchedAt.IsZero()
 }
 
 // RecentlyPlayed returns the recently played track history.
@@ -210,11 +243,12 @@ func (s *Store) RecentlyPlayed() []domain.PlayHistory {
 	return s.recentlyPlayed
 }
 
-// SetRecentlyPlayed updates the recently played history in the store.
+// SetRecentlyPlayed updates the recently played history in the store and stamps the fetch time.
 func (s *Store) SetRecentlyPlayed(items []domain.PlayHistory) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recentlyPlayed = items
+	s.recentPlayedFetchedAt = time.Now()
 }
 
 // Queue returns the upcoming tracks in the user's play queue.
@@ -285,7 +319,8 @@ func (s *Store) TopTracks(timeRange string) []domain.Track {
 	return s.topTracks[timeRange]
 }
 
-// SetTopTracks caches top tracks for a specific time range in the store.
+// SetTopTracks caches top tracks for a specific time range in the store
+// and stamps the fetch time for that range.
 func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -293,6 +328,10 @@ func (s *Store) SetTopTracks(timeRange string, tracks []domain.Track) {
 		s.topTracks = make(map[string][]domain.Track)
 	}
 	s.topTracks[timeRange] = tracks
+	if s.statsFetchedAt == nil {
+		s.statsFetchedAt = make(map[string]time.Time)
+	}
+	s.statsFetchedAt[timeRange] = time.Now()
 }
 
 // TopArtists returns the cached top artists for the given time range,
@@ -307,7 +346,8 @@ func (s *Store) TopArtists(timeRange string) []domain.FullArtist {
 	return s.topArtists[timeRange]
 }
 
-// SetTopArtists caches top artists for a specific time range in the store.
+// SetTopArtists caches top artists for a specific time range in the store
+// and stamps the fetch time for that range.
 func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -315,6 +355,10 @@ func (s *Store) SetTopArtists(timeRange string, artists []domain.FullArtist) {
 		s.topArtists = make(map[string][]domain.FullArtist)
 	}
 	s.topArtists[timeRange] = artists
+	if s.statsFetchedAt == nil {
+		s.statsFetchedAt = make(map[string]time.Time)
+	}
+	s.statsFetchedAt[timeRange] = time.Now()
 }
 
 // PlaylistTracks returns the cached tracks for a given playlist ID,
@@ -352,6 +396,114 @@ func (s *Store) SetPlayingPlaylistID(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playingPlaylistID = id
+}
+
+// --- Staleness tracking accessors ---
+
+// PlaylistsFetchedAt returns the time when playlists were last successfully fetched.
+// Returns the zero time if playlists have never been fetched.
+func (s *Store) PlaylistsFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.playlistsFetchedAt
+}
+
+// AlbumsFetchedAt returns the time when saved albums were last successfully fetched.
+// Returns the zero time if albums have never been fetched.
+func (s *Store) AlbumsFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.albumsFetchedAt
+}
+
+// LikedTracksFetchedAt returns the time when liked tracks were last successfully fetched.
+// Returns the zero time if liked tracks have never been fetched.
+func (s *Store) LikedTracksFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedTracksFetchedAt
+}
+
+// RecentPlayedFetchedAt returns the time when recently played was last successfully fetched.
+// Returns the zero time if recently played has never been fetched.
+func (s *Store) RecentPlayedFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.recentPlayedFetchedAt
+}
+
+// StatsFetchedAt returns the time when stats for the given time range were last fetched.
+// Returns the zero time if that range has never been fetched.
+func (s *Store) StatsFetchedAt(timeRange string) time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.statsFetchedAt == nil {
+		return time.Time{}
+	}
+	return s.statsFetchedAt[timeRange]
+}
+
+// DevicesFetchedAt returns the time when the device list was last successfully fetched.
+// Returns the zero time if devices have never been fetched.
+func (s *Store) DevicesFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.devicesFetchedAt
+}
+
+// SetDevicesFetchedAt stamps the time when devices were last successfully loaded.
+// Called by DeviceOverlay.Update() after a successful devicesLoadedMsg.
+func (s *Store) SetDevicesFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devicesFetchedAt = t
+}
+
+// --- TTL-based staleness convenience methods ---
+
+// PlaylistsStale returns true if the playlists list is stale and should be re-fetched.
+func (s *Store) PlaylistsStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.playlistsFetchedAt, PlaylistsTTL)
+}
+
+// AlbumsStale returns true if the saved albums are stale and should be re-fetched.
+func (s *Store) AlbumsStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.albumsFetchedAt, AlbumsTTL)
+}
+
+// LikedTracksStale returns true if the liked tracks are stale and should be re-fetched.
+func (s *Store) LikedTracksStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.likedTracksFetchedAt, LikedTracksTTL)
+}
+
+// RecentlyPlayedStale returns true if the recently played list is stale and should be re-fetched.
+func (s *Store) RecentlyPlayedStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.recentPlayedFetchedAt, RecentlyPlayedTTL)
+}
+
+// StatsStale returns true if stats for the given time range are stale and should be re-fetched.
+func (s *Store) StatsStale(timeRange string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.statsFetchedAt == nil {
+		return true
+	}
+	return IsStale(s.statsFetchedAt[timeRange], StatsTTL)
+}
+
+// DevicesStale returns true if the device list is stale and should be re-fetched.
+func (s *Store) DevicesStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.devicesFetchedAt, DevicesTTL)
 }
 
 // --- Error state accessors ---

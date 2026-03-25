@@ -509,6 +509,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchStatsMsg:
 		// Stats view requesting data for a time range.
+		// Skip fetch if the store already has fresh stats for this range (within StatsTTL).
+		if !a.store.StatsStale(m.TimeRange) {
+			return a, nil
+		}
 		return a, a.buildFetchStatsCmd(m.TimeRange)
 
 	case panes.StatsLoadedMsg:
@@ -686,6 +690,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.alerts.NewAlertCmd("success", "Added to queue")
 
 	case panes.FetchPlaylistsRequestMsg:
+		// Skip fetch if playlists are fresh and this is an initial (non-paginated) load.
+		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 && !a.store.PlaylistsStale() {
+			return a, nil
+		}
 		return a, a.buildFetchPlaylistsCmd(m.Offset)
 
 	case panes.LibraryLoadedMsg:
@@ -713,6 +722,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchAlbumsRequestMsg:
+		// Skip fetch if albums are fresh and this is an initial (non-paginated) load.
+		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 && !a.store.AlbumsStale() {
+			return a, nil
+		}
 		return a, a.buildFetchAlbumsCmd(m.Offset)
 
 	case panes.AlbumsLoadedMsg:
@@ -735,6 +749,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchLikedTracksRequestMsg:
+		// Skip fetch if liked tracks are fresh and this is an initial (non-paginated) load.
+		// Paginated requests (offset > 0) always proceed to avoid incomplete data.
+		if m.Offset == 0 && !a.store.LikedTracksStale() {
+			return a, nil
+		}
 		return a, a.buildFetchLikedTracksCmd(m.Offset)
 
 	case panes.LikedTracksLoadedMsg:
@@ -758,6 +777,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.FetchRecentlyPlayedRequestMsg:
+		// Skip fetch if recently played data is fresh (within RecentlyPlayedTTL).
+		if !a.store.RecentlyPlayedStale() {
+			return a, nil
+		}
 		return a, a.buildFetchRecentlyPlayedCmd()
 
 	case panes.RecentlyPlayedLoadedMsg:
@@ -795,6 +818,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.FetchDevicesRequestMsg:
 		// Device overlay is requesting the device list from the API.
+		// Skip fetch if the device list is still within DevicesTTL (30s).
+		if !a.store.DevicesStale() {
+			return a, nil
+		}
 		return a, a.buildFetchDevicesCmd()
 
 	case panes.TransferPlaybackMsg:

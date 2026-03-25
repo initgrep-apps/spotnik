@@ -186,6 +186,58 @@ func (s *Store) SetPlaybackState(ps *api.PlaybackState) { ... }
 // ... etc
 ```
 
+### Staleness Tracking
+
+Each data domain in the Store carries a `fetchedAt time.Time` timestamp. When data is written via `Set*()`, the timestamp is stamped to `time.Now()`. `Update()` uses these timestamps to avoid unnecessary re-fetches.
+
+**`IsStale` helper:**
+
+```go
+// IsStale returns true if fetchedAt is zero (never fetched) or older than ttl.
+func IsStale(fetchedAt time.Time, ttl time.Duration) bool {
+    return fetchedAt.IsZero() || time.Since(fetchedAt) > ttl
+}
+```
+
+**TTL constants (defined in `internal/state/store.go`):**
+
+| Domain | TTL | Rationale |
+|---|---|---|
+| `PlaylistsTTL` | 5 min | Changes infrequently |
+| `AlbumsTTL` | 5 min | Changes infrequently |
+| `LikedTracksTTL` | 5 min | Changes infrequently |
+| `RecentlyPlayedTTL` | 2 min | Changes with every playback event |
+| `StatsTTL` | 10 min | Spotify updates these slowly |
+| `DevicesTTL` | 30 sec | Can change quickly when switching |
+
+**Convenience methods** — one per domain, e.g.:
+
+```go
+func (s *Store) PlaylistsStale() bool {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    return IsStale(s.playlistsFetchedAt, PlaylistsTTL)
+}
+```
+
+**`Update()` gate pattern:**
+
+```go
+// In app.go handleMsg:
+case panes.FetchPlaylistsRequestMsg:
+    // Skip fetch if playlists are fresh and this is a non-paginated initial load.
+    if m.Offset == 0 && !a.store.PlaylistsStale() {
+        return a, nil
+    }
+    return a, a.buildFetchPlaylistsCmd(m.Offset)
+```
+
+Playback state and queue are **not** staleness-tracked because they are overwritten on every tick cycle (polling). Staleness tracking is only for data fetched on demand: library, stats, and devices.
+
+The former `albumsLoaded` and `likedLoaded` boolean sentinels have been replaced by `AlbumsLoaded()` and `LikedLoaded()` methods derived from the `fetchedAt` timestamps. Library pane expansion uses `AlbumsStale()` and `LikedTracksStale()` to decide whether to trigger a lazy fetch.
+
+---
+
 ### Message Types
 
 Every distinct piece of data coming back from async operations has its own message type. Named consistently as `<noun><verb>Msg`.
@@ -446,9 +498,11 @@ The root model's 1-second tick loop is the single polling mechanism in the app.
 **Rules:**
 - Feature 03 owns the tick loop and dispatches `fetchPlaybackState` on each `tickMsg`
 - Feature 06 extends the tick to also dispatch `fetchQueue` alongside the playback fetch
-- Features 04 (Library) and 08 (Stats) fetch their own data on-demand (init, section expand, view open) — they do NOT add to the tick loop
-- Feature 07 (Devices) reads device info from the playback state response — it only fetches `GET /me/player/devices` when the device overlay opens
+- Feature 04 (Library) fetches on-demand (Init, section expand, view open) with staleness gating — data within its TTL (albums/liked/playlists: 5m, recently played: 2m) is not re-fetched
+- Feature 08 (Stats) fetches on-demand per time range with staleness gating — data within `StatsTTL` (10m) is not re-fetched even if the view is closed and reopened
+- Feature 07 (Devices) only fetches when the device overlay opens — the overlay emits `FetchDevicesRequestMsg` on `Init()` and the app dispatches the API call. Device list is considered stale after `DevicesTTL` (30s)
 - No feature other than 03 and 06 should add recurring poll commands to the tick cycle
+- Library/stats use **staleness-based refresh**, not polling — see "Staleness Tracking" in State Management
 
 ---
 

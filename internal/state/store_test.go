@@ -372,6 +372,182 @@ func TestStore_ErrorState(t *testing.T) {
 	}
 }
 
+// --- Staleness tracking ---
+
+func TestIsStale_ZeroTime(t *testing.T) {
+	// Zero time (never fetched) is always stale.
+	var zero time.Time
+	assert.True(t, IsStale(zero, 5*time.Minute), "zero fetchedAt should be stale")
+}
+
+func TestIsStale_ExpiredTTL(t *testing.T) {
+	// fetchedAt older than TTL → stale.
+	fetchedAt := time.Now().Add(-6 * time.Minute)
+	assert.True(t, IsStale(fetchedAt, 5*time.Minute), "fetchedAt older than TTL should be stale")
+}
+
+func TestIsStale_WithinTTL(t *testing.T) {
+	// fetchedAt within TTL → not stale.
+	fetchedAt := time.Now().Add(-1 * time.Minute)
+	assert.False(t, IsStale(fetchedAt, 5*time.Minute), "recent fetchedAt should not be stale")
+}
+
+func TestStore_SetPlaylists_UpdatesFetchedAt(t *testing.T) {
+	s := New()
+	before := time.Now()
+	s.SetPlaylists([]api.SimplePlaylist{{ID: "pl1", Name: "Test"}})
+	after := time.Now()
+
+	ts := s.PlaylistsFetchedAt()
+	assert.False(t, ts.IsZero(), "PlaylistsFetchedAt should be set after SetPlaylists")
+	assert.True(t, ts.After(before) || ts.Equal(before), "fetchedAt should be >= before")
+	assert.True(t, ts.Before(after) || ts.Equal(after), "fetchedAt should be <= after")
+}
+
+func TestStore_SetSavedAlbums_UpdatesFetchedAt(t *testing.T) {
+	s := New()
+	before := time.Now()
+	s.SetSavedAlbums([]api.SavedAlbum{{AddedAt: "2024-01-01", Album: api.FullAlbum{ID: "a1"}}})
+	after := time.Now()
+
+	ts := s.AlbumsFetchedAt()
+	assert.False(t, ts.IsZero(), "AlbumsFetchedAt should be set after SetSavedAlbums")
+	assert.True(t, ts.After(before) || ts.Equal(before))
+	assert.True(t, ts.Before(after) || ts.Equal(after))
+}
+
+func TestStore_SetTopTracks_UpdatesStatsFetchedAt(t *testing.T) {
+	s := New()
+	before := time.Now()
+	s.SetTopTracks("short_term", []api.Track{{ID: "t1", Name: "Track 1"}})
+	after := time.Now()
+
+	ts := s.StatsFetchedAt("short_term")
+	assert.False(t, ts.IsZero(), "StatsFetchedAt should be set after SetTopTracks")
+	assert.True(t, ts.After(before) || ts.Equal(before))
+	assert.True(t, ts.Before(after) || ts.Equal(after))
+
+	// Other ranges are unaffected.
+	assert.True(t, s.StatsFetchedAt("medium_term").IsZero(), "other ranges should remain zero")
+}
+
+func TestStore_SetTopArtists_UpdatesStatsFetchedAt(t *testing.T) {
+	s := New()
+	before := time.Now()
+	s.SetTopArtists("long_term", []api.FullArtist{{ID: "a1", Name: "Artist 1"}})
+	after := time.Now()
+
+	ts := s.StatsFetchedAt("long_term")
+	assert.False(t, ts.IsZero(), "StatsFetchedAt should be set after SetTopArtists")
+	assert.True(t, ts.After(before) || ts.Equal(before))
+	assert.True(t, ts.Before(after) || ts.Equal(after))
+}
+
+func TestStore_FetchedAt_Accessors(t *testing.T) {
+	s := New()
+
+	// Initially zero for all domains.
+	assert.True(t, s.PlaylistsFetchedAt().IsZero(), "PlaylistsFetchedAt initially zero")
+	assert.True(t, s.AlbumsFetchedAt().IsZero(), "AlbumsFetchedAt initially zero")
+	assert.True(t, s.LikedTracksFetchedAt().IsZero(), "LikedTracksFetchedAt initially zero")
+	assert.True(t, s.RecentPlayedFetchedAt().IsZero(), "RecentPlayedFetchedAt initially zero")
+	assert.True(t, s.DevicesFetchedAt().IsZero(), "DevicesFetchedAt initially zero")
+	assert.True(t, s.StatsFetchedAt("short_term").IsZero(), "StatsFetchedAt initially zero")
+
+	// Set each domain.
+	s.SetPlaylists(nil)
+	assert.False(t, s.PlaylistsFetchedAt().IsZero())
+
+	s.SetLikedTracks(nil)
+	assert.False(t, s.LikedTracksFetchedAt().IsZero())
+
+	s.SetRecentlyPlayed(nil)
+	assert.False(t, s.RecentPlayedFetchedAt().IsZero())
+}
+
+// --- TTL-based staleness convenience methods ---
+
+func TestStore_PlaylistsStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.PlaylistsStale(), "PlaylistsStale should be true when never fetched")
+}
+
+func TestStore_PlaylistsStale_AfterTTL(t *testing.T) {
+	s := New()
+	// Manually set a past fetchedAt to simulate TTL expiry.
+	s.mu.Lock()
+	s.playlistsFetchedAt = time.Now().Add(-(PlaylistsTTL + time.Second))
+	s.mu.Unlock()
+	assert.True(t, s.PlaylistsStale(), "PlaylistsStale should be true after TTL")
+}
+
+func TestStore_PlaylistsStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetPlaylists(nil) // stamps fetchedAt = now
+	assert.False(t, s.PlaylistsStale(), "PlaylistsStale should be false within TTL")
+}
+
+func TestStore_AlbumsStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.AlbumsStale(), "AlbumsStale should be true when never fetched")
+}
+
+func TestStore_AlbumsStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetSavedAlbums(nil) // stamps fetchedAt = now
+	assert.False(t, s.AlbumsStale(), "AlbumsStale should be false within TTL")
+}
+
+func TestStore_LikedTracksStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.LikedTracksStale(), "LikedTracksStale should be true when never fetched")
+}
+
+func TestStore_LikedTracksStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetLikedTracks(nil) // stamps fetchedAt = now
+	assert.False(t, s.LikedTracksStale(), "LikedTracksStale should be false within TTL")
+}
+
+func TestStore_RecentlyPlayedStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.RecentlyPlayedStale(), "RecentlyPlayedStale should be true when never fetched")
+}
+
+func TestStore_RecentlyPlayedStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetRecentlyPlayed(nil) // stamps fetchedAt = now
+	assert.False(t, s.RecentlyPlayedStale(), "RecentlyPlayedStale should be false within TTL")
+}
+
+func TestStore_StatsStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.StatsStale("short_term"), "StatsStale should be true when never fetched")
+}
+
+func TestStore_StatsStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetTopTracks("short_term", nil) // stamps fetchedAt = now
+	assert.False(t, s.StatsStale("short_term"), "StatsStale should be false within TTL")
+}
+
+func TestStore_DevicesStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.DevicesStale(), "DevicesStale should be true when never fetched")
+}
+
+func TestStore_DevicesStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetDevicesFetchedAt(time.Now()) // stamp now
+	assert.False(t, s.DevicesStale(), "DevicesStale should be false within TTL")
+}
+
+func TestStore_DevicesStale_AfterTTL(t *testing.T) {
+	s := New()
+	s.SetDevicesFetchedAt(time.Now().Add(-(DevicesTTL + time.Second)))
+	assert.True(t, s.DevicesStale(), "DevicesStale should be true after TTL")
+}
+
 // --- Throttle observability ---
 
 func TestStore_Throttle_InitiallyFalse(t *testing.T) {
