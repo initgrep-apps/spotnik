@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -1997,4 +1998,47 @@ func TestApp_AlbumsLoadedMsg_OffsetPositive_AppendsAlbums(t *testing.T) {
 	require.Len(t, got, 2, "Offset>0 should append to existing albums")
 	assert.Equal(t, "existing", got[0].Album.ID)
 	assert.Equal(t, "new1", got[1].Album.ID)
+}
+
+// --- Feature 39: Idle Polish & Test Coverage ---
+
+// TestApp_WindowSizeMsg_ResetsLastInteraction verifies that a terminal resize resets
+// lastInteraction, signalling user presence the same way a key press does.
+func TestApp_WindowSizeMsg_ResetsLastInteraction(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Make the app idle by pushing lastInteraction into the past.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle after 120s without interaction")
+
+	// A terminal resize should reset the idle state.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated := m.(*app.App)
+
+	assert.False(t, updated.IsIdle(), "WindowSizeMsg should reset idle state")
+}
+
+// TestApp_WindowSizeMsg_ResetsTickCountWhenIdle verifies that when the app is idle
+// and receives a WindowSizeMsg, tickCount resets to 0 to force an immediate poll.
+func TestApp_WindowSizeMsg_ResetsTickCountWhenIdle(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Advance the tick count so we can verify it gets reset.
+	for i := 0; i < 5; i++ {
+		m, _ := a.Update(panes.TickMsg{})
+		a = m.(*app.App)
+	}
+	require.Equal(t, 5, a.TickCount(), "tick count should have advanced to 5")
+
+	// Make the app idle.
+	a.SetLastInteraction(time.Now().Add(-120 * time.Second))
+	require.True(t, a.IsIdle(), "app should be idle")
+
+	// WindowSizeMsg while idle should reset tickCount.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated := m.(*app.App)
+
+	assert.Equal(t, 0, updated.TickCount(), "WindowSizeMsg while idle should reset tickCount to 0")
 }

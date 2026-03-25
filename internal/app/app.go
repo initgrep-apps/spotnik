@@ -592,6 +592,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case tea.WindowSizeMsg:
+		// Terminal resize implies user presence — reset idle state the same way KeyMsg does.
+		wasIdle := a.isIdle()
+		a.lastInteraction = time.Now()
+		if wasIdle {
+			// User returned from idle via resize — force immediate poll on the next tick.
+			a.tickCount = 0
+		}
 		a.width = m.Width
 		a.height = m.Height
 		// DESIGN.md: Library 22%, Player 50%, Queue 28%.
