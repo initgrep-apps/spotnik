@@ -66,9 +66,9 @@
 
 ### Robustness
 
-- [ ] **`alerts.Update()` type assertion failure silently ignored** — `app.go` does `if am, ok := updatedAlerts.(bubbleup.AlertModel); ok` but if assertion fails, alert state updates stop silently. Add defensive logging/comment.
-- [ ] **`alerts.Init()` return value discarded** — Currently returns nil by design, but a BubbleUp upgrade could break alert auto-dismiss if Init() starts returning a setup command. Batch it into returned commands.
-- [ ] **No validation of alert type registration** — `NewNotifications` calls `RegisterNewAlertType` 5 times but never validates success. Invalid theme color strings could cause silent registration failure.
+- [x] **`alerts.Update()` type assertion failure silently ignored** — Fixed in Feature 38: added a defensive comment explaining why the assertion is safe (BubbleUp.AlertModel.Update always returns AlertModel). Assertion failure indicates a BubbleUp library bug — app continues without crashing.
+- [x] **`alerts.Init()` return value discarded** — Fixed in Feature 38: `alertsInitCmd := a.alerts.Init()` is now batched into the returned commands in both authenticated and unauthenticated Init() paths.
+- [x] **No validation of alert type registration** — Fixed in Feature 38: `TestNewNotifications_AllFiveAlertTypesRegistered` verifies all 5 alert types produce non-nil commands after registration. BubbleUp's `RegisterNewAlertType` is void, so the test is the validation point.
 
 ### Consistency
 
@@ -80,12 +80,12 @@
 
 ### Race Conditions
 
-- [ ] **TOCTOU race between staleness check and fetchedAt stamp** — Duplicate fetches possible when staleness check passes but the async fetch hasn't completed yet. Consider adding a "fetching" sentinel set in Update() immediately when staleness gate passes, cleared when loaded message arrives.
+- [x] **TOCTOU race between staleness check and fetchedAt stamp** — Fixed in Feature 38: fetching sentinel fields (`playlistsFetching`, `albumsFetching`, `likedFetching`, `recentFetching`, `statsFetching`, `devicesFetching`) added to Store. Sentinels set before dispatch, cleared in loaded-message handlers. Paginated requests (Offset > 0) bypass sentinels.
 
 ### Data Integrity
 
-- [ ] **fetchedAt stamped on nil/empty data from nil-client fallbacks** — All `Set*()` methods unconditionally stamp `fetchedAt = time.Now()` even when data is nil. If API client is nil, the nil-client fallback returns empty success message, which stamps fetchedAt and prevents retries for the full TTL. Consider guarding: only stamp when data is non-nil.
-- [ ] **Stats double-stamped** — Both `SetTopTracks` and `SetTopArtists` independently stamp `statsFetchedAt[range]`. If only one is called, the range appears fresh despite incomplete data. Consider stamping once in the `StatsLoadedMsg` handler after both setters.
+- [x] **fetchedAt stamped on nil/empty data from nil-client fallbacks** — Fixed in Feature 38: `SetPlaylists`, `SetSavedAlbums`, `SetLikedTracks`, `SetRecentlyPlayed` now only stamp `fetchedAt` when the slice is non-empty. Exception: `SetPlaybackState` where nil is valid (204 = nothing playing).
+- [x] **Stats double-stamped** — Fixed in Feature 38: removed `statsFetchedAt` stamping from `SetTopTracks` and `SetTopArtists`. Added `StampStatsFetchedAt(timeRange)` method, called once in the `StatsLoadedMsg` handler after both setters succeed.
 
 ### Initialization
 
@@ -93,7 +93,7 @@
 
 ### UX
 
-- [ ] **Staleness gate silently drops `FetchPlaylistsRequestMsg`** — When playlists are within TTL, `return a, nil` swallows the request. LibraryPane's `Init()` expects a `LibraryLoadedMsg` for auto-expand. After re-auth, library pane may show collapsed sections. Consider sending synthetic loaded message with cached data.
+- [x] **Staleness gate silently drops `FetchPlaylistsRequestMsg`** — Fixed in Feature 38: when playlists (albums, liked tracks, recently-played) are within TTL, a synthetic loaded message carrying cached store data is returned instead of `nil`, so the pane can initialize its list without a redundant API call.
 
 ---
 
