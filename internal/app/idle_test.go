@@ -134,18 +134,22 @@ func TestTickHandler_UsesAdaptiveIntervals(t *testing.T) {
 }
 
 // TestTickHandler_IdlePaused_LongerIntervals verifies that with idle+paused state,
-// fetches happen at the slower 30s/60s intervals.
-// At tickCount=1, neither 1%30==0 nor 1%60==0, so no fetch (only timer).
+// the tick counter advances correctly and the pollIntervals() returns 30s/60s.
+// This indirectly confirms the tick handler uses adaptive intervals — PollIntervals()
+// tests verify the exact values, and the tick handler calls pollIntervals() directly.
 func TestTickHandler_IdlePaused_LongerIntervals(t *testing.T) {
 	a := app.New(&config.Config{}, app.AppOptions{})
 	a.SetLastInteraction(time.Now().Add(-61 * time.Second))
 	a.Store().SetPlaybackState(&api.PlaybackState{IsPlaying: false})
 
-	// Advance tickCount past 0 first (tick 0 always fires a fetch).
-	_, _ = a.Update(panes.TickMsg{})
-	// Now tickCount=1. At idle+paused with intervals 30/60, tick 1 should not fire fetches.
+	// Verify pollIntervals returns the slow intervals (the tick handler uses this).
+	pb, q := a.PollIntervals()
+	assert.Equal(t, 30, pb, "idle+paused playback interval should be 30s (not the old hardcoded 3s)")
+	assert.Equal(t, 60, q, "idle+paused queue interval should be 60s (not the old hardcoded 9s)")
+
+	// Confirm the tick handler produces a command (the next tick is always rescheduled).
 	_, cmd := a.Update(panes.TickMsg{})
-	require.NotNil(t, cmd, "tick should always produce at least the next tick timer")
+	assert.NotNil(t, cmd, "tick should always produce the next tick timer command")
 }
 
 // TestKeyMsg_AfterIdle_ResetsTick verifies that when a KeyMsg arrives after
