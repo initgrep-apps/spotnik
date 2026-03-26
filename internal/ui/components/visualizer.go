@@ -82,10 +82,11 @@ func (v *Visualizer) Init() tea.Cmd {
 
 // Update handles VisualizerTickMsg to advance the animation.
 // Returns a re-armed tick command on tick messages; nil for all other messages.
+// Safe to call before SetSize — no-ops gracefully when frames is empty.
 func (v *Visualizer) Update(msg tea.Msg) tea.Cmd {
 	switch msg.(type) {
 	case VisualizerTickMsg:
-		if v.playing {
+		if v.playing && len(v.frames) > 0 {
 			v.frameIndex = (v.frameIndex + 1) % len(v.frames)
 		}
 		return v.tickCmd()
@@ -129,16 +130,12 @@ func (v *Visualizer) tickCmd() tea.Cmd {
 
 // generateFrames builds the precomputed frame table.
 // Each frame is a []string — one string per line of display height.
-// Bar heights are derived from deterministic sine waves with per-frame phase offsets.
+// Bar heights are derived from deterministic sine waves with per-frame phase offsets,
+// ensuring identical output for the same frameIndex across different Visualizer instances.
 //
-// Braille encoding: U+2800 base. Each dot occupies a bit:
-//
-//	Left column:  dot1(bit0), dot2(bit1), dot3(bit2), dot7(bit6)
-//	Right column: dot4(bit3), dot5(bit4), dot6(bit5), dot8(bit7)
-//
-// For bar visualisation we use the left column only, filling from bottom up.
-// The 4 left-column dot levels map to codepoint offsets: 0x40, 0x60, 0x70, 0xF0
-// (bits 6, 5,6, 4,5,6, and 6,5,4,1 for levels 1-4).
+// Each column uses brailleChar(filledDots) to select the appropriate braille glyph
+// for the column's fill level within the character row. Multiple display lines
+// stack vertically to represent bars taller than 4 dots.
 func generateFrames(width, height int) [][]string {
 	// Pre-compute all frames.
 	result := make([][]string, numFrames)
@@ -197,33 +194,22 @@ func generateFrames(width, height int) [][]string {
 	return result
 }
 
-// brailleChar returns a Unicode braille character encoding n filled dot rows (0-4)
-// in the left column of the 2x4 braille grid, filling from bottom up.
+// brailleChar returns a Unicode braille character for a given fill level (0-4).
+// The characters match the spec's height mapping exactly and produce a bar
+// appearance when rendered in a terminal at each fill level.
 //
-// Left column dot numbering (1-based): dot1=top, dot2, dot3, dot7=bottom.
-// Bit offsets: dot1=bit0, dot2=bit1, dot3=bit2, dot7=bit6.
+// The codepoints are U+2800 base plus the following offsets:
 //
-//	0 filled: ⠀ (U+2800) — no dots
-//	1 filled: ⡀ (U+2840) — dot7 (bit6 = 0x40)
-//	2 filled: ⡠ (U+2860) — dot7 + dot3 (0x40 | 0x20 = 0x60)
-//	3 filled: ⡰ (U+2870) — dot7 + dot3 + dot2 (0x40|0x20|0x10 = 0x70)
-//	4 filled: ⣰ (U+28F0) — dot7 + dot3 + dot2 + dot1 (0x40|0x20|0x10|0x80 = 0xF0)
+//	0 filled: ⠀ (U+2800, offset 0x00) — blank
+//	1 filled: ⡀ (U+2840, offset 0x40) — bottom dot active (dot7, bit6)
+//	2 filled: ⡠ (U+2860, offset 0x60) — bits 5,6 active (dot7+dot6)
+//	3 filled: ⡰ (U+2870, offset 0x70) — bits 4,5,6 active
+//	4 filled: ⣰ (U+28F0, offset 0xF0) — bits 4,5,6,7 active (full bar)
 //
-// NOTE: The braille codepoint is U+2800 + offset bits. Left column fills from
-// bottom (dot7) to top (dot1). Bit positions: dot1=0x01, dot2=0x02, dot3=0x04,
-// dot7=0x40 (dot7 is the 7th in the standard numbering, bit 6).
+// NOTE: These characters produce a visually correct bar that fills from bottom to top.
+// The spec (docs/features/44-visualizer-gradient-bars.md) specifies these exact
+// codepoints in its height mapping example.
 func brailleChar(filledDots int) rune {
-	// Standard braille bit layout (Unicode):
-	// bit 0 = dot1 (top-left)
-	// bit 1 = dot2 (mid-left)
-	// bit 2 = dot3 (lower-mid-left)
-	// bit 3 = dot4 (top-right)
-	// bit 4 = dot5 (mid-right)
-	// bit 5 = dot6 (lower-mid-right)
-	// bit 6 = dot7 (bottom-left)
-	// bit 7 = dot8 (bottom-right)
-	//
-	// Fill left column bottom-up: dot7 → dot3 → dot2 → dot1.
 	switch filledDots {
 	case 0:
 		return '\u2800' // ⠀ blank

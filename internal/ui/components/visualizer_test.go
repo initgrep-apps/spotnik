@@ -128,6 +128,21 @@ func TestVisualizer_DeterministicFrames(t *testing.T) {
 	assert.Equal(t, v1.View(), v2.View(), "same frameIndex should produce identical output")
 }
 
+// TestVisualizer_UpdateBeforeSetSize verifies Update does not panic if SetSize was never called.
+// Regression test for divide-by-zero when len(frames)==0 with playing=true.
+func TestVisualizer_UpdateBeforeSetSize(t *testing.T) {
+	th := theme.Load("black")
+	v := NewVisualizer(th)
+	v.SetPlaying(true) // frames is still nil
+
+	require.NotPanics(t, func() {
+		cmd := v.Update(VisualizerTickMsg(time.Now()))
+		assert.NotNil(t, cmd, "Update should still re-arm tick even with nil frames")
+	})
+	// frameIndex should remain 0 since there are no frames to cycle through.
+	assert.Equal(t, 0, v.frameIndex)
+}
+
 // TestVisualizer_OtherMessagesIgnored verifies non-tick messages don't change state.
 func TestVisualizer_OtherMessagesIgnored(t *testing.T) {
 	v := newTestVisualizer(40, 2)
