@@ -3,7 +3,7 @@
 > **This document is the authoritative design specification for Spotnik.**
 > A responsive, pane-based grid inspired by btop's celebrated terminal UI design.
 > Agents: treat every pixel of this spec as a hard constraint, not a suggestion.
-> The previous frozen three-column layout is archived in `DESIGN_OLD.md`.
+> The previous frozen three-column layout has been fully replaced.
 
 ---
 
@@ -21,7 +21,7 @@ The redesign draws from **btop** — a system monitor beloved by terminal enthus
 
 ### What Changes
 
-| Aspect | Previous (DESIGN_OLD.md) | Current (this document) |
+| Aspect | Previous (three-column layout) | Current (this document) |
 |--------|---------------------|---------------------|
 | Layout | Fixed 3-column (22/50/28%) | 3-row responsive grid, 10 panes across 2 pages |
 | Panes | 3 fixed + 2 alternative views | 8 music panes + 2 nerd status panes, toggleable |
