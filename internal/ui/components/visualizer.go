@@ -69,6 +69,12 @@ func (v *Visualizer) SetPlaying(playing bool) {
 	v.playing = playing
 }
 
+// FrameIndex returns the current animation frame index.
+// Exported for integration testing and pane state inspection.
+func (v *Visualizer) FrameIndex() int {
+	return v.frameIndex
+}
+
 // Init returns the initial tick command to start the animation loop.
 func (v *Visualizer) Init() tea.Cmd {
 	return v.tickCmd()
