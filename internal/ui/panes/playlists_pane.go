@@ -188,7 +188,8 @@ func (p *PlaylistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			p.resizeTable()
 		}
-		p.refreshPlaylistRows()
+		// Refresh the active table (playlist list or track list).
+		p.RefreshRows()
 		return p, cmd
 	}
 
