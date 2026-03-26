@@ -86,9 +86,9 @@ func TestApp_Update_TickMsg_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "tickMsg should produce a follow-up command")
 }
 
-// TestApp_PlayerPaneRouting verifies key events are routed to the player pane
+// TestApp_NowPlayingPaneRouting verifies key events are routed to the NowPlaying pane
 // when it is focused.
-func TestApp_PlayerPaneRouting(t *testing.T) {
+func TestApp_NowPlayingPaneRouting(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 

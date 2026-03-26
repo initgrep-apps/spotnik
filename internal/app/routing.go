@@ -160,7 +160,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.playerPane.SetFocused(true)
 		}
 		updatedPane, cmd := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
+		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
 			a.playerPane = pp
 		}
 		if wasUnfocused {
@@ -184,7 +184,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	default:
 		updatedPane, cmd := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
+		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
 			a.playerPane = pp
 		}
 		return a, cmd
