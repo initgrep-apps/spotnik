@@ -129,15 +129,13 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// When filter is active, forward all key events to the filter.
 	if q.filter.IsActive() {
-		wasActive := q.filter.IsActive()
 		cmd := q.filter.Update(msg)
-		// If filter just closed, re-focus the table and refresh rows.
-		if wasActive && !q.filter.IsActive() {
+		// If the filter just closed (Esc/Enter consumed it), re-focus the table.
+		if !q.filter.IsActive() {
 			q.table.SetFocused(true)
-			q.refreshRows()
-		} else {
-			q.refreshRows()
 		}
+		// Refresh rows regardless — query may have changed or filter may have closed.
+		q.refreshRows()
 		return q, cmd
 	}
 
