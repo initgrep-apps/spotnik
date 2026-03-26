@@ -22,3 +22,11 @@
 - [ ] **fetchedAt len>0 guard blocks empty collections** — Users with genuinely empty libraries (0 playlists, 0 albums) will never get fetchedAt stamped, causing repeated API calls. Distinguish "empty because error" from "empty because user has no data."
 - [ ] **Hardcoded time range strings in clearAllFetchingSentinels** — `app.go` iterates `{"short_term", "medium_term", "long_term"}` as literals. Extract to constants to prevent silent sentinel leak on drift.
 - [ ] **Pagination response can clear Offset=0 sentinel** — A paginated loaded message (Offset>0) unconditionally clears the fetching sentinel. Narrow window for duplicate Offset=0 fetches during active pagination.
+
+---
+
+## From PR #48 Review — Reusable Components (2026-03-26)
+
+### Investigation Needed
+
+- [ ] **Table emptyBorder may add phantom blank lines** — `emptyBorder` in `components/table.go` uses space `" "` for Top/Bottom border characters. bubble-table may still render these as blank lines above the header and below the last row, consuming vertical space. The `pageSize` calculation (`height - 1`) does not account for these extra lines. Verify during Feature 46 (Queue Pane Migration) when the Table component is first used with real data, and adjust `pageSize` if needed.
