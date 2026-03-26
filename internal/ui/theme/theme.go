@@ -44,6 +44,32 @@ type Theme interface {
 	StatusBarFg() lipgloss.Color // Status bar body text
 	KeyHint() lipgloss.Color     // Keybinding key labels (Space, Tab, etc.)
 
+	// Gradient bars — seek bar fill stages and volume bands (Feature 44)
+	Gradient1() lipgloss.Color // Seek bar start / low volume (cool)
+	Gradient2() lipgloss.Color // Seek bar end / mid volume
+	Gradient3() lipgloss.Color // High volume (hot)
+
+	// Visualizer — braille-dot audio spectrum (Feature 44)
+	VisualizerFg() lipgloss.Color // Braille dot foreground
+
+	// Tables — dense column header text (Feature 43+)
+	TableHeader() lipgloss.Color // Column header text
+
+	// Status — preset label in the header bar
+	PresetIndicator() lipgloss.Color // Preset label in header
+
+	// Per-pane borders — distinct accent colour per pane, btop-style identity (Feature 42)
+	PaneBorderNowPlaying() lipgloss.Color     // Green accent
+	PaneBorderQueue() lipgloss.Color          // Yellow accent
+	PaneBorderPlaylists() lipgloss.Color      // Blue accent
+	PaneBorderAlbums() lipgloss.Color         // Cyan accent
+	PaneBorderLikedSongs() lipgloss.Color     // Green accent
+	PaneBorderRecentlyPlayed() lipgloss.Color // Teal accent
+	PaneBorderTopTracks() lipgloss.Color      // Purple accent
+	PaneBorderTopArtists() lipgloss.Color     // Pink/red accent
+	PaneBorderRequestFlow() lipgloss.Color    // Orange/amber accent
+	PaneBorderNetworkLog() lipgloss.Color     // Warm grey accent
+
 	// Metadata
 	ID() string   // Config key: "black", "monokai", "catppuccin", "nord", "light"
 	Name() string // Display name: "True Black", "Monokai", etc.
