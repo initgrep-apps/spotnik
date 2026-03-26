@@ -31,6 +31,8 @@ the feature spec explicitly points you to a pattern or layout you need to look u
 | TUI | Bubble Tea v0.27+ | Elm architecture |
 | Styling | Lip Gloss | Token-based, via Theme interface |
 | Components | Bubbles | Lists, inputs, spinners |
+| Tables | `github.com/evertras/bubble-table` | Dense sortable tables in panes |
+| Overlays | `github.com/rmhubbert/bubbletea-overlay` | Modal overlay compositing |
 | HTTP | Go stdlib `net/http` | No extra HTTP lib |
 | Config | `github.com/BurntSushi/toml` | |
 | Keychain | `github.com/zalando/go-keyring` | Token storage |
@@ -63,8 +65,10 @@ spotnik/
 │   ├── app/             ← root Bubble Tea model
 │   ├── api/             ← Spotify HTTP client + models
 │   ├── ui/
-│   │   ├── panes/       ← library, player, queue, search
-│   │   ├── components/  ← progress bar, volume, controls, statusbar
+│   │   ├── panes/       ← 10 panes: nowplaying, queue, playlists, albums, likedsongs,
+│   │   │                   toptracks, topartists, recentlyplayed, requestflow, networklog
+│   │   ├── components/  ← gradient bars, visualizer, filter, table, controls, statusbar
+│   │   ├── layout/      ← LayoutManager, preset system, focus rotation, PaneAt hit-test
 │   │   └── theme/       ← Theme interface + 5 implementations
 │   ├── state/           ← central Store (single source of truth)
 │   ├── config/          ← config loading + defaults
@@ -129,10 +133,10 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 
 Full spec is in `docs/DESIGN.md` — read it before any UI work. Hard rules:
 
-- **Three-pane layout is frozen** — Library | Player | Queue, never change this
+- **Grid layout managed by LayoutManager** — 10 panes across 2 pages, configured via presets; see `docs/DESIGN.md` for full spec
 - **Never hardcode hex values** — always use `Theme` interface tokens
 - **Default theme is `black`** — config key `theme = "black"`
-- **Keybindings are frozen** — full table in `docs/DESIGN.md`, update there first if changing
+- **Keybindings are frozen** — full table in `docs/DESIGN.md` §17, update there first if changing
 - **Rounded corners only** — `╭╮╰╯`, never `┌┐└┘`
 - **Status bar always visible** — never hide or remove it
 
@@ -179,7 +183,7 @@ Follow this sequence exactly for every feature — no shortcuts.
 ## What Agents Must NEVER Do
 
 1. Store credentials or secrets in tracked files
-2. Deviate from the three-pane layout
+2. Bypass the LayoutManager — all pane geometry flows through it
 3. Add a feature not in `docs/features/` without creating a spec first
 4. Call API synchronously from `View()` or `Update()`
 5. Skip writing tests for new `api/`, `state/`, `config/` code
