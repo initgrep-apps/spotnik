@@ -233,23 +233,23 @@ func (p *NowPlayingPane) renderFull() string {
 // renderCompact renders a single-line strip for small presets.
 // Content line: seek bar gradient + controls + volume bar inline.
 func (p *NowPlayingPane) renderCompact() string {
-	actualPS := p.store.PlaybackState()
-	if actualPS == nil || actualPS.Item == nil {
+	ps := p.store.PlaybackState()
+	if ps == nil || ps.Item == nil {
 		mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 		return mutedStyle.Render("Nothing playing")
 	}
 
 	// Single line: seek bar + controls + volume.
 	volume := 0
-	if actualPS.Device != nil {
-		volume = actualPS.Device.VolumePercent
+	if ps.Device != nil {
+		volume = ps.Device.VolumePercent
 	}
 
 	// Compact seek bar: just the fill bar without time labels.
 	barWidth := paneMax(p.width/3, 10)
 	ratio := 0.0
-	if actualPS.Item.DurationMs > 0 {
-		ratio = float64(p.localProgressMs) / float64(actualPS.Item.DurationMs)
+	if ps.Item.DurationMs > 0 {
+		ratio = float64(p.localProgressMs) / float64(ps.Item.DurationMs)
 		if ratio > 1.0 {
 			ratio = 1.0
 		}
@@ -271,7 +271,7 @@ func (p *NowPlayingPane) renderCompact() string {
 	}
 	seekSB.WriteString(emptyStyle.Render(strings.Repeat("░", emptyCount)))
 
-	ctrl := components.NewControls(p.theme, actualPS.IsPlaying, actualPS.ShuffleState, actualPS.RepeatState)
+	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 	volBar := p.volumeBar.Render(volume)
 
 	return seekSB.String() + "  " + ctrl.Render() + "   " + volBar
@@ -362,12 +362,11 @@ func formatDurationMs(ms int) string {
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
 
-// interpolateHexCompact is a thin wrapper around the gradient interpolation for compact mode.
-// Defined here to avoid importing components for this internal function.
+// interpolateHexCompact interpolates between two "#rrggbb" hex colors.
+// This duplicates the unexported interpolateHex from components/gradient.go because
+// the compact seek bar needs a label-free fill bar that GradientSeekBar.Render()
+// does not produce. TODO(feature-53): consolidate with components once all panes migrate.
 func interpolateHexCompact(g1, g2 string, t float64) lipgloss.Color {
-	// Use the gradient.go helper via the GradientSeekBar's Render indirectly.
-	// Since interpolateHex is package-private in components, we duplicate the
-	// minimal logic here for the compact seek bar.
 	if t <= 0 {
 		return lipgloss.Color(g1)
 	}
