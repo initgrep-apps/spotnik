@@ -27,7 +27,7 @@ type viewMode int
 const (
 	viewSplash viewMode = iota // Splash screen shown on startup
 	viewAuth                   // Auth panel shown when user needs to authenticate
-	viewGrid // Grid layout: 10 panes across 2 pages, managed by LayoutManager
+	viewGrid                   // Grid layout: 10 panes across 2 pages, managed by LayoutManager
 )
 
 const (
