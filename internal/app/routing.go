@@ -8,58 +8,32 @@ import (
 	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
+
+// toggleKeyMap maps rune keys '1'-'8' to their corresponding PaneID.
+// This is used for btop-style pane visibility toggling.
+var toggleKeyMap = map[rune]layout.PaneID{
+	'1': layout.PaneNowPlaying,
+	'2': layout.PaneQueue,
+	'3': layout.PanePlaylists,
+	'4': layout.PaneAlbums,
+	'5': layout.PaneLikedSongs,
+	'6': layout.PaneRecentlyPlayed,
+	'7': layout.PaneTopTracks,
+	'8': layout.PaneTopArtists,
+}
 
 // isPlaybackKey returns true for keys that control playback regardless of focus.
 func isPlaybackKey(m tea.KeyMsg) bool {
 	if m.Type == tea.KeyRunes {
 		switch string(m.Runes) {
-		case " ", "n", "p", "+", "-", "s", "r":
+		case " ", "n", "+", "-", "s", "r":
 			return true
 		}
 	}
 	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight
-}
-
-// rotateFocus cycles keyboard focus between the three panes.
-// direction: 1 = forward (player → library → queue → player),
-//
-//	-1 = backward (player → queue → library → player).
-func (a *App) rotateFocus(direction int) (*App, tea.Cmd) {
-	// Clear all pane focus states.
-	a.playerPane.SetFocused(false)
-	a.libraryPane.SetFocused(false)
-	a.queuePane.SetFocused(false)
-
-	// Advance focus in the requested direction.
-	switch a.focus {
-	case focusPlayer:
-		if direction >= 0 {
-			a.focus = focusLibrary
-			a.libraryPane.SetFocused(true)
-		} else {
-			a.focus = focusQueue
-			a.queuePane.SetFocused(true)
-		}
-	case focusLibrary:
-		if direction >= 0 {
-			a.focus = focusQueue
-			a.queuePane.SetFocused(true)
-		} else {
-			a.focus = focusPlayer
-			a.playerPane.SetFocused(true)
-		}
-	default: // focusQueue
-		if direction >= 0 {
-			a.focus = focusPlayer
-			a.playerPane.SetFocused(true)
-		} else {
-			a.focus = focusLibrary
-			a.libraryPane.SetFocused(true)
-		}
-	}
-	return a, nil
 }
 
 // handleKeyMsg routes a keyboard event through all overlay and view guards before
@@ -95,45 +69,6 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.Type == tea.KeyRunes && string(m.Runes) == "q" {
 		return a, tea.Quit
 	}
-	// '2' opens the Stats view.
-	if m.Type == tea.KeyRunes && string(m.Runes) == "2" {
-		return a.openStats()
-	}
-	// '3' opens the Playlist Manager view.
-	if m.Type == tea.KeyRunes && string(m.Runes) == "3" {
-		return a.openPlaylists()
-	}
-	// '1' returns to the main three-pane layout from any alternate view.
-	if m.Type == tea.KeyRunes && string(m.Runes) == "1" {
-		if a.currentView == viewPlaylists {
-			return a.closePlaylists()
-		}
-		return a.closeStats()
-	}
-
-	// When stats view is open, route all non-global keys to it.
-	if a.currentView == viewStats {
-		if a.statsPane != nil {
-			updated, cmd := a.statsPane.Update(m)
-			if sv, ok := updated.(*panes.StatsView); ok {
-				a.statsPane = sv
-			}
-			return a, cmd
-		}
-		return a, nil
-	}
-
-	// When playlist view is open, route all non-global keys to the playlist pane.
-	if a.currentView == viewPlaylists {
-		if a.playlistPane != nil {
-			updated, cmd := a.playlistPane.Update(m)
-			if pm, ok := updated.(*panes.PlaylistManager); ok {
-				a.playlistPane = pm
-			}
-			return a, cmd
-		}
-		return a, nil
-	}
 
 	// '/' opens the search overlay from any pane.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "/" {
@@ -143,52 +78,79 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.Type == tea.KeyRunes && string(m.Runes) == "d" {
 		return a.openDeviceOverlay()
 	}
+
+	// '0' toggles between Page A and Page B.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "0" {
+		a.layout.TogglePage()
+		a.propagateSizes()
+		a.syncFocus()
+		return a, nil
+	}
+
+	// 'p' cycles presets within the current page.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "p" {
+		a.layout.CyclePreset()
+		a.propagateSizes()
+		a.syncFocus()
+		return a, nil
+	}
+
+	// '1'-'8' toggle pane visibility (Page A only).
+	if m.Type == tea.KeyRunes && len(m.Runes) == 1 {
+		if id, ok := toggleKeyMap[m.Runes[0]]; ok {
+			a.layout.TogglePane(id)
+			a.propagateSizes()
+			a.syncFocus()
+			return a, nil
+		}
+	}
+
 	// Tab rotates focus forward.
 	if m.Type == tea.KeyTab {
-		return a.rotateFocus(1)
+		a.layout.RotateFocus(true)
+		a.syncFocus()
+		return a, nil
 	}
 	// Shift+Tab rotates focus backward.
 	if m.Type == tea.KeyShiftTab {
-		return a.rotateFocus(-1)
+		a.layout.RotateFocus(false)
+		a.syncFocus()
+		return a, nil
 	}
-	// Playback keys always go to the player pane regardless of focus.
-	// Temporarily enable focus so the pane handles the key even when
-	// the library pane is active.
+
+	// Playback keys always go to the NowPlaying pane regardless of focus.
+	// Temporarily enable focus so the pane handles the key even when it isn't focused.
 	if isPlaybackKey(m) {
-		wasUnfocused := !a.playerPane.IsFocused()
-		if wasUnfocused {
-			a.playerPane.SetFocused(true)
+		np := a.nowPlayingPane()
+		if np == nil {
+			return a, nil
 		}
-		updatedPane, cmd := a.playerPane.Update(m)
+		wasFocused := np.IsFocused()
+		if !wasFocused {
+			np.SetFocused(true)
+		}
+		updatedPane, cmd := np.Update(m)
 		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
-			a.playerPane = pp
+			a.panes[layout.PaneNowPlaying] = pp
+			np = pp
 		}
-		if wasUnfocused {
-			a.playerPane.SetFocused(false)
+		if !wasFocused {
+			np.SetFocused(false)
 		}
 		return a, cmd
 	}
+
 	// Route remaining keys to the focused pane.
-	switch a.focus {
-	case focusLibrary:
-		updated, cmd := a.libraryPane.Update(m)
-		if lp, ok := updated.(*panes.LibraryPane); ok {
-			a.libraryPane = lp
-		}
-		return a, cmd
-	case focusQueue:
-		updated, cmd := a.queuePane.Update(m)
-		if qp, ok := updated.(*panes.QueuePane); ok {
-			a.queuePane = qp
-		}
-		return a, cmd
-	default:
-		updatedPane, cmd := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
-			a.playerPane = pp
-		}
-		return a, cmd
+	focusedID := a.layout.FocusedPane()
+	pane, ok := a.panes[focusedID]
+	if !ok {
+		return a, nil
 	}
+	updated, cmd := pane.Update(m)
+	if lp, ok := updated.(layout.Pane); ok {
+		a.panes[focusedID] = lp
+	}
+	return a, cmd
 }
 
 // routePlaylistMsg handles playlist-specific messages that may arrive regardless of
@@ -205,21 +167,21 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return a, nil, true
 			}
 			a.store.SetPlaylistsError(m.Err)
-			if a.playlistPane != nil {
-				updated, _ := a.playlistPane.Update(m)
-				if pm, ok := updated.(*panes.PlaylistManager); ok {
-					a.playlistPane = pm
+			if pp := a.playlistsPane(); pp != nil {
+				updated, _ := pp.Update(m)
+				if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+					a.panes[layout.PanePlaylists] = ppu
 				}
 			}
 			return a, a.alerts.NewAlertCmd("error", "Failed to load playlist tracks. Press Enter to retry"), true
 		}
 		a.store.ClearPlaylistsError()
 		a.store.SetPlaylistTracks(m.PlaylistID, m.Tracks)
-		// Forward to playlist pane so it can refresh from store.
-		if a.playlistPane != nil {
-			updated, cmd := a.playlistPane.Update(m)
-			if pm, ok := updated.(*panes.PlaylistManager); ok {
-				a.playlistPane = pm
+		// Forward to PlaylistsPane so it can refresh from store.
+		if pp := a.playlistsPane(); pp != nil {
+			updated, cmd := pp.Update(m)
+			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+				a.panes[layout.PanePlaylists] = ppu
 			}
 			return a, cmd, true
 		}
@@ -246,10 +208,10 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil, true
 			}
-			if a.playlistPane != nil {
-				updated, _ := a.playlistPane.Update(m)
-				if pm, ok := updated.(*panes.PlaylistManager); ok {
-					a.playlistPane = pm
+			if pp := a.playlistsPane(); pp != nil {
+				updated, _ := pp.Update(m)
+				if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+					a.panes[layout.PanePlaylists] = ppu
 				}
 			}
 			return a, a.alerts.NewAlertCmd("error", m.Err.Error()), true
@@ -264,10 +226,10 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if m.Err != nil && errors.Is(m.Err, errNilClient) {
 			return a, nil, true
 		}
-		if a.playlistPane != nil {
-			updated, cmd := a.playlistPane.Update(m)
-			if pm, ok := updated.(*panes.PlaylistManager); ok {
-				a.playlistPane = pm
+		if pp := a.playlistsPane(); pp != nil {
+			updated, cmd := pp.Update(m)
+			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+				a.panes[layout.PanePlaylists] = ppu
 			}
 			if m.Err != nil {
 				return a, tea.Batch(cmd, a.alerts.NewAlertCmd("error", m.Err.Error())), true
@@ -283,10 +245,10 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if m.Err != nil && errors.Is(m.Err, errNilClient) {
 			return a, nil, true
 		}
-		if a.playlistPane != nil {
-			updated, cmd := a.playlistPane.Update(m)
-			if pm, ok := updated.(*panes.PlaylistManager); ok {
-				a.playlistPane = pm
+		if pp := a.playlistsPane(); pp != nil {
+			updated, cmd := pp.Update(m)
+			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+				a.panes[layout.PanePlaylists] = ppu
 			}
 			if m.Err != nil {
 				return a, tea.Batch(cmd, a.alerts.NewAlertCmd("error", m.Err.Error())), true

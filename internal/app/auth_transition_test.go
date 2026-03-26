@@ -39,7 +39,7 @@ func TestSplash_TransitionsToMain_WhenAuthenticated(t *testing.T) {
 	model, cmd := a.Update(splashDismissMsg{})
 	updated := model.(*App)
 
-	assert.Equal(t, viewMain, updated.currentView)
+	assert.Equal(t, viewGrid, updated.currentView)
 	assert.Nil(t, cmd, "no auth cmd needed")
 }
 
@@ -50,7 +50,7 @@ func TestAuthSuccess_TransitionsToMain(t *testing.T) {
 	model, cmd := a.Update(authSuccessMsg{accessToken: "test-token"})
 	updated := model.(*App)
 
-	assert.Equal(t, viewMain, updated.currentView)
+	assert.Equal(t, viewGrid, updated.currentView)
 	assert.False(t, updated.needsAuth)
 	assert.NotNil(t, updated.player, "player should be injected")
 	assert.NotNil(t, updated.library, "library should be injected")

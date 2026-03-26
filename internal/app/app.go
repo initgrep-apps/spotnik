@@ -15,29 +15,19 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"go.dalton.dog/bubbleup"
-)
-
-// focusedPane identifies which pane currently has keyboard focus.
-type focusedPane int
-
-const (
-	focusPlayer  focusedPane = iota // default: player pane has focus
-	focusLibrary                    // library pane has focus
-	focusQueue                      // queue pane has focus
 )
 
 // viewMode identifies which top-level view is currently active.
 type viewMode int
 
 const (
-	viewSplash    viewMode = iota // Splash screen shown on startup
-	viewMain                      // three-pane Library | Player | Queue layout
-	viewAuth                      // Auth panel shown when user needs to authenticate
-	viewStats                     // Stats dashboard (press 2 to open, 1 to return)
-	viewPlaylists                 // Playlist Manager (press 3 to open, 1 to return)
+	viewSplash viewMode = iota // Splash screen shown on startup
+	viewAuth                   // Auth panel shown when user needs to authenticate
+	viewGrid                   // Grid layout (replaces viewMain/viewStats/viewPlaylists)
 )
 
 const (
@@ -76,17 +66,15 @@ type App struct {
 	devices api.DevicesAPI
 	userAPI api.UserAPI
 
-	playerPane  *panes.NowPlayingPane
-	libraryPane *panes.LibraryPane
-	queuePane   *panes.QueuePane
-	searchPane  *panes.SearchOverlay
-	devicePane  *panes.DeviceOverlay
+	// layout manages the grid, focus, preset, and page system.
+	layout *layout.Manager
 
-	// statsPane is lazy-initialized the first time the user presses 2.
-	statsPane *panes.StatsView
+	// panes holds all 8 Page A panes (Page B panes added in Feature 51).
+	panes map[layout.PaneID]layout.Pane
 
-	// playlistPane is lazy-initialized the first time the user presses 3.
-	playlistPane *panes.PlaylistManager
+	// searchPane and devicePane are overlay panes — they float above the grid.
+	searchPane *panes.SearchOverlay
+	devicePane *panes.DeviceOverlay
 
 	// playlistsAPI is the Spotify playlists mutation client.
 	playlistsAPI api.PlaylistsAPI
@@ -94,7 +82,6 @@ type App struct {
 	// currentView tracks which top-level view is displayed.
 	currentView viewMode
 
-	focus  focusedPane
 	width  int
 	height int
 
@@ -103,10 +90,6 @@ type App struct {
 
 	// deviceOverlayOpen is true while the device switcher overlay is visible.
 	deviceOverlayOpen bool
-
-	// prevFocus captures which pane was focused before search/device overlay opened,
-	// so it can be restored when the overlay closes.
-	prevFocus focusedPane
 
 	// tickCount increments every 1s tick. Used to throttle API polling:
 	// intervals are computed dynamically by pollIntervals() based on idle state and playback.
@@ -193,11 +176,31 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	s := state.New()
 	gw := api.NewGateway()
 
-	playerPane := panes.NewNowPlayingPane(s, t, true)
-	libraryPane := panes.NewLibraryPane(s, t, false)
+	// Create all 8 Page A panes.
+	nowPlayingPane := panes.NewNowPlayingPane(s, t, true)
 	queuePane := panes.NewQueuePane(s, t, false)
+	playlistsPane := panes.NewPlaylistsPane(s, t, false)
+	albumsPane := panes.NewAlbumsPane(s, t, false)
+	likedSongsPane := panes.NewLikedSongsPane(s, t, false)
+	recentlyPlayedPane := panes.NewRecentlyPlayedPane(s, t, false)
+	topTracksPane := panes.NewTopTracksPane(s, t, false)
+	topArtistsPane := panes.NewTopArtistsPane(s, t, false)
+
+	panesMap := map[layout.PaneID]layout.Pane{
+		layout.PaneNowPlaying:     nowPlayingPane,
+		layout.PaneQueue:          queuePane,
+		layout.PanePlaylists:      playlistsPane,
+		layout.PaneAlbums:         albumsPane,
+		layout.PaneLikedSongs:     likedSongsPane,
+		layout.PaneRecentlyPlayed: recentlyPlayedPane,
+		layout.PaneTopTracks:      topTracksPane,
+		layout.PaneTopArtists:     topArtistsPane,
+	}
+
 	searchPane := panes.NewSearchOverlay(s, t)
 	devicePane := panes.NewDeviceOverlay(s, t)
+
+	mgr := layout.NewManager()
 
 	volStep := cfg.UI.VolumeStep
 	if volStep <= 0 {
@@ -209,12 +212,10 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		store:           s,
 		alerts:          *components.NewNotifications(t),
 		gateway:         gw,
-		playerPane:      playerPane,
-		libraryPane:     libraryPane,
-		queuePane:       queuePane,
+		layout:          mgr,
+		panes:           panesMap,
 		searchPane:      searchPane,
 		devicePane:      devicePane,
-		focus:           focusPlayer,
 		currentView:     viewSplash,
 		volumeStep:      volStep,
 		needsAuth:       opts.NeedsAuth,
@@ -266,14 +267,9 @@ func (a *App) SetPlaylistsAPI(p api.PlaylistsAPI) {
 	a.playlistsAPI = p
 }
 
-// StatsViewOpen returns true while the stats view is the active top-level view.
-func (a *App) StatsViewOpen() bool {
-	return a.currentView == viewStats
-}
-
-// PlaylistViewOpen returns true while the Playlist Manager is the active top-level view.
-func (a *App) PlaylistViewOpen() bool {
-	return a.currentView == viewPlaylists
+// GridViewOpen returns true while the grid view is the active top-level view.
+func (a *App) GridViewOpen() bool {
+	return a.currentView == viewGrid
 }
 
 // AuthViewOpen returns true while the auth panel is the active view.
@@ -295,6 +291,27 @@ func (a *App) BackoffTicks() int {
 // Exported for testing.
 func (a *App) IsIdle() bool {
 	return a.isIdle()
+}
+
+// FocusedPane returns the PaneID of the pane that currently has keyboard focus.
+// Returns layout.PaneID(-1) if no pane is focused.
+func (a *App) FocusedPane() layout.PaneID {
+	return a.layout.FocusedPane()
+}
+
+// NowPlayingFocused returns true if the NowPlaying pane currently has keyboard focus.
+func (a *App) NowPlayingFocused() bool {
+	return a.layout.FocusedPane() == layout.PaneNowPlaying
+}
+
+// QueueFocused returns true if the Queue pane currently has keyboard focus.
+func (a *App) QueueFocused() bool {
+	return a.layout.FocusedPane() == layout.PaneQueue
+}
+
+// PlaylistsFocused returns true if the Playlists pane currently has keyboard focus.
+func (a *App) PlaylistsFocused() bool {
+	return a.layout.FocusedPane() == layout.PanePlaylists
 }
 
 // SetLastInteraction sets the lastInteraction timestamp (exported for testing).
@@ -351,19 +368,107 @@ func (a *App) DeviceOverlayOpen() bool {
 	return a.deviceOverlayOpen
 }
 
-// LibraryFocused returns true if the library pane currently has keyboard focus.
-func (a *App) LibraryFocused() bool {
-	return a.focus == focusLibrary
+// propagateSizes calls SetSize on all visible panes using their computed Rects from
+// the LayoutManager. Hidden panes do not receive a SetSize call.
+func (a *App) propagateSizes() {
+	for id, pane := range a.panes {
+		if a.layout.IsPaneVisible(id) {
+			rect := a.layout.PaneRect(id)
+			pane.SetSize(rect.ContentWidth(), rect.ContentHeight())
+		}
+	}
 }
 
-// PlayerFocused returns true if the player pane currently has keyboard focus.
-func (a *App) PlayerFocused() bool {
-	return a.focus == focusPlayer
+// syncFocus calls SetFocused(true/false) on all panes based on layout.FocusedPane().
+func (a *App) syncFocus() {
+	focused := a.layout.FocusedPane()
+	for id, pane := range a.panes {
+		pane.SetFocused(id == focused)
+	}
 }
 
-// QueueFocused returns true if the queue pane currently has keyboard focus.
-func (a *App) QueueFocused() bool {
-	return a.focus == focusQueue
+// nowPlayingPane returns the NowPlayingPane from the panes map (convenience accessor).
+func (a *App) nowPlayingPane() *panes.NowPlayingPane {
+	p, ok := a.panes[layout.PaneNowPlaying]
+	if !ok {
+		return nil
+	}
+	if np, ok := p.(*panes.NowPlayingPane); ok {
+		return np
+	}
+	return nil
+}
+
+// queuePane returns the QueuePane from the panes map (convenience accessor).
+func (a *App) queuePane() *panes.QueuePane {
+	p, ok := a.panes[layout.PaneQueue]
+	if !ok {
+		return nil
+	}
+	if qp, ok := p.(*panes.QueuePane); ok {
+		return qp
+	}
+	return nil
+}
+
+// playlistsPane returns the PlaylistsPane from the panes map (convenience accessor).
+func (a *App) playlistsPane() *panes.PlaylistsPane {
+	p, ok := a.panes[layout.PanePlaylists]
+	if !ok {
+		return nil
+	}
+	if pp, ok := p.(*panes.PlaylistsPane); ok {
+		return pp
+	}
+	return nil
+}
+
+// albumsPane returns the AlbumsPane from the panes map (convenience accessor).
+func (a *App) albumsPane() *panes.AlbumsPane {
+	p, ok := a.panes[layout.PaneAlbums]
+	if !ok {
+		return nil
+	}
+	if ap, ok := p.(*panes.AlbumsPane); ok {
+		return ap
+	}
+	return nil
+}
+
+// recentlyPlayedPane returns the RecentlyPlayedPane from the panes map.
+func (a *App) recentlyPlayedPane() *panes.RecentlyPlayedPane {
+	p, ok := a.panes[layout.PaneRecentlyPlayed]
+	if !ok {
+		return nil
+	}
+	if rp, ok := p.(*panes.RecentlyPlayedPane); ok {
+		return rp
+	}
+	return nil
+}
+
+// topTracksPane returns the TopTracksPane from the panes map.
+func (a *App) topTracksPane() *panes.TopTracksPane {
+	p, ok := a.panes[layout.PaneTopTracks]
+	if !ok {
+		return nil
+	}
+	if tp, ok := p.(*panes.TopTracksPane); ok {
+		return tp
+	}
+	return nil
+}
+
+// topArtistsPane returns the TopArtistsPane from the panes map.
+func (a *App) topArtistsPane() *panes.TopArtistsPane {
+	p, ok := a.panes[layout.PaneTopArtists]
+	if !ok {
+		return nil
+	}
+	if tp, ok := p.(*panes.TopArtistsPane); ok {
+		return tp
+	}
+	return nil
 }
 
 // Init starts the splash timer. If the user is already authenticated,
@@ -385,89 +490,47 @@ func (a *App) Init() tea.Cmd {
 		return tea.Batch(splashTimer, alertsInitCmd)
 	}
 
-	// Authenticated: start data fetching alongside splash.
-	return tea.Batch(
+	// Authenticated: start data fetching and pane init alongside splash.
+	var paneCmds []tea.Cmd
+	for _, pane := range a.panes {
+		if cmd := pane.Init(); cmd != nil {
+			paneCmds = append(paneCmds, cmd)
+		}
+	}
+
+	return tea.Batch(append(paneCmds,
 		fetchPlaybackStateCmd(a.player),
-		a.libraryPane.Init(),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
 		splashTimer,
 		alertsInitCmd,
-	)
+	)...)
 }
 
-// openSearch opens the search overlay and captures the current pane focus.
+// openSearch opens the search overlay.
 func (a *App) openSearch() (*App, tea.Cmd) {
-	a.prevFocus = a.focus
 	a.searchOpen = true
 	cmd := a.searchPane.Init()
 	return a, cmd
 }
 
-// closeSearch closes the search overlay and restores the previous pane focus.
+// closeSearch closes the search overlay.
 func (a *App) closeSearch() (*App, tea.Cmd) {
 	a.searchOpen = false
-	a.focus = a.prevFocus
 	return a, nil
 }
 
 // openDeviceOverlay opens the device switcher overlay and fetches the device list.
 func (a *App) openDeviceOverlay() (*App, tea.Cmd) {
-	a.prevFocus = a.focus
 	a.deviceOverlayOpen = true
 	cmd := a.devicePane.Init()
 	return a, cmd
 }
 
-// closeDeviceOverlay closes the device switcher overlay and restores previous focus.
+// closeDeviceOverlay closes the device switcher overlay.
 func (a *App) closeDeviceOverlay() (*App, tea.Cmd) {
 	a.deviceOverlayOpen = false
-	a.focus = a.prevFocus
-	return a, nil
-}
-
-// openStats switches to the Stats view. The StatsView is lazy-initialized on the
-// first call — cursor and section focus are preserved on subsequent calls.
-func (a *App) openStats() (*App, tea.Cmd) {
-	a.currentView = viewStats
-	if a.statsPane == nil {
-		// First open: construct and init the stats pane.
-		sv := panes.NewStatsView(a.store, a.theme)
-		if a.width > 0 {
-			sv.SetSize(a.width, a.height-4) // subtract header + status bar rows
-		}
-		a.statsPane = sv
-		return a, sv.Init()
-	}
-	return a, nil
-}
-
-// closeStats returns to the main three-pane layout.
-func (a *App) closeStats() (*App, tea.Cmd) {
-	a.currentView = viewMain
-	return a, nil
-}
-
-// openPlaylists switches to the Playlist Manager view. The PlaylistManager is
-// lazy-initialized on the first call and Init() is called to trigger a playlist
-// fetch if the store is empty. Subsequent calls reuse the existing pane and store data.
-func (a *App) openPlaylists() (*App, tea.Cmd) {
-	a.currentView = viewPlaylists
-	if a.playlistPane == nil {
-		pm := panes.NewPlaylistManager(a.store, a.theme)
-		if a.width > 0 {
-			pm.SetSize(a.width, a.height-4) // subtract header + status bar rows
-		}
-		a.playlistPane = pm
-		return a, pm.Init()
-	}
-	return a, nil
-}
-
-// closePlaylists returns to the main three-pane layout.
-func (a *App) closePlaylists() (*App, tea.Cmd) {
-	a.currentView = viewMain
 	return a, nil
 }
 
@@ -519,7 +582,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.authStatus = "Opening browser for authorization..."
 				return a, prepareAuthCmd(a.clientID)
 			}
-			a.currentView = viewMain
+			a.currentView = viewGrid
 		}
 		return a, nil
 
@@ -534,23 +597,28 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case authSuccessMsg:
 		a.needsAuth = false
-		a.currentView = viewMain
+		a.currentView = viewGrid
 		a.initAPIClients(m.accessToken)
 		// Start data fetching and tick loop.
-		return a, tea.Batch(
+		var paneCmds []tea.Cmd
+		for _, pane := range a.panes {
+			if cmd := pane.Init(); cmd != nil {
+				paneCmds = append(paneCmds, cmd)
+			}
+		}
+		return a, tea.Batch(append(paneCmds,
 			fetchPlaybackStateCmd(a.player),
-			a.libraryPane.Init(),
 			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 				return panes.TickMsg{}
 			}),
-		)
+		)...)
 
 	case authErrorMsg:
 		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
 		return a, nil
 
 	case panes.SearchClosedMsg:
-		// Search overlay closed — restore previous focus and close overlay.
+		// Search overlay closed — close overlay.
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
@@ -614,29 +682,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.width = m.Width
 		a.height = m.Height
-		// DESIGN.md: Library 22%, Player 50%, Queue 28%.
-		libraryWidth := m.Width * 22 / 100
-		queueWidth := m.Width * 28 / 100
-		playerWidth := m.Width - libraryWidth - queueWidth
-		// Subtract 2 per border (left+right) from content width.
-		a.libraryPane.SetSize(libraryWidth-2, m.Height-4)
-		a.playerPane.SetSize(playerWidth-2, m.Height-4)
-		a.queuePane.SetSize(queueWidth-2, m.Height-4)
+		// Propagate terminal size through LayoutManager, then to all visible panes.
+		a.layout.Resize(m.Width, m.Height)
+		a.propagateSizes()
+		a.syncFocus()
 		a.searchPane.SetSize(m.Width, m.Height)
 		a.devicePane.SetSize(m.Width, m.Height)
-		if a.statsPane != nil {
-			a.statsPane.SetSize(m.Width, m.Height-4)
-		}
-		if a.playlistPane != nil {
-			a.playlistPane.SetSize(m.Width, m.Height-4)
-		}
 		if toastCmd != nil {
 			return a, toastCmd
 		}
 		return a, nil
 
 	case panes.FetchStatsMsg:
-		// Stats view requesting data for a time range.
+		// Stats pane requesting data for a time range.
 		// If a fetch is already in-flight, silently skip to prevent TOCTOU duplicates.
 		if a.store.StatsFetching(m.TimeRange) {
 			return a, nil
@@ -659,7 +717,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildFetchStatsCmd(m.TimeRange)
 
 	case panes.StatsLoadedMsg:
-		// Stats data fetched — clear fetching sentinel, write to store, forward to pane.
+		// Stats data fetched — clear fetching sentinel, write to store, forward to panes.
 		if m.TimeRange != "" {
 			a.store.SetStatsFetching(m.TimeRange, false)
 		}
@@ -668,12 +726,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetStatsError(m.Err)
-			if a.statsPane != nil {
-				updated, _ := a.statsPane.Update(m)
-				if sv, ok := updated.(*panes.StatsView); ok {
-					a.statsPane = sv
-				}
-			}
 			return a, a.alerts.NewAlertCmd("error", "Failed to load stats. Press f to retry")
 		}
 		a.store.ClearStatsError()
@@ -685,12 +737,28 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// range fresh after only one write, hiding partial-data state.
 			a.store.StampStatsFetchedAt(m.TimeRange)
 		}
-		if a.statsPane != nil {
-			updated, cmd := a.statsPane.Update(m)
-			if sv, ok := updated.(*panes.StatsView); ok {
-				a.statsPane = sv
+		// Forward to TopTracks and TopArtists panes.
+		var cmds []tea.Cmd
+		if tp := a.topTracksPane(); tp != nil {
+			updated, cmd := tp.Update(m)
+			if tpu, ok := updated.(*panes.TopTracksPane); ok {
+				a.panes[layout.PaneTopTracks] = tpu
 			}
-			return a, cmd
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if ap := a.topArtistsPane(); ap != nil {
+			updated, cmd := ap.Update(m)
+			if apu, ok := updated.(*panes.TopArtistsPane); ok {
+				a.panes[layout.PaneTopArtists] = apu
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
 		}
 		return a, nil
 
@@ -712,10 +780,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleKeyMsg(m)
 
 	case panes.TickMsg:
-		// Always forward to playerPane for progress bar animation.
-		updatedPane, _ := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
-			a.playerPane = pp
+		// Forward TickMsg to NowPlaying for progress bar animation.
+		if np := a.nowPlayingPane(); np != nil {
+			updatedPane, _ := np.Update(m)
+			if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
 		}
 
 		nextTick := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
@@ -751,6 +821,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.tickCount++
 		return a, tea.Batch(cmds...)
+
+	case components.VisualizerTickMsg:
+		// Forward VisualizerTickMsg to NowPlaying pane.
+		if np := a.nowPlayingPane(); np != nil {
+			updated, cmd := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+			return a, cmd
+		}
+		return a, nil
 
 	case panes.RateLimitedMsg:
 		// 429 from Spotify — activate backoff and emit a ratelimit toast.
@@ -800,7 +881,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearQueueError()
 		a.store.SetQueue(m.Tracks)
-		a.queuePane.RefreshRows()
+		if qp := a.queuePane(); qp != nil {
+			qp.RefreshRows()
+		}
 		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
@@ -841,11 +924,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Data fetched during splash is stored but splash stays visible
 		// for the full 5s duration — the splashDismissMsg timer handles transition.
-		updatedPane, cmd := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
-			a.playerPane = pp
+		if np := a.nowPlayingPane(); np != nil {
+			updatedPane, cmd := np.Update(m)
+			if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+			return a, cmd
 		}
-		return a, cmd
+		return a, nil
 
 	case panes.PlaybackCmdSentMsg:
 		if m.Err != nil {
@@ -926,15 +1012,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear fetching sentinel so a subsequent stale check can dispatch a fresh fetch.
 		a.store.SetPlaylistsFetching(false)
 		if m.Err != nil {
-			// errNilClient means the API client is not yet initialized (pre-auth startup).
-			// Skip silently — no toast, no store error — to avoid noisy startup messages.
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
 			a.store.SetPlaylistsFetchError(m.Err)
-			updated, _ := a.libraryPane.Update(m)
-			if lp, ok := updated.(*panes.LibraryPane); ok {
-				a.libraryPane = lp
+			// Forward to PlaylistsPane for error display.
+			if pp := a.playlistsPane(); pp != nil {
+				updated, _ := pp.Update(m)
+				if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+					a.panes[layout.PanePlaylists] = ppu
+				}
 			}
 			return a, a.alerts.NewAlertCmd("error", "Failed to load playlists. Press Tab to retry")
 		}
@@ -945,12 +1032,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.store.SetPlaylists(append(a.store.Playlists(), m.Items...))
 		}
 		a.store.SetPlaylistsTotal(len(a.store.Playlists()))
-		// Forward to library pane so it can refresh from store.
-		updated, cmd := a.libraryPane.Update(m)
-		if lp, ok := updated.(*panes.LibraryPane); ok {
-			a.libraryPane = lp
+		// Forward to PlaylistsPane so it can refresh from store.
+		if pp := a.playlistsPane(); pp != nil {
+			updated, cmd := pp.Update(m)
+			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
+				a.panes[layout.PanePlaylists] = ppu
+			}
+			return a, cmd
 		}
-		return a, cmd
+		return a, nil
 
 	case panes.FetchAlbumsRequestMsg:
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
@@ -978,9 +1068,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetAlbumsFetchError(m.Err)
-			updated, _ := a.libraryPane.Update(m)
-			if lp, ok := updated.(*panes.LibraryPane); ok {
-				a.libraryPane = lp
+			// Forward to AlbumsPane for error display.
+			if ap := a.albumsPane(); ap != nil {
+				updated, _ := ap.Update(m)
+				if apu, ok := updated.(*panes.AlbumsPane); ok {
+					a.panes[layout.PaneAlbums] = apu
+				}
 			}
 			return a, a.alerts.NewAlertCmd("error", "Failed to load albums. Press Tab to retry")
 		}
@@ -990,12 +1083,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a.store.SetSavedAlbums(append(a.store.SavedAlbums(), m.Items...))
 		}
-		// Forward to library pane.
-		updated, cmd := a.libraryPane.Update(m)
-		if lp, ok := updated.(*panes.LibraryPane); ok {
-			a.libraryPane = lp
+		// Forward to AlbumsPane.
+		if ap := a.albumsPane(); ap != nil {
+			updated, cmd := ap.Update(m)
+			if apu, ok := updated.(*panes.AlbumsPane); ok {
+				a.panes[layout.PaneAlbums] = apu
+			}
+			return a, cmd
 		}
-		return a, cmd
+		return a, nil
 
 	case panes.FetchLikedTracksRequestMsg:
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
@@ -1023,21 +1119,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetLikedTracksFetchError(m.Err)
-			updated, _ := a.libraryPane.Update(m)
-			if lp, ok := updated.(*panes.LibraryPane); ok {
-				a.libraryPane = lp
-			}
 			return a, a.alerts.NewAlertCmd("error", "Failed to load liked tracks. Press Tab to retry")
 		}
 		a.store.ClearLikedTracksFetchError()
 		a.store.SetLikedTracks(m.Items)
 		a.store.SetLikedTotal(len(m.Items) + m.Offset)
-		// Forward to library pane.
-		updated, cmd := a.libraryPane.Update(m)
-		if lp, ok := updated.(*panes.LibraryPane); ok {
-			a.libraryPane = lp
+		// LikedSongsPane reads from store on RefreshRows — forward message to trigger refresh.
+		if lsp, ok := a.panes[layout.PaneLikedSongs]; ok {
+			updated, cmd := lsp.Update(m)
+			a.panes[layout.PaneLikedSongs] = updated.(layout.Pane)
+			return a, cmd
 		}
-		return a, cmd
+		return a, nil
 
 	case panes.FetchRecentlyPlayedRequestMsg:
 		// NOTE: recently-played has no pagination.
@@ -1064,20 +1157,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetRecentPlayedFetchError(m.Err)
-			updated, _ := a.libraryPane.Update(m)
-			if lp, ok := updated.(*panes.LibraryPane); ok {
-				a.libraryPane = lp
-			}
 			return a, a.alerts.NewAlertCmd("error", "Failed to load recently played. Press Tab to retry")
 		}
 		a.store.ClearRecentPlayedFetchError()
 		a.store.SetRecentlyPlayed(m.Items)
-		// Forward to library pane.
-		updated, cmd := a.libraryPane.Update(m)
-		if lp, ok := updated.(*panes.LibraryPane); ok {
-			a.libraryPane = lp
+		// Forward to RecentlyPlayedPane.
+		if rp := a.recentlyPlayedPane(); rp != nil {
+			updated, cmd := rp.Update(m)
+			if rpu, ok := updated.(*panes.RecentlyPlayedPane); ok {
+				a.panes[layout.PaneRecentlyPlayed] = rpu
+			}
+			return a, cmd
 		}
-		return a, cmd
+		return a, nil
 
 	case panes.LikeTrackRequestMsg:
 		return a, a.buildToggleLikeCmd(m.TrackID, m.Unlike)
@@ -1093,7 +1185,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.DeviceOverlayClosedMsg:
-		// Device overlay closed via Esc — restore previous focus.
+		// Device overlay closed via Esc — close overlay.
 		return a.closeDeviceOverlay()
 
 	case panes.FetchDevicesRequestMsg:
@@ -1216,10 +1308,5 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	// Forward unhandled messages to the library pane (notification msgs, etc.).
-	updated, cmd := a.libraryPane.Update(msg)
-	if lp, ok := updated.(*panes.LibraryPane); ok {
-		a.libraryPane = lp
-	}
-	return a, cmd
+	return a, nil
 }

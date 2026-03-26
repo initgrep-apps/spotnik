@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 )
 
 // View renders the full terminal UI.
@@ -21,8 +22,8 @@ func (a *App) View() string {
 // buildView renders the full terminal UI content without the alert overlay.
 // Called by View() which applies alerts.Render() as the final step.
 func (a *App) buildView() string {
-	// DESIGN.md: minimum terminal size check.
-	if a.width > 0 && a.height > 0 && (a.width < 100 || a.height < 24) {
+	// DESIGN.md: minimum terminal size check (updated to 120×30 per F49).
+	if a.width > 0 && a.height > 0 && (a.width < 120 || a.height < 30) {
 		return a.renderTooSmall()
 	}
 
@@ -31,7 +32,7 @@ func (a *App) buildView() string {
 		if a.width > 0 && a.height > 0 {
 			return a.renderSplash()
 		}
-		// No size yet — fall through to main view for tests.
+		// No size yet — fall through to grid view for tests.
 	}
 
 	// Auth panel shown when the user needs to authenticate.
@@ -39,31 +40,11 @@ func (a *App) buildView() string {
 		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
-	// Stats view replaces the three-pane layout when active.
-	if a.currentView == viewStats && a.statsPane != nil {
-		header := a.renderHeader("[STATS]")
-		statsContent := a.statsPane.View()
-		statusBar := a.renderStatusBar(a.statsHints())
-		return strings.Join([]string{header, statsContent, statusBar}, "\n")
-	}
-
-	// Playlist Manager replaces the three-pane layout when active.
-	if a.currentView == viewPlaylists && a.playlistPane != nil {
-		header := a.renderHeader("[PLAYLISTS]")
-		playlistContent := a.playlistPane.View()
-		statusBar := a.renderStatusBar(a.playlistsHints())
-		return strings.Join([]string{header, playlistContent, statusBar}, "\n")
-	}
-
+	// Grid view: header + grid content + status bar.
 	header := a.renderHeader("")
-	statusBar := a.renderStatusBar(a.mainHints())
-
-	libraryView := a.renderPaneWithBorder(a.libraryPane.View(), a.focus == focusLibrary)
-	playerView := a.renderPaneWithBorder(a.playerPane.View(), a.focus == focusPlayer)
-	queueView := a.renderPaneWithBorder(a.queuePane.View(), a.focus == focusQueue)
-
-	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, libraryView, playerView, queueView)
-	body := strings.Join([]string{header, mainContent, statusBar}, "\n")
+	gridContent := a.renderGrid()
+	statusBar := a.renderStatusBar(a.gridHints())
+	body := strings.Join([]string{header, gridContent, statusBar}, "\n")
 
 	if a.deviceOverlayOpen {
 		return a.renderWithDeviceOverlay(body)
@@ -76,7 +57,89 @@ func (a *App) buildView() string {
 	return body
 }
 
-// renderWithDeviceOverlay renders the three-pane view dimmed and places the
+// renderGrid assembles all visible panes into the full grid using LayoutManager.
+// Panes are grouped by row (using Rect.Y), rendered with btop-style borders,
+// and joined horizontally per row, then vertically across rows.
+func (a *App) renderGrid() string {
+	visiblePanes := a.layout.VisiblePanes()
+	if len(visiblePanes) == 0 {
+		return ""
+	}
+
+	// Group panes by row (panes with the same Rect.Y belong to the same row).
+	rows := groupPanesByRow(visiblePanes, a.layout)
+
+	var rowStrings []string
+	for _, row := range rows {
+		var cellStrings []string
+		for _, paneID := range row {
+			rect := a.layout.PaneRect(paneID)
+			pane, ok := a.panes[paneID]
+			if !ok {
+				continue
+			}
+
+			// Get pane content (sized to content area).
+			content := pane.View()
+
+			// Wrap in btop-style border.
+			cfg := layout.BorderConfig{
+				Width:       rect.Width,
+				Height:      rect.Height,
+				Title:       pane.Title(),
+				ToggleKey:   pane.ToggleKey(),
+				Actions:     pane.Actions(),
+				AccentColor: layout.PaneBorderColor(paneID, a.theme),
+				Focused:     pane.IsFocused(),
+				Theme:       a.theme,
+			}
+			bordered := layout.RenderPaneBorder(content, cfg)
+
+			// Ensure exact width/height via lipgloss (safety cap against oversized pane output).
+			capped := lipgloss.NewStyle().
+				Width(rect.Width).MaxWidth(rect.Width).
+				Height(rect.Height).MaxHeight(rect.Height).
+				Render(bordered)
+			cellStrings = append(cellStrings, capped)
+		}
+		if len(cellStrings) > 0 {
+			rowStr := lipgloss.JoinHorizontal(lipgloss.Top, cellStrings...)
+			rowStrings = append(rowStrings, rowStr)
+		}
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, rowStrings...)
+}
+
+// groupPanesByRow groups visible PaneIDs into rows based on their Y coordinate.
+// Returns a slice of rows, each row being a slice of PaneIDs in left-to-right order.
+func groupPanesByRow(paneIDs []layout.PaneID, mgr *layout.Manager) [][]layout.PaneID {
+	if len(paneIDs) == 0 {
+		return nil
+	}
+
+	// Track which Y values we've seen, in order.
+	seen := make(map[int]bool)
+	var yOrder []int
+	rowMap := make(map[int][]layout.PaneID)
+
+	for _, id := range paneIDs {
+		rect := mgr.PaneRect(id)
+		if !seen[rect.Y] {
+			seen[rect.Y] = true
+			yOrder = append(yOrder, rect.Y)
+		}
+		rowMap[rect.Y] = append(rowMap[rect.Y], id)
+	}
+
+	rows := make([][]layout.PaneID, len(yOrder))
+	for i, y := range yOrder {
+		rows[i] = rowMap[y]
+	}
+	return rows
+}
+
+// renderWithDeviceOverlay renders the grid dimmed and places the
 // device switcher overlay in the top-right area per the DESIGN.md spec.
 func (a *App) renderWithDeviceOverlay(background string) string {
 	overlay := a.devicePane.View()
@@ -96,7 +159,7 @@ func (a *App) renderWithDeviceOverlay(background string) string {
 	return centered
 }
 
-// renderWithSearchOverlay renders the three-pane view dimmed and places the
+// renderWithSearchOverlay renders the grid dimmed and places the
 // search overlay centered on top using lipgloss.Place() per the DESIGN.md spec.
 func (a *App) renderWithSearchOverlay(background string) string {
 	overlay := a.searchPane.View()
@@ -106,7 +169,7 @@ func (a *App) renderWithSearchOverlay(background string) string {
 	}
 
 	// Center the overlay on a consistent black background so the dimmed
-	// three-pane view is replaced with a uniform dark surface behind the modal.
+	// grid is replaced with a uniform dark surface behind the modal.
 	centered := lipgloss.Place(
 		a.width, a.height,
 		lipgloss.Center, lipgloss.Center,
@@ -123,6 +186,7 @@ func (a *App) renderSplash() string {
 }
 
 // renderTooSmall renders the "terminal too small" message.
+// Updated minimum: 120×30 per F49 spec.
 func (a *App) renderTooSmall() string {
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -130,22 +194,10 @@ func (a *App) renderTooSmall() string {
 		Padding(1, 2)
 
 	msg := fmt.Sprintf(
-		"Spotnik needs more space\n\nCurrent:  %d × %d\nRequired: 100 × 24\n\nPlease resize your terminal and retry.",
+		"Spotnik needs more space\n\nCurrent:  %d × %d\nRequired: 120 × 30\n\nPlease resize your terminal and retry.",
 		a.width, a.height,
 	)
 	return style.Render(msg)
-}
-
-// renderPaneWithBorder wraps a pane's view with a rounded border per DESIGN.md.
-func (a *App) renderPaneWithBorder(content string, focused bool) string {
-	borderColor := a.theme.InactiveBorder()
-	if focused {
-		borderColor = a.theme.ActiveBorder()
-	}
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor).
-		Render(content)
 }
 
 // maxDeviceNameLen is the maximum number of characters for the device name in the header.
@@ -204,7 +256,7 @@ func (a *App) renderHeader(label string) string {
 // Toast notifications are shown as overlays via alerts.Render() — they no longer
 // appear in the status bar. The status bar is now always hints-only.
 // hints is a pre-built slice of rendered key-hint strings;
-// use mainHints(), statsHints(), or playlistsHints() to obtain the right set.
+// use gridHints() to obtain the right set.
 func (a *App) renderStatusBar(hints []string) string {
 	style := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
@@ -213,83 +265,22 @@ func (a *App) renderStatusBar(hints []string) string {
 	return style.Render("  " + strings.Join(hints, "  "))
 }
 
-// mainHints returns the context-sensitive key hints for the three-pane main view.
-func (a *App) mainHints() []string {
-	keyStyle := lipgloss.NewStyle().
-		Foreground(a.theme.KeyHint()).
-		Bold(true)
-
-	switch a.focus {
-	case focusLibrary:
-		return []string{
-			keyStyle.Render("/") + " search",
-			keyStyle.Render("Enter") + " play",
-			keyStyle.Render("a") + " queue",
-			keyStyle.Render("l") + " like",
-			keyStyle.Render("d") + " devices",
-			keyStyle.Render("2") + " stats",
-			keyStyle.Render("3") + " lists",
-			keyStyle.Render("Tab") + " pane",
-			keyStyle.Render("q") + " quit",
-		}
-	case focusQueue:
-		return []string{
-			keyStyle.Render("/") + " search",
-			keyStyle.Render("j/k") + " navigate",
-			keyStyle.Render("Enter") + " play",
-			keyStyle.Render("d") + " devices",
-			keyStyle.Render("2") + " stats",
-			keyStyle.Render("3") + " lists",
-			keyStyle.Render("Tab") + " pane",
-			keyStyle.Render("q") + " quit",
-		}
-	default:
-		return []string{
-			keyStyle.Render("/") + " search",
-			keyStyle.Render("Space") + " play",
-			keyStyle.Render("n/p") + " skip",
-			keyStyle.Render("+/-") + " vol",
-			keyStyle.Render("s") + " shuffle",
-			keyStyle.Render("r") + " repeat",
-			keyStyle.Render("d") + " devices",
-			keyStyle.Render("2") + " stats",
-			keyStyle.Render("3") + " lists",
-			keyStyle.Render("Tab") + " pane",
-			keyStyle.Render("q") + " quit",
-		}
-	}
-}
-
-// statsHints returns the key hints for the stats view status bar.
-func (a *App) statsHints() []string {
+// gridHints returns the context-sensitive key hints for the grid view status bar.
+func (a *App) gridHints() []string {
 	keyStyle := lipgloss.NewStyle().
 		Foreground(a.theme.KeyHint()).
 		Bold(true)
 
 	return []string{
-		keyStyle.Render("Tab") + " next section",
-		keyStyle.Render("j/k") + " move",
-		keyStyle.Render("Enter") + " play",
-		keyStyle.Render("f") + " cycle range",
-		keyStyle.Render("1") + " library",
-		keyStyle.Render("q") + " quit",
-	}
-}
-
-// playlistsHints returns the key hints for the playlist manager view status bar.
-func (a *App) playlistsHints() []string {
-	keyStyle := lipgloss.NewStyle().
-		Foreground(a.theme.KeyHint()).
-		Bold(true)
-
-	return []string{
-		keyStyle.Render("Enter") + " play",
-		keyStyle.Render("r") + " rename",
-		keyStyle.Render("n") + " new playlist",
-		keyStyle.Render("x") + " remove track",
-		keyStyle.Render("Shift+↑↓") + " reorder",
-		keyStyle.Render("Tab") + " switch pane",
-		keyStyle.Render("1") + " library",
+		keyStyle.Render("/") + " search",
+		keyStyle.Render("Space") + " play",
+		keyStyle.Render("n") + " next",
+		keyStyle.Render("+/-") + " vol",
+		keyStyle.Render("0") + " page",
+		keyStyle.Render("p") + " preset",
+		keyStyle.Render("1-8") + " toggle",
+		keyStyle.Render("Tab") + " focus",
+		keyStyle.Render("d") + " devices",
 		keyStyle.Render("q") + " quit",
 	}
 }
