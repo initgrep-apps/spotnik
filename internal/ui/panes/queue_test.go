@@ -355,3 +355,143 @@ func TestQueuePane_Table_JKNavigation(t *testing.T) {
 	pp2 := updated2.(*QueuePane)
 	assert.Equal(t, 0, pp2.table.SelectedIndex(), "k should move selection up")
 }
+
+// --- Task 3: filter support ---
+
+// TestQueuePane_Filter_FKeyActivates verifies that pressing 'f' activates the filter.
+func TestQueuePane_Filter_FKeyActivates(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	assert.False(t, pane.filter.IsActive(), "filter should be inactive initially")
+	updated, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pp := updated.(*QueuePane)
+	assert.True(t, pp.filter.IsActive(), "f key should activate filter")
+}
+
+// TestQueuePane_Filter_EscCloses verifies that Esc closes the filter and restores full list.
+func TestQueuePane_Filter_EscCloses(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	// Activate filter.
+	updated, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pp := updated.(*QueuePane)
+	require.True(t, pp.filter.IsActive())
+
+	// Press Esc — filter should close.
+	updated2, _ := pp.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	pp2 := updated2.(*QueuePane)
+	assert.False(t, pp2.filter.IsActive(), "Esc should close filter")
+	// Full list should be restored: table has 3 rows.
+	output := pp2.View()
+	assert.Contains(t, output, "Save Your Tears", "full list should be visible after close")
+}
+
+// TestQueuePane_Filter_QueryFiltersRows verifies that typing a query reduces visible rows.
+func TestQueuePane_Filter_QueryFiltersRows(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]api.Track{
+		{ID: "q1", Name: "Rocket Man", Artists: []api.Artist{{Name: "Elton John"}}},
+		{ID: "q2", Name: "Rock and Roll", Artists: []api.Artist{{Name: "Led Zeppelin"}}},
+		{ID: "q3", Name: "Save Your Tears", Artists: []api.Artist{{Name: "The Weeknd"}}},
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	// Activate filter.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+
+	// Type "rock" — should match "Rocket Man" and "Rock and Roll" but not "Save Your Tears".
+	for _, r := range "rock" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+
+	output := pane.View()
+	assert.Contains(t, output, "Rocket Man", "should show track matching filter")
+	assert.Contains(t, output, "Rock and Roll", "should show track matching filter")
+	assert.NotContains(t, output, "Save Your Tears", "non-matching track should be hidden")
+}
+
+// TestQueuePane_Filter_ArtistMatch verifies that filter matches artist names.
+func TestQueuePane_Filter_ArtistMatch(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]api.Track{
+		{ID: "q1", Name: "Blinding Lights", Artists: []api.Artist{{Name: "The Weeknd"}}},
+		{ID: "q2", Name: "Levitating", Artists: []api.Artist{{Name: "Dua Lipa"}}},
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	// Activate filter and type "weeknd" to match by artist.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+	for _, r := range "weeknd" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+
+	output := pane.View()
+	assert.Contains(t, output, "Blinding Lights", "should match track by artist name")
+	assert.NotContains(t, output, "Levitating", "non-matching track should be hidden")
+}
+
+// TestQueuePane_Filter_EmptyQueryShowsAll verifies that empty filter shows all rows.
+func TestQueuePane_Filter_EmptyQueryShowsAll(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	// Activate filter but don't type anything.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pp := m.(*QueuePane)
+	assert.True(t, pp.filter.IsActive())
+
+	output := pp.View()
+	// All three tracks should be visible.
+	assert.Contains(t, output, "Save Your Tears")
+	assert.Contains(t, output, "Starboy")
+	assert.Contains(t, output, "Can't Feel My Face")
+}
+
+// TestQueuePane_Filter_NoMatchesShowsEmptyTable verifies filter with no matches shows empty table.
+func TestQueuePane_Filter_NoMatchesShowsEmptyTable(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+
+	// Type a query that won't match anything.
+	for _, r := range "zzzzzzzzz" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+
+	// Should not panic — table renders empty state.
+	output := pane.View()
+	assert.NotEmpty(t, output)
+	assert.NotContains(t, output, "Save Your Tears", "no tracks should match")
+}
+
+// TestQueuePane_Filter_ActionsChangedWhenActive verifies Actions() changes when filter is active.
+func TestQueuePane_Filter_ActionsChangedWhenActive(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	// Default actions.
+	actions := pane.Actions()
+	require.Len(t, actions, 2)
+	assert.Equal(t, "f", actions[0].Key)
+
+	// Activate filter.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pp := m.(*QueuePane)
+	filterActions := pp.Actions()
+	require.Len(t, filterActions, 1, "filter active should show only close action")
+	assert.Equal(t, "Esc", filterActions[0].Key)
+	assert.Equal(t, "close", filterActions[0].Label)
+}
