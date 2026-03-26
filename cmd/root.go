@@ -306,7 +306,8 @@ func runApp(_ *cobra.Command, _ []string) error {
 	}
 
 	// Start the Bubble Tea program.
-	p := tea.NewProgram(a, tea.WithAltScreen())
+	// tea.WithMouseCellMotion() enables mouse wheel scroll events (Feature 52).
+	p := tea.NewProgram(a, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err = p.Run()
 	return err
 }

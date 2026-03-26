@@ -21,11 +21,19 @@ func (a *App) View() string {
 	return a.alerts.Render(a.buildView())
 }
 
+// minTermWidth and minTermHeight define the minimum terminal dimensions required
+// for Spotnik to render the full grid layout correctly.
+// Below these dimensions, renderTooSmall() is shown instead.
+const (
+	minTermWidth  = 120
+	minTermHeight = 30
+)
+
 // buildView renders the full terminal UI content without the alert overlay.
 // Called by View() which applies alerts.Render() as the final step.
 func (a *App) buildView() string {
-	// DESIGN.md: minimum terminal size check (updated to 120×30 per F49).
-	if a.width > 0 && a.height > 0 && (a.width < 120 || a.height < 30) {
+	// DESIGN.md §21: minimum terminal size check.
+	if a.width > 0 && a.height > 0 && (a.width < minTermWidth || a.height < minTermHeight) {
 		return a.renderTooSmall()
 	}
 
@@ -173,7 +181,7 @@ func (a *App) renderSplash() string {
 }
 
 // renderTooSmall renders the "terminal too small" message.
-// Updated minimum: 120×30 per F49 spec.
+// Shows the current and required dimensions so the user knows how much to resize.
 func (a *App) renderTooSmall() string {
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -181,8 +189,8 @@ func (a *App) renderTooSmall() string {
 		Padding(1, 2)
 
 	msg := fmt.Sprintf(
-		"Spotnik needs more space\n\nCurrent:  %d × %d\nRequired: 120 × 30\n\nPlease resize your terminal and retry.",
-		a.width, a.height,
+		"Spotnik needs more space\n\nCurrent:  %d × %d\nRequired: %d × %d\n\nPlease resize your terminal and retry.",
+		a.width, a.height, minTermWidth, minTermHeight,
 	)
 	return style.Render(msg)
 }

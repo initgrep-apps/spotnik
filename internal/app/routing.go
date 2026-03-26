@@ -153,6 +153,53 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
+// handleMouseMsg handles tea.MouseMsg events.
+// Only mouse wheel scroll events are handled — clicks and motion are ignored.
+// Scroll events are converted to j/k key messages and routed to the pane under
+// the cursor via PaneAt(), WITHOUT changing keyboard focus (btop behavior).
+// Mouse scroll is ignored when an overlay (search or device) is open.
+func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
+	// Ignore mouse events when any overlay is open.
+	// Overlays handle their own input; scroll behind them is unintuitive.
+	if a.deviceOverlayOpen || a.searchOpen {
+		return nil
+	}
+
+	// Only handle wheel scroll events on press action.
+	if m.Action != tea.MouseActionPress {
+		return nil
+	}
+	if m.Button != tea.MouseButtonWheelUp && m.Button != tea.MouseButtonWheelDown {
+		return nil
+	}
+
+	// Hit-test: which pane is under the cursor?
+	targetID := a.layout.PaneAt(m.X, m.Y)
+	if targetID < 0 {
+		return nil // header, status bar, or outside any pane
+	}
+	target, ok := a.panes[targetID]
+	if !ok {
+		return nil
+	}
+
+	// Convert mouse scroll to the equivalent keyboard scroll message.
+	// Wheel-up → 'k' (scroll up), Wheel-down → 'j' (scroll down).
+	var scrollMsg tea.KeyMsg
+	if m.Button == tea.MouseButtonWheelUp {
+		scrollMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	} else {
+		scrollMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	}
+
+	// Route scroll to the target pane WITHOUT changing keyboard focus.
+	updated, cmd := target.Update(scrollMsg)
+	if lp, ok := updated.(layout.Pane); ok {
+		a.panes[targetID] = lp
+	}
+	return cmd
+}
+
 // routePlaylistMsg handles playlist-specific messages that may arrive regardless of
 // which view is currently active. Returns (model, cmd, true) when handled, (nil, nil, false) otherwise.
 func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {

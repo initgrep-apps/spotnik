@@ -697,6 +697,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, cmd
 
+	case tea.MouseMsg:
+		return a, a.handleMouseMsg(m)
+
 	case tea.WindowSizeMsg:
 		// Terminal resize implies user presence — reset idle state the same way KeyMsg does.
 		wasIdle := a.isIdle()

@@ -2278,6 +2278,215 @@ func TestApp_PageB_VisualizerTick_ReachesRequestFlowPane(t *testing.T) {
 	assert.Equal(t, frameBefore+1, frameAfter, "VisualizerTickMsg should advance RequestFlowPane frame")
 }
 
+// --- Feature 52: Mouse Scroll + Responsive Behavior tests ---
+
+// TestApp_MouseScrollUp_OnPane_DoesNotChangeFocus verifies that a mouse wheel-up
+// event over a pane scrolls that pane without changing keyboard focus.
+func TestApp_MouseScrollUp_OnPane_DoesNotChangeFocus(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Resize so layout computes rects — otherwise PaneAt returns -1 for everything.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	// Capture the focused pane before mouse scroll.
+	focusBefore := a.FocusedPane()
+
+	// Simulate a mouse wheel-up event at a position within the content area.
+	// y=10 is in the content area (header=1, status bar=1, so rows 1-48 are content).
+	// x=10 is in the left column of the grid.
+	mouseMsg := tea.MouseMsg{
+		X:      10,
+		Y:      10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelUp,
+	}
+	m, _ = a.Update(mouseMsg)
+	a = m.(*app.App)
+
+	// Focus must not change (mouse scroll only — not click-to-focus).
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"mouse scroll should not change keyboard focus")
+}
+
+// TestApp_MouseScrollUp_RoutesPaneUpdate verifies that a wheel-up event on a pane
+// routes correctly — the app returns without crashing and the model is valid.
+func TestApp_MouseScrollUp_RoutesPaneUpdate(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	// Send a wheel-up event in the content area. The app should route it to the
+	// target pane without panicking and return a valid model.
+	mouseMsg := tea.MouseMsg{
+		X:      10,
+		Y:      10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelUp,
+	}
+	updated, _ := a.Update(mouseMsg)
+	// Model must remain valid after mouse scroll routing.
+	require.NotNil(t, updated, "Update with MouseMsg should return valid model")
+}
+
+// TestApp_MouseScrollDown_OnPane_DoesNotChangeFocus verifies that a mouse wheel-down
+// event over a pane scrolls that pane without changing keyboard focus.
+func TestApp_MouseScrollDown_OnPane_DoesNotChangeFocus(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	focusBefore := a.FocusedPane()
+
+	mouseMsg := tea.MouseMsg{
+		X:      10,
+		Y:      10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	}
+	m, _ = a.Update(mouseMsg)
+	a = m.(*app.App)
+
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"mouse scroll down should not change keyboard focus")
+}
+
+// TestApp_MouseScroll_HeaderArea_NoAction verifies that mouse scroll on y=0
+// (header area) is ignored — PaneAt returns -1 for header.
+func TestApp_MouseScroll_HeaderArea_NoAction(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	focusBefore := a.FocusedPane()
+
+	// y=0 is the header row.
+	mouseMsg := tea.MouseMsg{
+		X:      80,
+		Y:      0,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelUp,
+	}
+	m, _ = a.Update(mouseMsg)
+	a = m.(*app.App)
+
+	// Header area: focus must not change and app must not crash.
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"mouse scroll on header should be ignored")
+}
+
+// TestApp_MouseScroll_StatusBarArea_NoAction verifies that mouse scroll on the
+// last row (status bar) is ignored.
+func TestApp_MouseScroll_StatusBarArea_NoAction(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	focusBefore := a.FocusedPane()
+
+	// y=49 is the status bar row (height-1).
+	mouseMsg := tea.MouseMsg{
+		X:      80,
+		Y:      49,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	}
+	m, _ = a.Update(mouseMsg)
+	a = m.(*app.App)
+
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"mouse scroll on status bar should be ignored")
+}
+
+// TestApp_MouseScroll_OverlayOpen_Ignored verifies that mouse scroll events are
+// ignored when the search overlay or device overlay is open.
+func TestApp_MouseScroll_OverlayOpen_Ignored(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	// Open the search overlay.
+	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")}
+	m, _ = a.Update(slashMsg)
+	a = m.(*app.App)
+
+	require.True(t, a.SearchOpen(), "search overlay should be open")
+
+	focusBefore := a.FocusedPane()
+
+	mouseMsg := tea.MouseMsg{
+		X:      80,
+		Y:      10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelUp,
+	}
+	m, _ = a.Update(mouseMsg)
+	a = m.(*app.App)
+
+	// Focus should remain unchanged while overlay is open.
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"mouse scroll should be ignored while search overlay is open")
+}
+
+// TestApp_MouseClick_NotHandled verifies that non-wheel mouse events (clicks)
+// do not cause any side effects.
+func TestApp_MouseClick_NotHandled(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	focusBefore := a.FocusedPane()
+
+	// A left mouse button click — should be silently ignored.
+	mouseMsg := tea.MouseMsg{
+		X:      80,
+		Y:      10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+	m, _ = a.Update(mouseMsg)
+	a = m.(*app.App)
+
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"left mouse click should not change focus")
+}
+
+// TestApp_MouseMotion_Ignored verifies that mouse motion events do not change focus.
+func TestApp_MouseMotion_Ignored(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	focusBefore := a.FocusedPane()
+
+	motionMsg := tea.MouseMsg{
+		X:      80,
+		Y:      10,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+	}
+	m, _ = a.Update(motionMsg)
+	a = m.(*app.App)
+
+	assert.Equal(t, focusBefore, a.FocusedPane(),
+		"mouse motion event should not change focus")
+}
+
 // TestApp_NilPlaybackState_CounterResets verifies that the nil-state counter resets
 // when a non-nil PlaybackState is received, preventing repeat warnings.
 func TestApp_NilPlaybackState_CounterResets(t *testing.T) {
