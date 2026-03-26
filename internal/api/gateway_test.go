@@ -681,11 +681,12 @@ func TestGateway_Snapshot_InFlightKeys(t *testing.T) {
 
 	time.Sleep(30 * time.Millisecond)
 	snap := gw.Snapshot()
-	assert.Contains(t, snap.InFlightKeys, key, "in-flight GET key should appear in Snapshot")
+	keyStr := fmt.Sprintf("%s %s", key.Method, key.Path)
+	assert.Contains(t, snap.InFlightKeys, keyStr, "in-flight GET key should appear in Snapshot")
 
 	close(release)
 	wg.Wait()
 
 	snap2 := gw.Snapshot()
-	assert.NotContains(t, snap2.InFlightKeys, key, "completed key should no longer appear in Snapshot")
+	assert.NotContains(t, snap2.InFlightKeys, keyStr, "completed key should no longer appear in Snapshot")
 }

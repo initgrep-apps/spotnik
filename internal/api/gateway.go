@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
 // Priority classifies a request so the gateway can apply different policies.
@@ -147,30 +149,11 @@ func NewGateway() *Gateway {
 	}
 }
 
-// GatewayState holds a read-only snapshot of gateway internals for display.
-// All fields are safe to read without holding any lock — they are copied under
-// the gateway's mutex inside Snapshot().
-type GatewayState struct {
-	// TokensAvailable is the current token bucket level (0-10).
-	TokensAvailable int
-	// TokensMax is the token bucket capacity (always 10).
-	TokensMax int
-	// ConcurrentActive is the number of in-flight requests currently holding a semaphore slot.
-	ConcurrentActive int
-	// ConcurrentMax is the semaphore capacity (always 5).
-	ConcurrentMax int
-	// BackoffRemaining is the seconds until the 429 backoff period clears (0 if not throttled).
-	BackoffRemaining float64
-	// DedupWaiters is the number of in-flight GET requests tracked in the dedup map.
-	// Each entry is a primary caller; secondary goroutines waiting on it are not counted separately.
-	DedupWaiters int
-	// InFlightKeys lists the RequestKey values of all currently in-flight GET requests.
-	InFlightKeys []RequestKey
-}
-
 // Snapshot returns a read-only snapshot of the gateway's current internal state.
 // Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
-func (g *Gateway) Snapshot() GatewayState {
+// Best-effort point-in-time: each field group is read under its own lock, so the
+// snapshot is not guaranteed to be atomically consistent across all fields.
+func (g *Gateway) Snapshot() domain.GatewayState {
 	// Read the token bucket level without consuming a token.
 	g.bucket.mu.Lock()
 	// Apply any pending refill before reading so the value is current.
@@ -193,9 +176,9 @@ func (g *Gateway) Snapshot() GatewayState {
 	// Each entry represents one primary in-flight call. Secondary goroutines
 	// that join as waiters are not separately tracked here.
 	dedupWaiters := len(g.inflight)
-	inFlightKeys := make([]RequestKey, 0, len(g.inflight))
+	inFlightKeys := make([]string, 0, len(g.inflight))
 	for k := range g.inflight {
-		inFlightKeys = append(inFlightKeys, k)
+		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
 	}
 	g.mu.Unlock()
 
@@ -203,7 +186,7 @@ func (g *Gateway) Snapshot() GatewayState {
 	concurrentMax := cap(g.semaphore)
 	concurrentActive := len(g.semaphore)
 
-	return GatewayState{
+	return domain.GatewayState{
 		TokensAvailable:  int(tokens),
 		TokensMax:        tokenMax,
 		ConcurrentActive: concurrentActive,

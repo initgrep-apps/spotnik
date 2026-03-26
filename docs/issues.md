@@ -49,3 +49,12 @@
 ### Data Gap
 
 - [ ] **TopTracksPane "Pop" column always shows "--"** — `domain.Track` lacks a `Popularity` field. The Spotify top-tracks API returns popularity, but it's not captured in the domain model. Either add `Popularity int` to `domain.Track` and populate the column, or replace the column with extra width for Track/Artist.
+
+---
+
+## From PR #56 Review — Page B Nerd Status (2026-03-26)
+
+### Minor
+
+- [ ] **Gateway.Snapshot() is best-effort, not atomic** — Token bucket and gateway mutex are acquired separately. Comment updated to clarify, but snapshot fields may be from slightly different points in time. Acceptable for display purposes.
+- [ ] **PollingSnapshotMsg.TickIntervalMs is misleading** — Shows the polling decision interval (3000ms, 10000ms) but the actual tea.Tick fires every 1000ms. Consider renaming to `PollIntervalMs` or displaying the actual tick interval separately.

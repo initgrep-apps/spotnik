@@ -1,16 +1,12 @@
 package panes
 
-// NOTE: RequestFlowPane is the only pane that imports api/ directly.
-// This is acceptable because it holds a *api.Gateway reference (infrastructure,
-// not an API client) and calls Snapshot() — it does NOT make any Spotify API calls.
-
 import (
 	"fmt"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -46,8 +42,8 @@ type RequestCompletedMsg struct {
 	StatusCode int
 	// LatencyMs is the round-trip time in milliseconds.
 	LatencyMs int
-	// Priority is api.Interactive or api.Background.
-	Priority api.Priority
+	// Priority is domain.PriorityInteractive or domain.PriorityBackground.
+	Priority domain.RequestPriority
 	// CompletedAt is when the request completed. Zero value means time.Now().
 	CompletedAt time.Time
 }
@@ -57,16 +53,16 @@ type reqDisplay struct {
 	endpoint    string
 	statusCode  int
 	latencyMs   int
-	priority    api.Priority
+	priority    domain.RequestPriority
 	completedAt time.Time
 }
 
 // RequestFlowPane visualizes the live APP → GATEWAY → SPOTIFY request pipeline.
-// It reads from *api.Gateway (via Snapshot()) and *state.Store. It does NOT make
+// It reads from domain.GatewaySnapshotter (via Snapshot()) and *state.Store. It does NOT make
 // any Spotify API calls — all data is internal infrastructure state.
 type RequestFlowPane struct {
 	theme   theme.Theme
-	gateway *api.Gateway
+	gateway domain.GatewaySnapshotter
 	store   *state.Store
 	focused bool
 	width   int
@@ -79,7 +75,7 @@ type RequestFlowPane struct {
 	recentReqs []reqDisplay
 
 	// lastSnapshot is the most recent gateway state, refreshed on TickMsg.
-	lastSnapshot api.GatewayState
+	lastSnapshot domain.GatewayState
 
 	// pollingState is the latest app-level polling snapshot.
 	pollingState PollingSnapshotMsg
@@ -89,7 +85,7 @@ type RequestFlowPane struct {
 var _ layout.Pane = &RequestFlowPane{}
 
 // NewRequestFlowPane creates a RequestFlowPane with the given gateway, store, and theme.
-func NewRequestFlowPane(gw *api.Gateway, s *state.Store, t theme.Theme) *RequestFlowPane {
+func NewRequestFlowPane(gw domain.GatewaySnapshotter, s *state.Store, t theme.Theme) *RequestFlowPane {
 	p := &RequestFlowPane{
 		theme:   t,
 		gateway: gw,
@@ -375,10 +371,11 @@ func (p *RequestFlowPane) renderStoreStatus() string {
 
 // padRight pads s with spaces to width w. Truncates if s is longer than w.
 func padRight(s string, w int) string {
-	if len(s) >= w {
-		return s[:w]
+	runes := []rune(s)
+	if len(runes) >= w {
+		return string(runes[:w])
 	}
-	return s + strings.Repeat(" ", w-len(s))
+	return s + strings.Repeat(" ", w-len(runes))
 }
 
 // truncateStr truncates s to at most max runes.

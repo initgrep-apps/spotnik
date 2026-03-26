@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -205,7 +206,7 @@ func TestRequestFlowPane_View_RecentRequest_2xx(t *testing.T) {
 		Endpoint:   "/me/player",
 		StatusCode: 200,
 		LatencyMs:  45,
-		Priority:   api.Background,
+		Priority:   domain.PriorityBackground,
 	})
 	v := pane.View()
 	assert.Contains(t, v, "/me/player", "request endpoint should appear in view")
@@ -219,7 +220,7 @@ func TestRequestFlowPane_View_RecentRequest_429(t *testing.T) {
 		Endpoint:   "/me/player",
 		StatusCode: 429,
 		LatencyMs:  12,
-		Priority:   api.Background,
+		Priority:   domain.PriorityBackground,
 	})
 	v := pane.View()
 	assert.Contains(t, v, "429", "429 status should appear in view")
@@ -232,7 +233,7 @@ func TestRequestFlowPane_View_RecentRequest_5xx(t *testing.T) {
 		Endpoint:   "/me/player",
 		StatusCode: 500,
 		LatencyMs:  100,
-		Priority:   api.Background,
+		Priority:   domain.PriorityBackground,
 	})
 	v := pane.View()
 	assert.Contains(t, v, "500", "5xx status should appear in view")
@@ -249,7 +250,7 @@ func TestRequestFlowPane_View_RequestFadesAfter3s(t *testing.T) {
 		Endpoint:    "/me/player",
 		StatusCode:  200,
 		LatencyMs:   45,
-		Priority:    api.Background,
+		Priority:    domain.PriorityBackground,
 		CompletedAt: time.Now().Add(-4 * time.Second),
 	})
 
@@ -269,7 +270,7 @@ func TestRequestFlowPane_View_RequestAgedOutOnTick(t *testing.T) {
 		Endpoint:    "/me/player",
 		StatusCode:  200,
 		LatencyMs:   45,
-		Priority:    api.Background,
+		Priority:    domain.PriorityBackground,
 		CompletedAt: time.Now().Add(-6 * time.Second),
 	})
 
@@ -349,7 +350,7 @@ func TestRequestFlowPane_Integration_MaxRequests(t *testing.T) {
 			Endpoint:   fmt.Sprintf("/me/endpoint/%d", i),
 			StatusCode: 200,
 			LatencyMs:  10 + i,
-			Priority:   api.Background,
+			Priority:   domain.PriorityBackground,
 		})
 	}
 

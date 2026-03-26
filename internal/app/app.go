@@ -187,8 +187,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	topArtistsPane := panes.NewTopArtistsPane(s, t, false)
 
 	// Create Page B panes.
-	// NOTE: RequestFlowPane holds *api.Gateway directly — the only pane that does so.
-	// It calls Gateway.Snapshot() (read-only, thread-safe) but makes no API calls.
+	// RequestFlowPane receives the gateway as a domain.GatewaySnapshotter interface,
+	// avoiding ui/ → api/ import. It calls Snapshot() (read-only) but makes no API calls.
 	requestFlowPane := panes.NewRequestFlowPane(gw, s, t)
 	networkLogPane := panes.NewNetworkLogPane(s, t)
 
