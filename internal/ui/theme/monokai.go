@@ -43,3 +43,29 @@ func (t *MonokaiTheme) DeviceActive() lipgloss.Color     { return "#66d9ef" }
 func (t *MonokaiTheme) StatusBarBg() lipgloss.Color { return "#1e1f1c" }
 func (t *MonokaiTheme) StatusBarFg() lipgloss.Color { return "#75715e" }
 func (t *MonokaiTheme) KeyHint() lipgloss.Color     { return "#66d9ef" }
+
+// Gradient bars
+func (t *MonokaiTheme) Gradient1() lipgloss.Color { return "#a6e22e" }
+func (t *MonokaiTheme) Gradient2() lipgloss.Color { return "#e6db74" }
+func (t *MonokaiTheme) Gradient3() lipgloss.Color { return "#f92672" }
+
+// Visualizer
+func (t *MonokaiTheme) VisualizerFg() lipgloss.Color { return "#66d9ef" }
+
+// Tables
+func (t *MonokaiTheme) TableHeader() lipgloss.Color { return "#75715e" }
+
+// Status
+func (t *MonokaiTheme) PresetIndicator() lipgloss.Color { return "#66d9ef" }
+
+// Per-pane borders
+func (t *MonokaiTheme) PaneBorderNowPlaying() lipgloss.Color     { return "#a6e22e" }
+func (t *MonokaiTheme) PaneBorderQueue() lipgloss.Color          { return "#fd971f" }
+func (t *MonokaiTheme) PaneBorderPlaylists() lipgloss.Color      { return "#66d9ef" }
+func (t *MonokaiTheme) PaneBorderAlbums() lipgloss.Color         { return "#e6db74" }
+func (t *MonokaiTheme) PaneBorderLikedSongs() lipgloss.Color     { return "#a6e22e" }
+func (t *MonokaiTheme) PaneBorderRecentlyPlayed() lipgloss.Color { return "#4dc9b0" }
+func (t *MonokaiTheme) PaneBorderTopTracks() lipgloss.Color      { return "#ae81ff" }
+func (t *MonokaiTheme) PaneBorderTopArtists() lipgloss.Color     { return "#f92672" }
+func (t *MonokaiTheme) PaneBorderRequestFlow() lipgloss.Color    { return "#fd971f" }
+func (t *MonokaiTheme) PaneBorderNetworkLog() lipgloss.Color     { return "#75715e" }
