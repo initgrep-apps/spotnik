@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -601,32 +602,11 @@ func (sv *StatsView) renderTimeRangeToggle(sectionFocused bool) string {
 	return "  " + strings.Join(parts, " ")
 }
 
-// FormatRelativeTime returns a human-readable relative timestamp per the spec:
-//
-//	< 1 min   → "just now"
-//	1–59 min  → "{n} min ago"
-//	1–23 hr   → "{n} hr ago"
-//	1–6 days  → "{n} days ago"
-//	>= 7 days → "Mar 12" short date
+// FormatRelativeTime returns a human-readable relative timestamp.
+// Delegates to components.FormatRelativeTime — defined here for backward compatibility
+// until StatsView is removed in Feature 49/53.
 func FormatRelativeTime(t time.Time) string {
-	elapsed := time.Since(t)
-
-	if elapsed < time.Minute {
-		return "just now"
-	}
-	if elapsed < time.Hour {
-		mins := int(elapsed.Minutes())
-		return fmt.Sprintf("%d min ago", mins)
-	}
-	if elapsed < 24*time.Hour {
-		hours := int(elapsed.Hours())
-		return fmt.Sprintf("%d hr ago", hours)
-	}
-	days := int(elapsed.Hours() / 24)
-	if days < 7 {
-		return fmt.Sprintf("%d days ago", days)
-	}
-	return t.Format("Jan 2")
+	return components.FormatRelativeTime(t)
 }
 
 // formatPlayedAt parses an ISO 8601 played_at timestamp and returns a relative time string.
