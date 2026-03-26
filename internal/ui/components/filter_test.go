@@ -144,3 +144,19 @@ func TestFilter_EmptyQueryMatchesEverything(t *testing.T) {
 	assert.True(t, f.Matches("anything"))
 	assert.True(t, f.Matches(""))
 }
+
+func TestFilter_MatchesAnyEmptyQueryReturnsTrue(t *testing.T) {
+	f := components.NewFilter(testTheme())
+	// Inactive filter with empty query — MatchesAny must return true
+	// even with zero arguments, consistent with Matches() contract.
+	assert.True(t, f.MatchesAny())
+	assert.True(t, f.MatchesAny("anything"))
+}
+
+func TestFilter_MatchesAnyZeroArgsWithQueryReturnsFalse(t *testing.T) {
+	f := components.NewFilter(testTheme())
+	f.Toggle()
+	f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r', 'o', 'c', 'k'}})
+	// Active query with zero args — nothing can match
+	assert.False(t, f.MatchesAny())
+}

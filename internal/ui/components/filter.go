@@ -74,7 +74,11 @@ func (f *Filter) Matches(text string) bool {
 }
 
 // MatchesAny returns true if at least one of the provided strings satisfies Matches.
+// Returns true unconditionally when the query is empty (consistent with Matches).
 func (f *Filter) MatchesAny(texts ...string) bool {
+	if f.query == "" {
+		return true
+	}
 	for _, t := range texts {
 		if f.Matches(t) {
 			return true
