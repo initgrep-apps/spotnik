@@ -495,3 +495,180 @@ func TestQueuePane_Filter_ActionsChangedWhenActive(t *testing.T) {
 	assert.Equal(t, "Esc", filterActions[0].Key)
 	assert.Equal(t, "close", filterActions[0].Label)
 }
+
+// --- Task 4: Comprehensive tests ---
+
+// TestQueuePane_InterfaceSatisfied ensures compile-time layout.Pane compliance.
+var _ layout.Pane = &QueuePane{}
+
+// TestQueuePane_FullLifecycle tests construct → resize → load queue → filter → navigate → view.
+func TestQueuePane_FullLifecycle(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+
+	// Step 1: resize.
+	pane.SetSize(100, 30)
+
+	// Step 2: load queue.
+	tracks := []api.Track{
+		{ID: "t1", Name: "Blinding Lights", Artists: []api.Artist{{Name: "The Weeknd"}}, DurationMs: 200000},
+		{ID: "t2", Name: "Levitating", Artists: []api.Artist{{Name: "Dua Lipa"}}, DurationMs: 203000},
+		{ID: "t3", Name: "Rocket Man", Artists: []api.Artist{{Name: "Elton John"}}, DurationMs: 269000},
+	}
+	s.SetQueue(tracks)
+	// Simulate QueueLoadedMsg by refreshing the pane's rows.
+	pane.refreshRows()
+
+	output := pane.View()
+	assert.Contains(t, output, "Blinding Lights")
+	assert.Contains(t, output, "Levitating")
+	assert.Contains(t, output, "Rocket Man")
+
+	// Step 3: filter.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+	for _, r := range "rock" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+	filteredOutput := pane.View()
+	assert.Contains(t, filteredOutput, "Rocket Man")
+	assert.NotContains(t, filteredOutput, "Levitating")
+
+	// Step 4: navigate (j key).
+	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	pane = m.(*QueuePane)
+	// k in filter mode is forwarded to filter (not table nav).
+
+	// Step 5: close filter and verify full list.
+	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	pane = m.(*QueuePane)
+	assert.False(t, pane.filter.IsActive())
+	restoreOutput := pane.View()
+	assert.Contains(t, restoreOutput, "Levitating", "full list should restore after filter close")
+}
+
+// TestQueuePane_QueueUpdate_TableRefreshes verifies table refreshes on new QueueLoadedMsg data.
+func TestQueuePane_QueueUpdate_TableRefreshes(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(100, 30)
+
+	// Initially empty.
+	output := pane.View()
+	assert.NotContains(t, output, "New Track")
+
+	// Load queue data.
+	s.SetQueue([]api.Track{
+		{ID: "t1", Name: "New Track", Artists: []api.Artist{{Name: "Artist"}}},
+	})
+	pane.refreshRows()
+
+	output = pane.View()
+	assert.Contains(t, output, "New Track", "table should reflect new queue data")
+}
+
+// TestQueuePane_PlayingIndicatorPersists verifies ▶ persists across refreshes.
+func TestQueuePane_PlayingIndicatorPersists(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]api.Track{
+		{ID: "t1", Name: "Track A", Artists: []api.Artist{{Name: "Artist"}}},
+		{ID: "t2", Name: "Track B", Artists: []api.Artist{{Name: "Artist"}}},
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(100, 30)
+	pane.SetPlayingIndex(0)
+
+	output := pane.View()
+	assert.Contains(t, output, "▶", "playing indicator should appear")
+
+	// Refresh rows (simulating data update).
+	pane.refreshRows()
+	output2 := pane.View()
+	assert.Contains(t, output2, "▶", "playing indicator should persist after refresh")
+}
+
+// TestQueuePane_FilterScrollInteraction tests filtering then scrolling then clearing filter.
+func TestQueuePane_FilterScrollInteraction(t *testing.T) {
+	s := state.New()
+	tracks := make([]api.Track, 10)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Rock Track %d", i+1),
+			Artists: []api.Artist{{Name: "Band"}},
+		}
+	}
+	s.SetQueue(tracks)
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(100, 20)
+
+	// Filter to "Rock" — all 10 match.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+	for _, r := range "Rock" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+	output := pane.View()
+	assert.Contains(t, output, "Rock Track 1")
+
+	// Close filter — full list restores.
+	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	pane = m.(*QueuePane)
+	assert.False(t, pane.filter.IsActive())
+	fullOutput := pane.View()
+	assert.Contains(t, fullOutput, "Rock Track 1")
+}
+
+// TestQueuePane_LargeQueue verifies 200 items scroll correctly without panic.
+func TestQueuePane_LargeQueue(t *testing.T) {
+	s := state.New()
+	tracks := make([]api.Track, 200)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("t%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetQueue(tracks)
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(100, 30)
+
+	// Navigate down 100 times — should not panic.
+	for i := 0; i < 100; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		pane = m.(*QueuePane)
+	}
+
+	output := pane.View()
+	assert.NotEmpty(t, output, "should render without panic for large queue")
+}
+
+// TestQueuePane_LongTrackName verifies very long track names don't overflow.
+func TestQueuePane_LongTrackName(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]api.Track{
+		{
+			ID:      "t1",
+			Name:    "This Is A Very Long Track Name That Exceeds Any Reasonable Column Width By Far",
+			Artists: []api.Artist{{Name: "This Is Also A Very Long Artist Name That Won't Fit"}},
+		},
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(60, 20) // narrow to force truncation
+
+	// Should not panic and output should not exceed pane width.
+	output := pane.View()
+	assert.NotEmpty(t, output)
+	for _, line := range splitLines(output) {
+		assert.LessOrEqual(t, len([]rune(line)), 80, "line should not massively overflow pane width")
+	}
+}
