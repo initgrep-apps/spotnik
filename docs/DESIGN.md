@@ -599,6 +599,14 @@ Rendered in the Now Playing pane using Unicode braille characters (U+2800-U+28FF
 - When paused: `frameIndex` stops incrementing, visualizer shows a static flat-line pattern
 - Frame table contains 30-50 pre-generated bar patterns that loop smoothly
 
+**Animation patterns:**
+The visualizer supports 3 animation patterns, cycled manually via the `v` key:
+- **Pattern 0 (Dual Sine Wave):** Two overlapping sine waves at different frequencies, producing a flowing ocean-like motion. This is the default pattern.
+- **Pattern 1 (Standing Wave):** Interference of two counter-propagating waves creating stationary nodes and antinodes — bars pulse in place rather than traveling.
+- **Pattern 2 (Pulse/Ripple):** A Gaussian peak travels left-to-right with a trailing ripple, like a sonar ping sweeping across the display.
+
+Pattern state is local to the pane (not stored in the Store). `v` key always routes to NowPlaying via `isPlaybackKey()`.
+
 **Unicode note:** The `ᐅ` character (U+1405, Canadian Syllabics PA) is used for border action labels. Terminals must support this Unicode block. Fallback: `›` (U+203A, Single Right-Pointing Angle Quotation Mark) for environments without full Unicode support.
 
 **Implementation:** Component in `internal/ui/components/visualizer.go`.
