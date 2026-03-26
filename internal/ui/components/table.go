@@ -110,13 +110,18 @@ func (t *Table) rebuild() {
 		return lipgloss.NewStyle()
 	})
 
-	pageSize := t.height - 1 // reserve 1 line for header when shown
+	// NOTE: The emptyBorder adds top(1) + bottom(1) = 2 lines, the pagination
+	// indicator adds 1 more, and when header is visible a separator line adds 1.
+	// Total overhead: ShowHeader=true → 6 lines; ShowHeader=false → 4 lines.
+	// pageSize = height - overhead gives exactly height lines rendered.
+	pageSize := t.height - 6 // header visible: top+separator+header+pagination+bottom+spare = 6
 	if !t.config.ShowHeader {
-		pageSize = t.height
+		pageSize = t.height - 4 // no header: top+pagination+bottom+spare = 4
 	}
-	if pageSize > 0 {
-		inner = inner.WithPageSize(pageSize)
+	if pageSize < 1 {
+		pageSize = 1
 	}
+	inner = inner.WithPageSize(pageSize)
 
 	t.inner = inner
 	t.applyRows()
@@ -158,18 +163,21 @@ func (t *Table) applyRows() {
 }
 
 // SetSize updates the table dimensions. Recalculates column widths and page size.
+// The emptyBorder adds top+bottom lines; with ShowHeader the separator adds another.
+// Total overhead is 6 lines (header visible) or 4 lines (no header).
 func (t *Table) SetSize(width, height int) {
 	t.width = width
 	t.height = height
 	t.inner = t.inner.WithTargetWidth(width)
 
-	pageSize := height - 1
+	pageSize := height - 6
 	if !t.config.ShowHeader {
-		pageSize = height
+		pageSize = height - 4
 	}
-	if pageSize > 0 {
-		t.inner = t.inner.WithPageSize(pageSize)
+	if pageSize < 1 {
+		pageSize = 1
 	}
+	t.inner = t.inner.WithPageSize(pageSize)
 }
 
 // SetRows updates the table data. Each row is a map[string]string keyed by
