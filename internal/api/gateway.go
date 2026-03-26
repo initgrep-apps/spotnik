@@ -161,7 +161,8 @@ type GatewayState struct {
 	ConcurrentMax int
 	// BackoffRemaining is the seconds until the 429 backoff period clears (0 if not throttled).
 	BackoffRemaining float64
-	// DedupWaiters is the number of GET requests currently waiting on an in-flight dedup entry.
+	// DedupWaiters is the number of in-flight GET requests tracked in the dedup map.
+	// Each entry is a primary caller; secondary goroutines waiting on it are not counted separately.
 	DedupWaiters int
 	// InFlightKeys lists the RequestKey values of all currently in-flight GET requests.
 	InFlightKeys []RequestKey
@@ -188,9 +189,9 @@ func (g *Gateway) Snapshot() GatewayState {
 	if backoffRemaining < 0 {
 		backoffRemaining = 0
 	}
-	// Count dedup waiters: the number of entries in the inflight map.
-	// Each entry has exactly one primary caller; any goroutines that joined as
-	// waiters are not separately tracked, so DedupWaiters reflects in-flight GETs.
+	// DedupWaiters = number of in-flight GET requests in the dedup map.
+	// Each entry represents one primary in-flight call. Secondary goroutines
+	// that join as waiters are not separately tracked here.
 	dedupWaiters := len(g.inflight)
 	inFlightKeys := make([]RequestKey, 0, len(g.inflight))
 	for k := range g.inflight {
