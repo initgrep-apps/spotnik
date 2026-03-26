@@ -96,6 +96,7 @@ Page B panes are not toggleable with number keys (those control Page A only).
 - Playback keys (`Space`, `>`, `<`, `+`, `-`, `s`, `r`) always route to NowPlaying regardless of focus
 - `A` (Shift+a) for "add to queue" in search overlay and list panes
 - `i` for "like/unlike track" in Liked Songs and Queue panes
+- NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/4 width, left) + Visualizer (~3/4 width, right) + gradient seek bar (full width, bottom)
 
 ### Pane Interface
 
@@ -184,10 +185,15 @@ Keys `1`-`8` toggle the corresponding pane's visibility on Page A:
 All 8 panes visible across 3 rows. NowPlaying spans full width.
 
 ```
-╭─ ¹Now Playing ───────────────────────────────────────────────────────╮  Row 1 (weight 2)
-│ ⣿⣷⣿⣷⣿  Martbaan · Samar Mehdi     ▶ 1:41 ████████░░░ 5:30           │
-│            |<  ||  >|  ~  =>          VOL ████░░ 65%                 │
-╰──────────────────────────────────────────────────────────────────────╯
+╭─ ¹Now Playing ───────────────────────────────────────────── ᐅs shuffle ─ ᐅr repeat ─╮  Row 1 (weight 2)
+│ ╭─ Track Info ──────╮ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ │ Martbaan          │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ │ Samar Mehdi       │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ │ |<  ||  >|  ~ =>  │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ │ VOL ████░░ 65%    │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ ╰───────────────────╯ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ 1:41  ████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  5:30   │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ ³Playlists ─────────╮╭─ ⁴Albums ────────────╮╭─ ⁵Liked Songs ──────╮  Row 2 (weight 3)
 │  1  LoFi             ││  1  After Hours      ││  1  Blinding Lights  │
 │  2  Soul             ││  2  OK Computer      ││  2  Save Your Tears  │
@@ -217,16 +223,21 @@ Note: Row 3 has 4 panes. TopTracks and TopArtists share the rightmost region —
 NowPlaying expanded with large visualizer. Queue and RecentlyPlayed below. All other panes hidden.
 
 ```
-╭─ ¹Now Playing ──────────────────────────────────────────────────╮  Row 1 (weight 3)
-│                                                                │
-│  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿                       │
-│                                                                │
-│  Martbaan · Samar Mehdi, June, Sarah Mehdi                     │
-│  Martbaan (Album)                                              │
-│                                                                │
-│  ▶  1:41  ████████████████████████░░░░░░░░░░░░░░░░  5:30       │
-│  |<   ||   >|        ~   =>           VOL  ████████░░  65%     │
-╰────────────────────────────────────────────────────────────────╯
+╭─ ¹Now Playing ───────────────────────────────────────── ᐅs shuffle ─ ᐅr repeat ─╮  Row 1 (weight 3)
+│                                                                                  │
+│ ╭─ Track Info ──────────────╮  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ Martbaan                  │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ Samar Mehdi, June         │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ Martbaan (Album)          │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ |<   ||   >|   ~   =>    │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ VOL  ████████░░  65%     │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ ╰───────────────────────────╯  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│                                                                                  │
+│ ▶  1:41  ████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  5:30          │
+╰──────────────────────────────────────────────────────────────────────────────────╯
 ╭─ ²Queue ──────────────────────╮╭─ ⁶Recently Played ────────────╮  Row 2 (weight 2)
 │  #   Track          Artist    ││  #  Track          Played      │
 │  1   Lil Boo Thang  P.Russell ││  1  Starboy        2m ago      │
@@ -240,7 +251,7 @@ NowPlaying expanded with large visualizer. Queue and RecentlyPlayed below. All o
 
 #### Preset 2 — Library
 
-NowPlaying compact strip. Playlists, Albums, LikedSongs expanded. All other panes hidden.
+NowPlaying small strip (height < 8 triggers title-bar-embedded track info). Playlists, Albums, LikedSongs expanded. All other panes hidden.
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
@@ -261,11 +272,11 @@ NowPlaying compact strip. Playlists, Albums, LikedSongs expanded. All other pane
 ╰──────────────────────╯╰──────────────────────╯╰──────────────────────╯
 ```
 
-**Visible panes:** NowPlaying (compact), Playlists, Albums, LikedSongs
+**Visible panes:** NowPlaying (small strip, height < 8), Playlists, Albums, LikedSongs
 
 #### Preset 3 — Discovery
 
-NowPlaying compact strip. TopTracks, TopArtists, RecentlyPlayed expanded. All other panes hidden.
+NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopTracks, TopArtists, RecentlyPlayed expanded. All other panes hidden.
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
@@ -287,7 +298,7 @@ NowPlaying compact strip. TopTracks, TopArtists, RecentlyPlayed expanded. All ot
 ╰──────────────────────────────────────────────────────────────────────╯
 ```
 
-**Visible panes:** NowPlaying (compact), TopTracks, TopArtists, RecentlyPlayed
+**Visible panes:** NowPlaying (small strip, height < 8), TopTracks, TopArtists, RecentlyPlayed
 
 ### Page A Preset Summary
 
@@ -295,12 +306,12 @@ NowPlaying compact strip. TopTracks, TopArtists, RecentlyPlayed expanded. All ot
 |--------|------|---------------|
 | 0 | Full Dashboard | All 8 (3 rows) |
 | 1 | Listening | NowPlaying, Queue, RecentlyPlayed |
-| 2 | Library | NowPlaying (compact), Playlists, Albums, LikedSongs |
-| 3 | Discovery | NowPlaying (compact), TopTracks, TopArtists, RecentlyPlayed |
+| 2 | Library | NowPlaying (small strip, height < 8), Playlists, Albums, LikedSongs |
+| 3 | Discovery | NowPlaying (small strip, height < 8), TopTracks, TopArtists, RecentlyPlayed |
 
 ### Page B Layout
 
-Three-row layout: NowPlaying compact strip (weight 1) + Request Flow visualization (weight 3) + Network Log table (weight 2).
+Three-row layout: NowPlaying small strip (weight 1, height < 8 triggers title-bar-embedded track info) + Request Flow visualization (weight 3) + Network Log table (weight 2).
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
@@ -612,6 +623,30 @@ VOL  ████████░░░░░░  65%
 - High volume (67-100%): `Gradient3()` (red/hot)
 
 **Implementation:** Component in `internal/ui/components/gradient.go`. Uses block characters (`█▓▒░`) with per-character color application for smooth gradients.
+
+### NowPlaying Split Layout (btop-inspired)
+
+The NowPlaying pane uses a horizontal split layout inspired by btop's CPU pane:
+
+**Layout proportions:**
+- **Left (~1/4 width, min 28 chars):** InfoBox sub-pane — rounded border (`╭╮╰╯`), "Track Info" title, containing:
+  - Track name (bold, `TextPrimary()`)
+  - Artist names (`TextSecondary()`)
+  - Album name (`TextMuted()`) — omitted when insufficient height
+  - Controls row (`|< || >| ~ =>`)
+  - Volume bar (`VOL ████░░ 65%`)
+  - All content vertically centered within the InfoBox
+- **Right (~3/4 width):** Animated braille visualizer (full body height)
+- **Bottom (full width, 1 line):** Gradient seek bar with time labels
+
+**Responsive behavior:**
+- `infoWidth = max(contentWidth/4, 28)` — minimum 28 ensures controls fit
+- `vizWidth = contentWidth - infoWidth - 1` — gap between regions
+- `bodyHeight = paneHeight - borders - progressBar`
+- When height < 8: title bar embeds track info (`Now Playing ── Track · Artist ── ▶ 1:41/5:30`)
+- No separate compact mode — the split layout scales proportionally even in small presets
+
+**InfoBox border:** Uses the project's standard rounded corners. Border color follows `ActiveBorder()`/`InactiveBorder()` based on pane focus state.
 
 ---
 
