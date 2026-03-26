@@ -44,3 +44,29 @@ func (t *BlackTheme) DeviceActive() lipgloss.Color     { return "#00e5cc" }
 func (t *BlackTheme) StatusBarBg() lipgloss.Color { return "#000000" }
 func (t *BlackTheme) StatusBarFg() lipgloss.Color { return "#444444" }
 func (t *BlackTheme) KeyHint() lipgloss.Color     { return "#00afff" }
+
+// Gradient bars
+func (t *BlackTheme) Gradient1() lipgloss.Color { return "#00ff88" }
+func (t *BlackTheme) Gradient2() lipgloss.Color { return "#ffcc00" }
+func (t *BlackTheme) Gradient3() lipgloss.Color { return "#ff5555" }
+
+// Visualizer
+func (t *BlackTheme) VisualizerFg() lipgloss.Color { return "#00afff" }
+
+// Tables
+func (t *BlackTheme) TableHeader() lipgloss.Color { return "#666666" }
+
+// Status
+func (t *BlackTheme) PresetIndicator() lipgloss.Color { return "#00afff" }
+
+// Per-pane borders
+func (t *BlackTheme) PaneBorderNowPlaying() lipgloss.Color     { return "#00ff88" }
+func (t *BlackTheme) PaneBorderQueue() lipgloss.Color          { return "#ffcc00" }
+func (t *BlackTheme) PaneBorderPlaylists() lipgloss.Color      { return "#00afff" }
+func (t *BlackTheme) PaneBorderAlbums() lipgloss.Color         { return "#00e5cc" }
+func (t *BlackTheme) PaneBorderLikedSongs() lipgloss.Color     { return "#00ff88" }
+func (t *BlackTheme) PaneBorderRecentlyPlayed() lipgloss.Color { return "#00ccaa" }
+func (t *BlackTheme) PaneBorderTopTracks() lipgloss.Color      { return "#bd93f9" }
+func (t *BlackTheme) PaneBorderTopArtists() lipgloss.Color     { return "#ff79c6" }
+func (t *BlackTheme) PaneBorderRequestFlow() lipgloss.Color    { return "#ffb86c" }
+func (t *BlackTheme) PaneBorderNetworkLog() lipgloss.Color     { return "#8a8a8a" }
