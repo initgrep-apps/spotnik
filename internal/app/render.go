@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	btoverlay "github.com/rmhubbert/bubbletea-overlay"
+
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 )
 
@@ -41,9 +43,9 @@ func (a *App) buildView() string {
 	}
 
 	// Grid view: header + grid content + status bar.
-	header := a.renderHeader("")
+	header := a.renderHeader()
 	gridContent := a.renderGrid()
-	statusBar := a.renderStatusBar(a.gridHints())
+	statusBar := a.renderStatusBar()
 	body := strings.Join([]string{header, gridContent, statusBar}, "\n")
 
 	if a.deviceOverlayOpen {
@@ -140,44 +142,29 @@ func groupPanesByRow(paneIDs []layout.PaneID, mgr *layout.Manager) [][]layout.Pa
 }
 
 // renderWithDeviceOverlay renders the grid dimmed and places the
-// device switcher overlay in the top-right area per the DESIGN.md spec.
+// device switcher overlay in the top-right area using bubbletea-overlay Composite().
 func (a *App) renderWithDeviceOverlay(background string) string {
-	overlay := a.devicePane.View()
+	fg := a.devicePane.View()
 	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
 	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + overlay
+		return dimmed + "\n" + fg
 	}
 
-	// Position overlay in the top-right area (below the header/device indicator).
-	centered := lipgloss.Place(
-		a.width, a.height,
-		lipgloss.Right, lipgloss.Top,
-		overlay,
-		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(a.theme.Base()),
-	)
-	return centered
+	// Position overlay in the top-right using bubbletea-overlay string-level compositing.
+	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
 }
 
 // renderWithSearchOverlay renders the grid dimmed and places the
-// search overlay centered on top using lipgloss.Place() per the DESIGN.md spec.
+// search overlay centered on top using bubbletea-overlay Composite().
 func (a *App) renderWithSearchOverlay(background string) string {
-	overlay := a.searchPane.View()
+	fg := a.searchPane.View()
 	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
 	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + overlay
+		return dimmed + "\n" + fg
 	}
 
-	// Center the overlay on a consistent black background so the dimmed
-	// grid is replaced with a uniform dark surface behind the modal.
-	centered := lipgloss.Place(
-		a.width, a.height,
-		lipgloss.Center, lipgloss.Center,
-		overlay,
-		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(a.theme.Base()),
-	)
-	return centered
+	// Center the search overlay using bubbletea-overlay string-level compositing.
+	return btoverlay.Composite(fg, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
 }
 
 // renderSplash renders the startup splash screen with go-figure ASCII art.
@@ -212,75 +199,118 @@ func truncateDeviceName(name string) string {
 	return name
 }
 
-// renderHeader renders the top bar with the app name left-aligned and the device
-// indicator right-aligned. label is an optional suffix shown after "spotnik"
-// (e.g. "[STATS]", "[PLAYLISTS]"); pass "" for the default main-view header.
-func (a *App) renderHeader(label string) string {
-	appNameStyle := lipgloss.NewStyle().
-		Background(a.theme.SurfaceAlt()).
-		Foreground(a.theme.TextPrimary()).
-		Bold(true)
-
-	device := a.store.ActiveDevice()
-	var deviceStr string
-	if device != nil {
-		name := truncateDeviceName(device.Name)
-		deviceStr = lipgloss.NewStyle().
-			Foreground(a.theme.DeviceActive()).
-			Render(fmt.Sprintf("◉ %s", name))
-	} else {
-		deviceStr = lipgloss.NewStyle().
-			Foreground(a.theme.TextMuted()).
-			Render("○ No device")
+// pageLabel converts a layout.PageID to its display label ("A" or "B").
+func pageLabel(page layout.PageID) string {
+	switch page {
+	case layout.PageA:
+		return "A"
+	case layout.PageB:
+		return "B"
+	default:
+		return "?"
 	}
-
-	appName := appNameStyle.Render(" spotnik ")
-	if label != "" {
-		labelStyle := lipgloss.NewStyle().
-			Foreground(a.theme.SectionHeader()).
-			Bold(true)
-		appName = appName + " " + labelStyle.Render(label)
-	}
-
-	if a.width > 0 {
-		gap := a.width - lipgloss.Width(appName) - lipgloss.Width(deviceStr)
-		if gap < 1 {
-			gap = 1
-		}
-		return appName + strings.Repeat(" ", gap) + deviceStr
-	}
-	return appName + "  " + deviceStr
 }
 
-// renderStatusBar renders the bottom status bar with keybinding hints.
-// Toast notifications are shown as overlays via alerts.Render() — they no longer
-// appear in the status bar. The status bar is now always hints-only.
-// hints is a pre-built slice of rendered key-hint strings;
-// use gridHints() to obtain the right set.
-func (a *App) renderStatusBar(hints []string) string {
-	style := lipgloss.NewStyle().
+// renderHeader renders the btop-style header bar containing:
+// Left: spotnik ─ Page A ─ ᐅp preset 0 ─ ᐅ/ search ─ ᐅd devices
+// Right: ◉ DeviceName  (or  ○ No device)
+//
+// All separator dashes use "─" (U+2500). Key labels are rendered in KeyHint() color,
+// descriptions in TextMuted() color, and the app name in TextPrimary()+Bold.
+// The background is StatusBarBg(). The line is padded/trimmed to match a.width exactly.
+func (a *App) renderHeader() string {
+	bgStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.StatusBarFg())
 
-	return style.Render("  " + strings.Join(hints, "  "))
-}
+	appNameStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.TextPrimary()).
+		Bold(true)
 
-// gridHints returns the context-sensitive key hints for the grid view status bar.
-func (a *App) gridHints() []string {
 	keyStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.KeyHint()).
 		Bold(true)
 
-	return []string{
-		keyStyle.Render("/") + " search",
-		keyStyle.Render("Space") + " play",
-		keyStyle.Render("n") + " next",
-		keyStyle.Render("+/-") + " vol",
-		keyStyle.Render("0") + " page",
-		keyStyle.Render("p") + " preset",
-		keyStyle.Render("1-8") + " toggle",
-		keyStyle.Render("Tab") + " focus",
-		keyStyle.Render("d") + " devices",
-		keyStyle.Render("q") + " quit",
+	mutedStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.TextMuted())
+
+	sepStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.TextMuted())
+
+	sep := sepStyle.Render(" ─ ")
+
+	// App name segment.
+	appName := appNameStyle.Render(" spotnik ")
+
+	// Page indicator: "Page A"
+	page := mutedStyle.Render("Page ") + keyStyle.Render(pageLabel(a.layout.ActivePage()))
+
+	// Preset indicator: "ᐅp preset 0"
+	presetIdx := a.layout.ActivePresetIndex()
+	preset := mutedStyle.Render("ᐅ") + keyStyle.Render("p") + mutedStyle.Render(fmt.Sprintf(" preset %d", presetIdx))
+
+	// Action shortcuts: "ᐅ/ search"  "ᐅd devices"
+	search := mutedStyle.Render("ᐅ") + keyStyle.Render("/") + mutedStyle.Render(" search")
+	devices := mutedStyle.Render("ᐅ") + keyStyle.Render("d") + mutedStyle.Render(" devices")
+
+	left := appName + sep + page + sep + preset + sep + search + sep + devices
+
+	// Right side: device indicator.
+	device := a.store.ActiveDevice()
+	var right string
+	if device != nil {
+		name := truncateDeviceName(device.Name)
+		right = bgStyle.Render("◉ " + name + " ")
+	} else {
+		right = bgStyle.Render("○ No device ")
 	}
+
+	if a.width > 0 {
+		leftW := lipgloss.Width(left)
+		rightW := lipgloss.Width(right)
+		gap := a.width - leftW - rightW
+		if gap < 1 {
+			gap = 1
+		}
+		fill := bgStyle.Render(strings.Repeat(" ", gap))
+		return left + fill + right
+	}
+	return left + "  " + right
+}
+
+// renderStatusBar renders the global-only bottom status bar with fixed keybinding hints.
+// Pane-specific hints (filter, add, etc.) now live in pane borders — never here.
+// Toast notifications are shown as overlays via alerts.Render() — not in the status bar.
+func (a *App) renderStatusBar() string {
+	bgStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.StatusBarFg())
+
+	keyStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.KeyHint()).
+		Bold(true)
+
+	// Fixed global hints per DESIGN.md §15 — these never change per pane focus.
+	hints := []struct{ Key, Label string }{
+		{"/", "search"},
+		{"0", "page"},
+		{"p", "preset"},
+		{"1-8", "toggle"},
+		{"Tab", "pane"},
+		{"d", "devices"},
+		{"?", "help"},
+		{"q", "quit"},
+	}
+
+	var parts []string
+	for _, h := range hints {
+		parts = append(parts, keyStyle.Render(h.Key)+" "+bgStyle.Render(h.Label))
+	}
+
+	return bgStyle.Render("  " + strings.Join(parts, "   "))
 }
