@@ -46,7 +46,8 @@ func TestDeviceOverlay_View_DeviceList(t *testing.T) {
 	assert.Contains(t, view, "MacBook Pro Speakers", "active device name should appear")
 	assert.Contains(t, view, "iPhone 14", "inactive device name should appear")
 	assert.Contains(t, view, "Kitchen Speaker", "inactive device name should appear")
-	assert.Contains(t, view, "DEVICES", "overlay header should appear")
+	// After F50, "Devices" title is in the btop border (not "DEVICES" inside the body).
+	assert.Contains(t, view, "Devices", "overlay border title should appear")
 }
 
 func TestDeviceOverlay_View_ActiveDevice(t *testing.T) {
@@ -271,4 +272,57 @@ func TestDeviceOverlay_View_ShowsDevicesWhenNoError(t *testing.T) {
 	output := overlay.View()
 	assert.Contains(t, output, "MacBook Pro")
 	assert.NotContains(t, output, "Failed to load devices")
+}
+
+// --- F50 Task 5: btop-style border in device overlay ---
+
+func TestDeviceOverlay_View_HasBtopBorder(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.devices = testDevices()
+
+	view := overlay.View()
+
+	// btop border uses ╭ and ╰ corners.
+	assert.Contains(t, view, "╭", "device overlay should use btop-style rounded corner")
+	assert.Contains(t, view, "╰", "device overlay should use btop-style rounded corner")
+}
+
+func TestDeviceOverlay_View_BtopBorderTitle(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.devices = testDevices()
+
+	view := overlay.View()
+
+	// The border title should contain "Devices" (note: was "DEVICES" inside the body).
+	assert.Contains(t, view, "Devices", "border title should contain 'Devices'")
+}
+
+func TestDeviceOverlay_View_BtopBorderActions(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.devices = testDevices()
+
+	view := overlay.View()
+
+	// Action from the spec: "Enter select"
+	assert.Contains(t, view, "select", "border should show 'select' action")
+}
+
+func TestDeviceOverlay_View_ActiveDeviceSymbol(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.devices = testDevices()
+
+	view := overlay.View()
+
+	assert.Contains(t, view, "◉", "active device should show ◉ symbol")
+}
+
+func TestDeviceOverlay_View_InactiveDeviceSymbol(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.devices = []DeviceInfo{
+		{ID: "a", Name: "Phone", Type: "Smartphone", IsActive: false},
+	}
+
+	view := overlay.View()
+
+	assert.Contains(t, view, "○", "inactive device should show ○ symbol")
 }

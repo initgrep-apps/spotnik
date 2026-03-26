@@ -199,6 +199,43 @@ F37: Gateway Hardening ──→ (independent, can parallel with F34-F36)
 
 ---
 
+## UI Redesign Execution Order
+
+Features from the btop-inspired UI redesign (2026-03-26). See `docs/DESIGN.md` for
+the full specification. All features are sequential per project rules.
+
+```
+F40 (Theme) ──┐
+F41 (Layout) ─┤
+F42 (Border) ─┼──→ F45 (NowPlaying) ──┐
+F43 (Components)┘   F46 (Queue) ──────┤
+                     F47 (LibSplit) ───┼──→ F49 (App Migration) ──→ F50 (Header/Overlay)
+F44 (Visualizer) → F45                ┤                             F51 (Page B)
+                     F48 (StatsSplit) ─┘                            F52 (Mouse)
+                                                                    F53 (Cleanup)
+```
+
+| # | Feature | Spec | Status | Depends On | PR |
+|---|---------|------|--------|-----------|-----|
+| 40 | Theme Enhancement | `40-theme-enhancement.md` | | — | |
+| 41 | Layout Infrastructure | `41-layout-infrastructure.md` | | — | |
+| 42 | Custom Border Renderer | `42-custom-border-renderer.md` | | 40 | |
+| 43 | Reusable Components | `43-reusable-components.md` | | 40 | |
+| 44 | Visualizer + Gradient Bars | `44-visualizer-gradient-bars.md` | | 40 | |
+| 45 | NowPlaying Pane | `45-nowplaying-pane.md` | | 41,42,44 | |
+| 46 | Queue Pane Migration | `46-queue-pane-migration.md` | | 41,43 | |
+| 47 | Library Split | `47-library-split.md` | | 41,43 | |
+| 48 | Stats Split | `48-stats-split.md` | | 41,43 | |
+| 49 | App Migration | `49-app-migration.md` | | 40-48 | |
+| 50 | Header + Status Bar + Overlays | `50-header-statusbar-overlays.md` | | 42,49 | |
+| 51 | Page B: Nerd Status | `51-page-b-nerd-status.md` | | 41-43,49 | |
+| 52 | Mouse Scroll + Responsive | `52-mouse-scroll-responsive.md` | | 41,49 | |
+| 53 | Cleanup | `53-cleanup.md` | | 40-52 | |
+
+> **New dependencies:** `github.com/evertras/bubble-table` (dense tables), `github.com/rmhubbert/bubbletea-overlay` (overlay compositing). Both approved by owner 2026-03-26.
+
+---
+
 ## Versioning
 
 | Version | Includes |
@@ -212,6 +249,7 @@ F37: Gateway Hardening ──→ (independent, can parallel with F34-F36)
 | v2.0.0 | Features 19-27 (architecture improvements from review) |
 | v3.0.0 | Features 29-33 (architecture baseline: Elm purity, gateway, notifications, staleness, idle backoff) |
 | v3.1.0 | Features 34-39 (issues cleanup: docs, types, safety, gateway, staleness, tests) |
+| v4.0.0 | Features 40-53 (btop-inspired UI redesign: grid layout, 10 panes, 2 pages, presets) |
 
 ---
 
@@ -243,4 +281,4 @@ Brief insights from implementing all 9 features:
 
 ---
 
-*Last updated: 2026-03-25*
+*Last updated: 2026-03-26*

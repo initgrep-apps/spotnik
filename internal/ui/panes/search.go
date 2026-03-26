@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -344,38 +345,63 @@ func (o *SearchOverlay) selectedURI() (uri string, isTrack bool) {
 	return "", false
 }
 
-// View renders the search overlay box.
+// View renders the search overlay box with a btop-style border.
+// The border is rendered via layout.RenderPaneBorder() so that the title
+// ("Search") and action shortcuts ("Enter play", "Tab section") appear
+// embedded in the top border line, consistent with the main grid pane borders.
 func (o *SearchOverlay) View() string {
-	overlayWidth := o.overlayWidth()
+	totalWidth := o.overlayWidth()
+	// Minimum height: 2 border rows + input row + separator row + at least 1 content row.
+	totalHeight := o.overlayHeight()
 
-	var sb strings.Builder
+	// Inner content dimensions (inside the border).
+	innerWidth := totalWidth - 2
+	if innerWidth < 2 {
+		innerWidth = 2
+	}
+	innerHeight := totalHeight - 2
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
 
-	// Title bar
-	titleStyle := lipgloss.NewStyle().
-		Foreground(o.theme.TextPrimary()).
-		Bold(true)
-	sb.WriteString(titleStyle.Render("Search"))
-	sb.WriteString("\n")
-	sb.WriteString(strings.Repeat("·", overlayWidth-2))
-	sb.WriteString("\n")
+	// Build inner content lines.
+	var lines []string
 
-	// Input line
-	sb.WriteString(o.input.View())
-	sb.WriteString("\n")
-	sb.WriteString(strings.Repeat("·", overlayWidth-2))
-	sb.WriteString("\n")
+	// Input line — fixed at the top of the inner area.
+	lines = append(lines, o.input.View())
 
-	// Results area
-	sb.WriteString(o.renderResults(overlayWidth))
+	// Thin separator.
+	lines = append(lines, lipgloss.NewStyle().
+		Foreground(o.theme.TextMuted()).
+		Render(strings.Repeat("·", innerWidth)))
 
-	// Wrap in a border
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(o.theme.ActiveBorder()).
-		Padding(0, 1).
-		Width(overlayWidth)
+	// Results area — fills the remaining inner lines.
+	resultsStr := o.renderResults(innerWidth)
+	resultLines := strings.Split(resultsStr, "\n")
+	lines = append(lines, resultLines...)
 
-	return borderStyle.Render(sb.String())
+	// Join and size to innerWidth × innerHeight.
+	inner := strings.Join(lines, "\n")
+	// Safety: cap content to innerWidth × innerHeight via lipgloss.
+	inner = lipgloss.NewStyle().
+		Width(innerWidth).MaxWidth(innerWidth).
+		Height(innerHeight).MaxHeight(innerHeight).
+		Render(inner)
+
+	cfg := layout.BorderConfig{
+		Width:  totalWidth,
+		Height: totalHeight,
+		Title:  "Search",
+		Actions: []layout.Action{
+			{Key: "Enter", Label: "play"},
+			{Key: "Tab", Label: "section"},
+		},
+		AccentColor: o.theme.ActiveBorder(),
+		Focused:     true, // overlays are always focused
+		Theme:       o.theme,
+	}
+
+	return layout.RenderPaneBorder(inner, cfg)
 }
 
 // renderResults builds the results area of the overlay.
@@ -477,6 +503,22 @@ func (o *SearchOverlay) overlayWidth() int {
 		w = 20
 	}
 	return w
+}
+
+// overlayHeight returns the effective overlay height, clamped to 70% of
+// terminal height or a sensible default.
+func (o *SearchOverlay) overlayHeight() int {
+	h := 20
+	if o.height > 0 {
+		seventyPct := o.height * 70 / 100
+		if seventyPct > h {
+			h = seventyPct
+		}
+	}
+	if h < 8 {
+		h = 8
+	}
+	return h
 }
 
 // debounceSearch returns a tea.Cmd that fires a searchDebounceMsg after 300ms.

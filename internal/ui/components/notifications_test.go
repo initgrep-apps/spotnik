@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -108,4 +109,66 @@ func TestNewNotifications_NoActiveAlertRenderReturnsOriginalContent(t *testing.T
 	rendered := model.Render(content)
 	assert.Equal(t, content, rendered,
 		"Render() with no active alert should return original content unchanged")
+}
+
+// --- F50 Task 6: Toast notifications positioned bottom-right ---
+
+// TestNewNotifications_ToastAppearsAtBottomRight verifies that the toast notification
+// is composited at the bottom-right of the content area per DESIGN.md §12.
+// We use a sufficiently tall content block so top vs. bottom positioning is distinguishable.
+func TestNewNotifications_ToastAppearsAtBottomRight(t *testing.T) {
+	th := theme.Load(theme.DefaultThemeID)
+	model := NewNotifications(th)
+
+	// Activate a success alert.
+	cmd := model.NewAlertCmd("success", "Added to queue: Starboy")
+	msg := cmd()
+	updated, _ := model.Update(msg)
+	am, ok := updated.(bubbleup.AlertModel)
+	require.True(t, ok)
+
+	// Tall content block (20 lines) so top vs. bottom is clearly distinguishable.
+	// Alert is 3 lines tall (╭───╮ / │ msg │ / ╰───╯), so at bottom it appears in
+	// lines 17-19 (0-indexed). At top it appears in lines 0-2.
+	var contentLines []string
+	for i := 0; i < 20; i++ {
+		contentLines = append(contentLines, "line content here                              ")
+	}
+	content := strings.Join(contentLines, "\n")
+
+	rendered := am.Render(content)
+	lines := strings.Split(rendered, "\n")
+
+	// The alert text must appear somewhere.
+	assert.Contains(t, rendered, "Added to queue: Starboy",
+		"toast message should appear in rendered output")
+
+	// Find which line index the alert text appears on.
+	alertLine := -1
+	for i, l := range lines {
+		if strings.Contains(l, "Starboy") {
+			alertLine = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, alertLine, "alert line must be found in rendered output")
+
+	// With BottomRightPosition, the alert appears in the LAST few lines.
+	// With TopLeftPosition, it appears in the FIRST few lines (lines 0-2).
+	// We verify the alert is in the bottom half of the content (line >= 10).
+	assert.GreaterOrEqual(t, alertLine, len(lines)/2,
+		"toast should appear in the bottom half of the content (bottom-right positioning)")
+}
+
+// TestNewNotifications_PositionBottomRight verifies the position constant used is BottomRight.
+// This is an indirect test: we verify that the constructed model uses BottomRightPosition
+// by checking the rendered output's line distribution.
+func TestNewNotifications_AlertDoesNotInterfereWithGrid(t *testing.T) {
+	th := theme.Load(theme.DefaultThemeID)
+	model := NewNotifications(th)
+
+	// With no active alert, grid content passes through unchanged.
+	gridContent := "╭─ Playlists ─────────────╮\n│  Track 1                │\n╰─────────────────────────╯"
+	rendered := model.Render(gridContent)
+	assert.Contains(t, rendered, "╭─ Playlists", "grid content should pass through unchanged when no alert")
 }

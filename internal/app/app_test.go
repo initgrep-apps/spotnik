@@ -507,16 +507,18 @@ func TestApp_View_TooSmall(t *testing.T) {
 	assert.Contains(t, output, "120 × 30", "should show required dimensions")
 }
 
-// TestApp_View_StatusBarShowsGridHints verifies status bar shows grid hints.
+// TestApp_View_StatusBarShowsGridHints verifies status bar shows global hints.
+// Per F50, the status bar is now global-only: Space/n/+/- playback hints removed.
 func TestApp_View_StatusBarShowsGridHints(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Grid hints are always shown in the status bar.
+	// Global hints are always shown in the status bar.
 	output := a.View()
-	assert.Contains(t, output, "Space", "status bar should show Space play hint")
 	assert.Contains(t, output, "/", "status bar should show / search hint")
 	assert.Contains(t, output, "q", "status bar should show q quit hint")
+	assert.Contains(t, output, "page", "status bar should show page hint")
+	assert.Contains(t, output, "preset", "status bar should show preset hint")
 }
 
 // TestApp_View_HeaderNoDevice verifies header shows "No device" when no device is active.

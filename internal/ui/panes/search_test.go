@@ -573,3 +573,39 @@ func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 	assert.Contains(t, view, "Al1")
 	assert.Contains(t, view, "PL1")
 }
+
+// --- F50 Task 4: btop-style border in search overlay ---
+
+// TestSearchOverlay_View_HasBtopBorder verifies the btop-style border with title.
+func TestSearchOverlay_View_HasBtopBorder(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	view := o.View()
+
+	// btop border uses ╭ and ╯ corners.
+	assert.Contains(t, view, "╭", "search overlay should use btop-style rounded corner")
+	assert.Contains(t, view, "╰", "search overlay should use btop-style rounded corner")
+}
+
+// TestSearchOverlay_View_BtopBorderTitle verifies "Search" appears in the border.
+func TestSearchOverlay_View_BtopBorderTitle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	view := o.View()
+
+	assert.Contains(t, view, "Search", "border title should contain 'Search'")
+}
+
+// TestSearchOverlay_View_BtopBorderActions verifies action shortcuts appear in the border.
+func TestSearchOverlay_View_BtopBorderActions(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	view := o.View()
+
+	// Actions from the spec: "Enter play" and "Tab section"
+	assert.Contains(t, view, "play", "border should show 'play' action")
+	assert.Contains(t, view, "section", "border should show 'section' action")
+}

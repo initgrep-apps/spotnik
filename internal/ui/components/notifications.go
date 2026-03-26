@@ -14,6 +14,8 @@ const notificationDuration = 4 * time.Second
 // colors and custom alert types. All five severity levels are registered:
 // "success", "error", "warning", "info", and "ratelimit".
 //
+// Toast notifications are positioned at the bottom-right per DESIGN.md §12.
+//
 // IMPORTANT: Always call Render(content) in View() — never View(). BubbleUp's
 // View() returns an empty string by design; Render() overlays the alert on top
 // of the full rendered view string.
@@ -54,5 +56,8 @@ func NewNotifications(t theme.Theme) *bubbleup.AlertModel {
 	model.RegisterNewAlertType(infoAlert)
 	model.RegisterNewAlertType(rateLimitAlert)
 
-	return model
+	// Reposition toasts to bottom-right per DESIGN.md §12.
+	// WithPosition returns an immutable copy with the new position.
+	positioned := model.WithPosition(bubbleup.BottomRightPosition)
+	return &positioned
 }

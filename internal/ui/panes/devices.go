@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -112,64 +113,77 @@ func (d *DeviceOverlay) handleEnter() (tea.Model, tea.Cmd) {
 	}
 }
 
-// View renders the device overlay as a bordered list.
+// View renders the device overlay with a btop-style border.
+// The border title is "Devices" and the action shortcut "Enter select" is embedded
+// in the top border line, consistent with the main grid pane borders.
 func (d *DeviceOverlay) View() string {
+	totalWidth := d.overlayWidth()
+	innerWidth := totalWidth - 2
+	if innerWidth < 2 {
+		innerWidth = 2
+	}
+
+	var lines []string
+
+	if d.statusMsg != "" {
+		msgStyle := lipgloss.NewStyle().
+			Foreground(d.theme.TextMuted())
+		lines = append(lines, msgStyle.Render(d.statusMsg))
+	}
+
+	// NOTE: Device errors are routed through toast notifications (app.go).
+	// store.DevicesError() is preserved for retry logic but never read in View().
+	if len(d.devices) == 0 {
+		emptyStyle := lipgloss.NewStyle().
+			Foreground(d.theme.TextMuted())
+		lines = append(lines, emptyStyle.Render("No devices found"))
+	} else {
+		for i, dev := range d.devices {
+			lines = append(lines, d.renderDevice(i, dev))
+		}
+	}
+
+	inner := strings.Join(lines, "\n")
+	inner = lipgloss.NewStyle().
+		Width(innerWidth).MaxWidth(innerWidth).
+		Render(inner)
+
+	// Count actual rendered lines after width-constrained wrapping.
+	renderedLines := strings.Split(inner, "\n")
+	totalHeight := len(renderedLines) + 2 // +2 for top and bottom border rows
+	if totalHeight < 4 {
+		totalHeight = 4
+	}
+
+	cfg := layout.BorderConfig{
+		Width:  totalWidth,
+		Height: totalHeight,
+		Title:  "Devices",
+		Actions: []layout.Action{
+			{Key: "Enter", Label: "select"},
+		},
+		AccentColor: d.theme.ActiveBorder(),
+		Focused:     true, // overlays are always focused
+		Theme:       d.theme,
+	}
+
+	return layout.RenderPaneBorder(inner, cfg)
+}
+
+// overlayWidth computes the overlay width based on device name lengths.
+// Minimum 32 columns, maximum d.width (or large default).
+func (d *DeviceOverlay) overlayWidth() int {
 	minWidth := 32
-	// Compute width: fit the longest device name plus padding.
 	for _, dev := range d.devices {
-		needed := len(dev.Name) + 12 // prefix + padding
+		needed := len(dev.Name) + 12 // prefix icons + spacing + padding
 		if needed > minWidth {
 			minWidth = needed
 		}
 	}
-
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(d.theme.ActiveBorder()).
-		Background(d.theme.SurfaceAlt()).
-		Padding(0, 1).
-		Width(minWidth)
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(d.theme.TextPrimary()).
-		Background(d.theme.SurfaceAlt()).
-		Bold(true)
-
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(d.theme.TextMuted()).
-		Background(d.theme.SurfaceAlt())
-
-	var sb strings.Builder
-	sb.WriteString(titleStyle.Render("DEVICES"))
-	sb.WriteString("\n")
-	sb.WriteString(dividerStyle.Render(strings.Repeat("┄", minWidth-2)))
-	sb.WriteString("\n")
-
-	if d.statusMsg != "" {
-		msgStyle := lipgloss.NewStyle().
-			Foreground(d.theme.TextMuted()).
-			Background(d.theme.SurfaceAlt())
-		sb.WriteString(msgStyle.Render(d.statusMsg))
-		sb.WriteString("\n")
+	if d.width > 0 && minWidth > d.width {
+		minWidth = d.width
 	}
-
-	// NOTE: Device errors are routed through toast notifications (app.go).
-	// store.DevicesError() is preserved for retry logic but no longer read in View().
-	if len(d.devices) == 0 {
-		emptyStyle := lipgloss.NewStyle().
-			Foreground(d.theme.TextMuted()).
-			Background(d.theme.SurfaceAlt())
-		sb.WriteString(emptyStyle.Render("No devices found"))
-	} else {
-		for i, dev := range d.devices {
-			sb.WriteString(d.renderDevice(i, dev))
-			if i < len(d.devices)-1 {
-				sb.WriteString("\n")
-			}
-		}
-	}
-
-	return borderStyle.Render(sb.String())
+	return minWidth
 }
 
 // renderDevice renders a single device row with the appropriate symbol and label.
