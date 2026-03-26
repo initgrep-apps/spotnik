@@ -800,7 +800,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearQueueError()
 		a.store.SetQueue(m.Tracks)
-		// QueuePane reads directly from store on View().
+		a.queuePane.RefreshRows()
 		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
