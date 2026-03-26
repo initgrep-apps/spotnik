@@ -349,6 +349,11 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "r":
 		return p, emitPlaybackRequest(ActionCycleRepeat)
+
+	case msg.Type == tea.KeyRunes && string(msg.Runes) == "v":
+		// Cycle visualizer animation pattern locally — no API call needed.
+		p.visualizer.CyclePattern()
+		return p, nil
 	}
 
 	return p, nil

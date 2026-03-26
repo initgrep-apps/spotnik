@@ -636,6 +636,51 @@ func TestNowPlayingPane_VisualizerTickMsg_ReturnsCmd(t *testing.T) {
 	assert.NotNil(t, cmd, "VisualizerTickMsg should return a re-arm tick command")
 }
 
+// ── Task 2: v key cycles visualizer pattern ──────────────────────────────────
+
+// TestNowPlayingPane_V_CyclesVisualizerPattern verifies that pressing 'v' while
+// focused advances the visualizer's pattern index, wrapping at NumPatterns.
+func TestNowPlayingPane_V_CyclesVisualizerPattern(t *testing.T) {
+	tests := []struct {
+		name        string
+		startPat    int
+		wantPattern int
+	}{
+		{"pattern 0 → 1", 0, 1},
+		{"pattern 1 → 2", 1, 2},
+		{"pattern 2 wraps → 0", 2, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pane := newTestNowPlayingPaneWithState(true, true)
+			pane.SetSize(80, 24)
+			pane.visualizer.SetPattern(tt.startPat)
+
+			vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
+			_, cmd := pane.Update(vMsg)
+
+			assert.Nil(t, cmd, "v key should return nil cmd (local state change only)")
+			assert.Equal(t, tt.wantPattern, pane.visualizer.Pattern(),
+				"visualizer pattern should cycle from %d to %d", tt.startPat, tt.wantPattern)
+		})
+	}
+}
+
+// TestNowPlayingPane_V_IgnoredWhenNotFocused verifies that 'v' is ignored when
+// the pane is not focused (routing.go handles global routing; pane itself guards focus).
+func TestNowPlayingPane_V_IgnoredWhenNotFocused(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, false) // not focused
+	pane.SetSize(80, 24)
+	pane.visualizer.SetPattern(0)
+
+	vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
+	_, cmd := pane.Update(vMsg)
+
+	assert.Nil(t, cmd, "unfocused pane should return nil cmd")
+	assert.Equal(t, 0, pane.visualizer.Pattern(), "pattern should not change when not focused")
+}
+
 // filterNonEmpty returns non-empty lines from a multi-line string.
 func filterNonEmpty(s string) []string {
 	var out []string
