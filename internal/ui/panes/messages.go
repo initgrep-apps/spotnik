@@ -171,6 +171,13 @@ type QueueLoadedMsg struct {
 	Err    error
 }
 
+// FetchStatsMsg is a request message emitted by stats panes (TopTracksPane, TopArtistsPane)
+// to ask the root app to fetch stats data for the given time range from the API.
+type FetchStatsMsg struct {
+	// TimeRange is "short_term", "medium_term", or "long_term".
+	TimeRange string
+}
+
 // StatsLoadedMsg is returned by the stats fetch command.
 // TimeRange identifies which range was fetched.
 // TopTracks and TopArtists carry the fetched data on success.
@@ -224,7 +231,7 @@ type DeviceTransferredMsg struct {
 	Err      error
 }
 
-// FetchPlaylistTracksRequestMsg is emitted by PlaylistManager when it needs to
+// FetchPlaylistTracksRequestMsg is emitted by PlaylistsPane when it needs to
 // load tracks for a specific playlist from the API.
 type FetchPlaylistTracksRequestMsg struct {
 	PlaylistID string
@@ -233,21 +240,21 @@ type FetchPlaylistTracksRequestMsg struct {
 // PlaylistTracksLoadedMsg is returned by the playlist tracks fetch command.
 // PlaylistID identifies which playlist's tracks were fetched.
 // Tracks carries the fetched tracks on success; Err is non-nil on failure.
-// Update() writes Tracks to the store; PlaylistManager reads from store.
+// Update() writes Tracks to the store; PlaylistsPane reads from store.
 type PlaylistTracksLoadedMsg struct {
 	PlaylistID string
 	Tracks     []domain.Track
 	Err        error
 }
 
-// PlaylistCreateRequestMsg is emitted by PlaylistManager when the user submits
+// PlaylistCreateRequestMsg is emitted by PlaylistsPane when the user submits
 // a new playlist name. The root app creates the playlist via the API.
 type PlaylistCreateRequestMsg struct {
 	Name        string
 	Description string
 }
 
-// PlaylistRenameRequestMsg is emitted by PlaylistManager when the user submits
+// PlaylistRenameRequestMsg is emitted by PlaylistsPane when the user submits
 // a rename. The root app updates the playlist via the API.
 type PlaylistRenameRequestMsg struct {
 	PlaylistID string
@@ -270,7 +277,7 @@ type PlaylistRenamedMsg struct {
 	Err        error
 }
 
-// PlaylistRemoveRequestMsg is emitted by PlaylistManager when the user confirms
+// PlaylistRemoveRequestMsg is emitted by PlaylistsPane when the user confirms
 // removing a track from a playlist. The root app handles the API call.
 type PlaylistRemoveRequestMsg struct {
 	PlaylistID string
@@ -285,7 +292,7 @@ type PlaylistRemoveResultMsg struct {
 	Err        error
 }
 
-// PlaylistReorderRequestMsg is emitted by PlaylistManager when the user reorders
+// PlaylistReorderRequestMsg is emitted by PlaylistsPane when the user reorders
 // a track via Shift+Up/Down. The root app handles the API call.
 type PlaylistReorderRequestMsg struct {
 	PlaylistID   string

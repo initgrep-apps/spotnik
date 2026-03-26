@@ -217,20 +217,20 @@ F44 (Visualizer) → F45                ┤                             F51 (Pag
 
 | # | Feature | Spec | Status | Depends On | PR |
 |---|---------|------|--------|-----------|-----|
-| 40 | Theme Enhancement | `40-theme-enhancement.md` | | — | |
-| 41 | Layout Infrastructure | `41-layout-infrastructure.md` | | — | |
-| 42 | Custom Border Renderer | `42-custom-border-renderer.md` | | 40 | |
-| 43 | Reusable Components | `43-reusable-components.md` | | 40 | |
-| 44 | Visualizer + Gradient Bars | `44-visualizer-gradient-bars.md` | | 40 | |
-| 45 | NowPlaying Pane | `45-nowplaying-pane.md` | | 41,42,44 | |
-| 46 | Queue Pane Migration | `46-queue-pane-migration.md` | | 41,43 | |
-| 47 | Library Split | `47-library-split.md` | | 41,43 | |
-| 48 | Stats Split | `48-stats-split.md` | | 41,43 | |
-| 49 | App Migration | `49-app-migration.md` | | 40-48 | |
-| 50 | Header + Status Bar + Overlays | `50-header-statusbar-overlays.md` | | 42,49 | |
-| 51 | Page B: Nerd Status | `51-page-b-nerd-status.md` | | 41-43,49 | |
-| 52 | Mouse Scroll + Responsive | `52-mouse-scroll-responsive.md` | | 41,49 | |
-| 53 | Cleanup | `53-cleanup.md` | | 40-52 | |
+| 40 | Theme Enhancement | `40-theme-enhancement.md` | ✅ Complete | — | |
+| 41 | Layout Infrastructure | `41-layout-infrastructure.md` | ✅ Complete | — | |
+| 42 | Custom Border Renderer | `42-custom-border-renderer.md` | ✅ Complete | 40 | |
+| 43 | Reusable Components | `43-reusable-components.md` | ✅ Complete | 40 | |
+| 44 | Visualizer + Gradient Bars | `44-visualizer-gradient-bars.md` | ✅ Complete | 40 | |
+| 45 | NowPlaying Pane | `45-nowplaying-pane.md` | ✅ Complete | 41,42,44 | |
+| 46 | Queue Pane Migration | `46-queue-pane-migration.md` | ✅ Complete | 41,43 | |
+| 47 | Library Split | `47-library-split.md` | ✅ Complete | 41,43 | |
+| 48 | Stats Split | `48-stats-split.md` | ✅ Complete | 41,43 | |
+| 49 | App Migration | `49-app-migration.md` | ✅ Complete | 40-48 | |
+| 50 | Header + Status Bar + Overlays | `50-header-statusbar-overlays.md` | ✅ Complete | 42,49 | |
+| 51 | Page B: Nerd Status | `51-page-b-nerd-status.md` | ✅ Complete | 41-43,49 | |
+| 52 | Mouse Scroll + Responsive | `52-mouse-scroll-responsive.md` | ✅ Complete | 41,49 | |
+| 53 | Cleanup | `53-cleanup.md` | ✅ Complete | 40-52 | |
 
 > **New dependencies:** `github.com/evertras/bubble-table` (dense tables), `github.com/rmhubbert/bubbletea-overlay` (overlay compositing). Both approved by owner 2026-03-26.
 
@@ -281,4 +281,4 @@ Brief insights from implementing all 9 features:
 
 ---
 
-*Last updated: 2026-03-26*
+*Last updated: 2026-03-26. UI redesign (F40-F53) complete.*

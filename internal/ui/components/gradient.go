@@ -183,3 +183,11 @@ func parseHex(hex string) (r, g, b uint8) {
 func lerp(a, b uint8, t float64) uint8 {
 	return uint8(math.Round(float64(a) + t*(float64(b)-float64(a))))
 }
+
+// formatDuration converts milliseconds to "m:ss" string (e.g. 154000 → "2:34").
+func formatDuration(ms int) string {
+	totalSeconds := ms / 1000
+	minutes := totalSeconds / 60
+	seconds := totalSeconds % 60
+	return fmt.Sprintf("%d:%02d", minutes, seconds)
+}
