@@ -143,9 +143,10 @@ func TestRecentlyPlayedPane_EmptyData(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewRecentlyPlayedPane(st, th, false)
 	pane.SetSize(120, 20)
-	// Should not panic
+	// Should not panic and should show empty state message.
 	view := pane.View()
 	assert.NotEmpty(t, view)
+	assert.Contains(t, view, "No recently played tracks")
 }
 
 func TestRecentlyPlayedPane_RefreshRows(t *testing.T) {

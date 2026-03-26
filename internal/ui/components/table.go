@@ -86,12 +86,12 @@ func (t *Table) rebuild() {
 	btCols := make([]btable.Column, len(t.config.Columns))
 	for i, col := range t.config.Columns {
 		btCols[i] = btable.NewFlexColumn(col.Key, col.Header, col.FlexFactor).
-			WithStyle(lipgloss.NewStyle().Foreground(col.Color))
+			WithStyle(lipgloss.NewStyle().Foreground(col.Color).Align(lipgloss.Left))
 	}
 
 	inner := btable.New(btCols).
 		Border(emptyBorder).
-		HeaderStyle(lipgloss.NewStyle().Foreground(th.TableHeader()).Bold(false)).
+		HeaderStyle(lipgloss.NewStyle().Foreground(th.TableHeader()).Bold(false).Align(lipgloss.Left)).
 		WithTargetWidth(t.width)
 
 	if !t.config.ShowHeader {

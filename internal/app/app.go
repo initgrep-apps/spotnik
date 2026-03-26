@@ -530,14 +530,29 @@ func (a *App) Init() tea.Cmd {
 		}
 	}
 
-	return tea.Batch(append(paneCmds,
+	initCmds := append(paneCmds,
 		fetchPlaybackStateCmd(a.player),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
 		splashTimer,
 		alertsInitCmd,
-	)...)
+	)
+	initCmds = append(initCmds, a.initialFetchCmds()...)
+	return tea.Batch(initCmds...)
+}
+
+// initialFetchCmds returns commands that trigger the initial data load for all
+// library and stats panes. Each command emits a Fetch*RequestMsg which flows
+// through the existing staleness/dedup guards in handleMsg.
+func (a *App) initialFetchCmds() []tea.Cmd {
+	return []tea.Cmd{
+		func() tea.Msg { return panes.FetchPlaylistsRequestMsg{Offset: 0} },
+		func() tea.Msg { return panes.FetchAlbumsRequestMsg{Offset: 0} },
+		func() tea.Msg { return panes.FetchLikedTracksRequestMsg{Offset: 0} },
+		func() tea.Msg { return panes.FetchRecentlyPlayedRequestMsg{} },
+		func() tea.Msg { return panes.FetchStatsMsg{TimeRange: "short_term"} },
+	}
 }
 
 // openSearch opens the search overlay.
@@ -638,12 +653,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				paneCmds = append(paneCmds, cmd)
 			}
 		}
-		return a, tea.Batch(append(paneCmds,
+		authCmds := append(paneCmds,
 			fetchPlaybackStateCmd(a.player),
 			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 				return panes.TickMsg{}
 			}),
-		)...)
+		)
+		authCmds = append(authCmds, a.initialFetchCmds()...)
+		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
 		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())

@@ -26,7 +26,7 @@ const SpotifyScopes = "user-read-playback-state user-modify-playback-state " +
 	"user-read-currently-playing playlist-read-private playlist-read-collaborative " +
 	"playlist-modify-public playlist-modify-private user-library-read " +
 	"user-library-modify user-read-private user-read-email " +
-	"user-top-read user-follow-read"
+	"user-top-read user-follow-read user-read-recently-played"
 
 // spotifyAuthURL is the Spotify authorization endpoint.
 const spotifyAuthURL = "https://accounts.spotify.com/authorize"
