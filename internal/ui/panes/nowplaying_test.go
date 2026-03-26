@@ -504,75 +504,6 @@ func TestNowPlayingPane_BarsResize_WithSetSize(t *testing.T) {
 	assert.NotEqual(t, small, large, "different sizes should produce different output")
 }
 
-// ── Task 5: Compact mode tests ───────────────────────────────────────────────
-
-func TestNowPlayingPane_CompactMode_EnabledAtHeight3(t *testing.T) {
-	pane := newTestNowPlayingPane(true)
-	pane.SetSize(80, 3)
-	assert.True(t, pane.compact, "height=3 should enable compact mode")
-}
-
-func TestNowPlayingPane_CompactMode_DisabledAtHeight10(t *testing.T) {
-	pane := newTestNowPlayingPane(true)
-	pane.SetSize(80, 10)
-	assert.False(t, pane.compact, "height=10 should not enable compact mode")
-}
-
-func TestNowPlayingPane_CompactMode_DisabledAtHeight4(t *testing.T) {
-	pane := newTestNowPlayingPane(true)
-	pane.SetSize(80, 4)
-	assert.False(t, pane.compact, "height=4 should not enable compact mode")
-}
-
-func TestNowPlayingPane_CompactTitle_IncludesTrackInfo(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(80, 3) // compact mode
-	pane.localProgressMs = 30000
-
-	title := pane.Title()
-	assert.Contains(t, title, "Blinding Lights", "compact title should include track name")
-	assert.Contains(t, title, "The Weeknd", "compact title should include artist name")
-	// Time format: "0:30" for 30000ms.
-	assert.Contains(t, title, "0:30", "compact title should include current time")
-}
-
-func TestNowPlayingPane_CompactView_SingleContentLine(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(80, 3)
-
-	output := pane.View()
-	lines := filterNonEmpty(output)
-
-	// Compact mode should produce at most 1 content line.
-	assert.LessOrEqual(t, len(lines), 1, "compact mode should have at most 1 content line")
-}
-
-func TestNowPlayingPane_CompactView_ContainsVol(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(80, 3)
-
-	output := pane.View()
-	assert.Contains(t, output, "VOL", "compact view should contain volume bar")
-}
-
-func TestNowPlayingPane_NoVisualizerInCompactMode(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(80, 3)
-	pane.visualizer.SetPlaying(true)
-
-	output := pane.View()
-
-	// No braille chars in compact mode.
-	hasBraille := false
-	for _, r := range output {
-		if r >= '\u2800' && r <= '\u28FF' {
-			hasBraille = true
-			break
-		}
-	}
-	assert.False(t, hasBraille, "compact mode should not render braille visualizer")
-}
-
 func TestNowPlayingPane_FullView_ContainsTrackAndAlbum(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
@@ -581,29 +512,6 @@ func TestNowPlayingPane_FullView_ContainsTrackAndAlbum(t *testing.T) {
 	assert.Contains(t, output, "Blinding Lights")
 	assert.Contains(t, output, "The Weeknd")
 	assert.Contains(t, output, "After Hours")
-}
-
-// TestNowPlayingPane_Transition_FullToCompact verifies resize triggers mode change.
-func TestNowPlayingPane_Transition_FullToCompact(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
-
-	pane.SetSize(80, 24) // full mode
-	assert.False(t, pane.compact, "should start in full mode")
-
-	pane.SetSize(80, 3) // compact mode
-	assert.True(t, pane.compact, "should switch to compact after resize to height=3")
-
-	pane.SetSize(80, 24) // back to full mode
-	assert.False(t, pane.compact, "should return to full mode after resize to height=24")
-}
-
-// TestNowPlayingPane_CompactView_NilState verifies safe rendering when nothing is playing.
-func TestNowPlayingPane_CompactView_NilState(t *testing.T) {
-	pane := newTestNowPlayingPane(true)
-	pane.SetSize(80, 3) // compact mode
-
-	output := pane.View()
-	assert.Contains(t, output, "Nothing playing", "compact nil state should show empty message")
 }
 
 // TestNowPlayingPane_ZeroDuration verifies seek bar handles zero duration gracefully.
@@ -681,18 +589,110 @@ func TestNowPlayingPane_V_IgnoredWhenNotFocused(t *testing.T) {
 	assert.Equal(t, 0, pane.visualizer.Pattern(), "pattern should not change when not focused")
 }
 
-// filterNonEmpty returns non-empty lines from a multi-line string.
-func filterNonEmpty(s string) []string {
-	var out []string
-	for _, line := range splitLines(s) {
-		if line != "" {
-			out = append(out, line)
+// ── Feature 58: Split layout tests ──────────────────────────────────────────
+
+// TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders verifies that View() at
+// 80x24 contains the rounded-corner border characters produced by the InfoBox.
+func TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	assert.Contains(t, output, "╭", "split layout should contain InfoBox top-left corner")
+	assert.Contains(t, output, "╰", "split layout should contain InfoBox bottom-left corner")
+}
+
+// TestNowPlayingPane_SplitLayout_ContainsBraille verifies that View() contains
+// braille characters from the visualizer rendered on the right side.
+func TestNowPlayingPane_SplitLayout_ContainsBraille(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+	pane.visualizer.SetPlaying(true)
+
+	output := pane.View()
+
+	hasBraille := false
+	for _, r := range output {
+		if r >= '\u2800' && r <= '\u28FF' {
+			hasBraille = true
+			break
 		}
 	}
-	return out
+	assert.True(t, hasBraille, "split layout should contain braille characters from visualizer")
+}
+
+// TestNowPlayingPane_SplitLayout_ContainsSeekBar verifies that View() contains
+// the seek bar time stamps rendered at the bottom.
+func TestNowPlayingPane_SplitLayout_ContainsSeekBar(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+	pane.localProgressMs = 30000
+
+	output := pane.View()
+	// GradientSeekBar renders current/total times.
+	assert.Contains(t, output, "0:30", "split layout should contain seek bar current time")
+}
+
+// TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox verifies that View()
+// contains "VOL" from the volume bar rendered inside the InfoBox.
+func TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	assert.Contains(t, output, "VOL", "split layout InfoBox should contain volume bar")
+}
+
+// TestNowPlayingPane_SplitLayout_ContainsControls verifies that View() contains
+// the playback control characters from the Controls component.
+func TestNowPlayingPane_SplitLayout_ContainsControls(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	// Controls always renders |< and >| symbols.
+	assert.Contains(t, output, "|<", "split layout InfoBox should contain prev-track control")
+}
+
+// TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall verifies that Title() includes
+// track name when the pane height is below 8 (the new compact-title threshold).
+func TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 6) // height < 8
+	pane.localProgressMs = 30000
+
+	title := pane.Title()
+	assert.Contains(t, title, "Blinding Lights", "title at height<8 should include track name")
+	assert.Contains(t, title, "The Weeknd", "title at height<8 should include artist name")
+	assert.Contains(t, title, "0:30", "title at height<8 should include current time")
+}
+
+// TestNowPlayingPane_Title_DefaultWhenTall verifies that Title() returns the
+// default "Now Playing" string when the pane height is >= 8.
+func TestNowPlayingPane_Title_DefaultWhenTall(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24) // height >= 8
+
+	title := pane.Title()
+	assert.Equal(t, "Now Playing", title, "title at height>=8 should be 'Now Playing'")
+}
+
+// TestNowPlayingPane_SplitLayout_AdaptsToDifferentSizes verifies that
+// different pane sizes produce different view output (layout is proportional).
+func TestNowPlayingPane_SplitLayout_AdaptsToDifferentSizes(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+
+	pane.SetSize(60, 20)
+	small := pane.View()
+
+	pane.SetSize(120, 36)
+	large := pane.View()
+
+	assert.NotEqual(t, small, large, "different sizes should produce different split layout output")
 }
 
 // splitLines splits a string by newline.
+// Shared helper used by multiple pane test files in the same package.
 func splitLines(s string) []string {
 	var lines []string
 	start := 0

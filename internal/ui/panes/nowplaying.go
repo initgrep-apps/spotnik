@@ -19,6 +19,10 @@ import (
 // It renders the currently playing track and handles playback key events.
 // It reads all state from the Store; it never stores API data in its own fields.
 // It implements the layout.Pane interface for integration with the layout manager.
+//
+// Layout: horizontal split with InfoBox (left, ~1/4 width) and Visualizer (right, ~3/4 width),
+// and a gradient seek bar spanning full width at the bottom.
+// When height < 8, Title() embeds compact track info in the pane title bar instead.
 type NowPlayingPane struct {
 	store *state.Store
 	theme theme.Theme
@@ -26,19 +30,21 @@ type NowPlayingPane struct {
 	focused bool
 	width   int
 	height  int
-	compact bool // true when height <= 3 (compact single-line strip mode)
 
 	// localProgressMs is pane-local state (not in Store). It increments by 1000ms
 	// on each tick when playing, for smooth seek bar updates between polls.
 	localProgressMs int
 
-	// visualizer is the animated braille audio spectrum.
+	// infoBox is the bordered sub-pane on the left showing track/artist/album/controls.
+	infoBox *components.InfoBox
+
+	// visualizer is the animated braille audio spectrum (right side of the split).
 	visualizer *components.Visualizer
 
-	// seekBar is the gradient seek bar (replaces monochrome ProgressBar).
+	// seekBar is the gradient seek bar spanning full width at the bottom.
 	seekBar *components.GradientSeekBar
 
-	// volumeBar is the gradient volume bar (replaces monochrome VolumeBar).
+	// volumeBar is the gradient volume bar rendered inside the InfoBox.
 	volumeBar *components.GradientVolumeBar
 }
 
@@ -53,6 +59,7 @@ func NewNowPlayingPane(s *state.Store, t theme.Theme, focused bool) *NowPlayingP
 		store:      s,
 		theme:      t,
 		focused:    focused,
+		infoBox:    components.NewInfoBox(t),
 		visualizer: components.NewVisualizer(t),
 		seekBar:    components.NewGradientSeekBar(t),
 		volumeBar:  components.NewGradientVolumeBar(t),
@@ -69,9 +76,11 @@ func (p *NowPlayingPane) ID() layout.PaneID {
 	return layout.PaneNowPlaying
 }
 
-// Title returns the display title for the border, including track info in compact mode.
+// Title returns the display title for the border.
+// When height < 8 (pane too small for the split body), the title embeds track info
+// so the user can still see what's playing without any content area.
 func (p *NowPlayingPane) Title() string {
-	if p.compact {
+	if p.height < 8 {
 		ps := p.store.PlaybackState()
 		if ps != nil && ps.Item != nil {
 			t := ps.Item
@@ -105,28 +114,27 @@ func (p *NowPlayingPane) Actions() []layout.Action {
 	}
 }
 
-// SetSize updates the pane's dimensions (called by the root model on WindowSizeMsg).
-// Compact mode is enabled when height <= 3 (border + 1 content line).
+// SetSize updates the pane's dimensions and recomputes the split layout geometry.
+// The content area is divided: InfoBox takes ~1/4 of width (min 28 chars) on the left,
+// Visualizer takes the remaining ~3/4 on the right, and the seek bar spans the full width
+// at the bottom.
 func (p *NowPlayingPane) SetSize(width, height int) {
 	p.width = width
 	p.height = height
-	p.compact = height <= 3
 
 	contentWidth := paneMax(width-4, 10)
-	p.seekBar.SetWidth(contentWidth)
-	p.volumeBar.SetWidth(contentWidth)
 
-	// Visualizer height depends on mode:
-	//   compact: 1 line (kept for sizing but not shown)
-	//   full: 2 lines
-	//   expanded (height >= 10): 4 lines
-	vizHeight := 2
-	if p.compact {
-		vizHeight = 1
-	} else if height >= 10 {
-		vizHeight = 4
-	}
-	p.visualizer.SetSize(contentWidth, vizHeight)
+	// Split layout dimensions.
+	infoWidth := paneMax(contentWidth/4, 28) // minimum 28 chars for controls
+	vizWidth := contentWidth - infoWidth - 1 // -1 for gap between regions
+
+	progressHeight := 1
+	bodyHeight := paneMax(height-4, 4) - progressHeight // subtract border + seek bar
+
+	p.infoBox.SetSize(infoWidth, bodyHeight)
+	p.visualizer.SetSize(vizWidth, bodyHeight)
+	p.seekBar.SetWidth(contentWidth)
+	p.volumeBar.SetWidth(infoWidth - 4) // fits inside InfoBox with border padding
 }
 
 // SetFocused updates the focused state.
@@ -168,17 +176,9 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the NowPlaying pane. It reads from the store and never calls the API.
-// In compact mode (height <= 3), renders a single content line with controls.
-// In full mode, renders visualizer + track info + seek bar + controls + volume bar.
+// Renders a horizontal split: InfoBox (track/artist/album/controls/volume) on the left,
+// Visualizer on the right, with a gradient seek bar spanning the full width at the bottom.
 func (p *NowPlayingPane) View() string {
-	if p.compact {
-		return p.renderCompact()
-	}
-	return p.renderFull()
-}
-
-// renderFull renders the full-mode view with visualizer, track info, bars, and controls.
-func (p *NowPlayingPane) renderFull() string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
 		return p.renderEmpty()
@@ -195,86 +195,30 @@ func (p *NowPlayingPane) renderFull() string {
 		artistNames[i] = a.Name
 	}
 
-	trackName := primaryStyle.Render(t.Name)
-	artist := secondaryStyle.Render(strings.Join(artistNames, ", "))
-	album := mutedStyle.Render(t.Album.Name)
-
-	// Visualizer.
-	vizView := p.visualizer.View()
-
-	// Seek bar.
-	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-
-	// Transport controls.
 	volume := 0
 	if ps.Device != nil {
 		volume = ps.Device.VolumePercent
 	}
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-	volBar := p.volumeBar.Render(volume)
 
-	lines := []string{
-		vizView,
-		"",
-		trackName,
-		artist,
-		album,
-		"",
-		seekBar,
+	infoLines := []string{
+		primaryStyle.Render(t.Name),
+		secondaryStyle.Render(strings.Join(artistNames, ", ")),
+		mutedStyle.Render(t.Album.Name),
 		"",
 		ctrl.Render(),
-		volBar,
-		"",
+		p.volumeBar.Render(volume),
 	}
 
-	return strings.Join(lines, "\n")
-}
+	// Render InfoBox (left) and Visualizer (right) side by side.
+	infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
+	vizView := p.visualizer.View()
+	body := lipgloss.JoinHorizontal(lipgloss.Top, infoView, " ", vizView)
 
-// renderCompact renders a single-line strip for small presets.
-// Content line: seek bar gradient + controls + volume bar inline.
-func (p *NowPlayingPane) renderCompact() string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-		return mutedStyle.Render("Nothing playing")
-	}
+	// Seek bar spans full width at the bottom.
+	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
 
-	// Single line: seek bar + controls + volume.
-	volume := 0
-	if ps.Device != nil {
-		volume = ps.Device.VolumePercent
-	}
-
-	// Compact seek bar: just the fill bar without time labels.
-	barWidth := paneMax(p.width/3, 10)
-	ratio := 0.0
-	if ps.Item.DurationMs > 0 {
-		ratio = float64(p.localProgressMs) / float64(ps.Item.DurationMs)
-		if ratio > 1.0 {
-			ratio = 1.0
-		}
-	}
-	fillCount := int(ratio * float64(barWidth))
-	emptyCount := barWidth - fillCount
-
-	g1 := string(p.theme.Gradient1())
-	g2 := string(p.theme.Gradient2())
-	emptyStyle := lipgloss.NewStyle().Foreground(p.theme.Surface())
-	var seekSB strings.Builder
-	for i := 0; i < fillCount; i++ {
-		var tt float64
-		if fillCount > 1 {
-			tt = float64(i) / float64(fillCount-1)
-		}
-		col := interpolateHexCompact(g1, g2, tt)
-		seekSB.WriteString(lipgloss.NewStyle().Foreground(col).Render("█"))
-	}
-	seekSB.WriteString(emptyStyle.Render(strings.Repeat("░", emptyCount)))
-
-	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-	volBar := p.volumeBar.Render(volume)
-
-	return seekSB.String() + "  " + ctrl.Render() + "   " + volBar
+	return lipgloss.JoinVertical(lipgloss.Left, body, seekBar)
 }
 
 // renderEmpty shows the "Nothing playing" empty state, centered in the pane.
@@ -365,61 +309,6 @@ func formatDurationMs(ms int) string {
 	minutes := totalSec / 60
 	seconds := totalSec % 60
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
-}
-
-// interpolateHexCompact interpolates between two "#rrggbb" hex colors.
-// This duplicates the unexported interpolateHex from components/gradient.go because
-// the compact seek bar needs a label-free fill bar that GradientSeekBar.Render()
-// does not produce. TODO(feature-53): consolidate with components once all panes migrate.
-func interpolateHexCompact(g1, g2 string, t float64) lipgloss.Color {
-	if t <= 0 {
-		return lipgloss.Color(g1)
-	}
-	if t >= 1 {
-		return lipgloss.Color(g2)
-	}
-	r1, g1r, b1 := parseHexParts(g1)
-	r2, g2r, b2 := parseHexParts(g2)
-	r := lerpByte(r1, r2, t)
-	g := lerpByte(g1r, g2r, t)
-	b := lerpByte(b1, b2, t)
-	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
-}
-
-// parseHexParts parses a "#rrggbb" hex string into r, g, b uint8 components.
-func parseHexParts(hex string) (r, g, b uint8) {
-	s := strings.TrimPrefix(hex, "#")
-	if len(s) != 6 {
-		return 0, 0, 0
-	}
-	parse := func(sub string) uint8 {
-		var v uint64
-		for _, c := range sub {
-			v <<= 4
-			switch {
-			case c >= '0' && c <= '9':
-				v |= uint64(c - '0')
-			case c >= 'a' && c <= 'f':
-				v |= uint64(c-'a') + 10
-			case c >= 'A' && c <= 'F':
-				v |= uint64(c-'A') + 10
-			}
-		}
-		return uint8(v)
-	}
-	return parse(s[0:2]), parse(s[2:4]), parse(s[4:6])
-}
-
-// lerpByte linearly interpolates between two uint8 values.
-func lerpByte(a, b uint8, t float64) uint8 {
-	result := float64(a) + t*(float64(b)-float64(a))
-	if result < 0 {
-		return 0
-	}
-	if result > 255 {
-		return 255
-	}
-	return uint8(result + 0.5)
 }
 
 // emitPlaybackRequest returns a command that immediately emits a PlaybackRequestMsg.
