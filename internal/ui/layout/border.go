@@ -88,14 +88,12 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 
 	// Fixed prefix: ╭─ (corner + dash + space = 3 columns)
 	const (
-		cornerTL  = "╭"
-		cornerTR  = "╮"
-		cornerBL  = "╰"
-		cornerBR  = "╯"
-		hBar      = "─"
-		vBar      = "│"
-		actionSep = " ─── "
-		actionPfx = "ᐅ"
+		cornerTL = "╭"
+		cornerTR = "╮"
+		cornerBL = "╰"
+		cornerBR = "╯"
+		hBar     = "─"
+		vBar     = "│"
 	)
 
 	// Build the right-side segment (actions or filter).
