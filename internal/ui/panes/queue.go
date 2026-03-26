@@ -10,8 +10,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
+
+// Compile-time check: QueuePane implements layout.Pane.
+var _ layout.Pane = &QueuePane{}
 
 // QueuePane is the right-pane Bubble Tea model that shows what is playing
 // now and what is coming up next. It never imports api/ directly — all data
@@ -37,6 +41,24 @@ func NewQueuePane(store *state.Store, theme theme.Theme, focused bool) *QueuePan
 		store:   store,
 		theme:   theme,
 		focused: focused,
+	}
+}
+
+// ID returns the PaneQueue identifier for this pane slot.
+func (q *QueuePane) ID() layout.PaneID { return layout.PaneQueue }
+
+// Title returns the display title shown in the pane border.
+func (q *QueuePane) Title() string { return "Queue" }
+
+// ToggleKey returns 2 — the number key for btop-style pane toggling.
+func (q *QueuePane) ToggleKey() int { return 2 }
+
+// Actions returns the pane-specific shortcut hints displayed in the border.
+// Returns the close action when filter is active; otherwise the default set.
+func (q *QueuePane) Actions() []layout.Action {
+	return []layout.Action{
+		{Key: "f", Label: "filter"},
+		{Key: "A", Label: "add"},
 	}
 }
 

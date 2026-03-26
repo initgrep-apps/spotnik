@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -241,4 +242,38 @@ func TestQueuePane_RepeatIndicator(t *testing.T) {
 			assert.Contains(t, output, tt.wantHeader)
 		})
 	}
+}
+
+// --- Task 1: layout.Pane interface methods ---
+
+// TestQueuePane_ImplementsLayoutPane verifies QueuePane satisfies layout.Pane at compile time.
+var _ layout.Pane = &QueuePane{}
+
+// TestQueuePane_ID verifies that ID() returns PaneQueue.
+func TestQueuePane_ID(t *testing.T) {
+	pane := newTestQueuePane(false)
+	assert.Equal(t, layout.PaneQueue, pane.ID())
+}
+
+// TestQueuePane_Title verifies that Title() returns "Queue".
+func TestQueuePane_Title(t *testing.T) {
+	pane := newTestQueuePane(false)
+	assert.Equal(t, "Queue", pane.Title())
+}
+
+// TestQueuePane_ToggleKey verifies that ToggleKey() returns 2.
+func TestQueuePane_ToggleKey(t *testing.T) {
+	pane := newTestQueuePane(false)
+	assert.Equal(t, 2, pane.ToggleKey())
+}
+
+// TestQueuePane_Actions verifies that Actions() returns filter and add actions by default.
+func TestQueuePane_Actions(t *testing.T) {
+	pane := newTestQueuePane(false)
+	actions := pane.Actions()
+	require.Len(t, actions, 2)
+	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "filter", actions[0].Label)
+	assert.Equal(t, "A", actions[1].Key)
+	assert.Equal(t, "add", actions[1].Label)
 }
