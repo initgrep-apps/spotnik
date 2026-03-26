@@ -16,18 +16,22 @@ type VisualizerTickMsg time.Time
 // numFrames is the number of animation frames in the precomputed frame table.
 const numFrames = 40
 
+// NumPatterns is the number of available animation patterns.
+const NumPatterns = 3
+
 // Visualizer renders an animated braille-dot audio spectrum.
 // It maintains a precomputed frame table for deterministic, allocation-free animation.
 //
 // The frame table is generated once at construction time and regenerated when
-// SetSize() changes dimensions. View() simply indexes into the table — no work
-// per frame during animation.
+// SetSize() or SetPattern() changes dimensions or pattern. View() simply indexes
+// into the table — no work per frame during animation.
 type Visualizer struct {
 	th         theme.Theme
 	playing    bool
 	frameIndex int
 	width      int
 	height     int // number of display lines (1-4)
+	pattern    int // animation pattern index (0..NumPatterns-1)
 	interval   time.Duration
 	frames     [][]string // frames[frameIndex][lineIndex] = styled braille string
 }
@@ -59,7 +63,35 @@ func (v *Visualizer) SetSize(width, height int) {
 	}
 	v.width = width
 	v.height = height
-	v.frames = generateFrames(width, height)
+	v.frames = generateFrames(width, height, v.pattern)
+}
+
+// Pattern returns the current animation pattern index (0..NumPatterns-1).
+func (v *Visualizer) Pattern() int {
+	return v.pattern
+}
+
+// SetPattern selects an animation pattern and regenerates the frame table.
+// Values outside 0..NumPatterns-1 are clamped.
+func (v *Visualizer) SetPattern(p int) {
+	if p < 0 {
+		p = 0
+	}
+	if p >= NumPatterns {
+		p = NumPatterns - 1
+	}
+	if v.pattern == p {
+		return
+	}
+	v.pattern = p
+	if v.width > 0 && v.height > 0 {
+		v.frames = generateFrames(v.width, v.height, v.pattern)
+	}
+}
+
+// CyclePattern advances the animation pattern: 0→1→2→0.
+func (v *Visualizer) CyclePattern() {
+	v.SetPattern((v.pattern + 1) % NumPatterns)
 }
 
 // SetPlaying controls animation state.
@@ -128,70 +160,108 @@ func (v *Visualizer) tickCmd() tea.Cmd {
 	})
 }
 
-// generateFrames builds the precomputed frame table.
+// generateFrames builds the precomputed frame table for the given pattern.
 // Each frame is a []string — one string per line of display height.
-// Bar heights are derived from deterministic sine waves with per-frame phase offsets,
+// Bar heights are derived from deterministic math functions with per-frame phase offsets,
 // ensuring identical output for the same frameIndex across different Visualizer instances.
 //
-// Each column uses brailleChar(filledDots) to select the appropriate braille glyph
-// for the column's fill level within the character row. Multiple display lines
-// stack vertically to represent bars taller than 4 dots.
-func generateFrames(width, height int) [][]string {
-	// Pre-compute all frames.
+// Pattern 0: dual sine wave — two sine waves at different frequencies create a flowing wave.
+// Pattern 1: standing wave — interference of two counter-propagating waves creates nodes/antinodes.
+// Pattern 2: pulse/ripple — a narrow peak travels left-to-right and wraps, like a sonar ping.
+func generateFrames(width, height, pattern int) [][]string {
 	result := make([][]string, numFrames)
-
-	// Total dot-rows available: each display line holds 4 dot rows.
 	totalDotRows := height * 4
 
 	for f := 0; f < numFrames; f++ {
-		// phase shifts across the frame index for animation.
-		phaseShift := float64(f) * (2 * math.Pi / float64(numFrames))
+		colHeights := computeColumnHeights(width, totalDotRows, f, pattern)
+		result[f] = renderFrame(width, height, colHeights)
+	}
+	return result
+}
 
-		// Compute column heights (in dot rows, 0..totalDotRows).
-		colHeights := make([]int, width)
+// computeColumnHeights returns the bar height (in dot rows) for each column
+// in a single frame, based on the selected animation pattern.
+func computeColumnHeights(width, totalDotRows, frame, pattern int) []int {
+	colHeights := make([]int, width)
+	phaseShift := float64(frame) * (2 * math.Pi / float64(numFrames))
+
+	switch pattern {
+	case 1:
+		// Standing wave: interference of two counter-propagating sine waves.
+		// Creates stationary nodes (zero amplitude) and antinodes (max amplitude).
 		for col := 0; col < width; col++ {
-			// Combine two sine waves at different frequencies for visual interest.
+			x := float64(col) / float64(width) * 2 * math.Pi
+			// Two waves traveling in opposite directions sum to a standing wave.
+			wave1 := math.Sin(x*2 + phaseShift)
+			wave2 := math.Sin(x*2 - phaseShift)
+			val := (wave1 + wave2 + 2.0) / 4.0 // normalize to [0, 1]
+			val = clamp01(val)
+			colHeights[col] = int(val * float64(totalDotRows))
+		}
+	case 2:
+		// Pulse/ripple: a narrow Gaussian peak that travels left-to-right and wraps.
+		// The peak position advances by one full width over the frame cycle.
+		peakPos := float64(frame) / float64(numFrames) // 0..1 position across width
+		for col := 0; col < width; col++ {
+			x := float64(col) / float64(width)
+			// Distance from peak, wrapping around edges.
+			dist := math.Abs(x - peakPos)
+			if dist > 0.5 {
+				dist = 1.0 - dist
+			}
+			// Gaussian envelope: sigma controls pulse width.
+			sigma := 0.08
+			val := math.Exp(-(dist * dist) / (2 * sigma * sigma))
+			// Add a small trailing ripple for visual interest.
+			ripple := 0.15 * math.Exp(-(dist*dist)/(2*0.15*0.15)) * math.Sin(dist*30)
+			val = clamp01(val + ripple)
+			colHeights[col] = int(val * float64(totalDotRows))
+		}
+	default:
+		// Pattern 0: dual sine wave (original behavior).
+		for col := 0; col < width; col++ {
 			x := float64(col) / float64(width) * 2 * math.Pi
 			val := 0.5*(math.Sin(x+phaseShift)+1) +
 				0.3*(math.Sin(2*x+phaseShift*1.3)+1)*0.5 +
 				0.2*(math.Sin(3*x+phaseShift*0.7)+1)*0.5
-			// val is in [0, 1] approximately — clamp.
-			if val > 1.0 {
-				val = 1.0
-			}
-			if val < 0 {
-				val = 0
-			}
+			val = clamp01(val)
 			colHeights[col] = int(val * float64(totalDotRows))
 		}
-
-		// Build the display lines from top to bottom.
-		// Line 0 is the top; line height-1 is the bottom.
-		frameLines := make([]string, height)
-		for lineIdx := 0; lineIdx < height; lineIdx++ {
-			// This display line covers dot rows:
-			//   bottom dot row of this char = totalDotRows - lineIdx*4 - 1 (0-indexed from bottom)
-			//   bottom char row (lineIdx = height-1) covers dot rows 0-3.
-			lineBottom := (height - 1 - lineIdx) * 4 // dot row index of lowest dot in this char line
-			var sb strings.Builder
-			for col := 0; col < width; col++ {
-				h := colHeights[col]
-				// How many dots are filled in this character's slot?
-				// Dots within this char: rows lineBottom..lineBottom+3
-				filledInChar := h - lineBottom
-				if filledInChar < 0 {
-					filledInChar = 0
-				}
-				if filledInChar > 4 {
-					filledInChar = 4
-				}
-				sb.WriteRune(brailleChar(filledInChar))
-			}
-			frameLines[lineIdx] = sb.String()
-		}
-		result[f] = frameLines
 	}
-	return result
+	return colHeights
+}
+
+// renderFrame converts column heights into braille display lines.
+func renderFrame(width, height int, colHeights []int) []string {
+	frameLines := make([]string, height)
+	for lineIdx := 0; lineIdx < height; lineIdx++ {
+		lineBottom := (height - 1 - lineIdx) * 4
+		var sb strings.Builder
+		for col := 0; col < width; col++ {
+			h := colHeights[col]
+			filledInChar := h - lineBottom
+			if filledInChar < 0 {
+				filledInChar = 0
+			}
+			if filledInChar > 4 {
+				filledInChar = 4
+			}
+			sb.WriteRune(brailleChar(filledInChar))
+		}
+		frameLines[lineIdx] = sb.String()
+	}
+	return frameLines
+}
+
+// clamp01 clamps a value to [0, 1].
+func clamp01(v float64) float64 {
+	if v > 1.0 {
+		return 1.0
+	}
+	if v < 0 {
+		return 0
+	}
+	return v
 }
 
 // brailleChar returns a Unicode braille character for a given fill level (0-4).
