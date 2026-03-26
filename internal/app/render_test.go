@@ -75,9 +75,8 @@ func TestRenderHeader_FitsWidth(t *testing.T) {
 	a.width = 160
 	result := a.renderHeader()
 
-	// Strip ANSI escape codes to get the visual width.
-	stripped := stripANSI(result)
-	assert.Equal(t, 160, lipgloss.Width(stripped), "header should fit exactly the terminal width")
+	// lipgloss.Width() already handles ANSI escape codes internally.
+	assert.Equal(t, 160, lipgloss.Width(result), "header should fit exactly the terminal width")
 }
 
 func TestRenderHeader_FitsWidth_Narrow(t *testing.T) {
@@ -85,8 +84,7 @@ func TestRenderHeader_FitsWidth_Narrow(t *testing.T) {
 	a.width = 120
 	result := a.renderHeader()
 
-	stripped := stripANSI(result)
-	assert.Equal(t, 120, lipgloss.Width(stripped), "header should fit terminal width even at minimum")
+	assert.Equal(t, 120, lipgloss.Width(result), "header should fit terminal width even at minimum")
 }
 
 // --- Task 3: Global-only status bar tests ---
@@ -119,9 +117,8 @@ func TestRenderStatusBar_FitsWidth(t *testing.T) {
 	a.width = 160
 	result := a.renderStatusBar()
 
-	stripped := stripANSI(result)
 	// Status bar should not exceed terminal width.
-	assert.LessOrEqual(t, lipgloss.Width(stripped), 160, "status bar should not exceed terminal width")
+	assert.LessOrEqual(t, lipgloss.Width(result), 160, "status bar should not exceed terminal width")
 }
 
 // --- Legacy compatibility tests (renderStatusBar without hints) ---
@@ -203,25 +200,4 @@ func TestRenderGrid_AfterResize(t *testing.T) {
 
 	result := a.renderGrid()
 	assert.NotEmpty(t, result, "grid should render after resize")
-}
-
-// stripANSI removes ANSI escape codes from a string.
-// Used in render tests to measure visual width.
-func stripANSI(s string) string {
-	var out []rune
-	inEscape := false
-	for _, r := range s {
-		if r == '\x1b' {
-			inEscape = true
-			continue
-		}
-		if inEscape {
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEscape = false
-			}
-			continue
-		}
-		out = append(out, r)
-	}
-	return string(out)
 }

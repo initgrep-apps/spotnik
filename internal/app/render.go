@@ -264,7 +264,10 @@ func (a *App) renderHeader() string {
 	var right string
 	if device != nil {
 		name := truncateDeviceName(device.Name)
-		right = bgStyle.Render("◉ " + name + " ")
+		activeStyle := lipgloss.NewStyle().
+			Background(a.theme.StatusBarBg()).
+			Foreground(a.theme.DeviceActive())
+		right = activeStyle.Render("◉ " + name + " ")
 	} else {
 		right = bgStyle.Render("○ No device ")
 	}
