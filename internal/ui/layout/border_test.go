@@ -1,0 +1,643 @@
+package layout_test
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestMain forces TrueColor profile so ANSI codes are emitted in tests,
+// regardless of whether the test runner has a TTY attached.
+func TestMain(m *testing.M) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	os.Exit(m.Run())
+}
+
+// stripANSI removes ANSI escape sequences so we can test plain text content.
+func stripANSI(s string) string {
+	// lipgloss.Width strips ANSI for width calculation — we use a simple state machine.
+	result := make([]byte, 0, len(s))
+	inEsc := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			// End of escape sequence: 'm' for SGR, 'K' for EL, etc.
+			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+				inEsc = false
+			}
+			continue
+		}
+		result = append(result, s[i])
+	}
+	return string(result)
+}
+
+// ── Task 1 Tests: RenderPaneBorder basic behaviour ────────────────────────────
+
+func TestRenderPaneBorder_BasicCornerCharacters(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       20,
+		Height:      5,
+		Title:       "Test",
+		ToggleKey:   0,
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.GreaterOrEqual(t, len(lines), 1)
+
+	plain := stripANSI(lines[0])
+	assert.True(t, strings.HasPrefix(plain, "╭"), "top-left corner should be ╭")
+	assert.True(t, strings.HasSuffix(plain, "╮"), "top-right corner should be ╮")
+
+	// Check bottom border
+	lastLine := stripANSI(lines[len(lines)-1])
+	assert.True(t, strings.HasPrefix(lastLine, "╰"), "bottom-left corner should be ╰")
+	assert.True(t, strings.HasSuffix(lastLine, "╯"), "bottom-right corner should be ╯")
+}
+
+func TestRenderPaneBorder_WithToggleKey(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       30,
+		Height:      5,
+		Title:       "Playlists",
+		ToggleKey:   3,
+		AccentColor: th.PaneBorderPlaylists(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "³", "superscript 3 should appear in top border")
+	assert.Contains(t, topLine, "Playlists", "title should appear in top border")
+}
+
+func TestRenderPaneBorder_WithActions(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "f", Label: "filter"},
+		{Key: "n", Label: "new"},
+	}
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      5,
+		Title:       "Playlists",
+		ToggleKey:   3,
+		Actions:     actions,
+		AccentColor: th.PaneBorderPlaylists(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "ᐅ", "action prefix ᐅ should appear")
+	assert.Contains(t, topLine, "filter", "action label 'filter' should appear")
+	assert.Contains(t, topLine, "new", "action label 'new' should appear")
+}
+
+func TestRenderPaneBorder_WidthMatchesRequested(t *testing.T) {
+	th := theme.Load("black")
+	const wantWidth = 40
+	cfg := layout.BorderConfig{
+		Width:       wantWidth,
+		Height:      5,
+		Title:       "Queue",
+		ToggleKey:   2,
+		AccentColor: th.PaneBorderQueue(),
+		Focused:     false,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	for i, line := range lines {
+		w := lipgloss.Width(line)
+		assert.Equal(t, wantWidth, w, "line %d width should be %d, got %d: %q", i, wantWidth, w, stripANSI(line))
+	}
+}
+
+func TestRenderPaneBorder_HeightMatchesRequested(t *testing.T) {
+	th := theme.Load("black")
+	const wantHeight = 7
+	cfg := layout.BorderConfig{
+		Width:       30,
+		Height:      wantHeight,
+		Title:       "Albums",
+		AccentColor: th.PaneBorderAlbums(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	assert.Equal(t, wantHeight, len(lines), "should produce exactly %d lines", wantHeight)
+}
+
+func TestRenderPaneBorder_ContentLinesPaddedToFit(t *testing.T) {
+	th := theme.Load("black")
+	const w = 30
+	content := "hello"
+	cfg := layout.BorderConfig{
+		Width:       w,
+		Height:      3,
+		Title:       "Test",
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder(content, cfg)
+	lines := strings.Split(result, "\n")
+	// Content line is lines[1] — should be padded to width w
+	require.Len(t, lines, 3)
+	contentLine := lines[1]
+	assert.Equal(t, w, lipgloss.Width(contentLine), "content line should be width %d", w)
+}
+
+func TestRenderPaneBorder_FilterMode(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "f", Label: "filter"},
+		{Key: "n", Label: "new"},
+	}
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      5,
+		Title:       "Queue",
+		ToggleKey:   2,
+		Actions:     actions,
+		FilterQuery: "rock",
+		AccentColor: th.PaneBorderQueue(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "filtering:", "filter mode prefix should appear")
+	assert.Contains(t, topLine, "rock", "filter query should appear")
+	// Actions should NOT appear in filter mode
+	assert.NotContains(t, topLine, "new", "action labels should not appear in filter mode")
+}
+
+func TestRenderPaneBorder_NoToggleKey(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       30,
+		Height:      5,
+		Title:       "Request Flow",
+		ToggleKey:   0, // no toggle key
+		AccentColor: th.PaneBorderRequestFlow(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	// No superscript digits should appear
+	for _, sup := range []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸"} {
+		assert.NotContains(t, topLine, sup, "no superscript should appear when ToggleKey=0")
+	}
+	assert.Contains(t, topLine, "Request Flow", "title should still appear")
+}
+
+func TestRenderPaneBorder_EmptyActionsOnlyTitleAndDashes(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       40,
+		Height:      5,
+		Title:       "Albums",
+		ToggleKey:   4,
+		Actions:     nil, // empty actions
+		AccentColor: th.PaneBorderAlbums(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	// Only dashes after title
+	assert.NotContains(t, topLine, "ᐅ", "no action prefix without actions")
+	assert.Contains(t, topLine, "─", "dashes should appear")
+	assert.Contains(t, topLine, "Albums", "title should appear")
+}
+
+func TestRenderPaneBorder_FocusedStyleApplied(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       30,
+		Height:      5,
+		Title:       "Test",
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	focusedResult := layout.RenderPaneBorder("", cfg)
+
+	cfg.Focused = false
+	unfocusedResult := layout.RenderPaneBorder("", cfg)
+
+	// The outputs should differ — focused applies color, unfocused applies faint
+	assert.NotEqual(t, focusedResult, unfocusedResult, "focused and unfocused renders should differ")
+}
+
+func TestRenderPaneBorder_UnfocusedFaintStyle(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       30,
+		Height:      5,
+		Title:       "Test",
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     false,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	// Faint mode uses ANSI code 2 (dim)
+	assert.Contains(t, result, "\x1b[", "unfocused border should contain ANSI escape codes")
+}
+
+// ── Task 1: PaneBorderColor helper ───────────────────────────────────────────
+
+func TestPaneBorderColor_ReturnsCorrectColorPerPane(t *testing.T) {
+	th := theme.Load("black")
+	tests := []struct {
+		id   layout.PaneID
+		want lipgloss.Color
+	}{
+		{layout.PaneNowPlaying, th.PaneBorderNowPlaying()},
+		{layout.PaneQueue, th.PaneBorderQueue()},
+		{layout.PanePlaylists, th.PaneBorderPlaylists()},
+		{layout.PaneAlbums, th.PaneBorderAlbums()},
+		{layout.PaneLikedSongs, th.PaneBorderLikedSongs()},
+		{layout.PaneRecentlyPlayed, th.PaneBorderRecentlyPlayed()},
+		{layout.PaneTopTracks, th.PaneBorderTopTracks()},
+		{layout.PaneTopArtists, th.PaneBorderTopArtists()},
+		{layout.PaneRequestFlow, th.PaneBorderRequestFlow()},
+		{layout.PaneNetworkLog, th.PaneBorderNetworkLog()},
+	}
+	for _, tt := range tests {
+		got := layout.PaneBorderColor(tt.id, th)
+		assert.Equal(t, tt.want, got, "pane %d color mismatch", tt.id)
+	}
+}
+
+func TestPaneBorderColor_UnknownIDFallback(t *testing.T) {
+	th := theme.Load("black")
+	// Unknown pane ID should not panic — returns some color
+	got := layout.PaneBorderColor(layout.PaneID(99), th)
+	assert.NotEmpty(t, string(got), "unknown ID should return non-empty fallback color")
+}
+
+// ── Task 2 Tests: Edge cases and content truncation ───────────────────────────
+
+func TestRenderPaneBorder_NarrowBorderDropsActions(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "f", Label: "filter"},
+		{Key: "n", Label: "new"},
+	}
+	cfg := layout.BorderConfig{
+		Width:   15,
+		Height:  5,
+		Title:   "Queue",
+		Actions: actions,
+		Focused: true,
+		Theme:   th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	// At width 15, actions should be dropped to fit
+	assert.NotContains(t, topLine, "filter", "actions should be dropped on narrow border")
+}
+
+func TestRenderPaneBorder_VeryNarrowTruncatesTitle(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:   10,
+		Height:  5,
+		Title:   "A Very Long Title",
+		Focused: true,
+		Theme:   th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	assert.True(t, strings.HasPrefix(topLine, "╭"), "should still start with ╭")
+	assert.True(t, strings.HasSuffix(topLine, "╮"), "should still end with ╮")
+	// Width must still be exact
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		assert.Equal(t, 10, w, "line width should still be 10")
+	}
+}
+
+func TestRenderPaneBorder_ContentShorterThanHeightPadded(t *testing.T) {
+	th := theme.Load("black")
+	// Content is 1 line but height=5 means we need 3 content lines (5-2 borders)
+	cfg := layout.BorderConfig{
+		Width:       30,
+		Height:      5,
+		Title:       "Test",
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("one line", cfg)
+	lines := strings.Split(result, "\n")
+	assert.Equal(t, 5, len(lines), "should be exactly 5 lines")
+}
+
+func TestRenderPaneBorder_ContentWiderThanWidthTruncated(t *testing.T) {
+	th := theme.Load("black")
+	const w = 20
+	// Content wider than the interior (w-2 = 18 chars)
+	longContent := strings.Repeat("X", 50)
+	cfg := layout.BorderConfig{
+		Width:       w,
+		Height:      3,
+		Title:       "T",
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder(longContent, cfg)
+	lines := strings.Split(result, "\n")
+	require.Len(t, lines, 3)
+
+	// All lines must be exactly w columns wide
+	for i, line := range lines {
+		assert.Equal(t, w, lipgloss.Width(line), "line %d should be width %d", i, w)
+	}
+	// Content line should contain truncation marker
+	contentLine := stripANSI(lines[1])
+	assert.Contains(t, contentLine, "…", "truncated content should end with ellipsis")
+}
+
+func TestRenderPaneBorder_UnicodeContentMeasuredCorrectly(t *testing.T) {
+	th := theme.Load("black")
+	const w = 20
+	// CJK characters are 2 columns wide each
+	cjkContent := "日本語テスト" // 6 chars × 2 columns = 12 columns
+	cfg := layout.BorderConfig{
+		Width:       w,
+		Height:      3,
+		Title:       "T",
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder(cjkContent, cfg)
+	lines := strings.Split(result, "\n")
+	require.Len(t, lines, 3)
+
+	for i, line := range lines {
+		w := lipgloss.Width(line)
+		assert.Equal(t, 20, w, "line %d with CJK content should be exactly 20 wide", i)
+	}
+}
+
+func TestRenderPaneBorder_ActionPrefixCharacterWidth(t *testing.T) {
+	// Verify that ᐅ (U+1405) measures as 1 column wide
+	width := lipgloss.Width("ᐅ")
+	assert.Equal(t, 1, width, "ᐅ (U+1405) should be 1 column wide")
+}
+
+func TestRenderPaneBorder_SuperscriptCharacterWidth(t *testing.T) {
+	// Verify superscripts measure as 1 column wide
+	for _, sup := range []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸"} {
+		width := lipgloss.Width(sup)
+		assert.Equal(t, 1, width, "superscript %q should be 1 column wide", sup)
+	}
+}
+
+// ── Task 3 Tests: Integration scenarios ──────────────────────────────────────
+
+func TestRenderPaneBorder_NowPlayingBorder(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "s", Label: "shuffle"},
+		{Key: "r", Label: "repeat"},
+	}
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      10,
+		Title:       "Now Playing",
+		ToggleKey:   1,
+		Actions:     actions,
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	assert.Equal(t, 10, len(lines), "NowPlaying border should be 10 lines tall")
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "¹", "toggle key 1 superscript")
+	assert.Contains(t, topLine, "Now Playing", "title")
+	assert.Contains(t, topLine, "shuffle", "shuffle action")
+	assert.Contains(t, topLine, "repeat", "repeat action")
+
+	for i, line := range lines {
+		assert.Equal(t, 60, lipgloss.Width(line), "line %d should be exactly 60 wide", i)
+	}
+}
+
+func TestRenderPaneBorder_PlaylistsBorder(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "f", Label: "filter"},
+		{Key: "n", Label: "new"},
+		{Key: "r", Label: "rename"},
+		{Key: "x", Label: "delete"},
+	}
+	cfg := layout.BorderConfig{
+		Width:       80,
+		Height:      15,
+		Title:       "Playlists",
+		ToggleKey:   3,
+		Actions:     actions,
+		AccentColor: th.PaneBorderPlaylists(),
+		Focused:     false,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	assert.Equal(t, 15, len(lines))
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "³")
+	assert.Contains(t, topLine, "Playlists")
+
+	for i, line := range lines {
+		assert.Equal(t, 80, lipgloss.Width(line), "line %d width", i)
+	}
+}
+
+func TestRenderPaneBorder_QueueWithActiveFilter(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "f", Label: "filter"},
+		{Key: "x", Label: "clear"},
+	}
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      8,
+		Title:       "Queue",
+		ToggleKey:   2,
+		Actions:     actions,
+		FilterQuery: "rock",
+		AccentColor: th.PaneBorderQueue(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	assert.Equal(t, 8, len(lines))
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "filtering:")
+	assert.Contains(t, topLine, "rock")
+	// Original actions should not appear
+	assert.NotContains(t, topLine, "clear")
+
+	for i, line := range lines {
+		assert.Equal(t, 60, lipgloss.Width(line), "line %d width", i)
+	}
+}
+
+func TestRenderPaneBorder_PageBRequestFlowNoToggleKey(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       70,
+		Height:      12,
+		Title:       "Request Flow",
+		ToggleKey:   0, // Page B — no toggle key
+		AccentColor: th.PaneBorderRequestFlow(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	assert.Equal(t, 12, len(lines))
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "Request Flow")
+	for _, sup := range []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸"} {
+		assert.NotContains(t, topLine, sup)
+	}
+
+	for i, line := range lines {
+		assert.Equal(t, 70, lipgloss.Width(line), "line %d width", i)
+	}
+}
+
+func TestRenderPaneBorder_ExactDimensions(t *testing.T) {
+	th := theme.Load("black")
+	tests := []struct {
+		w, h int
+	}{
+		{20, 4},
+		{40, 8},
+		{80, 20},
+		{100, 30},
+	}
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			cfg := layout.BorderConfig{
+				Width:       tt.w,
+				Height:      tt.h,
+				Title:       "Test",
+				AccentColor: th.PaneBorderNowPlaying(),
+				Focused:     true,
+				Theme:       th,
+			}
+			result := layout.RenderPaneBorder("", cfg)
+			lines := strings.Split(result, "\n")
+			assert.Equal(t, tt.h, len(lines), "height mismatch for %dx%d", tt.w, tt.h)
+			for i, line := range lines {
+				assert.Equal(t, tt.w, lipgloss.Width(line), "line %d width mismatch for %dx%d", i, tt.w, tt.h)
+			}
+		})
+	}
+}
+
+func TestRenderPaneBorder_SideBySideNoOverlap(t *testing.T) {
+	th := theme.Load("black")
+	makePane := func(title string, w, h int) string {
+		cfg := layout.BorderConfig{
+			Width:       w,
+			Height:      h,
+			Title:       title,
+			AccentColor: th.PaneBorderNowPlaying(),
+			Focused:     false,
+			Theme:       th,
+		}
+		return layout.RenderPaneBorder("", cfg)
+	}
+
+	left := makePane("Left", 40, 10)
+	right := makePane("Right", 40, 10)
+	combined := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+
+	// Combined width should be 80 (40+40)
+	combinedLines := strings.Split(combined, "\n")
+	for i, line := range combinedLines {
+		assert.Equal(t, 80, lipgloss.Width(line), "side-by-side line %d should be 80 wide", i)
+	}
+}
+
+func TestRenderPaneBorder_AllThemesAccentColorsChange(t *testing.T) {
+	themeIDs := theme.Available()
+	results := make(map[string]string)
+
+	for _, id := range themeIDs {
+		th := theme.Load(id)
+		cfg := layout.BorderConfig{
+			Width:       30,
+			Height:      5,
+			Title:       "Test",
+			AccentColor: th.PaneBorderNowPlaying(),
+			Focused:     true,
+			Theme:       th,
+		}
+		results[id] = layout.RenderPaneBorder("", cfg)
+	}
+
+	// All theme renders should produce the correct dimensions
+	for _, id := range themeIDs {
+		lines := strings.Split(results[id], "\n")
+		assert.Equal(t, 5, len(lines), "theme %s should produce 5 lines", id)
+		for i, line := range lines {
+			assert.Equal(t, 30, lipgloss.Width(line), "theme %s line %d width", id, i)
+		}
+	}
+}
