@@ -65,23 +65,7 @@
 | 54 | Fix Table Alignment | `54-fix-table-alignment.md` | 🔲 Ready | 43 | — |
 | 55 | Fix Recently Played Empty | `55-fix-recently-played-empty.md` | 🔲 Ready | 47 | — |
 | 56 | Fix Request Flow Data | `56-fix-request-flow-data.md` | 🔲 Ready | 51 | — |
-
----
-
-## Versioning
-
-| Version | Includes |
-|---|---|
-| v0.1.0 | Features 1-3 (theme + auth + playback) |
-| v0.2.0 | Features 4-5 (library + search) |
-| v0.3.0 | Features 6-7 (queue + devices) |
-| v0.4.0 | Feature 8 (stats) |
-| v1.0.0 | Feature 9 (playlist manager) |
-| v1.1.0 | Features 10-18 (bug fixes + error architecture) |
-| v2.0.0 | Features 19-27 (architecture improvements) |
-| v3.0.0 | Features 29-33 (architecture baseline) |
-| v3.1.0 | Features 34-39 (issues cleanup) |
-| v4.0.0 | Features 40-53 (btop-inspired UI redesign) |
+| 57 | CI/CD & Release Pipeline | `57-cicd-release-pipeline.md` | 🔲 Ready | — | — |
 
 ---
 
