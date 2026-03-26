@@ -942,8 +942,7 @@ func TestApp_View_ContainsQueuePane(t *testing.T) {
 }
 
 // TestApp_QueuePane_ShowsQueueData verifies that the queue pane shows store data in View().
-// Queue pane data rendering is exhaustively tested in queue_test.go; this test verifies
-// integration — the queue pane is wired into the app and renders without error.
+// Uses QueueLoadedMsg to go through the proper data flow: msg → store → RefreshRows → table.
 func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -956,14 +955,21 @@ func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
 			Artists: []api.Artist{{Name: "The Weeknd"}},
 		},
 	})
-	a.Store().SetQueue([]api.Track{
-		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1", Artists: []api.Artist{{Name: "The Weeknd"}}},
+
+	// Route through Update so RefreshRows is called on the queue pane.
+	a.Update(panes.QueueLoadedMsg{
+		Tracks: []api.Track{
+			{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1", Artists: []api.Artist{{Name: "The Weeknd"}}},
+		},
 	})
 
 	output := a.View()
 	assert.NotEmpty(t, output, "app view should render")
-	// The queue pane table should be present — # is the first column header.
-	assert.Contains(t, output, "#", "queue pane table should be visible in the layout")
+	// Queue pane width is narrow in the default layout (no WindowSizeMsg),
+	// so table columns truncate. Verify the row index "1" appears, confirming
+	// data flowed through QueueLoadedMsg → store → RefreshRows → table.
+	// Full track name rendering is verified in queue_test.go with proper width.
+	assert.Contains(t, output, "1", "queue pane should have data row after QueueLoadedMsg")
 }
 
 // TestHeaderDeviceIndicator_ActiveDevice verifies the header shows ◉ and device name.

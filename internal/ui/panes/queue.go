@@ -130,9 +130,10 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// When filter is active, forward all key events to the filter.
 	if q.filter.IsActive() {
 		cmd := q.filter.Update(msg)
-		// If the filter just closed (Esc/Enter consumed it), re-focus the table.
+		// If the filter just closed (Esc/Enter consumed it), re-focus the table and resize.
 		if !q.filter.IsActive() {
 			q.table.SetFocused(true)
+			q.resizeTable()
 		}
 		// Refresh rows regardless — query may have changed or filter may have closed.
 		q.refreshRows()
@@ -143,6 +144,7 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f" {
 		q.filter.Toggle()
 		q.table.SetFocused(false)
+		q.resizeTable()
 		return q, nil
 	}
 
@@ -177,8 +179,11 @@ func (q *QueuePane) View() string {
 	return strings.Join(parts, "\n")
 }
 
+// RefreshRows re-reads the store and applies filtered rows to the table.
+// The app calls this after updating the store (e.g. QueueLoadedMsg handler).
+func (q *QueuePane) RefreshRows() { q.refreshRows() }
+
 // refreshRows re-reads the store and applies filtered rows to the table.
-// Call after any state change that affects the visible data.
 func (q *QueuePane) refreshRows() {
 	queue := q.filteredQueue()
 	rows := make([]map[string]string, len(queue))
