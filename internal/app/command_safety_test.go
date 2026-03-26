@@ -289,7 +289,7 @@ func TestPlaybackErrors_CounterResetsOnSuccess(t *testing.T) {
 		Device:    &api.Device{VolumePercent: 50},
 	}
 	_, cmd := a.Update(panes.PlaybackStateFetchedMsg{State: successState})
-	// Success may or may not produce a cmd (PlayerPane.Update may return one). Just no error toast.
+	// Success may or may not produce a cmd (NowPlayingPane.Update may return one). Just no error toast.
 	_ = cmd
 
 	// Now send 4 more errors — should still not toast (counter was reset to 0).
