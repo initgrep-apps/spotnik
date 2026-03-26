@@ -29,7 +29,7 @@ var toggleKeyMap = map[rune]layout.PaneID{
 func isPlaybackKey(m tea.KeyMsg) bool {
 	if m.Type == tea.KeyRunes {
 		switch string(m.Runes) {
-		case " ", "n", "+", "-", "s", "r":
+		case " ", "n", "+", "-", "s", "r", "v":
 			return true
 		}
 	}

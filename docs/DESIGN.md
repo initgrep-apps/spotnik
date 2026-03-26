@@ -722,6 +722,7 @@ Keys `1`-`8` toggle pane visibility rather than jumping focus. Use `Tab`/`Shift+
 | `+` / `-` | Volume up/down |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat |
+| `v` | Cycle visualizer animation pattern |
 
 These keys always route to `PaneNowPlaying` regardless of which pane is focused.
 
@@ -754,6 +755,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `+` / `-` | Volume up/down | Always |
 | `s` | Toggle shuffle | Always |
 | `r` | Cycle repeat | Always |
+| `v` | Cycle visualizer animation pattern | Always |
 | **Navigation** | | |
 | `Tab` | Next pane focus | Visible panes |
 | `Shift+Tab` | Previous pane focus | Visible panes |
