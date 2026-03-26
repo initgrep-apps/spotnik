@@ -186,6 +186,12 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	topTracksPane := panes.NewTopTracksPane(s, t, false)
 	topArtistsPane := panes.NewTopArtistsPane(s, t, false)
 
+	// Create Page B panes.
+	// NOTE: RequestFlowPane holds *api.Gateway directly — the only pane that does so.
+	// It calls Gateway.Snapshot() (read-only, thread-safe) but makes no API calls.
+	requestFlowPane := panes.NewRequestFlowPane(gw, s, t)
+	networkLogPane := panes.NewNetworkLogPane(s, t)
+
 	panesMap := map[layout.PaneID]layout.Pane{
 		layout.PaneNowPlaying:     nowPlayingPane,
 		layout.PaneQueue:          queuePane,
@@ -195,6 +201,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		layout.PaneRecentlyPlayed: recentlyPlayedPane,
 		layout.PaneTopTracks:      topTracksPane,
 		layout.PaneTopArtists:     topArtistsPane,
+		layout.PaneRequestFlow:    requestFlowPane,
+		layout.PaneNetworkLog:     networkLogPane,
 	}
 
 	searchPane := panes.NewSearchOverlay(s, t)
@@ -467,6 +475,30 @@ func (a *App) topArtistsPane() *panes.TopArtistsPane {
 	}
 	if tp, ok := p.(*panes.TopArtistsPane); ok {
 		return tp
+	}
+	return nil
+}
+
+// RequestFlowPane returns the RequestFlowPane from the panes map (exported for testing).
+func (a *App) RequestFlowPane() *panes.RequestFlowPane {
+	p, ok := a.panes[layout.PaneRequestFlow]
+	if !ok {
+		return nil
+	}
+	if rfp, ok := p.(*panes.RequestFlowPane); ok {
+		return rfp
+	}
+	return nil
+}
+
+// NetworkLogPane returns the NetworkLogPane from the panes map (exported for testing).
+func (a *App) NetworkLogPane() *panes.NetworkLogPane {
+	p, ok := a.panes[layout.PaneNetworkLog]
+	if !ok {
+		return nil
+	}
+	if nlp, ok := p.(*panes.NetworkLogPane); ok {
+		return nlp
 	}
 	return nil
 }
@@ -788,6 +820,40 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Forward TickMsg to Page B panes so they refresh their data.
+		if rfp := a.RequestFlowPane(); rfp != nil {
+			updated, _ := rfp.Update(m)
+			if p, ok := updated.(*panes.RequestFlowPane); ok {
+				a.panes[layout.PaneRequestFlow] = p
+			}
+		}
+		if nlp := a.NetworkLogPane(); nlp != nil {
+			updated, _ := nlp.Update(m)
+			if p, ok := updated.(*panes.NetworkLogPane); ok {
+				a.panes[layout.PaneNetworkLog] = p
+			}
+		}
+
+		// Send current polling snapshot to RequestFlowPane for the status strip.
+		// This is done by sending a PollingSnapshotMsg after the TickMsg.
+		idle := a.isIdle()
+		var idleSecs int
+		if idle {
+			idleSecs = int(time.Since(a.lastInteraction).Seconds())
+		}
+		playbackIntervalForSnap, _ := a.pollIntervals()
+		pollingSnapshot := panes.PollingSnapshotMsg{
+			TickIntervalMs: playbackIntervalForSnap * 1000,
+			IsIdle:         idle,
+			IdleSecs:       idleSecs,
+		}
+		if rfp := a.RequestFlowPane(); rfp != nil {
+			updated, _ := rfp.Update(pollingSnapshot)
+			if p, ok := updated.(*panes.RequestFlowPane); ok {
+				a.panes[layout.PaneRequestFlow] = p
+			}
+		}
+
 		nextTick := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		})
@@ -823,13 +889,26 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	case components.VisualizerTickMsg:
-		// Forward VisualizerTickMsg to NowPlaying pane.
+		// Forward VisualizerTickMsg to NowPlaying pane and Page B RequestFlowPane.
+		// Both panes share the 200ms animation tick for visual consistency.
+		var visCmds []tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {
 			updated, cmd := np.Update(m)
 			if pp, ok := updated.(*panes.NowPlayingPane); ok {
 				a.panes[layout.PaneNowPlaying] = pp
 			}
-			return a, cmd
+			if cmd != nil {
+				visCmds = append(visCmds, cmd)
+			}
+		}
+		if rfp := a.RequestFlowPane(); rfp != nil {
+			updated, _ := rfp.Update(m)
+			if p, ok := updated.(*panes.RequestFlowPane); ok {
+				a.panes[layout.PaneRequestFlow] = p
+			}
+		}
+		if len(visCmds) > 0 {
+			return a, tea.Batch(visCmds...)
 		}
 		return a, nil
 
