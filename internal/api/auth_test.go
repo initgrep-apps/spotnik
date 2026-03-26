@@ -406,6 +406,7 @@ func TestRefresh_NoRefreshTokenInResponse(t *testing.T) {
 func TestSpotifyScopes_NotEmpty(t *testing.T) {
 	assert.NotEmpty(t, api.SpotifyScopes)
 	assert.Contains(t, api.SpotifyScopes, "user-read-playback-state")
+	assert.Contains(t, api.SpotifyScopes, "user-read-recently-played")
 }
 
 // TestBuildTokenEndpoint_EmptyUsesProduction verifies that empty baseURL
