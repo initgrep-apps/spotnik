@@ -100,6 +100,9 @@ func (p *NetworkLogPane) SetFocused(focused bool) {
 // IsFocused returns whether this pane has keyboard focus.
 func (p *NetworkLogPane) IsFocused() bool { return p.focused }
 
+// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
+func (p *NetworkLogPane) HasActiveFilter() bool { return p.filter.IsActive() }
+
 // SelectedIndex returns the current table cursor row (0-based).
 // Exported for testing.
 func (p *NetworkLogPane) SelectedIndex() int { return p.table.SelectedIndex() }

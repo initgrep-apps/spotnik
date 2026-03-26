@@ -90,6 +90,9 @@ func (r *RecentlyPlayedPane) Init() tea.Cmd { return nil }
 // IsFocused returns true when the pane has keyboard focus.
 func (r *RecentlyPlayedPane) IsFocused() bool { return r.focused }
 
+// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
+func (r *RecentlyPlayedPane) HasActiveFilter() bool { return r.filter.IsActive() }
+
 // SetFocused updates the keyboard focus state.
 func (r *RecentlyPlayedPane) SetFocused(focused bool) {
 	r.focused = focused
