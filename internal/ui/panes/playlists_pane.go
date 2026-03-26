@@ -119,7 +119,6 @@ func (p *PlaylistsPane) Actions() []layout.Action {
 		{Key: "f", Label: "filter"},
 		{Key: "n", Label: "new"},
 		{Key: "r", Label: "rename"},
-		{Key: "x", Label: "delete"},
 	}
 }
 
@@ -236,30 +235,19 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p, nil
 
 	case key.Type == tea.KeyRunes && string(key.Runes) == "n":
+		// TODO(feature-53): integrate textinput to collect playlist name from user
 		return p, func() tea.Msg {
 			return PlaylistCreateRequestMsg{Name: "New Playlist"}
 		}
 
 	case key.Type == tea.KeyRunes && string(key.Runes) == "r":
+		// TODO(feature-53): integrate textinput to collect new name from user
 		playlist := p.filteredPlaylist()
 		idx := p.table.SelectedIndex()
 		if idx >= 0 && idx < len(playlist) {
 			pl := playlist[idx]
 			return p, func() tea.Msg {
 				return PlaylistRenameRequestMsg{PlaylistID: pl.ID, NewName: pl.Name}
-			}
-		}
-		return p, nil
-
-	case key.Type == tea.KeyRunes && string(key.Runes) == "x":
-		playlist := p.filteredPlaylist()
-		idx := p.table.SelectedIndex()
-		if idx >= 0 && idx < len(playlist) {
-			pl := playlist[idx]
-			return p, func() tea.Msg {
-				// In list view, 'x' maps to remove the playlist itself.
-				// Per spec, use PlaylistRemoveRequestMsg — the playlist URI is its context.
-				return PlaylistRemoveRequestMsg{PlaylistID: pl.ID, TrackURI: pl.URI}
 			}
 		}
 		return p, nil

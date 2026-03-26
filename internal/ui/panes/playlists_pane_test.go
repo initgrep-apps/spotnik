@@ -71,7 +71,6 @@ func TestPlaylistsPane_Actions_ListView(t *testing.T) {
 	assert.Contains(t, keys, "f", "should have filter action")
 	assert.Contains(t, keys, "n", "should have new action")
 	assert.Contains(t, keys, "r", "should have rename action")
-	assert.Contains(t, keys, "x", "should have delete action")
 }
 
 // TestPlaylistsPane_Actions_FilterActive returns close action when filter is active.

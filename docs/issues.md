@@ -29,4 +29,15 @@
 
 ### Investigation Needed
 
-- [ ] **Table emptyBorder may add phantom blank lines** — `emptyBorder` in `components/table.go` uses space `" "` for Top/Bottom border characters. bubble-table may still render these as blank lines above the header and below the last row, consuming vertical space. The `pageSize` calculation (`height - 1`) does not account for these extra lines. Verify during Feature 46 (Queue Pane Migration) when the Table component is first used with real data, and adjust `pageSize` if needed.
+- [x] **Table emptyBorder may add phantom blank lines** — Fixed in PR #51: pageSize overhead formula adjusted to account for border lines.
+
+---
+
+## From PR #52 Review — Library Split (2026-03-26)
+
+### UX Gaps
+
+- [ ] **PlaylistsPane `n` key creates with hardcoded "New Playlist"** — Needs textinput integration to collect user-specified name before emitting `PlaylistCreateRequestMsg`. The old `PlaylistManager` had a `textinput.Model` for this.
+- [ ] **PlaylistsPane `r` key sends current name as NewName** — `PlaylistRenameRequestMsg` gets `pl.Name` (current name) instead of a new name. Needs textinput integration to collect the new name. The old `PlaylistManager` had a `textinput.Model` for this.
+- [ ] **PlaylistsPane `Title()` calls `store.PlaylistTracks()` on every render** — Could cache the track count in a field updated in `refreshTrackRows()` instead of reading from store on every `Title()` call.
+- [ ] **Playlist deletion (`x` key in list view) removed** — The `x` key was using `PlaylistRemoveRequestMsg` (track removal) for playlist deletion. Removed the key since playlist unfollow requires a different message type (`PlaylistUnfollowRequestMsg`). Add proper playlist deletion support when needed.
