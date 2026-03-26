@@ -76,7 +76,7 @@ type App struct {
 	devices api.DevicesAPI
 	userAPI api.UserAPI
 
-	playerPane  *panes.PlayerPane
+	playerPane  *panes.NowPlayingPane
 	libraryPane *panes.LibraryPane
 	queuePane   *panes.QueuePane
 	searchPane  *panes.SearchOverlay
@@ -193,7 +193,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	s := state.New()
 	gw := api.NewGateway()
 
-	playerPane := panes.NewPlayerPane(s, t, true)
+	playerPane := panes.NewNowPlayingPane(s, t, true)
 	libraryPane := panes.NewLibraryPane(s, t, false)
 	queuePane := panes.NewQueuePane(s, t, false)
 	searchPane := panes.NewSearchOverlay(s, t)
@@ -714,7 +714,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.TickMsg:
 		// Always forward to playerPane for progress bar animation.
 		updatedPane, _ := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
+		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
 			a.playerPane = pp
 		}
 
@@ -842,7 +842,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Data fetched during splash is stored but splash stays visible
 		// for the full 5s duration — the splashDismissMsg timer handles transition.
 		updatedPane, cmd := a.playerPane.Update(m)
-		if pp, ok := updatedPane.(*panes.PlayerPane); ok {
+		if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
 			a.playerPane = pp
 		}
 		return a, cmd
