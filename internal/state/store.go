@@ -97,7 +97,7 @@ type Store struct {
 	playlistTracks map[string][]domain.Track
 
 	// playingPlaylistID is the Spotify playlist ID that is currently playing.
-	// Used by PlaylistManager to render the ▶ indicator next to the active playlist.
+	// Used by PlaylistsPane to render the ▶ indicator next to the active playlist.
 	playingPlaylistID string
 
 	// netLog records all API calls for the network log panel.
