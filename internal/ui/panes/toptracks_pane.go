@@ -199,8 +199,10 @@ func (p *TopTracksPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 	p.timeRange = nextRange
 	p.refreshRows()
 
-	// Check if data for this range is already cached.
-	if p.store.TopTracks(nextRange) != nil {
+	// Check if data for this range is already cached and fresh.
+	// Use StatsStale instead of nil check — an empty slice from a prior fetch
+	// is a valid cache hit, but StatsStale correctly uses fetchedAt timestamps.
+	if !p.store.StatsStale(nextRange) {
 		return p, nil
 	}
 

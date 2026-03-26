@@ -41,3 +41,11 @@
 - [ ] **PlaylistsPane `r` key sends current name as NewName** — `PlaylistRenameRequestMsg` gets `pl.Name` (current name) instead of a new name. Needs textinput integration to collect the new name. The old `PlaylistManager` had a `textinput.Model` for this.
 - [ ] **PlaylistsPane `Title()` calls `store.PlaylistTracks()` on every render** — Could cache the track count in a field updated in `refreshTrackRows()` instead of reading from store on every `Title()` call.
 - [ ] **Playlist deletion (`x` key in list view) removed** — The `x` key was using `PlaylistRemoveRequestMsg` (track removal) for playlist deletion. Removed the key since playlist unfollow requires a different message type (`PlaylistUnfollowRequestMsg`). Add proper playlist deletion support when needed.
+
+---
+
+## From PR #53 Review — Stats Split (2026-03-26)
+
+### Data Gap
+
+- [ ] **TopTracksPane "Pop" column always shows "--"** — `domain.Track` lacks a `Popularity` field. The Spotify top-tracks API returns popularity, but it's not captured in the domain model. Either add `Popularity int` to `domain.Track` and populate the column, or replace the column with extra width for Track/Artist.

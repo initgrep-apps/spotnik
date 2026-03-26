@@ -190,8 +190,8 @@ func (a *TopArtistsPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 	a.timeRange = nextRange
 	a.refreshRows()
 
-	// Check if data for this range is already cached.
-	if a.store.TopArtists(nextRange) != nil {
+	// Check if data for this range is already cached and fresh.
+	if !a.store.StatsStale(nextRange) {
 		return a, nil
 	}
 
