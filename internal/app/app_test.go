@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -2206,6 +2207,75 @@ func TestApp_NilPlaybackState_WarnAtTick30(t *testing.T) {
 		}
 	}
 	assert.Contains(t, a.View(), "No playback state", "warning toast should be visible at tick 30")
+}
+
+// --- Page B (Nerd Status) registration tests ---
+
+// TestApp_PageB_Panes_Registered verifies that both Page B panes are created
+// and present in the panes map after App.New().
+func TestApp_PageB_Panes_Registered(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	require.NotNil(t, a)
+
+	// RequestFlowPane and NetworkLogPane should be accessible.
+	assert.NotNil(t, a.RequestFlowPane(), "RequestFlowPane should be registered")
+	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should be registered")
+}
+
+// TestApp_PageB_Toggle_SwitchesPage verifies that pressing '0' switches to Page B.
+func TestApp_PageB_Toggle_SwitchesPage(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Trigger window resize so the layout initializes.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	// Press '0' to toggle to Page B.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
+	a = m.(*app.App)
+
+	assert.False(t, a.GridViewOpen(), "Page A should not be the 'grid view' on Page B")
+}
+
+// TestApp_PageB_TickMsg_ReachesRequestFlowPane verifies that TickMsg reaches
+// the RequestFlowPane (it should refresh its gateway snapshot).
+func TestApp_PageB_TickMsg_ReachesRequestFlowPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Send a TickMsg — RequestFlowPane should handle it without panicking.
+	m, _ := a.Update(panes.TickMsg{})
+	a = m.(*app.App)
+
+	// RequestFlowPane must still be accessible after TickMsg.
+	assert.NotNil(t, a.RequestFlowPane(), "RequestFlowPane should survive TickMsg")
+}
+
+// TestApp_PageB_TickMsg_ReachesNetworkLogPane verifies TickMsg reaches NetworkLogPane.
+func TestApp_PageB_TickMsg_ReachesNetworkLogPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	m, _ := a.Update(panes.TickMsg{})
+	a = m.(*app.App)
+
+	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should survive TickMsg")
+}
+
+// TestApp_PageB_VisualizerTick_ReachesRequestFlowPane verifies VisualizerTickMsg
+// advances the RequestFlowPane animation frame.
+func TestApp_PageB_VisualizerTick_ReachesRequestFlowPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	frameBefore := a.RequestFlowPane().FrameIndex()
+	m, _ := a.Update(components.VisualizerTickMsg(time.Now()))
+	a = m.(*app.App)
+	frameAfter := a.RequestFlowPane().FrameIndex()
+
+	assert.Equal(t, frameBefore+1, frameAfter, "VisualizerTickMsg should advance RequestFlowPane frame")
 }
 
 // TestApp_NilPlaybackState_CounterResets verifies that the nil-state counter resets

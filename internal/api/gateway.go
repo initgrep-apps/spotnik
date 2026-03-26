@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
 // Priority classifies a request so the gateway can apply different policies.
@@ -144,6 +146,54 @@ func NewGateway() *Gateway {
 		bucket:    newTokenBucket(10, 10),
 		semaphore: make(chan struct{}, 5),
 		inflight:  make(map[RequestKey]*inflightEntry),
+	}
+}
+
+// Snapshot returns a read-only snapshot of the gateway's current internal state.
+// Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
+// Best-effort point-in-time: each field group is read under its own lock, so the
+// snapshot is not guaranteed to be atomically consistent across all fields.
+func (g *Gateway) Snapshot() domain.GatewayState {
+	// Read the token bucket level without consuming a token.
+	g.bucket.mu.Lock()
+	// Apply any pending refill before reading so the value is current.
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	tokens := g.bucket.tokens + elapsed*g.bucket.rate
+	if tokens > g.bucket.max {
+		tokens = g.bucket.max
+	}
+	tokenMax := int(g.bucket.max)
+	g.bucket.mu.Unlock()
+
+	// Read gateway fields under the gateway mutex.
+	g.mu.Lock()
+	backoffRemaining := time.Until(g.backoffUntil).Seconds()
+	if backoffRemaining < 0 {
+		backoffRemaining = 0
+	}
+	// DedupWaiters = number of in-flight GET requests in the dedup map.
+	// Each entry represents one primary in-flight call. Secondary goroutines
+	// that join as waiters are not separately tracked here.
+	dedupWaiters := len(g.inflight)
+	inFlightKeys := make([]string, 0, len(g.inflight))
+	for k := range g.inflight {
+		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
+	}
+	g.mu.Unlock()
+
+	// Concurrent active = semaphore slots currently occupied.
+	concurrentMax := cap(g.semaphore)
+	concurrentActive := len(g.semaphore)
+
+	return domain.GatewayState{
+		TokensAvailable:  int(tokens),
+		TokensMax:        tokenMax,
+		ConcurrentActive: concurrentActive,
+		ConcurrentMax:    concurrentMax,
+		BackoffRemaining: backoffRemaining,
+		DedupWaiters:     dedupWaiters,
+		InFlightKeys:     inFlightKeys,
 	}
 }
 
