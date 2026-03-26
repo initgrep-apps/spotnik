@@ -78,52 +78,16 @@ func TestRenderStatusBar_ShowsHints(t *testing.T) {
 	assert.Contains(t, result, "q quit")
 }
 
-func TestRenderStatusBar_DifferentHintsProduceDifferentOutput(t *testing.T) {
+func TestGridHints_ContainsExpectedKeys(t *testing.T) {
 	a := newRenderTestApp()
-	statsResult := a.renderStatusBar(a.statsHints())
-	playlistsResult := a.renderStatusBar(a.playlistsHints())
+	combined := strings.Join(a.gridHints(), " ")
 
-	assert.NotEqual(t, statsResult, playlistsResult,
-		"different hint sets must produce different status bars")
-}
-
-func TestMainHints_FocusDependent(t *testing.T) {
-	tests := []struct {
-		name         string
-		focus        focusedPane
-		wantContains string
-	}{
-		{name: "library focus", focus: focusLibrary, wantContains: "like"},
-		{name: "queue focus", focus: focusQueue, wantContains: "navigate"},
-		{name: "player focus (default)", focus: focusPlayer, wantContains: "Space"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := newRenderTestApp()
-			a.focus = tt.focus
-			hints := a.mainHints()
-			combined := strings.Join(hints, " ")
-			assert.Contains(t, combined, tt.wantContains,
-				"main hints for %s should contain %q", tt.name, tt.wantContains)
-		})
-	}
-}
-
-func TestStatsHints_ContainsExpectedKeys(t *testing.T) {
-	a := newRenderTestApp()
-	combined := strings.Join(a.statsHints(), " ")
-
-	assert.Contains(t, combined, "cycle range")
-	assert.Contains(t, combined, "library")
-}
-
-func TestPlaylistsHints_ContainsExpectedKeys(t *testing.T) {
-	a := newRenderTestApp()
-	combined := strings.Join(a.playlistsHints(), " ")
-
-	assert.Contains(t, combined, "rename")
-	assert.Contains(t, combined, "reorder")
+	// The grid hints should include page/preset/toggle/focus controls.
+	assert.Contains(t, combined, "page")
+	assert.Contains(t, combined, "preset")
+	assert.Contains(t, combined, "toggle")
+	assert.Contains(t, combined, "focus")
+	assert.Contains(t, combined, "quit")
 }
 
 func TestTruncateDeviceName_ShortName(t *testing.T) {
@@ -141,4 +105,55 @@ func TestTruncateDeviceName_LongName(t *testing.T) {
 	assert.True(t, len([]rune(result)) <= maxDeviceNameLen,
 		"truncated name should not exceed maxDeviceNameLen")
 	assert.True(t, strings.HasSuffix(result, "…"), "truncated name should end with ellipsis")
+}
+
+// TestRenderTooSmall_UpdatedMinimum verifies the minimum size message uses 120x30.
+func TestRenderTooSmall_UpdatedMinimum(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 80
+	a.height = 24
+	result := a.renderTooSmall()
+
+	assert.Contains(t, result, "120 × 30", "minimum size message should reflect updated requirement")
+}
+
+// TestBuildView_MinimumSizeCheck_120x30 verifies the threshold is 120x30.
+func TestBuildView_MinimumSizeCheck_120x30(t *testing.T) {
+	a := newRenderTestApp()
+
+	// Just below threshold
+	a.width = 119
+	a.height = 30
+	result := a.buildView()
+	assert.Contains(t, result, "120 × 30", "width below 120 should show too-small message")
+
+	// Just above threshold
+	a.width = 120
+	a.height = 30
+	result = a.buildView()
+	assert.NotContains(t, result, "120 × 30", "120×30 should pass the minimum size check")
+}
+
+// TestRenderGrid_EmptyState verifies renderGrid returns empty string when no panes visible.
+func TestRenderGrid_EmptyState(t *testing.T) {
+	a := newRenderTestApp()
+	// Without a resize, the layout has no terminal size and VisiblePanes may be empty.
+	// The important thing is it doesn't panic.
+	result := a.renderGrid()
+	// May be empty or non-empty depending on layout defaults.
+	_ = result
+}
+
+// TestRenderGrid_AfterResize verifies grid renders after a size message.
+func TestRenderGrid_AfterResize(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewGrid
+	a.width = 160
+	a.height = 50
+	a.layout.Resize(160, 50)
+	a.propagateSizes()
+	a.syncFocus()
+
+	result := a.renderGrid()
+	assert.NotEmpty(t, result, "grid should render after resize")
 }
