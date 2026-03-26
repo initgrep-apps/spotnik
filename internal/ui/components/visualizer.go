@@ -198,28 +198,28 @@ func generateFrames(width, height int) [][]string {
 // The characters match the spec's height mapping exactly and produce a bar
 // appearance when rendered in a terminal at each fill level.
 //
-// The codepoints are U+2800 base plus the following offsets:
+// Braille dot layout: 1 4 / 2 5 / 3 6 / 7 8 (left|right per row).
+// Bits: dot1=0x01, dot2=0x02, dot3=0x04, dot4=0x08, dot5=0x10, dot6=0x20, dot7=0x40, dot8=0x80.
 //
 //	0 filled: ⠀ (U+2800, offset 0x00) — blank
-//	1 filled: ⡀ (U+2840, offset 0x40) — bottom dot active (dot7, bit6)
-//	2 filled: ⡠ (U+2860, offset 0x60) — bits 5,6 active (dot7+dot6)
-//	3 filled: ⡰ (U+2870, offset 0x70) — bits 4,5,6 active
-//	4 filled: ⣰ (U+28F0, offset 0xF0) — bits 4,5,6,7 active (full bar)
+//	1 filled: ⡀ (U+2840, offset 0x40) — dot7 (left col, row 4)
+//	2 filled: ⡠ (U+2860, offset 0x60) — dot6+dot7 (right col row 3 + left col row 4)
+//	3 filled: ⡰ (U+2870, offset 0x70) — dot5+dot6+dot7 (right col rows 2-3 + left col row 4)
+//	4 filled: ⣰ (U+28F0, offset 0xF0) — dot5+dot6+dot7+dot8 (bottom two rows filled)
 //
-// NOTE: These characters produce a visually correct bar that fills from bottom to top.
-// The spec (docs/features/44-visualizer-gradient-bars.md) specifies these exact
-// codepoints in its height mapping example.
+// NOTE: These codepoints match the spec exactly. The fill pattern spans both
+// columns for a wider visual bar effect rather than a single-column fill.
 func brailleChar(filledDots int) rune {
 	switch filledDots {
 	case 0:
 		return '\u2800' // ⠀ blank
 	case 1:
-		return '\u2840' // ⡀ dot7 (bit6=0x40)
+		return '\u2840' // ⡀ dot7 (0x40)
 	case 2:
-		return '\u2860' // ⡠ dot7+dot3 (0x40|0x20=0x60)
+		return '\u2860' // ⡠ dot6+dot7 (0x20|0x40=0x60)
 	case 3:
-		return '\u2870' // ⡰ dot7+dot3+dot2 (0x40|0x20|0x10=0x70)
+		return '\u2870' // ⡰ dot5+dot6+dot7 (0x10|0x20|0x40=0x70)
 	default: // 4+
-		return '\u28F0' // ⣰ dot7+dot3+dot2+dot1 (0x40|0x20|0x10|0x80=0xF0)
+		return '\u28F0' // ⣰ dot5+dot6+dot7+dot8 (0x10|0x20|0x40|0x80=0xF0)
 	}
 }

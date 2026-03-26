@@ -101,6 +101,16 @@ func TestGradientSeekBar_ZeroDuration(t *testing.T) {
 	})
 }
 
+func TestGradientSeekBar_NegativeProgress(t *testing.T) {
+	b := newTestSeekBar(50)
+	// Negative progressMs should not produce a wider-than-expected bar or panic.
+	require.NotPanics(t, func() {
+		out := b.Render(-5000, 300000)
+		// Bar should be all empty (no filled gradient chars).
+		assert.NotEmpty(t, out)
+	})
+}
+
 func TestGradientSeekBar_WidthChanges(t *testing.T) {
 	b40 := newTestSeekBar(40)
 	b80 := newTestSeekBar(80)

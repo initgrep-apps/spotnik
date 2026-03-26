@@ -50,6 +50,9 @@ func (b *GradientSeekBar) Render(progressMs, durationMs int) string {
 	if durationMs > 0 {
 		ratio = float64(progressMs) / float64(durationMs)
 	}
+	if ratio < 0 {
+		ratio = 0
+	}
 	if ratio > 1.0 {
 		ratio = 1.0
 	}
