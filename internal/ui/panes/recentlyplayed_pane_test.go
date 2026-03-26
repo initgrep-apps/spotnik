@@ -66,7 +66,7 @@ func TestRecentlyPlayedPane_Actions_FilterActive(t *testing.T) {
 	pane.SetFocused(true)
 	pane.SetSize(120, 20)
 	// Toggle filter on
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
 	assert.Equal(t, "Esc", actions[0].Key)
@@ -109,11 +109,11 @@ func TestRecentlyPlayedPane_FilterByTrackName(t *testing.T) {
 	pane.SetFocused(true)
 
 	// Activate filter
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 
 	// Type "another"
 	for _, r := range "another" {
-		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
 	view := pane.View()
@@ -126,11 +126,11 @@ func TestRecentlyPlayedPane_FilterByArtistName(t *testing.T) {
 	pane.SetFocused(true)
 
 	// Activate filter
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 
 	// Type "Artist A"
 	for _, r := range "Artist A" {
-		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
 	view := pane.View()
@@ -173,7 +173,7 @@ func TestRecentlyPlayedPane_RecentlyPlayedLoadedMsg(t *testing.T) {
 			PlayedAt: now.Add(-5 * time.Minute).Format(time.RFC3339),
 		},
 	})
-	pane.Update(RecentlyPlayedLoadedMsg{}) //nolint
+	pane.Update(RecentlyPlayedLoadedMsg{}) //nolint:errcheck
 	view := pane.View()
 	assert.Contains(t, view, "Loaded Track")
 }

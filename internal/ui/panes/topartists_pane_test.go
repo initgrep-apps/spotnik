@@ -62,7 +62,7 @@ func TestTopArtistsPane_Actions_Default_ShowsFilterAndRange(t *testing.T) {
 func TestTopArtistsPane_Actions_FilterActive(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	pane.SetFocused(true)
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
 	assert.Equal(t, "Esc", actions[0].Key)
@@ -102,15 +102,15 @@ func TestTopArtistsPane_TimeRangeCycles(t *testing.T) {
 	assert.Equal(t, "short_term", pane.TimeRange())
 
 	// short → medium
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	assert.Equal(t, "medium_term", pane.TimeRange())
 
 	// medium → long
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	assert.Equal(t, "long_term", pane.TimeRange())
 
 	// long → short (wraps)
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	assert.Equal(t, "short_term", pane.TimeRange())
 }
 
@@ -133,11 +133,11 @@ func TestTopArtistsPane_ActionsLabelReflectsRange(t *testing.T) {
 	populateStoreTopArtists(st, "medium_term")
 	populateStoreTopArtists(st, "long_term")
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	actions := pane.Actions()
 	assert.Equal(t, "6mo", actions[len(actions)-1].Label)
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	actions = pane.Actions()
 	assert.Equal(t, "all", actions[len(actions)-1].Label)
 }
@@ -146,9 +146,9 @@ func TestTopArtistsPane_FilterByArtistName(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	pane.SetFocused(true)
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	for _, r := range "weeknd" {
-		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
 	view := pane.View()
@@ -160,9 +160,9 @@ func TestTopArtistsPane_FilterByGenre(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	pane.SetFocused(true)
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	for _, r := range "hip-hop" {
-		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
 	view := pane.View()
@@ -186,7 +186,7 @@ func TestTopArtistsPane_StatsLoadedMsg(t *testing.T) {
 	})
 	st.SetTopTracks("short_term", []domain.Track{})
 	st.StampStatsFetchedAt("short_term")
-	pane.Update(StatsLoadedMsg{TimeRange: "short_term"}) //nolint
+	pane.Update(StatsLoadedMsg{TimeRange: "short_term"}) //nolint:errcheck
 	view := pane.View()
 	assert.Contains(t, view, "New Artist")
 }
@@ -199,7 +199,7 @@ func TestTopArtistsPane_StatsLoadedMsgWrongRange(t *testing.T) {
 	})
 	st.SetTopTracks("medium_term", []domain.Track{})
 	st.StampStatsFetchedAt("medium_term")
-	pane.Update(StatsLoadedMsg{TimeRange: "medium_term"}) //nolint
+	pane.Update(StatsLoadedMsg{TimeRange: "medium_term"}) //nolint:errcheck
 	view := pane.View()
 	// Should still show short_term data (The Weeknd) not medium_term data
 	assert.Contains(t, view, "The Weeknd")
@@ -210,7 +210,7 @@ func TestTopArtistsPane_NotFocusedIgnoresKeys(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	// t key on unfocused pane should not change time range
 	initialRange := pane.TimeRange()
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	assert.Equal(t, initialRange, pane.TimeRange())
 }
 

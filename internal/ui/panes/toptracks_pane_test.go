@@ -62,7 +62,7 @@ func TestTopTracksPane_Actions_Default_ShowsFilterAndRange(t *testing.T) {
 func TestTopTracksPane_Actions_FilterActive(t *testing.T) {
 	pane, _ := newTestTopTracksPane()
 	pane.SetFocused(true)
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
 	assert.Equal(t, "Esc", actions[0].Key)
@@ -108,11 +108,11 @@ func TestTopTracksPane_TimeRangeCycles(t *testing.T) {
 	assert.Nil(t, cmd)
 
 	// Press t → long_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	assert.Equal(t, "long_term", pane.TimeRange())
 
 	// Press t → wraps to short_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	assert.Equal(t, "short_term", pane.TimeRange())
 }
 
@@ -138,14 +138,14 @@ func TestTopTracksPane_ActionsLabelReflectsRange(t *testing.T) {
 	populateStoreTopTracks(st, "long_term")
 
 	// Cycle to medium_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	actions := pane.Actions()
 	tAction := actions[len(actions)-1]
 	assert.Equal(t, "t", tAction.Key)
 	assert.Equal(t, "6mo", tAction.Label)
 
 	// Cycle to long_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	actions = pane.Actions()
 	tAction = actions[len(actions)-1]
 	assert.Equal(t, "all", tAction.Label)
@@ -168,9 +168,9 @@ func TestTopTracksPane_FilterByTrackName(t *testing.T) {
 	pane.SetFocused(true)
 
 	// Activate filter
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	for _, r := range "martbaan" {
-		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
 	view := pane.View()
@@ -182,9 +182,9 @@ func TestTopTracksPane_FilterByArtistName(t *testing.T) {
 	pane, _ := newTestTopTracksPane()
 	pane.SetFocused(true)
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	for _, r := range "samar" {
-		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
 	view := pane.View()
@@ -208,7 +208,7 @@ func TestTopTracksPane_StatsLoadedMsg(t *testing.T) {
 	})
 	st.SetTopArtists("short_term", []domain.FullArtist{})
 	st.StampStatsFetchedAt("short_term")
-	pane.Update(StatsLoadedMsg{TimeRange: "short_term"}) //nolint
+	pane.Update(StatsLoadedMsg{TimeRange: "short_term"}) //nolint:errcheck
 	view := pane.View()
 	assert.Contains(t, view, "New Hit")
 }
