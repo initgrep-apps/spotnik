@@ -201,3 +201,89 @@ func TestRenderGrid_AfterResize(t *testing.T) {
 	result := a.renderGrid()
 	assert.NotEmpty(t, result, "grid should render after resize")
 }
+
+// --- Feature 52 Task 3: Responsive behavior tests ---
+
+// TestBuildView_TooSmall_120x29 verifies terminal height below 30 shows too-small message.
+func TestBuildView_TooSmall_120x29(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 29
+	result := a.buildView()
+
+	assert.Contains(t, result, "Spotnik needs more space",
+		"height below 30 should show too-small message")
+	assert.Contains(t, result, "120 × 30",
+		"too-small message should show required dimensions")
+}
+
+// TestBuildView_ExactMinimum_ShowsGrid verifies 120×30 shows the grid, not the error.
+func TestBuildView_ExactMinimum_ShowsGrid(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 30
+	a.currentView = viewGrid
+	result := a.buildView()
+
+	assert.NotContains(t, result, "Spotnik needs more space",
+		"exactly 120×30 should not show too-small message")
+}
+
+// TestRenderTooSmall_ShowsCurrentDimensions verifies the message includes actual
+// terminal dimensions so the user knows how much to resize.
+func TestRenderTooSmall_ShowsCurrentDimensions(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 98
+	a.height = 25
+	result := a.renderTooSmall()
+
+	assert.Contains(t, result, "98 × 25",
+		"too-small message should include current terminal dimensions")
+	assert.Contains(t, result, "120 × 30",
+		"too-small message should include required dimensions")
+	assert.Contains(t, result, "Spotnik needs more space",
+		"too-small message should contain the friendly header")
+}
+
+// TestRenderTooSmall_UsesRoundedBorder verifies the message is wrapped in a
+// rounded border (╭ and ╰ corners confirm lipgloss.RoundedBorder is used).
+func TestRenderTooSmall_UsesRoundedBorder(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 80
+	a.height = 20
+	result := a.renderTooSmall()
+
+	// lipgloss.RoundedBorder() uses ╭ (top-left) and ╰ (bottom-left) corners.
+	assert.Contains(t, result, "╭",
+		"too-small message should use rounded border (╭ corner)")
+	assert.Contains(t, result, "╰",
+		"too-small message should use rounded border (╰ corner)")
+}
+
+// TestBuildView_DynamicResize_ShrinkThenGrow verifies that shrinking below minimum
+// shows the error, then growing back shows the grid.
+func TestBuildView_DynamicResize_ShrinkThenGrow(t *testing.T) {
+	a := newRenderTestApp()
+
+	// Start at minimum size — grid renders.
+	a.width = 120
+	a.height = 30
+	a.currentView = viewGrid
+	result := a.buildView()
+	assert.NotContains(t, result, "Spotnik needs more space",
+		"at minimum size, grid should render")
+
+	// Shrink below minimum — error message renders.
+	a.width = 80
+	a.height = 20
+	result = a.buildView()
+	assert.Contains(t, result, "Spotnik needs more space",
+		"below minimum size, error should render")
+
+	// Grow back to minimum — grid renders again.
+	a.width = 120
+	a.height = 30
+	result = a.buildView()
+	assert.NotContains(t, result, "Spotnik needs more space",
+		"restored to minimum size, grid should render again")
+}
