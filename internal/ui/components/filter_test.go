@@ -99,6 +99,7 @@ func TestFilter_ViewEmptyWhenInactive(t *testing.T) {
 func TestFilter_ViewNonEmptyWhenActive(t *testing.T) {
 	f := components.NewFilter(testTheme())
 	f.Toggle()
+	f.SetWidth(40)
 	view := f.View(40)
 	assert.NotEmpty(t, view)
 }

@@ -64,11 +64,9 @@ func (f *Filter) Query() string {
 }
 
 // Matches returns true if text contains the filter query as a case-insensitive
-// substring. Returns true unconditionally when the filter is inactive.
+// substring. Returns true unconditionally when the query is empty (including
+// when the filter is inactive).
 func (f *Filter) Matches(text string) bool {
-	if !f.active && f.query == "" {
-		return true
-	}
 	if f.query == "" {
 		return true
 	}
@@ -121,6 +119,14 @@ func (f *Filter) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// SetWidth updates the visible width of the filter input bar.
+// Call this from the pane's SetSize so View() remains side-effect-free.
+func (f *Filter) SetWidth(width int) {
+	// input.Width is the number of visible columns for the text portion;
+	// subtract prompt (2) and outer padding (2) so the bar fits in the pane.
+	f.input.Width = width - 4
+}
+
 // View renders the filter input bar at the given width.
 // Returns an empty string when the filter is inactive.
 func (f *Filter) View(width int) string {
@@ -128,7 +134,6 @@ func (f *Filter) View(width int) string {
 		return ""
 	}
 
-	f.input.Width = width - 4 // account for prompt + padding
 	barStyle := lipgloss.NewStyle().
 		Background(f.theme.SurfaceAlt()).
 		Width(width).
@@ -137,13 +142,10 @@ func (f *Filter) View(width int) string {
 	return barStyle.Render(f.input.View())
 }
 
-// BorderLabel returns the text to embed in the pane border when the filter is
-// active and has a query. Returns an empty string when inactive or when the
-// query is empty.
+// BorderLabel returns the text to embed in the pane border when the filter has
+// an active query. Returns an empty string when inactive or when the query is empty.
+// e.g., `filtering: "rock"`.
 func (f *Filter) BorderLabel() string {
-	if !f.active && f.query == "" {
-		return ""
-	}
 	if f.query == "" {
 		return ""
 	}
