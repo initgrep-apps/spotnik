@@ -58,3 +58,12 @@
 
 - [ ] **Gateway.Snapshot() is best-effort, not atomic** — Token bucket and gateway mutex are acquired separately. Comment updated to clarify, but snapshot fields may be from slightly different points in time. Acceptable for display purposes.
 - [ ] **PollingSnapshotMsg.TickIntervalMs is misleading** — Shows the polling decision interval (3000ms, 10000ms) but the actual tea.Tick fires every 1000ms. Consider renaming to `PollIntervalMs` or displaying the actual tick interval separately.
+
+---
+
+## From PR #58 Review — Cleanup (2026-03-26)
+
+### Documentation
+
+- [ ] **ARCHITECTURE.md references deleted pane names** — The ASCII diagram at line 33 still shows `LibraryPane`, `PlayerPane`, and `QueuePane`. Test examples at lines 621/628 reference `PlayerPane`. These types no longer exist. Update the diagram and examples to reflect the new 10-pane grid layout.
+- [ ] **formatDuration duplication** — `formatDuration` in `gradient.go` and `formatDurationMs` in `nowplaying.go` are duplicate implementations. Extract to a shared utility in `components/`.
