@@ -91,6 +91,9 @@ func (l *LikedSongsPane) Init() tea.Cmd { return nil }
 // IsFocused returns true when the pane has keyboard focus.
 func (l *LikedSongsPane) IsFocused() bool { return l.focused }
 
+// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
+func (l *LikedSongsPane) HasActiveFilter() bool { return l.filter.IsActive() }
+
 // SetFocused updates the keyboard focus state.
 func (l *LikedSongsPane) SetFocused(focused bool) {
 	l.focused = focused

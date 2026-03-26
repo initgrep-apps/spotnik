@@ -65,6 +65,19 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// When a pane's filter is active, route all keys directly to it.
+	// This prevents global shortcuts (q, /, d, etc.) from firing while typing.
+	focusedID := a.layout.FocusedPane()
+	if pane, ok := a.panes[focusedID]; ok {
+		if fp, ok := pane.(layout.FilterablePane); ok && fp.HasActiveFilter() {
+			updated, cmd := pane.Update(m)
+			if lp, ok := updated.(layout.Pane); ok {
+				a.panes[focusedID] = lp
+			}
+			return a, cmd
+		}
+	}
+
 	// Global: q always quits.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "q" {
 		return a, tea.Quit
@@ -141,7 +154,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Route remaining keys to the focused pane.
-	focusedID := a.layout.FocusedPane()
+	// focusedID was computed above for the filter guard; reuse it here.
 	pane, ok := a.panes[focusedID]
 	if !ok {
 		return a, nil

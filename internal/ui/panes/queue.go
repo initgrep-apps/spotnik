@@ -97,6 +97,11 @@ func (q *QueuePane) IsFocused() bool {
 	return q.focused
 }
 
+// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
+func (q *QueuePane) HasActiveFilter() bool {
+	return q.filter.IsActive()
+}
+
 // SetFocused sets the keyboard focus state.
 func (q *QueuePane) SetFocused(focused bool) {
 	q.focused = focused

@@ -113,6 +113,9 @@ func (p *TopTracksPane) Init() tea.Cmd { return nil }
 // IsFocused returns true when the pane has keyboard focus.
 func (p *TopTracksPane) IsFocused() bool { return p.focused }
 
+// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
+func (p *TopTracksPane) HasActiveFilter() bool { return p.filter.IsActive() }
+
 // SetFocused updates the keyboard focus state.
 func (p *TopTracksPane) SetFocused(focused bool) {
 	p.focused = focused

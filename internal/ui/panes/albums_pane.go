@@ -88,6 +88,9 @@ func (a *AlbumsPane) Init() tea.Cmd { return nil }
 // IsFocused returns true when the pane has keyboard focus.
 func (a *AlbumsPane) IsFocused() bool { return a.focused }
 
+// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
+func (a *AlbumsPane) HasActiveFilter() bool { return a.filter.IsActive() }
+
 // SetFocused updates the keyboard focus state.
 func (a *AlbumsPane) SetFocused(focused bool) {
 	a.focused = focused

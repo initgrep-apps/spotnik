@@ -80,3 +80,10 @@ type Pane interface {
 	// Actions returns pane-specific shortcut hints displayed in the border.
 	Actions() []Action
 }
+
+// FilterablePane is implemented by panes that support in-pane text filtering.
+// When HasActiveFilter() returns true, the routing layer sends all key events
+// directly to the pane, bypassing global shortcuts.
+type FilterablePane interface {
+	HasActiveFilter() bool
+}
