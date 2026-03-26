@@ -361,6 +361,28 @@ func TestRequestFlowPane_Integration_MaxRequests(t *testing.T) {
 	assert.Contains(t, v, "/me/endpoint/9", "newest entry should be visible")
 }
 
+// TestRequestFlowPane_Integration_SyncFromNetLog verifies that TickMsg populates
+// recentReqs from the store's network log entries.
+func TestRequestFlowPane_Integration_SyncFromNetLog(t *testing.T) {
+	s := state.New()
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+
+	// Record API calls in the store's net log.
+	s.RecordNetCall("GET", "/me/player", 200, 45)
+	s.RecordNetCall("GET", "/me/playlists", 200, 120)
+
+	// TickMsg triggers syncFromNetLog.
+	_, _ = pane.Update(panes.TickMsg{})
+
+	v := pane.View()
+	assert.Contains(t, v, "/me/player", "net log entry should appear after TickMsg sync")
+	assert.Contains(t, v, "/me/playlists", "net log entry should appear after TickMsg sync")
+	assert.Contains(t, v, "200", "status code should appear")
+}
+
 // TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn verifies that
 // switching from idle to active updates the status strip.
 func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {

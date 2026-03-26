@@ -137,11 +137,11 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 
 	case TickMsg:
-		// Refresh gateway snapshot and age out old requests.
+		// Refresh gateway snapshot and sync requests from net log.
 		if p.gateway != nil {
 			p.lastSnapshot = p.gateway.Snapshot()
 		}
-		p.pruneOldRequests()
+		p.syncFromNetLog()
 		return p, nil
 
 	case PollingSnapshotMsg:
@@ -170,16 +170,33 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-// pruneOldRequests removes entries older than requestAgeOut.
-func (p *RequestFlowPane) pruneOldRequests() {
+// syncFromNetLog reads the store's network log and populates recentReqs
+// with the most recent entries within the requestAgeOut window.
+func (p *RequestFlowPane) syncFromNetLog() {
+	if p.store == nil {
+		return
+	}
+	entries := p.store.NetLogEntries()
 	cutoff := time.Now().Add(-requestAgeOut)
-	kept := p.recentReqs[:0]
-	for _, r := range p.recentReqs {
-		if r.completedAt.After(cutoff) {
-			kept = append(kept, r)
+
+	// Rebuild from store — newest first, capped at maxRecentReqs.
+	p.recentReqs = p.recentReqs[:0]
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		if e.Timestamp.Before(cutoff) {
+			continue
+		}
+		p.recentReqs = append(p.recentReqs, reqDisplay{
+			endpoint:    e.Path,
+			statusCode:  e.StatusCode,
+			latencyMs:   int(e.DurationMs),
+			priority:    domain.PriorityBackground,
+			completedAt: e.Timestamp,
+		})
+		if len(p.recentReqs) >= maxRecentReqs {
+			break
 		}
 	}
-	p.recentReqs = kept
 }
 
 // View renders the full RequestFlowPane. Pure — no side effects.

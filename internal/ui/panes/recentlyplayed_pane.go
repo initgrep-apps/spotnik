@@ -163,7 +163,11 @@ func (r *RecentlyPlayedPane) View() string {
 	if r.filter.IsActive() {
 		parts = append(parts, r.filter.View(r.width))
 	}
-	parts = append(parts, r.table.View())
+	if len(r.store.RecentlyPlayed()) == 0 && !r.filter.IsActive() {
+		parts = append(parts, "  No recently played tracks")
+	} else {
+		parts = append(parts, r.table.View())
+	}
 	return strings.Join(parts, "\n")
 }
 

@@ -62,6 +62,9 @@
 | 51 | Page B: Nerd Status | `51-page-b-nerd-status.md` | ✅ Complete | 41-43, 49 | #56 |
 | 52 | Mouse Scroll + Responsive | `52-mouse-scroll-responsive.md` | ✅ Complete | 41, 49 | #57 |
 | 53 | Cleanup | `53-cleanup.md` | ✅ Complete | 40-52 | #58 |
+| 54 | Fix Table Alignment | `54-fix-table-alignment.md` | 🔲 Ready | 43 | — |
+| 55 | Fix Recently Played Empty | `55-fix-recently-played-empty.md` | 🔲 Ready | 47 | — |
+| 56 | Fix Request Flow Data | `56-fix-request-flow-data.md` | 🔲 Ready | 51 | — |
 
 ---
 
