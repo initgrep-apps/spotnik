@@ -1,6 +1,7 @@
 package panes_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -278,4 +279,102 @@ func TestRequestFlowPane_View_RequestAgedOutOnTick(t *testing.T) {
 	v := pane.View()
 	// After age-out, the old request should not appear.
 	assert.NotContains(t, v, "/me/player", "request older than 5s should be pruned on tick")
+}
+
+// --- Integration tests ---
+
+// TestRequestFlowPane_Integration_MultipleVisualizerTicks verifies that multiple
+// animation ticks advance frameIndex monotonically.
+func TestRequestFlowPane_Integration_MultipleVisualizerTicks(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+
+	for i := 0; i < 10; i++ {
+		_, _ = pane.Update(components.VisualizerTickMsg(time.Now()))
+	}
+	assert.Equal(t, 10, pane.FrameIndex(), "after 10 ticks, frameIndex should be 10")
+}
+
+// TestRequestFlowPane_Integration_GatewaySnapshot_Refreshes verifies that
+// TickMsg causes the gateway snapshot to be re-read.
+func TestRequestFlowPane_Integration_GatewaySnapshot_Refreshes(t *testing.T) {
+	gw := api.NewGateway()
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+
+	// Snapshot before TickMsg — fresh gateway.
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	assert.Contains(t, v, "●", "token bucket should show filled tokens after TickMsg")
+}
+
+// TestRequestFlowPane_Integration_EmptyGateway_IdleState verifies that a pane
+// with no activity shows an empty/idle state without panicking.
+func TestRequestFlowPane_Integration_EmptyGateway_IdleState(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// No requests injected — view should not panic.
+	v := pane.View()
+	assert.Contains(t, v, "GATEWAY", "idle gateway state should still show GATEWAY section")
+}
+
+// TestRequestFlowPane_Integration_BackoffActive_TimerVisible verifies that when
+// the store marks the gateway as throttled, the backoff timer appears.
+func TestRequestFlowPane_Integration_BackoffActive_TimerVisible(t *testing.T) {
+	s := state.New()
+	s.SetThrottle(true, 30, time.Now())
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+
+	// Refresh the snapshot.
+	_, _ = pane.Update(panes.TickMsg{})
+
+	v := pane.View()
+	assert.Contains(t, v, "backoff", "backoff timer should be visible during throttle")
+}
+
+// TestRequestFlowPane_Integration_MaxRequests verifies that at most maxRecentReqs
+// entries are stored regardless of how many RequestCompletedMsgs are sent.
+func TestRequestFlowPane_Integration_MaxRequests(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+
+	// Send more than maxRecentReqs (6) requests.
+	for i := 0; i < 10; i++ {
+		_, _ = pane.Update(panes.RequestCompletedMsg{
+			Endpoint:   fmt.Sprintf("/me/endpoint/%d", i),
+			StatusCode: 200,
+			LatencyMs:  10 + i,
+			Priority:   api.Background,
+		})
+	}
+
+	v := pane.View()
+	// Only the last 6 endpoints should be visible (cap at maxRecentReqs).
+	// The first 4 (i=0..3) should have been evicted.
+	assert.NotContains(t, v, "/me/endpoint/0", "oldest entries should be evicted when cap exceeded")
+	assert.Contains(t, v, "/me/endpoint/9", "newest entry should be visible")
+}
+
+// TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn verifies that
+// switching from idle to active updates the status strip.
+func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+
+	// Simulate idle state.
+	_, _ = pane.Update(panes.PollingSnapshotMsg{TickIntervalMs: 3000, IsIdle: true, IdleSecs: 120})
+	v1 := pane.View()
+	assert.Contains(t, v1, "idle", "idle state should appear in view")
+	assert.Contains(t, v1, "120s", "idle duration should appear")
+
+	// Simulate return to active.
+	_, _ = pane.Update(panes.PollingSnapshotMsg{TickIntervalMs: 1000, IsIdle: false, IdleSecs: 0})
+	v2 := pane.View()
+	assert.NotContains(t, v2, "idle", "active state should not show idle label")
+	assert.Contains(t, v2, "1000ms", "active tick interval should update")
 }
