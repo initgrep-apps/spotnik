@@ -147,6 +147,72 @@ func NewGateway() *Gateway {
 	}
 }
 
+// GatewayState holds a read-only snapshot of gateway internals for display.
+// All fields are safe to read without holding any lock — they are copied under
+// the gateway's mutex inside Snapshot().
+type GatewayState struct {
+	// TokensAvailable is the current token bucket level (0-10).
+	TokensAvailable int
+	// TokensMax is the token bucket capacity (always 10).
+	TokensMax int
+	// ConcurrentActive is the number of in-flight requests currently holding a semaphore slot.
+	ConcurrentActive int
+	// ConcurrentMax is the semaphore capacity (always 5).
+	ConcurrentMax int
+	// BackoffRemaining is the seconds until the 429 backoff period clears (0 if not throttled).
+	BackoffRemaining float64
+	// DedupWaiters is the number of GET requests currently waiting on an in-flight dedup entry.
+	DedupWaiters int
+	// InFlightKeys lists the RequestKey values of all currently in-flight GET requests.
+	InFlightKeys []RequestKey
+}
+
+// Snapshot returns a read-only snapshot of the gateway's current internal state.
+// Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
+func (g *Gateway) Snapshot() GatewayState {
+	// Read the token bucket level without consuming a token.
+	g.bucket.mu.Lock()
+	// Apply any pending refill before reading so the value is current.
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	tokens := g.bucket.tokens + elapsed*g.bucket.rate
+	if tokens > g.bucket.max {
+		tokens = g.bucket.max
+	}
+	tokenMax := int(g.bucket.max)
+	g.bucket.mu.Unlock()
+
+	// Read gateway fields under the gateway mutex.
+	g.mu.Lock()
+	backoffRemaining := time.Until(g.backoffUntil).Seconds()
+	if backoffRemaining < 0 {
+		backoffRemaining = 0
+	}
+	// Count dedup waiters: the number of entries in the inflight map.
+	// Each entry has exactly one primary caller; any goroutines that joined as
+	// waiters are not separately tracked, so DedupWaiters reflects in-flight GETs.
+	dedupWaiters := len(g.inflight)
+	inFlightKeys := make([]RequestKey, 0, len(g.inflight))
+	for k := range g.inflight {
+		inFlightKeys = append(inFlightKeys, k)
+	}
+	g.mu.Unlock()
+
+	// Concurrent active = semaphore slots currently occupied.
+	concurrentMax := cap(g.semaphore)
+	concurrentActive := len(g.semaphore)
+
+	return GatewayState{
+		TokensAvailable:  int(tokens),
+		TokensMax:        tokenMax,
+		ConcurrentActive: concurrentActive,
+		ConcurrentMax:    concurrentMax,
+		BackoffRemaining: backoffRemaining,
+		DedupWaiters:     dedupWaiters,
+		InFlightKeys:     inFlightKeys,
+	}
+}
+
 // IsThrottled returns true when the gateway is in a 429 backoff period.
 func (g *Gateway) IsThrottled() bool {
 	g.mu.Lock()

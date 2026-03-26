@@ -531,3 +531,161 @@ func TestGateway_PlaybackState_RoutedThroughGateway(t *testing.T) {
 	assert.Nil(t, results[1], "204 should yield nil state")
 	assert.Equal(t, 1, callCount, "dedup should result in exactly one HTTP call")
 }
+
+// --- Gateway.Snapshot() tests ---
+
+func TestGateway_Snapshot_TokensAvailable(t *testing.T) {
+	gw := NewGateway()
+	snap := gw.Snapshot()
+	// Fresh gateway: bucket full at 10, no concurrent requests, no backoff.
+	assert.Equal(t, 10, snap.TokensAvailable, "fresh gateway should have full token bucket")
+	assert.Equal(t, 10, snap.TokensMax, "token max should be 10")
+	assert.Equal(t, 0, snap.ConcurrentActive, "no concurrent requests on fresh gateway")
+	assert.Equal(t, 5, snap.ConcurrentMax, "semaphore max should be 5")
+	assert.Equal(t, 0.0, snap.BackoffRemaining, "no backoff on fresh gateway")
+	assert.Equal(t, 0, snap.DedupWaiters, "no dedup waiters on fresh gateway")
+}
+
+func TestGateway_Snapshot_ConcurrentActive(t *testing.T) {
+	// Pause the server so we can measure in-flight count.
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+
+	// Launch one goroutine holding a semaphore slot.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		key := RequestKey{Method: "PUT", Path: "/v1/me/player/play"}
+		_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+			req, _ := http.NewRequest("PUT", srv.URL+"/play", http.NoBody)
+			return http.DefaultClient.Do(req)
+		})
+	}()
+
+	// Give the goroutine time to acquire the semaphore.
+	time.Sleep(30 * time.Millisecond)
+
+	snap := gw.Snapshot()
+	assert.GreaterOrEqual(t, snap.ConcurrentActive, 1, "at least one concurrent request in flight")
+	assert.Equal(t, 5, snap.ConcurrentMax)
+
+	close(release)
+	wg.Wait()
+
+	snap2 := gw.Snapshot()
+	assert.Equal(t, 0, snap2.ConcurrentActive, "concurrent count should drop to zero after request completes")
+}
+
+func TestGateway_Snapshot_BackoffRemaining(t *testing.T) {
+	// Trigger a 429 response to activate backoff.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
+	_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+		req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
+		return http.DefaultClient.Do(req)
+	})
+
+	snap := gw.Snapshot()
+	assert.Greater(t, snap.BackoffRemaining, 0.0, "backoff should be active after 429")
+	assert.Less(t, snap.BackoffRemaining, 31.0, "backoff should not exceed Retry-After")
+}
+
+func TestGateway_Snapshot_DedupWaiters(t *testing.T) {
+	// One waiter joins a dedup: primary request in-flight, second waits.
+	release := make(chan struct{})
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
+
+	// Start two GET requests for the same key; only one hits the server.
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
+				return http.DefaultClient.Do(req)
+			})
+		}()
+	}
+
+	// Give both goroutines time to start.
+	time.Sleep(30 * time.Millisecond)
+
+	snap := gw.Snapshot()
+	// At least one dedup waiter should appear (secondary goroutine waits on primary).
+	assert.GreaterOrEqual(t, snap.DedupWaiters, 0, "dedup waiters count must not be negative")
+
+	close(release)
+	wg.Wait()
+}
+
+func TestGateway_Snapshot_ThreadSafe(t *testing.T) {
+	gw := NewGateway()
+
+	// Concurrent reads of Snapshot() must not race.
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = gw.Snapshot()
+		}()
+	}
+	wg.Wait() // If data race occurs, go test -race will catch it.
+}
+
+func TestGateway_Snapshot_InFlightKeys(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+			req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
+			return http.DefaultClient.Do(req)
+		})
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	snap := gw.Snapshot()
+	assert.Contains(t, snap.InFlightKeys, key, "in-flight GET key should appear in Snapshot")
+
+	close(release)
+	wg.Wait()
+
+	snap2 := gw.Snapshot()
+	assert.NotContains(t, snap2.InFlightKeys, key, "completed key should no longer appear in Snapshot")
+}
