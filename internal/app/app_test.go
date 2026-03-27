@@ -12,7 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -2264,18 +2264,18 @@ func TestApp_PageB_TickMsg_ReachesNetworkLogPane(t *testing.T) {
 	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should survive TickMsg")
 }
 
-// TestApp_PageB_VisualizerTick_ReachesRequestFlowPane verifies VisualizerTickMsg
+// TestApp_PageB_VizTick_ReachesRequestFlowPane verifies viz.TickMsg
 // advances the RequestFlowPane animation frame.
-func TestApp_PageB_VisualizerTick_ReachesRequestFlowPane(t *testing.T) {
+func TestApp_PageB_VizTick_ReachesRequestFlowPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
 	frameBefore := a.RequestFlowPane().FrameIndex()
-	m, _ := a.Update(components.VisualizerTickMsg(time.Now()))
+	m, _ := a.Update(viz.TickMsg(time.Now()))
 	a = m.(*app.App)
 	frameAfter := a.RequestFlowPane().FrameIndex()
 
-	assert.Equal(t, frameBefore+1, frameAfter, "VisualizerTickMsg should advance RequestFlowPane frame")
+	assert.Equal(t, frameBefore+1, frameAfter, "viz.TickMsg should advance RequestFlowPane frame")
 }
 
 // --- Feature 52: Mouse Scroll + Responsive Behavior tests ---

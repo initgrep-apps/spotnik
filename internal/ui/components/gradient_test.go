@@ -135,9 +135,11 @@ func TestGradientSeekBar_TimeLabelPadded(t *testing.T) {
 func TestGradientVolumeBar_ZeroVolume(t *testing.T) {
 	b := newTestGradientVolumeBar(30)
 	out := b.Render(0)
-	assert.Contains(t, out, "VOL")
+	assert.Contains(t, out, "♪", "zero volume should show music note icon")
 	assert.Contains(t, out, "0%")
-	assert.NotContains(t, out, "█", "zero volume should show no filled chars")
+	assert.NotContains(t, out, "■", "zero volume should show no filled chars")
+	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
+	assert.NotContains(t, out, "█", "should not use old filled block character")
 }
 
 func TestGradientVolumeBar_LowVolume_Gradient1(t *testing.T) {
@@ -145,34 +147,58 @@ func TestGradientVolumeBar_LowVolume_Gradient1(t *testing.T) {
 	// 25% is in the 0-33% band — should use Gradient1 color.
 	// In no-color terminal, just verify structural output.
 	out := b.Render(25)
-	assert.Contains(t, out, "VOL")
+	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "25%")
-	assert.Contains(t, out, "█")
+	assert.Contains(t, out, "■")
+	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
 }
 
 func TestGradientVolumeBar_MidVolume_Gradient2(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// 50% is in the 34-66% band — should use Gradient2 color.
 	out := b.Render(50)
-	assert.Contains(t, out, "VOL")
+	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "50%")
-	assert.Contains(t, out, "█")
+	assert.Contains(t, out, "■")
+	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
 }
 
 func TestGradientVolumeBar_HighVolume_Gradient3(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// 80% is in the 67-100% band — should use Gradient3 color.
 	out := b.Render(80)
-	assert.Contains(t, out, "VOL")
+	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "80%")
-	assert.Contains(t, out, "█")
+	assert.Contains(t, out, "■")
+	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
 }
 
 func TestGradientVolumeBar_FullVolume(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	out := b.Render(100)
 	assert.Contains(t, out, "100%")
-	assert.NotContains(t, out, "░", "full volume should have no empty chars")
+	assert.NotContains(t, out, "□", "full volume should have no empty chars")
+	assert.NotContains(t, out, "░", "should not use old empty block character")
+}
+
+func TestGradientVolumeBar_Format(t *testing.T) {
+	b := newTestGradientVolumeBar(30)
+	out := b.Render(50)
+	assert.Contains(t, out, "♪", "should contain music note icon")
+	assert.Contains(t, out, "■", "should contain filled block character")
+	assert.Contains(t, out, "□", "should contain empty block character")
+	assert.Contains(t, out, "50%")
+	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
+	assert.NotContains(t, out, "█", "should not use old filled block character")
+	assert.NotContains(t, out, "░", "should not use old empty block character")
+}
+
+func TestGradientVolumeBar_MuteIcon_Volume0(t *testing.T) {
+	b := newTestGradientVolumeBar(30)
+	// Volume = 0: ♪ still present but in muted color
+	out := b.Render(0)
+	assert.Contains(t, out, "♪")
+	assert.Contains(t, out, "0%")
 }
 
 func TestGradientVolumeBar_ClampHigh(t *testing.T) {

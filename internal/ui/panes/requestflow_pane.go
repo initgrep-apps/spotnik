@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -68,7 +68,7 @@ type RequestFlowPane struct {
 	width   int
 	height  int
 
-	// frameIndex is the animation frame counter, advanced on each VisualizerTickMsg.
+	// frameIndex is the animation frame counter, advanced on each viz.TickMsg.
 	frameIndex int
 
 	// recentReqs stores the last maxRecentReqs completed requests.
@@ -125,13 +125,13 @@ func (p *RequestFlowPane) IsFocused() bool { return p.focused }
 func (p *RequestFlowPane) FrameIndex() int { return p.frameIndex }
 
 // Init returns nil — RequestFlowPane has no self-initiated tick loop.
-// It reacts to TickMsg (1s) and VisualizerTickMsg (200ms) from the app.
+// It reacts to TickMsg (1s) and viz.TickMsg (200ms) from the app.
 func (p *RequestFlowPane) Init() tea.Cmd { return nil }
 
 // Update handles incoming messages.
 func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
-	case components.VisualizerTickMsg:
+	case viz.TickMsg:
 		// Advance the arrow animation frame counter.
 		p.frameIndex++
 		return p, nil

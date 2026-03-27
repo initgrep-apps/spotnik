@@ -5,10 +5,9 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
-// Controls renders the transport controls row: |< ||/> >| ~ =>
-// Uses terminal-friendly ASCII symbols instead of Unicode emoji.
-// Active icons (shuffle on, repeat on) use PlayingIndicator() color.
-// Inactive icons use TextSecondary() color.
+// Controls renders the transport controls row: ⇄ ▷/⏸ ≡ ↻
+// Uses Unicode glyphs. Previous/Next removed (keyboard shortcuts exist).
+// Active icons use PlayingIndicator() color, inactive use TextSecondary().
 type Controls struct {
 	isPlaying  bool
 	shuffleOn  bool
@@ -32,33 +31,31 @@ func NewControls(t theme.Theme, isPlaying, shuffleOn bool, repeatMode string) Co
 
 // Render returns the controls row as a string.
 func (c Controls) Render() string {
-	prev := c.inactiveStyle.Render("|<")
+	var shuffle string
+	if c.shuffleOn {
+		shuffle = c.activeStyle.Render("⇄")
+	} else {
+		shuffle = c.inactiveStyle.Render("⇄")
+	}
 
 	var playPause string
 	if c.isPlaying {
-		playPause = c.activeStyle.Render("||")
+		playPause = c.activeStyle.Render("⏸")
 	} else {
-		playPause = c.inactiveStyle.Render(">")
+		playPause = c.inactiveStyle.Render("▷")
 	}
 
-	next := c.inactiveStyle.Render(">|")
-
-	var shuffle string
-	if c.shuffleOn {
-		shuffle = c.activeStyle.Render("~")
-	} else {
-		shuffle = c.inactiveStyle.Render("~")
-	}
+	queue := c.inactiveStyle.Render("≡")
 
 	var repeat string
 	switch c.repeatMode {
 	case "track":
-		repeat = c.activeStyle.Render("=>1")
+		repeat = c.activeStyle.Render("↻1")
 	case "context":
-		repeat = c.activeStyle.Render("=>")
+		repeat = c.activeStyle.Render("↻")
 	default:
-		repeat = c.inactiveStyle.Render("=>")
+		repeat = c.inactiveStyle.Render("↻")
 	}
 
-	return prev + "   " + playPause + "   " + next + "      " + shuffle + "   " + repeat
+	return shuffle + "  " + playPause + "  " + queue + "  " + repeat
 }

@@ -1,12 +1,15 @@
 package panes
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -381,32 +384,46 @@ func TestNowPlayingPane_ToggleKey(t *testing.T) {
 func TestNowPlayingPane_Actions(t *testing.T) {
 	pane := newTestNowPlayingPane(true)
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
-	assert.Equal(t, "s", actions[0].Key)
-	assert.Equal(t, "shuffle", actions[0].Label)
-	assert.Equal(t, "r", actions[1].Key)
-	assert.Equal(t, "repeat", actions[1].Label)
+	require.Len(t, actions, 5, "should have exactly 5 border actions")
+
+	expected := map[string]string{
+		"s":     "shfl",
+		"r":     "rpt",
+		"space": "play",
+		"+/-":   "vol",
+		"v":     "viz",
+	}
+	for _, a := range actions {
+		label, ok := expected[a.Key]
+		assert.True(t, ok, "unexpected action key: %s", a.Key)
+		assert.Equal(t, label, a.Label)
+	}
 }
 
-// ── Task 3: Visualizer tests ─────────────────────────────────────────────────
+// ── Task 4: viz.Engine migration tests ───────────────────────────────────────
 
-func TestNowPlayingPane_VisualizerTickMsg_AdvancesFrame(t *testing.T) {
+func TestNowPlayingPane_VizTickMsg_AdvancesFrame(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
-	// Set visualizer to playing.
-	pane.visualizer.SetPlaying(true)
-	initialFrame := pane.visualizer.FrameIndex()
+	initialFrame := pane.engine.FrameIndex()
 
-	// Send VisualizerTickMsg.
-	_, _ = pane.Update(components.VisualizerTickMsg{})
+	// Send viz.TickMsg — should advance frame when playing.
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
 
-	// Frame should have advanced (visualizer was playing).
-	assert.Equal(t, (initialFrame+1)%40, pane.visualizer.FrameIndex(),
-		"VisualizerTickMsg should advance frame when playing")
+	assert.Equal(t, (initialFrame+1)%40, pane.engine.FrameIndex(),
+		"viz.TickMsg should advance engine frame when playing")
 }
 
-func TestNowPlayingPane_PlaybackFetched_SetsVisualizerPlaying(t *testing.T) {
+func TestNowPlayingPane_VizTickMsg_ReturnsCmd(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.SetSize(80, 24)
+
+	_, cmd := pane.Update(viz.TickMsg(time.Now()))
+	assert.NotNil(t, cmd, "viz.TickMsg should return a re-arm tick command")
+}
+
+func TestNowPlayingPane_PlaybackFetched_SetsEnginePlaying(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(false, true)
 	pane.SetSize(80, 24)
 
@@ -422,18 +439,16 @@ func TestNowPlayingPane_PlaybackFetched_SetsVisualizerPlaying(t *testing.T) {
 	})
 	_, _ = pane.Update(PlaybackStateFetchedMsg{})
 
-	// Visualizer should now be in playing state.
-	// Verify by sending a tick and checking frame advances.
-	before := pane.visualizer.FrameIndex()
-	_, _ = pane.Update(components.VisualizerTickMsg{})
-	assert.Equal(t, (before+1)%40, pane.visualizer.FrameIndex(),
-		"visualizer should animate when playing=true")
+	// Engine should now be in playing state — frame should advance on tick.
+	before := pane.engine.FrameIndex()
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+	assert.Equal(t, (before+1)%40, pane.engine.FrameIndex(),
+		"engine should animate when playing=true")
 }
 
-func TestNowPlayingPane_PlaybackFetched_PausesVisualizer(t *testing.T) {
+func TestNowPlayingPane_PlaybackFetched_PausesEngine(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
-	pane.visualizer.SetPlaying(true)
 
 	// Update store to paused, send PlaybackStateFetchedMsg.
 	pane.store.SetPlaybackState(&api.PlaybackState{
@@ -447,21 +462,20 @@ func TestNowPlayingPane_PlaybackFetched_PausesVisualizer(t *testing.T) {
 	})
 	_, _ = pane.Update(PlaybackStateFetchedMsg{})
 
-	// Visualizer should be paused — frame should not advance on tick.
-	before := pane.visualizer.FrameIndex()
-	_, _ = pane.Update(components.VisualizerTickMsg{})
-	assert.Equal(t, before, pane.visualizer.FrameIndex(),
-		"visualizer should not animate when playing=false")
+	// Engine should be paused — frame should not advance on tick.
+	before := pane.engine.FrameIndex()
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+	assert.Equal(t, before, pane.engine.FrameIndex(),
+		"engine should not animate when playing=false")
 }
 
 func TestNowPlayingPane_FullView_ContainsBrailleChars(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
-	pane.visualizer.SetPlaying(true)
 
 	output := pane.View()
 
-	// Braille chars used by the visualizer (any of the 5 codepoints).
+	// Braille chars used by the engine (any braille codepoint).
 	hasBraille := false
 	for _, r := range output {
 		if r >= '\u2800' && r <= '\u28FF' {
@@ -469,7 +483,7 @@ func TestNowPlayingPane_FullView_ContainsBrailleChars(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, hasBraille, "full mode View() should contain braille characters from visualizer")
+	assert.True(t, hasBraille, "full mode View() should contain braille characters from engine")
 }
 
 // ── Task 4: Gradient bars tests ──────────────────────────────────────────────
@@ -488,8 +502,8 @@ func TestNowPlayingPane_VolumeBar_Renders(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	// GradientVolumeBar always renders "VOL" prefix.
-	assert.Contains(t, output, "VOL", "volume bar should be rendered in full mode")
+	// GradientVolumeBar renders music note icon ♪.
+	assert.Contains(t, output, "♪", "volume bar should be rendered in full mode")
 }
 
 func TestNowPlayingPane_BarsResize_WithSetSize(t *testing.T) {
@@ -535,44 +549,24 @@ func TestNowPlayingPane_ZeroDuration(t *testing.T) {
 	assert.NotEmpty(t, output)
 }
 
-// TestNowPlayingPane_VisualizerTickMsg_ReturnsCmd verifies the tick returns a re-arm command.
-func TestNowPlayingPane_VisualizerTickMsg_ReturnsCmd(t *testing.T) {
-	pane := newTestNowPlayingPane(true)
+// ── v key cycles engine pattern ──────────────────────────────────────────────
+
+// TestNowPlayingPane_V_CyclesEnginePattern verifies that pressing 'v' while
+// focused advances the engine's pattern index, wrapping around.
+func TestNowPlayingPane_V_CyclesEnginePattern(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
+	pane.engine.SetSize(40, 10) // ensure frames are generated
 
-	_, cmd := pane.Update(components.VisualizerTickMsg{})
-	assert.NotNil(t, cmd, "VisualizerTickMsg should return a re-arm tick command")
-}
+	startPat := pane.engine.Pattern()
 
-// ── Task 2: v key cycles visualizer pattern ──────────────────────────────────
+	vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
+	_, cmd := pane.Update(vMsg)
 
-// TestNowPlayingPane_V_CyclesVisualizerPattern verifies that pressing 'v' while
-// focused advances the visualizer's pattern index, wrapping at NumPatterns.
-func TestNowPlayingPane_V_CyclesVisualizerPattern(t *testing.T) {
-	tests := []struct {
-		name        string
-		startPat    int
-		wantPattern int
-	}{
-		{"pattern 0 → 1", 0, 1},
-		{"pattern 1 → 2", 1, 2},
-		{"pattern 2 wraps → 0", 2, 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pane := newTestNowPlayingPaneWithState(true, true)
-			pane.SetSize(80, 24)
-			pane.visualizer.SetPattern(tt.startPat)
-
-			vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
-			_, cmd := pane.Update(vMsg)
-
-			assert.Nil(t, cmd, "v key should return nil cmd (local state change only)")
-			assert.Equal(t, tt.wantPattern, pane.visualizer.Pattern(),
-				"visualizer pattern should cycle from %d to %d", tt.startPat, tt.wantPattern)
-		})
-	}
+	assert.Nil(t, cmd, "v key should return nil cmd (local state change only)")
+	patternCount := pane.engine.PatternCount()
+	assert.Equal(t, (startPat+1)%patternCount, pane.engine.Pattern(),
+		"engine pattern should advance by 1 on v key")
 }
 
 // TestNowPlayingPane_V_IgnoredWhenNotFocused verifies that 'v' is ignored when
@@ -580,13 +574,14 @@ func TestNowPlayingPane_V_CyclesVisualizerPattern(t *testing.T) {
 func TestNowPlayingPane_V_IgnoredWhenNotFocused(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, false) // not focused
 	pane.SetSize(80, 24)
-	pane.visualizer.SetPattern(0)
+
+	startPat := pane.engine.Pattern()
 
 	vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
 	_, cmd := pane.Update(vMsg)
 
 	assert.Nil(t, cmd, "unfocused pane should return nil cmd")
-	assert.Equal(t, 0, pane.visualizer.Pattern(), "pattern should not change when not focused")
+	assert.Equal(t, startPat, pane.engine.Pattern(), "pattern should not change when not focused")
 }
 
 // ── Feature 58: Split layout tests ──────────────────────────────────────────
@@ -603,11 +598,10 @@ func TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders(t *testing.T) {
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsBraille verifies that View() contains
-// braille characters from the visualizer rendered on the right side.
+// braille characters from the engine rendered on the right side.
 func TestNowPlayingPane_SplitLayout_ContainsBraille(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
-	pane.visualizer.SetPlaying(true)
 
 	output := pane.View()
 
@@ -618,7 +612,7 @@ func TestNowPlayingPane_SplitLayout_ContainsBraille(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, hasBraille, "split layout should contain braille characters from visualizer")
+	assert.True(t, hasBraille, "split layout should contain braille characters from engine")
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsSeekBar verifies that View() contains
@@ -634,13 +628,13 @@ func TestNowPlayingPane_SplitLayout_ContainsSeekBar(t *testing.T) {
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox verifies that View()
-// contains "VOL" from the volume bar rendered inside the InfoBox.
+// contains ♪ from the volume bar rendered inside the InfoBox.
 func TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	assert.Contains(t, output, "VOL", "split layout InfoBox should contain volume bar")
+	assert.Contains(t, output, "♪", "split layout InfoBox should contain volume bar")
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsControls verifies that View() contains
@@ -650,8 +644,9 @@ func TestNowPlayingPane_SplitLayout_ContainsControls(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	// Controls always renders |< and >| symbols.
-	assert.Contains(t, output, "|<", "split layout InfoBox should contain prev-track control")
+	// Controls renders Unicode glyphs — shuffle ⇄ and repeat ↻.
+	assert.Contains(t, output, "⇄", "split layout InfoBox should contain shuffle control")
+	assert.Contains(t, output, "↻", "split layout InfoBox should contain repeat control")
 }
 
 // TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall verifies that Title() includes
@@ -689,6 +684,88 @@ func TestNowPlayingPane_SplitLayout_AdaptsToDifferentSizes(t *testing.T) {
 	large := pane.View()
 
 	assert.NotEqual(t, small, large, "different sizes should produce different split layout output")
+}
+
+// ── Task 5: Two-column layout with seek bar in right panel ───────────────────
+
+func TestNowPlayingPane_SeekBarInRightPanel(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 20)
+	view := pane.View()
+
+	// The seek bar time labels should be present.
+	assert.Contains(t, view, "0:30", "should contain elapsed time from seek bar")
+
+	// Multiple lines should be present.
+	lines := strings.Split(view, "\n")
+	assert.Greater(t, len(lines), 3, "should have multiple lines")
+}
+
+func TestNowPlayingPane_SplitFrame_Table(t *testing.T) {
+	tests := []struct {
+		name      string
+		frameLen  int
+		expectTop int
+		expectBot int
+	}{
+		{"6 lines", 6, 3, 3},
+		{"5 lines", 5, 2, 3},
+		{"1 line", 1, 0, 1},
+		{"0 lines", 0, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			frame := make(viz.Frame, tt.frameLen)
+			for i := range frame {
+				frame[i] = viz.StyledLine{Text: "x", Color: "#fff"}
+			}
+			top, bot := splitFrame(frame)
+			assert.Len(t, top, tt.expectTop)
+			assert.Len(t, bot, tt.expectBot)
+		})
+	}
+}
+
+func TestNowPlayingPane_RenderStyledLines(t *testing.T) {
+	lines := viz.Frame{
+		{Text: "aaa", Color: lipgloss.Color("#ff0000")},
+		{Text: "bbb", Color: lipgloss.Color("#00ff00")},
+	}
+	out := renderStyledLines(lines)
+	assert.Contains(t, out, "aaa")
+	assert.Contains(t, out, "bbb")
+}
+
+func TestNowPlayingPane_RenderStyledLines_Empty(t *testing.T) {
+	out := renderStyledLines(viz.Frame{})
+	assert.Empty(t, out)
+}
+
+// ── Task 6: Vertical centering in expanded mode ───────────────────────────────
+
+func TestNowPlayingPane_ExpandedVerticalCentering(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+
+	// Expanded: large height
+	pane.SetSize(80, 30)
+	view := pane.View()
+	lines := strings.Split(view, "\n")
+
+	// lipgloss.Place pads output to the available height (30-2 = 28 lines).
+	availableHeight := 30 - 2 // pane height minus border chrome
+	assert.Equal(t, availableHeight, len(lines), "expanded should be padded to available height")
+}
+
+func TestNowPlayingPane_CompactNoCentering(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+
+	// Compact: small height — content should not be over-padded.
+	pane.SetSize(80, 10)
+	view := pane.View()
+	lines := strings.Split(view, "\n")
+
+	// Should NOT have excessive padding beyond the content.
+	assert.LessOrEqual(t, len(lines), 12, "compact should not have centering padding")
 }
 
 // splitLines splits a string by newline.
