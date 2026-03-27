@@ -177,8 +177,7 @@ func (s *Store) Devices() []domain.Device {
 }
 
 // SetDevices replaces the cached device list. Called by app.Update() after a
-// successful DevicesLoadedMsg so that subsequent FetchDevicesRequestMsg calls
-// can return cached data when the store is still within DevicesTTL.
+// successful DevicesLoadedMsg.
 func (s *Store) SetDevices(devices []domain.Device) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
