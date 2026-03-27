@@ -381,11 +381,20 @@ func TestNowPlayingPane_ToggleKey(t *testing.T) {
 func TestNowPlayingPane_Actions(t *testing.T) {
 	pane := newTestNowPlayingPane(true)
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
-	assert.Equal(t, "s", actions[0].Key)
-	assert.Equal(t, "shuffle", actions[0].Label)
-	assert.Equal(t, "r", actions[1].Key)
-	assert.Equal(t, "repeat", actions[1].Label)
+	require.Len(t, actions, 5, "should have exactly 5 border actions")
+
+	expected := map[string]string{
+		"s":     "shfl",
+		"r":     "rpt",
+		"space": "play",
+		"+/-":   "vol",
+		"v":     "viz",
+	}
+	for _, a := range actions {
+		label, ok := expected[a.Key]
+		assert.True(t, ok, "unexpected action key: %s", a.Key)
+		assert.Equal(t, label, a.Label)
+	}
 }
 
 // ── Task 3: Visualizer tests ─────────────────────────────────────────────────

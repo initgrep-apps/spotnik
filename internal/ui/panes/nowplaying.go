@@ -109,8 +109,11 @@ func (p *NowPlayingPane) ToggleKey() int {
 // Actions returns the pane-specific shortcuts shown in the border.
 func (p *NowPlayingPane) Actions() []layout.Action {
 	return []layout.Action{
-		{Key: "s", Label: "shuffle"},
-		{Key: "r", Label: "repeat"},
+		{Key: "s", Label: "shfl"},
+		{Key: "r", Label: "rpt"},
+		{Key: "space", Label: "play"},
+		{Key: "+/-", Label: "vol"},
+		{Key: "v", Label: "viz"},
 	}
 }
 
