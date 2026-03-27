@@ -42,8 +42,12 @@ type Engine struct {
 
 // NewEngine creates an Engine with all registered patterns.
 // The theme is used to resolve gradient colors during frame precomputation.
+// If th is nil, the "black" theme is used as a safe default.
 // Call SetSize before calling CurrentFrame or Init.
 func NewEngine(th theme.Theme) *Engine {
+	if th == nil {
+		th = theme.Load("black")
+	}
 	return &Engine{
 		theme:    th,
 		patterns: Patterns(),
@@ -164,12 +168,9 @@ func (e *Engine) generateFrames() []Frame {
 	p := e.patterns[e.patternIdx]
 	colors := e.buildColors(e.height)
 
-	// For braille, maxHeight is height*4 (dot rows).
-	// For block, maxHeight is height (display rows).
-	maxHeight := e.height
-	if _, ok := p.Renderer.(BrailleRenderer); ok {
-		maxHeight = e.height * 4
-	}
+	// MaxHeight is renderer-specific: braille uses height*4 (dot rows),
+	// block uses height (display rows). Delegating avoids type assertions here.
+	maxHeight := p.Renderer.MaxHeight(e.height)
 
 	frames := make([]Frame, numFrames)
 	for f := 0; f < numFrames; f++ {

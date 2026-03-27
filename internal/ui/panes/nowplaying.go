@@ -294,10 +294,14 @@ func (p *NowPlayingPane) renderEmpty() string {
 }
 
 // handleTick processes a TickMsg: increments local progress when playing.
+// localProgressMs is clamped to DurationMs so the seek bar never overflows.
 func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil && ps.IsPlaying {
 		p.localProgressMs += 1000
+		if ps.Item != nil && p.localProgressMs > ps.Item.DurationMs {
+			p.localProgressMs = ps.Item.DurationMs
+		}
 	}
 	return p, nil
 }

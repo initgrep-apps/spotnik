@@ -923,9 +923,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if rfp := a.RequestFlowPane(); rfp != nil {
-			updated, _ := rfp.Update(m)
+			updated, rfpCmd := rfp.Update(m)
 			if p, ok := updated.(*panes.RequestFlowPane); ok {
 				a.panes[layout.PaneRequestFlow] = p
+			}
+			if rfpCmd != nil {
+				visCmds = append(visCmds, rfpCmd)
 			}
 		}
 		if len(visCmds) > 0 {

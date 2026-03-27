@@ -14,6 +14,11 @@ type Renderer interface {
 	// colors must have at least height elements; colors[i] applies to row i.
 	// Returns an empty Frame when width or height is zero.
 	RenderFrame(width, height int, colHeights []int, colors []lipgloss.Color) Frame
+
+	// MaxHeight returns the maximum HeightFunc value for a given display height.
+	// For braille this is height*4 (dot rows per display row).
+	// For block this is height (one unit per display row).
+	MaxHeight(displayHeight int) int
 }
 
 // BrailleRenderer renders column heights as Unicode braille characters (U+2800 block).
@@ -56,6 +61,12 @@ func (r BrailleRenderer) RenderFrame(width, height int, colHeights []int, colors
 		frame[lineIdx] = StyledLine{Text: sb.String(), Color: color}
 	}
 	return frame
+}
+
+// MaxHeight returns the maximum dot-row height for a given display height.
+// Braille uses 4 dot rows per display row.
+func (r BrailleRenderer) MaxHeight(displayHeight int) int {
+	return displayHeight * 4
 }
 
 // brailleChar returns a Unicode braille character for a given fill level (0-4).
