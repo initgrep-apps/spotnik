@@ -1297,9 +1297,22 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.store.DevicesFetching() {
 			return a, nil
 		}
-		// Always fetch fresh device data — device fetches are user-initiated (pressing 'd'),
-		// so the staleness gate must not apply here. A new device coming online would
-		// otherwise be invisible until the TTL expires (~30s).
+		// Short cooldown (5s) prevents rapid-fire API calls while keeping data fresh.
+		if !a.store.DevicesStale() {
+			cached := a.store.Devices()
+			infos := make([]panes.DeviceInfo, 0, len(cached))
+			for _, d := range cached {
+				infos = append(infos, panes.DeviceInfo{
+					ID:       d.ID,
+					Name:     d.Name,
+					Type:     d.Type,
+					IsActive: d.IsActive,
+				})
+			}
+			return a, func() tea.Msg {
+				return panes.DevicesLoadedMsg{Devices: infos}
+			}
+		}
 		a.store.SetDevicesFetching(true)
 		return a, a.buildFetchDevicesCmd()
 

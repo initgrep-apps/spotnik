@@ -350,7 +350,8 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 		if devices == nil {
 			return panes.DevicesLoadedMsg{Err: errNilClient}
 		}
-		devList, err := devices.Devices(context.Background())
+		ctx := api.WithPriority(context.Background(), api.Interactive)
+		devList, err := devices.Devices(ctx)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}

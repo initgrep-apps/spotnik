@@ -11,6 +11,19 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
+// Staleness classification:
+//
+// Stable data (staleness-gated, 5-10min TTL): playlists, albums, liked tracks, stats.
+//   These only change when the user acts within Spotnik or very slowly.
+//   TTL prevents redundant API calls on repeated pane navigation.
+//
+// Volatile data (staleness-gated, short TTL): devices, recently played.
+//   These change externally (devices appear/disappear, playback advances).
+//   Short TTL balances freshness with API efficiency.
+//
+// Real-time data (polled on tick, no TTL): playback state, queue.
+//   Overwritten every tick cycle with adaptive polling intervals.
+
 // TTL constants define how long each data domain is considered fresh.
 // After the TTL expires, Update() should trigger a re-fetch from the Spotify API.
 const (
@@ -27,8 +40,8 @@ const (
 	// Long because Spotify updates these slowly.
 	StatsTTL = 10 * time.Minute
 	// DevicesTTL is the cache lifetime for the available device list.
-	// Short because the user may switch devices at any time.
-	DevicesTTL = 30 * time.Second
+	// Short cooldown prevents rapid-fire API calls while ensuring fresh data on user request.
+	DevicesTTL = 5 * time.Second
 )
 
 // IsStale returns true if fetchedAt is zero (never fetched) or older than ttl.

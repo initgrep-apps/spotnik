@@ -212,7 +212,7 @@ func TestStalenessTTLConstants(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, state.LikedTracksTTL, "LikedTracksTTL should be 5 minutes")
 	assert.Equal(t, 2*time.Minute, state.RecentlyPlayedTTL, "RecentlyPlayedTTL should be 2 minutes")
 	assert.Equal(t, 10*time.Minute, state.StatsTTL, "StatsTTL should be 10 minutes")
-	assert.Equal(t, 30*time.Second, state.DevicesTTL, "DevicesTTL should be 30 seconds")
+	assert.Equal(t, 5*time.Second, state.DevicesTTL, "DevicesTTL should be 5 seconds")
 }
 
 // --- Fetching sentinels: TOCTOU prevention (Task 5) ---
