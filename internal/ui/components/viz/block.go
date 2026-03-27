@@ -14,6 +14,12 @@ import (
 // terminal configurations. This is a known limitation, not something we solve for.
 type BlockRenderer struct{}
 
+// MaxHeight returns the maximum height value for a given display height.
+// Block renderer uses one unit per display row.
+func (r BlockRenderer) MaxHeight(displayHeight int) int {
+	return displayHeight
+}
+
 // RenderFrame converts column heights to block display lines with per-row coloring.
 // Row 0 is the top; row (height-1) is the bottom.
 // A column is filled (█) for all rows at or below its height from the bottom.

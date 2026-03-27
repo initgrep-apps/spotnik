@@ -69,7 +69,7 @@ func TestInfoBox_Render_ContentVerticallycentered(t *testing.T) {
 	// width=28, height=10 → 8 inner rows
 	// 5 content lines → topPad = (8 - 5) / 2 = 1
 	ib := newTestInfoBox(28, 10)
-	lines := []string{"Song Name", "Artist", "", "|< || >|", "VOL 65%"}
+	lines := []string{"Song Name", "Artist", "", "⇄  ▷  ≡  ↻", "♪ ■■■□□ 65%"}
 	out := ib.Render("Track Info", lines, false)
 
 	leading := countLeadingBlankLinesInsideBox(out)

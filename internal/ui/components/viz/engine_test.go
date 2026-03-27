@@ -765,6 +765,61 @@ func TestEngine_SetSize_SameDimensions_NoReset(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// MaxHeight interface method (Issue 1 fix)
+// ---------------------------------------------------------------------------
+
+func TestBrailleRenderer_MaxHeight(t *testing.T) {
+	r := BrailleRenderer{}
+	tests := []struct {
+		displayHeight int
+		want          int
+	}{
+		{displayHeight: 0, want: 0},
+		{displayHeight: 1, want: 4},
+		{displayHeight: 4, want: 16},
+		{displayHeight: 10, want: 40},
+	}
+	for _, tt := range tests {
+		got := r.MaxHeight(tt.displayHeight)
+		assert.Equal(t, tt.want, got,
+			"BrailleRenderer.MaxHeight(%d) should be %d", tt.displayHeight, tt.want)
+	}
+}
+
+func TestBlockRenderer_MaxHeight(t *testing.T) {
+	r := BlockRenderer{}
+	tests := []struct {
+		displayHeight int
+		want          int
+	}{
+		{displayHeight: 0, want: 0},
+		{displayHeight: 1, want: 1},
+		{displayHeight: 4, want: 4},
+		{displayHeight: 10, want: 10},
+	}
+	for _, tt := range tests {
+		got := r.MaxHeight(tt.displayHeight)
+		assert.Equal(t, tt.want, got,
+			"BlockRenderer.MaxHeight(%d) should be %d", tt.displayHeight, tt.want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NewEngine nil-theme guard (Issue 2 fix)
+// ---------------------------------------------------------------------------
+
+func TestNewEngine_NilTheme_UsesDefault(t *testing.T) {
+	assert.NotPanics(t, func() {
+		e := NewEngine(nil)
+		// Engine should be functional with default theme.
+		e.SetSize(20, 4)
+		e.SetPlaying(true)
+		f := e.CurrentFrame()
+		assert.Len(t, f, 4, "nil-theme engine should produce correct frame height")
+	})
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
