@@ -278,6 +278,22 @@ func TestNowPlayingPane_Update_TickNoIncrement_WhenPaused(t *testing.T) {
 	assert.Equal(t, 30000, updatedPane.localProgressMs)
 }
 
+func TestNowPlayingPane_Update_TickClampsAtDuration(t *testing.T) {
+	// localProgressMs must not exceed DurationMs (252000 in the test fixture).
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.localProgressMs = 251500 // one tick away from exceeding DurationMs
+
+	tickMsg := TickMsg{}
+	updatedModel, _ := pane.Update(tickMsg)
+
+	updatedPane, ok := updatedModel.(*NowPlayingPane)
+	require.True(t, ok)
+
+	// 251500 + 1000 = 252500 > 252000 — must be clamped to DurationMs.
+	assert.Equal(t, 252000, updatedPane.localProgressMs,
+		"localProgressMs must be clamped to DurationMs when it would overflow")
+}
+
 func TestNowPlayingPane_SetFocused(t *testing.T) {
 	pane := newTestNowPlayingPane(false)
 	assert.False(t, pane.focused)
