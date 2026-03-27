@@ -15,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -908,8 +909,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.tickCount++
 		return a, tea.Batch(cmds...)
 
-	case components.VisualizerTickMsg:
-		// Forward VisualizerTickMsg to NowPlaying pane and Page B RequestFlowPane.
+	case viz.TickMsg:
+		// Forward viz.TickMsg to NowPlaying pane and Page B RequestFlowPane.
 		// Both panes share the 200ms animation tick for visual consistency.
 		var visCmds []tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {

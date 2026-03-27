@@ -8,7 +8,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -131,16 +131,16 @@ func TestRequestFlowPane_View_BackoffVisibleWhenThrottled(t *testing.T) {
 	assert.Contains(t, v, "backoff", "backoff timer should appear when store is throttled")
 }
 
-// --- Arrow animation advances on VisualizerTickMsg ---
+// --- Arrow animation advances on viz.TickMsg ---
 
-func TestRequestFlowPane_VisualizerTickMsg_AdvancesFrame(t *testing.T) {
+func TestRequestFlowPane_VizTickMsg_AdvancesFrame(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(100, 20)
 
 	frameBefore := pane.FrameIndex()
-	_, _ = pane.Update(components.VisualizerTickMsg(time.Now()))
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
 	frameAfter := pane.FrameIndex()
-	assert.Equal(t, frameBefore+1, frameAfter, "VisualizerTickMsg should advance frameIndex by 1")
+	assert.Equal(t, frameBefore+1, frameAfter, "viz.TickMsg should advance frameIndex by 1")
 }
 
 // --- TickMsg refreshes state ---
@@ -284,14 +284,14 @@ func TestRequestFlowPane_View_RequestAgedOutOnTick(t *testing.T) {
 
 // --- Integration tests ---
 
-// TestRequestFlowPane_Integration_MultipleVisualizerTicks verifies that multiple
+// TestRequestFlowPane_Integration_MultipleVizTicks verifies that multiple
 // animation ticks advance frameIndex monotonically.
-func TestRequestFlowPane_Integration_MultipleVisualizerTicks(t *testing.T) {
+func TestRequestFlowPane_Integration_MultipleVizTicks(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(100, 20)
 
 	for i := 0; i < 10; i++ {
-		_, _ = pane.Update(components.VisualizerTickMsg(time.Now()))
+		_, _ = pane.Update(viz.TickMsg(time.Now()))
 	}
 	assert.Equal(t, 10, pane.FrameIndex(), "after 10 ticks, frameIndex should be 10")
 }
