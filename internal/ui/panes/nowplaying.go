@@ -215,13 +215,55 @@ func (p *NowPlayingPane) View() string {
 	}
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 
-	infoLines := []string{
-		primaryStyle.Render(t.Name),
-		secondaryStyle.Render(strings.Join(artistNames, ", ")),
-		mutedStyle.Render(t.Album.Name),
-		"",
-		ctrl.Render(),
-		p.volumeBar.Render(volume),
+	// Compute available inner height to decide which info lines to include.
+	// This mirrors SetSize: bodyHeight = max(height-4, 4), innerH = bodyHeight-2.
+	bodyHeight := paneMax(p.height-4, 4)
+	innerH := bodyHeight - 2 // InfoBox border rows consume 2
+
+	// Priority: always show track name, controls, and volume bar (essential).
+	// Add artists, album, spacer as space allows.
+	var infoLines []string
+	switch {
+	case innerH >= 6:
+		// Full layout: track, artists, album, spacer, controls, volume.
+		infoLines = []string{
+			primaryStyle.Render(t.Name),
+			secondaryStyle.Render(strings.Join(artistNames, ", ")),
+			mutedStyle.Render(t.Album.Name),
+			"",
+			ctrl.Render(),
+			p.volumeBar.Render(volume),
+		}
+	case innerH >= 5:
+		// Drop spacer: track, artists, album, controls, volume.
+		infoLines = []string{
+			primaryStyle.Render(t.Name),
+			secondaryStyle.Render(strings.Join(artistNames, ", ")),
+			mutedStyle.Render(t.Album.Name),
+			ctrl.Render(),
+			p.volumeBar.Render(volume),
+		}
+	case innerH >= 4:
+		// Drop album: track, artists, controls, volume.
+		infoLines = []string{
+			primaryStyle.Render(t.Name),
+			secondaryStyle.Render(strings.Join(artistNames, ", ")),
+			ctrl.Render(),
+			p.volumeBar.Render(volume),
+		}
+	case innerH >= 3:
+		// Drop artists: track, controls, volume.
+		infoLines = []string{
+			primaryStyle.Render(t.Name),
+			ctrl.Render(),
+			p.volumeBar.Render(volume),
+		}
+	default:
+		// Minimal: track and controls only (no room for volume bar).
+		infoLines = []string{
+			primaryStyle.Render(t.Name),
+			ctrl.Render(),
+		}
 	}
 
 	infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
