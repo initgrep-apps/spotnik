@@ -1297,23 +1297,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.store.DevicesFetching() {
 			return a, nil
 		}
-		// If data is fresh, return cached device list so the overlay can initialize
-		// without a redundant API round-trip.
-		if !a.store.DevicesStale() {
-			cached := a.store.Devices()
-			infos := make([]panes.DeviceInfo, 0, len(cached))
-			for _, d := range cached {
-				infos = append(infos, panes.DeviceInfo{
-					ID:       d.ID,
-					Name:     d.Name,
-					Type:     d.Type,
-					IsActive: d.IsActive,
-				})
-			}
-			return a, func() tea.Msg {
-				return panes.DevicesLoadedMsg{Devices: infos}
-			}
-		}
+		// Always fetch fresh device data — device fetches are user-initiated (pressing 'd'),
+		// so the staleness gate must not apply here. A new device coming online would
+		// otherwise be invisible until the TTL expires (~30s).
 		a.store.SetDevicesFetching(true)
 		return a, a.buildFetchDevicesCmd()
 
@@ -1337,8 +1323,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearDevicesError()
 		a.store.SetDevicesFetchedAt(time.Now())
-		// Cache the raw domain device list so the staleness gate can return
-		// cached data on subsequent FetchDevicesRequestMsg calls within DevicesTTL.
+		// Cache the raw domain device list in the store and stamp fetchedAt.
 		// Reverse-convert panes.DeviceInfo → domain.Device (same fields, lossless).
 		rawDevices := make([]domain.Device, 0, len(m.Devices))
 		for _, info := range m.Devices {
