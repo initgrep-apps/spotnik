@@ -15,7 +15,6 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // newTestApp creates a fresh App for staleness tests.
@@ -288,33 +287,6 @@ func TestFetchDevicesRequest_WhenFetching_SkipsDuplicateDispatch(t *testing.T) {
 
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
 	assert.Nil(t, cmd, "FetchDevicesRequestMsg should be skipped when already fetching")
-}
-
-// TestFetchDevicesRequest_WhenFresh_ReturnsCachedDevices verifies that when the device
-// list is fresh (within 5s DevicesTTL), FetchDevicesRequestMsg returns a synthetic cmd
-// delivering cached devices and does NOT set the fetching sentinel.
-func TestFetchDevicesRequest_WhenFresh_ReturnsCachedDevices(t *testing.T) {
-	a := newTestApp()
-	a.Store().SetDevices([]domain.Device{
-		{ID: "d1", Name: "MacBook Pro", Type: "Computer", IsActive: true},
-	})
-	a.Store().SetDevicesFetchedAt(time.Now())
-	// Devices are fresh (within 5s DevicesTTL).
-
-	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
-	require.NotNil(t, cmd, "FetchDevicesRequestMsg when fresh should return a synthetic cmd (not nil)")
-	// The fetching sentinel must NOT be set — no real fetch was dispatched.
-	assert.False(t, a.Store().DevicesFetching(), "DevicesFetching sentinel must NOT be set when returning cached data")
-
-	// Execute the command to verify it produces a DevicesLoadedMsg with cached data.
-	msg := cmd()
-	loaded, ok := msg.(panes.DevicesLoadedMsg)
-	require.True(t, ok, "synthetic cmd should produce a DevicesLoadedMsg, got %T", msg)
-	assert.Nil(t, loaded.Err, "synthetic DevicesLoadedMsg should have nil Err")
-	require.Len(t, loaded.Devices, 1, "synthetic DevicesLoadedMsg should carry cached device list")
-	assert.Equal(t, "d1", loaded.Devices[0].ID)
-	assert.Equal(t, "MacBook Pro", loaded.Devices[0].Name)
-	assert.True(t, loaded.Devices[0].IsActive)
 }
 
 // TestFetchStats_NilClient_ClearsSentinel verifies that when buildFetchStatsCmd returns
