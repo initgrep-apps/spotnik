@@ -326,3 +326,62 @@ func TestDeviceOverlay_View_InactiveDeviceSymbol(t *testing.T) {
 
 	assert.Contains(t, view, "○", "inactive device should show ○ symbol")
 }
+
+// TestDeviceOverlay_CursorClampedOnListShrink verifies that when a DevicesLoadedMsg
+// arrives with a shorter device list, the cursor is clamped to remain in bounds.
+// This prevents a panic (index out of range) in handleEnter when the user presses Enter
+// after devices go offline between refreshes.
+func TestDeviceOverlay_CursorClampedOnListShrink(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+
+	// Step 1: load 3 devices and navigate to cursor=2 (last device).
+	threeDevices := []DeviceInfo{
+		{ID: "a", Name: "Device A", Type: "Computer", IsActive: true},
+		{ID: "b", Name: "Device B", Type: "Smartphone", IsActive: false},
+		{ID: "c", Name: "Device C", Type: "Speaker", IsActive: false},
+	}
+	model, _ := overlay.Update(DevicesLoadedMsg{Devices: threeDevices})
+	overlay = model.(*DeviceOverlay)
+	overlay.cursor = 2 // manually set cursor to last position
+
+	// Step 2: refresh with only 1 device (simulating devices going offline).
+	oneDevice := []DeviceInfo{
+		{ID: "a", Name: "Device A", Type: "Computer", IsActive: true},
+	}
+	model, _ = overlay.Update(DevicesLoadedMsg{Devices: oneDevice})
+	overlay = model.(*DeviceOverlay)
+
+	// Cursor must be clamped to 0 (last valid index for a 1-element list).
+	assert.Equal(t, 0, overlay.cursor, "cursor should be clamped to 0 after list shrinks to 1 device")
+
+	// Step 3: pressing Enter must not panic — no index out of range.
+	assert.NotPanics(t, func() {
+		overlay.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	}, "pressing Enter after list shrinks must not panic")
+}
+
+// TestDeviceOverlay_CursorClampedOnEmptyList verifies that when a DevicesLoadedMsg
+// arrives with an empty device list, the cursor is reset to 0.
+func TestDeviceOverlay_CursorClampedOnEmptyList(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+
+	// Start with 2 devices and cursor at 1.
+	twoDevices := []DeviceInfo{
+		{ID: "a", Name: "Device A", Type: "Computer", IsActive: true},
+		{ID: "b", Name: "Device B", Type: "Smartphone", IsActive: false},
+	}
+	model, _ := overlay.Update(DevicesLoadedMsg{Devices: twoDevices})
+	overlay = model.(*DeviceOverlay)
+	overlay.cursor = 1
+
+	// Now receive an empty list.
+	model, _ = overlay.Update(DevicesLoadedMsg{Devices: []DeviceInfo{}})
+	overlay = model.(*DeviceOverlay)
+
+	assert.Equal(t, 0, overlay.cursor, "cursor should be reset to 0 when device list becomes empty")
+
+	// Pressing Enter on empty list must not panic (handleEnter already guards len==0).
+	assert.NotPanics(t, func() {
+		overlay.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	}, "pressing Enter on empty list must not panic")
+}

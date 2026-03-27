@@ -60,6 +60,14 @@ func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// This handler only updates the local devices list for rendering.
 		if m.Err == nil {
 			d.devices = m.Devices
+			// Clamp the cursor so it stays in bounds when the list shrinks
+			// (e.g. a device goes offline between refreshes). Without this,
+			// the next Enter keypress panics with index out of range.
+			if len(d.devices) == 0 {
+				d.cursor = 0
+			} else if d.cursor >= len(d.devices) {
+				d.cursor = len(d.devices) - 1
+			}
 		}
 		return d, nil
 
