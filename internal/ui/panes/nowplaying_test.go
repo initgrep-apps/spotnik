@@ -650,8 +650,9 @@ func TestNowPlayingPane_SplitLayout_ContainsControls(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	// Controls always renders |< and >| symbols.
-	assert.Contains(t, output, "|<", "split layout InfoBox should contain prev-track control")
+	// Controls renders Unicode glyphs — shuffle ⇄ and repeat ↻.
+	assert.Contains(t, output, "⇄", "split layout InfoBox should contain shuffle control")
+	assert.Contains(t, output, "↻", "split layout InfoBox should contain repeat control")
 }
 
 // TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall verifies that Title() includes
