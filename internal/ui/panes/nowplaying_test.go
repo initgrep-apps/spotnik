@@ -488,8 +488,8 @@ func TestNowPlayingPane_VolumeBar_Renders(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	// GradientVolumeBar always renders "VOL" prefix.
-	assert.Contains(t, output, "VOL", "volume bar should be rendered in full mode")
+	// GradientVolumeBar renders music note icon ♪.
+	assert.Contains(t, output, "♪", "volume bar should be rendered in full mode")
 }
 
 func TestNowPlayingPane_BarsResize_WithSetSize(t *testing.T) {
@@ -634,13 +634,13 @@ func TestNowPlayingPane_SplitLayout_ContainsSeekBar(t *testing.T) {
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox verifies that View()
-// contains "VOL" from the volume bar rendered inside the InfoBox.
+// contains ♪ from the volume bar rendered inside the InfoBox.
 func TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	assert.Contains(t, output, "VOL", "split layout InfoBox should contain volume bar")
+	assert.Contains(t, output, "♪", "split layout InfoBox should contain volume bar")
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsControls verifies that View() contains

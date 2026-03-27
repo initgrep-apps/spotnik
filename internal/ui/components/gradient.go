@@ -79,11 +79,17 @@ func (b *GradientSeekBar) Render(progressMs, durationMs int) string {
 	return elapsed + strings.Repeat(" ", labelPad) + sb.String() + strings.Repeat(" ", labelPad) + total
 }
 
-// GradientVolumeBar renders a volume bar with color bands based on volume level.
+// GradientVolumeBar renders a volume bar with color bands and a music note icon.
+// Format: "♪ ■■■■□□□□□□ 31%"
 //
+// Color bands:
 //   - 0-33%:  Gradient1() (green/cool)
 //   - 34-66%: Gradient2() (yellow/warm)
 //   - 67-100%: Gradient3() (red/hot)
+//
+// Icon color:
+//   - volume > 0: ♪ in Gradient1() color
+//   - volume = 0: ♪ in TextMuted() color
 type GradientVolumeBar struct {
 	th    theme.Theme
 	width int // total bar fill width; 0 uses default
@@ -94,14 +100,14 @@ func NewGradientVolumeBar(t theme.Theme) *GradientVolumeBar {
 	return &GradientVolumeBar{th: t}
 }
 
-// SetWidth updates the total component width (including label and percentage).
+// SetWidth updates the total component width (including icon and percentage).
 func (b *GradientVolumeBar) SetWidth(width int) {
 	b.width = width
 }
 
 // Render returns the volume bar string for the given volume level.
 // Volume is clamped to [0, 100].
-// Format: "VOL  ████████░░░░░░  65%"
+// Format: "♪ ■■■■□□□□□□ 31%"
 func (b *GradientVolumeBar) Render(volume int) string {
 	if volume > 100 {
 		volume = 100
@@ -113,8 +119,8 @@ func (b *GradientVolumeBar) Render(volume int) string {
 	// Determine the fill bar width from the component width, or use the default.
 	barWidth := gradientVolumeBarWidth
 	if b.width > 0 {
-		// "VOL  " = 5 chars, "  XX%" = up to 5 chars → reserve 10+
-		reserved := 10
+		// "♪ " = 2 chars, "  XX%" = up to 5 chars → reserve 7
+		reserved := 7
 		computed := b.width - reserved
 		if computed > 0 {
 			barWidth = computed
@@ -138,10 +144,20 @@ func (b *GradientVolumeBar) Render(volume int) string {
 	fillStyle := lipgloss.NewStyle().Foreground(fillColor)
 	emptyStyle := lipgloss.NewStyle().Foreground(b.th.Surface())
 
-	bar := fillStyle.Render(strings.Repeat("█", filled)) +
-		emptyStyle.Render(strings.Repeat("░", empty))
+	bar := fillStyle.Render(strings.Repeat("■", filled)) +
+		emptyStyle.Render(strings.Repeat("□", empty))
 
-	return fmt.Sprintf("VOL  %s  %d%%", bar, volume)
+	// Music note icon: green when volume > 0, muted when 0.
+	var icon string
+	if volume > 0 {
+		iconStyle := lipgloss.NewStyle().Foreground(b.th.Gradient1())
+		icon = iconStyle.Render("♪")
+	} else {
+		iconStyle := lipgloss.NewStyle().Foreground(b.th.TextMuted())
+		icon = iconStyle.Render("♪")
+	}
+
+	return fmt.Sprintf("%s %s  %d%%", icon, bar, volume)
 }
 
 // interpolateHex interpolates between two hex color strings.
