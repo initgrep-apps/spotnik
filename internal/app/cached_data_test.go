@@ -150,23 +150,32 @@ func TestFetchStatsMsg_WhenFetching_ReturnsNil(t *testing.T) {
 	assert.Nil(t, cmd, "FetchStatsMsg with in-flight fetch should return nil (no duplicate)")
 }
 
-// TestFetchDevicesRequest_WhenFresh_StillDispatchesFetch verifies that FetchDevicesRequestMsg
-// always triggers a real API fetch even when the store data is within DevicesTTL.
-// Device fetches are user-initiated (pressing 'd'), so returning stale cached data is wrong —
-// a new device coming online would be invisible until the TTL expires (~30s).
-func TestFetchDevicesRequest_WhenFresh_StillDispatchesFetch(t *testing.T) {
+// TestFetchDevicesRequest_WhenFresh_ReturnsCachedData verifies that when device data is
+// fresh (within the 5s DevicesTTL), FetchDevicesRequestMsg returns a synthetic cmd
+// delivering cached devices — it does NOT dispatch a new API fetch.
+// The short 5s TTL prevents rapid-fire API calls while keeping the data fresh.
+func TestFetchDevicesRequest_WhenFresh_ReturnsCachedData(t *testing.T) {
 	a := newTestApp()
 	a.Store().SetDevices([]domain.Device{
 		{ID: "d1", Name: "MacBook Pro", Type: "Computer", IsActive: true},
 		{ID: "d2", Name: "iPhone 15", Type: "Smartphone", IsActive: false},
 	})
 	a.Store().SetDevicesFetchedAt(time.Now())
-	// Devices are fresh (within DevicesTTL), but the handler must still fetch.
+	// Devices are fresh (within 5s DevicesTTL) — handler must return cached data.
 
 	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
-	require.NotNil(t, cmd, "FetchDevicesRequestMsg should always dispatch a fresh API fetch")
-	// The DevicesFetching sentinel proves a real fetch was dispatched, not cached data.
-	assert.True(t, a.Store().DevicesFetching(), "DevicesFetching sentinel must be set when a fetch is dispatched")
+	require.NotNil(t, cmd, "FetchDevicesRequestMsg when fresh should return a synthetic cmd (not nil)")
+	// The fetching sentinel must NOT be set — no real API fetch was dispatched.
+	assert.False(t, a.Store().DevicesFetching(), "DevicesFetching sentinel must NOT be set when returning cached data")
+
+	// Execute the synthetic command and verify it delivers cached devices.
+	msg := cmd()
+	loaded, ok := msg.(panes.DevicesLoadedMsg)
+	require.True(t, ok, "synthetic cmd must produce a DevicesLoadedMsg, got %T", msg)
+	assert.Nil(t, loaded.Err, "synthetic DevicesLoadedMsg should have nil Err")
+	require.Len(t, loaded.Devices, 2, "synthetic cmd should carry both cached devices")
+	assert.Equal(t, "d1", loaded.Devices[0].ID)
+	assert.Equal(t, "d2", loaded.Devices[1].ID)
 }
 
 // TestFetchDevicesRequest_WhenFetching_ReturnsNil verifies that when a devices fetch is
