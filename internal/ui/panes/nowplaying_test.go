@@ -784,6 +784,35 @@ func TestNowPlayingPane_CompactNoCentering(t *testing.T) {
 	assert.LessOrEqual(t, len(lines), 12, "compact should not have centering padding")
 }
 
+// ── Bug fix: compact mode controls visibility ─────────────────────────────────
+
+// TestNowPlayingPane_CompactShowsControls verifies that at height=10 (innerH=4)
+// the View output still contains the transport controls (⇄) and volume bar (♪).
+// At this height, InfoBox.Render() previously truncated content to 4 lines which
+// cut off controls (line 5) and volume bar (line 6) from the 6-line infoLines.
+func TestNowPlayingPane_CompactShowsControls(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 10)
+
+	output := pane.View()
+
+	assert.Contains(t, output, "⇄", "compact mode (height=10) should show shuffle control")
+	assert.Contains(t, output, "♪", "compact mode (height=10) should show volume bar")
+}
+
+// TestNowPlayingPane_VeryCompactShowsControls verifies that at height=8 (innerH=2)
+// the View output still contains the transport controls glyph (⇄).
+// At this height only 2 inner lines are available so the layout should show
+// track name + controls (dropping artists, album, spacer, and volume bar).
+func TestNowPlayingPane_VeryCompactShowsControls(t *testing.T) {
+	pane := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 8)
+
+	output := pane.View()
+
+	assert.Contains(t, output, "⇄", "very compact mode (height=8) should still show controls glyph")
+}
+
 // splitLines splits a string by newline.
 // Shared helper used by multiple pane test files in the same package.
 func splitLines(s string) []string {
