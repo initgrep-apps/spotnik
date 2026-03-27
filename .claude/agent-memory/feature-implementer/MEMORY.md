@@ -23,3 +23,5 @@
 - [project_spotnik_feature49_complete.md](project_spotnik_feature49_complete.md) — Feature 49 (App Migration): viewMode consolidation, LayoutManager integration, renderGrid, key routing, splash fallthrough, focus rotation tests need Resize(), test update patterns
 - [project_spotnik_feature51_complete.md](project_spotnik_feature51_complete.md) — Feature 51 (Page B Nerd Status): Gateway.Snapshot(), RequestFlowPane, NetworkLogPane, Page B registration, PollingSnapshotMsg pattern, DedupWaiters naming gotcha
 - [project_spotnik_feature52_complete.md](project_spotnik_feature52_complete.md) — Feature 52 (Mouse Scroll + Responsive Behavior): mouse option, handleMouseMsg, PaneAt hit-test, minTerm constants, overlay suppression
+- [project_spotnik_feature58_complete.md](project_spotnik_feature58_complete.md) — Feature 58 (NowPlaying Split Layout): InfoBox+Visualizer split, compact removal, splitLines shared helper discovery, vizWidth negative-safe
+- [project_spotnik_feature58b_complete.md](project_spotnik_feature58b_complete.md) — Feature 58b (NowPlaying Design Docs): DESIGN.md-only update, animation patterns, preset diagrams, Edit-tool-on-large-files gotcha
