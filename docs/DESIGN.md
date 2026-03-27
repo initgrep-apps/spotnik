@@ -96,7 +96,7 @@ Page B panes are not toggleable with number keys (those control Page A only).
 - Playback keys (`Space`, `>`, `<`, `+`, `-`, `s`, `r`) always route to NowPlaying regardless of focus
 - `A` (Shift+a) for "add to queue" in search overlay and list panes
 - `i` for "like/unlike track" in Liked Songs and Queue panes
-- NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/4 width, left) + Visualizer (~3/4 width, right) + gradient seek bar (full width, bottom)
+- NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
 ### Pane Interface
 
@@ -188,11 +188,10 @@ All 8 panes visible across 3 rows. NowPlaying spans full width.
 ╭─ ¹Now Playing ───────────────── ᐅs shfl ─ ᐅr rpt ─ ᐅspace play ─ ᐅ+/- vol ─ ᐅv viz ─╮  Row 1 (weight 2)
 │ ╭─ Track Info ──────╮ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ │ Martbaan          │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
-│ │ Samar Mehdi       │ ────────────────────────────────── seek bar ──              │
+│ │ Samar Mehdi       │ ─── 1:41 ████████████████░░░░░░░░░░░░░░░  5:30 ──       │
 │ │ ⇄  ▷  ≡  ↻        │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ │ ♪ ■■■□□□ 65%      │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ ╰───────────────────╯ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
-│ 1:41  ████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  5:30   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ ³Playlists ─────────╮╭─ ⁴Albums ────────────╮╭─ ⁵Liked Songs ──────╮  Row 2 (weight 3)
 │  1  LoFi             ││  1  After Hours      ││  1  Blinding Lights  │
@@ -227,14 +226,12 @@ NowPlaying expanded with large visualizer. Queue and RecentlyPlayed below. All o
 │                                                                                  │
 │ ╭─ Track Info ──────────────╮  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
-│ │ Martbaan                  │  ─────────────── seek bar ─────────────────────    │
-│ │ Samar Mehdi, June         │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ Martbaan                  │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ Samar Mehdi, June         │  ────────── 1:41 ████████░░░░░░░░░ 5:30 ───────    │
 │ │ Martbaan (Album)          │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ │ ⇄  ▷  ≡  ↻               │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
-│ │ VOL  ████████░░  65%     │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
-│ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
-│ │ ♪ ■■■■■□□□□ 65%           │  ────────────── 1:41 ███░░░░ 5:30 ─────────────    │
+│ │ ♪ ■■■■■□□□□ 65%          │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ ╰───────────────────────────╯  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
@@ -255,7 +252,7 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). Play
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
-│  ████████████░░░░░░░  |<  ||  >|  ~  =>   VOL ████░░ 65%             │
+│  (height < 8: track info in title bar — see compact title mode)       │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭─ ³Playlists ─────────╮╭─ ⁴Albums ────────────╮╭─ ⁵Liked Songs ──────╮  Row 2 (weight 4)
 │  1  LoFi             ││  1  After Hours      ││  1  Blinding Lights  │
@@ -280,7 +277,7 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
-│  ████████████░░░░░░░  |<  ||  >|  ~  =>   VOL ████░░ 65%             │
+│  (height < 8: track info in title bar — see compact title mode)       │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭─ ⁷Top Tracks ────────────────╮╭─ ⁸Top Artists ───────────────────────╮  Row 2 (weight 2)
 │  #  Track          Pop       ││  #  Artist          Genre            │
@@ -315,7 +312,7 @@ Three-row layout: NowPlaying small strip (weight 1, height < 8 triggers title-ba
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
-│  ████████████░░░░░░░  |<  ||  >|  ~  =>   VOL ████░░ 65%             │
+│  (height < 8: track info in title bar — see compact title mode)       │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭─ Request Flow ───────────────────────────────────────────────────────╮  Row 2 (weight 3)
 │  (live flow visualization — see Section 19)                          │
@@ -624,35 +621,38 @@ Replace the current monochrome `SeekBar()` / `VolumeBar()` fills:
 
 **Volume bar:**
 ```
-VOL  ████████░░░░░░  65%
+♪ ■■■■□□□□□□  65%
 ```
 - Low volume (0-33%): `Gradient1()` (green/cool)
 - Mid volume (34-66%): `Gradient2()` (yellow/warm)
 - High volume (67-100%): `Gradient3()` (red/hot)
+- Volume = 0: `♪` icon in `TextMuted()` color
+- Volume > 0: `♪` icon in `Gradient1()` color
 
-**Implementation:** Component in `internal/ui/components/gradient.go`. Uses block characters (`█▓▒░`) with per-character color application for smooth gradients.
+**Implementation:** Component in `internal/ui/components/gradient.go`. Uses discrete block characters (`■□`) with per-character color application for the seek bar gradient.
 
 ### NowPlaying Split Layout (btop-inspired)
 
 The NowPlaying pane uses a horizontal split layout inspired by btop's CPU pane:
 
 **Layout proportions:**
-- **Left (~1/4 width, min 28 chars):** InfoBox sub-pane — rounded border (`╭╮╰╯`), "Track Info" title, containing:
+- **Left (~1/3 width, min 28 chars):** InfoBox sub-pane — rounded border (`╭╮╰╯`), "Track Info" title, containing:
   - Track name (bold, `TextPrimary()`)
   - Artist names (`TextSecondary()`)
-  - Album name (`TextMuted()`) — omitted when insufficient height
-  - Controls row (`|< || >| ~ =>`)
-  - Volume bar (`VOL ████░░ 65%`)
-  - All content vertically centered within the InfoBox
-- **Right (~3/4 width):** Animated braille visualizer (full body height)
-- **Bottom (full width, 1 line):** Gradient seek bar with time labels
+  - Album name (`TextMuted()`)
+  - Controls row (`⇄  ▷  ≡  ↻`)
+  - Volume bar (`♪ ■■■□□□ 65%`)
+- **Right (~2/3 width):** viz.Engine animated visualization with per-row color gradient
+  - Top viz rows (top half of frame)
+  - Gradient seek bar with time labels (1 row, `vizWidth` wide)
+  - Bottom viz rows (bottom half of frame)
 
 **Responsive behavior:**
-- `infoWidth = max(contentWidth/4, 28)` — minimum 28 ensures controls fit
-- `vizWidth = contentWidth - infoWidth - 1` — gap between regions
-- `bodyHeight = paneHeight - borders - progressBar`
+- `infoWidth = max(contentWidth/3, 28)` — minimum 28 ensures controls fit
+- `vizWidth = contentWidth - infoWidth - 1` — gap between regions; clamped to min 1
+- `vizHeight = bodyHeight - 1` — engine height excluding seek bar row
+- When height >= 8: full split layout with centering via `lipgloss.Place` if content < available height
 - When height < 8: title bar embeds track info (`Now Playing ── Track · Artist ── ▶ 1:41/5:30`)
-- No separate compact mode — the split layout scales proportionally even in small presets
 
 **InfoBox border:** Uses the project's standard rounded corners. Border color follows `ActiveBorder()`/`InactiveBorder()` based on pane focus state.
 
