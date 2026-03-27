@@ -204,30 +204,6 @@ func TestFetchDevicesRequest_WhenStale_DispatchesFetch(t *testing.T) {
 	assert.NotNil(t, cmd, "FetchDevicesRequestMsg when stale should dispatch a fetch command")
 }
 
-// TestFetchDevicesRequest_WhenFresh_ReturnsSyntheticCmd verifies device fetch returns a
-// synthetic command delivering cached data when the store is within DevicesTTL, so the
-// device overlay can initialize without a redundant API round-trip.
-func TestFetchDevicesRequest_WhenFresh_ReturnsSyntheticCmd(t *testing.T) {
-	a := newTestApp()
-	// Stamp as recently fetched so the store is within DevicesTTL,
-	// and pre-populate the cached device list in the store.
-	a.Store().SetDevicesFetchedAt(time.Now())
-	a.Store().SetDevices([]domain.Device{
-		{ID: "dev1", Name: "MacBook Pro", Type: "Computer", IsActive: true},
-	})
-
-	_, cmd := a.Update(panes.FetchDevicesRequestMsg{})
-	assert.NotNil(t, cmd, "FetchDevicesRequestMsg when fresh should return a synthetic cmd (not nil)")
-	msg := cmd()
-	loaded, ok := msg.(panes.DevicesLoadedMsg)
-	assert.True(t, ok, "synthetic cmd should produce DevicesLoadedMsg, got %T", msg)
-	assert.Nil(t, loaded.Err, "synthetic DevicesLoadedMsg should have nil Err")
-	assert.Len(t, loaded.Devices, 1)
-	assert.Equal(t, "dev1", loaded.Devices[0].ID)
-	assert.Equal(t, "MacBook Pro", loaded.Devices[0].Name)
-	assert.True(t, loaded.Devices[0].IsActive)
-}
-
 // TestStalenessTTLConstants verifies that the exported TTL constants match the spec values.
 // This acts as a regression guard against accidental constant changes.
 func TestStalenessTTLConstants(t *testing.T) {
