@@ -62,11 +62,15 @@
 | 51 | Page B: Nerd Status | `51-page-b-nerd-status.md` | ✅ Complete | 41-43, 49 | #56 |
 | 52 | Mouse Scroll + Responsive | `52-mouse-scroll-responsive.md` | ✅ Complete | 41, 49 | #57 |
 | 53 | Cleanup | `53-cleanup.md` | ✅ Complete | 40-52 | #58 |
-| 54 | Fix Table Alignment | `54-fix-table-alignment.md` | 🔲 Ready | 43 | — |
-| 55 | Fix Recently Played Empty | `55-fix-recently-played-empty.md` | 🔲 Ready | 47 | — |
-| 56 | Fix Request Flow Data | `56-fix-request-flow-data.md` | 🔲 Ready | 51 | — |
+| 54 | Fix Table Alignment | `54-fix-table-alignment.md` | ✅ Complete | 43 | — |
+| 55 | Fix Recently Played Empty | `55-fix-recently-played-empty.md` | ✅ Complete | 47 | — |
+| 56 | Fix Request Flow Data | `56-fix-request-flow-data.md` | ✅ Complete | 51 | — |
 | 57 | CI/CD & Release Pipeline | `57-cicd-release-pipeline.md` | 🔲 Ready | — | — |
+| 58 | NowPlaying Split Layout | `58-nowplaying-split-layout.md` | ✅ Complete | 41, 42, 44 | #61 |
+| 58b | NowPlaying Design Docs | `58b-nowplaying-design-docs.md` | ✅ Complete | 58 | #61 |
+| 59 | Visualizer Engine | `59-visualizer-engine.md` | ✅ Complete | 40 | #65 |
+| 60 | NowPlaying Pane Redesign | `60-nowplaying-redesign.md` | ✅ Complete | 59 | #66 |
 
 ---
 
-*Last updated: 2026-03-26*
+*Last updated: 2026-03-27*

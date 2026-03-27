@@ -31,7 +31,7 @@ so `Update()` can make informed decisions about when to re-fetch.
 | Liked tracks | 5 min | Changes infrequently |
 | Recently played | 2 min | Changes with playback |
 | Stats (per range) | 10 min | Spotify updates these slowly |
-| Devices | 30 sec | Can change quickly when switching |
+| Devices | 5 sec | Volatile — short cooldown; user-initiated fetches use Interactive priority |
 
 ---
 
@@ -108,7 +108,7 @@ single-use flags that can't support re-fetching.
        LikedTracksTTL    = 5 * time.Minute
        RecentlyPlayedTTL = 2 * time.Minute
        StatsTTL          = 10 * time.Minute
-       DevicesTTL        = 30 * time.Second
+       DevicesTTL        = 5 * time.Second
    )
    ```
 
