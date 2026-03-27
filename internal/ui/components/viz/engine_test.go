@@ -745,6 +745,25 @@ func TestEdge_LargeDimensions(t *testing.T) {
 	})
 }
 
+func TestEngine_Update_NonTickMsg_ReturnsNil(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(20, 4)
+	// A non-TickMsg should return nil (no re-arm)
+	cmd := e.Update("some-other-message")
+	assert.Nil(t, cmd)
+}
+
+func TestEngine_SetSize_SameDimensions_NoReset(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(20, 4)
+	e.SetPlaying(true)
+	e.Advance()
+	e.Advance()
+	// Calling SetSize with identical dimensions should not reset frameIdx
+	e.SetSize(20, 4)
+	assert.Equal(t, 2, e.FrameIndex(), "same-dimensions SetSize must not reset frameIdx")
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

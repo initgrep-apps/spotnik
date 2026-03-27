@@ -181,15 +181,14 @@ func heightBlockSparse(width, maxHeight, frameIdx int) []int {
 		x := float64(col) / float64(width) * 4 * math.Pi
 		// Mostly low with occasional narrow peaks
 		base := 0.1 * (math.Sin(x+phase) + 1)
-		spike := 0.0
-		// Gaussian spike at phase-dependent positions
+		// Gaussian spike at a single phase-dependent position per frame
 		spikePos := math.Mod(phase/(2*math.Pi), 1.0)
 		colPos := float64(col) / float64(width)
 		dist := math.Abs(colPos - spikePos)
 		if dist > 0.5 {
 			dist = 1.0 - dist
 		}
-		spike = 0.8 * math.Exp(-(dist*dist)/(2*0.05*0.05))
+		spike := 0.8 * math.Exp(-(dist*dist)/(2*0.05*0.05))
 		val := clamp01(base + spike)
 		out[col] = int(val * float64(maxHeight))
 	}
