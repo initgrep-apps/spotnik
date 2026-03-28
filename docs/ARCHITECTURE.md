@@ -614,6 +614,20 @@ POLLING  tick: 1000ms  state: active    STORE  fetching: []
 - **Flat fallback** (`viewFlat()`): original column headers + request rows + gateway state block; used when width < 60
 - Status strip always spans full pane width below the boxes
 
+#### Gateway Snapshot Refresh Rate (Feature 64)
+
+`gateway.Snapshot()` is called on **both** `viz.TickMsg` (every 200ms) and `TickMsg` (every 1s):
+
+- **200ms polling** — catches longer-lived events (backoff timers, slow requests, dedup keys) that would be missed at 1s resolution
+- **Sub-200ms events** are captured via peak watermarks tracked on each `viz.TickMsg`:
+  - `minTokens` — lowest `TokensAvailable` seen in the current 1-second window
+  - `peakConcurrent` — highest `ConcurrentActive` seen in the current 1-second window
+- Watermarks reset to defaults on each `TickMsg` (1-second boundary) to keep annotations fresh
+- **Annotations** appear in `gatewayStateLines()` only when activity was detected:
+  - Token line: `(min: N)` suffix when `minTokens < TokensAvailable`
+  - Semaphore line: `(peak: N)` suffix when `peakConcurrent > ConcurrentActive`
+- `Snapshot()` is cheap (two lock reads, one struct copy) — 5× more frequent calls add negligible overhead
+
 #### Gateway Decision Recording
 
 Each request through the gateway is classified with a `domain.GatewayDecision`:
