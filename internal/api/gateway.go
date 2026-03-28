@@ -249,9 +249,12 @@ func (g *Gateway) Snapshot() domain.GatewayState {
 // activity in the most recent window.
 func (g *Gateway) ResetWatermarks() {
 	g.bucket.mu.Lock()
-	// Reset minTokens to current token level (not zero).
-	// This preserves the current level as the new baseline for the next window.
-	current := g.bucket.tokens
+	// Apply pending refill before reading the current level, exactly as Snapshot()
+	// does. Without this, minTokens could be set below the refilled TokensAvailable
+	// returned by the next Snapshot(), causing a false (min: N) annotation.
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	current := g.bucket.tokens + elapsed*g.bucket.rate
 	if current > g.bucket.max {
 		current = g.bucket.max
 	}
