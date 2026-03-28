@@ -737,4 +737,3 @@ func TestRequestFlowPane_InteractivePriorityRendering(t *testing.T) {
 	assert.NotEqual(t, v1, v2,
 		"Interactive and Background priority views should differ due to styling")
 }
-

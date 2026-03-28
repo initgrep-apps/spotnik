@@ -970,4 +970,3 @@ func TestMarkGatewayRecorded_PreservesRequestProperties(t *testing.T) {
 	assert.True(t, IsGatewayRecorded(markedReq),
 		"marked request should still be marked after properties check")
 }
-
