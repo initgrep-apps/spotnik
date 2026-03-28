@@ -231,7 +231,7 @@ func (p *RequestFlowPane) viewBoxed() string {
 	statusStripHeight := 1
 	// boxAreaHeight: subtract status strip and 1 blank separator row.
 	boxAreaHeight := p.height - statusStripHeight - 1
-	// Minimum meaningful boxed layout: 2 border rows + 1 content row + separator + status = 5.
+	// Need at least 3 rows for a meaningful box (top border + 1 content row + bottom border).
 	if boxAreaHeight < 3 {
 		return p.viewFlat()
 	}
