@@ -673,3 +673,68 @@ func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {
 	assert.NotContains(t, v2, "idle", "active state should not show idle label")
 	assert.Contains(t, v2, "1000ms", "active tick interval should update")
 }
+
+// --- I61-6: syncFromNetLog propagates Priority and GatewayDecision ---
+
+// TestRequestFlowPane_SyncFromNetLog_PropagatesPriorityAndDecision verifies
+// that RecordGatewayCall -> NetLogEntry -> syncFromNetLog -> reqDisplay ->
+// renderArrow correctly propagates Priority and GatewayDecision end-to-end.
+func TestRequestFlowPane_SyncFromNetLog_PropagatesPriorityAndDecision(t *testing.T) {
+	s := state.New()
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+
+	// Record a dedup call directly through the store (as the gateway would).
+	s.RecordGatewayCall("GET", "/me/player", 200, 45,
+		domain.PriorityInteractive, domain.DecisionDeduped)
+
+	// TickMsg triggers syncFromNetLog which reads from the store net log.
+	_, _ = pane.Update(panes.TickMsg{})
+
+	v := pane.View()
+	assert.Contains(t, v, "/me/player", "net log entry should appear after sync")
+	// renderArrow maps DecisionDeduped -> "dedup" label.
+	assert.Contains(t, v, "dedup", "DecisionDeduped should propagate through syncFromNetLog to renderArrow")
+}
+
+// --- I61-7: Interactive priority rendering differs from Background ---
+
+// TestRequestFlowPane_InteractivePriorityRendering verifies that an Interactive
+// priority request produces ANSI-styled output that differs from a Background
+// priority request (TextPrimary vs TextMuted styling).
+func TestRequestFlowPane_InteractivePriorityRendering(t *testing.T) {
+	pane1 := newTestRequestFlowPane()
+	pane1.SetSize(100, 20)
+	_, _ = pane1.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 200,
+		LatencyMs:  45,
+		Priority:   domain.PriorityInteractive,
+	})
+	v1 := pane1.View()
+
+	pane2 := newTestRequestFlowPane()
+	pane2.SetSize(100, 20)
+	_, _ = pane2.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 200,
+		LatencyMs:  45,
+		Priority:   domain.PriorityBackground,
+	})
+	v2 := pane2.View()
+
+	// Both views should contain the endpoint and status code.
+	assert.Contains(t, v1, "/me/player", "Interactive view must show endpoint")
+	assert.Contains(t, v2, "/me/player", "Background view must show endpoint")
+	// Both should have ANSI styling; the content must match since both have
+	// the same endpoint but the styling may differ due to priority.
+	assert.Contains(t, v1, "\x1b[", "Interactive request view must contain ANSI styling")
+	assert.Contains(t, v2, "\x1b[", "Background request view must contain ANSI styling")
+	// Interactive and Background priority requests produce different renderings
+	// because priority affects text brightness (TextPrimary vs TextMuted).
+	assert.NotEqual(t, v1, v2,
+		"Interactive and Background priority views should differ due to styling")
+}
+

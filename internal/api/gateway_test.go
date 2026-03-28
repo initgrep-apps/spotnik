@@ -919,3 +919,55 @@ func TestGateway_Snapshot_InFlightKeys(t *testing.T) {
 	snap2 := gw.Snapshot()
 	assert.NotContains(t, snap2.InFlightKeys, keyStr, "completed key should no longer appear in Snapshot")
 }
+
+// --- MarkGatewayRecorded / IsGatewayRecorded tests (I61-5) ---
+
+// TestIsGatewayRecorded_FalseForPlainRequest verifies that a plain request
+// (with no gateway marker) returns false from IsGatewayRecorded.
+func TestIsGatewayRecorded_FalseForPlainRequest(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "https://api.spotify.com/v1/me/player", http.NoBody)
+	require.NoError(t, err)
+	assert.False(t, IsGatewayRecorded(req),
+		"plain request without marker should return false from IsGatewayRecorded")
+}
+
+// TestIsGatewayRecorded_TrueAfterMarking verifies that IsGatewayRecorded
+// returns true after MarkGatewayRecorded is called.
+func TestIsGatewayRecorded_TrueAfterMarking(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "https://api.spotify.com/v1/me/player", http.NoBody)
+	require.NoError(t, err)
+	markedReq := MarkGatewayRecorded(req)
+	assert.True(t, IsGatewayRecorded(markedReq),
+		"marked request should return true from IsGatewayRecorded")
+}
+
+// TestMarkGatewayRecorded_OriginalUnchanged verifies that MarkGatewayRecorded
+// does not modify the original request — only the returned copy is marked.
+func TestMarkGatewayRecorded_OriginalUnchanged(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "https://api.spotify.com/v1/me/player", http.NoBody)
+	require.NoError(t, err)
+	_ = MarkGatewayRecorded(req)
+	// The original must remain unmarked.
+	assert.False(t, IsGatewayRecorded(req),
+		"MarkGatewayRecorded must not mutate the original request")
+}
+
+// TestMarkGatewayRecorded_PreservesRequestProperties verifies that the marked
+// request retains the original method, URL, and auth header.
+func TestMarkGatewayRecorded_PreservesRequestProperties(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "https://api.spotify.com/v1/me/player", http.NoBody)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer test-token")
+
+	markedReq := MarkGatewayRecorded(req)
+
+	assert.Equal(t, http.MethodGet, markedReq.Method,
+		"marked request should preserve Method")
+	assert.Equal(t, req.URL.String(), markedReq.URL.String(),
+		"marked request should preserve URL")
+	assert.Equal(t, "Bearer test-token", markedReq.Header.Get("Authorization"),
+		"marked request should preserve Authorization header")
+	assert.True(t, IsGatewayRecorded(markedReq),
+		"marked request should still be marked after properties check")
+}
+
