@@ -619,14 +619,21 @@ POLLING  tick: 1000ms  state: active    STORE  fetching: []
 `gateway.Snapshot()` is called on **both** `viz.TickMsg` (every 200ms) and `TickMsg` (every 1s):
 
 - **200ms polling** — catches longer-lived events (backoff timers, slow requests, dedup keys) that would be missed at 1s resolution
-- **Sub-200ms events** are captured via peak watermarks tracked on each `viz.TickMsg`:
-  - `minTokens` — lowest `TokensAvailable` seen in the current 1-second window
-  - `peakConcurrent` — highest `ConcurrentActive` seen in the current 1-second window
-- Watermarks reset to defaults on each `TickMsg` (1-second boundary) to keep annotations fresh
-- **Annotations** appear in `gatewayStateLines()` only when activity was detected:
-  - Token line: `(min: N)` suffix when `minTokens < TokensAvailable`
-  - Semaphore line: `(peak: N)` suffix when `peakConcurrent > ConcurrentActive`
 - `Snapshot()` is cheap (two lock reads, one struct copy) — 5× more frequent calls add negligible overhead
+
+#### Gateway-Internal Watermarks (Feature 65)
+
+Watermarks track peak activity within a 1-second window and are tracked **inside the Gateway itself**, not by UI-side sampling:
+
+- **`tokenBucket.minTokens`** — updated under `tb.mu` at the exact moment of `tb.tokens--` in `wait()`. This captures the minimum before any refill can hide the dip.
+- **`Gateway.peakConcurrent`** — updated under `g.mu` immediately after semaphore acquisition in `Do()`.
+- Both fields are exported via `Snapshot()` as `GatewayState.MinTokens` and `GatewayState.PeakConcurrent`.
+- **`ResetWatermarks()`** on `GatewaySnapshotter` resets both to current values (not zero). Called by `RequestFlowPane.Update(TickMsg)` after capturing the snapshot, so the prior window's peaks are returned by the last `viz.TickMsg` snapshot before reset.
+- **Annotations** appear in `gatewayStateLines()` only when activity was detected:
+  - Token line: `(min: N)` suffix when `snap.MinTokens < snap.TokensAvailable`
+  - Semaphore line: `(peak: N)` suffix when `snap.PeakConcurrent > snap.ConcurrentActive`
+
+**Why not UI-side sampling?** `Snapshot()` applies a pending token refill before reading, so a token consumed 50ms ago is already recovered by the time the UI samples it. The Gateway-internal approach captures the dip atomically at the moment of consumption.
 
 #### Gateway Decision Recording
 
