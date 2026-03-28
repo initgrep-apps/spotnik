@@ -264,6 +264,10 @@ func (g *Gateway) RetryAfterSecs() int {
 // When a GatewayRecorder is attached, Do() records the gateway decision
 // (Allowed/Waited/Deduped/Blocked) for each request, including Background
 // requests rejected by backoff that never reach the HTTP layer.
+//
+// IMPORTANT: Callers must call MarkGatewayRecorded on the *http.Request passed
+// to fn when a GatewayRecorder is attached. This prevents LoggingTransport from
+// double-recording the request. See BaseClient.doJSON for the canonical pattern.
 func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	fn func() (*http.Response, error)) (*http.Response, error) {
 
@@ -335,6 +339,10 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			select {
 			case <-entry.done:
 			case <-ctx.Done():
+				if rec != nil {
+					rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
+						domainPriority, domain.DecisionDeduped)
+				}
 				return nil, ctx.Err()
 			}
 			// Record the dedup decision — the waiter re-uses the primary's result.
@@ -350,6 +358,12 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 				return nil, entry.err
 			}
 			// Clone the buffered body so each caller gets their own reader.
+			// Defensively guard against a nil response — should not happen in practice
+			// since the primary caller always sets entry.resp before closing entry.done,
+			// but the check prevents a nil-pointer dereference if the invariant is ever broken.
+			if entry.resp == nil {
+				return nil, fmt.Errorf("dedup: primary caller returned nil response")
+			}
 			return cloneResponseWithBody(entry.resp, entry.body), nil
 		}
 		g.mu.Unlock()
@@ -378,6 +392,10 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			select {
 			case <-existing.done:
 			case <-ctx.Done():
+				if rec != nil {
+					rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
+						domainPriority, domain.DecisionDeduped)
+				}
 				return nil, ctx.Err()
 			}
 			if rec != nil {
@@ -390,6 +408,10 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			}
 			if existing.err != nil {
 				return nil, existing.err
+			}
+			// Nil-guard: defensively check existing.resp before cloning.
+			if existing.resp == nil {
+				return nil, fmt.Errorf("dedup: primary caller returned nil response")
 			}
 			return cloneResponseWithBody(existing.resp, existing.body), nil
 		}
