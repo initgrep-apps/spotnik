@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
@@ -231,9 +232,11 @@ func (p *RequestFlowPane) View() string {
 
 // renderColumnHeaders renders the three column headers.
 func (p *RequestFlowPane) renderColumnHeaders(colWidth int) string {
-	app := padRight("APP", colWidth)
-	gw := padRight("GATEWAY", colWidth)
-	return app + gw + "SPOTIFY"
+	headerStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary()).Bold(true)
+	app := padRightVisible(headerStyle.Render("APP"), colWidth)
+	gw := padRightVisible(headerStyle.Render("GATEWAY"), colWidth)
+	spotify := headerStyle.Render("SPOTIFY")
+	return app + gw + spotify
 }
 
 // renderRequestRows renders one row per recent request showing APP → GATEWAY → SPOTIFY.
@@ -253,6 +256,8 @@ func (p *RequestFlowPane) renderRequestRows(colWidth int) []string {
 }
 
 // renderAppEntry renders one line in the APP column.
+// Interactive priority requests are shown in TextPrimary; Background in TextMuted.
+// Requests older than requestDimAge are always dimmed regardless of priority.
 func (p *RequestFlowPane) renderAppEntry(r reqDisplay, colWidth int) string {
 	age := time.Since(r.completedAt)
 	marker := "  "
@@ -260,7 +265,17 @@ func (p *RequestFlowPane) renderAppEntry(r reqDisplay, colWidth int) string {
 		marker = "▶ "
 	}
 	ep := truncateStr(r.endpoint, colWidth-2)
-	return padRight(marker+ep, colWidth)
+	text := marker + ep
+
+	var style lipgloss.Style
+	if age >= requestDimAge {
+		style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	} else if r.priority == domain.PriorityInteractive {
+		style = lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
+	} else {
+		style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	}
+	return padRightVisible(style.Render(text), colWidth)
 }
 
 // renderArrow renders the connecting arrow between APP and GATEWAY columns.
@@ -276,26 +291,46 @@ func (p *RequestFlowPane) renderArrow(r reqDisplay, colWidth int) string {
 }
 
 // renderSpotifyEntry renders the SPOTIFY column for one request.
+// Status codes are color-coded: 2xx=Success, 429=Warning, 5xx=Error, 0=TextMuted.
 func (p *RequestFlowPane) renderSpotifyEntry(r reqDisplay) string {
-	statusStr := fmt.Sprintf("%d", r.statusCode)
 	latencyStr := fmt.Sprintf("%dms", r.latencyMs)
+
+	var statusStyle lipgloss.Style
 	suffix := ""
-	if r.statusCode == 429 {
+	switch {
+	case r.statusCode == 0:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	case r.statusCode >= 200 && r.statusCode < 300:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Success())
+	case r.statusCode == 429:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Warning())
 		suffix = " ⚠"
+	case r.statusCode >= 500:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Error())
+	default:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
 	}
-	return fmt.Sprintf("%-6s %-8s%s", statusStr, latencyStr, suffix)
+
+	statusStr := statusStyle.Render(fmt.Sprintf("%-6d", r.statusCode))
+	return fmt.Sprintf("%s %-8s%s", statusStr, latencyStr, suffix)
 }
 
 // renderGatewayState renders the GATEWAY column details (token bucket, semaphore, backoff).
 func (p *RequestFlowPane) renderGatewayState() string {
 	snap := p.lastSnapshot
 
-	// Token bucket bar: ● for available, ○ for consumed.
-	tokenBar := p.renderDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○')
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+
+	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
+	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
 	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
 
-	// Semaphore bar: ■ for in-use, □ for available.
-	semBar := p.renderDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□')
+	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
+	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
 	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
 
 	lines := []string{tokenLine, semLine}
@@ -306,28 +341,29 @@ func (p *RequestFlowPane) renderGatewayState() string {
 		if remaining <= 0 {
 			remaining = float64(p.store.ThrottleRetryAfterSecs())
 		}
-		lines = append(lines, fmt.Sprintf("⏳ backoff %.1fs", remaining))
+		lines = append(lines, errorStyle.Render(fmt.Sprintf("⏳ backoff %.1fs", remaining)))
 	}
 
 	// Dedup waiters: only show when active.
 	if snap.DedupWaiters > 0 {
-		lines = append(lines, fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters))
+		lines = append(lines, secondaryStyle.Render(fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters)))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// renderDotBar renders a progress bar using filled/empty rune characters.
-func (p *RequestFlowPane) renderDotBar(filled, total int, filledRune, emptyRune rune) string {
+// renderColoredDotBar renders a progress bar using filled/empty rune characters
+// with distinct lipgloss styles for the filled and empty portions.
+func (p *RequestFlowPane) renderColoredDotBar(filled, total int, filledRune, emptyRune rune, filledStyle, emptyStyle lipgloss.Style) string {
 	if total <= 0 {
 		return ""
 	}
 	var sb strings.Builder
 	for i := 0; i < total; i++ {
 		if i < filled {
-			sb.WriteRune(filledRune)
+			sb.WriteString(filledStyle.Render(string(filledRune)))
 		} else {
-			sb.WriteRune(emptyRune)
+			sb.WriteString(emptyStyle.Render(string(emptyRune)))
 		}
 	}
 	return sb.String()
@@ -336,19 +372,21 @@ func (p *RequestFlowPane) renderDotBar(filled, total int, filledRune, emptyRune 
 // renderStatusStrip renders the bottom polling + store status line.
 func (p *RequestFlowPane) renderStatusStrip() string {
 	ps := p.pollingState
+	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
 	// Polling section.
 	stateLabel := "active"
 	idlePart := ""
 	if ps.IsIdle {
 		stateLabel = "idle"
-		idlePart = fmt.Sprintf("  idle: %ds", ps.IdleSecs)
+		idlePart = mutedStyle.Render(fmt.Sprintf("  idle: %ds", ps.IdleSecs))
 	}
 	intervalMs := ps.TickIntervalMs
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
-	pollingPart := fmt.Sprintf("POLLING  tick: %dms  state: %s%s", intervalMs, stateLabel, idlePart)
+	pollingPart := labelStyle.Render("POLLING") + mutedStyle.Render(fmt.Sprintf("  tick: %dms  state: %s", intervalMs, stateLabel)) + idlePart
 
 	// Store section.
 	storePart := p.renderStoreStatus()
@@ -364,6 +402,8 @@ func (p *RequestFlowPane) renderStoreStatus() string {
 	if p.store == nil {
 		return ""
 	}
+	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
 	var fetching []string
 	if p.store.PlaylistsFetching() {
@@ -379,20 +419,31 @@ func (p *RequestFlowPane) renderStoreStatus() string {
 		fetching = append(fetching, "recent")
 	}
 
-	storeLabel := "STORE"
 	if len(fetching) > 0 {
-		return fmt.Sprintf("%s  fetching: [%s]", storeLabel, strings.Join(fetching, ", "))
+		return labelStyle.Render("STORE") + mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
 	}
-	return storeLabel
+	return labelStyle.Render("STORE")
 }
 
 // padRight pads s with spaces to width w. Truncates if s is longer than w.
+// For plain strings without ANSI escape codes — use padRightVisible for styled strings.
 func padRight(s string, w int) string {
 	runes := []rune(s)
 	if len(runes) >= w {
 		return string(runes[:w])
 	}
 	return s + strings.Repeat(" ", w-len(runes))
+}
+
+// padRightVisible pads s with spaces to visible width w using lipgloss.Width()
+// to measure the string's visible character count, correctly ignoring ANSI
+// escape sequences. Use this for styled strings that contain ANSI codes.
+func padRightVisible(s string, w int) string {
+	visibleWidth := lipgloss.Width(s)
+	if visibleWidth >= w {
+		return s
+	}
+	return s + strings.Repeat(" ", w-visibleWidth)
 }
 
 // truncateStr truncates s to at most max runes.

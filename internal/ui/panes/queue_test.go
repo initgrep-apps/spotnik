@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -666,9 +667,10 @@ func TestQueuePane_LongTrackName(t *testing.T) {
 	pane.SetSize(60, 20) // narrow to force truncation
 
 	// Should not panic and output should not exceed pane width.
+	// Use lipgloss.Width() to measure visible width after stripping ANSI escapes.
 	output := pane.View()
 	assert.NotEmpty(t, output)
 	for _, line := range splitLines(output) {
-		assert.LessOrEqual(t, len([]rune(line)), 80, "line should not massively overflow pane width")
+		assert.LessOrEqual(t, lipgloss.Width(line), 80, "line should not massively overflow pane width")
 	}
 }

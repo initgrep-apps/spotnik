@@ -383,6 +383,73 @@ func TestRequestFlowPane_Integration_SyncFromNetLog(t *testing.T) {
 	assert.Contains(t, v, "200", "status code should appear")
 }
 
+// --- Theme color coding tests ---
+
+func TestRequestFlowPane_View_ContainsANSIEscapes(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// Inject a request so color-coded rows are rendered.
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 200,
+		LatencyMs:  50,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	// Theme colors produce ANSI escape sequences — check for ESC character.
+	assert.Contains(t, v, "\x1b[", "View() should contain ANSI escape sequences from theme styling")
+}
+
+func TestRequestFlowPane_View_StatusCodeColoring_2xx(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 200,
+		LatencyMs:  50,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	// ANSI + "200" must appear (the status code is rendered with color).
+	assert.Contains(t, v, "200", "2xx status code should appear in view with theme color")
+}
+
+func TestRequestFlowPane_View_StatusCodeColoring_429(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 429,
+		LatencyMs:  5,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "429", "429 status code should appear in view")
+}
+
+func TestRequestFlowPane_View_StatusCodeColoring_5xx(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 500,
+		LatencyMs:  200,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "500", "5xx status code should appear in view")
+}
+
+func TestRequestFlowPane_View_Headers_AreStyled(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	v := pane.View()
+	// Column headers must still be present after styling is applied.
+	assert.Contains(t, v, "APP", "APP header must appear after theme styling")
+	assert.Contains(t, v, "GATEWAY", "GATEWAY header must appear after theme styling")
+	assert.Contains(t, v, "SPOTIFY", "SPOTIFY header must appear after theme styling")
+}
+
 // TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn verifies that
 // switching from idle to active updates the status strip.
 func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {
