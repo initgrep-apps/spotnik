@@ -169,14 +169,11 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 
 	case TickMsg:
-		// Reset peak watermarks every 1s so annotations reflect recent activity.
-		p.peakConcurrent = 0
-		if p.gateway != nil {
-			p.minTokens = p.lastSnapshot.TokensMax
-		}
-		// Refresh gateway snapshot and sync requests from net log.
 		if p.gateway != nil {
 			p.lastSnapshot = p.gateway.Snapshot()
+			// Reset peak watermarks from fresh snapshot values.
+			p.minTokens = p.lastSnapshot.TokensMax
+			p.peakConcurrent = 0
 		}
 		p.syncFromNetLog()
 		return p, nil

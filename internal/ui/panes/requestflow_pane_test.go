@@ -991,6 +991,32 @@ func TestRequestFlowPane_SyncFromNetLog_PropagatesPriorityAndDecision(t *testing
 	assert.Contains(t, v, "dedup", "DecisionDeduped should propagate through syncFromNetLog to renderArrow")
 }
 
+// --- Issue 5: nil-gateway safety ---
+
+// TestRequestFlowPane_NilGateway_NoPanic verifies that constructing a pane with
+// gateway=nil and sending both viz.TickMsg and TickMsg does not panic, and that
+// no watermark annotations appear in View() output.
+func TestRequestFlowPane_NilGateway_NoPanic(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(nil, s, th)
+	pane.SetSize(100, 20)
+
+	// Neither message should panic with a nil gateway.
+	assert.NotPanics(t, func() {
+		_, _ = pane.Update(viz.TickMsg(time.Now()))
+	}, "viz.TickMsg with nil gateway must not panic")
+
+	assert.NotPanics(t, func() {
+		_, _ = pane.Update(panes.TickMsg{})
+	}, "TickMsg with nil gateway must not panic")
+
+	// No watermark annotations should appear when gateway is nil.
+	v := pane.View()
+	assert.NotContains(t, v, "(min:", "no min-token annotation expected with nil gateway")
+	assert.NotContains(t, v, "(peak:", "no peak-concurrent annotation expected with nil gateway")
+}
+
 // --- I61-7: Interactive priority rendering differs from Background ---
 
 // TestRequestFlowPane_InteractivePriorityRendering verifies that an Interactive
