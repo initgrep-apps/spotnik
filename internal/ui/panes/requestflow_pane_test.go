@@ -2,6 +2,7 @@ package panes_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -381,6 +382,277 @@ func TestRequestFlowPane_Integration_SyncFromNetLog(t *testing.T) {
 	assert.Contains(t, v, "/me/player", "net log entry should appear after TickMsg sync")
 	assert.Contains(t, v, "/me/playlists", "net log entry should appear after TickMsg sync")
 	assert.Contains(t, v, "200", "status code should appear")
+}
+
+// --- InFlightKeys rendering tests ---
+
+// mockGateway implements domain.GatewaySnapshotter for testing InFlightKeys.
+type mockGateway struct {
+	snap domain.GatewayState
+}
+
+func (m *mockGateway) Snapshot() domain.GatewayState { return m.snap }
+
+func TestRequestFlowPane_View_InFlightKeys_NonEmpty(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys:    []string{"GET /me/player", "GET /me/playlists"},
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	assert.Contains(t, v, "GET /me/player", "in-flight key should appear in view")
+	assert.Contains(t, v, "GET /me/playlists", "in-flight key should appear in view")
+}
+
+func TestRequestFlowPane_View_InFlightKeys_Truncated(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys: []string{
+			"GET /me/player",
+			"GET /me/playlists",
+			"GET /me/albums",
+			"GET /me/liked",
+			"GET /me/recent",
+		},
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	// At most 3 keys shown, rest truncated.
+	assert.Contains(t, v, "+2 more", "overflow should show '+N more' truncation")
+}
+
+func TestRequestFlowPane_View_InFlightKeys_Empty(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys:    nil,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	// No in-flight section rendered when keys is empty.
+	assert.NotContains(t, v, "→ GET", "no in-flight section when InFlightKeys is empty")
+}
+
+// --- Arrow state tests (four gateway decisions) ---
+
+func TestRequestFlowPane_Arrow_AllowedDecision_Animated(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// Inject an Allowed request.
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		LatencyMs:       50,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionAllowed,
+	})
+	v := pane.View()
+	// Allowed decision renders an animated arrow.
+	assert.True(t, containsAny(v, "──→──", "───→─", "────→"),
+		"DecisionAllowed should render an animated arrow")
+}
+
+func TestRequestFlowPane_Arrow_WaitedDecision(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		LatencyMs:       100,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionWaited,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "wait", "DecisionWaited should render 'wait' in the arrow column")
+}
+
+func TestRequestFlowPane_Arrow_DedupedDecision(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		LatencyMs:       30,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionDeduped,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "dedup", "DecisionDeduped should render 'dedup' in the arrow column")
+}
+
+func TestRequestFlowPane_Arrow_BlockedDecision(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      0,
+		LatencyMs:       0,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionBlocked,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "╳", "DecisionBlocked should render ╳ in the arrow column")
+}
+
+func TestRequestFlowPane_Arrow_Allowed429_ShowsBlock(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// DecisionAllowed with 429 status code → X arrow (HTTP-layer throttle).
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      429,
+		LatencyMs:       5,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionAllowed,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "╳", "DecisionAllowed+429 should render ╳ in the arrow column")
+}
+
+// containsAny returns true if s contains any of the given substrings.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// --- Theme color coding tests ---
+
+func TestRequestFlowPane_View_ContainsANSIEscapes(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// Inject a request so color-coded rows are rendered.
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 200,
+		LatencyMs:  50,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	// Theme colors produce ANSI escape sequences — check for ESC character.
+	assert.Contains(t, v, "\x1b[", "View() should contain ANSI escape sequences from theme styling")
+}
+
+func TestRequestFlowPane_View_StatusCodeColoring_2xx(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 200,
+		LatencyMs:  50,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	// ANSI + "200" must appear (the status code is rendered with color).
+	assert.Contains(t, v, "200", "2xx status code should appear in view with theme color")
+}
+
+func TestRequestFlowPane_View_StatusCodeColoring_429(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 429,
+		LatencyMs:  5,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "429", "429 status code should appear in view")
+}
+
+func TestRequestFlowPane_View_StatusCodeColoring_5xx(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:   "/me/player",
+		StatusCode: 500,
+		LatencyMs:  200,
+		Priority:   domain.PriorityBackground,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "500", "5xx status code should appear in view")
+}
+
+func TestRequestFlowPane_View_Headers_AreStyled(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	v := pane.View()
+	// Column headers must still be present after styling is applied.
+	assert.Contains(t, v, "APP", "APP header must appear after theme styling")
+	assert.Contains(t, v, "GATEWAY", "GATEWAY header must appear after theme styling")
+	assert.Contains(t, v, "SPOTIFY", "SPOTIFY header must appear after theme styling")
+}
+
+// --- Staleness display tests ---
+
+func TestRequestFlowPane_View_StalenessDisplay_StalePlaylist(t *testing.T) {
+	s := state.New()
+	// Set playlists fetched-at to 10 minutes ago (beyond PlaylistsTTL of 5 min).
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	v := pane.View()
+	assert.Contains(t, v, "stale:", "status strip should show stale label when data is stale")
+	assert.Contains(t, v, "playlists", "stale playlists domain should appear")
+}
+
+func TestRequestFlowPane_View_StalenessDisplay_FreshData(t *testing.T) {
+	s := state.New()
+	// Set playlists fetched-at to 1 minute ago (within PlaylistsTTL of 5 min).
+	s.SetPlaylistsFetchedAt(time.Now().Add(-1 * time.Minute))
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	v := pane.View()
+	assert.NotContains(t, v, "stale:", "fresh data should not show stale label")
+}
+
+func TestRequestFlowPane_View_StalenessDisplay_NeverFetched(t *testing.T) {
+	s := state.New()
+	// Never fetched — zero time — should not appear as stale.
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	v := pane.View()
+	assert.NotContains(t, v, "stale:", "never-fetched data should not appear as stale")
+}
+
+func TestRequestFlowPane_View_StalenessDisplay_MultipleStale(t *testing.T) {
+	s := state.New()
+	// Set multiple domains stale.
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	s.SetAlbumsFetchedAt(time.Now().Add(-10 * time.Minute))
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(120, 20)
+	v := pane.View()
+	assert.Contains(t, v, "playlists", "stale playlists should appear")
+	assert.Contains(t, v, "albums", "stale albums should appear")
 }
 
 // TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn verifies that

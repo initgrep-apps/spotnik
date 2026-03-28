@@ -528,6 +528,35 @@ func (s *Store) SetDevicesFetchedAt(t time.Time) {
 	s.devicesFetchedAt = t
 }
 
+// SetPlaylistsFetchedAt stamps the time when playlists were last successfully loaded.
+// Used by tests and import flows that need precise staleness control.
+func (s *Store) SetPlaylistsFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playlistsFetchedAt = t
+}
+
+// SetAlbumsFetchedAt stamps the time when saved albums were last successfully loaded.
+func (s *Store) SetAlbumsFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.albumsFetchedAt = t
+}
+
+// SetLikedTracksFetchedAt stamps the time when liked tracks were last successfully loaded.
+func (s *Store) SetLikedTracksFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.likedTracksFetchedAt = t
+}
+
+// SetRecentPlayedFetchedAt stamps the time when recently played was last successfully loaded.
+func (s *Store) SetRecentPlayedFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recentPlayedFetchedAt = t
+}
+
 // --- TTL-based staleness convenience methods ---
 
 // PlaylistsStale returns true if the playlists list is stale and should be re-fetched.
@@ -852,7 +881,8 @@ func (s *Store) ClearPlaylistsError() {
 // --- Network log accessors ---
 
 // RecordNetCall adds an API call record to the network log.
-// Implements api.NetLogRecorder.
+// Implements api.NetLogRecorder. Priority defaults to PriorityBackground and
+// GatewayDecision defaults to DecisionAllowed (zero values).
 func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs int64) {
 	s.netLog.Add(NetLogEntry{
 		Timestamp:  time.Now(),
@@ -860,6 +890,22 @@ func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs in
 		Path:       path,
 		StatusCode: statusCode,
 		DurationMs: durationMs,
+	})
+}
+
+// RecordGatewayCall records a gateway-level API call with per-request decision metadata.
+// Unlike RecordNetCall (used by LoggingTransport), this records gateway decisions
+// including blocked Background requests that never reach the HTTP layer.
+func (s *Store) RecordGatewayCall(method, path string, statusCode int, durationMs int64,
+	priority domain.RequestPriority, decision domain.GatewayDecision) {
+	s.netLog.Add(NetLogEntry{
+		Timestamp:       time.Now(),
+		Method:          method,
+		Path:            path,
+		StatusCode:      statusCode,
+		DurationMs:      durationMs,
+		Priority:        priority,
+		GatewayDecision: decision,
 	})
 }
 

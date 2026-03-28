@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
@@ -44,6 +45,9 @@ type RequestCompletedMsg struct {
 	LatencyMs int
 	// Priority is domain.PriorityInteractive or domain.PriorityBackground.
 	Priority domain.RequestPriority
+	// GatewayDecision is the gateway routing outcome (allowed/waited/deduped/blocked).
+	// Defaults to DecisionAllowed (zero value) for backward compatibility.
+	GatewayDecision domain.GatewayDecision
 	// CompletedAt is when the request completed. Zero value means time.Now().
 	CompletedAt time.Time
 }
@@ -54,6 +58,7 @@ type reqDisplay struct {
 	statusCode  int
 	latencyMs   int
 	priority    domain.RequestPriority
+	decision    domain.GatewayDecision
 	completedAt time.Time
 }
 
@@ -158,6 +163,7 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			statusCode:  m.StatusCode,
 			latencyMs:   m.LatencyMs,
 			priority:    m.Priority,
+			decision:    m.GatewayDecision,
 			completedAt: at,
 		}
 		// Prepend (newest first), cap at maxRecentReqs.
@@ -190,7 +196,8 @@ func (p *RequestFlowPane) syncFromNetLog() {
 			endpoint:    e.Path,
 			statusCode:  e.StatusCode,
 			latencyMs:   int(e.DurationMs),
-			priority:    domain.PriorityBackground,
+			priority:    e.Priority,
+			decision:    e.GatewayDecision,
 			completedAt: e.Timestamp,
 		})
 		if len(p.recentReqs) >= maxRecentReqs {
@@ -231,9 +238,11 @@ func (p *RequestFlowPane) View() string {
 
 // renderColumnHeaders renders the three column headers.
 func (p *RequestFlowPane) renderColumnHeaders(colWidth int) string {
-	app := padRight("APP", colWidth)
-	gw := padRight("GATEWAY", colWidth)
-	return app + gw + "SPOTIFY"
+	headerStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary()).Bold(true)
+	app := padRightVisible(headerStyle.Render("APP"), colWidth)
+	gw := padRightVisible(headerStyle.Render("GATEWAY"), colWidth)
+	spotify := headerStyle.Render("SPOTIFY")
+	return app + gw + spotify
 }
 
 // renderRequestRows renders one row per recent request showing APP → GATEWAY → SPOTIFY.
@@ -253,6 +262,8 @@ func (p *RequestFlowPane) renderRequestRows(colWidth int) []string {
 }
 
 // renderAppEntry renders one line in the APP column.
+// Interactive priority requests are shown in TextPrimary; Background in TextMuted.
+// Requests older than requestDimAge are always dimmed regardless of priority.
 func (p *RequestFlowPane) renderAppEntry(r reqDisplay, colWidth int) string {
 	age := time.Since(r.completedAt)
 	marker := "  "
@@ -260,42 +271,96 @@ func (p *RequestFlowPane) renderAppEntry(r reqDisplay, colWidth int) string {
 		marker = "▶ "
 	}
 	ep := truncateStr(r.endpoint, colWidth-2)
-	return padRight(marker+ep, colWidth)
+	text := marker + ep
+
+	var style lipgloss.Style
+	if age >= requestDimAge {
+		style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	} else if r.priority == domain.PriorityInteractive {
+		style = lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
+	} else {
+		style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	}
+	return padRightVisible(style.Render(text), colWidth)
 }
 
 // renderArrow renders the connecting arrow between APP and GATEWAY columns.
-// The arrow animates by cycling through 3 frame offsets using frameIndex.
+// The arrow style reflects the gateway decision:
+//   - DecisionAllowed: animated flowing arrow (Success color); ╳ if HTTP 429
+//   - DecisionWaited:  "── wait ──" (Warning color)
+//   - DecisionDeduped: "──→ dedup" (TextSecondary color)
+//   - DecisionBlocked: "── ╳ ──"  (Error color — Background blocked by backoff)
 func (p *RequestFlowPane) renderArrow(r reqDisplay, colWidth int) string {
-	// Three-frame animation: `──→──`, `───→─`, `────→`
 	frames := []string{"──→──", "───→─", "────→"}
-	arrow := frames[p.frameIndex%3]
-	if r.statusCode == 429 {
-		arrow = "── ╳ ─"
+
+	var arrow string
+	var style lipgloss.Style
+
+	switch r.decision {
+	case domain.DecisionWaited:
+		arrow = "── wait ──"
+		style = lipgloss.NewStyle().Foreground(p.theme.Warning())
+	case domain.DecisionDeduped:
+		arrow = "──→ dedup"
+		style = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	case domain.DecisionBlocked:
+		arrow = "── ╳ ──"
+		style = lipgloss.NewStyle().Foreground(p.theme.Error())
+	default:
+		// DecisionAllowed: animate unless the HTTP response was 429.
+		if r.statusCode == 429 {
+			arrow = "── ╳ ─"
+			style = lipgloss.NewStyle().Foreground(p.theme.Warning())
+		} else {
+			arrow = frames[p.frameIndex%3]
+			style = lipgloss.NewStyle().Foreground(p.theme.Success())
+		}
 	}
-	return padRight(arrow, colWidth)
+
+	return padRightVisible(style.Render(arrow), colWidth)
 }
 
 // renderSpotifyEntry renders the SPOTIFY column for one request.
+// Status codes are color-coded: 2xx=Success, 429=Warning, 5xx=Error, 0=TextMuted.
 func (p *RequestFlowPane) renderSpotifyEntry(r reqDisplay) string {
-	statusStr := fmt.Sprintf("%d", r.statusCode)
 	latencyStr := fmt.Sprintf("%dms", r.latencyMs)
+
+	var statusStyle lipgloss.Style
 	suffix := ""
-	if r.statusCode == 429 {
+	switch {
+	case r.statusCode == 0:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	case r.statusCode >= 200 && r.statusCode < 300:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Success())
+	case r.statusCode == 429:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Warning())
 		suffix = " ⚠"
+	case r.statusCode >= 500:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Error())
+	default:
+		statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
 	}
-	return fmt.Sprintf("%-6s %-8s%s", statusStr, latencyStr, suffix)
+
+	statusStr := statusStyle.Render(fmt.Sprintf("%-6d", r.statusCode))
+	return fmt.Sprintf("%s %-8s%s", statusStr, latencyStr, suffix)
 }
 
 // renderGatewayState renders the GATEWAY column details (token bucket, semaphore, backoff).
 func (p *RequestFlowPane) renderGatewayState() string {
 	snap := p.lastSnapshot
 
-	// Token bucket bar: ● for available, ○ for consumed.
-	tokenBar := p.renderDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○')
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+
+	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
+	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
 	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
 
-	// Semaphore bar: ■ for in-use, □ for available.
-	semBar := p.renderDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□')
+	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
+	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
 	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
 
 	lines := []string{tokenLine, semLine}
@@ -306,28 +371,44 @@ func (p *RequestFlowPane) renderGatewayState() string {
 		if remaining <= 0 {
 			remaining = float64(p.store.ThrottleRetryAfterSecs())
 		}
-		lines = append(lines, fmt.Sprintf("⏳ backoff %.1fs", remaining))
+		lines = append(lines, errorStyle.Render(fmt.Sprintf("⏳ backoff %.1fs", remaining)))
 	}
 
 	// Dedup waiters: only show when active.
 	if snap.DedupWaiters > 0 {
-		lines = append(lines, fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters))
+		lines = append(lines, secondaryStyle.Render(fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters)))
+	}
+
+	// InFlightKeys: render up to 3 with truncation.
+	if len(snap.InFlightKeys) > 0 {
+		const maxKeys = 3
+		shown := len(snap.InFlightKeys)
+		if shown > maxKeys {
+			shown = maxKeys
+		}
+		for i := 0; i < shown; i++ {
+			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  → %s", snap.InFlightKeys[i])))
+		}
+		if len(snap.InFlightKeys) > maxKeys {
+			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … +%d more", len(snap.InFlightKeys)-maxKeys)))
+		}
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// renderDotBar renders a progress bar using filled/empty rune characters.
-func (p *RequestFlowPane) renderDotBar(filled, total int, filledRune, emptyRune rune) string {
+// renderColoredDotBar renders a progress bar using filled/empty rune characters
+// with distinct lipgloss styles for the filled and empty portions.
+func (p *RequestFlowPane) renderColoredDotBar(filled, total int, filledRune, emptyRune rune, filledStyle, emptyStyle lipgloss.Style) string {
 	if total <= 0 {
 		return ""
 	}
 	var sb strings.Builder
 	for i := 0; i < total; i++ {
 		if i < filled {
-			sb.WriteRune(filledRune)
+			sb.WriteString(filledStyle.Render(string(filledRune)))
 		} else {
-			sb.WriteRune(emptyRune)
+			sb.WriteString(emptyStyle.Render(string(emptyRune)))
 		}
 	}
 	return sb.String()
@@ -336,19 +417,21 @@ func (p *RequestFlowPane) renderDotBar(filled, total int, filledRune, emptyRune 
 // renderStatusStrip renders the bottom polling + store status line.
 func (p *RequestFlowPane) renderStatusStrip() string {
 	ps := p.pollingState
+	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
 	// Polling section.
 	stateLabel := "active"
 	idlePart := ""
 	if ps.IsIdle {
 		stateLabel = "idle"
-		idlePart = fmt.Sprintf("  idle: %ds", ps.IdleSecs)
+		idlePart = mutedStyle.Render(fmt.Sprintf("  idle: %ds", ps.IdleSecs))
 	}
 	intervalMs := ps.TickIntervalMs
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
-	pollingPart := fmt.Sprintf("POLLING  tick: %dms  state: %s%s", intervalMs, stateLabel, idlePart)
+	pollingPart := labelStyle.Render("POLLING") + mutedStyle.Render(fmt.Sprintf("  tick: %dms  state: %s", intervalMs, stateLabel)) + idlePart
 
 	// Store section.
 	storePart := p.renderStoreStatus()
@@ -360,10 +443,13 @@ func (p *RequestFlowPane) renderStatusStrip() string {
 }
 
 // renderStoreStatus renders the STORE section of the status strip.
+// Shows active fetches and, when present, stale data domains.
 func (p *RequestFlowPane) renderStoreStatus() string {
 	if p.store == nil {
 		return ""
 	}
+	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
 	var fetching []string
 	if p.store.PlaylistsFetching() {
@@ -379,20 +465,56 @@ func (p *RequestFlowPane) renderStoreStatus() string {
 		fetching = append(fetching, "recent")
 	}
 
-	storeLabel := "STORE"
+	result := labelStyle.Render("STORE")
 	if len(fetching) > 0 {
-		return fmt.Sprintf("%s  fetching: [%s]", storeLabel, strings.Join(fetching, ", "))
+		result += mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
 	}
-	return storeLabel
+
+	stalePart := p.renderStalenessStatus()
+	if stalePart != "" {
+		result += "  " + stalePart
+	}
+
+	return result
 }
 
-// padRight pads s with spaces to width w. Truncates if s is longer than w.
-func padRight(s string, w int) string {
-	runes := []rune(s)
-	if len(runes) >= w {
-		return string(runes[:w])
+// renderStalenessStatus builds the "stale: domain(Xs), ..." segment.
+// Only non-zero FetchedAt values that exceed their TTL are shown.
+// Returns empty string when no data is stale.
+func (p *RequestFlowPane) renderStalenessStatus() string {
+	if p.store == nil {
+		return ""
 	}
-	return s + strings.Repeat(" ", w-len(runes))
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+
+	var stale []string
+	if fa := p.store.PlaylistsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.PlaylistsTTL) {
+		stale = append(stale, fmt.Sprintf("playlists(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if fa := p.store.AlbumsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.AlbumsTTL) {
+		stale = append(stale, fmt.Sprintf("albums(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if fa := p.store.LikedTracksFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.LikedTracksTTL) {
+		stale = append(stale, fmt.Sprintf("liked(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if fa := p.store.RecentPlayedFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.RecentlyPlayedTTL) {
+		stale = append(stale, fmt.Sprintf("recent(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if len(stale) == 0 {
+		return ""
+	}
+	return mutedStyle.Render(fmt.Sprintf("stale: %s", strings.Join(stale, ", ")))
+}
+
+// padRightVisible pads s with spaces to visible width w using lipgloss.Width()
+// to measure the string's visible character count, correctly ignoring ANSI
+// escape sequences. Use this for styled strings that contain ANSI codes.
+func padRightVisible(s string, w int) string {
+	visibleWidth := lipgloss.Width(s)
+	if visibleWidth >= w {
+		return s
+	}
+	return s + strings.Repeat(" ", w-visibleWidth)
 }
 
 // truncateStr truncates s to at most max runes.

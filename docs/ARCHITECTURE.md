@@ -590,30 +590,62 @@ like/unlike, transfer playback, create/rename/remove/reorder playlist, fetch dev
 The gateway exposes its internal state for UI visualization via the `domain.GatewaySnapshotter` interface, keeping `internal/ui/` decoupled from `internal/api/`:
 
 - `domain.GatewaySnapshotter` interface — implemented by `api.Gateway.Snapshot()`
-- `domain.GatewayState` struct — snapshot of token bucket level, concurrency slots, backoff timer, dedup waiters
+- `domain.GatewayState` struct — snapshot of token bucket level, concurrency slots, backoff timer, dedup waiters, InFlightKeys
 - `RequestFlowPane` (Page B) reads snapshots to render live gateway visualization
 - `PollingSnapshotMsg` — carries app-level polling diagnostics (tick interval, idle state) to RequestFlowPane
-- `RequestCompletedMsg` — carries per-request completion data (endpoint, status, latency) to RequestFlowPane
+- `RequestCompletedMsg` — carries per-request completion data (endpoint, status, latency, Priority, GatewayDecision) to RequestFlowPane
+
+#### Gateway Decision Recording
+
+Each request through the gateway is classified with a `domain.GatewayDecision`:
+
+| Decision | Meaning |
+|---|---|
+| `DecisionAllowed` | Request proceeded normally through the gateway |
+| `DecisionWaited` | Request was deduped — caller waited for an in-flight sibling to complete |
+| `DecisionDeduped` | Alias: same as Waited; the in-flight key match caused the caller to share the result |
+| `DecisionBlocked` | Background request was rejected during active rate-limit backoff |
+
+The `api.GatewayRecorder` interface (implemented by `state.Store`) bridges the `api/` → `state/` boundary without a direct import:
+
+```go
+type GatewayRecorder interface {
+    RecordGatewayCall(method, path string, statusCode int, durationMs int64,
+        priority domain.RequestPriority, decision domain.GatewayDecision)
+}
+```
+
+Wired in `initAPIClients()` via `gateway.SetRecorder(store)`. Recorded entries are stored in the NetLog ring buffer alongside network-level entries.
+
+#### Double-Recording Prevention
+
+Both `Gateway.Do()` (via `GatewayRecorder`) and `LoggingTransport` (via `NetLogRecorder`) observe HTTP requests. To prevent double-counting gateway-routed requests:
+
+- `api.MarkGatewayRecorded(req)` stamps an `http.Request` with a context key before it is dispatched through the gateway
+- `api.IsGatewayRecorded(req)` returns true if the request was stamped
+- `LoggingTransport.RoundTrip()` skips `RecordNetCall()` when `IsGatewayRecorded(req)` is true
+- Direct API calls not routed through the gateway are still recorded by `LoggingTransport`
 
 ### Network Logging
 
 All HTTP requests are logged to a ring buffer for the NetworkLogPane (Page B):
 
-- `internal/state/netlog.go` — `NetLog` struct: 200-entry thread-safe ring buffer of `NetLogEntry` records (timestamp, method, path, status code, duration)
-- `internal/api/logging.go` — `LoggingTransport` wraps `http.DefaultTransport`, intercepts all requests, records method/path/status/duration
+- `internal/state/netlog.go` — `NetLog` struct: 200-entry thread-safe ring buffer of `NetLogEntry` records (timestamp, method, path, status code, duration, Priority, GatewayDecision)
+- `internal/api/logging.go` — `LoggingTransport` wraps `http.DefaultTransport`, intercepts requests not already recorded by the gateway
 - `NetLogRecorder` interface bridges `api/` → `state/` without a direct import
-- Data flow: `LoggingTransport` → `store.RecordNetCall()` → `NetLog` ring buffer → `NetworkLogPane` reads via `store.NetLogEntries()`
+- Data flow (gateway path): `BaseClient.doJSON` → `Gateway.Do()` → records via `GatewayRecorder` → `store.RecordGatewayCall()` → `NetLog`
+- Data flow (direct path): `LoggingTransport.RoundTrip()` → `store.RecordNetCall()` → `NetLog`
 - Wired in `initAPIClients()` — a shared `http.Client` with `LoggingTransport` is passed to all 6 API clients
 
 ### Integration Points
 
-- `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority
-- `internal/api/base.go` — `BaseClient.SetGateway()`, `doJSON`/`doNoContent` routing
-- `internal/api/logging.go` — `LoggingTransport`, `NetLogRecorder` interface
+- `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority, GatewayRecorder interface, MarkGatewayRecorded/IsGatewayRecorded helpers
+- `internal/api/base.go` — `BaseClient.SetGateway()`, `doJSON`/`doNoContent` routing, MarkGatewayRecorded call
+- `internal/api/logging.go` — `LoggingTransport`, `NetLogRecorder` interface, double-recording skip
 - `internal/app/app.go` — Gateway created in `New()`, `throttleExpiredMsg` handler
-- `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()` and wires `LoggingTransport`
-- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`
-- `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry`, `RecordNetCall()`
-- `internal/domain/gateway.go` — `GatewaySnapshotter`, `GatewayState`, `RequestPriority`
+- `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()`, wires `LoggingTransport`, calls `SetRecorder(store)`
+- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordGatewayCall()`
+- `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry` (with Priority + GatewayDecision), `RecordNetCall()`, `RecordGatewayCall()`
+- `internal/domain/gateway.go` — `GatewaySnapshotter`, `GatewayState`, `RequestPriority`, `GatewayDecision`
 
 *Last updated: 2026-03-28*

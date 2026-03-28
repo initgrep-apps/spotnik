@@ -105,6 +105,12 @@ func (a *App) initAPIClients(token string) {
 	loggingClient := &http.Client{
 		Transport: api.NewLoggingTransport(http.DefaultTransport, a.store),
 	}
+	// Wire the store as a GatewayRecorder so Gateway.Do() records per-request
+	// decisions (allowed/waited/deduped/blocked) with priority metadata.
+	// This enables the Request Flow pane to show gateway decisions for all
+	// requests, including Background requests rejected by backoff.
+	a.gateway.SetRecorder(a.store)
+
 	player := api.NewPlayer("", token)
 	player.SetHTTPClient(loggingClient)
 	player.SetGateway(a.gateway)

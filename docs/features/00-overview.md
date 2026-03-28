@@ -70,7 +70,8 @@
 | 58b | NowPlaying Design Docs | `58b-nowplaying-design-docs.md` | ✅ Complete | 58 | #61 |
 | 59 | Visualizer Engine | `59-visualizer-engine.md` | ✅ Complete | 40 | #65 |
 | 60 | NowPlaying Pane Redesign | `60-nowplaying-redesign.md` | ✅ Complete | 59 | #66 |
+| 61 | Fix Request Flow Gateway Viz | `61-fix-requestflow-gateway-viz.md` | ✅ Complete | 56 | — |
 
 ---
 
-*Last updated: 2026-03-27*
+*Last updated: 2026-03-28*
