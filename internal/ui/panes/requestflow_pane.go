@@ -207,11 +207,90 @@ func (p *RequestFlowPane) syncFromNetLog() {
 }
 
 // View renders the full RequestFlowPane. Pure — no side effects.
+// When pane width >= 60, renders three bordered sub-boxes (APP, GATEWAY, SPOTIFY)
+// with dual arrow columns. Falls back to flat table layout for narrower terminals.
 func (p *RequestFlowPane) View() string {
 	if p.width <= 0 || p.height <= 0 {
 		return ""
 	}
 
+	// Minimum content width for three bordered boxes.
+	if p.width < 60 {
+		return p.viewFlat()
+	}
+
+	return p.viewBoxed()
+}
+
+// viewBoxed renders the three bordered sub-boxes layout.
+// Box proportions (approximate):
+//
+//	APP ~25% | left arrow ~8% | GATEWAY ~26% | right arrow ~8% | SPOTIFY ~20%
+func (p *RequestFlowPane) viewBoxed() string {
+	contentWidth := p.width
+	statusStripHeight := 1
+	// boxAreaHeight: subtract status strip and 1 blank separator row.
+	boxAreaHeight := p.height - statusStripHeight - 1
+	if boxAreaHeight < 3 {
+		boxAreaHeight = 3
+	}
+
+	// Column widths (proportional to pane width).
+	appBoxW := contentWidth * 25 / 100
+	arrowW := contentWidth * 8 / 100
+	gwBoxW := contentWidth * 26 / 100
+	spotifyBoxW := contentWidth * 20 / 100
+
+	// Enforce minimum widths so boxes are always meaningful.
+	if appBoxW < 10 {
+		appBoxW = 10
+	}
+	if arrowW < 7 {
+		arrowW = 7
+	}
+	if gwBoxW < 12 {
+		gwBoxW = 12
+	}
+	if spotifyBoxW < 10 {
+		spotifyBoxW = 10
+	}
+
+	// Inner row count = box height minus top/bottom border rows.
+	innerRows := boxAreaHeight - 2
+	if innerRows < 1 {
+		innerRows = 1
+	}
+
+	// Build content lines for each box.
+	appLines := p.buildAppBoxLines(innerRows)
+	gwLines := p.buildGatewayBoxLines(innerRows)
+	spotifyLines := p.buildSpotifyBoxLines(innerRows)
+
+	// Build arrow columns (one line per content row).
+	leftArrows := p.buildLeftArrowLines(innerRows, arrowW)
+	rightArrows := p.buildRightArrowLines(innerRows, arrowW)
+
+	// Render bordered sub-boxes.
+	appBox := p.renderSubBox("APP", appLines, appBoxW)
+	gwBox := p.renderSubBox("GATEWAY", gwLines, gwBoxW)
+	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyBoxW)
+
+	// Arrow blocks: pad with a blank line above and below to align
+	// arrow rows with box content rows (offset by border rows).
+	blankArrow := strings.Repeat(" ", arrowW)
+	leftBlock := blankArrow + "\n" + strings.Join(leftArrows, "\n") + "\n" + blankArrow
+	rightBlock := blankArrow + "\n" + strings.Join(rightArrows, "\n") + "\n" + blankArrow
+
+	// Compose horizontally: APP | left arrows | GATEWAY | right arrows | SPOTIFY
+	composite := lipgloss.JoinHorizontal(lipgloss.Top,
+		appBox, leftBlock, gwBox, rightBlock, spotifyBox)
+
+	return composite + "\n" + p.renderStatusStrip()
+}
+
+// viewFlat renders the original flat table layout. Used as a fallback for narrow
+// terminals (width < 60) and preserves all existing rendering logic unchanged.
+func (p *RequestFlowPane) viewFlat() string {
 	var sb strings.Builder
 
 	// Row 1: column headers.

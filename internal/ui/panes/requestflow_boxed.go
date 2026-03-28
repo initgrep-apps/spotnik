@@ -244,4 +244,3 @@ func (p *RequestFlowPane) buildRightArrowLines(maxRows, colWidth int) []string {
 	}
 	return lines
 }
-
