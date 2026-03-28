@@ -768,6 +768,28 @@ func TestRequestFlowPane_View_StalenessDisplay_NeverFetched(t *testing.T) {
 	assert.NotContains(t, v, "stale:", "never-fetched data should not appear as stale")
 }
 
+// --- Task 2: Height fallback guard ---
+
+// TestRequestFlowPane_View_ShortHeightFallback verifies that when the pane height
+// is too small for the boxed layout (height < 5), viewBoxed() falls back to
+// viewFlat() instead of clamping boxAreaHeight and producing oversized output.
+func TestRequestFlowPane_View_ShortHeightFallback(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	// Width ≥ 60 so viewBoxed() would be selected, but height = 4 is too short.
+	pane.SetSize(80, 4)
+	v := pane.View()
+	// With height=4: boxAreaHeight = 4 - 1 - 1 = 2 < 3, so must fall back to flat layout.
+	// Flat layout has no bordered sub-boxes.
+	assert.False(t, viewContainsBox(v, "APP"),
+		"height=4 should trigger flat-layout fallback — no APP bordered box")
+}
+
+// --- Task 1: Post-clamp overflow guard comment ---
+// NOTE: The overflow guard (appBoxW+arrowW+gwBoxW+arrowW+spotifyBoxW > contentWidth)
+// cannot be triggered at runtime with current minimums (sum=46) when width >= 60.
+// The guard is a defensive safety net for future constant changes.
+// Coverage is provided by the existing flat fallback tests which exercise viewFlat().
+
 func TestRequestFlowPane_View_StalenessDisplay_MultipleStale(t *testing.T) {
 	s := state.New()
 	// Set multiple domains stale.
