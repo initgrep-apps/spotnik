@@ -73,7 +73,8 @@
 | 61 | Fix Request Flow Gateway Viz | `61-fix-requestflow-gateway-viz.md` | ✅ Complete | 56 | — |
 | 62 | Request Flow Boxed Layout | `62-requestflow-boxed-layout.md` | ✅ Complete | 61 | #76 |
 | 63 | Request Flow Boxed Guards | `63-requestflow-boxed-guards.md` | ✅ Complete | 62 | #77 |
-| 64 | Gateway Liveness & Watermarks | `64-gateway-liveness-watermarks.md` | ✅ Complete | 63 | — |
+| 64 | Gateway Liveness & Watermarks | `64-gateway-liveness-watermarks.md` | ✅ Complete | 63 | #78 |
+| 65 | Gateway-Internal Watermarks | `65-gateway-internal-watermarks.md` | ✅ Complete | 64 | — |
 
 ---
 

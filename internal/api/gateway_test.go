@@ -970,3 +970,136 @@ func TestMarkGatewayRecorded_PreservesRequestProperties(t *testing.T) {
 	assert.True(t, IsGatewayRecorded(markedReq),
 		"marked request should still be marked after properties check")
 }
+
+// --- Feature 65: Gateway-internal watermarks ---
+
+// TestGateway_NewGateway_InitializesWatermarks verifies that a fresh gateway
+// starts with minTokens equal to the bucket max capacity.
+func TestGateway_NewGateway_InitializesWatermarks(t *testing.T) {
+	gw := NewGateway()
+	snap := gw.Snapshot()
+	// Before any requests, MinTokens should equal TokensMax (full bucket).
+	assert.Equal(t, snap.TokensMax, snap.MinTokens,
+		"fresh gateway MinTokens must equal TokensMax")
+	// PeakConcurrent starts at 0 since no requests have been made.
+	assert.Equal(t, 0, snap.PeakConcurrent,
+		"fresh gateway PeakConcurrent must be 0")
+}
+
+// TestGateway_MinTokens_TrackedOnConsumption verifies that making requests
+// through the gateway causes Snapshot().MinTokens to drop below TokensMax.
+func TestGateway_MinTokens_TrackedOnConsumption(t *testing.T) {
+	gw := NewGateway()
+	// Initial: MinTokens == TokensMax == 10.
+	initial := gw.Snapshot()
+	require.Equal(t, initial.TokensMax, initial.MinTokens,
+		"precondition: fresh gateway MinTokens must equal TokensMax")
+
+	// Make 3 background requests to consume tokens from the bucket.
+	for i := 0; i < 3; i++ {
+		key := RequestKey{Method: "GET", Path: fmt.Sprintf("/track/%d", i)}
+		_, err := gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+		require.NoError(t, err)
+	}
+
+	snap := gw.Snapshot()
+	assert.Less(t, snap.MinTokens, snap.TokensMax,
+		"MinTokens must be less than TokensMax after consuming tokens")
+}
+
+// TestGateway_PeakConcurrent_TrackedOnAcquisition verifies that launching
+// concurrent requests causes Snapshot().PeakConcurrent to become positive.
+func TestGateway_PeakConcurrent_TrackedOnAcquisition(t *testing.T) {
+	gw := NewGateway()
+
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Launch 3 concurrent slow requests.
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := RequestKey{Method: "GET", Path: fmt.Sprintf("/slow/%d", i)}
+			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				<-release
+				return newFakeResponse(200, "ok"), nil
+			})
+		}(i)
+	}
+
+	// Give goroutines time to acquire semaphore slots.
+	time.Sleep(30 * time.Millisecond)
+
+	snap := gw.Snapshot()
+	assert.GreaterOrEqual(t, snap.PeakConcurrent, 2,
+		"PeakConcurrent must be >= 2 when 3 concurrent requests are in-flight")
+
+	close(release)
+	wg.Wait()
+}
+
+// TestGateway_Snapshot_IncludesWatermarks verifies that Snapshot() returns
+// watermark fields populated with meaningful values after activity.
+func TestGateway_Snapshot_IncludesWatermarks(t *testing.T) {
+	gw := NewGateway()
+
+	// Consume a few tokens.
+	for i := 0; i < 5; i++ {
+		key := RequestKey{Method: "GET", Path: fmt.Sprintf("/ep/%d", i)}
+		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+	}
+
+	snap := gw.Snapshot()
+	// After 5 requests, MinTokens must be <= (TokensMax - 5).
+	// Allow some slack for token refill between calls, but MinTokens < TokensMax.
+	assert.Less(t, snap.MinTokens, snap.TokensMax,
+		"Snapshot().MinTokens must reflect token consumption")
+}
+
+// TestGateway_ResetWatermarks_ClearsToCurrentValues verifies that after
+// consuming tokens and calling ResetWatermarks(), the subsequent Snapshot()
+// reflects the reset values (not the historical peak/min).
+func TestGateway_ResetWatermarks_ClearsToCurrentValues(t *testing.T) {
+	gw := NewGateway()
+
+	// Consume several tokens to drive MinTokens below max.
+	for i := 0; i < 5; i++ {
+		key := RequestKey{Method: "GET", Path: fmt.Sprintf("/ep/%d", i)}
+		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+	}
+
+	// Verify MinTokens dropped.
+	before := gw.Snapshot()
+	require.Less(t, before.MinTokens, before.TokensMax,
+		"precondition: MinTokens must be < TokensMax after 5 requests")
+
+	// Reset watermarks.
+	gw.ResetWatermarks()
+
+	// After reset, MinTokens should be set to current token level (not the historical min).
+	after := gw.Snapshot()
+	// MinTokens post-reset must be >= the pre-reset MinTokens (it was reset to current level).
+	assert.GreaterOrEqual(t, after.MinTokens, before.MinTokens,
+		"MinTokens after ResetWatermarks must be >= historical min (reset to current)")
+	// PeakConcurrent should be 0 (no requests in-flight during reset).
+	assert.Equal(t, 0, after.PeakConcurrent,
+		"PeakConcurrent must reset to 0 when no concurrent requests are in-flight")
+}
+
+// TestGateway_Watermarks_IdleShowsDefaults verifies that an idle gateway
+// (no requests made) shows MinTokens == TokensMax and PeakConcurrent == 0.
+func TestGateway_Watermarks_IdleShowsDefaults(t *testing.T) {
+	gw := NewGateway()
+	snap := gw.Snapshot()
+	assert.Equal(t, snap.TokensMax, snap.MinTokens,
+		"idle gateway: MinTokens must equal TokensMax")
+	assert.Equal(t, 0, snap.PeakConcurrent,
+		"idle gateway: PeakConcurrent must be 0")
+}

@@ -68,21 +68,23 @@ func PriorityFromContext(ctx context.Context) Priority {
 // Tokens are refilled continuously at `rate` per second up to `max`.
 // Callers call wait() to consume a token, blocking until one is available.
 type tokenBucket struct {
-	mu       sync.Mutex
-	tokens   float64
-	max      float64
-	rate     float64 // tokens per second
-	lastFill time.Time
+	mu        sync.Mutex
+	tokens    float64
+	max       float64
+	rate      float64 // tokens per second
+	lastFill  time.Time
+	minTokens float64 // lowest token level observed since last reset (watermark)
 }
 
 // newTokenBucket creates a full token bucket with the given max capacity and
 // refill rate (tokens per second).
 func newTokenBucket(max, rate float64) *tokenBucket {
 	return &tokenBucket{
-		tokens:   max,
-		max:      max,
-		rate:     rate,
-		lastFill: time.Now(),
+		tokens:    max,
+		max:       max,
+		rate:      rate,
+		lastFill:  time.Now(),
+		minTokens: max, // start at max — no consumption observed yet
 	}
 }
 
@@ -102,6 +104,12 @@ func (tb *tokenBucket) wait(ctx context.Context) error {
 
 		if tb.tokens >= 1 {
 			tb.tokens--
+			// Track the minimum token level at the exact moment of consumption,
+			// before any refill can hide the dip. This is the key fix over
+			// Feature 64's UI-side sampling approach.
+			if tb.tokens < tb.minTokens {
+				tb.minTokens = tb.tokens
+			}
 			tb.mu.Unlock()
 			return nil
 		}
@@ -156,13 +164,14 @@ type GatewayRecorder interface {
 //   - In-flight request deduplication (same key → only one HTTP call)
 //   - 429 backoff with priority bypass for Interactive requests
 type Gateway struct {
-	mu           sync.Mutex
-	bucket       *tokenBucket
-	semaphore    chan struct{} // concurrency limiter, buffered to size 5
-	inflight     map[RequestKey]*inflightEntry
-	backoffUntil time.Time
-	retryAfter   int
-	recorder     GatewayRecorder // optional; nil means no recording
+	mu             sync.Mutex
+	bucket         *tokenBucket
+	semaphore      chan struct{} // concurrency limiter, buffered to size 5
+	inflight       map[RequestKey]*inflightEntry
+	backoffUntil   time.Time
+	retryAfter     int
+	recorder       GatewayRecorder // optional; nil means no recording
+	peakConcurrent int             // max semaphore occupancy observed since last reset (watermark)
 }
 
 // SetRecorder sets the gateway decision recorder. Pass nil to disable recording.
@@ -188,7 +197,7 @@ func NewGateway() *Gateway {
 // Best-effort point-in-time: each field group is read under its own lock, so the
 // snapshot is not guaranteed to be atomically consistent across all fields.
 func (g *Gateway) Snapshot() domain.GatewayState {
-	// Read the token bucket level without consuming a token.
+	// Read the token bucket level and watermark without consuming a token.
 	g.bucket.mu.Lock()
 	// Apply any pending refill before reading so the value is current.
 	now := time.Now()
@@ -198,6 +207,7 @@ func (g *Gateway) Snapshot() domain.GatewayState {
 		tokens = g.bucket.max
 	}
 	tokenMax := int(g.bucket.max)
+	minTokens := int(g.bucket.minTokens)
 	g.bucket.mu.Unlock()
 
 	// Read gateway fields under the gateway mutex.
@@ -214,6 +224,7 @@ func (g *Gateway) Snapshot() domain.GatewayState {
 	for k := range g.inflight {
 		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
 	}
+	peakConcurrent := g.peakConcurrent
 	g.mu.Unlock()
 
 	// Concurrent active = semaphore slots currently occupied.
@@ -228,7 +239,32 @@ func (g *Gateway) Snapshot() domain.GatewayState {
 		BackoffRemaining: backoffRemaining,
 		DedupWaiters:     dedupWaiters,
 		InFlightKeys:     inFlightKeys,
+		PeakConcurrent:   peakConcurrent,
+		MinTokens:        minTokens,
 	}
+}
+
+// ResetWatermarks resets peak activity watermarks to their current values.
+// Called by the UI on each 1-second boundary so annotations reflect only
+// activity in the most recent window.
+func (g *Gateway) ResetWatermarks() {
+	g.bucket.mu.Lock()
+	// Apply pending refill before reading the current level, exactly as Snapshot()
+	// does. Without this, minTokens could be set below the refilled TokensAvailable
+	// returned by the next Snapshot(), causing a false (min: N) annotation.
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	current := g.bucket.tokens + elapsed*g.bucket.rate
+	if current > g.bucket.max {
+		current = g.bucket.max
+	}
+	g.bucket.minTokens = current
+	g.bucket.mu.Unlock()
+
+	g.mu.Lock()
+	// Reset peakConcurrent to current semaphore occupancy (usually 0 when idle).
+	g.peakConcurrent = len(g.semaphore)
+	g.mu.Unlock()
 }
 
 // IsThrottled returns true when the gateway is in a 429 backoff period.
@@ -372,6 +408,14 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	// Phase 3: concurrency semaphore (only primary callers reach here).
 	select {
 	case g.semaphore <- struct{}{}:
+		// Track peak concurrent usage for watermark display. len(g.semaphore) is
+		// read under the gateway mutex to avoid a race with ResetWatermarks().
+		g.mu.Lock()
+		active := len(g.semaphore)
+		if active > g.peakConcurrent {
+			g.peakConcurrent = active
+		}
+		g.mu.Unlock()
 		defer func() { <-g.semaphore }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
