@@ -346,55 +346,9 @@ func (p *RequestFlowPane) renderSpotifyEntry(r reqDisplay) string {
 }
 
 // renderGatewayState renders the GATEWAY column details (token bucket, semaphore, backoff).
+// Delegates to gatewayStateLines() defined in requestflow_boxed.go for DRY reuse.
 func (p *RequestFlowPane) renderGatewayState() string {
-	snap := p.lastSnapshot
-
-	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
-	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
-	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-
-	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
-	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
-	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
-
-	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
-	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
-	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
-
-	lines := []string{tokenLine, semLine}
-
-	// Backoff timer: only show when store is throttled.
-	if p.store != nil && p.store.IsThrottled() {
-		remaining := snap.BackoffRemaining
-		if remaining <= 0 {
-			remaining = float64(p.store.ThrottleRetryAfterSecs())
-		}
-		lines = append(lines, errorStyle.Render(fmt.Sprintf("⏳ backoff %.1fs", remaining)))
-	}
-
-	// Dedup waiters: only show when active.
-	if snap.DedupWaiters > 0 {
-		lines = append(lines, secondaryStyle.Render(fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters)))
-	}
-
-	// InFlightKeys: render up to 3 with truncation.
-	if len(snap.InFlightKeys) > 0 {
-		const maxKeys = 3
-		shown := len(snap.InFlightKeys)
-		if shown > maxKeys {
-			shown = maxKeys
-		}
-		for i := 0; i < shown; i++ {
-			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  → %s", snap.InFlightKeys[i])))
-		}
-		if len(snap.InFlightKeys) > maxKeys {
-			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … +%d more", len(snap.InFlightKeys)-maxKeys)))
-		}
-	}
-
-	return strings.Join(lines, "\n")
+	return strings.Join(p.gatewayStateLines(), "\n")
 }
 
 // renderColoredDotBar renders a progress bar using filled/empty rune characters
