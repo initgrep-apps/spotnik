@@ -2,6 +2,7 @@ package panes_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -381,6 +382,92 @@ func TestRequestFlowPane_Integration_SyncFromNetLog(t *testing.T) {
 	assert.Contains(t, v, "/me/player", "net log entry should appear after TickMsg sync")
 	assert.Contains(t, v, "/me/playlists", "net log entry should appear after TickMsg sync")
 	assert.Contains(t, v, "200", "status code should appear")
+}
+
+// --- Arrow state tests (four gateway decisions) ---
+
+func TestRequestFlowPane_Arrow_AllowedDecision_Animated(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// Inject an Allowed request.
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		LatencyMs:       50,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionAllowed,
+	})
+	v := pane.View()
+	// Allowed decision renders an animated arrow.
+	assert.True(t, containsAny(v, "──→──", "───→─", "────→"),
+		"DecisionAllowed should render an animated arrow")
+}
+
+func TestRequestFlowPane_Arrow_WaitedDecision(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		LatencyMs:       100,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionWaited,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "wait", "DecisionWaited should render 'wait' in the arrow column")
+}
+
+func TestRequestFlowPane_Arrow_DedupedDecision(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		LatencyMs:       30,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionDeduped,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "dedup", "DecisionDeduped should render 'dedup' in the arrow column")
+}
+
+func TestRequestFlowPane_Arrow_BlockedDecision(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      0,
+		LatencyMs:       0,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionBlocked,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "╳", "DecisionBlocked should render ╳ in the arrow column")
+}
+
+func TestRequestFlowPane_Arrow_Allowed429_ShowsBlock(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(100, 20)
+	// DecisionAllowed with 429 status code → X arrow (HTTP-layer throttle).
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      429,
+		LatencyMs:       5,
+		Priority:        domain.PriorityBackground,
+		GatewayDecision: domain.DecisionAllowed,
+	})
+	v := pane.View()
+	assert.Contains(t, v, "╳", "DecisionAllowed+429 should render ╳ in the arrow column")
+}
+
+// containsAny returns true if s contains any of the given substrings.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- Theme color coding tests ---

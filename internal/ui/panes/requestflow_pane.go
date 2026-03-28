@@ -45,6 +45,9 @@ type RequestCompletedMsg struct {
 	LatencyMs int
 	// Priority is domain.PriorityInteractive or domain.PriorityBackground.
 	Priority domain.RequestPriority
+	// GatewayDecision is the gateway routing outcome (allowed/waited/deduped/blocked).
+	// Defaults to DecisionAllowed (zero value) for backward compatibility.
+	GatewayDecision domain.GatewayDecision
 	// CompletedAt is when the request completed. Zero value means time.Now().
 	CompletedAt time.Time
 }
@@ -55,6 +58,7 @@ type reqDisplay struct {
 	statusCode  int
 	latencyMs   int
 	priority    domain.RequestPriority
+	decision    domain.GatewayDecision
 	completedAt time.Time
 }
 
@@ -159,6 +163,7 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			statusCode:  m.StatusCode,
 			latencyMs:   m.LatencyMs,
 			priority:    m.Priority,
+			decision:    m.GatewayDecision,
 			completedAt: at,
 		}
 		// Prepend (newest first), cap at maxRecentReqs.
@@ -191,7 +196,8 @@ func (p *RequestFlowPane) syncFromNetLog() {
 			endpoint:    e.Path,
 			statusCode:  e.StatusCode,
 			latencyMs:   int(e.DurationMs),
-			priority:    domain.PriorityBackground,
+			priority:    e.Priority,
+			decision:    e.GatewayDecision,
 			completedAt: e.Timestamp,
 		})
 		if len(p.recentReqs) >= maxRecentReqs {
@@ -279,15 +285,39 @@ func (p *RequestFlowPane) renderAppEntry(r reqDisplay, colWidth int) string {
 }
 
 // renderArrow renders the connecting arrow between APP and GATEWAY columns.
-// The arrow animates by cycling through 3 frame offsets using frameIndex.
+// The arrow style reflects the gateway decision:
+//   - DecisionAllowed: animated flowing arrow (Success color); ╳ if HTTP 429
+//   - DecisionWaited:  "── wait ──" (Warning color)
+//   - DecisionDeduped: "──→ dedup" (TextSecondary color)
+//   - DecisionBlocked: "── ╳ ──"  (Error color — Background blocked by backoff)
 func (p *RequestFlowPane) renderArrow(r reqDisplay, colWidth int) string {
-	// Three-frame animation: `──→──`, `───→─`, `────→`
 	frames := []string{"──→──", "───→─", "────→"}
-	arrow := frames[p.frameIndex%3]
-	if r.statusCode == 429 {
-		arrow = "── ╳ ─"
+
+	var arrow string
+	var style lipgloss.Style
+
+	switch r.decision {
+	case domain.DecisionWaited:
+		arrow = "── wait ──"
+		style = lipgloss.NewStyle().Foreground(p.theme.Warning())
+	case domain.DecisionDeduped:
+		arrow = "──→ dedup"
+		style = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	case domain.DecisionBlocked:
+		arrow = "── ╳ ──"
+		style = lipgloss.NewStyle().Foreground(p.theme.Error())
+	default:
+		// DecisionAllowed: animate unless the HTTP response was 429.
+		if r.statusCode == 429 {
+			arrow = "── ╳ ─"
+			style = lipgloss.NewStyle().Foreground(p.theme.Warning())
+		} else {
+			arrow = frames[p.frameIndex%3]
+			style = lipgloss.NewStyle().Foreground(p.theme.Success())
+		}
 	}
-	return padRight(arrow, colWidth)
+
+	return padRightVisible(style.Render(arrow), colWidth)
 }
 
 // renderSpotifyEntry renders the SPOTIFY column for one request.
@@ -423,16 +453,6 @@ func (p *RequestFlowPane) renderStoreStatus() string {
 		return labelStyle.Render("STORE") + mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
 	}
 	return labelStyle.Render("STORE")
-}
-
-// padRight pads s with spaces to width w. Truncates if s is longer than w.
-// For plain strings without ANSI escape codes — use padRightVisible for styled strings.
-func padRight(s string, w int) string {
-	runes := []rune(s)
-	if len(runes) >= w {
-		return string(runes[:w])
-	}
-	return s + strings.Repeat(" ", w-len(runes))
 }
 
 // padRightVisible pads s with spaces to visible width w using lipgloss.Width()
