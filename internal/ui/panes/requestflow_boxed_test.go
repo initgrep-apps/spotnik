@@ -335,62 +335,63 @@ func TestBuildRightArrowLines_ZeroMaxRows(t *testing.T) {
 	assert.Nil(t, lines, "buildRightArrowLines(0, w) must return nil")
 }
 
-// --- Feature 64: peak annotations in gatewayStateLines ---
+// --- Feature 65: peak annotations in gatewayStateLines (from gateway snapshot) ---
 
-// TestGatewayStateLines_PeakAnnotation_Tokens verifies that when minTokens is
-// below the current TokensAvailable, a "(min: N)" annotation appears in the
-// token bucket line.
+// TestGatewayStateLines_PeakAnnotation_Tokens verifies that when the gateway
+// snapshot reports MinTokens below TokensAvailable, a "(min: N)" annotation
+// appears in the token bucket line.
 func TestGatewayStateLines_PeakAnnotation_Tokens(t *testing.T) {
 	p := newInternalTestPane()
 
-	// Manually set minTokens below current (tokens = 10, minTokens = 6).
+	// Set snapshot with gateway-tracked MinTokens below current TokensAvailable.
 	p.lastSnapshot = domain.GatewayState{
 		TokensAvailable: 10,
 		TokensMax:       10,
+		MinTokens:       6, // gateway recorded a dip to 6 during this window
 		ConcurrentMax:   5,
 	}
-	// Force minTokens to a lower value to simulate activity.
-	p.minTokens = 6
 
 	lines := p.gatewayStateLines()
 	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "(min: 6)", "token line must include (min: N) annotation when minTokens < current tokens")
+	assert.Contains(t, combined, "(min: 6)", "token line must include (min: N) annotation when MinTokens < current tokens")
 }
 
-// TestGatewayStateLines_PeakAnnotation_Concurrent verifies that when
-// peakConcurrent exceeds current ConcurrentActive, a "(peak: N)" annotation
+// TestGatewayStateLines_PeakAnnotation_Concurrent verifies that when the gateway
+// snapshot reports PeakConcurrent above ConcurrentActive, a "(peak: N)" annotation
 // appears in the semaphore line.
 func TestGatewayStateLines_PeakAnnotation_Concurrent(t *testing.T) {
 	p := newInternalTestPane()
 
-	// Set snapshot: no active concurrent, but peak was 3.
+	// Set snapshot: no active concurrent now, but gateway recorded peak of 3.
 	p.lastSnapshot = domain.GatewayState{
 		TokensAvailable:  10,
 		TokensMax:        10,
+		MinTokens:        10,
 		ConcurrentActive: 0,
 		ConcurrentMax:    5,
+		PeakConcurrent:   3, // gateway recorded a spike to 3 during this window
 	}
-	p.peakConcurrent = 3
 
 	lines := p.gatewayStateLines()
 	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "(peak: 3)", "semaphore line must include (peak: N) annotation when peakConcurrent > current active")
+	assert.Contains(t, combined, "(peak: 3)", "semaphore line must include (peak: N) annotation when PeakConcurrent > current active")
 }
 
 // TestGatewayStateLines_NoPeakAnnotation_WhenIdle verifies that no peak
-// annotations are rendered when the gateway is idle (peaks match current values).
+// annotations are rendered when the gateway snapshot shows idle values
+// (MinTokens == TokensAvailable, PeakConcurrent == ConcurrentActive == 0).
 func TestGatewayStateLines_NoPeakAnnotation_WhenIdle(t *testing.T) {
 	p := newInternalTestPane()
 
-	// Idle state: current tokens = max, no concurrent, peaks match.
+	// Idle state: gateway watermarks match current values.
 	p.lastSnapshot = domain.GatewayState{
 		TokensAvailable:  10,
 		TokensMax:        10,
+		MinTokens:        10, // no dip — equals current
 		ConcurrentActive: 0,
 		ConcurrentMax:    5,
+		PeakConcurrent:   0, // no spike — equals current
 	}
-	p.minTokens = 10
-	p.peakConcurrent = 0
 
 	lines := p.gatewayStateLines()
 	combined := strings.Join(lines, "\n")

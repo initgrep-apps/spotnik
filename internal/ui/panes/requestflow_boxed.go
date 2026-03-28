@@ -117,17 +117,18 @@ func (p *RequestFlowPane) gatewayStateLines() []string {
 	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
 	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
 	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
-	// Show "(min: N)" annotation when a token dip was detected this window.
-	if p.minTokens < snap.TokensAvailable {
-		tokenLine += mutedStyle.Render(fmt.Sprintf(" (min: %d)", p.minTokens))
+	// Show "(min: N)" annotation when the gateway observed a token dip this window.
+	// Gateway tracks this internally at the moment of consumption (not by sampling).
+	if snap.MinTokens < snap.TokensAvailable {
+		tokenLine += mutedStyle.Render(fmt.Sprintf(" (min: %d)", snap.MinTokens))
 	}
 
 	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
 	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
 	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
-	// Show "(peak: N)" annotation when a concurrency spike was detected this window.
-	if p.peakConcurrent > snap.ConcurrentActive {
-		semLine += mutedStyle.Render(fmt.Sprintf(" (peak: %d)", p.peakConcurrent))
+	// Show "(peak: N)" annotation when the gateway observed a concurrency spike this window.
+	if snap.PeakConcurrent > snap.ConcurrentActive {
+		semLine += mutedStyle.Render(fmt.Sprintf(" (peak: %d)", snap.PeakConcurrent))
 	}
 
 	lines := []string{tokenLine, semLine}

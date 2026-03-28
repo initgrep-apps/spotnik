@@ -65,6 +65,11 @@ type reqDisplay struct {
 // RequestFlowPane visualizes the live APP → GATEWAY → SPOTIFY request pipeline.
 // It reads from domain.GatewaySnapshotter (via Snapshot()) and *state.Store. It does NOT make
 // any Spotify API calls — all data is internal infrastructure state.
+//
+// Watermark values (MinTokens, PeakConcurrent) are tracked inside the Gateway
+// itself and returned via Snapshot() — the pane reads them passively without
+// sampling. The UI calls ResetWatermarks() on each 1-second TickMsg boundary so
+// annotations reflect only the most recent activity window.
 type RequestFlowPane struct {
 	theme   theme.Theme
 	gateway domain.GatewaySnapshotter
@@ -84,11 +89,6 @@ type RequestFlowPane struct {
 
 	// pollingState is the latest app-level polling snapshot.
 	pollingState PollingSnapshotMsg
-
-	// peakConcurrent is the max ConcurrentActive seen since last TickMsg reset.
-	peakConcurrent int
-	// minTokens is the min TokensAvailable seen since last TickMsg reset.
-	minTokens int
 }
 
 // Compile-time check: RequestFlowPane implements layout.Pane.
@@ -103,7 +103,6 @@ func NewRequestFlowPane(gw domain.GatewaySnapshotter, s *state.Store, t theme.Th
 	}
 	if gw != nil {
 		p.lastSnapshot = gw.Snapshot()
-		p.minTokens = p.lastSnapshot.TokensMax
 	}
 	return p
 }
@@ -135,14 +134,6 @@ func (p *RequestFlowPane) IsFocused() bool { return p.focused }
 // FrameIndex returns the current animation frame index (exported for testing).
 func (p *RequestFlowPane) FrameIndex() int { return p.frameIndex }
 
-// MinTokens returns the minimum TokensAvailable seen since the last TickMsg reset
-// (exported for testing).
-func (p *RequestFlowPane) MinTokens() int { return p.minTokens }
-
-// PeakConcurrent returns the maximum ConcurrentActive seen since the last TickMsg
-// reset (exported for testing).
-func (p *RequestFlowPane) PeakConcurrent() int { return p.peakConcurrent }
-
 // Init returns nil — RequestFlowPane has no self-initiated tick loop.
 // It reacts to TickMsg (1s) and viz.TickMsg (200ms) from the app.
 func (p *RequestFlowPane) Init() tea.Cmd { return nil }
@@ -154,26 +145,19 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Advance the arrow animation frame counter.
 		p.frameIndex++
 		// Refresh gateway snapshot at 200ms resolution (5x faster than TickMsg).
+		// Watermarks are tracked inside the Gateway itself — just read the snapshot.
 		if p.gateway != nil {
-			snap := p.gateway.Snapshot()
-			p.lastSnapshot = snap
-			// Track peak activity watermarks within the current 1-second window.
-			if snap.ConcurrentActive > p.peakConcurrent {
-				p.peakConcurrent = snap.ConcurrentActive
-			}
-			if snap.TokensAvailable < p.minTokens {
-				p.minTokens = snap.TokensAvailable
-			}
+			p.lastSnapshot = p.gateway.Snapshot()
 		}
 		p.syncFromNetLog()
 		return p, nil
 
 	case TickMsg:
 		if p.gateway != nil {
+			// Capture the snapshot first (preserves peaks from the last window),
+			// then reset so the next window starts fresh.
 			p.lastSnapshot = p.gateway.Snapshot()
-			// Reset peak watermarks from fresh snapshot values.
-			p.minTokens = p.lastSnapshot.TokensMax
-			p.peakConcurrent = 0
+			p.gateway.ResetWatermarks()
 		}
 		p.syncFromNetLog()
 		return p, nil
