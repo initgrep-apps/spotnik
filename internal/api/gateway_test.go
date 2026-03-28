@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -656,6 +657,161 @@ func TestGateway_Snapshot_ThreadSafe(t *testing.T) {
 		}()
 	}
 	wg.Wait() // If data race occurs, go test -race will catch it.
+}
+
+// --- GatewayRecorder tests ---
+
+// mockRecorder captures RecordGatewayCall invocations for assertion.
+type mockRecorder struct {
+	mu    sync.Mutex
+	calls []recordedCall
+}
+
+type recordedCall struct {
+	method   string
+	path     string
+	status   int
+	duration int64
+	priority domain.RequestPriority
+	decision domain.GatewayDecision
+}
+
+func (m *mockRecorder) RecordGatewayCall(method, path string, statusCode int, durationMs int64, priority domain.RequestPriority, decision domain.GatewayDecision) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, recordedCall{
+		method:   method,
+		path:     path,
+		status:   statusCode,
+		duration: durationMs,
+		priority: priority,
+		decision: decision,
+	})
+}
+
+func (m *mockRecorder) last() (recordedCall, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.calls) == 0 {
+		return recordedCall{}, false
+	}
+	return m.calls[len(m.calls)-1], true
+}
+
+func (m *mockRecorder) all() []recordedCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]recordedCall, len(m.calls))
+	copy(out, m.calls)
+	return out
+}
+
+func TestGateway_SetRecorder_NilSafe(t *testing.T) {
+	gw := NewGateway()
+	// SetRecorder(nil) must not panic.
+	gw.SetRecorder(nil)
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/test"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.NoError(t, err)
+}
+
+func TestGateway_Recorder_AllowedDecision(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockRecorder{}
+	gw.SetRecorder(rec)
+
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/me/player"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.NoError(t, err)
+
+	call, ok := rec.last()
+	require.True(t, ok, "recorder should have captured a call")
+	assert.Equal(t, "GET", call.method)
+	assert.Equal(t, "/me/player", call.path)
+	assert.Equal(t, 200, call.status)
+	assert.Equal(t, domain.PriorityBackground, call.priority)
+	assert.Equal(t, domain.DecisionAllowed, call.decision)
+}
+
+func TestGateway_Recorder_BlockedDecision(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockRecorder{}
+	gw.SetRecorder(rec)
+
+	// Trigger a 429 to put the gateway in backoff.
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/limited"},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "30")
+			return resp, nil
+		})
+
+	// Now a Background request during backoff should be recorded as Blocked.
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/blocked"},
+		func() (*http.Response, error) {
+			t.Error("fn should not be called for blocked request")
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.Error(t, err)
+
+	// Find the blocked call in the recorder.
+	calls := rec.all()
+	var blocked *recordedCall
+	for i := range calls {
+		if calls[i].path == "/blocked" {
+			blocked = &calls[i]
+		}
+	}
+	require.NotNil(t, blocked, "blocked request should be recorded")
+	assert.Equal(t, domain.DecisionBlocked, blocked.decision)
+	assert.Equal(t, domain.PriorityBackground, blocked.priority)
+	assert.Equal(t, 0, blocked.status, "blocked request has no HTTP status")
+}
+
+func TestGateway_Recorder_DedupedDecision(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockRecorder{}
+	gw.SetRecorder(rec)
+
+	release := make(chan struct{})
+	key := RequestKey{Method: "GET", Path: "/dedup-endpoint"}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				<-release
+				return newFakeResponse(200, "data"), nil
+			})
+		}()
+	}
+
+	// Give both goroutines time to start.
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	calls := rec.all()
+	// Should have 2 recorded calls: one Allowed + one Deduped.
+	require.GreaterOrEqual(t, len(calls), 2, "both goroutines should be recorded")
+	decisions := make(map[domain.GatewayDecision]int)
+	for _, c := range calls {
+		if c.path == "/dedup-endpoint" {
+			decisions[c.decision]++
+		}
+	}
+	assert.Equal(t, 1, decisions[domain.DecisionAllowed], "exactly one Allowed call")
+	assert.Equal(t, 1, decisions[domain.DecisionDeduped], "exactly one Deduped call")
 }
 
 func TestGateway_Snapshot_InFlightKeys(t *testing.T) {

@@ -30,7 +30,24 @@ const (
 // using context.WithValue.
 type contextKey int
 
-const priorityKey contextKey = 0
+const (
+	priorityKey        contextKey = 0
+	gatewayRecordedKey contextKey = 1
+)
+
+// MarkGatewayRecorded returns a new request with a context marker indicating
+// that the gateway has already recorded this call. LoggingTransport checks
+// this marker and skips its own RecordNetCall to prevent double-recording.
+func MarkGatewayRecorded(req *http.Request) *http.Request {
+	ctx := context.WithValue(req.Context(), gatewayRecordedKey, true)
+	return req.WithContext(ctx)
+}
+
+// IsGatewayRecorded reports whether the request context carries the gateway-recorded marker.
+func IsGatewayRecorded(req *http.Request) bool {
+	v, _ := req.Context().Value(gatewayRecordedKey).(bool)
+	return v
+}
 
 // WithPriority returns a new context that carries the given Priority.
 // BaseClient reads this via PriorityFromContext when routing through the Gateway.
@@ -124,6 +141,14 @@ type inflightEntry struct {
 	err  error
 }
 
+// GatewayRecorder records per-request gateway decisions for visualization.
+// Implemented by *state.Store; defined here to avoid an import cycle
+// (api/ cannot import state/).
+type GatewayRecorder interface {
+	RecordGatewayCall(method, path string, statusCode int, durationMs int64,
+		priority domain.RequestPriority, decision domain.GatewayDecision)
+}
+
 // Gateway is the central control point for all outbound Spotify API requests.
 // It enforces:
 //   - Token-bucket rate limiting (10 req/s burst of 10)
@@ -137,6 +162,15 @@ type Gateway struct {
 	inflight     map[RequestKey]*inflightEntry
 	backoffUntil time.Time
 	retryAfter   int
+	recorder     GatewayRecorder // optional; nil means no recording
+}
+
+// SetRecorder sets the gateway decision recorder. Pass nil to disable recording.
+// Thread-safe.
+func (g *Gateway) SetRecorder(r GatewayRecorder) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.recorder = r
 }
 
 // NewGateway creates a Gateway with default limits:
@@ -226,8 +260,14 @@ func (g *Gateway) RetryAfterSecs() int {
 //   - Check the in-flight map; if a matching request is already running,
 //     wait for it and return the cached result.
 //   - On 429 response, set backoffUntil and return RateLimitError.
+//
+// When a GatewayRecorder is attached, Do() records the gateway decision
+// (Allowed/Waited/Deduped/Blocked) for each request, including Background
+// requests rejected by backoff that never reach the HTTP layer.
 func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	fn func() (*http.Response, error)) (*http.Response, error) {
+
+	domainPriority := priorityToDomain(priority)
 
 	// Phase 1: rate limiting policy based on priority.
 	if priority == Interactive {
@@ -240,8 +280,15 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		g.mu.Lock()
 		throttled := time.Now().Before(g.backoffUntil)
 		retryAfter := g.retryAfter
+		rec := g.recorder
 		g.mu.Unlock()
 		if throttled {
+			// Record the block decision before returning — blocked Background
+			// requests never reach the HTTP layer so LoggingTransport misses them.
+			if rec != nil {
+				rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
+					domainPriority, domain.DecisionBlocked)
+			}
 			return nil, &RateLimitError{RetryAfter: retryAfter}
 		}
 		// Apply token-bucket throttle.
@@ -259,11 +306,22 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		g.mu.Lock()
 		if entry, ok := g.inflight[key]; ok {
 			// A matching GET is already in flight — wait without holding a slot.
+			rec := g.recorder
 			g.mu.Unlock()
+			waitStart := time.Now()
 			select {
 			case <-entry.done:
 			case <-ctx.Done():
 				return nil, ctx.Err()
+			}
+			// Record the dedup decision — the waiter re-uses the primary's result.
+			if rec != nil {
+				statusCode := 0
+				if entry.resp != nil {
+					statusCode = entry.resp.StatusCode
+				}
+				rec.RecordGatewayCall(key.Method, key.Path, statusCode,
+					time.Since(waitStart).Milliseconds(), domainPriority, domain.DecisionDeduped)
 			}
 			if entry.err != nil {
 				return nil, entry.err
@@ -291,11 +349,21 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		if existing, ok := g.inflight[key]; ok {
 			// Lost the race — become a waiter (semaphore slot is held via defer).
 			// We release the slot in the defer above and join as a waiter result.
+			rec := g.recorder
 			g.mu.Unlock()
+			waitStart := time.Now()
 			select {
 			case <-existing.done:
 			case <-ctx.Done():
 				return nil, ctx.Err()
+			}
+			if rec != nil {
+				statusCode := 0
+				if existing.resp != nil {
+					statusCode = existing.resp.StatusCode
+				}
+				rec.RecordGatewayCall(key.Method, key.Path, statusCode,
+					time.Since(waitStart).Milliseconds(), domainPriority, domain.DecisionDeduped)
 			}
 			if existing.err != nil {
 				return nil, existing.err
@@ -316,6 +384,9 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	}
 
 	// Execute the actual HTTP call.
+	// Mark the context so LoggingTransport knows the gateway will record this call,
+	// preventing double-recording in the net log.
+	httpStart := time.Now()
 	resp, err := fn()
 
 	// Guard against the rare (nil, nil) return from a transport implementation.
@@ -362,10 +433,32 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		// entry.done is closed by the deferred cleanup above.
 	}
 
+	// Record the Allowed decision for the primary caller.
+	g.mu.Lock()
+	rec := g.recorder
+	g.mu.Unlock()
+	if rec != nil {
+		statusCode := 0
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
+		rec.RecordGatewayCall(key.Method, key.Path, statusCode,
+			time.Since(httpStart).Milliseconds(), domainPriority, domain.DecisionAllowed)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
+}
+
+// priorityToDomain converts the api-layer Priority to the domain.RequestPriority
+// that is shared with the state and UI layers.
+func priorityToDomain(p Priority) domain.RequestPriority {
+	if p == Interactive {
+		return domain.PriorityInteractive
+	}
+	return domain.PriorityBackground
 }
 
 // waitForBackoff blocks until the current 429 backoff period expires or ctx is cancelled.
