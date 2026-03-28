@@ -42,10 +42,20 @@ type GatewayState struct {
 	DedupWaiters int
 	// InFlightKeys lists string representations of currently in-flight GET requests.
 	InFlightKeys []string
+
+	// PeakConcurrent is the highest ConcurrentActive seen since the last watermark reset.
+	// Tracked inside the Gateway at the moment of semaphore acquisition.
+	PeakConcurrent int
+	// MinTokens is the lowest TokensAvailable seen since the last watermark reset.
+	// Tracked inside the tokenBucket at the moment of token consumption.
+	MinTokens int
 }
 
 // GatewaySnapshotter provides a read-only view into gateway internal state.
 // Implemented by *api.Gateway; used by RequestFlowPane to avoid ui/ importing api/.
 type GatewaySnapshotter interface {
 	Snapshot() GatewayState
+	// ResetWatermarks resets peak activity watermarks to current values. Called by
+	// the UI on each 1-second boundary so annotations reflect only recent activity.
+	ResetWatermarks()
 }
