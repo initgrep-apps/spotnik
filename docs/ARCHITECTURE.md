@@ -603,7 +603,7 @@ Each request through the gateway is classified with a `domain.GatewayDecision`:
 |---|---|
 | `DecisionAllowed` | Request proceeded normally through the gateway |
 | `DecisionWaited` | Request was deduped — caller waited for an in-flight sibling to complete |
-| `DecisionDeduped` | Alias: same as Waited; the in-flight key match caused the caller to share the result |
+| `DecisionDeduped` | Joined an existing in-flight GET request; the caller shares the primary's cached response instead of making a new HTTP call |
 | `DecisionBlocked` | Background request was rejected during active rate-limit backoff |
 
 The `api.GatewayRecorder` interface (implemented by `state.Store`) bridges the `api/` → `state/` boundary without a direct import:
