@@ -537,6 +537,58 @@ func TestRequestFlowPane_View_Headers_AreStyled(t *testing.T) {
 	assert.Contains(t, v, "SPOTIFY", "SPOTIFY header must appear after theme styling")
 }
 
+// --- Staleness display tests ---
+
+func TestRequestFlowPane_View_StalenessDisplay_StalePlaylist(t *testing.T) {
+	s := state.New()
+	// Set playlists fetched-at to 10 minutes ago (beyond PlaylistsTTL of 5 min).
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	v := pane.View()
+	assert.Contains(t, v, "stale:", "status strip should show stale label when data is stale")
+	assert.Contains(t, v, "playlists", "stale playlists domain should appear")
+}
+
+func TestRequestFlowPane_View_StalenessDisplay_FreshData(t *testing.T) {
+	s := state.New()
+	// Set playlists fetched-at to 1 minute ago (within PlaylistsTTL of 5 min).
+	s.SetPlaylistsFetchedAt(time.Now().Add(-1 * time.Minute))
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	v := pane.View()
+	assert.NotContains(t, v, "stale:", "fresh data should not show stale label")
+}
+
+func TestRequestFlowPane_View_StalenessDisplay_NeverFetched(t *testing.T) {
+	s := state.New()
+	// Never fetched — zero time — should not appear as stale.
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	v := pane.View()
+	assert.NotContains(t, v, "stale:", "never-fetched data should not appear as stale")
+}
+
+func TestRequestFlowPane_View_StalenessDisplay_MultipleStale(t *testing.T) {
+	s := state.New()
+	// Set multiple domains stale.
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	s.SetAlbumsFetchedAt(time.Now().Add(-10 * time.Minute))
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(120, 20)
+	v := pane.View()
+	assert.Contains(t, v, "playlists", "stale playlists should appear")
+	assert.Contains(t, v, "albums", "stale albums should appear")
+}
+
 // TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn verifies that
 // switching from idle to active updates the status strip.
 func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {

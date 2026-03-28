@@ -428,6 +428,7 @@ func (p *RequestFlowPane) renderStatusStrip() string {
 }
 
 // renderStoreStatus renders the STORE section of the status strip.
+// Shows active fetches and, when present, stale data domains.
 func (p *RequestFlowPane) renderStoreStatus() string {
 	if p.store == nil {
 		return ""
@@ -449,10 +450,45 @@ func (p *RequestFlowPane) renderStoreStatus() string {
 		fetching = append(fetching, "recent")
 	}
 
+	result := labelStyle.Render("STORE")
 	if len(fetching) > 0 {
-		return labelStyle.Render("STORE") + mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
+		result += mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
 	}
-	return labelStyle.Render("STORE")
+
+	stalePart := p.renderStalenessStatus()
+	if stalePart != "" {
+		result += "  " + stalePart
+	}
+
+	return result
+}
+
+// renderStalenessStatus builds the "stale: domain(Xs), ..." segment.
+// Only non-zero FetchedAt values that exceed their TTL are shown.
+// Returns empty string when no data is stale.
+func (p *RequestFlowPane) renderStalenessStatus() string {
+	if p.store == nil {
+		return ""
+	}
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+
+	var stale []string
+	if fa := p.store.PlaylistsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.PlaylistsTTL) {
+		stale = append(stale, fmt.Sprintf("playlists(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if fa := p.store.AlbumsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.AlbumsTTL) {
+		stale = append(stale, fmt.Sprintf("albums(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if fa := p.store.LikedTracksFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.LikedTracksTTL) {
+		stale = append(stale, fmt.Sprintf("liked(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if fa := p.store.RecentPlayedFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.RecentlyPlayedTTL) {
+		stale = append(stale, fmt.Sprintf("recent(%ds)", int(time.Since(fa).Seconds())))
+	}
+	if len(stale) == 0 {
+		return ""
+	}
+	return mutedStyle.Render(fmt.Sprintf("stale: %s", strings.Join(stale, ", ")))
 }
 
 // padRightVisible pads s with spaces to visible width w using lipgloss.Width()
