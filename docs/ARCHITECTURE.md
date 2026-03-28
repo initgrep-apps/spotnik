@@ -22,48 +22,121 @@ Spotnik follows the **Elm Architecture** as enforced by Bubble Tea. The entire a
 └─────────────────────────┬────────────────────────────────┘
                           │
 ┌─────────────────────────▼────────────────────────────────┐
-│                   internal/app/app.go                    │
-│              Root Bubble Tea Model (tea.Model)           │
-│   - Owns: all pane models, store ref, active pane state  │
-│   - Routes: all messages to correct pane                 │
-│   - Composes: final view from pane outputs               │
-└──────┬────────────────┬──────────────────┬───────────────┘
-       │                │                  │
-┌──────▼──────┐  ┌──────▼──────┐  ┌───────▼──────┐
-│  LibraryPane│  │  PlayerPane │  │  QueuePane   │
-│  (tea.Model)│  │  (tea.Model)│  │  (tea.Model) │
-└──────┬──────┘  └──────┬──────┘  └───────┬──────┘
-       │                │                  │
-       └────────────────▼──────────────────┘
-                        │
-              ┌─────────▼─────────┐
-              │   internal/state  │
-              │     Store         │
-              │  (single source   │
-              │   of truth)       │
-              └─────────┬─────────┘
-                        │
-              ┌─────────▼─────────┐
-              │   internal/api    │
-              │  Spotify Client   │
-              │  (HTTP only,      │
-              │   no UI imports)  │
-              └───────────────────┘
+│                    internal/app/                          │
+│              Root Bubble Tea Model (tea.Model)            │
+│   app.go      — Init/Update, handleMsg, polling tick     │
+│   render.go   — View composition, grid, overlays         │
+│   routing.go  — Key/mouse dispatch, focus rotation       │
+│   commands.go — 30+ build*Cmd factories (no store writes)│
+│   auth.go     — PKCE flow, API client wiring             │
+│   splash.go   — Startup splash screen                    │
+└──────┬─────────────┬──────────────┬──────────────────────┘
+       │             │              │
+       │    ┌────────▼────────┐    │
+       │    │ internal/domain │    │
+       │    │ (shared types)  │    │
+       │    └──┬──────────┬───┘    │
+       │       │          │        │
+┌──────▼───────▼──┐  ┌───▼────────▼──────┐
+│  internal/ui/   │  │  internal/api/    │
+│  (10 panes,     │  │  (HTTP clients,   │
+│   components,   │  │   gateway,        │
+│   layout,       │  │   logging)        │
+│   theme)        │  │                   │
+└────────┬────────┘  └─────────┬─────────┘
+         │                     │
+         └──────────┬──────────┘
+                    │
+         ┌──────────▼──────────┐
+         │  internal/state/    │
+         │  Store (single      │
+         │  source of truth)   │
+         └──────────┬──────────┘
+                    │
+    ┌───────────────┼───────────────┐
+    │               │               │
+┌───▼────┐    ┌─────▼─────┐   ┌────▼────┐
+│config/ │    │ keychain/ │   │domain/  │
+└────────┘    └───────────┘   └─────────┘
+
+PANES (10 total):
+  Page A (Music, 8 panes):
+    NowPlayingPane, QueuePane, PlaylistsPane, AlbumsPane,
+    LikedSongsPane, RecentlyPlayedPane, TopTracksPane, TopArtistsPane
+  Page B (Nerd Status, 2 panes):
+    RequestFlowPane, NetworkLogPane
+  Floating overlays (not in grid):
+    SearchOverlay, DeviceOverlay
 ```
+
+### The Domain Package
+
+`internal/domain/` contains shared types that bridge `api/` and `ui/` without creating import cycles. Key files:
+
+- `types.go` — Core types: `PlaybackState`, `Track`, `Artist`, `Album`, `Device`, `SimplePlaylist`, `SavedAlbum`, `SavedTrack`, `PlayHistory`, `QueueResponse`, `FullArtist`, `PlayOptions`
+- `gateway.go` — `GatewaySnapshotter` interface, `GatewayState` struct, `RequestPriority` constants
+- `search.go` — `SearchResult` type
+
+Panes import `domain/` types, not `api/` types. API clients return `domain/` types. This is how the import boundary is enforced — `ui/` and `api/` never import each other.
+
+---
+
+## View States
+
+The app has three view modes, managed by the `currentView` field:
+
+1. **`viewSplash`** — 5-second startup screen with ASCII banner (rendered by `splash.go`)
+2. **`viewAuth`** — OAuth panel when authentication is needed (rendered by `auth.go`)
+3. **`viewGrid`** — Normal operation with pane grid, header, and status bar
+
+Transitions: `viewSplash` → `viewAuth` (if unauthenticated) → `viewGrid`, or `viewSplash` → `viewGrid` (if already authenticated). The splash timer fires `splashDismissMsg` after 5 seconds.
+
+---
+
+## Render Pipeline
+
+The full view composition flow in `internal/app/render.go`:
+
+```
+View()
+  └── alerts.Render(buildView())     ← toast overlay is ALWAYS the last step
+        │
+        └── buildView()
+              ├── Terminal too small? → renderTooSmall()  (min 120x30)
+              ├── viewSplash?        → renderSplash()
+              ├── viewAuth?          → renderAuthPanel()
+              └── viewGrid:
+                    ├── renderHeader()      (1 line: app name, page, shortcuts, device)
+                    ├── renderGrid()        (pane grid with borders)
+                    ├── renderStatusBar()   (1 line: global keybinding hints)
+                    └── Overlay compositing:
+                          ├── deviceOverlayOpen? → btoverlay.Composite(device, dimmed, Right, Top)
+                          └── searchOpen?        → btoverlay.Composite(search, dimmed, Center, Center)
+```
+
+**Key rules:**
+- `alerts.View()` always returns `""` — must use `alerts.Render(content)` for toast compositing
+- `renderGrid()` groups panes by row, wraps each in btop-style borders via `layout.RenderPaneBorder()`, applies `lipgloss.Width/MaxWidth/Height/MaxHeight` caps, then joins horizontally per row and vertically across rows
+- Overlays use the `bubbletea-overlay` library (`btoverlay.Composite`) — background is dimmed with `Faint(true)`
+- Total view output must equal exactly `terminalHeight` lines
 
 ---
 
 ## Message Flow
 
 ```
-User Keypress
+User Keypress / Mouse Wheel
      │
      ▼
-app.Update(keyMsg)
+routing.go: handleKeyMsg / handleMouseMsg
      │
-     ├── If global key (Tab, q, ?, d): handle in root
-     │
-     └── Else: delegate to active pane
+     ├── Guard 1: Device overlay open → all keys to DeviceOverlay
+     ├── Guard 2: Search overlay open → all keys to SearchOverlay
+     ├── Guard 3: Auth view → only quit keys
+     ├── Guard 4: Pane has active filter → all keys to pane
+     ├── Global keys (q, /, d, 0, p, 1-8, Tab, Shift+Tab)
+     ├── Playback keys (Space, n, +, -, s, r, v, ←, →) → always NowPlayingPane
+     └── All other keys → focused pane
               │
               ▼
          pane.Update(msg)
@@ -77,11 +150,16 @@ app.Update(keyMsg)
                   Returns tea.Msg with DATA payload
                        │
                        ▼
-              app.Update(resultMsg)
+              app.go: handleMsg(resultMsg)
                        │
                        ├── Write data from msg payload to Store
+                       ├── Emit toast notification if error
                        └── Forward to pane, re-render
 ```
+
+### Mouse Support
+
+`handleMouseMsg` in `routing.go`: wheel-up/down events are converted to `j`/`k` key messages, hit-tested via `layout.PaneAt(x, y)` to find the target pane, and routed to that pane WITHOUT changing keyboard focus. Mouse events are ignored when overlays are open.
 
 ### Data-Carrying Messages (Elm Architecture Purity)
 
@@ -193,6 +271,22 @@ Playback state and queue are **not** staleness-tracked because they are overwrit
 
 The former `albumsLoaded` and `likedLoaded` boolean sentinels have been replaced by `AlbumsLoaded()` and `LikedLoaded()` methods derived from the `fetchedAt` timestamps. Library pane expansion uses `AlbumsStale()` and `LikedTracksStale()` to decide whether to trigger a lazy fetch.
 
+### Fetching Sentinels (TOCTOU Prevention)
+
+Between a staleness check and the API response arriving, a second identical request could slip through. Boolean sentinel fields prevent this:
+
+- `playlistsFetching`, `albumsFetching`, `likedFetching`, `recentFetching`, `devicesFetching` — one per domain
+- `statsFetching map[string]bool` — keyed by time range
+
+**Guard pattern (in `app.go` handleMsg):**
+1. Check `*Stale()` — if fresh, return cached data
+2. Check `*Fetching()` — if already in-flight, return nil (skip)
+3. Set `*Fetching(true)` — mark as in-flight
+4. Dispatch `build*Cmd()` — API call
+5. On response (`*LoadedMsg`): set `*Fetching(false)`, write data to Store
+
+Pagination requests (offset > 0) bypass both staleness and sentinel checks — they are explicit continuations.
+
 ---
 
 ### Message Types
@@ -205,11 +299,18 @@ All message types are defined in `internal/ui/panes/messages.go`. Convention: `<
 
 ## API Client Design
 
-**Interfaces:** All Spotify operations are defined as interfaces (`PlayerAPI`, `LibraryAPI`, `DevicesAPI`, `UserAPI`, `SearchAPI`) in `internal/api/`. Panes depend on these interfaces for mockability. See `internal/api/player_interfaces.go`, `internal/api/library_interfaces.go`, `internal/api/devices_interfaces.go`, `internal/api/user_interfaces.go`, and `internal/api/search_interfaces.go`.
+**Interfaces:** All Spotify operations are defined as interfaces (`PlayerAPI`, `LibraryAPI`, `DevicesAPI`, `UserAPI`, `SearchAPI`, `PlaylistsAPI`) in `internal/api/`. Panes depend on these interfaces for mockability. See `internal/api/player_interfaces.go`, `internal/api/library_interfaces.go`, `internal/api/devices_interfaces.go`, `internal/api/user_interfaces.go`, `internal/api/search_interfaces.go`, and `internal/api/playlists_interfaces.go`.
 
 **HTTP Pattern:** All requests route through `BaseClient.doJSON`/`doNoContent` which handles auth headers, error parsing, and gateway routing. See `internal/api/base.go`.
 
 **Pagination:** Generic `fetchAll[T]` helper fetches all pages with a safety cap. See `internal/api/pagination.go`.
+
+**Additional API files:**
+- `internal/api/logging.go` — `LoggingTransport` HTTP middleware (records all requests to Store NetLog)
+- `internal/api/errors.go` — Custom error types: `RateLimitError`, auth errors, parsing helpers
+- `internal/api/token.go` — Token refresh and validation helpers
+- `internal/api/models.go` — Spotify API response model definitions
+- `internal/api/browser.go` — Opens default browser for OAuth callback
 
 ---
 
@@ -225,12 +326,12 @@ Playback state must stay fresh. Use `tea.Tick` — never `time.Sleep`.
 
 ### Polling Ownership
 
-The root model's 1-second tick loop is the single polling mechanism in the app.
+The root model's 1-second tick loop is the single polling mechanism in the app. The base tick rate is 1 second; actual fetch intervals vary by idle state — see Idle Polling Backoff below.
 
 | Tick Cycle | Endpoint | Owner | Consumers |
 |---|---|---|---|
-| Every 1s | `GET /me/player` | Feature 03 (Playback) | Features 03, 04, 07, 08 |
-| Every 1s | `GET /me/player/queue` | Feature 06 (Queue) | Feature 06 |
+| Adaptive (3-30s) | `GET /me/player` | Feature 03 (Playback) | Features 03, 04, 07, 08 |
+| Adaptive (9-60s) | `GET /me/player/queue` | Feature 06 (Queue) | Feature 06 |
 
 **Rules:**
 - Feature 03 owns the tick loop and dispatches `fetchPlaybackState` on each `tickMsg`
@@ -263,6 +364,10 @@ The actual polling intervals adapt based on user activity and playback state. Th
 - The tick handler calls `a.pollIntervals()` on every tick to get current intervals
 - When a `KeyMsg` arrives after idle (`wasIdle && now active`), `tickCount` is reset to 0 to
   force an immediate fetch on the next tick — gives instant feedback on return from idle
+
+### Search Debounce
+
+Search uses a 300ms debounce via `tea.Tick`. When the user types, a debounce timer is scheduled. If the query changes before the timer fires, the stale timer is ignored. Only when 300ms elapse without further input is `SearchRequestMsg` dispatched with `api.Interactive` priority.
 
 ---
 
@@ -359,26 +464,24 @@ that `alertCmd` returns the internal `alertMsg`; feeding `alertMsg` to Update ac
 API errors in `build*Cmd` functions MUST be surfaced to the user via toast notification.
 **Silent swallowing is prohibited.**
 
-Pattern:
+**In build*Cmd (commands.go)** — commands NEVER write to the Store:
 ```go
-// On failure — MUST set error state AND return msg with error
-store.SetXxxError(err)
-return XxxLoadedMsg{Err: err}
-
-// On success — MUST clear error state
-store.ClearXxxError()
-store.SetXxx(data)
+// Return data or error in Msg payload — no store mutations here
+if err != nil {
+    return XxxLoadedMsg{Err: err}
+}
 return XxxLoadedMsg{Data: data}
 ```
 
-The root `app.go` `handleMsg()` handler for `XxxLoadedMsg` emits a toast when `Err != nil`:
-
+**In Update() handler (app.go)** — Store writes happen here:
 ```go
 case XxxLoadedMsg:
     if m.Err != nil {
+        a.store.SetXxxError(m.Err)
         return a, a.alerts.NewAlertCmd("error", m.Err.Error())
     }
-    ...
+    a.store.ClearXxxError()
+    a.store.SetXxx(m.Data)
 ```
 
 Store error fields are **preserved** for retry logic (panes check them to decide whether to
@@ -413,12 +516,18 @@ No manual dismissal timer or `statusDismissMsg` pattern is needed.
 main.go
   └── cmd/
         └── internal/app/
-              ├── internal/state/     ← reads store
-              ├── internal/ui/        ← renders UI from store
+              ├── internal/domain/   ← shared types (bridge between api/ and ui/)
+              ├── internal/state/    ← reads store
+              ├── internal/ui/       ← renders UI from store
               │     └── internal/ui/theme/
-              ├── internal/api/       ← HTTP calls only
-              ├── internal/config/    ← reads config
-              └── internal/keychain/  ← token storage
+              ├── internal/api/      ← HTTP calls only
+              ├── internal/config/   ← reads config
+              └── internal/keychain/ ← token storage
+
+SHARED IMPORTS (allowed):
+  internal/api/   → internal/domain/  (API returns domain types)
+  internal/ui/    → internal/domain/  (UI reads domain types)
+  internal/state/ → internal/domain/  (Store holds domain types)
 
 FORBIDDEN IMPORTS:
   internal/api/   → internal/ui/    (API must not know about UI)
@@ -474,14 +583,37 @@ Background is the default; `api.PriorityFromContext(ctx)` reads it in `BaseClien
 
 Command builders in `internal/app/commands.go` set `Interactive` for:
 play, pause, next, previous, volume, shuffle, repeat, search, add-to-queue,
-like/unlike, transfer playback, create/rename/remove/reorder playlist.
+like/unlike, transfer playback, create/rename/remove/reorder playlist, fetch devices.
+
+### Gateway Observability
+
+The gateway exposes its internal state for UI visualization via the `domain.GatewaySnapshotter` interface, keeping `internal/ui/` decoupled from `internal/api/`:
+
+- `domain.GatewaySnapshotter` interface — implemented by `api.Gateway.Snapshot()`
+- `domain.GatewayState` struct — snapshot of token bucket level, concurrency slots, backoff timer, dedup waiters
+- `RequestFlowPane` (Page B) reads snapshots to render live gateway visualization
+- `PollingSnapshotMsg` — carries app-level polling diagnostics (tick interval, idle state) to RequestFlowPane
+- `RequestCompletedMsg` — carries per-request completion data (endpoint, status, latency) to RequestFlowPane
+
+### Network Logging
+
+All HTTP requests are logged to a ring buffer for the NetworkLogPane (Page B):
+
+- `internal/state/netlog.go` — `NetLog` struct: 200-entry thread-safe ring buffer of `NetLogEntry` records (timestamp, method, path, status code, duration)
+- `internal/api/logging.go` — `LoggingTransport` wraps `http.DefaultTransport`, intercepts all requests, records method/path/status/duration
+- `NetLogRecorder` interface bridges `api/` → `state/` without a direct import
+- Data flow: `LoggingTransport` → `store.RecordNetCall()` → `NetLog` ring buffer → `NetworkLogPane` reads via `store.NetLogEntries()`
+- Wired in `initAPIClients()` — a shared `http.Client` with `LoggingTransport` is passed to all 6 API clients
 
 ### Integration Points
 
 - `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority
 - `internal/api/base.go` — `BaseClient.SetGateway()`, `doJSON`/`doNoContent` routing
+- `internal/api/logging.go` — `LoggingTransport`, `NetLogRecorder` interface
 - `internal/app/app.go` — Gateway created in `New()`, `throttleExpiredMsg` handler
-- `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()` on every client
+- `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()` and wires `LoggingTransport`
 - `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`
+- `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry`, `RecordNetCall()`
+- `internal/domain/gateway.go` — `GatewaySnapshotter`, `GatewayState`, `RequestPriority`
 
-*Last updated: 2026-03-25*
+*Last updated: 2026-03-28*

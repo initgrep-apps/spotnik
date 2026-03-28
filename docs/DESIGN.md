@@ -93,9 +93,9 @@ Page B panes are not toggleable with number keys (those control Page A only).
 
 - Keys `1`-`8` **toggle** pane visibility on Page A (btop-style hide/show), not pane-jump
 - `0` toggles between Page A and Page B
-- Playback keys (`Space`, `>`, `<`, `+`, `-`, `s`, `r`) always route to NowPlaying regardless of focus
-- `A` (Shift+a) for "add to queue" in search overlay and list panes
-- `i` for "like/unlike track" in Liked Songs and Queue panes
+- Playback keys (`Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→`) always route to NowPlaying regardless of focus
+- `A` for "add to queue" in search overlay and list panes
+- `i` for "like/unlike track" in Liked Songs pane
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
 ### Pane Interface
@@ -714,7 +714,7 @@ Same border treatment as search:
 ```
 
 - Uses `RenderPaneBorder()` with `Devices` title
-- Positioned top-right via `lipgloss.Place()`
+- Positioned top-right via `btoverlay.Composite()`
 - Active device: `◉` in `DeviceActive()`, `[active]` badge
 
 ---
@@ -760,8 +760,8 @@ Keys `1`-`8` toggle pane visibility rather than jumping focus. Use `Tab`/`Shift+
 | Key | Action |
 |-----|--------|
 | `Space` | Play/pause |
-| `>` / `.` | Next track |
-| `<` / `,` | Previous track |
+| `n` | Next track |
+| `←` / `→` | Previous/next track |
 | `+` / `-` | Volume up/down |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat |
@@ -793,8 +793,8 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `p` | Cycle to next preset | Current page |
 | **Playback (always route to NowPlaying)** | | |
 | `Space` | Play/pause | Always |
-| `>` / `.` | Next track | Always |
-| `<` / `,` | Previous track | Always |
+| `n` | Next track | Always |
+| `←` / `→` | Previous/next track | Always |
 | `+` / `-` | Volume up/down | Always |
 | `s` | Toggle shuffle | Always |
 | `r` | Cycle repeat | Always |
@@ -807,19 +807,18 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `Esc` | Close overlay/filter | Context |
 | **Pane Actions** | | |
 | `f` | Toggle filter in focused pane | List panes |
-| `x` | Remove from queue | Queue pane |
-| `i` | Like/unlike track | LikedSongs, Queue |
-| `n` | New playlist | Playlists pane |
-| `A` (Shift+a) | Add to queue | Search overlay, list panes |
+| `i` | Like/unlike track | LikedSongs pane |
+| `A` | Add to queue | Search overlay, list panes |
 | **Playlist Management (Playlists pane)** | | |
 | `Enter` | Open playlist tracks (sub-view) | Playlists pane |
+| `n` | New playlist | Playlists pane |
 | `r` | Rename playlist | Playlists pane (as border action) |
-| `x` | Delete playlist | Playlists pane (as border action) |
+| `x` | Remove track from playlist | Playlists pane track sub-view |
 | `Shift+↑/↓` | Reorder playlist | Playlists pane |
 | **Global** | | |
 | `/` | Open search overlay | Global |
 | `d` | Open device overlay | Global |
-| `?` | Help | Global |
+| `?` | Help (planned) | Global |
 | `q` | Quit | Global |
 
 ---
