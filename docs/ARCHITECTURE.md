@@ -595,6 +595,25 @@ The gateway exposes its internal state for UI visualization via the `domain.Gate
 - `PollingSnapshotMsg` — carries app-level polling diagnostics (tick interval, idle state) to RequestFlowPane
 - `RequestCompletedMsg` — carries per-request completion data (endpoint, status, latency, Priority, GatewayDecision) to RequestFlowPane
 
+#### Request Flow Rendering
+
+`RequestFlowPane.View()` uses a **boxed layout** (Feature 62) when pane width ≥ 60 columns:
+
+```
+╭─ APP ──────────╮           ╭─ GATEWAY ──────────╮           ╭─ SPOTIFY ──────╮
+│ ▶ /player      │───────→───│ tokens  ●●●● 10/10 │───────→───│  200  45ms     │
+│   /queue       │───→ dedup │ conc    □□□□□  0/5 │    ╳      │  200  62ms     │
+╰────────────────╯           ╰────────────────────╯           ╰────────────────╯
+POLLING  tick: 1000ms  state: active    STORE  fetching: []
+```
+
+- **Three sub-boxes**: APP (endpoints), GATEWAY (metrics), SPOTIFY (responses) with rounded corners
+- **Dual arrow columns**: left (APP→GW decision: allowed/waited/deduped/blocked), right (GW→SPOTIFY outcome: 2xx/429/5xx/blocked)
+- **`renderSubBox(title, lines, width)`** — pure helper that draws rounded-corner box; used by all three sub-boxes
+- **`gatewayStateLines()`** — extracted from `renderGatewayState()` for DRY reuse in both boxed and flat layouts
+- **Flat fallback** (`viewFlat()`): original column headers + request rows + gateway state block; used when width < 60
+- Status strip always spans full pane width below the boxes
+
 #### Gateway Decision Recording
 
 Each request through the gateway is classified with a `domain.GatewayDecision`:

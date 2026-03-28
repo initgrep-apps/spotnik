@@ -536,6 +536,133 @@ func containsAny(s string, subs ...string) bool {
 	return false
 }
 
+// viewContainsBox returns true if the view output contains a bordered box with the
+// given title. It checks whether any single line contains both "╭" and the title,
+// which reliably detects a sub-box border even when ANSI escape codes separate them.
+func viewContainsBox(output, title string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "╭") && strings.Contains(line, title) {
+			return true
+		}
+	}
+	return false
+}
+
+// --- Task 4-7: Boxed layout tests ---
+
+func TestRequestFlowPane_View_BoxedLayout_ThreeBoxes(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 20)
+	v := pane.View()
+	assert.True(t, viewContainsBox(v, "APP"), "boxed layout must contain APP sub-box")
+	assert.True(t, viewContainsBox(v, "GATEWAY"), "boxed layout must contain GATEWAY sub-box")
+	assert.True(t, viewContainsBox(v, "SPOTIFY"), "boxed layout must contain SPOTIFY sub-box")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_RoundedCorners(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 20)
+	v := pane.View()
+	assert.Contains(t, v, "╭", "boxed layout must contain top-left rounded corner")
+	assert.Contains(t, v, "╮", "boxed layout must contain top-right rounded corner")
+	assert.Contains(t, v, "╰", "boxed layout must contain bottom-left rounded corner")
+	assert.Contains(t, v, "╯", "boxed layout must contain bottom-right rounded corner")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_GatewayMetricsInCenter(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 20)
+	v := pane.View()
+	// Token bucket (●) must appear in the GATEWAY box section.
+	assert.Contains(t, v, "●", "token bucket must render inside GATEWAY box")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_StatusStripBelow(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 20)
+	_, _ = pane.Update(panes.PollingSnapshotMsg{TickIntervalMs: 1000})
+	v := pane.View()
+	assert.Contains(t, v, "POLLING", "status strip must appear below boxed layout")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_ZeroSize(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(0, 0)
+	assert.Empty(t, pane.View(), "zero-size pane must return empty string")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_MinimalHeight(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 5)
+	// Must not panic at minimal height.
+	v := pane.View()
+	assert.NotEmpty(t, v, "minimal-height pane must render something")
+}
+
+func TestRequestFlowPane_View_FlatFallback_NarrowWidth(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(40, 20)
+	v := pane.View()
+	// Flat layout: no bordered sub-boxes.
+	assert.False(t, viewContainsBox(v, "APP"),
+		"width=40 should use flat layout, not boxed")
+}
+
+func TestRequestFlowPane_View_FlatFallback_ShowsColumnHeaders(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(40, 20)
+	v := pane.View()
+	// Flat layout still has column headers.
+	assert.Contains(t, v, "APP", "flat layout must show APP column header")
+	assert.Contains(t, v, "GATEWAY", "flat layout must show GATEWAY column header")
+	assert.Contains(t, v, "SPOTIFY", "flat layout must show SPOTIFY column header")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_DualArrows(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      200,
+		GatewayDecision: domain.DecisionAllowed,
+		CompletedAt:     time.Now(),
+	})
+	v := pane.View()
+	// With a request, both left and right arrow columns should contain arrow chars.
+	assert.True(t, containsAny(v, "──→──", "───→─", "────→"),
+		"boxed layout must contain animated arrow (at least one arrow column)")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_ArrowRightColumn_429(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(80, 20)
+	_, _ = pane.Update(panes.RequestCompletedMsg{
+		Endpoint:        "/me/player",
+		StatusCode:      429,
+		GatewayDecision: domain.DecisionAllowed,
+		CompletedAt:     time.Now(),
+	})
+	v := pane.View()
+	// Both the left (HTTP-layer ╳) and right (429 ╳) arrows should show ╳.
+	assert.Contains(t, v, "╳", "429 response must render ╳ in arrow column(s)")
+}
+
+func TestRequestFlowPane_View_BoxedLayout_InFlightKeysInGateway(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys:    []string{"GET /me/player"},
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	assert.Contains(t, v, "GET /me/player", "in-flight key must appear in GATEWAY box")
+}
+
 // --- Theme color coding tests ---
 
 func TestRequestFlowPane_View_ContainsANSIEscapes(t *testing.T) {

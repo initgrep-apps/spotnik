@@ -207,11 +207,90 @@ func (p *RequestFlowPane) syncFromNetLog() {
 }
 
 // View renders the full RequestFlowPane. Pure — no side effects.
+// When pane width >= 60, renders three bordered sub-boxes (APP, GATEWAY, SPOTIFY)
+// with dual arrow columns. Falls back to flat table layout for narrower terminals.
 func (p *RequestFlowPane) View() string {
 	if p.width <= 0 || p.height <= 0 {
 		return ""
 	}
 
+	// Minimum content width for three bordered boxes.
+	if p.width < 60 {
+		return p.viewFlat()
+	}
+
+	return p.viewBoxed()
+}
+
+// viewBoxed renders the three bordered sub-boxes layout.
+// Box proportions (approximate):
+//
+//	APP ~25% | left arrow ~8% | GATEWAY ~26% | right arrow ~8% | SPOTIFY ~20%
+func (p *RequestFlowPane) viewBoxed() string {
+	contentWidth := p.width
+	statusStripHeight := 1
+	// boxAreaHeight: subtract status strip and 1 blank separator row.
+	boxAreaHeight := p.height - statusStripHeight - 1
+	if boxAreaHeight < 3 {
+		boxAreaHeight = 3
+	}
+
+	// Column widths (proportional to pane width).
+	appBoxW := contentWidth * 25 / 100
+	arrowW := contentWidth * 8 / 100
+	gwBoxW := contentWidth * 26 / 100
+	spotifyBoxW := contentWidth * 20 / 100
+
+	// Enforce minimum widths so boxes are always meaningful.
+	if appBoxW < 10 {
+		appBoxW = 10
+	}
+	if arrowW < 7 {
+		arrowW = 7
+	}
+	if gwBoxW < 12 {
+		gwBoxW = 12
+	}
+	if spotifyBoxW < 10 {
+		spotifyBoxW = 10
+	}
+
+	// Inner row count = box height minus top/bottom border rows.
+	innerRows := boxAreaHeight - 2
+	if innerRows < 1 {
+		innerRows = 1
+	}
+
+	// Build content lines for each box.
+	appLines := p.buildAppBoxLines(innerRows)
+	gwLines := p.buildGatewayBoxLines(innerRows)
+	spotifyLines := p.buildSpotifyBoxLines(innerRows)
+
+	// Build arrow columns (one line per content row).
+	leftArrows := p.buildLeftArrowLines(innerRows, arrowW)
+	rightArrows := p.buildRightArrowLines(innerRows, arrowW)
+
+	// Render bordered sub-boxes.
+	appBox := p.renderSubBox("APP", appLines, appBoxW)
+	gwBox := p.renderSubBox("GATEWAY", gwLines, gwBoxW)
+	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyBoxW)
+
+	// Arrow blocks: pad with a blank line above and below to align
+	// arrow rows with box content rows (offset by border rows).
+	blankArrow := strings.Repeat(" ", arrowW)
+	leftBlock := blankArrow + "\n" + strings.Join(leftArrows, "\n") + "\n" + blankArrow
+	rightBlock := blankArrow + "\n" + strings.Join(rightArrows, "\n") + "\n" + blankArrow
+
+	// Compose horizontally: APP | left arrows | GATEWAY | right arrows | SPOTIFY
+	composite := lipgloss.JoinHorizontal(lipgloss.Top,
+		appBox, leftBlock, gwBox, rightBlock, spotifyBox)
+
+	return composite + "\n" + p.renderStatusStrip()
+}
+
+// viewFlat renders the original flat table layout. Used as a fallback for narrow
+// terminals (width < 60) and preserves all existing rendering logic unchanged.
+func (p *RequestFlowPane) viewFlat() string {
 	var sb strings.Builder
 
 	// Row 1: column headers.
@@ -346,55 +425,9 @@ func (p *RequestFlowPane) renderSpotifyEntry(r reqDisplay) string {
 }
 
 // renderGatewayState renders the GATEWAY column details (token bucket, semaphore, backoff).
+// Delegates to gatewayStateLines() defined in requestflow_boxed.go for DRY reuse.
 func (p *RequestFlowPane) renderGatewayState() string {
-	snap := p.lastSnapshot
-
-	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
-	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
-	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-
-	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
-	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
-	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
-
-	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
-	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
-	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
-
-	lines := []string{tokenLine, semLine}
-
-	// Backoff timer: only show when store is throttled.
-	if p.store != nil && p.store.IsThrottled() {
-		remaining := snap.BackoffRemaining
-		if remaining <= 0 {
-			remaining = float64(p.store.ThrottleRetryAfterSecs())
-		}
-		lines = append(lines, errorStyle.Render(fmt.Sprintf("⏳ backoff %.1fs", remaining)))
-	}
-
-	// Dedup waiters: only show when active.
-	if snap.DedupWaiters > 0 {
-		lines = append(lines, secondaryStyle.Render(fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters)))
-	}
-
-	// InFlightKeys: render up to 3 with truncation.
-	if len(snap.InFlightKeys) > 0 {
-		const maxKeys = 3
-		shown := len(snap.InFlightKeys)
-		if shown > maxKeys {
-			shown = maxKeys
-		}
-		for i := 0; i < shown; i++ {
-			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  → %s", snap.InFlightKeys[i])))
-		}
-		if len(snap.InFlightKeys) > maxKeys {
-			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … +%d more", len(snap.InFlightKeys)-maxKeys)))
-		}
-	}
-
-	return strings.Join(lines, "\n")
+	return strings.Join(p.gatewayStateLines(), "\n")
 }
 
 // renderColoredDotBar renders a progress bar using filled/empty rune characters
