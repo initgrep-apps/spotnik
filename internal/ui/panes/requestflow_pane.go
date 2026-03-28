@@ -379,6 +379,21 @@ func (p *RequestFlowPane) renderGatewayState() string {
 		lines = append(lines, secondaryStyle.Render(fmt.Sprintf("dedup  %d in-flight", snap.DedupWaiters)))
 	}
 
+	// InFlightKeys: render up to 3 with truncation.
+	if len(snap.InFlightKeys) > 0 {
+		const maxKeys = 3
+		shown := len(snap.InFlightKeys)
+		if shown > maxKeys {
+			shown = maxKeys
+		}
+		for i := 0; i < shown; i++ {
+			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  → %s", snap.InFlightKeys[i])))
+		}
+		if len(snap.InFlightKeys) > maxKeys {
+			lines = append(lines, mutedStyle.Render(fmt.Sprintf("  … +%d more", len(snap.InFlightKeys)-maxKeys)))
+		}
+	}
+
 	return strings.Join(lines, "\n")
 }
 

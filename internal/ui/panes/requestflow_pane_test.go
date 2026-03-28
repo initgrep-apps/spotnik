@@ -384,6 +384,72 @@ func TestRequestFlowPane_Integration_SyncFromNetLog(t *testing.T) {
 	assert.Contains(t, v, "200", "status code should appear")
 }
 
+// --- InFlightKeys rendering tests ---
+
+// mockGateway implements domain.GatewaySnapshotter for testing InFlightKeys.
+type mockGateway struct {
+	snap domain.GatewayState
+}
+
+func (m *mockGateway) Snapshot() domain.GatewayState { return m.snap }
+
+func TestRequestFlowPane_View_InFlightKeys_NonEmpty(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys:    []string{"GET /me/player", "GET /me/playlists"},
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	assert.Contains(t, v, "GET /me/player", "in-flight key should appear in view")
+	assert.Contains(t, v, "GET /me/playlists", "in-flight key should appear in view")
+}
+
+func TestRequestFlowPane_View_InFlightKeys_Truncated(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys: []string{
+			"GET /me/player",
+			"GET /me/playlists",
+			"GET /me/albums",
+			"GET /me/liked",
+			"GET /me/recent",
+		},
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	// At most 3 keys shown, rest truncated.
+	assert.Contains(t, v, "+2 more", "overflow should show '+N more' truncation")
+}
+
+func TestRequestFlowPane_View_InFlightKeys_Empty(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+		InFlightKeys:    nil,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+	_, _ = pane.Update(panes.TickMsg{})
+	v := pane.View()
+	// No in-flight section rendered when keys is empty.
+	assert.NotContains(t, v, "→ GET", "no in-flight section when InFlightKeys is empty")
+}
+
 // --- Arrow state tests (four gateway decisions) ---
 
 func TestRequestFlowPane_Arrow_AllowedDecision_Animated(t *testing.T) {
