@@ -71,7 +71,9 @@
 | 59 | Visualizer Engine | `59-visualizer-engine.md` | ✅ Complete | 40 | #65 |
 | 60 | NowPlaying Pane Redesign | `60-nowplaying-redesign.md` | ✅ Complete | 59 | #66 |
 | 61 | Fix Request Flow Gateway Viz | `61-fix-requestflow-gateway-viz.md` | ✅ Complete | 56 | — |
-| 62 | Request Flow Boxed Layout | `62-requestflow-boxed-layout.md` | ✅ Complete | 61 | — |
+| 62 | Request Flow Boxed Layout | `62-requestflow-boxed-layout.md` | ✅ Complete | 61 | #76 |
+| 63 | Request Flow Boxed Guards | `63-requestflow-boxed-guards.md` | ✅ Complete | 62 | #77 |
+| 64 | Gateway Liveness & Watermarks | `64-gateway-liveness-watermarks.md` | ✅ Complete | 63 | — |
 
 ---
 

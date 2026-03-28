@@ -117,10 +117,18 @@ func (p *RequestFlowPane) gatewayStateLines() []string {
 	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
 	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
 	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
+	// Show "(min: N)" annotation when a token dip was detected this window.
+	if p.minTokens < snap.TokensAvailable {
+		tokenLine += mutedStyle.Render(fmt.Sprintf(" (min: %d)", p.minTokens))
+	}
 
 	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
 	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
 	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
+	// Show "(peak: N)" annotation when a concurrency spike was detected this window.
+	if p.peakConcurrent > snap.ConcurrentActive {
+		semLine += mutedStyle.Render(fmt.Sprintf(" (peak: %d)", p.peakConcurrent))
+	}
 
 	lines := []string{tokenLine, semLine}
 

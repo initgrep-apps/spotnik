@@ -804,6 +804,149 @@ func TestRequestFlowPane_View_StalenessDisplay_MultipleStale(t *testing.T) {
 	assert.Contains(t, v, "albums", "stale albums should appear")
 }
 
+// --- Feature 64: viz.TickMsg gateway snapshot refresh ---
+
+// TestRequestFlowPane_VizTickMsg_RefreshesSnapshot verifies that viz.TickMsg
+// causes p.lastSnapshot to be re-read from the gateway (200ms resolution).
+func TestRequestFlowPane_VizTickMsg_RefreshesSnapshot(t *testing.T) {
+	// Use a controllable mock gateway.
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+
+	// Simulate token consumption between ticks.
+	gw.snap.TokensAvailable = 3
+
+	// Send viz.TickMsg — should refresh snapshot.
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+
+	// The view should now reflect the updated token count.
+	// Use flat layout (width=40) to avoid box truncation of the token number.
+	pane.SetSize(40, 20)
+	v := pane.View()
+	assert.Contains(t, v, "3/10", "viz.TickMsg must refresh gateway snapshot (token count should reflect change)")
+}
+
+// TestRequestFlowPane_VizTickMsg_SyncsNetLog verifies that viz.TickMsg also
+// triggers syncFromNetLog so completed requests appear within 200ms.
+func TestRequestFlowPane_VizTickMsg_SyncsNetLog(t *testing.T) {
+	s := state.New()
+	gw := api.NewGateway()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+	pane.SetSize(100, 20)
+
+	// Add an entry to the net log.
+	s.RecordNetCall("GET", "/me/player", 200, 45)
+
+	// viz.TickMsg should call syncFromNetLog.
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+
+	v := pane.View()
+	assert.Contains(t, v, "/me/player", "viz.TickMsg must sync net log entries into view")
+}
+
+// --- Feature 64: watermark field initialization ---
+
+// TestRequestFlowPane_New_InitializesMinTokens verifies that after construction
+// with a non-nil gateway, minTokens is set to the gateway's TokensMax.
+func TestRequestFlowPane_New_InitializesMinTokens(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+
+	// minTokens must be initialized to TokensMax=10.
+	assert.Equal(t, 10, pane.MinTokens(), "MinTokens must be initialized to TokensMax after construction")
+}
+
+// --- Feature 64: watermark tracking on viz.TickMsg ---
+
+// TestRequestFlowPane_PeakWatermarks_TrackMinTokens verifies that when token
+// count drops between viz.TickMsg events, minTokens decreases accordingly.
+func TestRequestFlowPane_PeakWatermarks_TrackMinTokens(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable: 10,
+		TokensMax:       10,
+		ConcurrentMax:   5,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+
+	// Simulate token consumption.
+	gw.snap.TokensAvailable = 6
+
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+
+	// minTokens should now track the lower value.
+	assert.Equal(t, 6, pane.MinTokens(), "minTokens should decrease to reflect consumed tokens")
+}
+
+// TestRequestFlowPane_PeakWatermarks_TrackPeakConcurrent verifies that when
+// concurrent active count rises between viz.TickMsg events, peakConcurrent increases.
+func TestRequestFlowPane_PeakWatermarks_TrackPeakConcurrent(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable:  10,
+		TokensMax:        10,
+		ConcurrentActive: 0,
+		ConcurrentMax:    5,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+
+	// Simulate two concurrent requests in-flight.
+	gw.snap.ConcurrentActive = 2
+
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+
+	assert.Equal(t, 2, pane.PeakConcurrent(), "peakConcurrent should increase to reflect active requests")
+}
+
+// TestRequestFlowPane_PeakWatermarks_ResetOnTickMsg verifies that on TickMsg (1s)
+// the peak watermarks are reset: peakConcurrent → 0, minTokens → TokensMax.
+func TestRequestFlowPane_PeakWatermarks_ResetOnTickMsg(t *testing.T) {
+	gw := &mockGateway{snap: domain.GatewayState{
+		TokensAvailable:  10,
+		TokensMax:        10,
+		ConcurrentActive: 0,
+		ConcurrentMax:    5,
+	}}
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(gw, s, th)
+
+	// Drive peaks to non-default values via viz.TickMsg.
+	gw.snap.TokensAvailable = 4
+	gw.snap.ConcurrentActive = 3
+	_, _ = pane.Update(viz.TickMsg(time.Now()))
+
+	// Verify peaks were tracked.
+	assert.Equal(t, 4, pane.MinTokens())
+	assert.Equal(t, 3, pane.PeakConcurrent())
+
+	// Restore to idle (so TickMsg snapshot sees idle state).
+	gw.snap.TokensAvailable = 10
+	gw.snap.ConcurrentActive = 0
+
+	// TickMsg resets both watermarks.
+	_, _ = pane.Update(panes.TickMsg{})
+
+	assert.Equal(t, 0, pane.PeakConcurrent(), "peakConcurrent must reset to 0 on TickMsg")
+	assert.Equal(t, 10, pane.MinTokens(), "minTokens must reset to TokensMax on TickMsg")
+}
+
 // TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn verifies that
 // switching from idle to active updates the status strip.
 func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {
@@ -846,6 +989,32 @@ func TestRequestFlowPane_SyncFromNetLog_PropagatesPriorityAndDecision(t *testing
 	assert.Contains(t, v, "/me/player", "net log entry should appear after sync")
 	// renderArrow maps DecisionDeduped -> "dedup" label.
 	assert.Contains(t, v, "dedup", "DecisionDeduped should propagate through syncFromNetLog to renderArrow")
+}
+
+// --- Issue 5: nil-gateway safety ---
+
+// TestRequestFlowPane_NilGateway_NoPanic verifies that constructing a pane with
+// gateway=nil and sending both viz.TickMsg and TickMsg does not panic, and that
+// no watermark annotations appear in View() output.
+func TestRequestFlowPane_NilGateway_NoPanic(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewRequestFlowPane(nil, s, th)
+	pane.SetSize(100, 20)
+
+	// Neither message should panic with a nil gateway.
+	assert.NotPanics(t, func() {
+		_, _ = pane.Update(viz.TickMsg(time.Now()))
+	}, "viz.TickMsg with nil gateway must not panic")
+
+	assert.NotPanics(t, func() {
+		_, _ = pane.Update(panes.TickMsg{})
+	}, "TickMsg with nil gateway must not panic")
+
+	// No watermark annotations should appear when gateway is nil.
+	v := pane.View()
+	assert.NotContains(t, v, "(min:", "no min-token annotation expected with nil gateway")
+	assert.NotContains(t, v, "(peak:", "no peak-concurrent annotation expected with nil gateway")
 }
 
 // --- I61-7: Interactive priority rendering differs from Background ---

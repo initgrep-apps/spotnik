@@ -79,11 +79,16 @@ type RequestFlowPane struct {
 	// recentReqs stores the last maxRecentReqs completed requests.
 	recentReqs []reqDisplay
 
-	// lastSnapshot is the most recent gateway state, refreshed on TickMsg.
+	// lastSnapshot is the most recent gateway state, refreshed on viz.TickMsg (200ms).
 	lastSnapshot domain.GatewayState
 
 	// pollingState is the latest app-level polling snapshot.
 	pollingState PollingSnapshotMsg
+
+	// peakConcurrent is the max ConcurrentActive seen since last TickMsg reset.
+	peakConcurrent int
+	// minTokens is the min TokensAvailable seen since last TickMsg reset.
+	minTokens int
 }
 
 // Compile-time check: RequestFlowPane implements layout.Pane.
@@ -98,6 +103,7 @@ func NewRequestFlowPane(gw domain.GatewaySnapshotter, s *state.Store, t theme.Th
 	}
 	if gw != nil {
 		p.lastSnapshot = gw.Snapshot()
+		p.minTokens = p.lastSnapshot.TokensMax
 	}
 	return p
 }
@@ -129,6 +135,14 @@ func (p *RequestFlowPane) IsFocused() bool { return p.focused }
 // FrameIndex returns the current animation frame index (exported for testing).
 func (p *RequestFlowPane) FrameIndex() int { return p.frameIndex }
 
+// MinTokens returns the minimum TokensAvailable seen since the last TickMsg reset
+// (exported for testing).
+func (p *RequestFlowPane) MinTokens() int { return p.minTokens }
+
+// PeakConcurrent returns the maximum ConcurrentActive seen since the last TickMsg
+// reset (exported for testing).
+func (p *RequestFlowPane) PeakConcurrent() int { return p.peakConcurrent }
+
 // Init returns nil — RequestFlowPane has no self-initiated tick loop.
 // It reacts to TickMsg (1s) and viz.TickMsg (200ms) from the app.
 func (p *RequestFlowPane) Init() tea.Cmd { return nil }
@@ -139,12 +153,27 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case viz.TickMsg:
 		// Advance the arrow animation frame counter.
 		p.frameIndex++
+		// Refresh gateway snapshot at 200ms resolution (5x faster than TickMsg).
+		if p.gateway != nil {
+			snap := p.gateway.Snapshot()
+			p.lastSnapshot = snap
+			// Track peak activity watermarks within the current 1-second window.
+			if snap.ConcurrentActive > p.peakConcurrent {
+				p.peakConcurrent = snap.ConcurrentActive
+			}
+			if snap.TokensAvailable < p.minTokens {
+				p.minTokens = snap.TokensAvailable
+			}
+		}
+		p.syncFromNetLog()
 		return p, nil
 
 	case TickMsg:
-		// Refresh gateway snapshot and sync requests from net log.
 		if p.gateway != nil {
 			p.lastSnapshot = p.gateway.Snapshot()
+			// Reset peak watermarks from fresh snapshot values.
+			p.minTokens = p.lastSnapshot.TokensMax
+			p.peakConcurrent = 0
 		}
 		p.syncFromNetLog()
 		return p, nil
