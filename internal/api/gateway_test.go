@@ -814,6 +814,79 @@ func TestGateway_Recorder_DedupedDecision(t *testing.T) {
 	assert.Equal(t, 1, decisions[domain.DecisionDeduped], "exactly one Deduped call")
 }
 
+func TestGateway_Recorder_InteractiveCancelledDuringBackoff_RecordsWaited(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockRecorder{}
+	gw.SetRecorder(rec)
+
+	// Set a long backoff so waitForBackoff blocks until the context is cancelled.
+	gw.mu.Lock()
+	gw.backoffUntil = time.Now().Add(30 * time.Second)
+	gw.mu.Unlock()
+
+	// Cancel the context while the Interactive request is waiting on the backoff.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := gw.Do(ctx, Interactive,
+		RequestKey{Method: "GET", Path: "/interactive-cancelled"},
+		func() (*http.Response, error) {
+			t.Error("fn should not be called for cancelled request")
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.Error(t, err, "expected context cancellation error")
+
+	// The cancelled request must be recorded as DecisionWaited with status 0.
+	calls := rec.all()
+	var found *recordedCall
+	for i := range calls {
+		if calls[i].path == "/interactive-cancelled" {
+			found = &calls[i]
+		}
+	}
+	require.NotNil(t, found, "cancelled Interactive request should be recorded")
+	assert.Equal(t, domain.DecisionWaited, found.decision, "cancelled backoff wait should record DecisionWaited")
+	assert.Equal(t, domain.PriorityInteractive, found.priority)
+	assert.Equal(t, 0, found.status, "cancelled request has no HTTP status")
+}
+
+func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocked(t *testing.T) {
+	// Use a very slow refill rate so bucket.wait blocks until context is cancelled.
+	gw := NewGateway()
+	// Replace the bucket with a nearly-empty, ultra-slow one.
+	gw.bucket = newTokenBucket(1, 0.001) // refills 1 token per 1000s
+	// Drain the single token so the next wait will block.
+	require.NoError(t, gw.bucket.wait(context.Background()))
+
+	rec := &mockRecorder{}
+	gw.SetRecorder(rec)
+
+	// Cancel the context while waiting for a token.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := gw.Do(ctx, Background,
+		RequestKey{Method: "GET", Path: "/bg-bucket-cancelled"},
+		func() (*http.Response, error) {
+			t.Error("fn should not be called for cancelled request")
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.Error(t, err, "expected context cancellation error")
+
+	// The cancelled request must be recorded as DecisionBlocked with status 0.
+	calls := rec.all()
+	var found *recordedCall
+	for i := range calls {
+		if calls[i].path == "/bg-bucket-cancelled" {
+			found = &calls[i]
+		}
+	}
+	require.NotNil(t, found, "Background request cancelled during token bucket wait should be recorded")
+	assert.Equal(t, domain.DecisionBlocked, found.decision, "token bucket wait cancellation should record DecisionBlocked")
+	assert.Equal(t, domain.PriorityBackground, found.priority)
+	assert.Equal(t, 0, found.status, "cancelled request has no HTTP status")
+}
+
 func TestGateway_Snapshot_InFlightKeys(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

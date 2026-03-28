@@ -269,10 +269,26 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 
 	domainPriority := priorityToDomain(priority)
 
+	// waited is set true when an Interactive request blocks on the backoff timer.
+	// This causes the final recording to use DecisionWaited instead of DecisionAllowed,
+	// so the UI can distinguish "passed through immediately" from "had to wait at backoff".
+	var waited bool
+
 	// Phase 1: rate limiting policy based on priority.
 	if priority == Interactive {
 		// Interactive: wait for backoff to expire, then proceed immediately.
+		// Check first whether any backoff is active — if so, the request waited.
+		g.mu.Lock()
+		waited = time.Now().Before(g.backoffUntil)
+		g.mu.Unlock()
 		if err := g.waitForBackoff(ctx); err != nil {
+			g.mu.Lock()
+			rec := g.recorder
+			g.mu.Unlock()
+			if rec != nil {
+				rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
+					domainPriority, domain.DecisionWaited)
+			}
 			return nil, err
 		}
 	} else {
@@ -293,6 +309,13 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		}
 		// Apply token-bucket throttle.
 		if err := g.bucket.wait(ctx); err != nil {
+			g.mu.Lock()
+			rec := g.recorder
+			g.mu.Unlock()
+			if rec != nil {
+				rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
+					domainPriority, domain.DecisionBlocked)
+			}
 			return nil, fmt.Errorf("rate limit wait: %w", err)
 		}
 	}
@@ -433,7 +456,13 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		// entry.done is closed by the deferred cleanup above.
 	}
 
-	// Record the Allowed decision for the primary caller.
+	// Record the final decision for the primary caller.
+	// DecisionWaited is used when an Interactive request had to block on the backoff
+	// timer before proceeding; DecisionAllowed covers all other primary-caller paths.
+	finalDecision := domain.DecisionAllowed
+	if waited {
+		finalDecision = domain.DecisionWaited
+	}
 	g.mu.Lock()
 	rec := g.recorder
 	g.mu.Unlock()
@@ -443,7 +472,7 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			statusCode = resp.StatusCode
 		}
 		rec.RecordGatewayCall(key.Method, key.Path, statusCode,
-			time.Since(httpStart).Milliseconds(), domainPriority, domain.DecisionAllowed)
+			time.Since(httpStart).Milliseconds(), domainPriority, finalDecision)
 	}
 
 	if err != nil {
