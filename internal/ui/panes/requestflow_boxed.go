@@ -13,6 +13,9 @@ import (
 // width columns × (len(lines) + 2) rows (content + top/bottom border).
 // Inner content is padded with one space on each side.
 // If width < 8, returns empty string (too narrow for a meaningful box).
+// NOTE: viewBoxed() guarantees width >= 10 for all boxes via minimum clamps
+// and falls back to viewFlat() if totals exceed pane width, so the empty-string
+// path is a safety net rather than a normal render path.
 func (p *RequestFlowPane) renderSubBox(title string, lines []string, width int) string {
 	if width < 8 {
 		return ""
@@ -220,6 +223,9 @@ func (p *RequestFlowPane) buildSpotifyBoxLines(maxRows int) []string {
 // buildLeftArrowLines builds arrow strings for APP→GATEWAY (one per row).
 // Rows beyond request count are space-padded to colWidth.
 func (p *RequestFlowPane) buildLeftArrowLines(maxRows, colWidth int) []string {
+	if maxRows <= 0 {
+		return nil
+	}
 	lines := make([]string, maxRows)
 	for i := 0; i < maxRows; i++ {
 		if i < len(p.recentReqs) {
@@ -234,6 +240,9 @@ func (p *RequestFlowPane) buildLeftArrowLines(maxRows, colWidth int) []string {
 // buildRightArrowLines builds arrow strings for GATEWAY→SPOTIFY (one per row).
 // Rows beyond request count are space-padded to colWidth.
 func (p *RequestFlowPane) buildRightArrowLines(maxRows, colWidth int) []string {
+	if maxRows <= 0 {
+		return nil
+	}
 	lines := make([]string, maxRows)
 	for i := 0; i < maxRows; i++ {
 		if i < len(p.recentReqs) {

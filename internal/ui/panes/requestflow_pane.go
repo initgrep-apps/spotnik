@@ -231,8 +231,9 @@ func (p *RequestFlowPane) viewBoxed() string {
 	statusStripHeight := 1
 	// boxAreaHeight: subtract status strip and 1 blank separator row.
 	boxAreaHeight := p.height - statusStripHeight - 1
+	// Need at least 3 rows for a meaningful box (top border + 1 content row + bottom border).
 	if boxAreaHeight < 3 {
-		boxAreaHeight = 3
+		return p.viewFlat()
 	}
 
 	// Column widths (proportional to pane width).
@@ -253,6 +254,11 @@ func (p *RequestFlowPane) viewBoxed() string {
 	}
 	if spotifyBoxW < 10 {
 		spotifyBoxW = 10
+	}
+
+	// Guard: if minimums push total beyond pane width, fall back to flat layout.
+	if appBoxW+arrowW+gwBoxW+arrowW+spotifyBoxW > contentWidth {
+		return p.viewFlat()
 	}
 
 	// Inner row count = box height minus top/bottom border rows.
