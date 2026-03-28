@@ -316,3 +316,21 @@ func TestBuildRightArrowLines_RequestRowHasArrow(t *testing.T) {
 	assert.True(t, strings.TrimSpace(combined) != "",
 		"right arrow lines must be non-blank when a request is present")
 }
+
+// --- Task 3: maxRows <= 0 guard for arrow builders ---
+
+// TestBuildLeftArrowLines_ZeroMaxRows verifies that buildLeftArrowLines returns
+// nil (not a zero-length slice backed by a non-nil array) when maxRows <= 0.
+func TestBuildLeftArrowLines_ZeroMaxRows(t *testing.T) {
+	p := newInternalTestPane()
+	lines := p.buildLeftArrowLines(0, 10)
+	assert.Nil(t, lines, "buildLeftArrowLines(0, w) must return nil")
+}
+
+// TestBuildRightArrowLines_ZeroMaxRows verifies that buildRightArrowLines returns
+// nil (not a zero-length slice backed by a non-nil array) when maxRows <= 0.
+func TestBuildRightArrowLines_ZeroMaxRows(t *testing.T) {
+	p := newInternalTestPane()
+	lines := p.buildRightArrowLines(0, 10)
+	assert.Nil(t, lines, "buildRightArrowLines(0, w) must return nil")
+}
