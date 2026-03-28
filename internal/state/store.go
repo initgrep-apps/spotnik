@@ -852,7 +852,8 @@ func (s *Store) ClearPlaylistsError() {
 // --- Network log accessors ---
 
 // RecordNetCall adds an API call record to the network log.
-// Implements api.NetLogRecorder.
+// Implements api.NetLogRecorder. Priority defaults to PriorityBackground and
+// GatewayDecision defaults to DecisionAllowed (zero values).
 func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs int64) {
 	s.netLog.Add(NetLogEntry{
 		Timestamp:  time.Now(),
@@ -860,6 +861,22 @@ func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs in
 		Path:       path,
 		StatusCode: statusCode,
 		DurationMs: durationMs,
+	})
+}
+
+// RecordGatewayCall records a gateway-level API call with per-request decision metadata.
+// Unlike RecordNetCall (used by LoggingTransport), this records gateway decisions
+// including blocked Background requests that never reach the HTTP layer.
+func (s *Store) RecordGatewayCall(method, path string, statusCode int, durationMs int64,
+	priority domain.RequestPriority, decision domain.GatewayDecision) {
+	s.netLog.Add(NetLogEntry{
+		Timestamp:       time.Now(),
+		Method:          method,
+		Path:            path,
+		StatusCode:      statusCode,
+		DurationMs:      durationMs,
+		Priority:        priority,
+		GatewayDecision: decision,
 	})
 }
 

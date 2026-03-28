@@ -3,17 +3,24 @@ package state
 import (
 	"sync"
 	"time"
+
+	"github.com/initgrep-apps/spotnik/internal/domain"
 )
 
 const netLogCapacity = 200
 
 // NetLogEntry records a single API call for the network log panel.
+// Priority and GatewayDecision default to PriorityBackground and DecisionAllowed
+// (both zero values) for backward compatibility with existing callers that do
+// not set these fields.
 type NetLogEntry struct {
-	Timestamp  time.Time
-	Method     string
-	Path       string
-	StatusCode int
-	DurationMs int64
+	Timestamp       time.Time
+	Method          string
+	Path            string
+	StatusCode      int
+	DurationMs      int64
+	Priority        domain.RequestPriority
+	GatewayDecision domain.GatewayDecision
 }
 
 // NetLog is a fixed-size ring buffer of NetLogEntry values.

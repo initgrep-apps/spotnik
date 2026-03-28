@@ -10,6 +10,20 @@ const (
 	PriorityInteractive
 )
 
+// GatewayDecision classifies the outcome of a request's passage through the gateway.
+type GatewayDecision int
+
+const (
+	// DecisionAllowed means the request passed through the gateway normally.
+	DecisionAllowed GatewayDecision = iota
+	// DecisionWaited means the request waited at the token bucket or semaphore.
+	DecisionWaited
+	// DecisionDeduped means the request joined an existing in-flight GET (dedup hit).
+	DecisionDeduped
+	// DecisionBlocked means the request was rejected by 429 backoff (Background only).
+	DecisionBlocked
+)
+
 // GatewayState holds a read-only snapshot of gateway internals for display.
 // All fields are safe to read without holding any lock — they are copied under
 // the gateway's mutex inside Snapshot().
