@@ -25,3 +25,7 @@
 - [project_spotnik_feature52_complete.md](project_spotnik_feature52_complete.md) — Feature 52 (Mouse Scroll + Responsive Behavior): mouse option, handleMouseMsg, PaneAt hit-test, minTerm constants, overlay suppression
 - [project_spotnik_feature58_complete.md](project_spotnik_feature58_complete.md) — Feature 58 (NowPlaying Split Layout): InfoBox+Visualizer split, compact removal, splitLines shared helper discovery, vizWidth negative-safe
 - [project_spotnik_feature58b_complete.md](project_spotnik_feature58b_complete.md) — Feature 58b (NowPlaying Design Docs): DESIGN.md-only update, animation patterns, preset diagrams, Edit-tool-on-large-files gotcha
+- [project_spotnik_feature62_complete.md](project_spotnik_feature62_complete.md) — Feature 62 (Request Flow Boxed Layout): three sub-boxes, dual arrows, viewBoxed/viewFlat dispatch, ANSI-safe test helpers
+- [project_spotnik_feature63_complete.md](project_spotnik_feature63_complete.md) — Feature 63 (Boxed Guards): overflow guard, height fallback, arrow nil guards, renderSubBox doc comment, comment accuracy fix in review
+- [project_spotnik_feature64_complete.md](project_spotnik_feature64_complete.md) — Feature 64 (Gateway Liveness Watermarks): 200ms snapshot on viz.TickMsg, peak watermark fields, annotation rendering, exported accessor pattern
+- [project_spotnik_feature65_complete.md](project_spotnik_feature65_complete.md) — Feature 65 (Gateway-Internal Watermarks): minTokens in tokenBucket, peakConcurrent in Gateway.Do(), ResetWatermarks() with refill, mockGateway interface update
