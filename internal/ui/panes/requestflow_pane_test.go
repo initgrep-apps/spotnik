@@ -1,3 +1,8 @@
+// Tests for RequestFlowPane.
+// This file intentionally uses deprecated domain.GatewayDecision types that are
+// retained for Feature 68 migration compatibility.
+//
+//nolint:staticcheck // Deprecated: GatewayDecision types retained until Feature 68.
 package panes_test
 
 import (

@@ -20,7 +20,7 @@ type NetLogEntry struct {
 	StatusCode      int
 	DurationMs      int64
 	Priority        domain.RequestPriority
-	GatewayDecision domain.GatewayDecision
+	GatewayDecision domain.GatewayDecision //nolint:staticcheck // Deprecated: retained for Feature 68 migration.
 }
 
 // NetLog is a fixed-size ring buffer of NetLogEntry values.

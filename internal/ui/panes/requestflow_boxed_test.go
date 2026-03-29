@@ -1,3 +1,7 @@
+// Tests for boxed layout helpers. This file intentionally uses deprecated
+// domain.GatewayState that is retained for Feature 68 migration compatibility.
+//
+//nolint:staticcheck // Deprecated: GatewayState retained until Feature 68.
 package panes
 
 // renderSubBox_test.go — internal tests for the boxed layout helpers.
