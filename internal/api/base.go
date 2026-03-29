@@ -49,7 +49,6 @@ func NewBaseClientWithProvider(baseURL string, tp TokenProvider) BaseClient {
 }
 
 // setHTTPClient overrides the default HTTP client used for API calls.
-// Used to inject a LoggingTransport for network call recording.
 func (b *BaseClient) setHTTPClient(c *http.Client) {
 	b.http = c
 }

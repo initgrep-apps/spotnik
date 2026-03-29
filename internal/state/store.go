@@ -113,11 +113,7 @@ type Store struct {
 	// Used by PlaylistsPane to render the ▶ indicator next to the active playlist.
 	playingPlaylistID string
 
-	// netLog records all API calls for the network log panel.
-	netLog *NetLog
-
 	// eventLog records gateway lifecycle events for the event journal.
-	// Coexists with netLog until Feature 69 retires NetLog.
 	eventLog *GatewayEventLog
 
 	// throttle holds rate-limit observability state updated by the API Gateway.
@@ -147,7 +143,6 @@ type Store struct {
 // when reading stats staleness before any fetch has completed.
 func New() *Store {
 	return &Store{
-		netLog:         NewNetLog(),
 		eventLog:       NewGatewayEventLog(defaultEventLogCapacity),
 		statsFetchedAt: make(map[string]time.Time),
 		statsFetching:  make(map[string]bool),
@@ -881,30 +876,6 @@ func (s *Store) ClearPlaylistsError() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlistsError = nil
-}
-
-// --- Network log accessors ---
-
-// RecordNetCall adds an API call record to the network log.
-// Implements api.NetLogRecorder.
-func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs int64) {
-	s.netLog.Add(NetLogEntry{
-		Timestamp:  time.Now(),
-		Method:     method,
-		Path:       path,
-		StatusCode: statusCode,
-		DurationMs: durationMs,
-	})
-}
-
-// NetLogEntries returns all network log entries in oldest-first order.
-func (s *Store) NetLogEntries() []NetLogEntry {
-	return s.netLog.Entries()
-}
-
-// NetLog returns the underlying NetLog ring buffer.
-func (s *Store) NetLog() *NetLog {
-	return s.netLog
 }
 
 // --- Gateway Event Journal ---
