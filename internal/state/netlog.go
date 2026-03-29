@@ -10,17 +10,13 @@ import (
 const netLogCapacity = 200
 
 // NetLogEntry records a single API call for the network log panel.
-// Priority and GatewayDecision default to PriorityBackground and DecisionAllowed
-// (both zero values) for backward compatibility with existing callers that do
-// not set these fields.
 type NetLogEntry struct {
-	Timestamp       time.Time
-	Method          string
-	Path            string
-	StatusCode      int
-	DurationMs      int64
-	Priority        domain.RequestPriority
-	GatewayDecision domain.GatewayDecision //nolint:staticcheck // Deprecated: retained for Feature 68 migration.
+	Timestamp  time.Time
+	Method     string
+	Path       string
+	StatusCode int
+	DurationMs int64
+	Priority   domain.RequestPriority
 }
 
 // NetLog is a fixed-size ring buffer of NetLogEntry values.
