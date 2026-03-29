@@ -159,9 +159,8 @@ func TestNetworkLogPane_View_ShowsAllColumns(t *testing.T) {
 	assert.Contains(t, v, "ENDPOINT", "ENDPOINT column header")
 	assert.Contains(t, v, "STATUS", "STATUS column header")
 	assert.Contains(t, v, "LATENCY", "LATENCY column header")
-	assert.Contains(t, v, "PRI", "PRI column header")
+	assert.Contains(t, v, "PRIORITY", "PRIORITY column header")
 	assert.Contains(t, v, "DECISION", "DECISION column header")
-	assert.Contains(t, v, "NOTES", "NOTES column header")
 }
 
 // --- Cursor-based reads ---
@@ -328,7 +327,7 @@ func TestNetworkLogPane_View_BlockedNotesColumn(t *testing.T) {
 	_, _ = pane.Update(panes.TickMsg{})
 
 	v := pane.View()
-	assert.Contains(t, v, "✗ blocked", "blocked request notes column should show '✗ blocked'")
+	assert.Contains(t, v, "blocked", "blocked request decision column should show 'blocked'")
 }
 
 // --- Filter extended for priority and decision ---
@@ -445,7 +444,6 @@ func TestNetworkLogPane_View_Status429_ShowsWarningMarker(t *testing.T) {
 	_, _ = pane.Update(panes.TickMsg{})
 	v := pane.View()
 	assert.Contains(t, v, "429")
-	assert.Contains(t, v, "⚠", "429 entries should show ⚠ in NOTES column")
 }
 
 func TestNetworkLogPane_View_Status500_InView(t *testing.T) {
@@ -459,31 +457,6 @@ func TestNetworkLogPane_View_Status500_InView(t *testing.T) {
 }
 
 // --- Latency bar ---
-
-func TestNetworkLogPane_View_LatencyBar_Proportional(t *testing.T) {
-	tests := []struct {
-		name       string
-		durationMs int64
-		minBars    int
-	}{
-		{name: "fast (45ms)", durationMs: 45, minBars: 1},
-		{name: "medium (100ms)", durationMs: 100, minBars: 4},
-		{name: "max (200ms+)", durationMs: 250, minBars: 9},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := state.New()
-			recordHttpCompleted(s, 1, "GET", "/me/player", 200, tt.durationMs, domain.PriorityBackground)
-			pane := panes.NewNetworkLogPane(s, theme.Load("black"))
-			pane.SetSize(160, 20)
-			_, _ = pane.Update(panes.TickMsg{})
-			v := pane.View()
-			// Count █ characters in the view.
-			count := countRune(v, '█')
-			assert.GreaterOrEqual(t, count, tt.minBars, "latency bar should have at least %d bars", tt.minBars)
-		})
-	}
-}
 
 // --- Entries sorted newest-first ---
 
@@ -633,15 +606,4 @@ func indexInStr(s, substr string) int {
 		}
 	}
 	return -1
-}
-
-// countRune counts occurrences of r in s.
-func countRune(s string, r rune) int {
-	count := 0
-	for _, c := range s {
-		if c == r {
-			count++
-		}
-	}
-	return count
 }

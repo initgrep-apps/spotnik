@@ -14,12 +14,6 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
-// latencyBarMax is the response time (ms) at which the latency bar is full (10 bars).
-const latencyBarMax = 200
-
-// latencyBarSteps is the number of █ chars in a full latency bar.
-const latencyBarSteps = 10
-
 // maxNetworkLogRows is the maximum number of completed request rows to retain.
 const maxNetworkLogRows = 200
 
@@ -61,9 +55,8 @@ func NewNetworkLogPane(s *state.Store, th theme.Theme) *NetworkLogPane {
 		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.TextPrimary()},
 		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.TextPrimary()},
 		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.TextMuted()},
-		{Key: "priority", Header: "PRI", FlexFactor: 1, Color: th.TextMuted()},
+		{Key: "priority", Header: "PRIORITY", FlexFactor: 3, Color: th.TextMuted()},
 		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.TextSecondary()},
-		{Key: "notes", Header: "NOTES", FlexFactor: 3, Color: th.TextMuted()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -285,14 +278,6 @@ func (p *NetworkLogPane) buildTableRows() {
 			}
 		}
 
-		notes := latencyBar(row.durationMs)
-		if row.statusCode == 429 {
-			notes += " ⚠"
-		}
-		if row.decision == domain.EventRequestBlocked {
-			notes = "✗ blocked"
-		}
-
 		rows = append(rows, map[string]string{
 			"time":     row.timestamp.Format("15:04:05"),
 			"method":   row.method,
@@ -301,26 +286,9 @@ func (p *NetworkLogPane) buildTableRows() {
 			"latency":  latencyStr,
 			"priority": pri,
 			"decision": dec,
-			"notes":    notes,
 		})
 	}
 	p.table.SetRows(rows)
-}
-
-// latencyBar returns a string of █ characters proportional to durationMs.
-// Full bar (10 chars) at latencyBarMax ms.
-func latencyBar(durationMs int64) string {
-	if durationMs <= 0 {
-		return "█"
-	}
-	bars := int(durationMs * latencyBarSteps / latencyBarMax)
-	if bars > latencyBarSteps {
-		bars = latencyBarSteps
-	}
-	if bars < 1 {
-		bars = 1
-	}
-	return strings.Repeat("█", bars)
 }
 
 // resizeTable adjusts table height to account for the filter bar when active.
