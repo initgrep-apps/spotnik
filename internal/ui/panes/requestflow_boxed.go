@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 )
 
@@ -70,28 +71,35 @@ func (p *RequestFlowPane) renderSubBox(title string, lines []string, width int) 
 }
 
 // renderRightArrow renders the connecting arrow between GATEWAY and SPOTIFY columns.
-// The arrow style reflects the HTTP response outcome:
-//   - 2xx: animated flowing arrow (Success color)
-//   - 429: "── ╳ ──" (Warning color)
-//   - 5xx: animated arrow (Error color)
-//   - 0:   "── ╳ ──" (TextMuted — blocked, no HTTP call made)
-func (p *RequestFlowPane) renderRightArrow(r reqDisplay, colWidth int) string {
+// The arrow style reflects the HTTP response outcome based on the requestAnimation:
+//   - phaseInFlight/phaseCompleted 2xx: animated flowing arrow (Success color)
+//   - phaseInFlight/phaseCompleted 429: "── ╳ ──" (Warning color)
+//   - phaseInFlight/phaseCompleted 5xx: animated arrow (Error color)
+//   - blocked (EventRequestBlocked): "── ╳ ──" (TextMuted — no HTTP call made)
+func (p *RequestFlowPane) renderRightArrow(a *requestAnimation, colWidth int) string {
 	frames := []string{"──→──", "───→─", "────→"}
 
 	var arrow string
 	var style lipgloss.Style
 
-	switch {
-	case r.statusCode == 0:
+	// Blocked requests never make an HTTP call.
+	if a.decision == domain.EventRequestBlocked {
 		arrow = "── ╳ ──"
 		style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-	case r.statusCode == 429:
+		return padRightVisible(style.Render(arrow), colWidth)
+	}
+
+	switch {
+	case a.statusCode == 0:
+		arrow = "── ╳ ──"
+		style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	case a.statusCode == 429:
 		arrow = "── ╳ ──"
 		style = lipgloss.NewStyle().Foreground(p.theme.Warning())
-	case r.statusCode >= 500:
+	case a.statusCode >= 500:
 		arrow = frames[p.frameIndex%3]
 		style = lipgloss.NewStyle().Foreground(p.theme.Error())
-	case r.statusCode >= 200 && r.statusCode < 300:
+	case a.statusCode >= 200 && a.statusCode < 300:
 		arrow = frames[p.frameIndex%3]
 		style = lipgloss.NewStyle().Foreground(p.theme.Success())
 	default:
@@ -106,7 +114,7 @@ func (p *RequestFlowPane) renderRightArrow(r reqDisplay, colWidth int) string {
 // This is used by both renderGatewayState() (flat layout) and
 // buildGatewayBoxLines() (boxed layout) for consistent output.
 func (p *RequestFlowPane) gatewayStateLines() []string {
-	snap := p.lastSnapshot
+	snap := p.displayState.snapshot
 
 	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
 	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
@@ -117,19 +125,10 @@ func (p *RequestFlowPane) gatewayStateLines() []string {
 	// Token bucket bar: ● (Success) for available, ○ (muted) for consumed.
 	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
 	tokenLine := fmt.Sprintf("tokens  %s %d/%d", tokenBar, snap.TokensAvailable, snap.TokensMax)
-	// Show "(min: N)" annotation when the gateway observed a token dip this window.
-	// Gateway tracks this internally at the moment of consumption (not by sampling).
-	if snap.MinTokens < snap.TokensAvailable {
-		tokenLine += mutedStyle.Render(fmt.Sprintf(" (min: %d)", snap.MinTokens))
-	}
 
 	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
 	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
 	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
-	// Show "(peak: N)" annotation when the gateway observed a concurrency spike this window.
-	if snap.PeakConcurrent > snap.ConcurrentActive {
-		semLine += mutedStyle.Render(fmt.Sprintf(" (peak: %d)", snap.PeakConcurrent))
-	}
 
 	lines := []string{tokenLine, semLine}
 
@@ -166,20 +165,28 @@ func (p *RequestFlowPane) gatewayStateLines() []string {
 }
 
 // buildAppBoxLines returns styled content lines for the APP sub-box.
-// Lines show endpoint paths for recent requests (newest first), up to maxRows.
+// Lines show endpoint paths for active requests (newest first), up to maxRows.
 // Padded with empty strings if fewer requests exist.
 func (p *RequestFlowPane) buildAppBoxLines(maxRows int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
+	anims := p.sortedAnimations()
 	lines := make([]string, 0, maxRows)
-	for i, r := range p.recentReqs {
+	for i, a := range anims {
 		if i >= maxRows {
 			break
 		}
-		// Reuse renderAppEntry but strip the padding to get the raw styled text.
-		// We pass a large colWidth so padding doesn't interfere; box renders it.
-		lines = append(lines, strings.TrimRight(p.renderAppEntry(r, 200), " "))
+		ep := truncateStr(a.method+" "+a.path, 200)
+		var style lipgloss.Style
+		if a.phase >= phaseCompleted {
+			style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		} else if a.priority == domain.PriorityInteractive {
+			style = lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
+		} else {
+			style = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		}
+		lines = append(lines, strings.TrimRight(style.Render(ep), " "))
 	}
 	// Pad with empty lines to fill maxRows.
 	for len(lines) < maxRows {
@@ -189,12 +196,13 @@ func (p *RequestFlowPane) buildAppBoxLines(maxRows int) []string {
 }
 
 // buildGatewayBoxLines returns styled content lines for the GATEWAY sub-box.
-// Lines show gateway metrics (token bucket, semaphore, backoff, dedup, in-flight),
-// up to maxRows. Padded with empty strings if fewer metric lines exist.
+// Lines show gateway state bars (token bucket, semaphore, backoff, dedup, in-flight)
+// followed by the scrolling decision log, up to maxRows. Padded with empty strings.
 func (p *RequestFlowPane) buildGatewayBoxLines(maxRows int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
+	// State bars from snapshot.
 	raw := p.gatewayStateLines()
 	lines := make([]string, 0, maxRows)
 	for i, l := range raw {
@@ -203,6 +211,47 @@ func (p *RequestFlowPane) buildGatewayBoxLines(maxRows int) []string {
 		}
 		lines = append(lines, l)
 	}
+
+	// Decision log below state bars.
+	if len(lines) < maxRows {
+		successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+		errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+		warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+		secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+		mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
+
+		for i := len(p.displayState.decisions) - 1; i >= 0 && len(lines) < maxRows; i-- {
+			d := p.displayState.decisions[i]
+			var style lipgloss.Style
+			switch d.kind {
+			case domain.EventRequestEntered:
+				// Interactive entries use TextPrimary; background use TextMuted.
+				// We don't have priority info on decisionEntry, use label prefix heuristic.
+				if strings.Contains(d.label, "[int]") {
+					style = primaryStyle
+				} else {
+					style = mutedStyle
+				}
+			case domain.EventRequestAllowed, domain.EventBackoffExpired,
+				domain.EventDedupResolved, domain.EventHttpCompleted:
+				style = successStyle
+			case domain.EventRequestBlocked:
+				style = errorStyle
+			case domain.EventRequestWaited, domain.EventDedupJoined:
+				style = warnStyle
+			case domain.EventTokenConsumed, domain.EventSemaphoreAcquired,
+				domain.EventSemaphoreReleased:
+				style = secondaryStyle
+			case domain.EventTokenRefilled:
+				style = mutedStyle
+			default:
+				style = mutedStyle
+			}
+			lines = append(lines, style.Render(d.label))
+		}
+	}
+
 	for len(lines) < maxRows {
 		lines = append(lines, "")
 	}
@@ -210,18 +259,41 @@ func (p *RequestFlowPane) buildGatewayBoxLines(maxRows int) []string {
 }
 
 // buildSpotifyBoxLines returns styled content lines for the SPOTIFY sub-box.
-// Lines show HTTP status + latency for recent requests (newest first), up to maxRows.
+// Lines show HTTP status + latency only for requests in phaseInFlight or phaseCompleted.
 // Padded with empty strings if fewer requests exist.
 func (p *RequestFlowPane) buildSpotifyBoxLines(maxRows int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
+	anims := p.sortedAnimations()
 	lines := make([]string, 0, maxRows)
-	for i, r := range p.recentReqs {
-		if i >= maxRows {
+	for _, a := range anims {
+		if len(lines) >= maxRows {
 			break
 		}
-		lines = append(lines, p.renderSpotifyEntry(r))
+		// Only show SPOTIFY entry when an HTTP call was made or is in progress.
+		if a.phase < phaseInFlight {
+			lines = append(lines, "")
+			continue
+		}
+		latencyStr := fmt.Sprintf("%dms", a.durationMs)
+		var statusStyle lipgloss.Style
+		suffix := ""
+		switch {
+		case a.statusCode == 0:
+			statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		case a.statusCode >= 200 && a.statusCode < 300:
+			statusStyle = lipgloss.NewStyle().Foreground(p.theme.Success())
+		case a.statusCode == 429:
+			statusStyle = lipgloss.NewStyle().Foreground(p.theme.Warning())
+			suffix = " ⚠"
+		case a.statusCode >= 500:
+			statusStyle = lipgloss.NewStyle().Foreground(p.theme.Error())
+		default:
+			statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+		}
+		statusStr := statusStyle.Render(fmt.Sprintf("%-6d", a.statusCode))
+		lines = append(lines, fmt.Sprintf("%s %-8s%s", statusStr, latencyStr, suffix))
 	}
 	for len(lines) < maxRows {
 		lines = append(lines, "")
@@ -230,15 +302,40 @@ func (p *RequestFlowPane) buildSpotifyBoxLines(maxRows int) []string {
 }
 
 // buildLeftArrowLines builds arrow strings for APP→GATEWAY (one per row).
+// Arrow style reflects the gateway decision from requestAnimation.
 // Rows beyond request count are space-padded to colWidth.
 func (p *RequestFlowPane) buildLeftArrowLines(maxRows, colWidth int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
+	anims := p.sortedAnimations()
 	lines := make([]string, maxRows)
+	frames := []string{"──→──", "───→─", "────→"}
 	for i := 0; i < maxRows; i++ {
-		if i < len(p.recentReqs) {
-			lines[i] = p.renderArrow(p.recentReqs[i], colWidth)
+		if i < len(anims) {
+			a := anims[i]
+			var arrow string
+			var style lipgloss.Style
+			switch a.decision {
+			case domain.EventRequestWaited:
+				arrow = "── wait ──"
+				style = lipgloss.NewStyle().Foreground(p.theme.Warning())
+			case domain.EventDedupJoined:
+				arrow = "──→ dedup"
+				style = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+			case domain.EventRequestBlocked:
+				arrow = "── ╳ ──"
+				style = lipgloss.NewStyle().Foreground(p.theme.Error())
+			default:
+				if a.statusCode == 429 {
+					arrow = "── ╳ ─"
+					style = lipgloss.NewStyle().Foreground(p.theme.Warning())
+				} else {
+					arrow = frames[p.frameIndex%3]
+					style = lipgloss.NewStyle().Foreground(p.theme.Success())
+				}
+			}
+			lines[i] = padRightVisible(style.Render(arrow), colWidth)
 		} else {
 			lines[i] = strings.Repeat(" ", colWidth)
 		}
@@ -252,10 +349,11 @@ func (p *RequestFlowPane) buildRightArrowLines(maxRows, colWidth int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
+	anims := p.sortedAnimations()
 	lines := make([]string, maxRows)
 	for i := 0; i < maxRows; i++ {
-		if i < len(p.recentReqs) {
-			lines[i] = p.renderRightArrow(p.recentReqs[i], colWidth)
+		if i < len(anims) {
+			lines[i] = p.renderRightArrow(anims[i], colWidth)
 		} else {
 			lines[i] = strings.Repeat(" ", colWidth)
 		}
