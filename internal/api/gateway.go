@@ -32,23 +32,8 @@ const (
 type contextKey int
 
 const (
-	priorityKey        contextKey = 0
-	gatewayRecordedKey contextKey = 1
+	priorityKey contextKey = 0
 )
-
-// MarkGatewayRecorded returns a new request with a context marker indicating
-// that the gateway has already recorded this call. LoggingTransport checks
-// this marker and skips its own RecordNetCall to prevent double-recording.
-func MarkGatewayRecorded(req *http.Request) *http.Request {
-	ctx := context.WithValue(req.Context(), gatewayRecordedKey, true)
-	return req.WithContext(ctx)
-}
-
-// IsGatewayRecorded reports whether the request context carries the gateway-recorded marker.
-func IsGatewayRecorded(req *http.Request) bool {
-	v, _ := req.Context().Value(gatewayRecordedKey).(bool)
-	return v
-}
 
 // WithPriority returns a new context that carries the given Priority.
 // BaseClient reads this via PriorityFromContext when routing through the Gateway.
@@ -69,23 +54,21 @@ func PriorityFromContext(ctx context.Context) Priority {
 // Tokens are refilled continuously at `rate` per second up to `max`.
 // Callers call wait() to consume a token, blocking until one is available.
 type tokenBucket struct {
-	mu        sync.Mutex
-	tokens    float64
-	max       float64
-	rate      float64 // tokens per second
-	lastFill  time.Time
-	minTokens float64 // lowest token level observed since last reset (watermark)
+	mu       sync.Mutex
+	tokens   float64
+	max      float64
+	rate     float64 // tokens per second
+	lastFill time.Time
 }
 
 // newTokenBucket creates a full token bucket with the given max capacity and
 // refill rate (tokens per second).
 func newTokenBucket(max, rate float64) *tokenBucket {
 	return &tokenBucket{
-		tokens:    max,
-		max:       max,
-		rate:      rate,
-		lastFill:  time.Now(),
-		minTokens: max, // start at max — no consumption observed yet
+		tokens:   max,
+		max:      max,
+		rate:     rate,
+		lastFill: time.Now(),
 	}
 }
 
@@ -105,12 +88,6 @@ func (tb *tokenBucket) wait(ctx context.Context) error {
 
 		if tb.tokens >= 1 {
 			tb.tokens--
-			// Track the minimum token level at the exact moment of consumption,
-			// before any refill can hide the dip. This is the key fix over
-			// Feature 64's UI-side sampling approach.
-			if tb.tokens < tb.minTokens {
-				tb.minTokens = tb.tokens
-			}
 			tb.mu.Unlock()
 			return nil
 		}
@@ -150,17 +127,6 @@ type inflightEntry struct {
 	err  error
 }
 
-// GatewayRecorder records per-request gateway decisions for visualization.
-// Implemented by *state.Store; defined here to avoid an import cycle
-// (api/ cannot import state/).
-//
-// Deprecated: GatewayRecorder is replaced by domain.GatewayEventRecorder.
-// Removed in Feature 67 Task 5.
-type GatewayRecorder interface {
-	RecordGatewayCall(method, path string, statusCode int, durationMs int64,
-		priority domain.RequestPriority, decision domain.GatewayDecision)
-}
-
 // Gateway is the central control point for all outbound Spotify API requests.
 // It enforces:
 //   - Token-bucket rate limiting (10 req/s burst of 10)
@@ -183,8 +149,6 @@ type Gateway struct {
 	// lastBackoffActive tracks whether backoff was active at the last check.
 	// Used to detect the backoff→clear transition for BackoffExpired events.
 	lastBackoffActive bool
-
-	peakConcurrent int // max semaphore occupancy observed since last reset (watermark)
 }
 
 // SetRecorder sets the gateway event recorder. Pass nil to disable recording.
@@ -333,77 +297,23 @@ func (g *Gateway) emitEventLocked(kind domain.EventKind, reqID uint64, method, p
 
 // Snapshot returns a read-only snapshot of the gateway's current internal state.
 // Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
-// Best-effort point-in-time: each field group is read under its own lock, so the
-// snapshot is not guaranteed to be atomically consistent across all fields.
+//
+// Deprecated: Snapshot() is a compatibility shim for panes that still use
+// domain.GatewayState. It will be removed when those panes migrate to the
+// GatewayEvent journal (Feature 68). Watermark fields (PeakConcurrent,
+// MinTokens) are always zero — they are replaced by the event journal.
 func (g *Gateway) Snapshot() domain.GatewayState {
-	// Read the token bucket level and watermark without consuming a token.
-	g.bucket.mu.Lock()
-	// Apply any pending refill before reading so the value is current.
-	now := time.Now()
-	elapsed := now.Sub(g.bucket.lastFill).Seconds()
-	tokens := g.bucket.tokens + elapsed*g.bucket.rate
-	if tokens > g.bucket.max {
-		tokens = g.bucket.max
-	}
-	tokenMax := int(g.bucket.max)
-	minTokens := int(g.bucket.minTokens)
-	g.bucket.mu.Unlock()
-
-	// Read gateway fields under the gateway mutex.
-	g.mu.Lock()
-	backoffRemaining := time.Until(g.backoffUntil).Seconds()
-	if backoffRemaining < 0 {
-		backoffRemaining = 0
-	}
-	// DedupWaiters = number of in-flight GET requests in the dedup map.
-	// Each entry represents one primary in-flight call. Secondary goroutines
-	// that join as waiters are not separately tracked here.
-	dedupWaiters := len(g.inflight)
-	inFlightKeys := make([]string, 0, len(g.inflight))
-	for k := range g.inflight {
-		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
-	}
-	peakConcurrent := g.peakConcurrent
-	g.mu.Unlock()
-
-	// Concurrent active = semaphore slots currently occupied.
-	concurrentMax := cap(g.semaphore)
-	concurrentActive := len(g.semaphore)
-
+	snap := g.captureSnapshot()
 	return domain.GatewayState{
-		TokensAvailable:  int(tokens),
-		TokensMax:        tokenMax,
-		ConcurrentActive: concurrentActive,
-		ConcurrentMax:    concurrentMax,
-		BackoffRemaining: backoffRemaining,
-		DedupWaiters:     dedupWaiters,
-		InFlightKeys:     inFlightKeys,
-		PeakConcurrent:   peakConcurrent,
-		MinTokens:        minTokens,
+		TokensAvailable:  snap.TokensAvailable,
+		TokensMax:        snap.TokensMax,
+		ConcurrentActive: snap.ConcurrentActive,
+		ConcurrentMax:    snap.ConcurrentMax,
+		BackoffRemaining: snap.BackoffRemaining,
+		DedupWaiters:     snap.DedupWaiters,
+		InFlightKeys:     snap.InFlightKeys,
+		// PeakConcurrent and MinTokens are retired — always zero.
 	}
-}
-
-// ResetWatermarks resets peak activity watermarks to their current values.
-// Called by the UI on each 1-second boundary so annotations reflect only
-// activity in the most recent window.
-func (g *Gateway) ResetWatermarks() {
-	g.bucket.mu.Lock()
-	// Apply pending refill before reading the current level, exactly as Snapshot()
-	// does. Without this, minTokens could be set below the refilled TokensAvailable
-	// returned by the next Snapshot(), causing a false (min: N) annotation.
-	now := time.Now()
-	elapsed := now.Sub(g.bucket.lastFill).Seconds()
-	current := g.bucket.tokens + elapsed*g.bucket.rate
-	if current > g.bucket.max {
-		current = g.bucket.max
-	}
-	g.bucket.minTokens = current
-	g.bucket.mu.Unlock()
-
-	g.mu.Lock()
-	// Reset peakConcurrent to current semaphore occupancy (usually 0 when idle).
-	g.peakConcurrent = len(g.semaphore)
-	g.mu.Unlock()
 }
 
 // CheckAndEmitRefill checks if the token bucket level has changed since the
@@ -455,6 +365,13 @@ func (g *Gateway) CheckAndEmitBackoffExpiry() {
 		})
 	}
 }
+
+// ResetWatermarks is a no-op retained for interface compatibility with
+// domain.GatewaySnapshotter. Watermark tracking was retired in Feature 67;
+// this method will be removed when RequestFlowPane migrates in Feature 68.
+//
+// Deprecated: Replaced by event journal replay.
+func (g *Gateway) ResetWatermarks() {}
 
 // IsThrottled returns true when the gateway is in a 429 backoff period.
 func (g *Gateway) IsThrottled() bool {
@@ -584,14 +501,6 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	// Phase 3: concurrency semaphore (only primary callers reach here).
 	select {
 	case g.semaphore <- struct{}{}:
-		// Track peak concurrent usage for watermark display. len(g.semaphore) is
-		// read under the gateway mutex to avoid a race with ResetWatermarks().
-		g.mu.Lock()
-		active := len(g.semaphore)
-		if active > g.peakConcurrent {
-			g.peakConcurrent = active
-		}
-		g.mu.Unlock()
 		// Emit SemaphoreAcquired after successfully acquiring the slot.
 		g.emitEvent(domain.EventSemaphoreAcquired, reqID, key.Method, key.Path, domainPriority, 0, 0)
 		// Emit SemaphoreReleased in the defer so it fires even on panic or early return.

@@ -13,22 +13,38 @@ const (
 )
 
 // GatewayDecision classifies the outcome of a request's passage through the gateway.
+//
+// Deprecated: GatewayDecision is superseded by EventKind. Retained for pane
+// compatibility until Feature 68 migrates RequestFlowPane to the event journal.
 type GatewayDecision int
 
 const (
 	// DecisionAllowed means the request passed through the gateway normally.
+	//
+	// Deprecated: Use EventRequestAllowed.
 	DecisionAllowed GatewayDecision = iota
 	// DecisionWaited means the request waited at the token bucket or semaphore.
+	//
+	// Deprecated: Use EventRequestWaited.
 	DecisionWaited
 	// DecisionDeduped means the request joined an existing in-flight GET (dedup hit).
+	//
+	// Deprecated: Use EventDedupJoined/EventDedupResolved.
 	DecisionDeduped
 	// DecisionBlocked means the request was rejected by 429 backoff (Background only).
+	//
+	// Deprecated: Use EventRequestBlocked.
 	DecisionBlocked
 )
 
 // GatewayState holds a read-only snapshot of gateway internals for display.
 // All fields are safe to read without holding any lock — they are copied under
 // the gateway's mutex inside Snapshot().
+//
+// Deprecated: GatewayState is superseded by GatewayStateSnapshot (embedded in
+// GatewayEvent). Retained for pane compatibility until Feature 68 migrates
+// RequestFlowPane to the event journal. Watermark fields (PeakConcurrent,
+// MinTokens) are always zero — they are replaced by the event journal.
 type GatewayState struct {
 	// TokensAvailable is the current token bucket level (0-10).
 	TokensAvailable int
@@ -45,20 +61,24 @@ type GatewayState struct {
 	// InFlightKeys lists string representations of currently in-flight GET requests.
 	InFlightKeys []string
 
-	// PeakConcurrent is the highest ConcurrentActive seen since the last watermark reset.
-	// Tracked inside the Gateway at the moment of semaphore acquisition.
+	// PeakConcurrent is always 0 — watermark tracking retired in Feature 67.
+	// Deprecated: Replaced by event journal replay.
 	PeakConcurrent int
-	// MinTokens is the lowest TokensAvailable seen since the last watermark reset.
-	// Tracked inside the tokenBucket at the moment of token consumption.
+	// MinTokens is always 0 — watermark tracking retired in Feature 67.
+	// Deprecated: Replaced by event journal replay.
 	MinTokens int
 }
 
 // GatewaySnapshotter provides a read-only view into gateway internal state.
 // Implemented by *api.Gateway; used by RequestFlowPane to avoid ui/ importing api/.
+//
+// Deprecated: GatewaySnapshotter will be removed in Feature 68 when
+// RequestFlowPane migrates to the event journal. ResetWatermarks() is a no-op.
 type GatewaySnapshotter interface {
 	Snapshot() GatewayState
-	// ResetWatermarks resets peak activity watermarks to current values. Called by
-	// the UI on each 1-second boundary so annotations reflect only recent activity.
+	// ResetWatermarks is a no-op since Feature 67 retired watermark tracking.
+	//
+	// Deprecated: Replaced by event journal replay.
 	ResetWatermarks()
 }
 

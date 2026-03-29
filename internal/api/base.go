@@ -90,11 +90,8 @@ func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path}
-		// Mark the request so LoggingTransport skips its RecordNetCall — the
-		// gateway records the call with richer decision metadata instead.
-		markedReq := MarkGatewayRecorded(req)
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
-			return b.http.Do(markedReq)
+			return b.http.Do(req)
 		})
 	} else {
 		resp, err = b.http.Do(req)
@@ -132,9 +129,8 @@ func (b *BaseClient) doJSONOptional(req *http.Request, out interface{}) (bool, e
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path}
-		markedReq := MarkGatewayRecorded(req)
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
-			return b.http.Do(markedReq)
+			return b.http.Do(req)
 		})
 	} else {
 		resp, err = b.http.Do(req)
@@ -175,9 +171,8 @@ func (b *BaseClient) doNoContent(req *http.Request) error {
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path}
-		markedReq := MarkGatewayRecorded(req)
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
-			return b.http.Do(markedReq)
+			return b.http.Do(req)
 		})
 	} else {
 		resp, err = b.http.Do(req)
