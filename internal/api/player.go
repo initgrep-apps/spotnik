@@ -26,7 +26,6 @@ func NewPlayer(baseURL, accessToken string) *Player {
 }
 
 // SetHTTPClient overrides the default HTTP client used for API calls.
-// Used to inject a LoggingTransport for network call recording.
 func (p *Player) SetHTTPClient(c *http.Client) {
 	p.setHTTPClient(c)
 }
