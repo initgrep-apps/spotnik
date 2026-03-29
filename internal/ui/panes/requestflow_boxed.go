@@ -128,7 +128,7 @@ func (p *RequestFlowPane) gatewayStateLines() []string {
 
 	// Semaphore bar: ■ (Warning) for in-use, □ (muted) for available.
 	semBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
-	semLine := fmt.Sprintf("conc    %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
+	semLine := fmt.Sprintf("concurrent %s %d/%d", semBar, snap.ConcurrentActive, snap.ConcurrentMax)
 
 	lines := []string{tokenLine, semLine}
 
