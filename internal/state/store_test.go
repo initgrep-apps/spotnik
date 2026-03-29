@@ -750,12 +750,12 @@ func TestStore_RecordEvent_StoreAndRetrieve(t *testing.T) {
 	s := New()
 
 	ev := domain.GatewayEvent{
-		Timestamp: time.Now(),
-		Kind:      domain.EventHttpCompleted,
-		RequestID: 99,
-		Method:    "GET",
-		Path:      "/me/player",
-		Priority:  domain.PriorityInteractive,
+		Timestamp:  time.Now(),
+		Kind:       domain.EventHttpCompleted,
+		RequestID:  99,
+		Method:     "GET",
+		Path:       "/me/player",
+		Priority:   domain.PriorityInteractive,
 		StatusCode: 200,
 		DurationMs: 125,
 		Snapshot: domain.GatewayStateSnapshot{
