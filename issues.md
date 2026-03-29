@@ -33,18 +33,18 @@
 ## Feature 64: Gateway Liveness & Watermarks
 
 ### ~~I64-1~~ SUPERSEDED by Feature 65 — UI-side watermark fields removed entirely
-### I64-2 — Peak annotations truncated to fragments in narrow boxed layouts
-- **File:** `internal/ui/panes/requestflow_boxed.go:119-131`
-- **Description:** `(min: N)` and `(peak: N)` annotations are appended unconditionally. In narrow pane layouts (< ~45 cols), `TruncateOrPad` clips them to meaningless fragments like `(mi` or `(pe`. Consider suppressing annotations when box inner width is too small to display them fully.
+### ~~I64-2~~ SUPERSEDED by Feature 68 — watermark annotations removed; boxed layout now renders from replay state
 
 ---
 
 ## Feature 65: Gateway-Internal Watermarks
 
-### I65-1 — `TestRequestFlowPane_TickMsg_CallsResetWatermarks` doesn't verify the call
-- **File:** `internal/ui/panes/requestflow_pane_test.go`
-- **Description:** The mock `ResetWatermarks()` is a no-op. The test doesn't assert the method was called. If someone removes the `p.gateway.ResetWatermarks()` call from the TickMsg handler, this test still passes. Add a `resetCalled bool` to the mock and assert it.
+### ~~I65-1~~ SUPERSEDED by Feature 68 — ResetWatermarks() removed entirely
+### ~~I65-2~~ SUPERSEDED by Feature 68 — old Snapshot() removed, replaced by captureSnapshot()
 
-### I65-2 — `len(g.semaphore)` in `Snapshot()` read outside mutex
-- **File:** `internal/api/gateway.go` — `Snapshot()` method
-- **Description:** Pre-existing: `concurrentActive := len(g.semaphore)` is read after both mutexes are released. `PeakConcurrent` is read under `g.mu`. This inconsistency means `ConcurrentActive` could briefly exceed `PeakConcurrent`, suppressing a `(peak: N)` annotation. Consider moving `len(g.semaphore)` inside the `g.mu` critical section.
+---
+
+## Feature 67: Gateway Event Instrumentation
+
+### ~~I67-1~~ RESOLVED by Feature 69 — ARCHITECTURE.md updated, stale GatewayRecorder refs removed
+### ~~I67-2~~ RESOLVED by Feature 69 — auth.go comment updated to reference GatewayEventRecorder

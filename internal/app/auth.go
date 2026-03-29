@@ -98,6 +98,12 @@ func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, re
 	}
 }
 
+// InitAPIClients constructs and wires all Spotify API clients with the gateway
+// and event recorder. Called from cmd/ for pre-authenticated startup.
+func (a *App) InitAPIClients(token string) {
+	a.initAPIClients(token)
+}
+
 // initAPIClients constructs all Spotify API clients with the centralized API
 // gateway, then injects them into the app. All request recording is handled by
 // the gateway event journal (GatewayEventLog) — no separate logging transport
