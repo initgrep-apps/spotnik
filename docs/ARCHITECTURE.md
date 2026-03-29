@@ -306,7 +306,6 @@ All message types are defined in `internal/ui/panes/messages.go`. Convention: `<
 **Pagination:** Generic `fetchAll[T]` helper fetches all pages with a safety cap. See `internal/api/pagination.go`.
 
 **Additional API files:**
-- `internal/api/logging.go` — `LoggingTransport` HTTP middleware (records all requests to Store NetLog)
 - `internal/api/errors.go` — Custom error types: `RateLimitError`, auth errors, parsing helpers
 - `internal/api/token.go` — Token refresh and validation helpers
 - `internal/api/models.go` — Spotify API response model definitions
@@ -658,25 +657,33 @@ Each request gets a unique `RequestID` from `nextRequestID atomic.Uint64`. All e
 
 `GatewayState`, `GatewaySnapshotter`, and `GatewayDecision` have been removed from
 `domain/gateway.go`. The deprecated `Snapshot()` shim and `ResetWatermarks()` no-op have
-been removed from `api/gateway.go`. `NetLogEntry.GatewayDecision` and `Store.RecordGatewayCall()`
-have been removed from `state/`. All snapshot-based tests have been rewritten to use
+been removed from `api/gateway.go`. All snapshot-based tests have been rewritten to use
 event injection via `store.RecordEvent()` + `viz.TickMsg`.
 
-### Network Logging
+#### Feature 69: Network Log Event Migration (completed)
 
-All HTTP requests are logged to a ring buffer for the NetworkLogPane (Page B):
+`NetLog`, `NetLogEntry`, `RecordNetCall`, `RecordGatewayCall`, `NetLogEntries`, and
+`LoggingTransport`/`NetLogRecorder` have been removed. NetworkLogPane now reads directly
+from `GatewayEventLog` via cursor-based `ReadEventsFrom()`. Blocked requests that never
+reached HTTP are now visible (status 0, "✗ blocked"). PRIORITY and DECISION columns added.
 
-- `internal/state/netlog.go` — `NetLog` struct: 200-entry thread-safe ring buffer of `NetLogEntry` records (timestamp, method, path, status code, duration, Priority)
-- `internal/api/logging.go` — `LoggingTransport` wraps `http.DefaultTransport`, intercepts requests not already recorded by the gateway
-- `NetLogRecorder` interface bridges `api/` → `state/` without a direct import
-- Data flow (gateway path): `BaseClient.doJSON` → `Gateway.Do()` → records via `GatewayRecorder` → `store.RecordNetCall()` → `NetLog`
-- Data flow (direct path): `LoggingTransport.RoundTrip()` → `store.RecordNetCall()` → `NetLog`
-- Wired in `initAPIClients()` — a shared `http.Client` with `LoggingTransport` is passed to all 6 API clients
+### Network Logging (Feature 69+)
+
+All HTTP requests are logged to the `GatewayEventLog` for the NetworkLogPane (Page B).
+`NetLog`, `NetLogEntry`, `RecordNetCall`, and `LoggingTransport` were retired in Feature 69
+— `GatewayEventLog` is the single authoritative source for both NetworkLogPane and
+RequestFlowPane.
+
+- Data flow: `BaseClient.doJSON` → `Gateway.Do()` → `store.RecordEvent()` → `GatewayEventLog`
+- NetworkLogPane drains events via cursor-based `store.ReadEventsFrom(cursor)` on each 1s tick
+- Columns: TIME, METHOD, ENDPOINT, STATUS, LATENCY, PRI (int/bg), DECISION (allowed/blocked/waited/dedup), NOTES
+- Blocked requests (`EventRequestBlocked`) appear with status 0 and "✗ blocked" in NOTES
+- Interactive vs background priority visible in PRI column; gateway decision in DECISION column
 
 ### Gateway Event Journal (Feature 66+)
 
-The gateway event journal replaces snapshot-polling with a timestamped event stream.
-`NetLog` and `GatewayEventLog` coexist until Feature 69 retires `NetLog`.
+The gateway event journal is a timestamped event stream that replaced snapshot-polling
+and the old `NetLog` ring buffer.
 
 - `internal/domain/gateway.go` — `EventKind` (13 constants), `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder` interface
 - `internal/state/eventlog.go` — `GatewayEventLog`: 500-entry thread-safe ring buffer with cursor-based reads
@@ -686,14 +693,12 @@ The gateway event journal replaces snapshot-polling with a timestamped event str
 
 ### Integration Points
 
-- `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority, GatewayRecorder interface, MarkGatewayRecorded/IsGatewayRecorded helpers
-- `internal/api/base.go` — `BaseClient.SetGateway()`, `doJSON`/`doNoContent` routing, MarkGatewayRecorded call
-- `internal/api/logging.go` — `LoggingTransport`, `NetLogRecorder` interface, double-recording skip
+- `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority, emitEvent helpers
+- `internal/api/base.go` — `BaseClient.SetGateway()`, `doJSON`/`doNoContent` routing
 - `internal/app/app.go` — Gateway created in `New()`, `throttleExpiredMsg` handler
-- `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()`, wires `LoggingTransport`, calls `SetRecorder(store)`
-- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordEvent()`, `ReadEventsFrom()`, `RecordNetCall()`
-- `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry` (with Priority), `RecordNetCall()`
-- `internal/state/eventlog.go` — `GatewayEventLog` ring buffer with cursor-based reads (Feature 66+)
+- `internal/app/auth.go` — `initAPIClients()` creates plain `http.Client`, calls `SetGateway()` and `SetRecorder(store)`
+- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordEvent()`, `ReadEventsFrom()`
+- `internal/state/eventlog.go` — `GatewayEventLog` ring buffer with cursor-based reads
 - `internal/domain/gateway.go` — `RequestPriority`, `EventKind`, `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder`
 
 *Last updated: 2026-03-29*
