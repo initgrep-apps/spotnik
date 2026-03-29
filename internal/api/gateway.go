@@ -406,6 +406,56 @@ func (g *Gateway) ResetWatermarks() {
 	g.mu.Unlock()
 }
 
+// CheckAndEmitRefill checks if the token bucket level has changed since the
+// last emission and emits EventTokenRefilled if so. Called by the app on
+// viz.TickMsg (every 200ms). Does NOT mutate bucket.tokens — the lazy refill
+// stays as-is for the hot path.
+func (g *Gateway) CheckAndEmitRefill() {
+	g.bucket.mu.Lock()
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	tokens := g.bucket.tokens + elapsed*g.bucket.rate
+	if tokens > g.bucket.max {
+		tokens = g.bucket.max
+	}
+	currentLevel := int(tokens)
+	g.bucket.mu.Unlock()
+
+	g.mu.Lock()
+	changed := currentLevel != g.lastEmittedTokens
+	rec := g.recorder
+	g.lastEmittedTokens = currentLevel
+	g.mu.Unlock()
+
+	if changed && rec != nil {
+		rec.RecordEvent(domain.GatewayEvent{
+			Timestamp: time.Now(),
+			Kind:      domain.EventTokenRefilled,
+			Snapshot:  g.captureSnapshot(),
+		})
+	}
+}
+
+// CheckAndEmitBackoffExpiry checks if the 429 backoff period has just expired
+// and emits EventBackoffExpired on the active→cleared transition. Called by the
+// app on viz.TickMsg (every 200ms).
+func (g *Gateway) CheckAndEmitBackoffExpiry() {
+	g.mu.Lock()
+	nowActive := time.Now().Before(g.backoffUntil)
+	wasActive := g.lastBackoffActive
+	g.lastBackoffActive = nowActive
+	rec := g.recorder
+	g.mu.Unlock()
+
+	if wasActive && !nowActive && rec != nil {
+		rec.RecordEvent(domain.GatewayEvent{
+			Timestamp: time.Now(),
+			Kind:      domain.EventBackoffExpired,
+			Snapshot:  g.captureSnapshot(),
+		})
+	}
+}
+
 // IsThrottled returns true when the gateway is in a 429 backoff period.
 func (g *Gateway) IsThrottled() bool {
 	g.mu.Lock()

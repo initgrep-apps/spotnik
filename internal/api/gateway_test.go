@@ -1393,3 +1393,113 @@ func TestGateway_Do_SnapshotReflectsStateAtMoment(t *testing.T) {
 	assert.Less(t, snap.TokensAvailable, snap.TokensMax,
 		"after token consumption, TokensAvailable must be < TokensMax")
 }
+
+// --- Feature 67 Task 3: CheckAndEmitRefill / CheckAndEmitBackoffExpiry ---
+
+// TestGateway_CheckAndEmitRefill_EmitsOnChange verifies that after consuming
+// tokens, CheckAndEmitRefill emits EventTokenRefilled.
+func TestGateway_CheckAndEmitRefill_EmitsOnChange(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	// Consume a token (changes the token level from the initial max).
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/consume"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+
+	// lastEmittedTokens is now stale (was set to max, tokens are now max-1).
+	// Force a clear difference by setting lastEmittedTokens high.
+	gw.mu.Lock()
+	gw.lastEmittedTokens = int(gw.bucket.max) // reset to max so next check detects change
+	gw.mu.Unlock()
+
+	// Simulate the token level being below max by consuming more directly.
+	_ = gw.bucket.wait(context.Background())
+
+	// Now CheckAndEmitRefill should detect the difference and emit an event.
+	gw.CheckAndEmitRefill()
+
+	refilled := rec.byKind(domain.EventTokenRefilled)
+	assert.NotEmpty(t, refilled, "CheckAndEmitRefill must emit EventTokenRefilled when level changed")
+}
+
+// TestGateway_CheckAndEmitRefill_NoEmitWhenStable verifies that when the token
+// level hasn't changed, no duplicate event is emitted on the second call.
+func TestGateway_CheckAndEmitRefill_NoEmitWhenStable(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	// First call: may emit if level differs from max.
+	gw.CheckAndEmitRefill()
+	count1 := len(rec.byKind(domain.EventTokenRefilled))
+
+	// Second call immediately after: token level has not changed.
+	gw.CheckAndEmitRefill()
+	count2 := len(rec.byKind(domain.EventTokenRefilled))
+
+	// No additional event should have been emitted.
+	assert.Equal(t, count1, count2, "consecutive calls without level change must not emit duplicate events")
+}
+
+// TestGateway_CheckAndEmitBackoffExpiry_EmitsOnTransition verifies that when
+// backoff expires, CheckAndEmitBackoffExpiry emits EventBackoffExpired.
+func TestGateway_CheckAndEmitBackoffExpiry_EmitsOnTransition(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	// Set a very short backoff.
+	gw.mu.Lock()
+	gw.backoffUntil = time.Now().Add(50 * time.Millisecond)
+	gw.mu.Unlock()
+
+	// First check: backoff is active — sets lastBackoffActive = true, no event yet.
+	gw.CheckAndEmitBackoffExpiry()
+	assert.Empty(t, rec.byKind(domain.EventBackoffExpired), "no event when backoff first detected as active")
+
+	// Wait for backoff to expire.
+	time.Sleep(100 * time.Millisecond)
+
+	// Second check: backoff just expired — should emit EventBackoffExpired.
+	gw.CheckAndEmitBackoffExpiry()
+	assert.NotEmpty(t, rec.byKind(domain.EventBackoffExpired),
+		"CheckAndEmitBackoffExpiry must emit EventBackoffExpired on active→clear transition")
+}
+
+// TestGateway_CheckAndEmitBackoffExpiry_NoEmitWhenAlreadyClear verifies that
+// calling CheckAndEmitBackoffExpiry when no backoff is active emits nothing.
+func TestGateway_CheckAndEmitBackoffExpiry_NoEmitWhenAlreadyClear(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	// No backoff set — both calls should emit nothing.
+	gw.CheckAndEmitBackoffExpiry()
+	gw.CheckAndEmitBackoffExpiry()
+	assert.Empty(t, rec.byKind(domain.EventBackoffExpired),
+		"no event when backoff was never active")
+}
+
+// TestGateway_CheckAndEmitRefill_NilRecorder verifies no panic when no
+// recorder is attached.
+func TestGateway_CheckAndEmitRefill_NilRecorder(t *testing.T) {
+	gw := NewGateway()
+	// No recorder attached — force a level change.
+	_ = gw.bucket.wait(context.Background())
+	require.NotPanics(t, func() {
+		gw.CheckAndEmitRefill()
+		gw.CheckAndEmitBackoffExpiry()
+	})
+}
