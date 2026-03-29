@@ -98,46 +98,46 @@ func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, re
 	}
 }
 
-// initAPIClients constructs all Spotify API clients with a shared logging HTTP
-// transport and the centralized API gateway, then injects them into the app.
-// Called after a successful auth flow or token refresh.
+// initAPIClients constructs all Spotify API clients with the centralized API
+// gateway, then injects them into the app. All request recording is handled by
+// the gateway event journal (GatewayEventLog) — no separate logging transport
+// is needed. Called after a successful auth flow or token refresh.
 func (a *App) initAPIClients(token string) {
-	loggingClient := &http.Client{
-		Transport: api.NewLoggingTransport(http.DefaultTransport, a.store),
-	}
-	// Wire the store as a GatewayRecorder so Gateway.Do() records per-request
-	// decisions (allowed/waited/deduped/blocked) with priority metadata.
-	// This enables the Request Flow pane to show gateway decisions for all
-	// requests, including Background requests rejected by backoff.
+	// Wire the store as a GatewayEventRecorder so Gateway.Do() records
+	// per-request lifecycle events (allowed/waited/deduped/blocked/completed)
+	// into the GatewayEventLog. Both the Request Flow pane and the Network Log
+	// pane read from this single authoritative event source.
 	a.gateway.SetRecorder(a.store)
 
+	httpClient := &http.Client{}
+
 	player := api.NewPlayer("", token)
-	player.SetHTTPClient(loggingClient)
+	player.SetHTTPClient(httpClient)
 	player.SetGateway(a.gateway)
 	a.player = player
 
 	library := api.NewLibraryClient("", token)
-	library.SetHTTPClient(loggingClient)
+	library.SetHTTPClient(httpClient)
 	library.SetGateway(a.gateway)
 	a.library = library
 
 	search := api.NewSearchClient("", token)
-	search.SetHTTPClient(loggingClient)
+	search.SetHTTPClient(httpClient)
 	search.SetGateway(a.gateway)
 	a.search = search
 
 	devices := api.NewDevicesClient("", token)
-	devices.SetHTTPClient(loggingClient)
+	devices.SetHTTPClient(httpClient)
 	devices.SetGateway(a.gateway)
 	a.devices = devices
 
 	userAPI := api.NewUserClient("", token)
-	userAPI.SetHTTPClient(loggingClient)
+	userAPI.SetHTTPClient(httpClient)
 	userAPI.SetGateway(a.gateway)
 	a.userAPI = userAPI
 
 	playlistsAPI := api.NewPlaylistsClient("", token)
-	playlistsAPI.SetHTTPClient(loggingClient)
+	playlistsAPI.SetHTTPClient(httpClient)
 	playlistsAPI.SetGateway(a.gateway)
 	a.playlistsAPI = playlistsAPI
 }

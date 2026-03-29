@@ -281,27 +281,26 @@ func runApp(_ *cobra.Command, _ []string) error {
 
 	if !needsAuth {
 		// Inject API clients for already-authenticated users.
+		// Gateway event recording is handled by initAPIClients (called on auth success).
 		accessToken, _ := store.Get(keychain.KeyAccessToken)
-		loggingClient := &http.Client{
-			Transport: api.NewLoggingTransport(http.DefaultTransport, a.Store()),
-		}
+		httpClient := &http.Client{}
 		player := api.NewPlayer("", accessToken)
-		player.SetHTTPClient(loggingClient)
+		player.SetHTTPClient(httpClient)
 		a.SetPlayer(player)
 		library := api.NewLibraryClient("", accessToken)
-		library.SetHTTPClient(loggingClient)
+		library.SetHTTPClient(httpClient)
 		a.SetLibrary(library)
 		search := api.NewSearchClient("", accessToken)
-		search.SetHTTPClient(loggingClient)
+		search.SetHTTPClient(httpClient)
 		a.SetSearch(search)
 		devices := api.NewDevicesClient("", accessToken)
-		devices.SetHTTPClient(loggingClient)
+		devices.SetHTTPClient(httpClient)
 		a.SetDevices(devices)
 		userAPI := api.NewUserClient("", accessToken)
-		userAPI.SetHTTPClient(loggingClient)
+		userAPI.SetHTTPClient(httpClient)
 		a.SetUserAPI(userAPI)
 		playlists := api.NewPlaylistsClient("", accessToken)
-		playlists.SetHTTPClient(loggingClient)
+		playlists.SetHTTPClient(httpClient)
 		a.SetPlaylistsAPI(playlists)
 	}
 
