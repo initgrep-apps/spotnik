@@ -10,11 +10,11 @@ import (
 type animationPhase int
 
 const (
-	phaseEntered    animationPhase = iota // appeared in APP box
-	phaseAtGateway                        // gateway decision rendered
-	phaseInFlight                         // HTTP call in progress (arrow animating right)
-	phaseCompleted                        // response received
-	phaseDone                             // aged out, ready for removal
+	phaseEntered   animationPhase = iota // appeared in APP box
+	phaseAtGateway                       // gateway decision rendered
+	phaseInFlight                        // HTTP call in progress (arrow animating right)
+	phaseCompleted                       // response received
+	phaseDone                            // aged out, ready for removal
 )
 
 // requestAnimation tracks one request's visual state across all three boxes.

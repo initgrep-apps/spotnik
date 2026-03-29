@@ -188,9 +188,9 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	topArtistsPane := panes.NewTopArtistsPane(s, t, false)
 
 	// Create Page B panes.
-	// RequestFlowPane receives the gateway as a domain.GatewaySnapshotter interface,
-	// avoiding ui/ → api/ import. It calls Snapshot() (read-only) but makes no API calls.
-	requestFlowPane := panes.NewRequestFlowPane(gw, s, t)
+	// RequestFlowPane reads gateway events from the store's event journal,
+	// preserving the ui/ → state/ dependency direction (no gateway reference).
+	requestFlowPane := panes.NewRequestFlowPane(s, t)
 	networkLogPane := panes.NewNetworkLogPane(s, t)
 
 	panesMap := map[layout.PaneID]layout.Pane{
