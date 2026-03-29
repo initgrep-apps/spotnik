@@ -116,6 +116,10 @@ type Store struct {
 	// netLog records all API calls for the network log panel.
 	netLog *NetLog
 
+	// eventLog records gateway lifecycle events for the event journal.
+	// Coexists with netLog until Feature 69 retires NetLog.
+	eventLog *GatewayEventLog
+
 	// throttle holds rate-limit observability state updated by the API Gateway.
 	// The UI status bar reads these to show a "Rate limited" indicator.
 	throttle struct {
@@ -144,6 +148,7 @@ type Store struct {
 func New() *Store {
 	return &Store{
 		netLog:         NewNetLog(),
+		eventLog:       NewGatewayEventLog(defaultEventLogCapacity),
 		statsFetchedAt: make(map[string]time.Time),
 		statsFetching:  make(map[string]bool),
 	}
@@ -917,6 +922,23 @@ func (s *Store) NetLogEntries() []NetLogEntry {
 // NetLog returns the underlying NetLog ring buffer.
 func (s *Store) NetLog() *NetLog {
 	return s.netLog
+}
+
+// --- Gateway Event Journal ---
+
+// Compile-time check: *Store must implement domain.GatewayEventRecorder.
+var _ domain.GatewayEventRecorder = &Store{}
+
+// RecordEvent records a gateway lifecycle event. Implements domain.GatewayEventRecorder.
+func (s *Store) RecordEvent(event domain.GatewayEvent) {
+	s.eventLog.Add(event)
+}
+
+// ReadEventsFrom returns gateway events added since the given cursor.
+// Returns the new cursor and the slice of new events.
+// Pass cursor=0 on the first call.
+func (s *Store) ReadEventsFrom(cursor uint64) (uint64, []domain.GatewayEvent) {
+	return s.eventLog.ReadFrom(cursor)
 }
 
 // --- Throttle observability ---

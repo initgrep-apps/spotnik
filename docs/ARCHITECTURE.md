@@ -677,6 +677,17 @@ All HTTP requests are logged to a ring buffer for the NetworkLogPane (Page B):
 - Data flow (direct path): `LoggingTransport.RoundTrip()` → `store.RecordNetCall()` → `NetLog`
 - Wired in `initAPIClients()` — a shared `http.Client` with `LoggingTransport` is passed to all 6 API clients
 
+### Gateway Event Journal (Feature 66+)
+
+The gateway event journal replaces snapshot-polling with a timestamped event stream.
+`NetLog` and `GatewayEventLog` coexist until Feature 69 retires `NetLog`.
+
+- `internal/domain/gateway.go` — `EventKind` (13 constants), `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder` interface
+- `internal/state/eventlog.go` — `GatewayEventLog`: 500-entry thread-safe ring buffer with cursor-based reads
+  - `Add(event)` — write path; called by `Store.RecordEvent()`
+  - `ReadFrom(cursor)` — returns events since cursor; multiple independent consumers (RequestFlowPane, NetworkLogPane) each hold their own cursor
+- `internal/state/store.go` — `RecordEvent()` implements `domain.GatewayEventRecorder`; `ReadEventsFrom()` exposes cursor reads to the UI
+
 ### Integration Points
 
 - `internal/api/gateway.go` — Gateway struct, tokenBucket, inflightEntry, Priority, GatewayRecorder interface, MarkGatewayRecorded/IsGatewayRecorded helpers
@@ -684,8 +695,9 @@ All HTTP requests are logged to a ring buffer for the NetworkLogPane (Page B):
 - `internal/api/logging.go` — `LoggingTransport`, `NetLogRecorder` interface, double-recording skip
 - `internal/app/app.go` — Gateway created in `New()`, `throttleExpiredMsg` handler
 - `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()`, wires `LoggingTransport`, calls `SetRecorder(store)`
-- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordGatewayCall()`
+- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordGatewayCall()`, `RecordEvent()`, `ReadEventsFrom()`
 - `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry` (with Priority + GatewayDecision), `RecordNetCall()`, `RecordGatewayCall()`
-- `internal/domain/gateway.go` — `GatewaySnapshotter`, `GatewayState`, `RequestPriority`, `GatewayDecision`
+- `internal/state/eventlog.go` — `GatewayEventLog` ring buffer with cursor-based reads (Feature 66+)
+- `internal/domain/gateway.go` — `GatewaySnapshotter`, `GatewayState`, `RequestPriority`, `GatewayDecision`, `EventKind`, `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder`
 
-*Last updated: 2026-03-28*
+*Last updated: 2026-03-29*
