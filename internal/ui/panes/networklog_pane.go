@@ -2,11 +2,12 @@ package panes
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -19,16 +20,34 @@ const latencyBarMax = 200
 // latencyBarSteps is the number of █ chars in a full latency bar.
 const latencyBarSteps = 10
 
+// maxNetworkLogRows is the maximum number of completed request rows to retain.
+const maxNetworkLogRows = 200
+
+// networkLogRow holds the display data extracted from gateway events for a single
+// completed or blocked request.
+type networkLogRow struct {
+	timestamp  time.Time
+	method     string
+	path       string
+	statusCode int
+	durationMs int64
+	priority   domain.RequestPriority
+	decision   domain.EventKind
+}
+
 // NetworkLogPane displays a scrollable, filterable reverse-chronological log of
-// all API requests stored in state.Store.NetLogEntries(). It does NOT import api/.
+// all API requests read from the GatewayEventLog via cursor-based reads.
+// It does NOT import api/.
 type NetworkLogPane struct {
-	store   *state.Store
-	theme   theme.Theme
-	table   *components.Table
-	filter  *components.Filter
-	focused bool
-	width   int
-	height  int
+	store             *state.Store
+	theme             theme.Theme
+	table             *components.Table
+	filter            *components.Filter
+	focused           bool
+	width             int
+	height            int
+	eventCursor       uint64
+	completedRequests []networkLogRow
 }
 
 // Compile-time check: NetworkLogPane implements layout.Pane.
@@ -39,10 +58,12 @@ func NewNetworkLogPane(s *state.Store, th theme.Theme) *NetworkLogPane {
 	columns := []components.ColumnDef{
 		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.TextMuted()},
 		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.TextSecondary()},
-		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 8, Color: th.TextPrimary()},
+		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.TextPrimary()},
 		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.TextPrimary()},
 		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.TextMuted()},
-		{Key: "notes", Header: "NOTES", FlexFactor: 4, Color: th.TextMuted()},
+		{Key: "priority", Header: "PRI", FlexFactor: 1, Color: th.TextMuted()},
+		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.TextSecondary()},
+		{Key: "notes", Header: "NOTES", FlexFactor: 3, Color: th.TextMuted()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -107,6 +128,14 @@ func (p *NetworkLogPane) HasActiveFilter() bool { return p.filter.IsActive() }
 // Exported for testing.
 func (p *NetworkLogPane) SelectedIndex() int { return p.table.SelectedIndex() }
 
+// EventCursor returns the current event cursor position.
+// Exported for testing.
+func (p *NetworkLogPane) EventCursor() uint64 { return p.eventCursor }
+
+// CompletedRequestsLen returns the number of completed request rows currently buffered.
+// Exported for testing.
+func (p *NetworkLogPane) CompletedRequestsLen() int { return len(p.completedRequests) }
+
 // Init returns nil — the NetworkLogPane reacts to TickMsg from the app.
 func (p *NetworkLogPane) Init() tea.Cmd { return nil }
 
@@ -114,7 +143,7 @@ func (p *NetworkLogPane) Init() tea.Cmd { return nil }
 func (p *NetworkLogPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case TickMsg:
-		// Refresh log entries from store on each 1s tick.
+		// Refresh log entries from the event journal on each 1s tick.
 		p.refreshRows()
 		return p, nil
 
@@ -136,7 +165,7 @@ func (p *NetworkLogPane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			p.table.SetFocused(true)
 			p.resizeTable()
 		}
-		p.refreshRows()
+		p.buildTableRows()
 		return p, cmd
 	}
 
@@ -163,40 +192,115 @@ func (p *NetworkLogPane) View() string {
 	return strings.Join(parts, "\n")
 }
 
-// refreshRows re-reads the store's net log and rebuilds the table rows.
-// Entries are sorted newest-first before display.
+// refreshRows drains new events from the GatewayEventLog since the last cursor
+// position, extracts completed and blocked requests, and rebuilds the table.
 func (p *NetworkLogPane) refreshRows() {
-	entries := p.store.NetLogEntries()
+	// Drain new events since last cursor.
+	newCursor, events := p.store.ReadEventsFrom(p.eventCursor)
+	p.eventCursor = newCursor
 
-	// Sort newest-first (Entries() returns oldest-first).
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Timestamp.After(entries[j].Timestamp)
-	})
+	// Build a map of RequestID → decision kind for lookups.
+	// Decision events (allowed/blocked/waited/dedupJoined) precede EventHttpCompleted
+	// in the event stream for the same request.
+	decisions := make(map[uint64]domain.EventKind)
+	for _, e := range events {
+		switch e.Kind {
+		case domain.EventRequestAllowed, domain.EventRequestBlocked,
+			domain.EventRequestWaited, domain.EventDedupJoined:
+			decisions[e.RequestID] = e.Kind
+		}
+	}
 
+	for _, e := range events {
+		switch e.Kind {
+		case domain.EventHttpCompleted:
+			row := networkLogRow{
+				timestamp:  e.Timestamp,
+				method:     e.Method,
+				path:       e.Path,
+				statusCode: e.StatusCode,
+				durationMs: e.DurationMs,
+				priority:   e.Priority,
+				decision:   decisions[e.RequestID],
+			}
+			p.completedRequests = append(p.completedRequests, row)
+
+		case domain.EventRequestBlocked:
+			// Blocked requests never reach HTTP — show them with status 0.
+			row := networkLogRow{
+				timestamp:  e.Timestamp,
+				method:     e.Method,
+				path:       e.Path,
+				statusCode: 0,
+				durationMs: 0,
+				priority:   e.Priority,
+				decision:   domain.EventRequestBlocked,
+			}
+			p.completedRequests = append(p.completedRequests, row)
+		}
+	}
+
+	// Cap at max entries (newest kept).
+	if len(p.completedRequests) > maxNetworkLogRows {
+		p.completedRequests = p.completedRequests[len(p.completedRequests)-maxNetworkLogRows:]
+	}
+
+	p.buildTableRows()
+}
+
+// buildTableRows iterates completedRequests in reverse (newest-first), applies
+// the filter, and sets the table rows.
+func (p *NetworkLogPane) buildTableRows() {
 	query := p.filter.Query()
-	rows := make([]map[string]string, 0, len(entries))
-	for _, e := range entries {
-		statusStr := strconv.Itoa(e.StatusCode)
-		latencyStr := fmt.Sprintf("%dms", e.DurationMs)
+	rows := make([]map[string]string, 0, len(p.completedRequests))
 
-		// Apply filter: match on endpoint path or status code.
+	// Iterate newest-first.
+	for i := len(p.completedRequests) - 1; i >= 0; i-- {
+		row := p.completedRequests[i]
+
+		statusStr := strconv.Itoa(row.statusCode)
+		latencyStr := fmt.Sprintf("%dms", row.durationMs)
+
+		pri := "bg"
+		if row.priority == domain.PriorityInteractive {
+			pri = "int"
+		}
+
+		dec := ""
+		switch row.decision {
+		case domain.EventRequestAllowed:
+			dec = "allowed"
+		case domain.EventRequestBlocked:
+			dec = "blocked"
+		case domain.EventRequestWaited:
+			dec = "waited"
+		case domain.EventDedupJoined:
+			dec = "dedup"
+		}
+
+		// Apply filter: match on endpoint path, status code, priority, or decision.
 		if query != "" {
-			if !p.filter.MatchesAny(e.Path, statusStr) {
+			if !p.filter.MatchesAny(row.path, statusStr, pri, dec) {
 				continue
 			}
 		}
 
-		notes := latencyBar(e.DurationMs)
-		if e.StatusCode == 429 {
+		notes := latencyBar(row.durationMs)
+		if row.statusCode == 429 {
 			notes += " ⚠"
+		}
+		if row.decision == domain.EventRequestBlocked {
+			notes = "✗ blocked"
 		}
 
 		rows = append(rows, map[string]string{
-			"time":     e.Timestamp.Format("15:04:05"),
-			"method":   e.Method,
-			"endpoint": e.Path,
+			"time":     row.timestamp.Format("15:04:05"),
+			"method":   row.method,
+			"endpoint": row.path,
 			"status":   statusStr,
 			"latency":  latencyStr,
+			"priority": pri,
+			"decision": dec,
 			"notes":    notes,
 		})
 	}
