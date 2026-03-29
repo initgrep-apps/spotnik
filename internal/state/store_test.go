@@ -740,3 +740,56 @@ func TestStore_SetDevices_ReplacesExistingList(t *testing.T) {
 	assert.Len(t, got, 1, "SetDevices should replace the old list")
 	assert.Equal(t, "new", got[0].ID)
 }
+
+// --- GatewayEventRecorder interface ---
+
+// Compile-time check: *Store must implement domain.GatewayEventRecorder.
+var _ domain.GatewayEventRecorder = &Store{}
+
+func TestStore_RecordEvent_StoreAndRetrieve(t *testing.T) {
+	s := New()
+
+	ev := domain.GatewayEvent{
+		Timestamp: time.Now(),
+		Kind:      domain.EventHttpCompleted,
+		RequestID: 99,
+		Method:    "GET",
+		Path:      "/me/player",
+		Priority:  domain.PriorityInteractive,
+		StatusCode: 200,
+		DurationMs: 125,
+		Snapshot: domain.GatewayStateSnapshot{
+			TokensAvailable: 8,
+			TokensMax:       10,
+		},
+	}
+
+	s.RecordEvent(ev)
+
+	cursor, events := s.ReadEventsFrom(0)
+	require.Len(t, events, 1, "ReadEventsFrom should return the recorded event")
+	assert.Equal(t, uint64(1), cursor)
+	assert.Equal(t, domain.EventHttpCompleted, events[0].Kind)
+	assert.Equal(t, uint64(99), events[0].RequestID)
+	assert.Equal(t, 200, events[0].StatusCode)
+}
+
+func TestStore_ReadEventsFrom_IncrementalCursor(t *testing.T) {
+	s := New()
+
+	s.RecordEvent(domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: 1})
+	s.RecordEvent(domain.GatewayEvent{Kind: domain.EventTokenConsumed, RequestID: 2})
+	s.RecordEvent(domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: 3})
+
+	// First read.
+	cursor, events := s.ReadEventsFrom(0)
+	assert.Len(t, events, 3)
+
+	// Add one more.
+	s.RecordEvent(domain.GatewayEvent{Kind: domain.EventSemaphoreAcquired, RequestID: 4})
+
+	// Incremental read from saved cursor.
+	_, events2 := s.ReadEventsFrom(cursor)
+	require.Len(t, events2, 1)
+	assert.Equal(t, domain.EventSemaphoreAcquired, events2[0].Kind)
+}
