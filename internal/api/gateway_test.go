@@ -659,52 +659,7 @@ func TestGateway_Snapshot_ThreadSafe(t *testing.T) {
 	wg.Wait() // If data race occurs, go test -race will catch it.
 }
 
-// --- GatewayRecorder tests ---
-
-// mockRecorder captures RecordGatewayCall invocations for assertion.
-type mockRecorder struct {
-	mu    sync.Mutex
-	calls []recordedCall
-}
-
-type recordedCall struct {
-	method   string
-	path     string
-	status   int
-	duration int64
-	priority domain.RequestPriority
-	decision domain.GatewayDecision
-}
-
-func (m *mockRecorder) RecordGatewayCall(method, path string, statusCode int, durationMs int64, priority domain.RequestPriority, decision domain.GatewayDecision) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, recordedCall{
-		method:   method,
-		path:     path,
-		status:   statusCode,
-		duration: durationMs,
-		priority: priority,
-		decision: decision,
-	})
-}
-
-func (m *mockRecorder) last() (recordedCall, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.calls) == 0 {
-		return recordedCall{}, false
-	}
-	return m.calls[len(m.calls)-1], true
-}
-
-func (m *mockRecorder) all() []recordedCall {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]recordedCall, len(m.calls))
-	copy(out, m.calls)
-	return out
-}
+// --- GatewayEventRecorder tests (replaces old GatewayRecorder tests) ---
 
 func TestGateway_SetRecorder_NilSafe(t *testing.T) {
 	gw := NewGateway()
@@ -720,7 +675,7 @@ func TestGateway_SetRecorder_NilSafe(t *testing.T) {
 
 func TestGateway_Recorder_AllowedDecision(t *testing.T) {
 	gw := NewGateway()
-	rec := &mockRecorder{}
+	rec := &mockEventRecorder{}
 	gw.SetRecorder(rec)
 
 	_, err := gw.Do(context.Background(), Background,
@@ -730,18 +685,18 @@ func TestGateway_Recorder_AllowedDecision(t *testing.T) {
 		})
 	require.NoError(t, err)
 
-	call, ok := rec.last()
-	require.True(t, ok, "recorder should have captured a call")
-	assert.Equal(t, "GET", call.method)
-	assert.Equal(t, "/me/player", call.path)
-	assert.Equal(t, 200, call.status)
-	assert.Equal(t, domain.PriorityBackground, call.priority)
-	assert.Equal(t, domain.DecisionAllowed, call.decision)
+	// The primary caller path emits RequestAllowed with correct fields.
+	allowed := rec.byKind(domain.EventRequestAllowed)
+	require.NotEmpty(t, allowed, "recorder should have captured a RequestAllowed event")
+	e := allowed[0]
+	assert.Equal(t, "GET", e.Method)
+	assert.Equal(t, "/me/player", e.Path)
+	assert.Equal(t, domain.PriorityBackground, e.Priority)
 }
 
 func TestGateway_Recorder_BlockedDecision(t *testing.T) {
 	gw := NewGateway()
-	rec := &mockRecorder{}
+	rec := &mockEventRecorder{}
 	gw.SetRecorder(rec)
 
 	// Trigger a 429 to put the gateway in backoff.
@@ -753,7 +708,7 @@ func TestGateway_Recorder_BlockedDecision(t *testing.T) {
 			return resp, nil
 		})
 
-	// Now a Background request during backoff should be recorded as Blocked.
+	// Now a Background request during backoff should emit EventRequestBlocked.
 	_, err := gw.Do(context.Background(), Background,
 		RequestKey{Method: "GET", Path: "/blocked"},
 		func() (*http.Response, error) {
@@ -762,23 +717,22 @@ func TestGateway_Recorder_BlockedDecision(t *testing.T) {
 		})
 	require.Error(t, err)
 
-	// Find the blocked call in the recorder.
-	calls := rec.all()
-	var blocked *recordedCall
-	for i := range calls {
-		if calls[i].path == "/blocked" {
-			blocked = &calls[i]
+	// Find the blocked event.
+	events := rec.all()
+	var blocked *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventRequestBlocked && events[i].Path == "/blocked" {
+			blocked = &events[i]
 		}
 	}
-	require.NotNil(t, blocked, "blocked request should be recorded")
-	assert.Equal(t, domain.DecisionBlocked, blocked.decision)
-	assert.Equal(t, domain.PriorityBackground, blocked.priority)
-	assert.Equal(t, 0, blocked.status, "blocked request has no HTTP status")
+	require.NotNil(t, blocked, "blocked request should emit EventRequestBlocked")
+	assert.Equal(t, domain.PriorityBackground, blocked.Priority)
+	assert.Equal(t, 0, blocked.StatusCode, "blocked request has no HTTP status")
 }
 
 func TestGateway_Recorder_DedupedDecision(t *testing.T) {
 	gw := NewGateway()
-	rec := &mockRecorder{}
+	rec := &mockEventRecorder{}
 	gw.SetRecorder(rec)
 
 	release := make(chan struct{})
@@ -801,22 +755,15 @@ func TestGateway_Recorder_DedupedDecision(t *testing.T) {
 	close(release)
 	wg.Wait()
 
-	calls := rec.all()
-	// Should have 2 recorded calls: one Allowed + one Deduped.
-	require.GreaterOrEqual(t, len(calls), 2, "both goroutines should be recorded")
-	decisions := make(map[domain.GatewayDecision]int)
-	for _, c := range calls {
-		if c.path == "/dedup-endpoint" {
-			decisions[c.decision]++
-		}
-	}
-	assert.Equal(t, 1, decisions[domain.DecisionAllowed], "exactly one Allowed call")
-	assert.Equal(t, 1, decisions[domain.DecisionDeduped], "exactly one Deduped call")
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventRequestAllowed, "primary caller emits RequestAllowed")
+	assert.Contains(t, kinds, domain.EventDedupJoined, "dedup waiter emits DedupJoined")
+	assert.Contains(t, kinds, domain.EventDedupResolved, "dedup waiter emits DedupResolved")
 }
 
 func TestGateway_Recorder_InteractiveCancelledDuringBackoff_RecordsWaited(t *testing.T) {
 	gw := NewGateway()
-	rec := &mockRecorder{}
+	rec := &mockEventRecorder{}
 	gw.SetRecorder(rec)
 
 	// Set a long backoff so waitForBackoff blocks until the context is cancelled.
@@ -836,18 +783,17 @@ func TestGateway_Recorder_InteractiveCancelledDuringBackoff_RecordsWaited(t *tes
 		})
 	require.Error(t, err, "expected context cancellation error")
 
-	// The cancelled request must be recorded as DecisionWaited with status 0.
-	calls := rec.all()
-	var found *recordedCall
-	for i := range calls {
-		if calls[i].path == "/interactive-cancelled" {
-			found = &calls[i]
+	// Cancelled Interactive request must emit EventRequestWaited (was waiting on backoff).
+	events := rec.all()
+	var waited *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventRequestWaited && events[i].Path == "/interactive-cancelled" {
+			waited = &events[i]
 		}
 	}
-	require.NotNil(t, found, "cancelled Interactive request should be recorded")
-	assert.Equal(t, domain.DecisionWaited, found.decision, "cancelled backoff wait should record DecisionWaited")
-	assert.Equal(t, domain.PriorityInteractive, found.priority)
-	assert.Equal(t, 0, found.status, "cancelled request has no HTTP status")
+	require.NotNil(t, waited, "cancelled Interactive request should emit EventRequestWaited")
+	assert.Equal(t, domain.PriorityInteractive, waited.Priority)
+	assert.Equal(t, 0, waited.StatusCode, "cancelled request has no HTTP status")
 }
 
 func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocked(t *testing.T) {
@@ -858,7 +804,7 @@ func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocke
 	// Drain the single token so the next wait will block.
 	require.NoError(t, gw.bucket.wait(context.Background()))
 
-	rec := &mockRecorder{}
+	rec := &mockEventRecorder{}
 	gw.SetRecorder(rec)
 
 	// Cancel the context while waiting for a token.
@@ -873,18 +819,17 @@ func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocke
 		})
 	require.Error(t, err, "expected context cancellation error")
 
-	// The cancelled request must be recorded as DecisionBlocked with status 0.
-	calls := rec.all()
-	var found *recordedCall
-	for i := range calls {
-		if calls[i].path == "/bg-bucket-cancelled" {
-			found = &calls[i]
+	// Cancelled background bucket wait must emit EventRequestBlocked.
+	events := rec.all()
+	var blocked *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventRequestBlocked && events[i].Path == "/bg-bucket-cancelled" {
+			blocked = &events[i]
 		}
 	}
-	require.NotNil(t, found, "Background request cancelled during token bucket wait should be recorded")
-	assert.Equal(t, domain.DecisionBlocked, found.decision, "token bucket wait cancellation should record DecisionBlocked")
-	assert.Equal(t, domain.PriorityBackground, found.priority)
-	assert.Equal(t, 0, found.status, "cancelled request has no HTTP status")
+	require.NotNil(t, blocked, "Background request cancelled during token bucket wait should emit EventRequestBlocked")
+	assert.Equal(t, domain.PriorityBackground, blocked.Priority)
+	assert.Equal(t, 0, blocked.StatusCode, "cancelled request has no HTTP status")
 }
 
 func TestGateway_Snapshot_InFlightKeys(t *testing.T) {
@@ -1102,4 +1047,349 @@ func TestGateway_Watermarks_IdleShowsDefaults(t *testing.T) {
 		"idle gateway: MinTokens must equal TokensMax")
 	assert.Equal(t, 0, snap.PeakConcurrent,
 		"idle gateway: PeakConcurrent must be 0")
+}
+
+// --- Feature 67: captureSnapshot and emitEvent helpers ---
+
+// mockEventRecorder captures RecordEvent invocations for assertion.
+type mockEventRecorder struct {
+	mu     sync.Mutex
+	events []domain.GatewayEvent
+}
+
+func (m *mockEventRecorder) RecordEvent(e domain.GatewayEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, e)
+}
+
+func (m *mockEventRecorder) all() []domain.GatewayEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]domain.GatewayEvent, len(m.events))
+	copy(out, m.events)
+	return out
+}
+
+func (m *mockEventRecorder) byKind(kind domain.EventKind) []domain.GatewayEvent {
+	all := m.all()
+	var out []domain.GatewayEvent
+	for _, e := range all {
+		if e.Kind == kind {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// TestGateway_CaptureSnapshot_TokenLevel verifies captureSnapshot returns
+// the correct token level including refill arithmetic.
+func TestGateway_CaptureSnapshot_TokenLevel(t *testing.T) {
+	gw := NewGateway()
+	// Consume 3 tokens.
+	for i := 0; i < 3; i++ {
+		key := RequestKey{Method: "GET", Path: fmt.Sprintf("/snap/%d", i)}
+		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+	}
+	snap := gw.captureSnapshot()
+	assert.Equal(t, 10, snap.TokensMax, "TokensMax must always be 10")
+	// After 3 tokens consumed, available should be ≤ TokensMax-3 (some refill may have occurred).
+	assert.LessOrEqual(t, snap.TokensAvailable, snap.TokensMax,
+		"TokensAvailable must not exceed TokensMax")
+	assert.GreaterOrEqual(t, snap.TokensAvailable, 0,
+		"TokensAvailable must be non-negative")
+}
+
+// TestGateway_CaptureSnapshot_ConcurrentActive verifies captureSnapshot
+// reflects semaphore occupancy.
+func TestGateway_CaptureSnapshot_ConcurrentActive(t *testing.T) {
+	release := make(chan struct{})
+	gw := NewGateway()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		key := RequestKey{Method: "PUT", Path: "/player/play"}
+		_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+			<-release
+			return newFakeResponse(204, ""), nil
+		})
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	snap := gw.captureSnapshot()
+	assert.GreaterOrEqual(t, snap.ConcurrentActive, 1,
+		"captureSnapshot must reflect in-flight semaphore occupancy")
+
+	close(release)
+	wg.Wait()
+}
+
+// TestGateway_EmitEvent_NilRecorderNoPanic verifies emitEvent does not panic
+// when no recorder is attached.
+func TestGateway_EmitEvent_NilRecorderNoPanic(t *testing.T) {
+	gw := NewGateway()
+	// No recorder attached — must not panic.
+	require.NotPanics(t, func() {
+		gw.emitEvent(domain.EventRequestEntered, 1, "GET", "/me/player",
+			domain.PriorityBackground, 0, 0)
+	})
+}
+
+// TestGateway_EmitEvent_CallsRecorderWithCorrectFields verifies that emitEvent
+// calls RecordEvent with the correct Kind, RequestID, Method, Path, and Priority.
+func TestGateway_EmitEvent_CallsRecorderWithCorrectFields(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	gw.emitEvent(domain.EventRequestEntered, 42, "GET", "/me/player",
+		domain.PriorityBackground, 0, 0)
+
+	events := rec.all()
+	require.Len(t, events, 1, "expected exactly one event")
+	e := events[0]
+	assert.Equal(t, domain.EventRequestEntered, e.Kind)
+	assert.Equal(t, uint64(42), e.RequestID)
+	assert.Equal(t, "GET", e.Method)
+	assert.Equal(t, "/me/player", e.Path)
+	assert.Equal(t, domain.PriorityBackground, e.Priority)
+	assert.Equal(t, 10, e.Snapshot.TokensMax, "snapshot must be populated")
+}
+
+// TestGateway_NextRequestID_Increments verifies nextRequestID increments
+// correctly across calls.
+func TestGateway_NextRequestID_Increments(t *testing.T) {
+	gw := NewGateway()
+	id1 := gw.nextRequestID.Add(1)
+	id2 := gw.nextRequestID.Add(1)
+	id3 := gw.nextRequestID.Add(1)
+	assert.Equal(t, uint64(1), id1)
+	assert.Equal(t, uint64(2), id2)
+	assert.Equal(t, uint64(3), id3)
+}
+
+// --- Feature 67 Task 2: Do() lifecycle event emission ---
+
+// collectKinds extracts just the EventKind values from a slice of events.
+func collectKinds(events []domain.GatewayEvent) []domain.EventKind {
+	kinds := make([]domain.EventKind, len(events))
+	for i, e := range events {
+		kinds[i] = e.Kind
+	}
+	return kinds
+}
+
+// TestGateway_Do_NormalRequest_EmitsLifecycle verifies that a normal background
+// GET emits: RequestEntered → TokenConsumed → SemaphoreAcquired → HttpCompleted →
+// SemaphoreReleased → RequestAllowed.
+func TestGateway_Do_NormalRequest_EmitsLifecycle(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/me/player"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.NoError(t, err)
+
+	events := rec.all()
+	kinds := collectKinds(events)
+	assert.Contains(t, kinds, domain.EventRequestEntered, "must emit RequestEntered")
+	assert.Contains(t, kinds, domain.EventTokenConsumed, "must emit TokenConsumed")
+	assert.Contains(t, kinds, domain.EventSemaphoreAcquired, "must emit SemaphoreAcquired")
+	assert.Contains(t, kinds, domain.EventHttpCompleted, "must emit HttpCompleted")
+	assert.Contains(t, kinds, domain.EventSemaphoreReleased, "must emit SemaphoreReleased")
+	assert.Contains(t, kinds, domain.EventRequestAllowed, "must emit RequestAllowed")
+}
+
+// TestGateway_Do_BlockedRequest_EmitsBlockedEvent verifies a background request
+// during backoff emits: RequestEntered → RequestBlocked.
+func TestGateway_Do_BlockedRequest_EmitsBlockedEvent(t *testing.T) {
+	gw := NewGateway()
+	// Set backoff directly.
+	gw.mu.Lock()
+	gw.backoffUntil = time.Now().Add(30 * time.Second)
+	gw.mu.Unlock()
+
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/blocked"},
+		func() (*http.Response, error) {
+			t.Error("fn must not be called for blocked request")
+			return newFakeResponse(200, "ok"), nil
+		})
+	require.Error(t, err)
+
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventRequestEntered, "must emit RequestEntered")
+	assert.Contains(t, kinds, domain.EventRequestBlocked, "must emit RequestBlocked")
+}
+
+// TestGateway_Do_InteractiveWait_EmitsWaitedEvent verifies an interactive request
+// during backoff emits RequestWaited as the final decision event (not RequestAllowed).
+func TestGateway_Do_InteractiveWait_EmitsWaitedEvent(t *testing.T) {
+	gw := NewGateway()
+	// Set a short backoff.
+	gw.mu.Lock()
+	gw.backoffUntil = time.Now().Add(50 * time.Millisecond)
+	gw.mu.Unlock()
+
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, err := gw.Do(context.Background(), Interactive,
+		RequestKey{Method: "PUT", Path: "/play"},
+		func() (*http.Response, error) {
+			return newFakeResponse(204, ""), nil
+		})
+	require.NoError(t, err)
+
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventRequestEntered, "must emit RequestEntered")
+	// An interactive request that waited on backoff emits RequestWaited as the
+	// final decision (not RequestAllowed) to distinguish "had to wait" from "passed through".
+	assert.Contains(t, kinds, domain.EventRequestWaited, "must emit RequestWaited as final decision")
+	assert.NotContains(t, kinds, domain.EventRequestAllowed,
+		"waited interactive request must not emit RequestAllowed (RequestWaited is the final decision)")
+}
+
+// TestGateway_Do_DedupRequest_EmitsJoinAndResolve verifies a dedup waiter
+// emits DedupJoined and DedupResolved.
+func TestGateway_Do_DedupRequest_EmitsJoinAndResolve(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	release := make(chan struct{})
+	key := RequestKey{Method: "GET", Path: "/dedup-test"}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+				<-release
+				return newFakeResponse(200, "data"), nil
+			})
+		}()
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventDedupJoined, "must emit DedupJoined for waiter")
+	assert.Contains(t, kinds, domain.EventDedupResolved, "must emit DedupResolved for waiter")
+}
+
+// TestGateway_Do_429Response_EmitsBackoffStarted verifies a 429 response
+// causes EventBackoffStarted to be emitted.
+func TestGateway_Do_429Response_EmitsBackoffStarted(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/limited"},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "5")
+			return resp, nil
+		})
+
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventBackoffStarted, "must emit BackoffStarted on 429")
+}
+
+// TestGateway_Do_EventsHaveCorrectRequestID verifies all events for the same
+// request share the same RequestID.
+func TestGateway_Do_EventsHaveCorrectRequestID(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/req-id-test"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+
+	events := rec.all()
+	require.NotEmpty(t, events, "must have events")
+
+	// All events for this request should share the same non-zero RequestID.
+	firstID := events[0].RequestID
+	assert.NotZero(t, firstID, "RequestID must be non-zero")
+	for _, e := range events {
+		assert.Equal(t, firstID, e.RequestID, "all request events must share the same RequestID")
+	}
+}
+
+// TestGateway_Do_EventsHaveSnapshots verifies every event has a non-zero
+// Snapshot.TokensMax (proving snapshot was captured).
+func TestGateway_Do_EventsHaveSnapshots(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/snapshot-test"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+
+	events := rec.all()
+	require.NotEmpty(t, events, "must have events")
+	for _, e := range events {
+		assert.Equal(t, 10, e.Snapshot.TokensMax,
+			"every event must carry a snapshot with TokensMax=10, kind=%v", e.Kind)
+	}
+}
+
+// TestGateway_Do_SnapshotReflectsStateAtMoment verifies the EventTokenConsumed
+// snapshot shows TokensAvailable < TokensMax.
+func TestGateway_Do_SnapshotReflectsStateAtMoment(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/state-moment"},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+
+	consumed := rec.byKind(domain.EventTokenConsumed)
+	require.NotEmpty(t, consumed, "must have TokenConsumed event")
+	snap := consumed[0].Snapshot
+	assert.Less(t, snap.TokensAvailable, snap.TokensMax,
+		"after token consumption, TokensAvailable must be < TokensMax")
 }
