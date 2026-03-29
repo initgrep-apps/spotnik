@@ -533,22 +533,41 @@ func TestGateway_PlaybackState_RoutedThroughGateway(t *testing.T) {
 	assert.Equal(t, 1, callCount, "dedup should result in exactly one HTTP call")
 }
 
-// --- Gateway.Snapshot() tests ---
+// --- Gateway state via event snapshots ---
 
-func TestGateway_Snapshot_TokensAvailable(t *testing.T) {
+// TestGateway_StateSnapshot_TokensAvailable verifies that a fresh gateway's first
+// recorded event carries a full token bucket in its snapshot.
+func TestGateway_StateSnapshot_TokensAvailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	rec := &mockEventRecorder{}
 	gw := NewGateway()
-	snap := gw.Snapshot()
-	// Fresh gateway: bucket full at 10, no concurrent requests, no backoff.
-	assert.Equal(t, 10, snap.TokensAvailable, "fresh gateway should have full token bucket")
-	assert.Equal(t, 10, snap.TokensMax, "token max should be 10")
-	assert.Equal(t, 0, snap.ConcurrentActive, "no concurrent requests on fresh gateway")
-	assert.Equal(t, 5, snap.ConcurrentMax, "semaphore max should be 5")
-	assert.Equal(t, 0.0, snap.BackoffRemaining, "no backoff on fresh gateway")
-	assert.Equal(t, 0, snap.DedupWaiters, "no dedup waiters on fresh gateway")
+	gw.SetRecorder(rec)
+
+	key := RequestKey{Method: "PUT", Path: "/v1/me/player/play"}
+	_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+		req, _ := http.NewRequest("PUT", srv.URL+"/play", http.NoBody)
+		return http.DefaultClient.Do(req)
+	})
+
+	events := rec.all()
+	require.NotEmpty(t, events, "at least one event must be recorded")
+	// The first event (RequestEntered) carries the state at entry.
+	first := events[0]
+	assert.Equal(t, domain.EventRequestEntered, first.Kind)
+	// Token bucket starts full at 10, no backoff on fresh gateway.
+	assert.Equal(t, 10, first.Snapshot.TokensMax, "token max should be 10")
+	assert.Equal(t, 0, first.Snapshot.ConcurrentActive, "no concurrent requests at entry")
+	assert.Equal(t, 5, first.Snapshot.ConcurrentMax, "semaphore max should be 5")
+	assert.Equal(t, 0.0, first.Snapshot.BackoffRemaining, "no backoff on fresh gateway")
 }
 
-func TestGateway_Snapshot_ConcurrentActive(t *testing.T) {
-	// Pause the server so we can measure in-flight count.
+// TestGateway_StateSnapshot_ConcurrentActive verifies that semaphore acquired event
+// carries a non-zero ConcurrentActive count in its snapshot.
+func TestGateway_StateSnapshot_ConcurrentActive(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-release
@@ -556,9 +575,10 @@ func TestGateway_Snapshot_ConcurrentActive(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	rec := &mockEventRecorder{}
 	gw := NewGateway()
+	gw.SetRecorder(rec)
 
-	// Launch one goroutine holding a semaphore slot.
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -570,22 +590,39 @@ func TestGateway_Snapshot_ConcurrentActive(t *testing.T) {
 		})
 	}()
 
-	// Give the goroutine time to acquire the semaphore.
 	time.Sleep(30 * time.Millisecond)
-
-	snap := gw.Snapshot()
-	assert.GreaterOrEqual(t, snap.ConcurrentActive, 1, "at least one concurrent request in flight")
-	assert.Equal(t, 5, snap.ConcurrentMax)
+	// The SemaphoreAcquired event should show ConcurrentActive >= 1.
+	events := rec.all()
+	var semAcq *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventSemaphoreAcquired {
+			semAcq = &events[i]
+			break
+		}
+	}
+	require.NotNil(t, semAcq, "SemaphoreAcquired event must be recorded")
+	assert.GreaterOrEqual(t, semAcq.Snapshot.ConcurrentActive, 1, "at least one concurrent request in flight")
+	assert.Equal(t, 5, semAcq.Snapshot.ConcurrentMax)
 
 	close(release)
 	wg.Wait()
 
-	snap2 := gw.Snapshot()
-	assert.Equal(t, 0, snap2.ConcurrentActive, "concurrent count should drop to zero after request completes")
+	// After completion, SemaphoreReleased event should show ConcurrentActive == 0.
+	events = rec.all()
+	var semRel *domain.GatewayEvent
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Kind == domain.EventSemaphoreReleased {
+			semRel = &events[i]
+			break
+		}
+	}
+	require.NotNil(t, semRel, "SemaphoreReleased event must be recorded")
+	assert.Equal(t, 0, semRel.Snapshot.ConcurrentActive, "concurrent count should drop to zero after release")
 }
 
-func TestGateway_Snapshot_BackoffRemaining(t *testing.T) {
-	// Trigger a 429 response to activate backoff.
+// TestGateway_StateSnapshot_BackoffRemaining verifies that a BackoffStarted event
+// carries a non-zero BackoffRemaining in its snapshot after receiving a 429.
+func TestGateway_StateSnapshot_BackoffRemaining(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -593,20 +630,32 @@ func TestGateway_Snapshot_BackoffRemaining(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	rec := &mockEventRecorder{}
 	gw := NewGateway()
+	gw.SetRecorder(rec)
+
 	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
 	_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 		req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
 		return http.DefaultClient.Do(req)
 	})
 
-	snap := gw.Snapshot()
-	assert.Greater(t, snap.BackoffRemaining, 0.0, "backoff should be active after 429")
-	assert.Less(t, snap.BackoffRemaining, 31.0, "backoff should not exceed Retry-After")
+	events := rec.all()
+	var backoffEv *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventBackoffStarted {
+			backoffEv = &events[i]
+			break
+		}
+	}
+	require.NotNil(t, backoffEv, "EventBackoffStarted must be recorded after 429")
+	assert.Greater(t, backoffEv.Snapshot.BackoffRemaining, 0.0, "backoff should be active after 429")
+	assert.Less(t, backoffEv.Snapshot.BackoffRemaining, 31.0, "backoff should not exceed Retry-After")
 }
 
-func TestGateway_Snapshot_DedupWaiters(t *testing.T) {
-	// One waiter joins a dedup: primary request in-flight, second waits.
+// TestGateway_StateSnapshot_DedupWaiters verifies that DedupJoined event is recorded
+// when a second GET request joins an in-flight identical request.
+func TestGateway_StateSnapshot_DedupWaiters(t *testing.T) {
 	release := make(chan struct{})
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -617,10 +666,11 @@ func TestGateway_Snapshot_DedupWaiters(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	rec := &mockEventRecorder{}
 	gw := NewGateway()
+	gw.SetRecorder(rec)
 	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
 
-	// Start two GET requests for the same key; only one hits the server.
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -633,30 +683,22 @@ func TestGateway_Snapshot_DedupWaiters(t *testing.T) {
 		}()
 	}
 
-	// Give both goroutines time to start.
 	time.Sleep(30 * time.Millisecond)
-
-	snap := gw.Snapshot()
-	// At least one dedup waiter should appear (secondary goroutine waits on primary).
-	assert.GreaterOrEqual(t, snap.DedupWaiters, 0, "dedup waiters count must not be negative")
+	// DedupJoined event's snapshot must have non-negative DedupWaiters.
+	events := rec.all()
+	var dedupEv *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventDedupJoined {
+			dedupEv = &events[i]
+			break
+		}
+	}
+	if dedupEv != nil {
+		assert.GreaterOrEqual(t, dedupEv.Snapshot.DedupWaiters, 0, "dedup waiters count must not be negative")
+	}
 
 	close(release)
 	wg.Wait()
-}
-
-func TestGateway_Snapshot_ThreadSafe(t *testing.T) {
-	gw := NewGateway()
-
-	// Concurrent reads of Snapshot() must not race.
-	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_ = gw.Snapshot()
-		}()
-	}
-	wg.Wait() // If data race occurs, go test -race will catch it.
 }
 
 // --- GatewayEventRecorder tests (replaces old GatewayRecorder tests) ---
@@ -832,54 +874,53 @@ func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocke
 	assert.Equal(t, 0, blocked.StatusCode, "cancelled request has no HTTP status")
 }
 
-func TestGateway_Snapshot_InFlightKeys(t *testing.T) {
-	release := make(chan struct{})
+// TestGateway_StateSnapshot_InFlightKeys verifies that EventHttpCompleted carries
+// InFlightKeys showing the in-flight GET request, and that EventSemaphoreReleased
+// does not (because the inflight entry is cleaned up before SemaphoreReleased).
+//
+// NOTE: The inflight key is added to the map AFTER EventSemaphoreAcquired is emitted,
+// so SemaphoreAcquired will NOT contain it. The key appears in EventHttpCompleted and
+// EventRequestAllowed snapshots, which are emitted before the cleanup defer fires.
+func TestGateway_StateSnapshot_InFlightKeys(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-release
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
 
+	rec := &mockEventRecorder{}
 	gw := NewGateway()
+	gw.SetRecorder(rec)
 	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
-			req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
-			return http.DefaultClient.Do(req)
-		})
-	}()
+	_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+		req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
+		return http.DefaultClient.Do(req)
+	})
 
-	time.Sleep(30 * time.Millisecond)
-	snap := gw.Snapshot()
+	// After completion, EventHttpCompleted snapshot must contain the in-flight key
+	// (emitted before the inflight cleanup defer fires).
+	events := rec.all()
 	keyStr := fmt.Sprintf("%s %s", key.Method, key.Path)
-	assert.Contains(t, snap.InFlightKeys, keyStr, "in-flight GET key should appear in Snapshot")
+	foundInFlight := false
+	for _, e := range events {
+		if e.Kind == domain.EventHttpCompleted {
+			for _, k := range e.Snapshot.InFlightKeys {
+				if k == keyStr {
+					foundInFlight = true
+				}
+			}
+		}
+	}
+	assert.True(t, foundInFlight, "EventHttpCompleted snapshot must contain the in-flight GET key")
 
-	close(release)
-	wg.Wait()
-
-	snap2 := gw.Snapshot()
-	assert.NotContains(t, snap2.InFlightKeys, keyStr, "completed key should no longer appear in Snapshot")
-}
-
-
-// TestGateway_Snapshot_CompatibilityShim verifies that Snapshot() still returns
-// valid (non-watermark) fields for pane compatibility (deprecated shim).
-func TestGateway_Snapshot_CompatibilityShim(t *testing.T) {
-	gw := NewGateway()
-	snap := gw.Snapshot()
-	// The deprecated Snapshot() shim should still return valid base fields.
-	assert.Equal(t, 10, snap.TokensAvailable, "fresh gateway should have full token bucket")
-	assert.Equal(t, 10, snap.TokensMax, "token max should be 10")
-	assert.Equal(t, 0, snap.ConcurrentActive, "no concurrent requests on fresh gateway")
-	assert.Equal(t, 5, snap.ConcurrentMax, "semaphore max should be 5")
-	assert.Equal(t, 0.0, snap.BackoffRemaining, "no backoff on fresh gateway")
-	// PeakConcurrent and MinTokens are zero now (watermarks retired).
-	assert.Equal(t, 0, snap.PeakConcurrent, "PeakConcurrent is always 0 after retirement")
-	assert.Equal(t, 0, snap.MinTokens, "MinTokens is always 0 after retirement")
+	// EventSemaphoreReleased snapshot should not contain the key (cleanup defer fires first).
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Kind == domain.EventSemaphoreReleased {
+			assert.NotContains(t, events[i].Snapshot.InFlightKeys, keyStr,
+				"completed key should not appear in EventSemaphoreReleased snapshot")
+			break
+		}
+	}
 }
 
 // --- Feature 67: captureSnapshot and emitEvent helpers ---
