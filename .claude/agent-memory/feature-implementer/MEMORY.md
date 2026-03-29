@@ -29,3 +29,4 @@
 - [project_spotnik_feature63_complete.md](project_spotnik_feature63_complete.md) — Feature 63 (Boxed Guards): overflow guard, height fallback, arrow nil guards, renderSubBox doc comment, comment accuracy fix in review
 - [project_spotnik_feature64_complete.md](project_spotnik_feature64_complete.md) — Feature 64 (Gateway Liveness Watermarks): 200ms snapshot on viz.TickMsg, peak watermark fields, annotation rendering, exported accessor pattern
 - [project_spotnik_feature65_complete.md](project_spotnik_feature65_complete.md) — Feature 65 (Gateway-Internal Watermarks): minTokens in tokenBucket, peakConcurrent in Gateway.Do(), ResetWatermarks() with refill, mockGateway interface update
+- [project_spotnik_feature69_complete.md](project_spotnik_feature69_complete.md) — Feature 69 (Network Log Event Migration): NetLog retirement, cursor-based reads, PRIORITY/DECISION columns, blocked visibility, stale comment gotchas
