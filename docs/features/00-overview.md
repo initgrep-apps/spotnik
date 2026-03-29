@@ -75,7 +75,7 @@
 | 63 | Request Flow Boxed Guards | `63-requestflow-boxed-guards.md` | ✅ Complete | 62 | #77 |
 | 64 | Gateway Liveness & Watermarks | `64-gateway-liveness-watermarks.md` | ✅ Complete | 63 | #78 |
 | 65 | Gateway-Internal Watermarks | `65-gateway-internal-watermarks.md` | ✅ Complete | 64 | — |
-| 66 | Gateway Event Types & Storage | `66-gateway-event-types-storage.md` | 🔲 Ready | 65 | — |
+| 66 | Gateway Event Types & Storage | `66-gateway-event-types-storage.md` | ✅ Complete | 65 | — |
 | 67 | Gateway Event Instrumentation | `67-gateway-event-instrumentation.md` | 🔲 Ready | 66 | — |
 | 68 | Request Flow Replay Engine | `68-requestflow-replay-engine.md` | 🔲 Ready | 67 | — |
 | 69 | Network Log Event Migration | `69-networklog-event-migration.md` | 🔲 Ready | 68 | — |
