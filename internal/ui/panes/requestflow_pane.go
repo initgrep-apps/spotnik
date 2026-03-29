@@ -271,9 +271,12 @@ func (p *RequestFlowPane) renderRequestRows(colWidth int) []string {
 // renderFlatAppEntry renders one line in the APP column (flat layout).
 // Interactive priority requests are shown in TextPrimary; Background in TextMuted.
 func (p *RequestFlowPane) renderFlatAppEntry(a *requestAnimation, colWidth int) string {
-	marker := "▶ "
+	marker := "⚡"
+	if a.priority != domain.PriorityInteractive {
+		marker = "◷"
+	}
 	if a.phase >= phaseCompleted {
-		marker = "  "
+		marker = " "
 	}
 	ep := truncateStr(a.path, colWidth-2)
 	text := marker + ep
@@ -480,9 +483,9 @@ func (p *RequestFlowPane) sortedAnimations() []*requestAnimation {
 func formatDecisionLabel(e domain.GatewayEvent) string {
 	switch e.Kind {
 	case domain.EventRequestEntered:
-		tag := "bg"
+		tag := "◷"
 		if e.Priority == domain.PriorityInteractive {
-			tag = "int"
+			tag = "⚡"
 		}
 		return fmt.Sprintf("→ %s %s entered [%s]", e.Method, e.Path, tag)
 	case domain.EventTokenConsumed:
