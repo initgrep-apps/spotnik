@@ -281,7 +281,9 @@ func runApp(_ *cobra.Command, _ []string) error {
 
 	if !needsAuth {
 		// Inject API clients for already-authenticated users.
-		// Gateway event recording is handled by initAPIClients (called on auth success).
+		// NOTE: Gateway recorder and SetGateway are not wired here. This is a
+		// pre-existing gap: for this startup path the gateway event journal is
+		// empty until the first token refresh triggers initAPIClients().
 		accessToken, _ := store.Get(keychain.KeyAccessToken)
 		httpClient := &http.Client{}
 		player := api.NewPlayer("", accessToken)
