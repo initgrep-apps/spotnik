@@ -74,7 +74,7 @@ PANES (10 total):
 `internal/domain/` contains shared types that bridge `api/` and `ui/` without creating import cycles. Key files:
 
 - `types.go` — Core types: `PlaybackState`, `Track`, `Artist`, `Album`, `Device`, `SimplePlaylist`, `SavedAlbum`, `SavedTrack`, `PlayHistory`, `QueueResponse`, `FullArtist`, `PlayOptions`
-- `gateway.go` — `GatewaySnapshotter` interface, `GatewayState` struct, `RequestPriority` constants
+- `gateway.go` — `EventKind` (13 constants), `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder` interface, `RequestPriority` constants
 - `search.go` — `SearchResult` type
 
 Panes import `domain/` types, not `api/` types. API clients return `domain/` types. This is how the import boundary is enforced — `ui/` and `api/` never import each other.
@@ -587,13 +587,23 @@ like/unlike, transfer playback, create/rename/remove/reorder playlist, fetch dev
 
 ### Gateway Observability
 
-The gateway exposes its internal state for UI visualization via the `domain.GatewaySnapshotter` interface, keeping `internal/ui/` decoupled from `internal/api/`:
+`RequestFlowPane` (Page B) reads gateway events from the store's event journal using a
+cursor-based replay model. The pane never holds a gateway reference — it only reads from
+`*state.Store`, preserving the `ui/ → state/` dependency direction.
 
-- `domain.GatewaySnapshotter` interface — implemented by `api.Gateway.Snapshot()`
-- `domain.GatewayState` struct — snapshot of token bucket level, concurrency slots, backoff timer, dedup waiters, InFlightKeys
-- `RequestFlowPane` (Page B) reads snapshots to render live gateway visualization
 - `PollingSnapshotMsg` — carries app-level polling diagnostics (tick interval, idle state) to RequestFlowPane
-- `RequestCompletedMsg` — carries per-request completion data (endpoint, status, latency, Priority, GatewayDecision) to RequestFlowPane
+- `replayDisplayState` — single render model that `View()` reads from; updated by the replay loop on each `viz.TickMsg`
+- `eventCursor uint64` — cursor into `GatewayEventLog`; advanced by `drainEvents()` on each tick
+- `replayQueue []domain.GatewayEvent` — events waiting to be displayed at 200ms minimum visibility
+- `requestAnimation` — tracks one request's visual state (method, path, priority, phase, decision, status) across all three boxes
+- `decisionEntry` — one line in the GATEWAY box's scrolling decision log (kind, label, shownAt for age-out)
+
+#### Request Flow Replay Loop
+
+On each `viz.TickMsg` (200ms), the pane:
+1. **`drainEvents()`** — reads new events from `store.ReadEventsFrom(cursor)`, appends to `replayQueue`
+2. **`processNextEvent()`** — pops one event, updates `displayState.snapshot` and request animation phases
+3. **`ageOutEntries()`** — removes decisions older than 3s, completed requests older than 5s
 
 #### Request Flow Rendering
 
@@ -603,14 +613,17 @@ The gateway exposes its internal state for UI visualization via the `domain.Gate
 ╭─ APP ──────────╮           ╭─ GATEWAY ──────────╮           ╭─ SPOTIFY ──────╮
 │ ▶ /player      │───────→───│ tokens  ●●●● 10/10 │───────→───│  200  45ms     │
 │   /queue       │───→ dedup │ conc    □□□□□  0/5 │    ╳      │  200  62ms     │
+│                │           │ ✓ GET /player allow │           │                │
 ╰────────────────╯           ╰────────────────────╯           ╰────────────────╯
 POLLING  tick: 1000ms  state: active    STORE  fetching: []
 ```
 
-- **Three sub-boxes**: APP (endpoints), GATEWAY (metrics), SPOTIFY (responses) with rounded corners
-- **Dual arrow columns**: left (APP→GW decision: allowed/waited/deduped/blocked), right (GW→SPOTIFY outcome: 2xx/429/5xx/blocked)
+- **Three sub-boxes**: APP (endpoints), GATEWAY (state bars + decision log), SPOTIFY (responses) with rounded corners
+- **Dual arrow columns**: left (APP→GW decision based on `requestAnimation.decision` EventKind), right (GW→SPOTIFY outcome based on phase + status code)
+- **GATEWAY box sections**: state bars (token bucket bar + semaphore bar + optional backoff timer) from `displayState.snapshot`; scrolling decision log below with per-EventKind theme colors
+- **Decision log colors**: `✓` allowed/expired → Success; `✗` blocked → Error; `⧖` waited/dedup → Warning; resource events → TextSecondary; `↻` refill → TextMuted
 - **`renderSubBox(title, lines, width)`** — pure helper that draws rounded-corner box; used by all three sub-boxes
-- **`gatewayStateLines()`** — extracted from `renderGatewayState()` for DRY reuse in both boxed and flat layouts
+- **`formatDecisionLabel(e GatewayEvent) string`** — maps all 13 EventKind values to display strings
 - **Flat fallback** (`viewFlat()`): original column headers + request rows + gateway state block; used when width < 60
 - Status strip always spans full pane width below the boxes
 
@@ -641,20 +654,22 @@ Periodic events are emitted on `viz.TickMsg` (every 200ms) from `app.go`:
 
 Each request gets a unique `RequestID` from `nextRequestID atomic.Uint64`. All events for the same request share this ID. Internal events (TokenRefilled, BackoffExpired) use `RequestID = 0`.
 
-#### Deprecated: Gateway Snapshot Polling (Feature 64–65)
+#### Feature 68: Replay Engine (completed)
 
-`Snapshot()` is retained as a **deprecated compatibility shim** for `RequestFlowPane` until Feature 68 migrates it to the event journal. Watermark fields (`PeakConcurrent`, `MinTokens`) are always zero — they are replaced by event journal replay. `ResetWatermarks()` is a no-op stub retained for `GatewaySnapshotter` interface compatibility.
-
-`GatewayState`, `GatewaySnapshotter`, and `GatewayDecision` in `domain/gateway.go` are deprecated and will be removed in Feature 68.
+`GatewayState`, `GatewaySnapshotter`, and `GatewayDecision` have been removed from
+`domain/gateway.go`. The deprecated `Snapshot()` shim and `ResetWatermarks()` no-op have
+been removed from `api/gateway.go`. `NetLogEntry.GatewayDecision` and `Store.RecordGatewayCall()`
+have been removed from `state/`. All snapshot-based tests have been rewritten to use
+event injection via `store.RecordEvent()` + `viz.TickMsg`.
 
 ### Network Logging
 
 All HTTP requests are logged to a ring buffer for the NetworkLogPane (Page B):
 
-- `internal/state/netlog.go` — `NetLog` struct: 200-entry thread-safe ring buffer of `NetLogEntry` records (timestamp, method, path, status code, duration, Priority, GatewayDecision)
+- `internal/state/netlog.go` — `NetLog` struct: 200-entry thread-safe ring buffer of `NetLogEntry` records (timestamp, method, path, status code, duration, Priority)
 - `internal/api/logging.go` — `LoggingTransport` wraps `http.DefaultTransport`, intercepts requests not already recorded by the gateway
 - `NetLogRecorder` interface bridges `api/` → `state/` without a direct import
-- Data flow (gateway path): `BaseClient.doJSON` → `Gateway.Do()` → records via `GatewayRecorder` → `store.RecordGatewayCall()` → `NetLog`
+- Data flow (gateway path): `BaseClient.doJSON` → `Gateway.Do()` → records via `GatewayRecorder` → `store.RecordNetCall()` → `NetLog`
 - Data flow (direct path): `LoggingTransport.RoundTrip()` → `store.RecordNetCall()` → `NetLog`
 - Wired in `initAPIClients()` — a shared `http.Client` with `LoggingTransport` is passed to all 6 API clients
 
@@ -676,9 +691,9 @@ The gateway event journal replaces snapshot-polling with a timestamped event str
 - `internal/api/logging.go` — `LoggingTransport`, `NetLogRecorder` interface, double-recording skip
 - `internal/app/app.go` — Gateway created in `New()`, `throttleExpiredMsg` handler
 - `internal/app/auth.go` — `initAPIClients()` calls `SetGateway()`, wires `LoggingTransport`, calls `SetRecorder(store)`
-- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordGatewayCall()`, `RecordEvent()`, `ReadEventsFrom()`
-- `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry` (with Priority + GatewayDecision), `RecordNetCall()`, `RecordGatewayCall()`
+- `internal/state/store.go` — `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `RecordEvent()`, `ReadEventsFrom()`, `RecordNetCall()`
+- `internal/state/netlog.go` — `NetLog` ring buffer, `NetLogEntry` (with Priority), `RecordNetCall()`
 - `internal/state/eventlog.go` — `GatewayEventLog` ring buffer with cursor-based reads (Feature 66+)
-- `internal/domain/gateway.go` — `GatewaySnapshotter`, `GatewayState`, `RequestPriority`, `GatewayDecision`, `EventKind`, `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder`
+- `internal/domain/gateway.go` — `RequestPriority`, `EventKind`, `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder`
 
 *Last updated: 2026-03-29*
