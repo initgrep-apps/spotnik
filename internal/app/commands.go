@@ -159,7 +159,8 @@ func (a *App) buildFetchPlaylistsCmd(offset int) tea.Cmd {
 		if library == nil {
 			return panes.LibraryLoadedMsg{Offset: offset, Err: errNilClient}
 		}
-		playlists, err := library.Playlists(context.Background(), 50, offset)
+		ctx := api.WithPriority(context.Background(), api.Interactive)
+		playlists, err := library.Playlists(ctx, 50, offset)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -568,7 +569,8 @@ func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
 		if library == nil {
 			return panes.PlaylistTracksLoadedMsg{Err: errNilClient, PlaylistID: playlistID}
 		}
-		tracks, err := library.PlaylistTracks(context.Background(), playlistID, 100, 0)
+		ctx := api.WithPriority(context.Background(), api.Interactive)
+		tracks, err := library.PlaylistTracks(ctx, playlistID, 100, 0)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}

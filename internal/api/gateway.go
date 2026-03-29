@@ -112,10 +112,13 @@ func (tb *tokenBucket) wait(ctx context.Context) error {
 // --- Gateway ---
 
 // RequestKey uniquely identifies a request for deduplication purposes.
-// Two requests with the same Method and Path are considered identical.
+// Two requests with the same Method, Path, and RawQuery are considered identical.
+// RawQuery is included so that paginated requests to the same path with different
+// query parameters (e.g. offset=0 vs offset=50) are not incorrectly deduplicated.
 type RequestKey struct {
-	Method string
-	Path   string
+	Method   string
+	Path     string
+	RawQuery string
 }
 
 // inflightEntry tracks an in-flight HTTP request for deduplication.

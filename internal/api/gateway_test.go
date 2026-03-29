@@ -241,6 +241,54 @@ func TestGateway_Dedup_SameKey_OneHTTPCall(t *testing.T) {
 	assert.Equal(t, 1, callCount, "expected exactly one HTTP call for two deduplicated requests")
 }
 
+// TestGateway_Dedup_DifferentQueryParams_IndependentCalls verifies that two
+// concurrent GET requests to the same path but with different query strings
+// are NOT deduplicated — each gets its own HTTP call and response.
+func TestGateway_Dedup_DifferentQueryParams_IndependentCalls(t *testing.T) {
+	gw := NewGateway()
+
+	callCount := int32(0)
+	release := make(chan struct{})
+
+	var wg sync.WaitGroup
+	results := make([]string, 2)
+	errs := make([]error, 2)
+
+	keys := []RequestKey{
+		{Method: "GET", Path: "/v1/me/playlists", RawQuery: "limit=50&offset=0"},
+		{Method: "GET", Path: "/v1/me/playlists", RawQuery: "limit=50&offset=50"},
+	}
+	bodies := []string{"page-1", "page-2"}
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			resp, err := gw.Do(context.Background(), Background, keys[idx], func() (*http.Response, error) {
+				<-release
+				atomic.AddInt32(&callCount, 1)
+				return newFakeResponse(200, bodies[idx]), nil
+			})
+			errs[idx] = err
+			if err == nil {
+				body, _ := io.ReadAll(resp.Body)
+				results[idx] = string(body)
+			}
+		}(i)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	require.NoError(t, errs[0])
+	require.NoError(t, errs[1])
+	assert.Equal(t, "page-1", results[0])
+	assert.Equal(t, "page-2", results[1])
+	assert.Equal(t, int32(2), atomic.LoadInt32(&callCount),
+		"expected two independent HTTP calls for different query params")
+}
+
 func TestGateway_Dedup_DifferentKeys_IndependentCalls(t *testing.T) {
 	gw := NewGateway()
 

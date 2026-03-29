@@ -88,7 +88,7 @@ func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
 
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
-		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		key := RequestKey{Method: req.Method, Path: req.URL.Path, RawQuery: req.URL.RawQuery}
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
@@ -127,7 +127,7 @@ func (b *BaseClient) doJSONOptional(req *http.Request, out interface{}) (bool, e
 
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
-		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		key := RequestKey{Method: req.Method, Path: req.URL.Path, RawQuery: req.URL.RawQuery}
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
@@ -169,7 +169,7 @@ func (b *BaseClient) doNoContent(req *http.Request) error {
 
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
-		key := RequestKey{Method: req.Method, Path: req.URL.Path}
+		key := RequestKey{Method: req.Method, Path: req.URL.Path, RawQuery: req.URL.RawQuery}
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})

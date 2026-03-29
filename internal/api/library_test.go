@@ -255,3 +255,54 @@ func TestNewLibraryClient_DefaultBaseURL(t *testing.T) {
 	assert.NotNil(t, client)
 	// The client was created — we can't easily test the URL but no panic occurred.
 }
+
+// TestGetPlaylists_WithGateway_PreservesTrackCount verifies that routing
+// Playlists() through the gateway preserves the custom UnmarshalJSON
+// extraction of tracks.total into TrackCount.
+func TestGetPlaylists_WithGateway_PreservesTrackCount(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/fixtures/playlists_response.json")
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	client.SetGateway(NewGateway())
+
+	playlists, err := client.Playlists(context.Background(), 50, 0)
+
+	require.NoError(t, err)
+	require.Len(t, playlists, 2)
+	assert.Equal(t, "Chill Vibes", playlists[0].Name)
+	assert.Equal(t, 42, playlists[0].TrackCount, "TrackCount must survive gateway body buffering")
+	assert.Equal(t, "Workout Mix", playlists[1].Name)
+	assert.Equal(t, 18, playlists[1].TrackCount)
+}
+
+// TestGetPlaylistTracks_WithGateway_ReturnsTracks verifies that routing
+// PlaylistTracks() through the gateway returns parsed tracks without error.
+func TestGetPlaylistTracks_WithGateway_ReturnsTracks(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/fixtures/playlist_tracks_response.json")
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	client.SetGateway(NewGateway())
+
+	tracks, err := client.PlaylistTracks(context.Background(), "playlist-abc123", 50, 0)
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 2)
+	assert.Equal(t, "Blinding Lights", tracks[0].Name)
+	assert.Equal(t, "Save Your Tears", tracks[1].Name)
+}
