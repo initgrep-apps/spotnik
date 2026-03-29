@@ -295,27 +295,6 @@ func (g *Gateway) emitEventLocked(kind domain.EventKind, reqID uint64, method, p
 	})
 }
 
-// Snapshot returns a read-only snapshot of the gateway's current internal state.
-// Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
-//
-// Deprecated: Snapshot() is a compatibility shim for panes that still use
-// domain.GatewayState. It will be removed when those panes migrate to the
-// GatewayEvent journal (Feature 68). Watermark fields (PeakConcurrent,
-// MinTokens) are always zero — they are replaced by the event journal.
-func (g *Gateway) Snapshot() domain.GatewayState {
-	snap := g.captureSnapshot()
-	return domain.GatewayState{
-		TokensAvailable:  snap.TokensAvailable,
-		TokensMax:        snap.TokensMax,
-		ConcurrentActive: snap.ConcurrentActive,
-		ConcurrentMax:    snap.ConcurrentMax,
-		BackoffRemaining: snap.BackoffRemaining,
-		DedupWaiters:     snap.DedupWaiters,
-		InFlightKeys:     snap.InFlightKeys,
-		// PeakConcurrent and MinTokens are retired — always zero.
-	}
-}
-
 // CheckAndEmitRefill checks if the token bucket level has changed since the
 // last emission and emits EventTokenRefilled if so. Called by the app on
 // viz.TickMsg (every 200ms). Does NOT mutate bucket.tokens — the lazy refill
@@ -365,13 +344,6 @@ func (g *Gateway) CheckAndEmitBackoffExpiry() {
 		})
 	}
 }
-
-// ResetWatermarks is a no-op retained for interface compatibility with
-// domain.GatewaySnapshotter. Watermark tracking was retired in Feature 67;
-// this method will be removed when RequestFlowPane migrates in Feature 68.
-//
-// Deprecated: Replaced by event journal replay.
-func (g *Gateway) ResetWatermarks() {}
 
 // IsThrottled returns true when the gateway is in a 429 backoff period.
 func (g *Gateway) IsThrottled() bool {

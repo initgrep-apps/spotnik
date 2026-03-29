@@ -84,4 +84,3 @@ func TestLoggingTransport_RecordsOnError(t *testing.T) {
 	assert.Equal(t, "GET", rec.calls[0].Method)
 	assert.Equal(t, 0, rec.calls[0].StatusCode, "status should be 0 on transport error")
 }
-
