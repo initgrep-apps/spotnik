@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"time"
 
@@ -280,30 +279,8 @@ func runApp(_ *cobra.Command, _ []string) error {
 	a := app.New(cfg, opts)
 
 	if !needsAuth {
-		// Inject API clients for already-authenticated users.
-		// NOTE: Gateway recorder and SetGateway are not wired here. This is a
-		// pre-existing gap: for this startup path the gateway event journal is
-		// empty until the first token refresh triggers initAPIClients().
 		accessToken, _ := store.Get(keychain.KeyAccessToken)
-		httpClient := &http.Client{}
-		player := api.NewPlayer("", accessToken)
-		player.SetHTTPClient(httpClient)
-		a.SetPlayer(player)
-		library := api.NewLibraryClient("", accessToken)
-		library.SetHTTPClient(httpClient)
-		a.SetLibrary(library)
-		search := api.NewSearchClient("", accessToken)
-		search.SetHTTPClient(httpClient)
-		a.SetSearch(search)
-		devices := api.NewDevicesClient("", accessToken)
-		devices.SetHTTPClient(httpClient)
-		a.SetDevices(devices)
-		userAPI := api.NewUserClient("", accessToken)
-		userAPI.SetHTTPClient(httpClient)
-		a.SetUserAPI(userAPI)
-		playlists := api.NewPlaylistsClient("", accessToken)
-		playlists.SetHTTPClient(httpClient)
-		a.SetPlaylistsAPI(playlists)
+		a.InitAPIClients(accessToken)
 	}
 
 	// Start the Bubble Tea program.

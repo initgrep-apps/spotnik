@@ -62,6 +62,11 @@ func NewRequestFlowPane(s *state.Store, t theme.Theme) *RequestFlowPane {
 		store: s,
 		displayState: replayDisplayState{
 			requests: make(map[uint64]*requestAnimation),
+			snapshot: domain.GatewayStateSnapshot{
+				TokensAvailable: 10,
+				TokensMax:       10,
+				ConcurrentMax:   5,
+			},
 		},
 	}
 }
