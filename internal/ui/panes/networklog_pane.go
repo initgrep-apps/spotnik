@@ -254,9 +254,9 @@ func (p *NetworkLogPane) buildTableRows() {
 		statusStr := strconv.Itoa(row.statusCode)
 		latencyStr := fmt.Sprintf("%dms", row.durationMs)
 
-		pri := "bg"
+		pri := "◷ background"
 		if row.priority == domain.PriorityInteractive {
-			pri = "int"
+			pri = "⚡ interactive"
 		}
 
 		dec := ""

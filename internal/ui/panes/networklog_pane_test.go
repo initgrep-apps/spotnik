@@ -277,8 +277,8 @@ func TestNetworkLogPane_View_ShowsPriorityColumn(t *testing.T) {
 	_, _ = pane.Update(panes.TickMsg{})
 
 	v := pane.View()
-	assert.Contains(t, v, "int", "interactive request should show 'int' in PRI column")
-	assert.Contains(t, v, "bg", "background request should show 'bg' in PRI column")
+	assert.Contains(t, v, "interactive", "interactive request should show '⚡ interactive' in PRIORITY column")
+	assert.Contains(t, v, "background", "background request should show '◷ background' in PRIORITY column")
 }
 
 func TestNetworkLogPane_View_ShowsDecisionColumn(t *testing.T) {
@@ -344,15 +344,15 @@ func TestNetworkLogPane_Filter_MatchesPriority(t *testing.T) {
 
 	_, _ = pane.Update(panes.TickMsg{})
 
-	// Filter by "int" to show only interactive.
+	// Filter by "interactive" to show only interactive requests.
 	_, _ = pane.Update(tea_keyMsg("f"))
-	for _, ch := range "int" {
+	for _, ch := range "interactive" {
 		_, _ = pane.Update(tea_keyMsgRune(ch))
 	}
 
 	v := pane.View()
-	assert.Contains(t, v, "/me/player", "interactive endpoint should be visible with 'int' filter")
-	assert.NotContains(t, v, "/me/playlists", "background endpoint should be hidden with 'int' filter")
+	assert.Contains(t, v, "/me/player", "interactive endpoint should be visible with 'interactive' filter")
+	assert.NotContains(t, v, "/me/playlists", "background endpoint should be hidden with 'interactive' filter")
 }
 
 func TestNetworkLogPane_Filter_MatchesDecision(t *testing.T) {
