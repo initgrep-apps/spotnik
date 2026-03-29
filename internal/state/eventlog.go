@@ -69,10 +69,10 @@ func (l *GatewayEventLog) ReadFrom(cursor uint64) (uint64, []domain.GatewayEvent
 	// Start position in the ring: head points to the next write slot,
 	// so the oldest stored entry is at (head - count) mod capacity.
 	// The first event we want is at (head - behind) mod capacity.
-	cap := len(l.entries)
-	start := (l.head - int(behind) + cap) % cap
+	ringCap := len(l.entries)
+	start := (l.head - int(behind) + ringCap) % ringCap
 	for i := range result {
-		result[i] = l.entries[(start+i)%cap]
+		result[i] = l.entries[(start+i)%ringCap]
 	}
 
 	return l.sequence, result

@@ -743,9 +743,6 @@ func TestStore_SetDevices_ReplacesExistingList(t *testing.T) {
 
 // --- GatewayEventRecorder interface ---
 
-// Compile-time check: *Store must implement domain.GatewayEventRecorder.
-var _ domain.GatewayEventRecorder = &Store{}
-
 func TestStore_RecordEvent_StoreAndRetrieve(t *testing.T) {
 	s := New()
 
