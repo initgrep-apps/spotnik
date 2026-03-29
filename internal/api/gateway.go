@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -31,23 +32,8 @@ const (
 type contextKey int
 
 const (
-	priorityKey        contextKey = 0
-	gatewayRecordedKey contextKey = 1
+	priorityKey contextKey = 0
 )
-
-// MarkGatewayRecorded returns a new request with a context marker indicating
-// that the gateway has already recorded this call. LoggingTransport checks
-// this marker and skips its own RecordNetCall to prevent double-recording.
-func MarkGatewayRecorded(req *http.Request) *http.Request {
-	ctx := context.WithValue(req.Context(), gatewayRecordedKey, true)
-	return req.WithContext(ctx)
-}
-
-// IsGatewayRecorded reports whether the request context carries the gateway-recorded marker.
-func IsGatewayRecorded(req *http.Request) bool {
-	v, _ := req.Context().Value(gatewayRecordedKey).(bool)
-	return v
-}
 
 // WithPriority returns a new context that carries the given Priority.
 // BaseClient reads this via PriorityFromContext when routing through the Gateway.
@@ -68,23 +54,21 @@ func PriorityFromContext(ctx context.Context) Priority {
 // Tokens are refilled continuously at `rate` per second up to `max`.
 // Callers call wait() to consume a token, blocking until one is available.
 type tokenBucket struct {
-	mu        sync.Mutex
-	tokens    float64
-	max       float64
-	rate      float64 // tokens per second
-	lastFill  time.Time
-	minTokens float64 // lowest token level observed since last reset (watermark)
+	mu       sync.Mutex
+	tokens   float64
+	max      float64
+	rate     float64 // tokens per second
+	lastFill time.Time
 }
 
 // newTokenBucket creates a full token bucket with the given max capacity and
 // refill rate (tokens per second).
 func newTokenBucket(max, rate float64) *tokenBucket {
 	return &tokenBucket{
-		tokens:    max,
-		max:       max,
-		rate:      rate,
-		lastFill:  time.Now(),
-		minTokens: max, // start at max — no consumption observed yet
+		tokens:   max,
+		max:      max,
+		rate:     rate,
+		lastFill: time.Now(),
 	}
 }
 
@@ -104,12 +88,6 @@ func (tb *tokenBucket) wait(ctx context.Context) error {
 
 		if tb.tokens >= 1 {
 			tb.tokens--
-			// Track the minimum token level at the exact moment of consumption,
-			// before any refill can hide the dip. This is the key fix over
-			// Feature 64's UI-side sampling approach.
-			if tb.tokens < tb.minTokens {
-				tb.minTokens = tb.tokens
-			}
 			tb.mu.Unlock()
 			return nil
 		}
@@ -149,14 +127,6 @@ type inflightEntry struct {
 	err  error
 }
 
-// GatewayRecorder records per-request gateway decisions for visualization.
-// Implemented by *state.Store; defined here to avoid an import cycle
-// (api/ cannot import state/).
-type GatewayRecorder interface {
-	RecordGatewayCall(method, path string, statusCode int, durationMs int64,
-		priority domain.RequestPriority, decision domain.GatewayDecision)
-}
-
 // Gateway is the central control point for all outbound Spotify API requests.
 // It enforces:
 //   - Token-bucket rate limiting (10 req/s burst of 10)
@@ -164,19 +134,26 @@ type GatewayRecorder interface {
 //   - In-flight request deduplication (same key → only one HTTP call)
 //   - 429 backoff with priority bypass for Interactive requests
 type Gateway struct {
-	mu             sync.Mutex
-	bucket         *tokenBucket
-	semaphore      chan struct{} // concurrency limiter, buffered to size 5
-	inflight       map[RequestKey]*inflightEntry
-	backoffUntil   time.Time
-	retryAfter     int
-	recorder       GatewayRecorder // optional; nil means no recording
-	peakConcurrent int             // max semaphore occupancy observed since last reset (watermark)
+	mu            sync.Mutex
+	bucket        *tokenBucket
+	semaphore     chan struct{} // concurrency limiter, buffered to size 5
+	inflight      map[RequestKey]*inflightEntry
+	backoffUntil  time.Time
+	retryAfter    int
+	recorder      domain.GatewayEventRecorder // optional; nil means no recording
+	nextRequestID atomic.Uint64               // monotonically incrementing request ID
+
+	// lastEmittedTokens tracks the token level of the last TokenRefilled event.
+	// Used to avoid emitting duplicate refill events when tokens haven't changed.
+	lastEmittedTokens int
+	// lastBackoffActive tracks whether backoff was active at the last check.
+	// Used to detect the backoff→clear transition for BackoffExpired events.
+	lastBackoffActive bool
 }
 
-// SetRecorder sets the gateway decision recorder. Pass nil to disable recording.
+// SetRecorder sets the gateway event recorder. Pass nil to disable recording.
 // Thread-safe.
-func (g *Gateway) SetRecorder(r GatewayRecorder) {
+func (g *Gateway) SetRecorder(r domain.GatewayEventRecorder) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.recorder = r
@@ -185,21 +162,25 @@ func (g *Gateway) SetRecorder(r GatewayRecorder) {
 // NewGateway creates a Gateway with default limits:
 // 10 requests/second token bucket, burst of 10, max 5 concurrent in-flight.
 func NewGateway() *Gateway {
-	return &Gateway{
+	g := &Gateway{
 		bucket:    newTokenBucket(10, 10),
 		semaphore: make(chan struct{}, 5),
 		inflight:  make(map[RequestKey]*inflightEntry),
 	}
+	// Initialize lastEmittedTokens to max so the first CheckAndEmitRefill
+	// only fires when the level actually changes from the initial full state.
+	g.lastEmittedTokens = int(g.bucket.max)
+	return g
 }
 
-// Snapshot returns a read-only snapshot of the gateway's current internal state.
-// Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
-// Best-effort point-in-time: each field group is read under its own lock, so the
-// snapshot is not guaranteed to be atomically consistent across all fields.
-func (g *Gateway) Snapshot() domain.GatewayState {
-	// Read the token bucket level and watermark without consuming a token.
+// captureSnapshot reads the gateway's current state under locks.
+// Returns a GatewayStateSnapshot suitable for embedding in a GatewayEvent.
+//
+// Lock ordering: acquires bucket.mu first, then g.mu. The caller must NOT
+// hold g.mu when calling this method. If the caller already holds g.mu,
+// use captureSnapshotLocked() instead.
+func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	g.bucket.mu.Lock()
-	// Apply any pending refill before reading so the value is current.
 	now := time.Now()
 	elapsed := now.Sub(g.bucket.lastFill).Seconds()
 	tokens := g.bucket.tokens + elapsed*g.bucket.rate
@@ -207,65 +188,190 @@ func (g *Gateway) Snapshot() domain.GatewayState {
 		tokens = g.bucket.max
 	}
 	tokenMax := int(g.bucket.max)
-	minTokens := int(g.bucket.minTokens)
 	g.bucket.mu.Unlock()
 
-	// Read gateway fields under the gateway mutex.
 	g.mu.Lock()
 	backoffRemaining := time.Until(g.backoffUntil).Seconds()
 	if backoffRemaining < 0 {
 		backoffRemaining = 0
 	}
-	// DedupWaiters = number of in-flight GET requests in the dedup map.
-	// Each entry represents one primary in-flight call. Secondary goroutines
-	// that join as waiters are not separately tracked here.
 	dedupWaiters := len(g.inflight)
 	inFlightKeys := make([]string, 0, len(g.inflight))
 	for k := range g.inflight {
 		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
 	}
-	peakConcurrent := g.peakConcurrent
 	g.mu.Unlock()
 
-	// Concurrent active = semaphore slots currently occupied.
-	concurrentMax := cap(g.semaphore)
-	concurrentActive := len(g.semaphore)
-
-	return domain.GatewayState{
+	return domain.GatewayStateSnapshot{
 		TokensAvailable:  int(tokens),
 		TokensMax:        tokenMax,
-		ConcurrentActive: concurrentActive,
-		ConcurrentMax:    concurrentMax,
+		ConcurrentActive: len(g.semaphore),
+		ConcurrentMax:    cap(g.semaphore),
 		BackoffRemaining: backoffRemaining,
 		DedupWaiters:     dedupWaiters,
 		InFlightKeys:     inFlightKeys,
-		PeakConcurrent:   peakConcurrent,
-		MinTokens:        minTokens,
 	}
 }
 
-// ResetWatermarks resets peak activity watermarks to their current values.
-// Called by the UI on each 1-second boundary so annotations reflect only
-// activity in the most recent window.
-func (g *Gateway) ResetWatermarks() {
+// captureSnapshotLocked reads gateway state when g.mu is already held.
+// Only acquires bucket.mu (safe — bucket.mu is never held when g.mu is acquired).
+// Reads semaphore length without a lock (channel len is always safe).
+// Reads inflight/backoff from g.mu-protected fields without re-acquiring.
+func (g *Gateway) captureSnapshotLocked() domain.GatewayStateSnapshot {
 	g.bucket.mu.Lock()
-	// Apply pending refill before reading the current level, exactly as Snapshot()
-	// does. Without this, minTokens could be set below the refilled TokensAvailable
-	// returned by the next Snapshot(), causing a false (min: N) annotation.
 	now := time.Now()
 	elapsed := now.Sub(g.bucket.lastFill).Seconds()
-	current := g.bucket.tokens + elapsed*g.bucket.rate
-	if current > g.bucket.max {
-		current = g.bucket.max
+	tokens := g.bucket.tokens + elapsed*g.bucket.rate
+	if tokens > g.bucket.max {
+		tokens = g.bucket.max
 	}
-	g.bucket.minTokens = current
+	tokenMax := int(g.bucket.max)
+	g.bucket.mu.Unlock()
+
+	// g.mu is already held by caller — read fields directly.
+	backoffRemaining := time.Until(g.backoffUntil).Seconds()
+	if backoffRemaining < 0 {
+		backoffRemaining = 0
+	}
+	dedupWaiters := len(g.inflight)
+	inFlightKeys := make([]string, 0, len(g.inflight))
+	for k := range g.inflight {
+		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
+	}
+
+	return domain.GatewayStateSnapshot{
+		TokensAvailable:  int(tokens),
+		TokensMax:        tokenMax,
+		ConcurrentActive: len(g.semaphore),
+		ConcurrentMax:    cap(g.semaphore),
+		BackoffRemaining: backoffRemaining,
+		DedupWaiters:     dedupWaiters,
+		InFlightKeys:     inFlightKeys,
+	}
+}
+
+// emitEvent records a gateway event if a recorder is attached.
+// Captures a state snapshot at the current moment.
+// The caller must NOT hold g.mu — use emitEventLocked() if g.mu is held.
+func (g *Gateway) emitEvent(kind domain.EventKind, reqID uint64, method, path string,
+	priority domain.RequestPriority, statusCode int, durationMs int64) {
+	g.mu.Lock()
+	rec := g.recorder
+	g.mu.Unlock()
+	if rec == nil {
+		return
+	}
+	rec.RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       kind,
+		RequestID:  reqID,
+		Method:     method,
+		Path:       path,
+		Priority:   priority,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+		Snapshot:   g.captureSnapshot(),
+	})
+}
+
+// emitEventLocked is like emitEvent but for use when g.mu is already held.
+// Reads recorder from the locked state and uses captureSnapshotLocked().
+func (g *Gateway) emitEventLocked(kind domain.EventKind, reqID uint64, method, path string,
+	priority domain.RequestPriority, statusCode int, durationMs int64) {
+	rec := g.recorder
+	if rec == nil {
+		return
+	}
+	rec.RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       kind,
+		RequestID:  reqID,
+		Method:     method,
+		Path:       path,
+		Priority:   priority,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+		Snapshot:   g.captureSnapshotLocked(),
+	})
+}
+
+// Snapshot returns a read-only snapshot of the gateway's current internal state.
+// Thread-safe — acquires the gateway mutex and the token bucket mutex internally.
+//
+// Deprecated: Snapshot() is a compatibility shim for panes that still use
+// domain.GatewayState. It will be removed when those panes migrate to the
+// GatewayEvent journal (Feature 68). Watermark fields (PeakConcurrent,
+// MinTokens) are always zero — they are replaced by the event journal.
+func (g *Gateway) Snapshot() domain.GatewayState {
+	snap := g.captureSnapshot()
+	return domain.GatewayState{
+		TokensAvailable:  snap.TokensAvailable,
+		TokensMax:        snap.TokensMax,
+		ConcurrentActive: snap.ConcurrentActive,
+		ConcurrentMax:    snap.ConcurrentMax,
+		BackoffRemaining: snap.BackoffRemaining,
+		DedupWaiters:     snap.DedupWaiters,
+		InFlightKeys:     snap.InFlightKeys,
+		// PeakConcurrent and MinTokens are retired — always zero.
+	}
+}
+
+// CheckAndEmitRefill checks if the token bucket level has changed since the
+// last emission and emits EventTokenRefilled if so. Called by the app on
+// viz.TickMsg (every 200ms). Does NOT mutate bucket.tokens — the lazy refill
+// stays as-is for the hot path.
+func (g *Gateway) CheckAndEmitRefill() {
+	g.bucket.mu.Lock()
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	tokens := g.bucket.tokens + elapsed*g.bucket.rate
+	if tokens > g.bucket.max {
+		tokens = g.bucket.max
+	}
+	currentLevel := int(tokens)
 	g.bucket.mu.Unlock()
 
 	g.mu.Lock()
-	// Reset peakConcurrent to current semaphore occupancy (usually 0 when idle).
-	g.peakConcurrent = len(g.semaphore)
+	changed := currentLevel != g.lastEmittedTokens
+	rec := g.recorder
+	g.lastEmittedTokens = currentLevel
 	g.mu.Unlock()
+
+	if changed && rec != nil {
+		rec.RecordEvent(domain.GatewayEvent{
+			Timestamp: time.Now(),
+			Kind:      domain.EventTokenRefilled,
+			Snapshot:  g.captureSnapshot(),
+		})
+	}
 }
+
+// CheckAndEmitBackoffExpiry checks if the 429 backoff period has just expired
+// and emits EventBackoffExpired on the active→cleared transition. Called by the
+// app on viz.TickMsg (every 200ms).
+func (g *Gateway) CheckAndEmitBackoffExpiry() {
+	g.mu.Lock()
+	nowActive := time.Now().Before(g.backoffUntil)
+	wasActive := g.lastBackoffActive
+	g.lastBackoffActive = nowActive
+	rec := g.recorder
+	g.mu.Unlock()
+
+	if wasActive && !nowActive && rec != nil {
+		rec.RecordEvent(domain.GatewayEvent{
+			Timestamp: time.Now(),
+			Kind:      domain.EventBackoffExpired,
+			Snapshot:  g.captureSnapshot(),
+		})
+	}
+}
+
+// ResetWatermarks is a no-op retained for interface compatibility with
+// domain.GatewaySnapshotter. Watermark tracking was retired in Feature 67;
+// this method will be removed when RequestFlowPane migrates in Feature 68.
+//
+// Deprecated: Replaced by event journal replay.
+func (g *Gateway) ResetWatermarks() {}
 
 // IsThrottled returns true when the gateway is in a 429 backoff period.
 func (g *Gateway) IsThrottled() bool {
@@ -297,20 +403,22 @@ func (g *Gateway) RetryAfterSecs() int {
 //     wait for it and return the cached result.
 //   - On 429 response, set backoffUntil and return RateLimitError.
 //
-// When a GatewayRecorder is attached, Do() records the gateway decision
-// (Allowed/Waited/Deduped/Blocked) for each request, including Background
-// requests rejected by backoff that never reach the HTTP layer.
-//
-// IMPORTANT: Callers must call MarkGatewayRecorded on the *http.Request passed
-// to fn when a GatewayRecorder is attached. This prevents LoggingTransport from
-// double-recording the request. See BaseClient.doJSON for the canonical pattern.
+// When a GatewayEventRecorder is attached, Do() emits fine-grained lifecycle events
+// at every decision point (entered, token consumed, semaphore acquired/released,
+// request allowed/blocked/waited, dedup joined/resolved, HTTP completed, backoff started).
 func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	fn func() (*http.Response, error)) (*http.Response, error) {
 
 	domainPriority := priorityToDomain(priority)
 
+	// Generate a unique request ID for correlating all events for this request.
+	reqID := g.nextRequestID.Add(1)
+
+	// Emit RequestEntered at the top of Do(), before any policy checks.
+	g.emitEvent(domain.EventRequestEntered, reqID, key.Method, key.Path, domainPriority, 0, 0)
+
 	// waited is set true when an Interactive request blocks on the backoff timer.
-	// This causes the final recording to use DecisionWaited instead of DecisionAllowed,
+	// This causes the final event to use EventRequestWaited instead of EventRequestAllowed,
 	// so the UI can distinguish "passed through immediately" from "had to wait at backoff".
 	var waited bool
 
@@ -322,13 +430,8 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		waited = time.Now().Before(g.backoffUntil)
 		g.mu.Unlock()
 		if err := g.waitForBackoff(ctx); err != nil {
-			g.mu.Lock()
-			rec := g.recorder
-			g.mu.Unlock()
-			if rec != nil {
-				rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
-					domainPriority, domain.DecisionWaited)
-			}
+			// Context cancelled while waiting on backoff — emit RequestWaited (was blocked).
+			g.emitEvent(domain.EventRequestWaited, reqID, key.Method, key.Path, domainPriority, 0, 0)
 			return nil, err
 		}
 	} else {
@@ -336,28 +439,23 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		g.mu.Lock()
 		throttled := time.Now().Before(g.backoffUntil)
 		retryAfter := g.retryAfter
-		rec := g.recorder
+		// Emit blocked event under g.mu using emitEventLocked — g.mu is held.
+		if throttled {
+			g.emitEventLocked(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
+		}
 		g.mu.Unlock()
 		if throttled {
-			// Record the block decision before returning — blocked Background
-			// requests never reach the HTTP layer so LoggingTransport misses them.
-			if rec != nil {
-				rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
-					domainPriority, domain.DecisionBlocked)
-			}
 			return nil, &RateLimitError{RetryAfter: retryAfter}
 		}
 		// Apply token-bucket throttle.
 		if err := g.bucket.wait(ctx); err != nil {
-			g.mu.Lock()
-			rec := g.recorder
-			g.mu.Unlock()
-			if rec != nil {
-				rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
-					domainPriority, domain.DecisionBlocked)
-			}
+			// Context cancelled while waiting for a token — emit blocked event.
+			// g.mu is NOT held here (bucket.wait releases bucket.mu before returning).
+			g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 			return nil, fmt.Errorf("rate limit wait: %w", err)
 		}
+		// Token successfully consumed — emit TokenConsumed event.
+		g.emitEvent(domain.EventTokenConsumed, reqID, key.Method, key.Path, domainPriority, 0, 0)
 	}
 
 	// Phase 2: in-flight deduplication for GET requests only.
@@ -368,28 +466,23 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	if key.Method == http.MethodGet {
 		g.mu.Lock()
 		if entry, ok := g.inflight[key]; ok {
-			// A matching GET is already in flight — wait without holding a slot.
-			rec := g.recorder
+			// A matching GET is already in flight — join as a dedup waiter.
 			g.mu.Unlock()
+			// Emit DedupJoined before waiting on entry.done.
+			g.emitEvent(domain.EventDedupJoined, reqID, key.Method, key.Path, domainPriority, 0, 0)
 			waitStart := time.Now()
 			select {
 			case <-entry.done:
 			case <-ctx.Done():
-				if rec != nil {
-					rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
-						domainPriority, domain.DecisionDeduped)
-				}
 				return nil, ctx.Err()
 			}
-			// Record the dedup decision — the waiter re-uses the primary's result.
-			if rec != nil {
-				statusCode := 0
-				if entry.resp != nil {
-					statusCode = entry.resp.StatusCode
-				}
-				rec.RecordGatewayCall(key.Method, key.Path, statusCode,
-					time.Since(waitStart).Milliseconds(), domainPriority, domain.DecisionDeduped)
+			// Emit DedupResolved — the waiter received the shared response.
+			statusCode := 0
+			if entry.resp != nil {
+				statusCode = entry.resp.StatusCode
 			}
+			g.emitEvent(domain.EventDedupResolved, reqID, key.Method, key.Path,
+				domainPriority, statusCode, time.Since(waitStart).Milliseconds())
 			if entry.err != nil {
 				return nil, entry.err
 			}
@@ -408,15 +501,13 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	// Phase 3: concurrency semaphore (only primary callers reach here).
 	select {
 	case g.semaphore <- struct{}{}:
-		// Track peak concurrent usage for watermark display. len(g.semaphore) is
-		// read under the gateway mutex to avoid a race with ResetWatermarks().
-		g.mu.Lock()
-		active := len(g.semaphore)
-		if active > g.peakConcurrent {
-			g.peakConcurrent = active
-		}
-		g.mu.Unlock()
-		defer func() { <-g.semaphore }()
+		// Emit SemaphoreAcquired after successfully acquiring the slot.
+		g.emitEvent(domain.EventSemaphoreAcquired, reqID, key.Method, key.Path, domainPriority, 0, 0)
+		// Emit SemaphoreReleased in the defer so it fires even on panic or early return.
+		defer func() {
+			<-g.semaphore
+			g.emitEvent(domain.EventSemaphoreReleased, reqID, key.Method, key.Path, domainPriority, 0, 0)
+		}()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -430,26 +521,22 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		if existing, ok := g.inflight[key]; ok {
 			// Lost the race — become a waiter (semaphore slot is held via defer).
 			// We release the slot in the defer above and join as a waiter result.
-			rec := g.recorder
 			g.mu.Unlock()
+			// Emit DedupJoined before waiting.
+			g.emitEvent(domain.EventDedupJoined, reqID, key.Method, key.Path, domainPriority, 0, 0)
 			waitStart := time.Now()
 			select {
 			case <-existing.done:
 			case <-ctx.Done():
-				if rec != nil {
-					rec.RecordGatewayCall(key.Method, key.Path, 0, 0,
-						domainPriority, domain.DecisionDeduped)
-				}
 				return nil, ctx.Err()
 			}
-			if rec != nil {
-				statusCode := 0
-				if existing.resp != nil {
-					statusCode = existing.resp.StatusCode
-				}
-				rec.RecordGatewayCall(key.Method, key.Path, statusCode,
-					time.Since(waitStart).Milliseconds(), domainPriority, domain.DecisionDeduped)
+			// Emit DedupResolved.
+			statusCode := 0
+			if existing.resp != nil {
+				statusCode = existing.resp.StatusCode
 			}
+			g.emitEvent(domain.EventDedupResolved, reqID, key.Method, key.Path,
+				domainPriority, statusCode, time.Since(waitStart).Milliseconds())
 			if existing.err != nil {
 				return nil, existing.err
 			}
@@ -473,8 +560,6 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	}
 
 	// Execute the actual HTTP call.
-	// Mark the context so LoggingTransport knows the gateway will record this call,
-	// preventing double-recording in the net log.
 	httpStart := time.Now()
 	resp, err := fn()
 
@@ -499,7 +584,7 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 				entry.body = body
 			}
 
-			// On 429: set the gateway backoff and create a RateLimitError.
+			// On 429: set the gateway backoff and emit BackoffStarted before creating the error.
 			// We do NOT suppress the error here — checkResponseStatus in
 			// doJSON/doNoContent would also create one, but dedup waiters
 			// bypass checkResponseStatus. By creating the error here, all
@@ -511,10 +596,21 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 				g.retryAfter = retryAfter
 				g.backoffUntil = time.Now().Add(time.Duration(retryAfter) * time.Second)
 				g.mu.Unlock()
+				// Emit BackoffStarted now that backoffUntil is set.
+				g.emitEvent(domain.EventBackoffStarted, reqID, key.Method, key.Path, domainPriority, resp.StatusCode, 0)
 				err = &RateLimitError{RetryAfter: retryAfter}
 			}
 		}
 	}
+
+	// Emit HttpCompleted with status code and latency.
+	httpDuration := time.Since(httpStart).Milliseconds()
+	httpStatus := 0
+	if resp != nil {
+		httpStatus = resp.StatusCode
+	}
+	g.emitEvent(domain.EventHttpCompleted, reqID, key.Method, key.Path,
+		domainPriority, httpStatus, httpDuration)
 
 	if entry != nil {
 		entry.resp = resp
@@ -522,23 +618,13 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		// entry.done is closed by the deferred cleanup above.
 	}
 
-	// Record the final decision for the primary caller.
-	// DecisionWaited is used when an Interactive request had to block on the backoff
-	// timer before proceeding; DecisionAllowed covers all other primary-caller paths.
-	finalDecision := domain.DecisionAllowed
+	// Emit the final decision event for the primary caller.
+	// EventRequestWaited is used when an Interactive request had to block on the
+	// backoff timer before proceeding; EventRequestAllowed covers all other primary paths.
 	if waited {
-		finalDecision = domain.DecisionWaited
-	}
-	g.mu.Lock()
-	rec := g.recorder
-	g.mu.Unlock()
-	if rec != nil {
-		statusCode := 0
-		if resp != nil {
-			statusCode = resp.StatusCode
-		}
-		rec.RecordGatewayCall(key.Method, key.Path, statusCode,
-			time.Since(httpStart).Milliseconds(), domainPriority, finalDecision)
+		g.emitEvent(domain.EventRequestWaited, reqID, key.Method, key.Path, domainPriority, httpStatus, httpDuration)
+	} else {
+		g.emitEvent(domain.EventRequestAllowed, reqID, key.Method, key.Path, domainPriority, httpStatus, httpDuration)
 	}
 
 	if err != nil {

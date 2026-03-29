@@ -85,26 +85,3 @@ func TestLoggingTransport_RecordsOnError(t *testing.T) {
 	assert.Equal(t, 0, rec.calls[0].StatusCode, "status should be 0 on transport error")
 }
 
-func TestLoggingTransport_SkipsRecordingWhenGatewayRecorded(t *testing.T) {
-	// When the gateway has already recorded a request (gatewayRecordedKey set),
-	// LoggingTransport must NOT call RecordNetCall to prevent double-recording.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	rec := &mockRecorder{}
-	transport := api.NewLoggingTransport(http.DefaultTransport, rec)
-	client := &http.Client{Transport: transport}
-
-	// Inject the gateway-recorded marker into the request context.
-	req, err := http.NewRequest("GET", srv.URL+"/v1/me/player", http.NoBody)
-	require.NoError(t, err)
-	req = api.MarkGatewayRecorded(req)
-
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	_ = resp.Body.Close()
-
-	assert.Empty(t, rec.calls, "LoggingTransport must not record when gateway-recorded marker is set")
-}

@@ -901,8 +901,8 @@ func (s *Store) RecordNetCall(method, path string, statusCode int, durationMs in
 // RecordGatewayCall records a gateway-level API call with per-request decision metadata.
 // Unlike RecordNetCall (used by LoggingTransport), this records gateway decisions
 // including blocked Background requests that never reach the HTTP layer.
-func (s *Store) RecordGatewayCall(method, path string, statusCode int, durationMs int64,
-	priority domain.RequestPriority, decision domain.GatewayDecision) {
+func (s *Store) RecordGatewayCall(method, path string, statusCode int, durationMs int64, //nolint:staticcheck // Deprecated: retained for Feature 68 migration.
+	priority domain.RequestPriority, decision domain.GatewayDecision) { //nolint:staticcheck
 	s.netLog.Add(NetLogEntry{
 		Timestamp:       time.Now(),
 		Method:          method,

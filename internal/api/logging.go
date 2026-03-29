@@ -28,19 +28,10 @@ func NewLoggingTransport(inner http.RoundTripper, recorder NetLogRecorder) *Logg
 
 // RoundTrip implements http.RoundTripper. It records timing and status
 // for every HTTP request that passes through the transport.
-// When the request context carries the gateway-recorded marker (set by
-// Gateway.Do via MarkGatewayRecorded), recording is skipped to prevent
-// double-counting: the gateway already recorded this call with richer
-// decision metadata via RecordGatewayCall.
 func (lt *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	resp, err := lt.inner.RoundTrip(req)
 	durationMs := time.Since(start).Milliseconds()
-
-	// Skip if the gateway has already recorded this request.
-	if IsGatewayRecorded(req) {
-		return resp, err
-	}
 
 	statusCode := 0
 	if resp != nil {

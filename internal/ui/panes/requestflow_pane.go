@@ -47,7 +47,7 @@ type RequestCompletedMsg struct {
 	Priority domain.RequestPriority
 	// GatewayDecision is the gateway routing outcome (allowed/waited/deduped/blocked).
 	// Defaults to DecisionAllowed (zero value) for backward compatibility.
-	GatewayDecision domain.GatewayDecision
+	GatewayDecision domain.GatewayDecision //nolint:staticcheck // Deprecated: retained until Feature 68.
 	// CompletedAt is when the request completed. Zero value means time.Now().
 	CompletedAt time.Time
 }
@@ -58,7 +58,7 @@ type reqDisplay struct {
 	statusCode  int
 	latencyMs   int
 	priority    domain.RequestPriority
-	decision    domain.GatewayDecision
+	decision    domain.GatewayDecision //nolint:staticcheck // Deprecated: retained until Feature 68.
 	completedAt time.Time
 }
 
@@ -72,7 +72,7 @@ type reqDisplay struct {
 // annotations reflect only the most recent activity window.
 type RequestFlowPane struct {
 	theme   theme.Theme
-	gateway domain.GatewaySnapshotter
+	gateway domain.GatewaySnapshotter //nolint:staticcheck // Deprecated: retained until Feature 68.
 	store   *state.Store
 	focused bool
 	width   int
@@ -85,7 +85,7 @@ type RequestFlowPane struct {
 	recentReqs []reqDisplay
 
 	// lastSnapshot is the most recent gateway state, refreshed on viz.TickMsg (200ms).
-	lastSnapshot domain.GatewayState
+	lastSnapshot domain.GatewayState //nolint:staticcheck // Deprecated: retained until Feature 68.
 
 	// pollingState is the latest app-level polling snapshot.
 	pollingState PollingSnapshotMsg
@@ -95,7 +95,7 @@ type RequestFlowPane struct {
 var _ layout.Pane = &RequestFlowPane{}
 
 // NewRequestFlowPane creates a RequestFlowPane with the given gateway, store, and theme.
-func NewRequestFlowPane(gw domain.GatewaySnapshotter, s *state.Store, t theme.Theme) *RequestFlowPane {
+func NewRequestFlowPane(gw domain.GatewaySnapshotter, s *state.Store, t theme.Theme) *RequestFlowPane { //nolint:staticcheck // Deprecated: retained until Feature 68.
 	p := &RequestFlowPane{
 		theme:   t,
 		gateway: gw,
@@ -157,7 +157,7 @@ func (p *RequestFlowPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Capture the snapshot first (preserves peaks from the last window),
 			// then reset so the next window starts fresh.
 			p.lastSnapshot = p.gateway.Snapshot()
-			p.gateway.ResetWatermarks()
+			p.gateway.ResetWatermarks() //nolint:staticcheck // No-op shim retained until Feature 68.
 		}
 		p.syncFromNetLog()
 		return p, nil
@@ -394,14 +394,14 @@ func (p *RequestFlowPane) renderArrow(r reqDisplay, colWidth int) string {
 	var arrow string
 	var style lipgloss.Style
 
-	switch r.decision {
-	case domain.DecisionWaited:
+	switch r.decision { //nolint:staticcheck // Deprecated: retained until Feature 68.
+	case domain.DecisionWaited: //nolint:staticcheck
 		arrow = "── wait ──"
 		style = lipgloss.NewStyle().Foreground(p.theme.Warning())
-	case domain.DecisionDeduped:
+	case domain.DecisionDeduped: //nolint:staticcheck
 		arrow = "──→ dedup"
 		style = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	case domain.DecisionBlocked:
+	case domain.DecisionBlocked: //nolint:staticcheck
 		arrow = "── ╳ ──"
 		style = lipgloss.NewStyle().Foreground(p.theme.Error())
 	default:

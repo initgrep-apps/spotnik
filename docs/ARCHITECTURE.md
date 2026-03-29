@@ -614,57 +614,38 @@ POLLING  tick: 1000ms  state: active    STORE  fetching: []
 - **Flat fallback** (`viewFlat()`): original column headers + request rows + gateway state block; used when width < 60
 - Status strip always spans full pane width below the boxes
 
-#### Gateway Snapshot Refresh Rate (Feature 64)
+#### Gateway Event Emission (Feature 67)
 
-`gateway.Snapshot()` is called on **both** `viz.TickMsg` (every 200ms) and `TickMsg` (every 1s):
+`Gateway.Do()` emits fine-grained lifecycle events at every decision point via `emitEvent()`/`emitEventLocked()`:
 
-- **200ms polling** — catches longer-lived events (backoff timers, slow requests, dedup keys) that would be missed at 1s resolution
-- `Snapshot()` is cheap (two lock reads, one struct copy) — 5× more frequent calls add negligible overhead
-
-#### Gateway-Internal Watermarks (Feature 65)
-
-Watermarks track peak activity within a 1-second window and are tracked **inside the Gateway itself**, not by UI-side sampling:
-
-- **`tokenBucket.minTokens`** — updated under `tb.mu` at the exact moment of `tb.tokens--` in `wait()`. This captures the minimum before any refill can hide the dip.
-- **`Gateway.peakConcurrent`** — updated under `g.mu` immediately after semaphore acquisition in `Do()`.
-- Both fields are exported via `Snapshot()` as `GatewayState.MinTokens` and `GatewayState.PeakConcurrent`.
-- **`ResetWatermarks()`** on `GatewaySnapshotter` resets both to current values (not zero). Called by `RequestFlowPane.Update(TickMsg)` after capturing the snapshot, so the prior window's peaks are returned by the last `viz.TickMsg` snapshot before reset.
-- **Annotations** appear in `gatewayStateLines()` only when activity was detected:
-  - Token line: `(min: N)` suffix when `snap.MinTokens < snap.TokensAvailable`
-  - Semaphore line: `(peak: N)` suffix when `snap.PeakConcurrent > snap.ConcurrentActive`
-
-**Why not UI-side sampling?** `Snapshot()` applies a pending token refill before reading, so a token consumed 50ms ago is already recovered by the time the UI samples it. The Gateway-internal approach captures the dip atomically at the moment of consumption.
-
-#### Gateway Decision Recording
-
-Each request through the gateway is classified with a `domain.GatewayDecision`:
-
-| Decision | Meaning |
+| Event | When emitted |
 |---|---|
-| `DecisionAllowed` | Request proceeded normally through the gateway |
-| `DecisionWaited` | Request was deduped — caller waited for an in-flight sibling to complete |
-| `DecisionDeduped` | Joined an existing in-flight GET request; the caller shares the primary's cached response instead of making a new HTTP call |
-| `DecisionBlocked` | Background request was rejected during active rate-limit backoff |
+| `EventRequestEntered` | Entry to `Do()`, before any policy checks |
+| `EventTokenConsumed` | After `bucket.wait()` returns for Background requests |
+| `EventSemaphoreAcquired` | After acquiring a concurrency slot |
+| `EventSemaphoreReleased` | Deferred on slot release |
+| `EventRequestBlocked` | Background request rejected by backoff or bucket cancellation |
+| `EventRequestWaited` | Interactive request waited on backoff timer |
+| `EventDedupJoined` | GET waiter joins an in-flight dedup entry |
+| `EventDedupResolved` | Dedup waiter received the shared response |
+| `EventHttpCompleted` | After `fn()` returns, with status code and latency |
+| `EventBackoffStarted` | After 429 response sets `backoffUntil` |
+| `EventRequestAllowed` | Primary caller succeeded (no backoff wait) |
 
-The `api.GatewayRecorder` interface (implemented by `state.Store`) bridges the `api/` → `state/` boundary without a direct import:
+Lock ordering: `emitEvent()` acquires `g.mu` then `bucket.mu`. `emitEventLocked()` assumes `g.mu` is already held and only acquires `bucket.mu`. `bucket.mu` is never held when calling `emitEvent()`.
 
-```go
-type GatewayRecorder interface {
-    RecordGatewayCall(method, path string, statusCode int, durationMs int64,
-        priority domain.RequestPriority, decision domain.GatewayDecision)
-}
-```
+Periodic events are emitted on `viz.TickMsg` (every 200ms) from `app.go`:
 
-Wired in `initAPIClients()` via `gateway.SetRecorder(store)`. Recorded entries are stored in the NetLog ring buffer alongside network-level entries.
+- **`CheckAndEmitRefill()`** — emits `EventTokenRefilled` when the bucket level changes from the last emission (lazy: does not mutate `bucket.tokens`)
+- **`CheckAndEmitBackoffExpiry()`** — emits `EventBackoffExpired` on the active→cleared transition only
 
-#### Double-Recording Prevention
+Each request gets a unique `RequestID` from `nextRequestID atomic.Uint64`. All events for the same request share this ID. Internal events (TokenRefilled, BackoffExpired) use `RequestID = 0`.
 
-Both `Gateway.Do()` (via `GatewayRecorder`) and `LoggingTransport` (via `NetLogRecorder`) observe HTTP requests. To prevent double-counting gateway-routed requests:
+#### Deprecated: Gateway Snapshot Polling (Feature 64–65)
 
-- `api.MarkGatewayRecorded(req)` stamps an `http.Request` with a context key before it is dispatched through the gateway
-- `api.IsGatewayRecorded(req)` returns true if the request was stamped
-- `LoggingTransport.RoundTrip()` skips `RecordNetCall()` when `IsGatewayRecorded(req)` is true
-- Direct API calls not routed through the gateway are still recorded by `LoggingTransport`
+`Snapshot()` is retained as a **deprecated compatibility shim** for `RequestFlowPane` until Feature 68 migrates it to the event journal. Watermark fields (`PeakConcurrent`, `MinTokens`) are always zero — they are replaced by event journal replay. `ResetWatermarks()` is a no-op stub retained for `GatewaySnapshotter` interface compatibility.
+
+`GatewayState`, `GatewaySnapshotter`, and `GatewayDecision` in `domain/gateway.go` are deprecated and will be removed in Feature 68.
 
 ### Network Logging
 

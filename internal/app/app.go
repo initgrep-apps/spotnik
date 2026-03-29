@@ -910,6 +910,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	case viz.TickMsg:
+		// Emit periodic gateway events (token refills, backoff expiry).
+		// These run on every 200ms viz tick so the event journal stays current
+		// without requiring the gateway hot-path to perform periodic work.
+		a.gateway.CheckAndEmitRefill()
+		a.gateway.CheckAndEmitBackoffExpiry()
 		// Forward viz.TickMsg to NowPlaying pane and Page B RequestFlowPane.
 		// Both panes share the 200ms animation tick for visual consistency.
 		var visCmds []tea.Cmd
