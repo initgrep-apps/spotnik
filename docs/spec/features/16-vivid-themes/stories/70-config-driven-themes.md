@@ -1,7 +1,7 @@
 ---
 title: "Config-Driven Theme Loading"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background

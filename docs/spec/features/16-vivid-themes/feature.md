@@ -1,6 +1,6 @@
 ---
 title: "Vivid Theme System"
-status: open
+status: in-progress
 ---
 
 ## Description
