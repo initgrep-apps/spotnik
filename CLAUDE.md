@@ -63,11 +63,14 @@ spotnik/
 ├── cmd/root.go          ← CLI flags, auth check, app launch
 ├── internal/
 │   ├── app/             ← root Bubble Tea model
-│   ├── api/             ← Spotify HTTP client + models
+│   ├── api/             ← Spotify HTTP client, gateway, rate limiting
+│   ├── domain/          ← shared types bridging api/ and ui/ (PlaybackState, Track, etc.)
 │   ├── ui/
-│   │   ├── panes/       ← 10 panes: nowplaying, queue, playlists, albums, likedsongs,
-│   │   │                   toptracks, topartists, recentlyplayed, requestflow, networklog
-│   │   ├── components/  ← gradient bars, visualizer, filter, table, controls, statusbar
+│   │   ├── panes/       ← nowplaying, queue, playlists, albums, likedsongs, toptracks,
+│   │   │                   topartists, recentlyplayed, search, devices, requestflow,
+│   │   │                   networklog
+│   │   ├── components/  ← gradient, visualizer (viz/), filter, table, controls,
+│   │   │                   notifications, infobox, timeutil
 │   │   ├── layout/      ← LayoutManager, preset system, focus rotation, PaneAt hit-test
 │   │   └── theme/       ← Theme interface + 5 implementations
 │   ├── state/           ← central Store (single source of truth)
@@ -76,6 +79,28 @@ spotnik/
 ├── docs/
 └── testdata/fixtures/   ← JSON fixtures for API mock tests
 ```
+
+---
+
+## Spec Structure
+
+Feature and issue specs live in `docs/spec/`:
+
+```
+docs/spec/
+├── 00-overview.md              ← index of all features with status and story counts
+├── issues.md                   ← quick dump for unresolved issues from PR reviews
+└── features/
+    └── NN-name/                ← one directory per feature
+        ├── feature.md          ← high-level: title, status, description, acceptance criteria
+        └── stories/
+            └── NN-story-name.md  ← individual story with background, design, tasks, tests
+```
+
+- **feature.md** has YAML frontmatter: `title`, `status` (open/in-progress/done/closed)
+- **Story files** have YAML frontmatter: `title`, `feature` (parent directory name), `status`
+- **issues.md** collects untriaged issues — triage into feature stories when ready to fix
+- **00-overview.md** is the master index — update it when adding or completing features
 
 ---
 
@@ -168,13 +193,13 @@ Follow this sequence exactly for every feature — no shortcuts.
 4. make ci   ← must pass fully (lint + tests + 80% coverage)
 5. git push origin feat/NN-feature-name
 6. Open a PR: title = "feat(name): brief description"  body = tasks completed + test summary
-7. STOP — do not merge. Wait for the owner to review and merge.
+7. STOP — do not merge unless you are the orchestrator agent running `/orchestrate`.
 8. After merge confirmed: git checkout main && git pull origin main
 ```
 
 **Hard rules:**
 - Never work directly on `main`
-- Never merge your own PR — the owner does this
+- Never merge your own PR — unless you are the orchestrator after external review passes
 - A failing `make ci` blocks the PR step — fix before pushing
 - One feature per branch — never mix features in a branch
 
@@ -184,7 +209,7 @@ Follow this sequence exactly for every feature — no shortcuts.
 
 1. Store credentials or secrets in tracked files
 2. Bypass the LayoutManager — all pane geometry flows through it
-3. Add a feature not in `docs/features/` without creating a spec first
+3. Add a feature not in `docs/spec/features/` without creating a spec first
 4. Call API synchronously from `View()` or `Update()`
 5. Skip writing tests for new `api/`, `state/`, `config/` code
 6. Change keybindings without updating `docs/DESIGN.md`
@@ -194,16 +219,17 @@ Follow this sequence exactly for every feature — no shortcuts.
 10. Hardcode hex colour values in component code
 11. Add a theme without implementing every method of the `Theme` interface
 12. Work directly on `main` — always use a feature branch
-13. Merge a PR — that is the owner's action only
+13. Merge a PR — unless you are the orchestrator agent after external review passes
 14. Render inline error boxes in pane `View()` methods — all API errors go through toast notifications via `a.alerts.NewAlertCmd`
 
 ---
 
 ## Feature Order
 
-See `docs/features/00-overview.md` for the full map. Short version:
-`01-theme-system` → `02-auth` → `03-playback` → `04-library` → `05-search`
-→ `06-queue` → `07-devices` → `08-stats` → `09-playlists`
+See `docs/spec/00-overview.md` for the full map. Short version:
+`01-theme` → `02-auth` → `03-playback` → `04-library` → `05-search`
+→ `06-queue` → `07-devices` → `08-stats` → `09-playlists` → `10-error-resilience`
+→ `11-api-gateway` → `12-layout` → `13-nowplaying` → `14-nerd-status` → `15-cicd`
 
 Do not start a feature until the previous one has passing tests and is committed.
 
@@ -220,6 +246,3 @@ make test-coverage  # coverage report (min 80%)
 make ci        # full pre-commit check
 ```
 
----
-
-*Owner: irshad.mike@gmail.com*
