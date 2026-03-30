@@ -1,6 +1,6 @@
-// Package theme defines the Theme interface and the config-driven loader.
-// This file contains ConfigTheme — the sole concrete implementation used for
-// all built-in and user-provided themes loaded from TOML files.
+// This file contains ConfigTheme — the sole concrete implementation of Theme
+// used for all built-in and user-provided themes loaded from TOML files.
+// It also holds the embed directive, lazy registry, and export helpers.
 package theme
 
 import (

@@ -50,7 +50,7 @@ func TestDefaultThemeID_IsBlack(t *testing.T) {
 // ---- Task 0b.2 tests: all five themes ----
 
 // allMethodsReturnNonEmpty verifies that every method on a Theme returns a non-empty value.
-// This covers all 46 methods: 26 original + 16 new tokens (Feature 40) + 4 column tokens (Feature 70).
+// This covers all 43 methods: 23 original + 16 new tokens (Feature 40) + 4 column tokens (Feature 70).
 func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	t.Helper()
 	// Original 26 tokens

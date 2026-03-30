@@ -82,7 +82,7 @@ type Theme interface {
 	ColumnTertiary() lipgloss.Color  // Metadata: duration, year, played time
 
 	// Metadata
-	ID() string   // Config key: "black", "monokai", "catppuccin", "nord", "light"
+	ID() string   // Config key matching the TOML id field (e.g. "black", "dracula")
 	Name() string // Display name: "True Black", "Monokai", etc.
 }
 
