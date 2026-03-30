@@ -1,12 +1,19 @@
-// Package theme defines the Theme interface and the registry/loader used
+// Package theme defines the Theme interface and the config-driven loader used
 // to resolve a config theme ID to a concrete theme implementation.
 //
 // Components call Theme methods to obtain colours — they never use raw hex
-// strings. The active theme is loaded once at startup and injected into
-// every pane constructor.
+// strings. Themes are loaded from embedded TOML files (built-in) and from
+// ~/.config/spotnik/themes/ (user overrides). The active theme is loaded once
+// at startup and injected into every pane constructor.
 package theme
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+	"os"
+	"sort"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Theme defines all colour tokens used across the UI.
 // Components call these methods — they never use raw hex strings.
@@ -77,18 +84,8 @@ type Theme interface {
 	ColumnTertiary() lipgloss.Color  // Metadata: duration, year, played time
 
 	// Metadata
-	ID() string   // Config key: "black", "monokai", "catppuccin", "nord", "light"
+	ID() string   // Config key matching the TOML id field (e.g. "black", "dracula")
 	Name() string // Display name: "True Black", "Monokai", etc.
-}
-
-// registry maps config IDs to theme constructors.
-// Add new themes here — nowhere else needs to change.
-var registry = map[string]func() Theme{
-	"black":      func() Theme { return &BlackTheme{} },
-	"monokai":    func() Theme { return &MonokaiTheme{} },
-	"catppuccin": func() Theme { return &CatppuccinTheme{} },
-	"nord":       func() Theme { return &NordTheme{} },
-	"light":      func() Theme { return &LightTheme{} },
 }
 
 // DefaultThemeID is the fallback theme ID used when an unknown ID is provided.
@@ -97,16 +94,30 @@ const DefaultThemeID = "black"
 
 // Load returns the theme for the given config ID.
 // Falls back to DefaultThemeID if the ID is unknown — never panics.
+// Themes are loaded lazily from embedded TOML files on first call.
 func Load(id string) Theme {
-	if constructor, ok := registry[id]; ok {
-		return constructor()
+	ensureLoaded()
+	if t, ok := loaded[id]; ok {
+		return t
 	}
 	// NOTE: unknown theme ID — fall back to default rather than panic.
-	return registry[DefaultThemeID]()
+	if t, ok := loaded[DefaultThemeID]; ok {
+		return t
+	}
+	// Should never reach here if built-in themes are embedded correctly.
+	fmt.Fprintf(os.Stderr, "spotnik: CRITICAL — no themes loaded, using empty fallback\n")
+	return &ConfigTheme{id: DefaultThemeID, name: "True Black"}
 }
 
-// Available returns all registered theme IDs in a stable order.
-// The order is intentional: default first, then alphabetical-ish by familiarity.
+// Available returns all registered theme IDs in sorted order.
+// The list grows automatically as new TOML files are embedded or dropped
+// into the user theme directory.
 func Available() []string {
-	return []string{"black", "monokai", "catppuccin", "nord", "light"}
+	ensureLoaded()
+	ids := make([]string, 0, len(loaded))
+	for id := range loaded {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
