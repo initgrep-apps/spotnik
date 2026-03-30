@@ -13,7 +13,7 @@ import (
 
 // testTheme returns the black theme which is the Spotnik default.
 func testTheme() theme.Theme {
-	return &theme.BlackTheme{}
+	return theme.Load("black")
 }
 
 // makeColumns returns a typical 4-column track list definition.
