@@ -69,3 +69,9 @@ func (t *NordTheme) PaneBorderTopTracks() lipgloss.Color      { return "#b48ead"
 func (t *NordTheme) PaneBorderTopArtists() lipgloss.Color     { return "#bf616a" }
 func (t *NordTheme) PaneBorderRequestFlow() lipgloss.Color    { return "#d08770" }
 func (t *NordTheme) PaneBorderNetworkLog() lipgloss.Color     { return "#4c566a" }
+
+// Column colors
+func (t *NordTheme) ColumnIndex() lipgloss.Color     { return "#4c566a" }
+func (t *NordTheme) ColumnPrimary() lipgloss.Color   { return "#a3be8c" }
+func (t *NordTheme) ColumnSecondary() lipgloss.Color { return "#88c0d0" }
+func (t *NordTheme) ColumnTertiary() lipgloss.Color  { return "#d08770" }

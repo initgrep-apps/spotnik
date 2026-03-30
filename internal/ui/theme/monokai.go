@@ -69,3 +69,9 @@ func (t *MonokaiTheme) PaneBorderTopTracks() lipgloss.Color      { return "#ae81
 func (t *MonokaiTheme) PaneBorderTopArtists() lipgloss.Color     { return "#f92672" }
 func (t *MonokaiTheme) PaneBorderRequestFlow() lipgloss.Color    { return "#fd971f" }
 func (t *MonokaiTheme) PaneBorderNetworkLog() lipgloss.Color     { return "#75715e" }
+
+// Column colors
+func (t *MonokaiTheme) ColumnIndex() lipgloss.Color     { return "#75715e" }
+func (t *MonokaiTheme) ColumnPrimary() lipgloss.Color   { return "#a6e22e" }
+func (t *MonokaiTheme) ColumnSecondary() lipgloss.Color { return "#66d9ef" }
+func (t *MonokaiTheme) ColumnTertiary() lipgloss.Color  { return "#fd971f" }

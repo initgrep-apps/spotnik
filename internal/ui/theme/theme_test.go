@@ -47,7 +47,7 @@ func TestDefaultThemeID_IsBlack(t *testing.T) {
 // ---- Task 0b.2 tests: all five themes ----
 
 // allMethodsReturnNonEmpty verifies that every method on a Theme returns a non-empty value.
-// This covers all 42 methods: 26 original + 16 new tokens added in Feature 40.
+// This covers all 46 methods: 26 original + 16 new tokens (Feature 40) + 4 column tokens (Feature 70).
 func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	t.Helper()
 	// Original 26 tokens
@@ -91,6 +91,11 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.PaneBorderTopArtists()), "PaneBorderTopArtists()")
 	assert.NotEmpty(t, string(th.PaneBorderRequestFlow()), "PaneBorderRequestFlow()")
 	assert.NotEmpty(t, string(th.PaneBorderNetworkLog()), "PaneBorderNetworkLog()")
+	// New 4 column tokens (Feature 70)
+	assert.NotEmpty(t, string(th.ColumnIndex()), "ColumnIndex()")
+	assert.NotEmpty(t, string(th.ColumnPrimary()), "ColumnPrimary()")
+	assert.NotEmpty(t, string(th.ColumnSecondary()), "ColumnSecondary()")
+	assert.NotEmpty(t, string(th.ColumnTertiary()), "ColumnTertiary()")
 }
 
 func TestAllThemes_ImplementInterface(t *testing.T) {

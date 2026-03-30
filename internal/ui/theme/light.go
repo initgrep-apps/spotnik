@@ -69,3 +69,9 @@ func (t *LightTheme) PaneBorderTopTracks() lipgloss.Color      { return "#8839ef
 func (t *LightTheme) PaneBorderTopArtists() lipgloss.Color     { return "#d20f39" }
 func (t *LightTheme) PaneBorderRequestFlow() lipgloss.Color    { return "#fe640b" }
 func (t *LightTheme) PaneBorderNetworkLog() lipgloss.Color     { return "#9ca0b0" }
+
+// Column colors
+func (t *LightTheme) ColumnIndex() lipgloss.Color     { return "#9ca0b0" }
+func (t *LightTheme) ColumnPrimary() lipgloss.Color   { return "#40a02b" }
+func (t *LightTheme) ColumnSecondary() lipgloss.Color { return "#1e66f5" }
+func (t *LightTheme) ColumnTertiary() lipgloss.Color  { return "#fe640b" }

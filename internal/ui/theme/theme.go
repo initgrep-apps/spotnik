@@ -70,6 +70,12 @@ type Theme interface {
 	PaneBorderRequestFlow() lipgloss.Color    // Orange/amber accent
 	PaneBorderNetworkLog() lipgloss.Color     // Warm grey accent
 
+	// Column colors — distinct foreground for each table column semantic (Feature 70)
+	ColumnIndex() lipgloss.Color     // # column (muted but colorful)
+	ColumnPrimary() lipgloss.Color   // Main data: track name, playlist name
+	ColumnSecondary() lipgloss.Color // Supporting: artist, genre
+	ColumnTertiary() lipgloss.Color  // Metadata: duration, year, played time
+
 	// Metadata
 	ID() string   // Config key: "black", "monokai", "catppuccin", "nord", "light"
 	Name() string // Display name: "True Black", "Monokai", etc.
