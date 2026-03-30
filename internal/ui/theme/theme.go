@@ -8,6 +8,8 @@
 package theme
 
 import (
+	"fmt"
+	"os"
 	"sort"
 
 	"github.com/charmbracelet/lipgloss"
@@ -103,6 +105,7 @@ func Load(id string) Theme {
 		return t
 	}
 	// Should never reach here if built-in themes are embedded correctly.
+	fmt.Fprintf(os.Stderr, "spotnik: CRITICAL — no themes loaded, using empty fallback\n")
 	return &ConfigTheme{id: DefaultThemeID, name: "True Black"}
 }
 

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -84,8 +85,9 @@ type ConfigTheme struct {
 }
 
 // ParseTheme decodes TOML bytes into a ConfigTheme.
-// Returns an error if the TOML is malformed or if the id field is missing.
-// This is exported so tests and tooling can parse TOML snippets directly.
+// Returns an error if the TOML is malformed, the id field is missing, or any
+// color field is empty. This is exported so tests and tooling can parse TOML
+// snippets directly.
 func ParseTheme(data []byte) (*ConfigTheme, error) {
 	var f themeFile
 	if err := toml.Unmarshal(data, &f); err != nil {
@@ -94,7 +96,32 @@ func ParseTheme(data []byte) (*ConfigTheme, error) {
 	if f.ID == "" {
 		return nil, fmt.Errorf("theme missing id field")
 	}
+	// Validate that all color fields are non-empty.
+	if err := validateColorFields(f.ID, f.Colors, f.PaneBorders); err != nil {
+		return nil, err
+	}
 	return &ConfigTheme{id: f.ID, name: f.Name, c: f.Colors, pb: f.PaneBorders}, nil
+}
+
+// validateColorFields checks that every string field in themeColors and
+// paneBorderColors is non-empty. Returns an error identifying the first
+// missing field found.
+func validateColorFields(themeID string, c themeColors, pb paneBorderColors) error {
+	cv := reflect.ValueOf(c)
+	ct := cv.Type()
+	for i := 0; i < cv.NumField(); i++ {
+		if cv.Field(i).String() == "" {
+			return fmt.Errorf("theme %q: missing or empty color field %q", themeID, ct.Field(i).Tag.Get("toml"))
+		}
+	}
+	pv := reflect.ValueOf(pb)
+	pt := pv.Type()
+	for i := 0; i < pv.NumField(); i++ {
+		if pv.Field(i).String() == "" {
+			return fmt.Errorf("theme %q: missing or empty color field %q", themeID, pt.Field(i).Tag.Get("toml"))
+		}
+	}
+	return nil
 }
 
 // Metadata
@@ -275,9 +302,11 @@ func ensureLoaded() {
 	loadOnce.Do(func() {
 		var err error
 		loaded, err = loadAll()
-		if err != nil || len(loaded) == 0 {
-			// NOTE: should never happen when built-in themes are embedded correctly,
-			// but guard to avoid a nil map on method calls.
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "spotnik: failed to load themes: %v\n", err)
+			loaded = make(map[string]*ConfigTheme)
+		} else if len(loaded) == 0 {
+			fmt.Fprintf(os.Stderr, "spotnik: failed to load themes: no themes found\n")
 			loaded = make(map[string]*ConfigTheme)
 		}
 	})
@@ -301,30 +330,36 @@ func LoadAllWithUserDir(userDir string) (map[string]*ConfigTheme, error) {
 	for _, e := range entries {
 		data, err := builtinThemes.ReadFile("themes/" + e.Name())
 		if err != nil {
-			continue // skip unreadable entries (shouldn't happen with embed)
+			fmt.Fprintf(os.Stderr, "spotnik: skipping built-in theme %s: %v\n", e.Name(), err)
+			continue
 		}
 		t, err := ParseTheme(data)
 		if err != nil {
-			continue // skip malformed built-in themes
+			fmt.Fprintf(os.Stderr, "spotnik: skipping built-in theme %s: %v\n", e.Name(), err)
+			continue
 		}
 		themes[t.id] = t
 	}
 
 	// 2. Load user themes — override built-in themes by ID.
-	if entries, err := os.ReadDir(userDir); err == nil {
-		for _, e := range entries {
-			if !strings.HasSuffix(e.Name(), ".toml") {
-				continue
+	if userDir != "" {
+		if entries, err := os.ReadDir(userDir); err == nil {
+			for _, e := range entries {
+				if !strings.HasSuffix(e.Name(), ".toml") {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join(userDir, e.Name()))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "spotnik: skipping user theme %s: %v\n", e.Name(), err)
+					continue
+				}
+				t, err := ParseTheme(data)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "spotnik: skipping user theme %s: %v\n", e.Name(), err)
+					continue
+				}
+				themes[t.id] = t // override built-in if same ID
 			}
-			data, err := os.ReadFile(filepath.Join(userDir, e.Name()))
-			if err != nil {
-				continue
-			}
-			t, err := ParseTheme(data)
-			if err != nil {
-				continue // skip malformed user themes without aborting
-			}
-			themes[t.id] = t // override built-in if same ID
 		}
 	}
 
@@ -332,8 +367,13 @@ func LoadAllWithUserDir(userDir string) (map[string]*ConfigTheme, error) {
 }
 
 // userThemeDir returns the user theme directory path (~/.config/spotnik/themes/).
+// Returns an empty string if the user config directory cannot be determined,
+// which causes the caller to skip user theme loading.
 func userThemeDir() string {
-	cfgDir, _ := os.UserConfigDir()
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
 	return filepath.Join(cfgDir, "spotnik", "themes")
 }
 

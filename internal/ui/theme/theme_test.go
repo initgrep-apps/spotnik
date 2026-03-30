@@ -406,6 +406,20 @@ func TestParseTheme_MalformedTOML_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseTheme_EmptyColorField_ReturnsError(t *testing.T) {
+	// Theme with id but missing most color fields — should fail validation.
+	incomplete := `
+id = "incomplete"
+name = "Incomplete Theme"
+[colors]
+base = "#000000"
+`
+	_, err := theme.ParseTheme([]byte(incomplete))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing or empty color field")
+	assert.Contains(t, err.Error(), "incomplete")
+}
+
 // ---- Feature 70: ConfigTheme interface compliance ----
 
 func TestConfigTheme_ImplementsInterface(t *testing.T) {
