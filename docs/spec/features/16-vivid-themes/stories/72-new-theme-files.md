@@ -1,7 +1,7 @@
 ---
 title: "Six New Vibrant Themes"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background
