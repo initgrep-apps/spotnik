@@ -212,7 +212,9 @@ func TestThemeOverlay_UpArrow(t *testing.T) {
 // dimmed overlay background produced by btoverlay.Composite(), rather than
 // showing an opaque colored rectangle.
 func TestThemeOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
+	prev := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 
 	themes := theme.AllThemes()
 	require.GreaterOrEqual(t, len(themes), 2, "need at least 2 themes to test non-cursor row")
@@ -234,6 +236,10 @@ func TestThemeOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
 // TestThemeOverlay_CursorRow_UsesSelectedBg verifies that the cursor row uses
 // SelectedBg() so it clearly stands out from non-cursor rows.
 func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	themes := theme.AllThemes()
 	require.NotEmpty(t, themes)
 
@@ -247,10 +253,9 @@ func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
 	// The cursor row must include the SelectedBg() color as a background.
 	selectedBgStyle := lipgloss.NewStyle().Background(th.SelectedBg()).Render("X")
 	selectedBg := extractBackgroundANSI(selectedBgStyle)
-	if selectedBg != "" {
-		assert.Contains(t, row, selectedBg,
-			"cursor row should use SelectedBg() background")
-	}
+	require.NotEmpty(t, selectedBg, "sanity: SelectedBg must produce 48;2; in TrueColor")
+	assert.Contains(t, row, selectedBg,
+		"cursor row should use SelectedBg() background")
 }
 
 // extractBackgroundANSI extracts the "48;2;R;G;B" portion of an ANSI string if present.

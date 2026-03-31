@@ -369,7 +369,9 @@ func TestDeviceOverlay_CursorClampedOnListShrink(t *testing.T) {
 // Without an explicit background the rows blend with the composited overlay background
 // instead of rendering as opaque colored rectangles over the dimmed grid.
 func TestDeviceOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
+	prev := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 
 	s := state.New()
 	th := theme.Load("black")
@@ -389,6 +391,10 @@ func TestDeviceOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
 // TestDeviceOverlay_CursorRow_UsesSelectedBg verifies that the cursor row in the
 // device overlay uses SelectedBg() so it clearly stands out.
 func TestDeviceOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	s := state.New()
 	th := theme.Load("black")
 	overlay := NewDeviceOverlay(s, th)
@@ -399,10 +405,9 @@ func TestDeviceOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
 
 	selectedBgStyle := lipgloss.NewStyle().Background(th.SelectedBg()).Render("X")
 	selectedBg := extractDeviceBgANSI(selectedBgStyle)
-	if selectedBg != "" {
-		assert.Contains(t, row, selectedBg,
-			"cursor device row should use SelectedBg() background")
-	}
+	require.NotEmpty(t, selectedBg, "sanity: SelectedBg must produce 48;2; in TrueColor")
+	assert.Contains(t, row, selectedBg,
+		"cursor device row should use SelectedBg() background")
 }
 
 // extractDeviceBgANSI extracts the "48;2;R;G;B" portion from an ANSI string.
