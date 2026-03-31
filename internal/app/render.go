@@ -56,6 +56,10 @@ func (a *App) buildView() string {
 	statusBar := a.renderStatusBar()
 	body := strings.Join([]string{header, gridContent, statusBar}, "\n")
 
+	if a.showThemeSwitcher && a.themeOverlay != nil {
+		return a.renderWithThemeOverlay(body)
+	}
+
 	if a.deviceOverlayOpen {
 		return a.renderWithDeviceOverlay(body)
 	}
@@ -147,6 +151,17 @@ func groupPanesByRow(paneIDs []layout.PaneID, mgr *layout.Manager) [][]layout.Pa
 		rows[i] = rowMap[y]
 	}
 	return rows
+}
+
+// renderWithThemeOverlay renders the grid dimmed and places the theme switcher
+// overlay in the top-right area using bubbletea-overlay Composite().
+func (a *App) renderWithThemeOverlay(background string) string {
+	fg := a.themeOverlay.View()
+	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
+	if a.width <= 0 || a.height <= 0 {
+		return dimmed + "\n" + fg
+	}
+	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
 }
 
 // renderWithDeviceOverlay renders the grid dimmed and places the

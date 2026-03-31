@@ -4,7 +4,10 @@
 // The Manager does not render anything — rendering is handled by Feature 42 (border renderer).
 package layout
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+)
 
 // PaneID uniquely identifies a pane slot in the grid.
 type PaneID int
@@ -79,6 +82,9 @@ type Pane interface {
 	ToggleKey() int
 	// Actions returns pane-specific shortcut hints displayed in the border.
 	Actions() []Action
+	// SetTheme updates the pane's theme reference for runtime theme switching.
+	// Table-based panes must rebuild their tables with new column colors.
+	SetTheme(th theme.Theme)
 }
 
 // FilterablePane is implemented by panes that support in-pane text filtering.

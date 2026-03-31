@@ -639,6 +639,11 @@ func padRightVisible(s string, w int) string {
 	return s + strings.Repeat(" ", w-visibleWidth)
 }
 
+// SetTheme updates the theme reference for runtime theme switching.
+func (p *RequestFlowPane) SetTheme(th theme.Theme) {
+	p.theme = th
+}
+
 // truncateStr truncates s to at most max runes.
 func truncateStr(s string, max int) string {
 	if max <= 0 {

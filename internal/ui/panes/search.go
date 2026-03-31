@@ -621,6 +621,11 @@ func truncate(s string, maxRunes int) string {
 	return string(runes[:maxRunes-1]) + "…"
 }
 
+// SetTheme updates the theme reference for runtime theme switching.
+func (o *SearchOverlay) SetTheme(th theme.Theme) {
+	o.theme = th
+}
+
 // --- Test helpers (exported only for test packages) ---
 
 // SearchDebounceMsgForTest creates a searchDebounceMsg for use in tests.

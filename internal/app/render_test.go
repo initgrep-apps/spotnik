@@ -7,10 +7,16 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// newThemeOverlayForTest creates a ThemeOverlay for use in render tests.
+func newThemeOverlayForTest(a *App) *panes.ThemeOverlay {
+	return panes.NewThemeOverlay(theme.AllThemes(), a.theme.ID(), a.theme)
+}
 
 // newRenderTestApp creates a minimal App suitable for render unit tests.
 func newRenderTestApp() *App {
@@ -258,6 +264,22 @@ func TestRenderTooSmall_UsesRoundedBorder(t *testing.T) {
 		"too-small message should use rounded border (╭ corner)")
 	assert.Contains(t, result, "╰",
 		"too-small message should use rounded border (╰ corner)")
+}
+
+// TestRender_ThemeOverlay_Composited verifies that when showThemeSwitcher is true,
+// the theme overlay appears in the rendered output.
+func TestRender_ThemeOverlay_Composited(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.currentView = viewGrid
+
+	// Open the theme overlay by setting state directly (internal test).
+	a.showThemeSwitcher = true
+	a.themeOverlay = newThemeOverlayForTest(a)
+
+	result := a.buildView()
+	assert.Contains(t, result, "Themes", "theme overlay should appear when showThemeSwitcher is true")
 }
 
 // TestBuildView_DynamicResize_ShrinkThenGrow verifies that shrinking below minimum

@@ -6,6 +6,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -77,6 +78,9 @@ type App struct {
 	searchPane *panes.SearchOverlay
 	devicePane *panes.DeviceOverlay
 
+	// themeOverlay is the floating theme switcher overlay. Populated when open.
+	themeOverlay *panes.ThemeOverlay
+
 	// playlistsAPI is the Spotify playlists mutation client.
 	playlistsAPI api.PlaylistsAPI
 
@@ -91,6 +95,9 @@ type App struct {
 
 	// deviceOverlayOpen is true while the device switcher overlay is visible.
 	deviceOverlayOpen bool
+
+	// showThemeSwitcher is true while the theme switcher overlay is visible.
+	showThemeSwitcher bool
 
 	// tickCount increments every 1s tick. Used to throttle API polling:
 	// intervals are computed dynamically by pollIntervals() based on idle state and playback.
@@ -377,6 +384,21 @@ func (a *App) DeviceOverlayOpen() bool {
 	return a.deviceOverlayOpen
 }
 
+// ThemeSwitcherOpen returns true while the theme switcher overlay is visible.
+func (a *App) ThemeSwitcherOpen() bool {
+	return a.showThemeSwitcher
+}
+
+// allPanes returns all pane values from the panes map.
+// Used by the ThemeSwitchMsg handler to propagate theme changes to every pane.
+func (a *App) allPanes() []layout.Pane {
+	paneList := make([]layout.Pane, 0, len(a.panes))
+	for _, p := range a.panes {
+		paneList = append(paneList, p)
+	}
+	return paneList
+}
+
 // propagateSizes calls SetSize on all visible panes using their computed Rects from
 // the LayoutManager. Hidden panes do not receive a SetSize call.
 func (a *App) propagateSizes() {
@@ -582,6 +604,36 @@ func (a *App) closeDeviceOverlay() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// openThemeSwitcher opens the theme switcher overlay.
+func (a *App) openThemeSwitcher() (*App, tea.Cmd) {
+	a.showThemeSwitcher = true
+	a.themeOverlay = panes.NewThemeOverlay(
+		theme.AllThemes(),
+		a.theme.ID(),
+		a.theme,
+	)
+	return a, nil
+}
+
+// closeThemeSwitcher closes the theme switcher overlay without changing the theme.
+func (a *App) closeThemeSwitcher() (*App, tea.Cmd) {
+	a.showThemeSwitcher = false
+	a.themeOverlay = nil
+	return a, nil
+}
+
+// persistThemeChoice writes the selected theme ID to the user's config.toml.
+// Errors are logged to stderr but never surface to the user — a failed write
+// is non-critical (the theme is already applied in-session).
+func (a *App) persistThemeChoice(themeID string) {
+	if err := config.PersistTheme(themeID); err != nil {
+		// NOTE: theme persistence failure is non-critical — the theme is already
+		// active in-session. Log to stderr but do not emit a toast, as this would
+		// be confusing ("theme applied, but also an error?").
+		fmt.Fprintf(os.Stderr, "spotnik: failed to persist theme %q: %v\n", themeID, err)
+	}
+}
+
 // clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
 // Called from RateLimitedMsg and unauthorizedMsg handlers, which short-circuit
 // the normal command → loaded-message path, so the loaded-message handler never
@@ -741,6 +793,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.syncFocus()
 		a.searchPane.SetSize(m.Width, m.Height)
 		a.devicePane.SetSize(m.Width, m.Height)
+		if a.themeOverlay != nil {
+			a.themeOverlay.SetSize(m.Width, m.Height)
+		}
 		if toastCmd != nil {
 			return a, toastCmd
 		}
@@ -1295,6 +1350,36 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.DeviceOverlayClosedMsg:
 		// Device overlay closed via Esc — close overlay.
 		return a.closeDeviceOverlay()
+
+	case panes.ThemeSwitchMsg:
+		// User selected a theme in the overlay — load new theme, propagate to all panes.
+		newTheme := theme.Load(m.ThemeID)
+		a.theme = newTheme
+		// Propagate to all grid panes.
+		for _, p := range a.allPanes() {
+			p.SetTheme(newTheme)
+		}
+		// Propagate to overlay panes.
+		a.searchPane.SetTheme(newTheme)
+		a.devicePane.SetTheme(newTheme)
+		if a.themeOverlay != nil {
+			a.themeOverlay.SetTheme(newTheme)
+		}
+		// Close the overlay.
+		a.showThemeSwitcher = false
+		a.themeOverlay = nil
+		// Persist the choice asynchronously via a Cmd (no side effects in Update).
+		return a, tea.Batch(
+			a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name()),
+			func() tea.Msg {
+				a.persistThemeChoice(m.ThemeID)
+				return nil
+			},
+		)
+
+	case panes.ThemeOverlayClosedMsg:
+		// Theme overlay closed via Esc — close overlay without changing theme.
+		return a.closeThemeSwitcher()
 
 	case panes.FetchDevicesRequestMsg:
 		// Device overlay is requesting the device list from the API.
