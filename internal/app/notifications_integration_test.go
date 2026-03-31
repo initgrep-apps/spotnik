@@ -14,7 +14,7 @@ import (
 // newNotifTestApp creates a minimal App for notification integration tests.
 func newNotifTestApp() *app.App {
 	cfg := &config.Config{}
-	cfg.UI.Theme = "black"
+	cfg.Preferences.Theme = "black"
 	return app.New(cfg, app.AppOptions{})
 }
 

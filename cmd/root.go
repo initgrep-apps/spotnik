@@ -15,8 +15,14 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/spf13/cobra"
 )
+
+// spotifyClientID is the Spotify application client ID, embedded at build time
+// via -ldflags "-X github.com/initgrep-apps/spotnik/cmd.spotifyClientID=...".
+// Users can override this by setting client_id in their config.toml.
+var spotifyClientID string
 
 var rootCmd = &cobra.Command{
 	Use:   "spotnik",
@@ -117,11 +123,59 @@ func PrintAuthStatus(store keychain.TokenStore, w io.Writer) error {
 	return nil
 }
 
-// LoadConfig reads the config file at path and validates it.
-// Returns an error if client_id is missing or TOML is invalid.
-// Exported for testing — production code calls this via loadConfig().
+// LoadConfig reads the config file at path, bootstraps it if missing, and
+// applies the embedded client ID fallback. Exported for testing.
 func LoadConfig(path string) (*config.Config, error) {
-	return config.Load(path)
+	return loadConfigFromPath(path, spotifyClientID)
+}
+
+// LoadConfigWithEmbedded is the testable variant of LoadConfig that accepts
+// an explicit embedded client ID, allowing tests to inject values without
+// relying on build-time ldflags. Exported for testing.
+func LoadConfigWithEmbedded(path string, embeddedClientID string) (*config.Config, error) {
+	return loadConfigFromPath(path, embeddedClientID)
+}
+
+// loadConfigFromPath is the testable implementation of LoadConfig that accepts
+// an explicit embedded client ID so tests can inject values without build flags.
+func loadConfigFromPath(path string, embeddedClientID string) (*config.Config, error) {
+	// Bootstrap config file on first launch.
+	if err := config.Bootstrap(path); err != nil {
+		return nil, fmt.Errorf("bootstrapping config: %w", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Config client_id overrides embedded. Use embedded as fallback.
+	if cfg.ClientID == "" {
+		cfg.ClientID = embeddedClientID
+	}
+
+	// Clamp unknown theme IDs against the theme registry.
+	// config.Load() clamps empty → "black" but cannot check registry membership
+	// (import boundary). We do it here where theme is accessible.
+	available := theme.Available()
+	validTheme := false
+	for _, id := range available {
+		if id == cfg.Preferences.Theme {
+			validTheme = true
+			break
+		}
+	}
+	if !validTheme {
+		cfg.Preferences.Theme = theme.DefaultThemeID
+	}
+
+	// If still empty (no embedded, no config), show setup instructions.
+	if cfg.ClientID == "" {
+		printSetupInstructions()
+		return nil, fmt.Errorf("no client_id available — see setup instructions above")
+	}
+
+	return cfg, nil
 }
 
 // EnsureAuthenticated checks the token state and runs the auth flow if needed.
@@ -304,17 +358,11 @@ func runAuth(_ *cobra.Command, _ []string) error {
 	return RunAuthFlow(cfg, store, "")
 }
 
-// loadConfig reads the config file from the default path and validates it.
-// Prints setup instructions and exits if client_id is missing.
+// loadConfig reads the config file from the default path, bootstraps it if
+// missing, applies the embedded client ID fallback, and prints setup
+// instructions if no client ID is available.
 func loadConfig() (*config.Config, error) {
-	path := config.DefaultConfigPath()
-	cfg, err := config.Load(path)
-	if err != nil {
-		// If client_id is missing, print clear setup instructions.
-		printSetupInstructions()
-		return nil, err
-	}
-	return cfg, nil
+	return loadConfigFromPath(config.DefaultConfigPath(), spotifyClientID)
 }
 
 // PrintMissingClientIDInstructions writes setup instructions when client_id is missing.

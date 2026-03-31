@@ -156,25 +156,82 @@ func TestMissingClientID_ExitsWithCode1(t *testing.T) {
 func TestLoadConfig_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
-	content := "[spotify]\nclient_id = \"test-client\"\n[ui]\ntheme = \"nord\"\n"
+	content := "[spotify]\nclient_id = \"test-client\"\n[preferences]\ntheme = \"nord\"\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	cfg, err := cmd.LoadConfig(path)
 	require.NoError(t, err)
 	assert.Equal(t, "test-client", cfg.ClientID)
-	assert.Equal(t, "nord", cfg.UI.Theme)
+	assert.Equal(t, "nord", cfg.Preferences.Theme)
 }
 
-// TestLoadConfig_MissingClientID verifies LoadConfig returns error for missing client_id.
-func TestLoadConfig_MissingClientID(t *testing.T) {
+// TestLoadConfig_UsesEmbeddedWhenConfigEmpty verifies that LoadConfig falls back
+// to the embedded client ID when the config file has none.
+func TestLoadConfig_UsesEmbeddedWhenConfigEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	// Config file exists but has no client_id.
+	content := "[spotify]\n\n[preferences]\ntheme = \"black\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	cfg, err := cmd.LoadConfigWithEmbedded(path, "embedded-client-id-123")
+	require.NoError(t, err)
+	assert.Equal(t, "embedded-client-id-123", cfg.ClientID)
+}
+
+// TestLoadConfig_ConfigOverridesEmbedded verifies that a config client_id takes
+// priority over the embedded value.
+func TestLoadConfig_ConfigOverridesEmbedded(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[spotify]\nclient_id = \"config-client-id\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	cfg, err := cmd.LoadConfigWithEmbedded(path, "embedded-client-id-123")
+	require.NoError(t, err)
+	assert.Equal(t, "config-client-id", cfg.ClientID)
+}
+
+// TestLoadConfig_ErrorWhenBothEmpty verifies that LoadConfig returns an error
+// when neither the config file nor the embedded ID provides a client_id.
+func TestLoadConfig_ErrorWhenBothEmpty(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 	content := "[spotify]\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-	_, err := cmd.LoadConfig(path)
+	_, err := cmd.LoadConfigWithEmbedded(path, "") // no embedded ID
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "client_id")
+}
+
+// TestLoadConfig_BootstrapsWhenMissing verifies that LoadConfig creates a config
+// file when none exists (Bootstrap behavior).
+func TestLoadConfig_BootstrapsWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	// File doesn't exist; embedded client ID is provided so no error.
+	cfg, err := cmd.LoadConfigWithEmbedded(path, "embedded-id")
+	require.NoError(t, err)
+	assert.Equal(t, "embedded-id", cfg.ClientID)
+
+	// Verify the file was created.
+	_, err = os.Stat(path)
+	require.NoError(t, err, "Bootstrap should have created the config file")
+}
+
+// TestLoadConfig_ClampsUnknownTheme verifies that an unknown theme ID in config
+// is clamped to the default theme.
+func TestLoadConfig_ClampsUnknownTheme(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[spotify]\nclient_id = \"test\"\n[preferences]\ntheme = \"not-a-real-theme-xyz\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	cfg, err := cmd.LoadConfigWithEmbedded(path, "")
+	require.NoError(t, err)
+	assert.Equal(t, "black", cfg.Preferences.Theme, "unknown theme should be clamped to 'black'")
 }
 
 // TestEnsureAuthenticated_AlreadyAuthenticated verifies that a valid token

@@ -11,16 +11,24 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// UIConfig holds UI-related configuration settings.
-type UIConfig struct {
+// PreferencesConfig holds user-facing preference settings.
+type PreferencesConfig struct {
 	// Theme is the config key for the active colour theme.
-	// Valid values: "black", "monokai", "catppuccin", "nord", "light".
+	// Valid values: "black", "monokai", "catppuccin", "nord", "light", etc.
 	// Defaults to "black" if unset or unknown.
 	Theme string `toml:"theme"`
 
 	// VolumeStep is the percentage change per volume up/down keypress.
 	// Defaults to 5 if unset or zero.
 	VolumeStep int `toml:"volume_step"`
+
+	// Preset is the Page A layout preset index (0-based).
+	// Negative values are clamped to 0 on load.
+	Preset int `toml:"preset"`
+
+	// Visualizer is the visualizer pattern index (0-6).
+	// Negative values are clamped to 0 on load.
+	Visualizer int `toml:"visualizer"`
 }
 
 // spotifyConfig holds Spotify-specific configuration.
@@ -30,15 +38,16 @@ type spotifyConfig struct {
 
 // Config holds all application configuration.
 type Config struct {
-	// ClientID is the Spotify application client ID, required for auth.
-	ClientID string
-	UI       UIConfig `toml:"ui"`
+	// ClientID is the Spotify application client ID.
+	// May be empty if not set in config — caller provides embedded fallback.
+	ClientID    string
+	Preferences PreferencesConfig `toml:"preferences"`
 }
 
 // Default returns a Config populated with sensible defaults.
 func Default() *Config {
 	return &Config{
-		UI: UIConfig{
+		Preferences: PreferencesConfig{
 			Theme:      "black",
 			VolumeStep: 5,
 		},
@@ -47,18 +56,20 @@ func Default() *Config {
 
 // Load reads the config file at the given path and returns a populated Config.
 // If the file does not exist, Load returns Default() with no error.
-// If client_id is missing, Load returns a descriptive error.
+// Empty ClientID is not an error — the caller handles the embedded fallback.
 // If the TOML is malformed, Load returns a parse error with file path context.
+// Invalid preference values are clamped: negative Preset/Visualizer → 0,
+// unknown theme → "black".
 func Load(path string) (*Config, error) {
 	cfg := Default()
 
 	// Use a raw struct for TOML decoding so we can extract the nested spotify section.
 	raw := struct {
-		Spotify spotifyConfig `toml:"spotify"`
-		UI      UIConfig      `toml:"ui"`
+		Spotify     spotifyConfig     `toml:"spotify"`
+		Preferences PreferencesConfig `toml:"preferences"`
 	}{
-		// Pre-populate UI with defaults so unset fields keep their defaults.
-		UI: cfg.UI,
+		// Pre-populate Preferences with defaults so unset fields keep their defaults.
+		Preferences: cfg.Preferences,
 	}
 
 	_, err := toml.DecodeFile(path, &raw)
@@ -72,17 +83,26 @@ func Load(path string) (*Config, error) {
 
 	// Apply parsed fields.
 	cfg.ClientID = raw.Spotify.ClientID
-	cfg.UI = raw.UI
+	cfg.Preferences = raw.Preferences
 
-	// Ensure theme default is preserved if not set.
-	if cfg.UI.Theme == "" {
-		cfg.UI.Theme = "black"
+	// Clamp theme: if unknown or empty, fall back to default.
+	// NOTE: full theme-registry validation (against Available()) cannot happen
+	// here because config cannot import ui/theme (import boundary). Empty string
+	// is handled here; callers that have access to the theme registry may clamp
+	// further.
+	if cfg.Preferences.Theme == "" {
+		cfg.Preferences.Theme = "black"
 	}
 
-	// Validate required fields.
-	if cfg.ClientID == "" {
-		return nil, fmt.Errorf("missing client_id in [spotify] section of %s — "+
-			"create an app at https://developer.spotify.com/dashboard and add it to your config", path)
+	// Clamp negative Preset to 0. Out-of-range positive values are handled by
+	// layout.SetPreset() which ignores invalid indices.
+	if cfg.Preferences.Preset < 0 {
+		cfg.Preferences.Preset = 0
+	}
+
+	// Clamp negative Visualizer to 0. The viz engine also guards out-of-range values.
+	if cfg.Preferences.Visualizer < 0 {
+		cfg.Preferences.Visualizer = 0
 	}
 
 	return cfg, nil
@@ -99,14 +119,50 @@ func DefaultConfigPath() string {
 	return fmt.Sprintf("%s/.config/spotnik/config.toml", home)
 }
 
-// PersistTheme updates the [ui] theme field in the config file at the default path.
+// defaultTemplate is the config file template written on first launch.
+// It documents available options as comments and sets sensible defaults.
+const defaultTemplate = `# Spotnik configuration
+# https://github.com/initgrep-apps/spotnik
+
+[spotify]
+# To use your own Spotify app credentials, uncomment and set:
+# client_id = "your-client-id-from-spotify-developer-dashboard"
+
+[preferences]
+theme = "black"
+volume_step = 5
+# preset = 0          # Page A layout preset index (0-based)
+# visualizer = 0      # Visualizer pattern index (0-6)
+`
+
+// Bootstrap creates the config file at path with a default template if it does
+// not already exist. Creates the parent directory if needed. If the file already
+// exists, Bootstrap is a no-op.
+func Bootstrap(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil // file exists, nothing to do
+	}
+
+	// Create directory with permissive owner-only access.
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("creating config directory: %w", err)
+	}
+
+	// Write template with owner-only read/write permissions.
+	if err := os.WriteFile(path, []byte(defaultTemplate), 0o600); err != nil {
+		return fmt.Errorf("writing config template: %w", err)
+	}
+	return nil
+}
+
+// PersistTheme updates the [preferences] theme field in the config file at the default path.
 // If the file does not exist it is created (with only the theme field).
 // Only the theme field is modified — all other settings are preserved.
 func PersistTheme(themeID string) error {
 	return persistThemeToPath(DefaultConfigPath(), themeID)
 }
 
-// PersistThemeTo updates the [ui] theme field in the config file at the given path.
+// PersistThemeTo updates the [preferences] theme field in the config file at the given path.
 // It is the path-parameterised variant of PersistTheme, intended for tests.
 func PersistThemeTo(cfgPath string, themeID string) error {
 	return persistThemeToPath(cfgPath, themeID)
@@ -123,9 +179,9 @@ func persistThemeToPath(cfgPath string, themeID string) error {
 		Spotify struct {
 			ClientID string `toml:"client_id,omitempty"`
 		} `toml:"spotify"`
-		UI UIConfig `toml:"ui"`
+		Preferences PreferencesConfig `toml:"preferences"`
 	}{
-		UI: cfg.UI,
+		Preferences: cfg.Preferences,
 	}
 
 	if _, err := toml.DecodeFile(cfgPath, &raw); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -133,7 +189,7 @@ func persistThemeToPath(cfgPath string, themeID string) error {
 	}
 
 	// Update only the theme field; other fields remain as read (or default).
-	raw.UI.Theme = themeID
+	raw.Preferences.Theme = themeID
 
 	// Ensure the config directory exists.
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o750); err != nil {

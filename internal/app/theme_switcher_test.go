@@ -15,7 +15,7 @@ import (
 func newThemeSwitcherTestApp(t *testing.T) *app.App {
 	t.Helper()
 	cfg := &config.Config{}
-	cfg.UI.Theme = "black"
+	cfg.Preferences.Theme = "black"
 	a := app.New(cfg, app.AppOptions{})
 	// Resize to a valid terminal size so the grid is visible.
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})

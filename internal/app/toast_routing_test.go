@@ -16,7 +16,7 @@ import (
 // newToastTestApp creates a minimal App for toast routing tests.
 func newToastTestApp() *app.App {
 	cfg := &config.Config{}
-	cfg.UI.Theme = "black"
+	cfg.Preferences.Theme = "black"
 	return app.New(cfg, app.AppOptions{})
 }
 
@@ -124,7 +124,7 @@ func TestApp_StatusBar_AlwaysShowsHints(t *testing.T) {
 	// After Task 3, renderStatusBar() always shows hints — no error override.
 	// Use renderStatusBar directly via a rendering test app to avoid splash screen.
 	cfg := &config.Config{}
-	cfg.UI.Theme = "black"
+	cfg.Preferences.Theme = "black"
 	a := app.New(cfg, app.AppOptions{})
 
 	// Trigger splash dismiss to switch to main view, then set window size.
