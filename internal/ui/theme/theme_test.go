@@ -30,10 +30,13 @@ func TestLoad_DefaultTheme(t *testing.T) {
 	assert.Equal(t, "black", got.ID())
 }
 
-func TestAvailable_Returns5Entries(t *testing.T) {
+func TestAvailable_Returns11Entries(t *testing.T) {
 	entries := theme.Available()
 	// Available() returns sorted IDs — order is alphabetical.
-	assert.Equal(t, []string{"black", "catppuccin", "light", "monokai", "nord"}, entries)
+	assert.Equal(t, []string{
+		"black", "catppuccin", "dracula", "gruvbox", "light",
+		"monokai", "nord", "rosepine", "solarized", "synthwave", "tokyonight",
+	}, entries)
 }
 
 func TestAvailable_StableOrder(t *testing.T) {
@@ -679,6 +682,101 @@ network_log     = "#aabbcc"
 	require.True(t, ok, "custom theme should be present")
 	assert.Equal(t, "My Custom Theme", th.Name())
 	assert.Equal(t, "#abcdef", string(th.Base()))
+}
+
+// ---- Story 72: six new built-in themes ----
+
+func TestDraculaTheme_Loads(t *testing.T) {
+	th := theme.Load("dracula")
+	require.NotNil(t, th)
+	assert.Equal(t, "dracula", th.ID())
+	assert.Equal(t, "Dracula", th.Name())
+	allMethodsReturnNonEmpty(t, th)
+}
+
+func TestDraculaTheme_Base(t *testing.T) {
+	th := theme.Load("dracula")
+	assert.Equal(t, "#282A36", string(th.Base()))
+}
+
+func TestGruvboxTheme_Loads(t *testing.T) {
+	th := theme.Load("gruvbox")
+	require.NotNil(t, th)
+	assert.Equal(t, "gruvbox", th.ID())
+	assert.Equal(t, "Gruvbox Dark", th.Name())
+	allMethodsReturnNonEmpty(t, th)
+}
+
+func TestGruvboxTheme_Base(t *testing.T) {
+	th := theme.Load("gruvbox")
+	assert.Equal(t, "#282828", string(th.Base()))
+}
+
+func TestTokyoNightTheme_Loads(t *testing.T) {
+	th := theme.Load("tokyonight")
+	require.NotNil(t, th)
+	assert.Equal(t, "tokyonight", th.ID())
+	assert.Equal(t, "Tokyo Night", th.Name())
+	allMethodsReturnNonEmpty(t, th)
+}
+
+func TestTokyoNightTheme_Base(t *testing.T) {
+	th := theme.Load("tokyonight")
+	assert.Equal(t, "#1a1b26", string(th.Base()))
+}
+
+func TestRosePineTheme_Loads(t *testing.T) {
+	th := theme.Load("rosepine")
+	require.NotNil(t, th)
+	assert.Equal(t, "rosepine", th.ID())
+	assert.Equal(t, "Rose Pine", th.Name())
+	allMethodsReturnNonEmpty(t, th)
+}
+
+func TestRosePineTheme_Base(t *testing.T) {
+	th := theme.Load("rosepine")
+	assert.Equal(t, "#191724", string(th.Base()))
+}
+
+func TestSolarizedTheme_Loads(t *testing.T) {
+	th := theme.Load("solarized")
+	require.NotNil(t, th)
+	assert.Equal(t, "solarized", th.ID())
+	assert.Equal(t, "Solarized Dark", th.Name())
+	allMethodsReturnNonEmpty(t, th)
+}
+
+func TestSolarizedTheme_Base(t *testing.T) {
+	th := theme.Load("solarized")
+	assert.Equal(t, "#002b36", string(th.Base()))
+}
+
+func TestSynthwaveTheme_Loads(t *testing.T) {
+	th := theme.Load("synthwave")
+	require.NotNil(t, th)
+	assert.Equal(t, "synthwave", th.ID())
+	assert.Equal(t, "Synthwave '84", th.Name())
+	allMethodsReturnNonEmpty(t, th)
+}
+
+func TestSynthwaveTheme_Base(t *testing.T) {
+	th := theme.Load("synthwave")
+	assert.Equal(t, "#262335", string(th.Base()))
+}
+
+// TestAllThemes_HaveAllTokens iterates all 11 themes and verifies no color token
+// is an empty string. This is 11 × 50 = 550 assertions in total.
+func TestAllThemes_HaveAllTokens(t *testing.T) {
+	ids := theme.Available()
+	assert.Len(t, ids, 11, "expect exactly 11 built-in themes")
+	for _, id := range ids {
+		id := id
+		t.Run(id, func(t *testing.T) {
+			th := theme.Load(id)
+			require.NotNil(t, th)
+			allMethodsReturnNonEmpty(t, th)
+		})
+	}
 }
 
 func TestUserThemeDir_OverridesBuiltin_ViaLoadAllWithUserDir(t *testing.T) {
