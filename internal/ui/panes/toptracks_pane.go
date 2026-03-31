@@ -55,10 +55,10 @@ func NewTopTracksPane(store *state.Store, th theme.Theme, focused bool) *TopTrac
 	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Pop 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.TextMuted()},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.TextPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.TextSecondary()},
-		{Key: "pop", Header: "Pop", FlexFactor: 3, Color: th.TextMuted()},
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "pop", Header: "Pop", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 
 	t := components.NewTable(components.TableConfig{

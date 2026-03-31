@@ -236,3 +236,19 @@ func TestTopTracksPane_RefreshRows(t *testing.T) {
 	view := pane.View()
 	assert.Contains(t, view, "Refreshed Track")
 }
+
+// ── Story 71 Task 2: column color tokens ─────────────────────────────────────
+
+// TestTopTracksPane_UsesColumnColors verifies that TopTracksPane column definitions
+// use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens.
+func TestTopTracksPane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	p := NewTopTracksPane(state.New(), th, false)
+	cols := p.table.Columns()
+	require.Len(t, cols, 4, "TopTracksPane should have 4 columns")
+
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Pop column should use ColumnTertiary()")
+}

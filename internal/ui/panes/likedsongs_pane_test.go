@@ -284,3 +284,19 @@ func TestLikedSongsPane_I_EmptyList(t *testing.T) {
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	assert.Nil(t, cmd, "'i' on empty list should not emit a command")
 }
+
+// ── Story 71 Task 2: column color tokens ─────────────────────────────────────
+
+// TestLikedSongsPane_UsesColumnColors verifies that LikedSongsPane column definitions
+// use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens.
+func TestLikedSongsPane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	l := NewLikedSongsPane(state.New(), th, false)
+	cols := l.table.Columns()
+	require.Len(t, cols, 4, "LikedSongsPane should have 4 columns")
+
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
+}

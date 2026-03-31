@@ -39,10 +39,10 @@ type QueuePane struct {
 // NewQueuePane creates a new QueuePane with the given store, theme, and focus state.
 func NewQueuePane(store *state.Store, th theme.Theme, focused bool) *QueuePane {
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.TextMuted()},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.TextPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.TextSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.TextMuted()},
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 
 	t := components.NewTable(components.TableConfig{

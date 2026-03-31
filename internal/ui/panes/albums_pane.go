@@ -40,10 +40,10 @@ func NewAlbumsPane(store *state.Store, th theme.Theme, focused bool) *AlbumsPane
 	// Album columns: # 5% | Name 50% | Artist 30% | Year 15%
 	// Flex factors: 1 : 10 : 6 : 3 ≈ 5% / 50% / 30% / 15%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.TextMuted()},
-		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.TextPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.TextSecondary()},
-		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.TextMuted()},
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
+		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
