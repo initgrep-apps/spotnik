@@ -321,11 +321,14 @@ func (a *App) renderStatusBar() string {
 		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.StatusBarFg())
 
-	// keyStyle uses only Foreground + Bold; no Background so key characters
-	// inherit the parent bar's background naturally and avoid visible "pill"
-	// rectangles in terminals that distinguish per-token background regions.
+	// keyStyle uses Foreground + Background + Bold. The explicit Background(StatusBarBg())
+	// matches bgStyle's background exactly, ensuring no ANSI nesting gaps that would
+	// produce visible "pill" rectangles around key characters. The space before each
+	// label is included in bgStyle.Render(" "+h.Label) so every character has a
+	// consistent background with no unstyled gap between key and label.
 	keyStyle := lipgloss.NewStyle().
 		Foreground(a.theme.KeyHint()).
+		Background(a.theme.StatusBarBg()).
 		Bold(true)
 
 	// Common hints present on both pages.
@@ -355,7 +358,7 @@ func (a *App) renderStatusBar() string {
 
 	var parts []string
 	for _, h := range hints {
-		parts = append(parts, keyStyle.Render(h.Key)+" "+bgStyle.Render(h.Label))
+		parts = append(parts, keyStyle.Render(h.Key)+bgStyle.Render(" "+h.Label))
 	}
 
 	// 2-space separator (tighter than the old 3-space gap).

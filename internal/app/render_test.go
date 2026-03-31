@@ -399,19 +399,18 @@ func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
 	assert.Contains(t, result, "theme", "status bar should contain 'theme' shortcut label")
 }
 
-// --- Story 74 Task 3: key style no background ---
+// --- Story 77 Task 5: key style has consistent background ---
 
-// TestRenderStatusBar_KeyStyleNoBackground verifies that key labels in the
-// status bar render without an explicit per-key background color. The fix
-// removes Background(StatusBarBg()) from keyStyle so individual key tokens
-// inherit the parent bar's background naturally.
+// TestRenderStatusBar_KeyStyleHasConsistentBackground verifies that key characters
+// in the status bar carry Background(StatusBarBg()) — same as the label background —
+// so there are no visible "pill" gaps between key and label.
 //
-// The test renders a keyStyle (matching renderStatusBar's definition) in
-// isolation — without a parent bgStyle wrapper — and asserts the ANSI output
-// contains no "48;2;" background escape sequence. A companion style WITH
-// Background() is rendered to confirm the assertion is meaningful (i.e. if
-// Background were present, the ANSI code would appear).
-func TestRenderStatusBar_KeyStyleNoBackground(t *testing.T) {
+// The test works by:
+//  1. Building a keyStyle WITHOUT background (old incorrect style).
+//  2. Building a keyStyle WITH background (new correct style).
+//  3. Rendering the status bar and asserting its output matches the with-background variant
+//     and does NOT match the no-background variant for a key character.
+func TestRenderStatusBar_KeyStyleHasConsistentBackground(t *testing.T) {
 	// Force TrueColor so lipgloss emits ANSI RGB escapes even without a TTY.
 	prev := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
@@ -419,29 +418,67 @@ func TestRenderStatusBar_KeyStyleNoBackground(t *testing.T) {
 
 	a := newRenderTestApp()
 
-	// keyStyle as defined in renderStatusBar — Foreground + Bold only, no Background.
-	keyStyle := lipgloss.NewStyle().
+	// Old (incorrect) keyStyle: Foreground + Bold only — no Background.
+	keyStyleNoBg := lipgloss.NewStyle().
 		Foreground(a.theme.KeyHint()).
 		Bold(true)
 
-	// Render a key token in isolation (no parent background wrapper).
-	rendered := keyStyle.Render("q")
+	// New (correct) keyStyle: Foreground + Background + Bold.
+	keyStyleWithBg := lipgloss.NewStyle().
+		Foreground(a.theme.KeyHint()).
+		Background(a.theme.StatusBarBg()).
+		Bold(true)
 
-	// "48;2;" is the ANSI SGR introducer for 24-bit RGB background color.
-	// Its absence proves keyStyle carries no per-key background escape.
-	assert.NotContains(t, rendered, "48;2;",
-		"keyStyle should NOT produce a background ANSI escape (48;2;)")
+	// Render a sample key character with both styles.
+	renderedNoBg := keyStyleNoBg.Render("q")
+	renderedWithBg := keyStyleWithBg.Render("q")
 
-	// Sanity check: adding Background() back DOES produce the escape, proving
-	// the assertion above is meaningful and not vacuously true.
-	withBg := keyStyle.Background(a.theme.StatusBarBg()).Render("q")
-	assert.Contains(t, withBg, "48;2;",
-		"keyStyle WITH Background() must produce a 48;2; escape (sanity check)")
+	// Sanity: the two renders must differ (proves the test is meaningful).
+	require.NotEqual(t, renderedNoBg, renderedWithBg,
+		"keyStyle with and without Background must produce different renders (sanity check)")
+
+	result := a.renderStatusBar()
+
+	// The status bar must contain the WITH-background key render.
+	assert.Contains(t, result, renderedWithBg,
+		"status bar must render key characters WITH Background(StatusBarBg())")
+
+	// The status bar must NOT contain the NO-background key render. If it does, it
+	// means keyStyle still lacks Background and the pill fix has not been applied.
+	assert.NotContains(t, result, renderedNoBg,
+		"status bar must NOT render key characters WITHOUT background (pill fix not applied)")
+
+	// bgStyle as used in renderStatusBar.
+	bgStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.StatusBarFg())
+	bgRendered := bgStyle.Render("label")
+	bgBgSeq := extractBgANSISeq(bgRendered)
+	keyBgSeq := extractBgANSISeq(renderedWithBg)
+
+	require.NotEmpty(t, bgBgSeq, "bgStyle render must contain a 48;2; background sequence")
+	require.NotEmpty(t, keyBgSeq, "keyStyle-with-bg render must contain a 48;2; background sequence")
+
+	// Both background sequences must match — same StatusBarBg() on key and label.
+	assert.Equal(t, keyBgSeq, bgBgSeq,
+		"keyStyle and bgStyle must carry the same background ANSI sequence (same StatusBarBg)")
 
 	// Regression: status bar should still render all expected key hints.
-	result := a.renderStatusBar()
-	assert.NotEmpty(t, result)
 	assert.Contains(t, result, "search")
 	assert.Contains(t, result, "quit")
 	assert.Contains(t, result, "theme")
+}
+
+// extractBgANSISeq extracts the "48;2;R;G;B" ANSI background sequence from a string.
+func extractBgANSISeq(s string) string {
+	const bgPrefix = "48;2;"
+	idx := strings.Index(s, bgPrefix)
+	if idx < 0 {
+		return ""
+	}
+	end := strings.Index(s[idx:], "m")
+	if end < 0 {
+		return ""
+	}
+	return s[idx : idx+end]
 }
