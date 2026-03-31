@@ -1368,9 +1368,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Close the overlay.
 		a.showThemeSwitcher = false
 		a.themeOverlay = nil
-		// Persist the choice.
-		a.persistThemeChoice(m.ThemeID)
-		return a, a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name())
+		// Persist the choice asynchronously via a Cmd (no side effects in Update).
+		return a, tea.Batch(
+			a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name()),
+			func() tea.Msg {
+				a.persistThemeChoice(m.ThemeID)
+				return nil
+			},
+		)
 
 	case panes.ThemeOverlayClosedMsg:
 		// Theme overlay closed via Esc — close overlay without changing theme.

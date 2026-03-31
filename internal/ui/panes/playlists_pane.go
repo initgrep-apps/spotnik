@@ -436,6 +436,7 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 
 	p.resizeTable()
 	p.refreshPlaylistRows()
+	p.refreshTrackRows()
 }
 
 // resizeTable updates the table size, accounting for the filter bar when active.

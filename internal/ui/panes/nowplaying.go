@@ -426,6 +426,8 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	p.engine = viz.NewEngine(th)
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
+	// Propagate dimensions to newly created sub-components.
+	p.SetSize(p.width, p.height)
 }
 
 // paneMax returns the larger of two ints.
