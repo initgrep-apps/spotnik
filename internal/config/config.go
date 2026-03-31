@@ -100,17 +100,20 @@ func Load(path string) (*Config, error) {
 	if cfg.Preferences.Theme == "" {
 		cfg.Preferences.Theme = "black"
 	} else if ThemeValidator != nil && !ThemeValidator(cfg.Preferences.Theme) {
+		fmt.Fprintf(os.Stderr, "spotnik: warning: unknown theme %q, falling back to \"black\"\n", cfg.Preferences.Theme)
 		cfg.Preferences.Theme = "black"
 	}
 
 	// Clamp negative Preset to 0. Out-of-range positive values are handled by
 	// layout.SetPreset() which ignores invalid indices.
 	if cfg.Preferences.Preset < 0 {
+		fmt.Fprintf(os.Stderr, "spotnik: warning: negative preset %d clamped to 0\n", cfg.Preferences.Preset)
 		cfg.Preferences.Preset = 0
 	}
 
 	// Clamp negative Visualizer to 0. The viz engine also guards out-of-range values.
 	if cfg.Preferences.Visualizer < 0 {
+		fmt.Fprintf(os.Stderr, "spotnik: warning: negative visualizer %d clamped to 0\n", cfg.Preferences.Visualizer)
 		cfg.Preferences.Visualizer = 0
 	}
 
@@ -150,6 +153,8 @@ volume_step = 5
 func Bootstrap(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil // file exists, nothing to do
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("checking config file: %w", err)
 	}
 
 	// Create directory: owner gets rwx, group gets r-x, others none.

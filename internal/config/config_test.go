@@ -387,6 +387,25 @@ func TestBootstrap_FilePermissions(t *testing.T) {
 		"config directory should have 0750 permissions")
 }
 
+// TestBootstrap_StatErrorPropagated verifies that Bootstrap returns an error when
+// os.Stat fails for a reason other than the file not existing (e.g. the parent
+// path component is a file, not a directory, which yields ENOTDIR).
+func TestBootstrap_StatErrorPropagated(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a regular file where Bootstrap will expect a directory.
+	// Using it as a path component forces os.Stat to fail with ENOTDIR,
+	// which is not os.ErrNotExist.
+	filePath := filepath.Join(dir, "notadir")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o600))
+
+	// Stat-ing a child inside a regular file returns ENOTDIR, not ErrNotExist.
+	path := filepath.Join(filePath, "config.toml")
+	err := config.Bootstrap(path)
+	require.Error(t, err, "Bootstrap should return an error when stat fails for non-ErrNotExist reason")
+	assert.Contains(t, err.Error(), "checking config file")
+}
+
 // TestPersistTheme_WithBootstrappedConfig verifies that PersistTheme works correctly
 // after Bootstrap has created the config file.
 func TestPersistTheme_WithBootstrappedConfig(t *testing.T) {

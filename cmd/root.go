@@ -282,9 +282,8 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 }
 
 // CheckAuthState performs a non-blocking check of the token state.
-// Returns (needsAuth bool, clientID string).
-// If a valid token exists (or was refreshed), needsAuth is false.
-// If no token or refresh fails, needsAuth is true.
+// Returns true if authentication is required (no valid token or refresh failed),
+// and false if a valid token exists or was successfully refreshed.
 // Exported for testing.
 func CheckAuthState(cfg *config.Config, store keychain.TokenStore) bool {
 	access, err := store.Get(keychain.KeyAccessToken)

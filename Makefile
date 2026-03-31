@@ -109,7 +109,7 @@ deps:
 install:
 	@echo "→ Installing $(BINARY_NAME)..."
 	$(GO) install $(GOFLAGS) \
-		-ldflags="$(LDFLAGS) -X main.version=$(VERSION)" \
+		-ldflags="$(LDFLAGS) -X main.version=$(VERSION) -X $(MODULE)/cmd.spotifyClientID=$(SPOTIFY_CLIENT_ID)" \
 		./...
 	@echo "✓ Installed: $$(which $(BINARY_NAME))"
 
@@ -124,7 +124,7 @@ release:
 		echo "  Building $(GOOS)/$(GOARCH)..."; \
 		GOOS=$(GOOS) GOARCH=$(GOARCH) \
 		$(GO) build $(GOFLAGS) \
-			-ldflags="$(LDFLAGS) -X main.version=$(VERSION)" \
+			-ldflags="$(LDFLAGS) -X main.version=$(VERSION) -X $(MODULE)/cmd.spotifyClientID=$(SPOTIFY_CLIENT_ID)" \
 			-o $(BINARY_DIR)/release/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) \
 			.; \
 	)
