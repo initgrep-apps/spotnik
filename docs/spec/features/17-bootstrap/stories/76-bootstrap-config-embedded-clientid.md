@@ -13,6 +13,9 @@ with the binary. The config file should be auto-created on first launch as a pre
 file, with a commented client_id placeholder for power users who register their own
 Spotify app.
 
+This story also renames `[ui]` to `[preferences]` and adds new preference fields
+(preset, visualizer) that will be wired into the PreferenceStore engine in story 80.
+
 ## Design
 
 ### Embedded Client ID
@@ -99,7 +102,7 @@ func Bootstrap(path string) error {
 }
 ```
 
-### Rename `[ui]` → `[preferences]`
+### Rename `[ui]` → `[preferences]` and Add New Fields
 
 The TOML section and Go types are renamed for clarity:
 
@@ -107,9 +110,52 @@ The TOML section and Go types are renamed for clarity:
 - Go type: `UIConfig` → `PreferencesConfig`
 - Go field: `Config.UI` → `Config.Preferences`
 
-This touches `config.go`, `config_test.go`, and all files referencing `cfg.UI`
-(app.go, root_test.go, various test files). Since there are no existing users
-or config files in the wild, this is a clean rename with no migration needed.
+New fields added to `PreferencesConfig`:
+
+```go
+type PreferencesConfig struct {
+    Theme      string `toml:"theme"`
+    VolumeStep int    `toml:"volume_step"`
+    Preset     int    `toml:"preset"`     // Page A layout preset index
+    Visualizer int    `toml:"visualizer"` // viz engine pattern index (0-6)
+}
+```
+
+Since there are no existing users or config files in the wild, this is a clean rename
+with no migration needed.
+
+### Validation / Clamping on Load
+
+After decoding TOML, `config.Load()` clamps preference values to valid ranges. This
+handles manual edits with invalid values — the app never crashes, it just falls back
+to defaults:
+
+```go
+// Clamp theme: if unknown, fall back to default.
+if !theme.IsValidID(cfg.Preferences.Theme) {
+    cfg.Preferences.Theme = "black"
+}
+
+// Clamp preset: valid range depends on the number of Page A presets.
+// Config only stores the raw int — the layout package validates on SetPreset.
+// Negative values are clamped here; out-of-range positive values are handled
+// by layout.SetPreset() which silently ignores invalid indices.
+if cfg.Preferences.Preset < 0 {
+    cfg.Preferences.Preset = 0
+}
+
+// Clamp visualizer: valid range is 0 to PatternCount-1.
+// We clamp to 0 here; the viz engine also ignores out-of-range values.
+if cfg.Preferences.Visualizer < 0 {
+    cfg.Preferences.Visualizer = 0
+}
+```
+
+Note: upper-bound clamping for preset and visualizer cannot happen in the config
+package because it doesn't know the total count of presets or patterns. Those packages
+(`layout` and `viz`) already guard against out-of-range indices — `SetPreset` is a
+no-op for invalid indices, and the viz engine wraps with modulo. The config layer
+only needs to catch negatives and obviously wrong values.
 
 ### Default Template
 
@@ -124,6 +170,8 @@ const defaultTemplate = `# Spotnik configuration
 [preferences]
 theme = "black"
 volume_step = 5
+# preset = 0          # Page A layout preset index (0-based)
+# visualizer = 0      # Visualizer pattern index (0-6)
 `
 ```
 
@@ -144,30 +192,16 @@ CI/release builds inject the real client ID.
 
 ### PersistTheme Interaction
 
-`PersistTheme()` uses `toml.DecodeFile` + `toml.Encoder.Encode` which strips
-comments from the template. This is acceptable — the comments serve as first-launch
-documentation. Once the user changes a theme, the file becomes a pure preferences
-file.
-
-After a theme change, the file will look like:
-
-```toml
-[spotify]
-
-[preferences]
-  theme = "nord"
-  volume_step = 5
-```
-
-The commented client_id is gone, but it served its purpose. The `[spotify]` section
-remains (empty) because PersistTheme preserves the full TOML structure.
+`PersistTheme()` is removed in story 79 when the PreferenceStore replaces it.
+Until then, it continues to work — this story does not touch persistence logic
+beyond the rename.
 
 ### Files Changed
 
 | Action | File | Purpose |
 |---|---|---|
-| Modify | `internal/config/config.go` | Rename `UIConfig`→`PreferencesConfig`, `UI`→`Preferences`, `[ui]`→`[preferences]`; add `Bootstrap()`, `defaultTemplate`; remove client_id validation error |
-| Modify | `internal/config/config_test.go` | Update all `cfg.UI` → `cfg.Preferences`; add Bootstrap tests |
+| Modify | `internal/config/config.go` | Rename `UIConfig`→`PreferencesConfig`, `UI`→`Preferences`, `[ui]`→`[preferences]`; add `Preset`/`Visualizer` fields; add `Bootstrap()`, `defaultTemplate`; remove client_id validation error; add clamping |
+| Modify | `internal/config/config_test.go` | Update all `cfg.UI` → `cfg.Preferences`; add Bootstrap tests; add clamping tests |
 | Modify | `cmd/root.go` | Add `spotifyClientID` var, update `loadConfig()` with bootstrap + fallback |
 | Modify | `cmd/root_test.go` | Update `cfg.UI` → `cfg.Preferences`; add client_id resolution tests |
 | Modify | `internal/app/app.go` | Update all `cfg.UI` → `cfg.Preferences` references |
@@ -180,6 +214,9 @@ remains (empty) because PersistTheme preserves the full TOML structure.
 - [ ] `config.Bootstrap()` is a no-op when file already exists
 - [ ] `config.Bootstrap()` creates parent directory if missing
 - [ ] `config.Load()` returns config with empty `ClientID` when not set (no error)
+- [ ] `config.Load()` clamps negative `Preset` to 0
+- [ ] `config.Load()` clamps negative `Visualizer` to 0
+- [ ] `config.Load()` clamps unknown theme ID to `"black"`
 - [ ] `loadConfig()` uses embedded client_id when config has none
 - [ ] `loadConfig()` uses config client_id when present (overrides embedded)
 - [ ] `loadConfig()` errors only when both embedded and config are empty
@@ -190,8 +227,10 @@ remains (empty) because PersistTheme preserves the full TOML structure.
 
 ## Tasks
 
-- [ ] Rename `UIConfig` → `PreferencesConfig`, `Config.UI` → `Config.Preferences`, TOML key `[ui]` → `[preferences]` in `internal/config/config.go`. Update `PersistTheme` internals to use `[preferences]`.
+- [ ] Rename `UIConfig` → `PreferencesConfig`, `Config.UI` → `Config.Preferences`, TOML key `[ui]` → `[preferences]` in `internal/config/config.go`. Add `Preset int` and `Visualizer int` fields to `PreferencesConfig`. Update `PersistTheme` internals to use `[preferences]`.
       - test: Update all existing config tests (`cfg.UI` → `cfg.Preferences`), verify TOML output uses `[preferences]`
+- [ ] Add validation/clamping in `config.Load()`: clamp `Preset < 0` to 0, clamp `Visualizer < 0` to 0, clamp unknown theme to `"black"`
+      - test: `TestLoad_NegativePreset_ClampsToZero`, `TestLoad_NegativeVisualizer_ClampsToZero`, `TestLoad_UnknownTheme_ClampsToBlack`, `TestLoad_ValidPreferences_Preserved`
 - [ ] Update all `cfg.UI` references in `internal/app/app.go`, `cmd/root.go`, `cmd/root_test.go`, and `internal/app/*_test.go`
       - test: `make ci` passes after rename
 - [ ] Add `defaultTemplate` constant and `Bootstrap()` function to `internal/config/config.go`
