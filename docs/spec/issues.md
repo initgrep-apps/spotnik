@@ -130,3 +130,19 @@ The ASCII diagram at line 33 still shows `LibraryPane`, `PlayerPane`, and `Queue
 **Feature:** 16-vivid-themes
 
 In `devices.go renderDevice()`, literal `" "` space characters concatenated between styled cursor-row elements carry no `Background(SelectedBg())`. Unlike `themes.go` which wraps the entire row in a `rowStyle` with background, `devices.go` returns raw concatenation. This can create 1-column highlight gaps on cursor rows depending on terminal rendering.
+
+---
+
+## Custom theme silent fallback when missing new fields
+**Found:** 2026-04-01 | **Source:** PR #96 Review
+**Feature:** 16-vivid-themes
+
+`theme.Load(id)` silently falls back to the default theme if a user-provided TOML fails validation (e.g., missing the `info` field added in story 79). No toast or user-visible feedback explains why their custom theme was rejected. Consider logging when a user theme fails validation.
+
+---
+
+## persistThemeChoice error silently discarded
+**Found:** 2026-04-01 | **Source:** PR #96 Review
+**Feature:** 16-vivid-themes
+
+In `app.go` ThemeSwitchMsg handler, `a.persistThemeChoice(m.ThemeID)` is called in an anonymous Cmd that returns nil regardless of success. If config file write fails, the theme switch appears successful but the choice is lost on restart.
