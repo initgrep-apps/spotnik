@@ -322,10 +322,7 @@ func (a *App) renderStatusBar() string {
 		Foreground(a.theme.StatusBarFg())
 
 	// keyStyle uses Foreground + Background + Bold. The explicit Background(StatusBarBg())
-	// matches bgStyle's background exactly, ensuring no ANSI nesting gaps that would
-	// produce visible "pill" rectangles around key characters. The space before each
-	// label is included in bgStyle.Render(" "+h.Label) so every character has a
-	// consistent background with no unstyled gap between key and label.
+	// matches bgStyle's background so every character has consistent background.
 	keyStyle := lipgloss.NewStyle().
 		Foreground(a.theme.KeyHint()).
 		Background(a.theme.StatusBarBg()).
@@ -361,6 +358,14 @@ func (a *App) renderStatusBar() string {
 		parts = append(parts, keyStyle.Render(h.Key)+bgStyle.Render(" "+h.Label))
 	}
 
-	// 2-space separator (tighter than the old 3-space gap).
-	return bgStyle.Render("  " + strings.Join(parts, "  "))
+	// Flat assembly: every piece (prefix, separator, padding) is explicitly styled
+	// with bgStyle so no character falls back to terminal default background.
+	// This avoids ANSI nesting issues that cause visible "pill" backgrounds on keys.
+	sep := bgStyle.Render("  ")
+	bar := bgStyle.Render("  ") + strings.Join(parts, sep)
+	// Pad to terminal width so background covers the full row.
+	if barW := lipgloss.Width(bar); a.width > barW {
+		bar += bgStyle.Render(strings.Repeat(" ", a.width-barW))
+	}
+	return bar
 }
