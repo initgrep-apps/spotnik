@@ -39,7 +39,7 @@ func successServer() *httptest.Server {
 
 func TestAppNew_ReceivesTheme(t *testing.T) {
 	cfg := &config.Config{}
-	cfg.UI.Theme = "monokai"
+	cfg.Preferences.Theme = "monokai"
 
 	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
@@ -48,7 +48,7 @@ func TestAppNew_ReceivesTheme(t *testing.T) {
 
 func TestAppNew_DefaultThemeFallback(t *testing.T) {
 	cfg := &config.Config{}
-	cfg.UI.Theme = "invalid-theme-id"
+	cfg.Preferences.Theme = "invalid-theme-id"
 
 	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
@@ -58,7 +58,7 @@ func TestAppNew_DefaultThemeFallback(t *testing.T) {
 
 func TestAppNew_EmptyThemeUsesDefault(t *testing.T) {
 	cfg := &config.Config{}
-	// cfg.UI.Theme is zero value (empty string)
+	// cfg.Preferences.Theme is zero value (empty string)
 
 	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
@@ -1883,7 +1883,7 @@ func TestApp_SearchClearedMsg_ClearsStoreState(t *testing.T) {
 func TestApp_OverlayRendering_UsesThemeBaseColor(t *testing.T) {
 	// Use monokai theme (Base() = #272822, not #000000).
 	cfg := &config.Config{}
-	cfg.UI.Theme = "monokai"
+	cfg.Preferences.Theme = "monokai"
 	a := app.New(cfg, app.AppOptions{})
 
 	// Set valid terminal size.

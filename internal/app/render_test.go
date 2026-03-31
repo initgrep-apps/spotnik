@@ -22,7 +22,7 @@ func newThemeOverlayForTest(a *App) *panes.ThemeOverlay {
 // newRenderTestApp creates a minimal App suitable for render unit tests.
 func newRenderTestApp() *App {
 	cfg := &config.Config{}
-	cfg.UI.Theme = theme.DefaultThemeID
+	cfg.Preferences.Theme = theme.DefaultThemeID
 	return New(cfg, AppOptions{})
 }
 

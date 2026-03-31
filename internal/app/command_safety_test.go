@@ -23,7 +23,7 @@ import (
 // newSafetyTestApp creates a minimal App for command safety tests.
 func newSafetyTestApp() *app.App {
 	cfg := &config.Config{}
-	cfg.UI.Theme = "black"
+	cfg.Preferences.Theme = "black"
 	return app.New(cfg, app.AppOptions{})
 }
 

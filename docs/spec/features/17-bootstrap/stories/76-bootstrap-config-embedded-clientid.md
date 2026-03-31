@@ -1,7 +1,7 @@
 ---
 title: "Bootstrap Config & Embedded Client ID"
 feature: 17-bootstrap
-status: open
+status: done
 ---
 
 ## Background

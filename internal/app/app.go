@@ -178,9 +178,9 @@ type AppOptions struct {
 	TokenBaseURL string
 }
 
-// New creates a new App, loading the theme from cfg.UI.Theme.
+// New creates a new App, loading the theme from cfg.Preferences.Theme.
 func New(cfg *config.Config, opts AppOptions) *App {
-	t := theme.Load(cfg.UI.Theme)
+	t := theme.Load(cfg.Preferences.Theme)
 	s := state.New()
 	gw := api.NewGateway()
 
@@ -218,7 +218,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 
 	mgr := layout.NewManager()
 
-	volStep := cfg.UI.VolumeStep
+	volStep := cfg.Preferences.VolumeStep
 	if volStep <= 0 {
 		volStep = 5
 	}
