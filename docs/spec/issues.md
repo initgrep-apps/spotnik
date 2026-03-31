@@ -122,3 +122,11 @@ The ASCII diagram at line 33 still shows `LibraryPane`, `PlayerPane`, and `Queue
 **Feature:** 13-nowplaying
 
 `formatDuration` in `gradient.go` and `formatDurationMs` in `nowplaying.go` are duplicate implementations. Extract to a shared utility in `components/`.
+
+---
+
+## Unstyled space characters in device overlay cursor rows
+**Found:** 2026-03-31 | **Source:** PR #94 Review
+**Feature:** 16-vivid-themes
+
+In `devices.go renderDevice()`, literal `" "` space characters concatenated between styled cursor-row elements carry no `Background(SelectedBg())`. Unlike `themes.go` which wraps the entire row in a `rowStyle` with background, `devices.go` returns raw concatenation. This can create 1-column highlight gaps on cursor rows depending on terminal rendering.
