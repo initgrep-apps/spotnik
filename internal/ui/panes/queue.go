@@ -256,7 +256,7 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 		ShowHeader:   true,
 	})
 	q.table.SetFocused(q.focused)
-	q.table.SetSize(q.width, q.height)
+	q.resizeTable()
 	q.refreshRows()
 }
 

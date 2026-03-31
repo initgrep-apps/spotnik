@@ -244,7 +244,7 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 		ShowHeader:   true,
 	})
 	a.table.SetFocused(a.focused)
-	a.table.SetSize(a.width, a.height)
+	a.resizeTable()
 	a.refreshRows()
 }
 

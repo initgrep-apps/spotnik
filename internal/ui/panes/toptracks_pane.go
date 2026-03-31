@@ -285,7 +285,7 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 		ShowHeader:   true,
 	})
 	p.table.SetFocused(p.focused)
-	p.table.SetSize(p.width, p.height)
+	p.resizeTable()
 	p.refreshRows()
 }
 

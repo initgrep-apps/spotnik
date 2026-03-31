@@ -236,7 +236,7 @@ func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 		ShowHeader:   true,
 	})
 	r.table.SetFocused(r.focused)
-	r.table.SetSize(r.width, r.height)
+	r.resizeTable()
 	r.refreshRows()
 }
 

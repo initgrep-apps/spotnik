@@ -33,8 +33,8 @@ type ThemeOverlay struct {
 	// currentID is the ID of the currently active theme (marked with ◉).
 	currentID string
 	// theme is the active theme used for rendering the overlay's own chrome.
-	theme theme.Theme
-	width int
+	theme  theme.Theme
+	width  int
 	height int
 }
 

@@ -246,7 +246,7 @@ func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 		ShowHeader:   true,
 	})
 	l.table.SetFocused(l.focused)
-	l.table.SetSize(l.width, l.height)
+	l.resizeTable()
 	l.refreshRows()
 }
 
