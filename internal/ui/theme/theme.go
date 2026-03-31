@@ -44,6 +44,7 @@ type Theme interface {
 	Success() lipgloss.Color          // Success states
 	Warning() lipgloss.Color          // Caution notices
 	Error() lipgloss.Color            // Error messages
+	Info() lipgloss.Color             // Informational notices (info toasts)
 	DeviceActive() lipgloss.Color     // ◉ active device indicator
 
 	// Status bar
