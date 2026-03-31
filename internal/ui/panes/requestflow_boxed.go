@@ -22,14 +22,14 @@ func (p *RequestFlowPane) renderSubBox(title string, lines []string, width int) 
 		return ""
 	}
 
-	borderColor := p.theme.TextSecondary()
+	borderColor := p.theme.PaneBorderRequestFlow()
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 	borderChar := borderStyle.Render("│")
 
 	innerW := width - 2 // subtract left/right border chars
 
 	// Build top border: ╭─ TITLE ──────╮
-	titleStyled := lipgloss.NewStyle().Foreground(p.theme.TextSecondary()).Bold(true).Render(title)
+	titleStyled := lipgloss.NewStyle().Foreground(p.theme.PaneBorderRequestFlow()).Bold(true).Render(title)
 	titleVisible := lipgloss.Width(titleStyled)
 
 	// Fill pattern: "─ <title> " then pad to innerW

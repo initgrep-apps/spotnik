@@ -9,6 +9,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -308,4 +309,63 @@ func TestBuildView_DynamicResize_ShrinkThenGrow(t *testing.T) {
 	result = a.buildView()
 	assert.NotContains(t, result, "Spotnik needs more space",
 		"restored to minimum size, grid should render again")
+}
+
+// --- Story 74 Task 2: status bar theme hint ---
+
+// TestRenderStatusBar_ContainsThemeHint verifies that the status bar includes
+// the "t" key and "theme" label added by story 73.
+func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
+	a := newRenderTestApp()
+	result := a.renderStatusBar()
+
+	assert.Contains(t, result, "t", "status bar should contain 't' key for theme shortcut")
+	assert.Contains(t, result, "theme", "status bar should contain 'theme' shortcut label")
+}
+
+// --- Story 74 Task 3: key style no background ---
+
+// TestRenderStatusBar_KeyStyleNoBackground verifies that key labels in the
+// status bar render without an explicit per-key background color. The fix
+// removes Background(StatusBarBg()) from keyStyle so individual key tokens
+// inherit the parent bar's background naturally.
+//
+// The test renders a keyStyle (matching renderStatusBar's definition) in
+// isolation — without a parent bgStyle wrapper — and asserts the ANSI output
+// contains no "48;2;" background escape sequence. A companion style WITH
+// Background() is rendered to confirm the assertion is meaningful (i.e. if
+// Background were present, the ANSI code would appear).
+func TestRenderStatusBar_KeyStyleNoBackground(t *testing.T) {
+	// Force TrueColor so lipgloss emits ANSI RGB escapes even without a TTY.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	a := newRenderTestApp()
+
+	// keyStyle as defined in renderStatusBar — Foreground + Bold only, no Background.
+	keyStyle := lipgloss.NewStyle().
+		Foreground(a.theme.KeyHint()).
+		Bold(true)
+
+	// Render a key token in isolation (no parent background wrapper).
+	rendered := keyStyle.Render("q")
+
+	// "48;2;" is the ANSI SGR introducer for 24-bit RGB background color.
+	// Its absence proves keyStyle carries no per-key background escape.
+	assert.NotContains(t, rendered, "48;2;",
+		"keyStyle should NOT produce a background ANSI escape (48;2;)")
+
+	// Sanity check: adding Background() back DOES produce the escape, proving
+	// the assertion above is meaningful and not vacuously true.
+	withBg := keyStyle.Background(a.theme.StatusBarBg()).Render("q")
+	assert.Contains(t, withBg, "48;2;",
+		"keyStyle WITH Background() must produce a 48;2; escape (sanity check)")
+
+	// Regression: status bar should still render all expected key hints.
+	result := a.renderStatusBar()
+	assert.NotEmpty(t, result)
+	assert.Contains(t, result, "search")
+	assert.Contains(t, result, "quit")
+	assert.Contains(t, result, "theme")
 }

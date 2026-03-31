@@ -316,8 +316,10 @@ func (a *App) renderStatusBar() string {
 		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.StatusBarFg())
 
+	// keyStyle uses only Foreground + Bold; no Background so key characters
+	// inherit the parent bar's background naturally and avoid visible "pill"
+	// rectangles in terminals that distinguish per-token background regions.
 	keyStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
 		Foreground(a.theme.KeyHint()).
 		Bold(true)
 
@@ -329,6 +331,7 @@ func (a *App) renderStatusBar() string {
 		{"1-8", "toggle"},
 		{"Tab", "pane"},
 		{"d", "devices"},
+		{"t", "theme"},
 		{"?", "help"},
 		{"q", "quit"},
 	}
