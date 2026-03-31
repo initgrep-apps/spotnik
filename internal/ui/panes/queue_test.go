@@ -674,3 +674,20 @@ func TestQueuePane_LongTrackName(t *testing.T) {
 		assert.LessOrEqual(t, lipgloss.Width(line), 80, "line should not massively overflow pane width")
 	}
 }
+
+// ── Story 71 Task 2: column color tokens ─────────────────────────────────────
+
+// TestQueuePane_UsesColumnColors verifies that QueuePane column definitions
+// use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens
+// instead of the deprecated TextMuted/TextPrimary/TextSecondary.
+func TestQueuePane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	q := NewQueuePane(state.New(), th, false)
+	cols := q.table.Columns()
+	require.Len(t, cols, 4, "QueuePane should have 4 columns")
+
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
+}

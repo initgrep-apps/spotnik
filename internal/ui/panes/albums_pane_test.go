@@ -271,3 +271,19 @@ func TestAlbumsPane_Navigation_JK(t *testing.T) {
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}) //nolint:errcheck
 	assert.Greater(t, pane.Cursor(), initialCursor, "cursor should move down after j")
 }
+
+// ── Story 71 Task 2: column color tokens ─────────────────────────────────────
+
+// TestAlbumsPane_UsesColumnColors verifies that AlbumsPane column definitions
+// use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens.
+func TestAlbumsPane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	a := NewAlbumsPane(state.New(), th, false)
+	cols := a.table.Columns()
+	require.Len(t, cols, 4, "AlbumsPane should have 4 columns")
+
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Name column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Year column should use ColumnTertiary()")
+}

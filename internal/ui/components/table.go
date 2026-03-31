@@ -213,6 +213,12 @@ func (t *Table) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// Columns returns the column definitions used to construct this table.
+// Primarily used in tests to verify that the correct color tokens were applied.
+func (t *Table) Columns() []ColumnDef {
+	return t.config.Columns
+}
+
 // View renders the table to a string. Call SetSize before first render.
 func (t *Table) View() string {
 	return t.inner.View()

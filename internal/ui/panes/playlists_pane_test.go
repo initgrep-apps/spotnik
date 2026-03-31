@@ -422,3 +422,27 @@ func TestPlaylistsPane_RefreshRows_UpdatesTable(t *testing.T) {
 	output := pane.View()
 	assert.Contains(t, output, "RefreshedPlaylist", "RefreshRows should update the view")
 }
+
+// ── Story 71 Task 4: column color tokens ─────────────────────────────────────
+
+// TestPlaylistsPane_UsesColumnColors verifies that PlaylistsPane column definitions
+// (both list view and track sub-view) use the new column color tokens.
+func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	p := NewPlaylistsPane(state.New(), th, false)
+
+	// List view: # → ColumnIndex, Name → ColumnPrimary, Tracks → ColumnTertiary
+	listCols := p.table.Columns()
+	require.Len(t, listCols, 3, "PlaylistsPane list table should have 3 columns")
+	assert.Equal(t, th.ColumnIndex(), listCols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), listCols[1].Color, "Name column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnTertiary(), listCols[2].Color, "Tracks column should use ColumnTertiary()")
+
+	// Track sub-view: # → ColumnIndex, Track → ColumnPrimary, Artist → ColumnSecondary, Duration → ColumnTertiary
+	trackCols := p.trackTable.Columns()
+	require.Len(t, trackCols, 4, "PlaylistsPane track table should have 4 columns")
+	assert.Equal(t, th.ColumnIndex(), trackCols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), trackCols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), trackCols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), trackCols[3].Color, "Duration column should use ColumnTertiary()")
+}

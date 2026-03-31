@@ -1,7 +1,7 @@
 ---
 title: "Always-Colorful Borders and Per-Column Table Colors"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background

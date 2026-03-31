@@ -200,3 +200,19 @@ func TestRecentlyPlayedPane_Init(t *testing.T) {
 	cmd := pane.Init()
 	assert.Nil(t, cmd)
 }
+
+// ── Story 71 Task 2: column color tokens ─────────────────────────────────────
+
+// TestRecentlyPlayedPane_UsesColumnColors verifies that RecentlyPlayedPane column
+// definitions use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens.
+func TestRecentlyPlayedPane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	p := NewRecentlyPlayedPane(state.New(), th, false)
+	cols := p.table.Columns()
+	require.Len(t, cols, 4, "RecentlyPlayedPane should have 4 columns")
+
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Played column should use ColumnTertiary()")
+}

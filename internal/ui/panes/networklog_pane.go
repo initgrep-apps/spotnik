@@ -50,13 +50,13 @@ var _ layout.Pane = &NetworkLogPane{}
 // NewNetworkLogPane creates a NetworkLogPane with the given store and theme.
 func NewNetworkLogPane(s *state.Store, th theme.Theme) *NetworkLogPane {
 	columns := []components.ColumnDef{
-		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.TextMuted()},
-		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.TextSecondary()},
-		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.TextPrimary()},
-		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.TextPrimary()},
-		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.TextMuted()},
-		{Key: "priority", Header: "PRIORITY", FlexFactor: 3, Color: th.TextMuted()},
-		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.TextSecondary()},
+		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.ColumnSecondary()},
+		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.ColumnPrimary()},
+		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "priority", Header: "PRIORITY", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.ColumnSecondary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
