@@ -9,6 +9,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -329,15 +330,41 @@ func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
 // removes Background(StatusBarBg()) from keyStyle so individual key tokens
 // inherit the parent bar's background naturally.
 //
-// The test renders the full status bar and ensures the key hints still appear
-// (regression check) and that the status bar is non-empty.
+// The test renders a keyStyle (matching renderStatusBar's definition) in
+// isolation — without a parent bgStyle wrapper — and asserts the ANSI output
+// contains no "48;2;" background escape sequence. A companion style WITH
+// Background() is rendered to confirm the assertion is meaningful (i.e. if
+// Background were present, the ANSI code would appear).
 func TestRenderStatusBar_KeyStyleNoBackground(t *testing.T) {
-	a := newRenderTestApp()
-	result := a.renderStatusBar()
+	// Force TrueColor so lipgloss emits ANSI RGB escapes even without a TTY.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 
-	// Status bar must still be non-empty and contain all key hint labels.
+	a := newRenderTestApp()
+
+	// keyStyle as defined in renderStatusBar — Foreground + Bold only, no Background.
+	keyStyle := lipgloss.NewStyle().
+		Foreground(a.theme.KeyHint()).
+		Bold(true)
+
+	// Render a key token in isolation (no parent background wrapper).
+	rendered := keyStyle.Render("q")
+
+	// "48;2;" is the ANSI SGR introducer for 24-bit RGB background color.
+	// Its absence proves keyStyle carries no per-key background escape.
+	assert.NotContains(t, rendered, "48;2;",
+		"keyStyle should NOT produce a background ANSI escape (48;2;)")
+
+	// Sanity check: adding Background() back DOES produce the escape, proving
+	// the assertion above is meaningful and not vacuously true.
+	withBg := keyStyle.Background(a.theme.StatusBarBg()).Render("q")
+	assert.Contains(t, withBg, "48;2;",
+		"keyStyle WITH Background() must produce a 48;2; escape (sanity check)")
+
+	// Regression: status bar should still render all expected key hints.
+	result := a.renderStatusBar()
 	assert.NotEmpty(t, result)
-	// All shortcuts should remain visible after removing per-key background.
 	assert.Contains(t, result, "search")
 	assert.Contains(t, result, "quit")
 	assert.Contains(t, result, "theme")
