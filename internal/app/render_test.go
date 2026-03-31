@@ -53,11 +53,13 @@ func TestRenderHeader_ContainsPresetIndex(t *testing.T) {
 }
 
 func TestRenderHeader_ContainsActionShortcuts(t *testing.T) {
+	// Story 75: search and devices shortcuts are removed from header (they live in the status bar).
+	// This test now verifies they are NOT in the header.
 	a := newRenderTestApp()
 	result := a.renderHeader()
 
-	assert.Contains(t, result, "search", "header should show search action")
-	assert.Contains(t, result, "devices", "header should show devices action")
+	assert.NotContains(t, result, "search", "header should NOT show search action (it's in the status bar)")
+	assert.NotContains(t, result, "devices", "header should NOT show devices action (it's in the status bar)")
 }
 
 func TestRenderHeader_NoDevice_ShowsNoDevice(t *testing.T) {
@@ -311,7 +313,41 @@ func TestBuildView_DynamicResize_ShrinkThenGrow(t *testing.T) {
 		"restored to minimum size, grid should render again")
 }
 
-// --- Story 74 Task 2: status bar theme hint ---
+// --- Story 75 Task 2: Header cleanup — no shortcut duplicates ---
+
+// TestRenderHeader_NoShortcutKeys verifies that the header does NOT show
+// shortcut hints (ᐅ/ search, ᐅd devices) that are already in the status bar.
+func TestRenderHeader_NoShortcutKeys(t *testing.T) {
+	a := newRenderTestApp()
+	result := a.renderHeader()
+
+	assert.NotContains(t, result, "ᐅ/", "header must not show ᐅ/ search shortcut")
+	assert.NotContains(t, result, "ᐅd", "header must not show ᐅd devices shortcut")
+	assert.NotContains(t, result, "ᐅp", "header must not show ᐅp preset shortcut")
+}
+
+// TestRenderHeader_PageA_ShowsPreset verifies that on Page A, the header shows
+// the preset number (e.g. "preset 0").
+func TestRenderHeader_PageA_ShowsPreset(t *testing.T) {
+	a := newRenderTestApp()
+	// Default page is Page A.
+	result := a.renderHeader()
+
+	assert.Contains(t, result, "preset 0", "header should show 'preset 0' on Page A")
+}
+
+// TestRenderHeader_PageB_NoPreset verifies that on Page B, the header does NOT
+// show any preset number (Page B has a single fixed layout with no presets).
+func TestRenderHeader_PageB_NoPreset(t *testing.T) {
+	a := newRenderTestApp()
+	// Switch to Page B.
+	a.layout.TogglePage()
+	result := a.renderHeader()
+
+	assert.NotContains(t, result, "preset", "header should NOT show preset on Page B")
+}
+
+// --- Story 75 Task 2: status bar theme hint ---
 
 // TestRenderStatusBar_ContainsThemeHint verifies that the status bar includes
 // the "t" key and "theme" label added by story 73.

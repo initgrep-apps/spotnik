@@ -235,12 +235,13 @@ func pageLabel(page layout.PageID) string {
 }
 
 // renderHeader renders the btop-style header bar containing:
-// Left: spotnik ─ Page A ─ ᐅp preset 0 ─ ᐅ/ search ─ ᐅd devices
-// Right: ◉ DeviceName  (or  ○ No device)
+// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName (or ○ No device)
+// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName (or ○ No device)
 //
-// All separator dashes use "─" (U+2500). Key labels are rendered in KeyHint() color,
-// descriptions in TextMuted() color, and the app name in TextPrimary()+Bold.
-// The background is StatusBarBg(). The line is padded/trimmed to match a.width exactly.
+// Shortcut hints (search, devices, preset key) are omitted from the header because
+// they already appear in the bottom status bar — the header is for contextual info only.
+// All separator dashes use "─" (U+2500). The app name uses TextPrimary()+Bold.
+// The background is StatusBarBg(). The line is padded to match a.width exactly.
 func (a *App) renderHeader() string {
 	bgStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
@@ -269,18 +270,19 @@ func (a *App) renderHeader() string {
 	// App name segment.
 	appName := appNameStyle.Render(" spotnik ")
 
-	// Page indicator: "Page A"
+	// Page indicator: "Page A" or "Page B"
 	page := mutedStyle.Render("Page ") + keyStyle.Render(pageLabel(a.layout.ActivePage()))
 
-	// Preset indicator: "ᐅp preset 0"
-	presetIdx := a.layout.ActivePresetIndex()
-	preset := mutedStyle.Render("ᐅ") + keyStyle.Render("p") + mutedStyle.Render(fmt.Sprintf(" preset %d", presetIdx))
-
-	// Action shortcuts: "ᐅ/ search"  "ᐅd devices"
-	search := mutedStyle.Render("ᐅ") + keyStyle.Render("/") + mutedStyle.Render(" search")
-	devices := mutedStyle.Render("ᐅ") + keyStyle.Render("d") + mutedStyle.Render(" devices")
-
-	left := appName + sep + page + sep + preset + sep + search + sep + devices
+	// Build left segment — Page A shows the active preset index as contextual info;
+	// Page B has a single fixed layout with no user-selectable presets, so it is omitted.
+	var left string
+	if a.layout.ActivePage() == layout.PageB {
+		left = appName + sep + page
+	} else {
+		presetIdx := a.layout.ActivePresetIndex()
+		preset := mutedStyle.Render(fmt.Sprintf("preset %d", presetIdx))
+		left = appName + sep + page + sep + preset
+	}
 
 	// Right side: device indicator.
 	device := a.store.ActiveDevice()
