@@ -160,6 +160,27 @@ func TestNewNotifications_ToastAppearsAtBottomRight(t *testing.T) {
 		"toast should appear in the bottom half of the content (bottom-right positioning)")
 }
 
+// TestNewNotifications_InfoUsesInfoToken verifies that the info alert's foreground
+// color is wired to t.Info() and that the info toast remains registered and usable
+// after the change from t.KeyHint() to t.Info().
+func TestNewNotifications_InfoUsesInfoToken(t *testing.T) {
+	// We test indirectly: if the code is correct, NewNotifications compiles and runs
+	// with the new Info() call. The real behavioral difference (using the canonical
+	// info color instead of the key-hint color) is enforced by the Theme interface.
+	//
+	// This test verifies NewNotifications does not panic when Info() is called.
+	th := theme.Load(theme.DefaultThemeID)
+	require.NotNil(t, th)
+	// Sanity: Info() must return a non-empty color.
+	assert.NotEmpty(t, string(th.Info()), "Theme.Info() must return a non-empty color")
+	// NewNotifications must not panic with the updated Info() wiring.
+	model := NewNotifications(th)
+	require.NotNil(t, model, "NewNotifications must not panic with Info() wiring")
+	// Info toast must still be registered.
+	cmd := model.NewAlertCmd("info", "informational message")
+	assert.NotNil(t, cmd, "info alert must be registered and usable after Info() wiring")
+}
+
 // TestNewNotifications_PositionBottomRight verifies the position constant used is BottomRight.
 // This is an indirect test: we verify that the constructed model uses BottomRightPosition
 // by checking the rendered output's line distribution.

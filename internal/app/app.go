@@ -1368,8 +1368,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Close the overlay.
 		a.showThemeSwitcher = false
 		a.themeOverlay = nil
+		// Recreate alerts so new toasts use the new theme's colors.
+		// This must happen before the NewAlertCmd call below so the success
+		// toast itself renders with the new theme's success color.
+		// NOTE: Any in-flight toast is intentionally dropped — theme switch is
+		// user-initiated and the success toast fires immediately after.
+		a.alerts = *components.NewNotifications(newTheme)
 		// Persist the choice asynchronously via a Cmd (no side effects in Update).
+		alertInitCmd := a.alerts.Init()
 		return a, tea.Batch(
+			alertInitCmd,
 			a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name()),
 			func() tea.Msg {
 				a.persistThemeChoice(m.ThemeID)

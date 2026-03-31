@@ -45,6 +45,7 @@ type themeColors struct {
 	Success          string `toml:"success"`
 	Warning          string `toml:"warning"`
 	Error            string `toml:"error"`
+	Info             string `toml:"info"`
 	DeviceActive     string `toml:"device_active"`
 	StatusBarBg      string `toml:"status_bar_bg"`
 	StatusBarFg      string `toml:"status_bar_fg"`
@@ -194,6 +195,9 @@ func (t *ConfigTheme) Warning() lipgloss.Color { return lipgloss.Color(t.c.Warni
 
 // Error returns the error message color.
 func (t *ConfigTheme) Error() lipgloss.Color { return lipgloss.Color(t.c.Error) }
+
+// Info returns the informational notice color (used for info toasts).
+func (t *ConfigTheme) Info() lipgloss.Color { return lipgloss.Color(t.c.Info) }
 
 // DeviceActive returns the active device indicator color.
 func (t *ConfigTheme) DeviceActive() lipgloss.Color { return lipgloss.Color(t.c.DeviceActive) }

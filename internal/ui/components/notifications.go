@@ -41,7 +41,7 @@ func NewNotifications(t theme.Theme) *bubbleup.AlertModel {
 	}
 	infoAlert := bubbleup.AlertDefinition{
 		Key:       "info",
-		ForeColor: string(t.KeyHint()),
+		ForeColor: string(t.Info()),
 		Prefix:    "→",
 	}
 	rateLimitAlert := bubbleup.AlertDefinition{

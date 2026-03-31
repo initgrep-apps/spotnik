@@ -104,6 +104,8 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.ColumnPrimary()), "ColumnPrimary()")
 	assert.NotEmpty(t, string(th.ColumnSecondary()), "ColumnSecondary()")
 	assert.NotEmpty(t, string(th.ColumnTertiary()), "ColumnTertiary()")
+	// Story 79: Info token
+	assert.NotEmpty(t, string(th.Info()), "Info()")
 }
 
 func TestAllThemes_ImplementInterface(t *testing.T) {
@@ -402,6 +404,7 @@ volume_bar       = "#eeeeee"
 success          = "#ff0000"
 warning          = "#00ff00"
 error            = "#0000ff"
+info             = "#00aaff"
 device_active    = "#112233"
 status_bar_bg    = "#223344"
 status_bar_fg    = "#334455"
@@ -509,6 +512,7 @@ func TestConfigTheme_ReturnsCorrectColors(t *testing.T) {
 		{"Success", string(th.Success()), "#ff0000"},
 		{"Warning", string(th.Warning()), "#00ff00"},
 		{"Error", string(th.Error()), "#0000ff"},
+		{"Info", string(th.Info()), "#00aaff"},
 		{"DeviceActive", string(th.DeviceActive()), "#112233"},
 		{"StatusBarBg", string(th.StatusBarBg()), "#223344"},
 		{"StatusBarFg", string(th.StatusBarFg()), "#334455"},
@@ -634,6 +638,7 @@ volume_bar       = "#ef0123"
 success          = "#f01234"
 warning          = "#012345"
 error            = "#123450"
+info             = "#1188ee"
 device_active    = "#234561"
 status_bar_bg    = "#345672"
 status_bar_fg    = "#456783"
@@ -699,6 +704,7 @@ volume_bar       = "#789ab6"
 success          = "#89abc7"
 warning          = "#9abcd8"
 error            = "#abcde9"
+info             = "#22bbff"
 device_active    = "#bcdef0"
 status_bar_bg    = "#cdef01"
 status_bar_fg    = "#def012"
@@ -855,6 +861,7 @@ volume_bar       = "#220000"
 success          = "#110000"
 warning          = "#100000"
 error            = "#0f0000"
+info             = "#0e00ff"
 device_active    = "#0e0000"
 status_bar_bg    = "#0d0000"
 status_bar_fg    = "#0c0000"
@@ -891,4 +898,27 @@ network_log     = "#aa0000"
 	assert.Equal(t, "Custom Black", th.Name())
 	// The override should replace the built-in black base color.
 	assert.Equal(t, "#ff0000", string(th.Base()))
+}
+
+// ---- Story 79: Info() token ----
+
+// TestConfigTheme_Info verifies that the Info() token returns the expected canonical
+// info color for the black theme (used as a known reference).
+func TestConfigTheme_Info(t *testing.T) {
+	th := theme.Load("black")
+	require.NotNil(t, th)
+	assert.Equal(t, "#00afff", string(th.Info()),
+		"black theme Info() should return canonical info color #00afff")
+}
+
+// TestAllThemes_InfoTokenNonEmpty verifies every theme has a non-empty Info() token.
+func TestAllThemes_InfoTokenNonEmpty(t *testing.T) {
+	for _, id := range theme.Available() {
+		id := id
+		t.Run(id, func(t *testing.T) {
+			th := theme.Load(id)
+			require.NotNil(t, th)
+			assert.NotEmpty(t, string(th.Info()), "Info() must not be empty for theme %s", id)
+		})
+	}
 }
