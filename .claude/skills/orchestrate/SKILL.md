@@ -2,8 +2,8 @@
 name: orchestrate
 description: |
   Autonomous end-to-end implementation pipeline. Validates a spec, launches the
-  feature-implementer agent in a worktree, runs external PR review with fix
-  cycles, finalizes docs, merges, and cleans up. Use when: "orchestrate feature 15",
+  feature-implementer agent, runs external PR review with fix cycles, finalizes
+  docs, merges, and reports. Use when: "orchestrate feature 15",
   "orchestrate issue 19", "implement feature 15", "build issue 19", or any
   request to run the full implementation pipeline for a numbered spec.
 ---
@@ -54,8 +54,7 @@ Parse into:
 
 ## STEP 2 — LAUNCH FEATURE-IMPLEMENTER
 
-1. Launch the `feature-implementer` agent via the `Agent` tool with
-   `isolation: "worktree"`.
+1. Launch the `feature-implementer` agent via the `Agent` tool.
 2. Prompt:
    ```
    Implement story {story_number} from feature {NN-name}.
@@ -65,8 +64,7 @@ Parse into:
 3. Await the agent's return. Expect:
    - A summary of what was built
    - A PR URL
-4. **Store the agent ID** (for SendMessage in later steps) and **worktree path**
-   (for cleanup).
+4. **Store the agent ID** (for SendMessage in later steps).
 5. Extract the PR number from the URL.
 
 **If the agent escalates** (spec ambiguity, persistent CI failure, blocker):
@@ -97,14 +95,17 @@ for round = 1 to 3:
 4. **If critical/important issues found:**
    - Format the issues as an actionable fix list with file paths and
      descriptions.
-   - **SendMessage** to the same feature-implementer agent (use the stored
-     agent ID):
+   - Use the **SendMessage tool** to message the feature-implementer agent
+     (the `to` field is the stored agent ID from Step 2). **Do NOT launch a
+     new Agent** — SendMessage resumes the existing agent with its full
+     implementation context:
      ```
-     PR review round {N} found {count} critical issues. Fix these on the
-     feature branch, run CI, commit, and push:
+     SendMessage(to: <stored-agent-id>, message: "PR review round {N} found
+     {count} critical issues. Fix these on the feature branch, run CI,
+     commit, and push:
 
      1. {issue description — file path — suggested fix}
-     2. ...
+     2. ...")
      ```
    - Await the agent's response confirming fixes are pushed.
    - **Continue to next round.**
@@ -128,7 +129,8 @@ Only reached when the PR has passed external review.
 
 ### 4a. Doc finalization
 
-SendMessage to the feature-implementer agent:
+Use the **SendMessage tool** (NOT the Agent tool) to message the
+feature-implementer agent (stored agent ID from Step 2):
 
 ```
 PR is approved. On the feature branch, make these final updates:
@@ -162,11 +164,6 @@ Await confirmation that the commit is pushed.
 1. `gh pr merge {number} --merge`
 2. `git checkout main && git pull origin main`
 
-### 4c. Cleanup
-
-1. `git worktree remove {worktree_path}` — clean up the worktree created in Step 2.
-2. If the worktree remove fails (e.g., path already gone), that's fine — continue.
-
 ---
 
 ## STEP 5 — REPORT
@@ -192,8 +189,9 @@ Report to the user:
 
 - **Sequential only** — never launch multiple feature-implementers in parallel.
   Complete one spec fully before starting another.
-- **Same agent for fix cycles** — always SendMessage to the same feature-implementer
-  instance. Starting a new agent loses implementation context.
+- **Same agent for fix cycles** — always use the **SendMessage tool** (not Agent)
+  to reach the same feature-implementer instance. Starting a new agent loses
+  implementation context.
 - **Never merge on failure** — if review issues persist after 3 rounds, leave
   the PR open and escalate to the user.
 - **Respect dependency order** — if the spec depends on another spec, verify
