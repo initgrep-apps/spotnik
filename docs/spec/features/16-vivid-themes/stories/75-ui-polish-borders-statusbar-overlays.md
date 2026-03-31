@@ -1,7 +1,7 @@
 ---
 title: "Fix: UI Polish — Border Corners, Page-Aware Shortcuts, Header Cleanup, Overlay Backgrounds"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background
