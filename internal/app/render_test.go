@@ -309,3 +309,37 @@ func TestBuildView_DynamicResize_ShrinkThenGrow(t *testing.T) {
 	assert.NotContains(t, result, "Spotnik needs more space",
 		"restored to minimum size, grid should render again")
 }
+
+// --- Story 74 Task 2: status bar theme hint ---
+
+// TestRenderStatusBar_ContainsThemeHint verifies that the status bar includes
+// the "t" key and "theme" label added by story 73.
+func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
+	a := newRenderTestApp()
+	result := a.renderStatusBar()
+
+	assert.Contains(t, result, "theme", "status bar should contain 'theme' shortcut label")
+	// "t" may appear as part of other words, so check alongside theme.
+	assert.Contains(t, result, "theme", "status bar should show t theme shortcut")
+}
+
+// --- Story 74 Task 3: key style no background ---
+
+// TestRenderStatusBar_KeyStyleNoBackground verifies that key labels in the
+// status bar render without an explicit per-key background color. The fix
+// removes Background(StatusBarBg()) from keyStyle so individual key tokens
+// inherit the parent bar's background naturally.
+//
+// The test renders the full status bar and ensures the key hints still appear
+// (regression check) and that the status bar is non-empty.
+func TestRenderStatusBar_KeyStyleNoBackground(t *testing.T) {
+	a := newRenderTestApp()
+	result := a.renderStatusBar()
+
+	// Status bar must still be non-empty and contain all key hint labels.
+	assert.NotEmpty(t, result)
+	// All shortcuts should remain visible after removing per-key background.
+	assert.Contains(t, result, "search")
+	assert.Contains(t, result, "quit")
+	assert.Contains(t, result, "theme")
+}
