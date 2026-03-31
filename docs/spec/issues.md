@@ -146,3 +146,35 @@ In `devices.go renderDevice()`, literal `" "` space characters concatenated betw
 **Feature:** 16-vivid-themes
 
 In `app.go` ThemeSwitchMsg handler, `a.persistThemeChoice(m.ThemeID)` is called in an anonymous Cmd that returns nil regardless of success. If config file write fails, the theme switch appears successful but the choice is lost on restart.
+
+---
+
+## PersistTheme writes zero-valued Preset/Visualizer fields
+**Found:** 2026-04-01 | **Source:** PR #97 Review
+**Feature:** 17-bootstrap
+
+When `PersistTheme` updates the config file, it writes `preset = 0` and `visualizer = 0` even if those fields were never set by the user. This pollutes the config with values the user didn't choose. Consider using `omitempty` in the raw TOML struct or a different approach. Note: PersistTheme is being replaced by PreferenceStore in story 79, so this may resolve itself.
+
+---
+
+## ThemeValidator package-level var has no concurrency protection
+**Found:** 2026-04-01 | **Source:** PR #97 Review
+**Feature:** 17-bootstrap
+
+`config.ThemeValidator` is a mutable `func(string) bool` set in `cmd/root.go` init(). No mutex or sync.Once protects it. Safe today since it's set before any Load() call, but a latent data race if tests use `t.Parallel()` or if Load() is called from multiple goroutines.
+
+---
+
+## DefaultConfigPath silently falls back to CWD
+**Found:** 2026-04-01 | **Source:** PR #97 Review
+**Feature:** 17-bootstrap
+
+When `os.UserHomeDir()` fails, `DefaultConfigPath()` returns `"config.toml"` (relative to CWD) with no warning. Could cause config to be read/written from unexpected locations in containers or CI.
+
+---
+
+## Visualizer range hardcoded in comment
+**Found:** 2026-04-01 | **Source:** PR #97 Review
+**Feature:** 17-bootstrap
+
+The `Visualizer` field comment in `PreferencesConfig` says "0-6" which will rot if patterns are added/removed. Should reference the viz engine instead of hardcoding the count.
