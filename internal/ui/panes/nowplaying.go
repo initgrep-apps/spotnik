@@ -418,6 +418,16 @@ func emitPlaybackRequest(action PlaybackAction) tea.Cmd {
 	}
 }
 
+// SetTheme updates the theme reference for runtime theme switching.
+// NowPlayingPane propagates the new theme to its sub-components.
+func (p *NowPlayingPane) SetTheme(th theme.Theme) {
+	p.theme = th
+	p.infoBox = components.NewInfoBox(th)
+	p.engine = viz.NewEngine(th)
+	p.seekBar = components.NewGradientSeekBar(th)
+	p.volumeBar = components.NewGradientVolumeBar(th)
+}
+
 // paneMax returns the larger of two ints.
 func paneMax(a, b int) int {
 	if a > b {

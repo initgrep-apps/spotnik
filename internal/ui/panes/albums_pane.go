@@ -226,6 +226,28 @@ func (a *AlbumsPane) resizeTable() {
 	a.table.SetSize(a.width, tableHeight)
 }
 
+// SetTheme updates the theme reference and rebuilds the table with new column colors.
+// Called when the user switches themes at runtime.
+func (a *AlbumsPane) SetTheme(th theme.Theme) {
+	a.theme = th
+	a.filter = components.NewFilter(th)
+	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
+		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary()},
+	}
+	a.table = components.NewTable(components.TableConfig{
+		Columns:      columns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	a.table.SetFocused(a.focused)
+	a.table.SetSize(a.width, a.height)
+	a.refreshRows()
+}
+
 // Cursor returns the currently selected row index (0-based).
 func (a *AlbumsPane) Cursor() int {
 	return a.table.SelectedIndex()

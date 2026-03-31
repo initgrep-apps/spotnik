@@ -255,6 +255,27 @@ func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 	return result
 }
 
+// SetTheme updates the theme reference and rebuilds the table with new column colors.
+// Called when the user switches themes at runtime.
+func (a *TopArtistsPane) SetTheme(th theme.Theme) {
+	a.theme = th
+	a.filter = components.NewFilter(th)
+	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.ColumnPrimary()},
+		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.ColumnSecondary()},
+	}
+	a.table = components.NewTable(components.TableConfig{
+		Columns:      columns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	a.table.SetFocused(a.focused)
+	a.table.SetSize(a.width, a.height)
+	a.refreshRows()
+}
+
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (a *TopArtistsPane) resizeTable() {
 	tableHeight := a.height

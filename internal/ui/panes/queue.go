@@ -238,6 +238,28 @@ func (q *QueuePane) resizeTable() {
 	q.table.SetSize(q.width, tableHeight)
 }
 
+// SetTheme updates the theme reference and rebuilds the table with new column colors.
+// Called when the user switches themes at runtime.
+func (q *QueuePane) SetTheme(th theme.Theme) {
+	q.theme = th
+	q.filter = components.NewFilter(th)
+	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+	}
+	q.table = components.NewTable(components.TableConfig{
+		Columns:      columns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	q.table.SetFocused(q.focused)
+	q.table.SetSize(q.width, q.height)
+	q.refreshRows()
+}
+
 // Cursor returns the currently selected row index (0-based) in the table.
 // NOTE: kept for backward compatibility with tests.
 func (q *QueuePane) Cursor() int {

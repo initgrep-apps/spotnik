@@ -218,6 +218,28 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 	return result
 }
 
+// SetTheme updates the theme reference and rebuilds the table with new column colors.
+// Called when the user switches themes at runtime.
+func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
+	r.theme = th
+	r.filter = components.NewFilter(th)
+	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
+	}
+	r.table = components.NewTable(components.TableConfig{
+		Columns:      columns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	r.table.SetFocused(r.focused)
+	r.table.SetSize(r.width, r.height)
+	r.refreshRows()
+}
+
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (r *RecentlyPlayedPane) resizeTable() {
 	tableHeight := r.height

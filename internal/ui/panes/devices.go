@@ -255,6 +255,11 @@ func deviceTypeIcon(deviceType string) string {
 	}
 }
 
+// SetTheme updates the theme reference for runtime theme switching.
+func (d *DeviceOverlay) SetTheme(th theme.Theme) {
+	d.theme = th
+}
+
 // FetchDevicesRequestMsg is emitted by DeviceOverlay.Init() to signal the root
 // app model to fetch the device list and then deliver a DevicesLoadedMsg back.
 type FetchDevicesRequestMsg struct{}

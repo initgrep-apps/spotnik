@@ -624,6 +624,11 @@ func truncate(s string, maxRunes int) string {
 // --- Test helpers (exported only for test packages) ---
 
 // SearchDebounceMsgForTest creates a searchDebounceMsg for use in tests.
+// SetTheme updates the theme reference for runtime theme switching.
+func (o *SearchOverlay) SetTheme(th theme.Theme) {
+	o.theme = th
+}
+
 // This allows the test package (panes_test) to inject debounce messages
 // without exposing the unexported type in the production API.
 func SearchDebounceMsgForTest(query string) tea.Msg {

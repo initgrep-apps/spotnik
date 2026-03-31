@@ -291,6 +291,31 @@ func (p *NetworkLogPane) buildTableRows() {
 	p.table.SetRows(rows)
 }
 
+// SetTheme updates the theme reference and rebuilds the table with new column colors.
+// Called when the user switches themes at runtime.
+func (p *NetworkLogPane) SetTheme(th theme.Theme) {
+	p.theme = th
+	p.filter = components.NewFilter(th)
+	columns := []components.ColumnDef{
+		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.ColumnSecondary()},
+		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.ColumnPrimary()},
+		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "priority", Header: "PRIORITY", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.ColumnSecondary()},
+	}
+	p.table = components.NewTable(components.TableConfig{
+		Columns:      columns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	p.table.SetFocused(p.focused)
+	p.table.SetSize(p.width, p.height)
+	p.refreshRows()
+}
+
 // resizeTable adjusts table height to account for the filter bar when active.
 func (p *NetworkLogPane) resizeTable() {
 	h := p.height

@@ -401,6 +401,43 @@ func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 	return result
 }
 
+// SetTheme updates the theme reference and rebuilds both tables with new column colors.
+// Called when the user switches themes at runtime.
+func (p *PlaylistsPane) SetTheme(th theme.Theme) {
+	p.theme = th
+	p.filter = components.NewFilter(th)
+
+	listColumns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.ColumnPrimary()},
+		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
+	}
+	p.table = components.NewTable(components.TableConfig{
+		Columns:      listColumns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	p.table.SetFocused(p.focused && !p.inTrackView)
+
+	trackColumns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+	}
+	p.trackTable = components.NewTable(components.TableConfig{
+		Columns:      trackColumns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	p.trackTable.SetFocused(p.focused && p.inTrackView)
+
+	p.resizeTable()
+	p.refreshPlaylistRows()
+}
+
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (p *PlaylistsPane) resizeTable() {
 	tableHeight := p.height
