@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -200,6 +201,84 @@ func TestThemeOverlay_UpArrow(t *testing.T) {
 	if len(overlay.themes) > 1 {
 		assert.Equal(t, 0, updated.cursor, "up arrow should move cursor up")
 	}
+}
+
+// ── Story 75 Task 4: Theme overlay non-cursor row background ─────────────────
+
+// TestThemeOverlay_NonCursorRow_UsesBaseBackground verifies that non-cursor rows in
+// the theme overlay use Base() background (not Surface()), so they visually recede
+// behind the dimmed grid and the cursor row (with SelectedBg()) stands out clearly.
+func TestThemeOverlay_NonCursorRow_UsesBaseBackground(t *testing.T) {
+	themes := theme.AllThemes()
+	require.GreaterOrEqual(t, len(themes), 2, "need at least 2 themes to test non-cursor row")
+
+	th := theme.Load("black")
+	overlay := NewThemeOverlay(themes, "black", th)
+	// Set cursor to 0 so row 1 is a non-cursor row.
+	overlay.cursor = 0
+
+	// renderRow with idx=1 is a non-cursor row.
+	row := overlay.renderRow(1, themes[1], 40)
+
+	// Base() for the black theme encodes as a specific ANSI background sequence.
+	// We verify the row uses Base() by confirming it does NOT use Surface().
+	// In TrueColor mode, Surface() and Base() will produce different "48;2;R;G;B" sequences.
+	base := string(th.Base())
+	surface := string(th.Surface())
+	// Only do the color comparison if the two colors are actually different.
+	if base != surface {
+		// Surface() should not appear as the background of a non-cursor row.
+		// We convert both colors to lipgloss Styles and check rendered output.
+		baseStyle := lipgloss.NewStyle().Background(th.Base()).Render("X")
+		surfaceStyle := lipgloss.NewStyle().Background(th.Surface()).Render("X")
+		// The row should not contain the Surface() background escape (if different from Base()).
+		if baseStyle != surfaceStyle {
+			// Extract background ANSI code from surfaceStyle.
+			surfaceBg := extractBackgroundANSI(surfaceStyle)
+			if surfaceBg != "" {
+				assert.NotContains(t, row, surfaceBg,
+					"non-cursor row should use Base() background, not Surface()")
+			}
+		}
+	}
+}
+
+// TestThemeOverlay_CursorRow_UsesSelectedBg verifies that the cursor row uses
+// SelectedBg() so it clearly stands out from non-cursor rows.
+func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
+	themes := theme.AllThemes()
+	require.NotEmpty(t, themes)
+
+	th := theme.Load("black")
+	overlay := NewThemeOverlay(themes, "black", th)
+	overlay.cursor = 0
+
+	// renderRow with idx=0 is the cursor row.
+	row := overlay.renderRow(0, themes[0], 40)
+
+	// The cursor row must include the SelectedBg() color as a background.
+	selectedBgStyle := lipgloss.NewStyle().Background(th.SelectedBg()).Render("X")
+	selectedBg := extractBackgroundANSI(selectedBgStyle)
+	if selectedBg != "" {
+		assert.Contains(t, row, selectedBg,
+			"cursor row should use SelectedBg() background")
+	}
+}
+
+// extractBackgroundANSI extracts the "48;2;R;G;B" portion of an ANSI string if present.
+// Returns empty string if no background sequence is found.
+func extractBackgroundANSI(s string) string {
+	const bgPrefix = "48;2;"
+	idx := strings.Index(s, bgPrefix)
+	if idx < 0 {
+		return ""
+	}
+	// Find end of sequence (terminated by 'm').
+	end := strings.Index(s[idx:], "m")
+	if end < 0 {
+		return ""
+	}
+	return s[idx : idx+end]
 }
 
 // TestRenderSwatches_Contains5Blocks verifies that renderSwatches produces 5 block chars.

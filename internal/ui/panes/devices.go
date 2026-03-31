@@ -202,7 +202,10 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 	var bulletStyle lipgloss.Style
 	var nameStyle lipgloss.Style
 
-	bg := d.theme.SurfaceAlt()
+	// Non-cursor rows use Base() (effectively transparent against the dimmed grid
+	// behind the overlay) so the cursor row with SelectedBg() clearly stands out.
+	// SurfaceAlt() would create opaque colored blocks that obscure the dimmed grid.
+	bg := d.theme.Base()
 	if isCursor {
 		bg = d.theme.SelectedBg()
 	}

@@ -164,8 +164,10 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 	isCursor := idx == o.cursor
 	isCurrent := th.ID() == o.currentID
 
-	// Background color for the row.
-	bg := o.theme.Surface()
+	// Background color for the row. Non-cursor rows use Base() (effectively transparent
+	// against the dimmed grid behind the overlay) so the cursor row with SelectedBg()
+	// clearly stands out. Surface() would create an opaque block that obscures the grid.
+	bg := o.theme.Base()
 	if isCursor {
 		bg = o.theme.SelectedBg()
 	}
