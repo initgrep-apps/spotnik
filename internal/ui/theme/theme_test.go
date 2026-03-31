@@ -1,8 +1,10 @@
 package theme_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -201,7 +203,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#bd93f9",
 				paneBorderTopArtists:     "#ff79c6",
 				paneBorderRequestFlow:    "#ffb86c",
-				paneBorderNetworkLog:     "#8a8a8a",
+				paneBorderNetworkLog:     "#ff6ac1",
 			},
 		},
 		{
@@ -222,7 +224,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#ae81ff",
 				paneBorderTopArtists:     "#f92672",
 				paneBorderRequestFlow:    "#fd971f",
-				paneBorderNetworkLog:     "#75715e",
+				paneBorderNetworkLog:     "#66d9ef",
 			},
 		},
 		{
@@ -243,7 +245,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#cba6f7",
 				paneBorderTopArtists:     "#f38ba8",
 				paneBorderRequestFlow:    "#fab387",
-				paneBorderNetworkLog:     "#6c7086",
+				paneBorderNetworkLog:     "#94e2d5",
 			},
 		},
 		{
@@ -264,7 +266,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#b48ead",
 				paneBorderTopArtists:     "#bf616a",
 				paneBorderRequestFlow:    "#d08770",
-				paneBorderNetworkLog:     "#4c566a",
+				paneBorderNetworkLog:     "#88c0d0",
 			},
 		},
 		{
@@ -285,7 +287,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#8839ef",
 				paneBorderTopArtists:     "#d20f39",
 				paneBorderRequestFlow:    "#fe640b",
-				paneBorderNetworkLog:     "#9ca0b0",
+				paneBorderNetworkLog:     "#179299",
 			},
 		},
 	}
@@ -323,6 +325,56 @@ func TestLoad_UnknownID_HasAllNewTokens(t *testing.T) {
 	assert.Equal(t, "#00ff88", string(th.Gradient1()), "Gradient1 on fallback theme")
 	assert.NotEmpty(t, string(th.VisualizerFg()), "VisualizerFg on fallback theme")
 	assert.NotEmpty(t, string(th.PaneBorderNowPlaying()), "PaneBorderNowPlaying on fallback theme")
+}
+
+// ── Story 77 Task 4: Network Log border vibrant color assertion ───────────────
+
+// TestAllThemes_NetworkLogBorderIsVibrant verifies that every theme's network_log
+// pane border color has a saturation > 20% (i.e. not a desaturated grey).
+// Saturation is approximated as: max(r,g,b) - min(r,g,b) > 50 on a 0-255 scale.
+// This prevents regression back to the grey values (#8a8a8a etc.) that existed before.
+func TestAllThemes_NetworkLogBorderIsVibrant(t *testing.T) {
+	for _, id := range theme.Available() {
+		id := id
+		t.Run(id, func(t *testing.T) {
+			th := theme.Load(id)
+			hex := strings.TrimPrefix(string(th.PaneBorderNetworkLog()), "#")
+			require.Len(t, hex, 6, "network log color for %s should be a 6-char hex: %q", id, hex)
+
+			var r, g, b uint8
+			_, err := fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
+			require.NoError(t, err, "could not parse hex color %q for theme %s", hex, id)
+
+			maxC := max3(r, g, b)
+			minC := min3(r, g, b)
+			saturation := int(maxC) - int(minC)
+			assert.Greater(t, saturation, 50,
+				"network_log border for %s (%s) is too grey (saturation %d ≤ 50); use a vibrant color",
+				id, "#"+hex, saturation)
+		})
+	}
+}
+
+// max3 returns the largest of three uint8 values.
+func max3(a, b, c uint8) uint8 {
+	if a >= b && a >= c {
+		return a
+	}
+	if b >= c {
+		return b
+	}
+	return c
+}
+
+// min3 returns the smallest of three uint8 values.
+func min3(a, b, c uint8) uint8 {
+	if a <= b && a <= c {
+		return a
+	}
+	if b <= c {
+		return b
+	}
+	return c
 }
 
 // ---- Feature 70: parseTheme tests ----
