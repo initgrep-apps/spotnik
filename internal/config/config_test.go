@@ -363,18 +363,28 @@ func TestBootstrap_TemplateContent(t *testing.T) {
 }
 
 // TestBootstrap_FilePermissions verifies that the created config file has
-// owner-only read/write permissions (0600).
+// owner-only read/write permissions (0600) and that the created directory
+// has owner-writable, group-readable permissions (0750).
 func TestBootstrap_FilePermissions(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
+	// Use a nested subdirectory so we can check Bootstrap's directory creation.
+	subDir := filepath.Join(dir, "spotnik")
+	path := filepath.Join(subDir, "config.toml")
 
 	err := config.Bootstrap(path)
 	require.NoError(t, err)
 
-	info, err := os.Stat(path)
+	// Verify file permissions (0600: owner read/write only).
+	fileInfo, err := os.Stat(path)
 	require.NoError(t, err)
-	// Mask to permission bits only (lower 9 bits).
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "config file should have 0600 permissions")
+	assert.Equal(t, os.FileMode(0o600), fileInfo.Mode().Perm(),
+		"config file should have 0600 permissions")
+
+	// Verify directory permissions (0750: owner rwx, group rx, others none).
+	dirInfo, err := os.Stat(subDir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o750), dirInfo.Mode().Perm(),
+		"config directory should have 0750 permissions")
 }
 
 // TestPersistTheme_WithBootstrappedConfig verifies that PersistTheme works correctly

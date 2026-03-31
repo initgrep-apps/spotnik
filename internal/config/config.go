@@ -152,12 +152,12 @@ func Bootstrap(path string) error {
 		return nil // file exists, nothing to do
 	}
 
-	// Create directory with permissive owner-only access.
+	// Create directory: owner gets rwx, group gets r-x, others none.
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	// Write template with owner-only read/write permissions.
+	// Write template with owner-only read/write permissions (no group access).
 	if err := os.WriteFile(path, []byte(defaultTemplate), 0o600); err != nil {
 		return fmt.Errorf("writing config template: %w", err)
 	}
