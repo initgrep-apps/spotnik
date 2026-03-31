@@ -161,14 +161,12 @@ func TestNewNotifications_ToastAppearsAtBottomRight(t *testing.T) {
 }
 
 // TestNewNotifications_InfoUsesInfoToken verifies that the info alert's foreground
-// color comes from t.Info() rather than t.KeyHint(). For the black theme these
-// are the same value (#00afff), so we use a custom TOML theme where Info and
-// KeyHint are intentionally different.
+// color is wired to t.Info() and that the info toast remains registered and usable
+// after the change from t.KeyHint() to t.Info().
 func TestNewNotifications_InfoUsesInfoToken(t *testing.T) {
-	// For the built-in black theme, Info() == "#00afff" and KeyHint() == "#00afff".
 	// We test indirectly: if the code is correct, NewNotifications compiles and runs
-	// with the new Info() call. The real behavioral difference is covered by the
-	// fact that Info() is now in the Theme interface and wired via t.Info().
+	// with the new Info() call. The real behavioral difference (using the canonical
+	// info color instead of the key-hint color) is enforced by the Theme interface.
 	//
 	// This test verifies NewNotifications does not panic when Info() is called.
 	th := theme.Load(theme.DefaultThemeID)
