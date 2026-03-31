@@ -164,39 +164,34 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 	isCursor := idx == o.cursor
 	isCurrent := th.ID() == o.currentID
 
-	// Background color for the row. Non-cursor rows use Base() (effectively transparent
-	// against the dimmed grid behind the overlay) so the cursor row with SelectedBg()
-	// clearly stands out. Surface() would create an opaque block that obscures the grid.
-	bg := o.theme.Base()
-	if isCursor {
-		bg = o.theme.SelectedBg()
-	}
-
 	// Indicator: ◉ for current theme (in Success color), ○ for others (in TextMuted).
+	// Only cursor rows receive Background(SelectedBg()); non-cursor rows have NO explicit
+	// background so they blend with the overlay's composited background instead of
+	// rendering as opaque colored rectangles over the dimmed grid.
 	var indicator string
 	var indicatorStyle lipgloss.Style
 	if isCurrent {
-		indicatorStyle = lipgloss.NewStyle().
-			Foreground(o.theme.Success()).
-			Background(bg)
+		indicatorStyle = lipgloss.NewStyle().Foreground(o.theme.Success())
 		indicator = "◉"
 	} else {
-		indicatorStyle = lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Background(bg)
+		indicatorStyle = lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 		indicator = "○"
 	}
 
-	// Theme name.
+	// Theme name style: cursor uses SelectedFg+SelectedBg; non-cursor uses TextPrimary only.
 	var nameStyle lipgloss.Style
 	if isCursor {
 		nameStyle = lipgloss.NewStyle().
 			Foreground(o.theme.SelectedFg()).
-			Background(bg)
+			Background(o.theme.SelectedBg())
 	} else {
-		nameStyle = lipgloss.NewStyle().
-			Foreground(o.theme.TextPrimary()).
-			Background(bg)
+		nameStyle = lipgloss.NewStyle().Foreground(o.theme.TextPrimary())
+	}
+
+	// Apply SelectedBg() to all cursor row elements.
+	if isCursor {
+		bg := o.theme.SelectedBg()
+		indicatorStyle = indicatorStyle.Background(bg)
 	}
 
 	// Color swatches — 5 colored █ chars using the target theme's colors (not current).
@@ -207,12 +202,19 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 		"  " +
 		swatches
 
-	// Pad entire row to inner width with the row's background color.
-	rowStyle := lipgloss.NewStyle().Background(bg)
-	return rowStyle.Render(lipgloss.NewStyle().
+	// Cursor row: pad with SelectedBg so the entire row is highlighted.
+	// Non-cursor row: no explicit background — blends with overlay composite background.
+	if isCursor {
+		bg := o.theme.SelectedBg()
+		rowStyle := lipgloss.NewStyle().Background(bg)
+		return rowStyle.Render(lipgloss.NewStyle().
+			Width(innerWidth).MaxWidth(innerWidth).
+			Background(bg).
+			Render(row))
+	}
+	return lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
-		Background(bg).
-		Render(row))
+		Render(row)
 }
 
 // overlayWidth computes the overlay width based on the longest theme name plus swatch space.

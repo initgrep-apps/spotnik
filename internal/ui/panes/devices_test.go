@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -361,12 +362,17 @@ func TestDeviceOverlay_CursorClampedOnListShrink(t *testing.T) {
 	}, "pressing Enter after list shrinks must not panic")
 }
 
-// ── Story 75 Task 4: Device overlay non-cursor row background ────────────────
+// ── Story 77 Task 2: Device overlay non-cursor row — no explicit background ───
 
-// TestDeviceOverlay_NonCursorRow_UsesBaseBackground verifies that non-cursor rows
-// in the device overlay use Base() (not SurfaceAlt()), so non-selected devices
-// visually recede and the cursor row (with SelectedBg()) clearly stands out.
-func TestDeviceOverlay_NonCursorRow_UsesBaseBackground(t *testing.T) {
+// TestDeviceOverlay_NonCursorRow_NoExplicitBackground verifies that non-cursor rows
+// in the device overlay have NO explicit background color (no "48;2;" ANSI sequence).
+// Without an explicit background the rows blend with the composited overlay background
+// instead of rendering as opaque colored rectangles over the dimmed grid.
+func TestDeviceOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	s := state.New()
 	th := theme.Load("black")
 	overlay := NewDeviceOverlay(s, th)
@@ -376,24 +382,19 @@ func TestDeviceOverlay_NonCursorRow_UsesBaseBackground(t *testing.T) {
 	// renderDevice with idx=1 is a non-cursor row.
 	row := overlay.renderDevice(1, overlay.devices[1])
 
-	base := string(th.Base())
-	surfaceAlt := string(th.SurfaceAlt())
-	if base != surfaceAlt {
-		baseStyle := lipgloss.NewStyle().Background(th.Base()).Render("X")
-		surfaceStyle := lipgloss.NewStyle().Background(th.SurfaceAlt()).Render("X")
-		if baseStyle != surfaceStyle {
-			surfaceBg := extractDeviceBgANSI(surfaceStyle)
-			if surfaceBg != "" {
-				assert.NotContains(t, row, surfaceBg,
-					"non-cursor device row should use Base() background, not SurfaceAlt()")
-			}
-		}
-	}
+	// "48;2;" is the ANSI SGR introducer for 24-bit RGB background color.
+	// Non-cursor rows must produce no background escape at all.
+	assert.NotContains(t, row, "48;2;",
+		"non-cursor device row should have NO explicit background (no 48;2; ANSI sequence)")
 }
 
 // TestDeviceOverlay_CursorRow_UsesSelectedBg verifies that the cursor row in the
 // device overlay uses SelectedBg() so it clearly stands out.
 func TestDeviceOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	s := state.New()
 	th := theme.Load("black")
 	overlay := NewDeviceOverlay(s, th)
@@ -404,10 +405,9 @@ func TestDeviceOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
 
 	selectedBgStyle := lipgloss.NewStyle().Background(th.SelectedBg()).Render("X")
 	selectedBg := extractDeviceBgANSI(selectedBgStyle)
-	if selectedBg != "" {
-		assert.Contains(t, row, selectedBg,
-			"cursor device row should use SelectedBg() background")
-	}
+	require.NotEmpty(t, selectedBg, "sanity: SelectedBg must produce 48;2; in TrueColor")
+	assert.Contains(t, row, selectedBg,
+		"cursor device row should use SelectedBg() background")
 }
 
 // extractDeviceBgANSI extracts the "48;2;R;G;B" portion from an ANSI string.

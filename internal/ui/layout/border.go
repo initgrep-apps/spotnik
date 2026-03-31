@@ -114,11 +114,18 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	// Compute available space for the dash fill.
 	// Total inner width = Width - 2 (subtracting ╭ and ╮).
 	// Left prefix: "─ " (2) + leftInner content.
-	// Right suffix: rightSegment + " " (1).
+	// Right suffix: rightSegment + " " (0 or 1, depending on rightSegment).
 	//
 	// We use lipgloss.Width() for accurate terminal-column counting.
 	leftPrefix := "─ "
-	rightSuffix := " "
+	// rightSuffix is a single space between the rightSegment and the corner ╮.
+	// It provides breathing room when actions are present (e.g. "╭ ╮").
+	// When rightSegment is empty (no actions, no filter), the suffix is removed
+	// so dashes flush directly against the corner: "──────╮" instead of "─── ╮".
+	rightSuffix := ""
+	if rightSegment != "" {
+		rightSuffix = " "
+	}
 
 	// Total non-dash columns in the top border:
 	// 1 (╭) + len(leftPrefix) + w(leftInner) + w(dashes) + w(rightSegment) + len(rightSuffix) + 1 (╮) = Width
@@ -129,13 +136,14 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 		lipgloss.Width(leftPrefix) + // "─ " = 2
 		lipgloss.Width(leftInner) + // superscript + title (variable)
 		lipgloss.Width(rightSegment) + // actions or filter
-		lipgloss.Width(rightSuffix) + // " " = 1
+		lipgloss.Width(rightSuffix) +
 		1 // ╮
 
 	dashCount := outerWidth - fixedWidth
 	if dashCount < 0 {
 		// Border too narrow to fit title + actions — drop actions and retry.
 		rightSegment = ""
+		rightSuffix = ""
 		fixedWidth = 1 +
 			lipgloss.Width(leftPrefix) +
 			lipgloss.Width(leftInner) +

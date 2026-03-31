@@ -1,7 +1,7 @@
 ---
 title: "Fix: Overlay Backgrounds, Border Corner Gap, Network Log Grey Borders, Status Bar Key Pills"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background

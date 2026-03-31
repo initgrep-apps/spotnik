@@ -202,41 +202,53 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 	var bulletStyle lipgloss.Style
 	var nameStyle lipgloss.Style
 
-	// Non-cursor rows use Base() (effectively transparent against the dimmed grid
-	// behind the overlay) so the cursor row with SelectedBg() clearly stands out.
-	// SurfaceAlt() would create opaque colored blocks that obscure the dimmed grid.
-	bg := d.theme.Base()
+	// Only cursor rows get Background(SelectedBg()); non-cursor rows have NO explicit
+	// background so they blend with the composited overlay background rather than
+	// rendering as opaque rectangles over the dimmed grid behind the overlay.
 	if isCursor {
-		bg = d.theme.SelectedBg()
-	}
-
-	if dev.IsActive {
-		bulletStyle = lipgloss.NewStyle().
-			Foreground(d.theme.DeviceActive()).
-			Background(bg)
-		bullet = "◉"
+		bg := d.theme.SelectedBg()
+		if dev.IsActive {
+			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.DeviceActive()).Background(bg)
+			bullet = "◉"
+		} else {
+			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.InactiveBorder()).Background(bg)
+			bullet = "○"
+		}
+		nameStyle = lipgloss.NewStyle().Foreground(d.theme.TextPrimary()).Background(bg)
 	} else {
-		bulletStyle = lipgloss.NewStyle().
-			Foreground(d.theme.InactiveBorder()).
-			Background(bg)
-		bullet = "○"
+		// Non-cursor: no Background() at all.
+		if dev.IsActive {
+			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.DeviceActive())
+			bullet = "◉"
+		} else {
+			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.InactiveBorder())
+			bullet = "○"
+		}
+		nameStyle = lipgloss.NewStyle().Foreground(d.theme.TextPrimary())
 	}
-
-	nameStyle = lipgloss.NewStyle().
-		Foreground(d.theme.TextPrimary()).
-		Background(bg)
 
 	typeIcon := deviceTypeIcon(dev.Type)
 	label := ""
 	if dev.IsActive {
-		label = lipgloss.NewStyle().
-			Foreground(d.theme.Success()).
-			Background(bg).
-			Render(" [active]")
+		if isCursor {
+			label = lipgloss.NewStyle().
+				Foreground(d.theme.Success()).
+				Background(d.theme.SelectedBg()).
+				Render(" [active]")
+		} else {
+			label = lipgloss.NewStyle().
+				Foreground(d.theme.Success()).
+				Render(" [active]")
+		}
+	}
+
+	typeStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
+	if isCursor {
+		typeStyle = typeStyle.Background(d.theme.SelectedBg())
 	}
 
 	return bulletStyle.Render(bullet) + " " +
-		lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Background(bg).Render(typeIcon) + " " +
+		typeStyle.Render(typeIcon) + " " +
 		nameStyle.Render(dev.Name) +
 		label
 }

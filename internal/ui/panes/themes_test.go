@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,12 +204,18 @@ func TestThemeOverlay_UpArrow(t *testing.T) {
 	}
 }
 
-// ── Story 75 Task 4: Theme overlay non-cursor row background ─────────────────
+// ── Story 77 Task 1: Theme overlay non-cursor row — no explicit background ────
 
-// TestThemeOverlay_NonCursorRow_UsesBaseBackground verifies that non-cursor rows in
-// the theme overlay use Base() background (not Surface()), so they visually recede
-// behind the dimmed grid and the cursor row (with SelectedBg()) stands out clearly.
-func TestThemeOverlay_NonCursorRow_UsesBaseBackground(t *testing.T) {
+// TestThemeOverlay_NonCursorRow_NoExplicitBackground verifies that non-cursor rows
+// in the theme overlay have NO explicit background color set (no "48;2;" ANSI
+// background sequence). Without an explicit background the row blends with the
+// dimmed overlay background produced by btoverlay.Composite(), rather than
+// showing an opaque colored rectangle.
+func TestThemeOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	themes := theme.AllThemes()
 	require.GreaterOrEqual(t, len(themes), 2, "need at least 2 themes to test non-cursor row")
 
@@ -220,32 +227,19 @@ func TestThemeOverlay_NonCursorRow_UsesBaseBackground(t *testing.T) {
 	// renderRow with idx=1 is a non-cursor row.
 	row := overlay.renderRow(1, themes[1], 40)
 
-	// Base() for the black theme encodes as a specific ANSI background sequence.
-	// We verify the row uses Base() by confirming it does NOT use Surface().
-	// In TrueColor mode, Surface() and Base() will produce different "48;2;R;G;B" sequences.
-	base := string(th.Base())
-	surface := string(th.Surface())
-	// Only do the color comparison if the two colors are actually different.
-	if base != surface {
-		// Surface() should not appear as the background of a non-cursor row.
-		// We convert both colors to lipgloss Styles and check rendered output.
-		baseStyle := lipgloss.NewStyle().Background(th.Base()).Render("X")
-		surfaceStyle := lipgloss.NewStyle().Background(th.Surface()).Render("X")
-		// The row should not contain the Surface() background escape (if different from Base()).
-		if baseStyle != surfaceStyle {
-			// Extract background ANSI code from surfaceStyle.
-			surfaceBg := extractBackgroundANSI(surfaceStyle)
-			if surfaceBg != "" {
-				assert.NotContains(t, row, surfaceBg,
-					"non-cursor row should use Base() background, not Surface()")
-			}
-		}
-	}
+	// "48;2;" is the ANSI SGR introducer for 24-bit RGB background color.
+	// Non-cursor rows must produce no background escape at all.
+	assert.NotContains(t, row, "48;2;",
+		"non-cursor row should have NO explicit background (no 48;2; ANSI sequence)")
 }
 
 // TestThemeOverlay_CursorRow_UsesSelectedBg verifies that the cursor row uses
 // SelectedBg() so it clearly stands out from non-cursor rows.
 func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	themes := theme.AllThemes()
 	require.NotEmpty(t, themes)
 
@@ -259,10 +253,9 @@ func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
 	// The cursor row must include the SelectedBg() color as a background.
 	selectedBgStyle := lipgloss.NewStyle().Background(th.SelectedBg()).Render("X")
 	selectedBg := extractBackgroundANSI(selectedBgStyle)
-	if selectedBg != "" {
-		assert.Contains(t, row, selectedBg,
-			"cursor row should use SelectedBg() background")
-	}
+	require.NotEmpty(t, selectedBg, "sanity: SelectedBg must produce 48;2; in TrueColor")
+	assert.Contains(t, row, selectedBg,
+		"cursor row should use SelectedBg() background")
 }
 
 // extractBackgroundANSI extracts the "48;2;R;G;B" portion of an ANSI string if present.

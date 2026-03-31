@@ -801,3 +801,55 @@ func TestRenderPaneBorder_AllThemesAccentColorsChange(t *testing.T) {
 		}
 	}
 }
+
+// ── Story 77 Task 3: rightSuffix conditional — flush corner when no actions ───
+
+// TestRenderPaneBorder_NoActions_FlushCorner verifies that when there are no actions
+// the top border ends with ─╮ (dash immediately before corner) with no space gap.
+func TestRenderPaneBorder_NoActions_FlushCorner(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       40,
+		Height:      5,
+		Title:       "Test",
+		ToggleKey:   0,
+		Actions:     nil, // no actions
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	// The top border must end with "─╮" — a dash immediately before the corner, no space.
+	assert.True(t, strings.HasSuffix(topLine, "─╮"),
+		"top border with no actions should end with ─╮ (no space before corner), got: %q", topLine)
+}
+
+// TestRenderPaneBorder_WithActions_SpaceBeforeCorner verifies that when actions are
+// present a space exists before the corner ╮ — providing breathing room after the last
+// corner-notch ╭.
+func TestRenderPaneBorder_WithActions_SpaceBeforeCorner(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      5,
+		Title:       "Test",
+		ToggleKey:   0,
+		Actions:     []layout.Action{{Key: "f", Label: "filter"}},
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	// The action segment ends with ╭, then a space, then the corner ╮.
+	// So the top line must end with " ╮" when actions are present.
+	assert.True(t, strings.HasSuffix(topLine, " ╮"),
+		"top border with actions should end with ' ╮' (space before corner), got: %q", topLine)
+}

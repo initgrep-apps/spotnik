@@ -25,7 +25,7 @@
 | 13 | NowPlaying | `features/13-nowplaying/` | done | 45, 58-60 | Real-time playback display with visualizer engine and split layout |
 | 14 | Nerd Status | `features/14-nerd-status/` | done | 51, 56, 61-64, 66-69 | Page B developer visibility: request flow, network log, gateway events |
 | 15 | CI/CD | `features/15-cicd/` | open | 57 | GitHub Actions, GoReleaser, multi-platform distribution |
-| 16 | Vivid Theme System | `features/16-vivid-themes/` | in-progress | 70, 71, 72, 73, 74, 75, 77 | Config-driven TOML themes, colorful borders, per-column colors, 6 new themes, runtime switcher overlay |
+| 16 | Vivid Theme System | `features/16-vivid-themes/` | done | 70, 71, 72, 73, 74, 75, 77 | Config-driven TOML themes, colorful borders, per-column colors, 6 new themes, runtime switcher overlay |
 | 17 | Bootstrap | `features/17-bootstrap/` | open | 76 | First-launch config bootstrap, embedded client ID via ldflags |
 
 ---
