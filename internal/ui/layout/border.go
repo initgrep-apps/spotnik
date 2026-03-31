@@ -118,7 +118,14 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	//
 	// We use lipgloss.Width() for accurate terminal-column counting.
 	leftPrefix := "─ "
-	rightSuffix := " "
+	// rightSuffix is a single space between the rightSegment and the corner ╮.
+	// It provides breathing room when actions are present (e.g. "╭ ╮").
+	// When rightSegment is empty (no actions, no filter), the suffix is removed
+	// so dashes flush directly against the corner: "──────╮" instead of "─── ╮".
+	rightSuffix := ""
+	if rightSegment != "" {
+		rightSuffix = " "
+	}
 
 	// Total non-dash columns in the top border:
 	// 1 (╭) + len(leftPrefix) + w(leftInner) + w(dashes) + w(rightSegment) + len(rightSuffix) + 1 (╮) = Width
