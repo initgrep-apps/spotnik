@@ -310,9 +310,12 @@ func (a *App) renderHeader() string {
 	return left + "  " + right
 }
 
-// renderStatusBar renders the global-only bottom status bar with fixed keybinding hints.
+// renderStatusBar renders the global-only bottom status bar with page-aware keybinding hints.
 // Pane-specific hints (filter, add, etc.) now live in pane borders — never here.
 // Toast notifications are shown as overlays via alerts.Render() — not in the status bar.
+//
+// Page A includes all hints including "p preset" and "1-8 toggle" (Page A has multiple
+// presets and toggleable panes). Page B omits those two since it has a single fixed layout.
 func (a *App) renderStatusBar() string {
 	bgStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
@@ -325,12 +328,18 @@ func (a *App) renderStatusBar() string {
 		Foreground(a.theme.KeyHint()).
 		Bold(true)
 
-	// Fixed global hints per DESIGN.md §15 — these never change per pane focus.
-	hints := []struct{ Key, Label string }{
+	// Common hints present on both pages.
+	common := []struct{ Key, Label string }{
 		{"/", "search"},
 		{"0", "page"},
+	}
+	// Page-A-only hints: multiple presets and toggleable panes.
+	pageAOnly := []struct{ Key, Label string }{
 		{"p", "preset"},
 		{"1-8", "toggle"},
+	}
+	// Shared tail hints.
+	tail := []struct{ Key, Label string }{
 		{"Tab", "pane"},
 		{"d", "devices"},
 		{"t", "theme"},
@@ -338,10 +347,17 @@ func (a *App) renderStatusBar() string {
 		{"q", "quit"},
 	}
 
+	hints := common
+	if a.layout.ActivePage() == layout.PageA {
+		hints = append(hints, pageAOnly...)
+	}
+	hints = append(hints, tail...)
+
 	var parts []string
 	for _, h := range hints {
 		parts = append(parts, keyStyle.Render(h.Key)+" "+bgStyle.Render(h.Label))
 	}
 
-	return bgStyle.Render("  " + strings.Join(parts, "   "))
+	// 2-space separator (tighter than the old 3-space gap).
+	return bgStyle.Render("  " + strings.Join(parts, "  "))
 }

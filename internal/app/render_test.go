@@ -347,6 +347,46 @@ func TestRenderHeader_PageB_NoPreset(t *testing.T) {
 	assert.NotContains(t, result, "preset", "header should NOT show preset on Page B")
 }
 
+// --- Story 75 Task 3: Page-aware status bar ---
+
+// TestRenderStatusBar_PageA_IncludesPresetAndToggle verifies that on Page A the status
+// bar includes both "preset" and "toggle" hints.
+func TestRenderStatusBar_PageA_IncludesPresetAndToggle(t *testing.T) {
+	a := newRenderTestApp()
+	// Default page is Page A.
+	result := a.renderStatusBar()
+
+	assert.Contains(t, result, "preset", "Page A status bar should include 'preset' hint")
+	assert.Contains(t, result, "toggle", "Page A status bar should include 'toggle' hint")
+}
+
+// TestRenderStatusBar_PageB_OmitsPresetAndToggle verifies that on Page B the status
+// bar omits "preset" and "toggle" (Page B has a single fixed layout).
+func TestRenderStatusBar_PageB_OmitsPresetAndToggle(t *testing.T) {
+	a := newRenderTestApp()
+	// Switch to Page B.
+	a.layout.TogglePage()
+	result := a.renderStatusBar()
+
+	assert.NotContains(t, result, "preset", "Page B status bar must NOT include 'preset' hint")
+	assert.NotContains(t, result, "toggle", "Page B status bar must NOT include 'toggle' hint")
+}
+
+// TestRenderStatusBar_TighterSpacing verifies the separator between hints is 2 spaces
+// (not the old 3-space separator).
+func TestRenderStatusBar_TighterSpacing(t *testing.T) {
+	a := newRenderTestApp()
+	result := a.renderStatusBar()
+
+	// The rendered bar should NOT contain 3 consecutive spaces as a separator.
+	// "   " (3 spaces) was the old separator; "  " (2 spaces) is the new one.
+	// Note: this checks the raw output including ANSI — use a plain-text check
+	// on what the user would see. Since lipgloss.Render wraps each item, the
+	// raw string between hint groups should not contain 3+ raw spaces as separator.
+	// We check that at least 2-space separation renders and the old 3-space does not.
+	assert.NotContains(t, result, "   ", "status bar separator must be 2 spaces, not 3")
+}
+
 // --- Story 75 Task 2: status bar theme hint ---
 
 // TestRenderStatusBar_ContainsThemeHint verifies that the status bar includes
