@@ -39,6 +39,15 @@ func isPlaybackKey(m tea.KeyMsg) bool {
 // handleKeyMsg routes a keyboard event through all overlay and view guards before
 // dispatching to the focused pane. Extracted from Update() to keep that function readable.
 func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When theme switcher is open, route all keys to it.
+	if a.showThemeSwitcher && a.themeOverlay != nil {
+		updated, cmd := a.themeOverlay.Update(m)
+		if to, ok := updated.(*panes.ThemeOverlay); ok {
+			a.themeOverlay = to
+		}
+		return a, cmd
+	}
+
 	// When device overlay is open, route all keys to the device pane.
 	if a.deviceOverlayOpen {
 		updated, cmd := a.devicePane.Update(m)
@@ -90,6 +99,14 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 'd' opens the device switcher overlay from any pane.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "d" {
 		return a.openDeviceOverlay()
+	}
+
+	// 't' opens the theme switcher overlay — but only if no other overlay is already open.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "t" {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher {
+			return a.openThemeSwitcher()
+		}
+		return a, nil
 	}
 
 	// '0' toggles between Page A and Page B.

@@ -124,3 +124,61 @@ func TestDefault_VolumeStep(t *testing.T) {
 	cfg := config.Default()
 	assert.Equal(t, 5, cfg.UI.VolumeStep, "default volume step should be 5")
 }
+
+// TestPersistTheme_WritesFile verifies that PersistThemeTo creates a config file
+// with the given theme ID at the specified path.
+func TestPersistTheme_WritesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	err := config.PersistThemeTo(path, "dracula")
+	require.NoError(t, err)
+
+	// Read back and verify the theme was written.
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "dracula", "config file should contain the theme ID")
+}
+
+// TestPersistTheme_CreatesFileIfMissing verifies that PersistThemeTo creates the file
+// and any required parent directories when they don't exist yet.
+func TestPersistTheme_CreatesFileIfMissing(t *testing.T) {
+	dir := t.TempDir()
+	// Use a nested path that doesn't exist yet.
+	path := filepath.Join(dir, "spotnik", "config.toml")
+
+	err := config.PersistThemeTo(path, "monokai")
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "monokai")
+}
+
+// TestPersistTheme_PreservesOtherConfig verifies that PersistThemeTo only changes
+// the theme field and preserves other settings (client_id, volume_step, etc.).
+func TestPersistTheme_PreservesOtherConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	// Write an initial config with extra fields.
+	initial := `[spotify]
+client_id = "my-client-id"
+
+[ui]
+theme = "black"
+volume_step = 10
+`
+	require.NoError(t, os.WriteFile(path, []byte(initial), 0o600))
+
+	// Persist a new theme.
+	err := config.PersistThemeTo(path, "nord")
+	require.NoError(t, err)
+
+	// Read back and check that only the theme changed.
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "nord", cfg.UI.Theme, "theme should be updated")
+	assert.Equal(t, "my-client-id", cfg.ClientID, "client_id should be preserved")
+	assert.Equal(t, 10, cfg.UI.VolumeStep, "volume_step should be preserved")
+}
