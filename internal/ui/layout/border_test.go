@@ -279,6 +279,73 @@ func TestRenderPaneBorder_UnfocusedFaintStyle(t *testing.T) {
 	assert.Contains(t, result, "\x1b[", "unfocused border should contain ANSI escape codes")
 }
 
+// ── Story 71 Task 1: Unfocused accent color ───────────────────────────────────
+
+// TestRenderPaneBorder_Unfocused_UsesAccentColor verifies that an unfocused border
+// still emits the accent color escape (Foreground) along with the faint modifier,
+// rather than only the faint grey produced by lipgloss.Faint(true) alone.
+//
+// The black theme NowPlaying accent is #00ff88 → TrueColor RGB(0, 255, 136) →
+// escape sequence "38;2;0;255;136". This escape must appear in the unfocused render
+// (the border chars), not only in the key-hint or title segments.
+func TestRenderPaneBorder_Unfocused_UsesAccentColor(t *testing.T) {
+	th := theme.Load("black")
+	// Use a config with ToggleKey=0 and no actions so the only styled elements
+	// are the border characters themselves and the title.
+	accentColor := th.PaneBorderNowPlaying() // #00ff88 → 38;2;0;255;136
+	cfg := layout.BorderConfig{
+		Width:       40,
+		Height:      5,
+		Title:       "Test",
+		ToggleKey:   0, // no superscript — eliminates KeyHint color from output
+		Actions:     nil,
+		AccentColor: accentColor,
+		Focused:     false,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+
+	// With ToggleKey=0 and no Actions, the only colored elements are borders and title.
+	// The accent color #00ff88 encodes as "38;2;0;255;136" in TrueColor mode.
+	// If the border uses Faint(true) alone, this sequence will NOT appear.
+	// If it uses Foreground(AccentColor)+Faint(true), this sequence WILL appear.
+	const accentEscape = "38;2;0;255;136"
+	assert.Contains(t, result, accentEscape,
+		"unfocused border must emit the accent foreground color (not just faint grey)")
+	// Faint modifier must also be present.
+	assert.Contains(t, result, "\x1b[2", "unfocused border must include the faint (dim) modifier")
+}
+
+// TestRenderPaneBorder_Focused_NoBoldRegression verifies that a focused border
+// emits both the accent color and bold, and that both focused vs unfocused renders
+// differ (focus is distinguished by brightness/bold, not just presence of color).
+func TestRenderPaneBorder_Focused_NoBoldRegression(t *testing.T) {
+	th := theme.Load("black")
+	accentColor := th.PaneBorderNowPlaying()
+	cfgFocused := layout.BorderConfig{
+		Width:       40,
+		Height:      5,
+		Title:       "Now Playing",
+		ToggleKey:   1,
+		AccentColor: accentColor,
+		Focused:     true,
+		Theme:       th,
+	}
+	cfgUnfocused := cfgFocused
+	cfgUnfocused.Focused = false
+
+	focused := layout.RenderPaneBorder("", cfgFocused)
+	unfocused := layout.RenderPaneBorder("", cfgUnfocused)
+
+	// Both must contain the accent color sequence.
+	assert.Contains(t, focused, "38;2;", "focused border must contain foreground color escape")
+	assert.Contains(t, unfocused, "38;2;", "unfocused border must contain foreground color escape")
+	// The two renders must differ — focus is visually distinguishable.
+	assert.NotEqual(t, focused, unfocused, "focused and unfocused renders must differ")
+	// Focused title must use bold (ANSI code 1). Lipgloss emits bold as "[1;" prefix.
+	assert.Contains(t, focused, "\x1b[1;", "focused title must be bold")
+}
+
 // ── Task 1: PaneBorderColor helper ───────────────────────────────────────────
 
 func TestPaneBorderColor_ReturnsCorrectColorPerPane(t *testing.T) {

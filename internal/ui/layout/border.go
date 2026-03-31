@@ -30,7 +30,7 @@ type BorderConfig struct {
 	// AccentColor is the per-pane border accent color (from Theme.PaneBorder*()).
 	AccentColor lipgloss.Color
 	// Focused controls whether the pane has keyboard focus.
-	// Focused: full AccentColor; unfocused: lipgloss Faint(true).
+	// Focused: full AccentColor + Bold title; unfocused: AccentColor + Faint (dimmed but colored).
 	Focused bool
 	// FilterQuery is non-empty when filter mode is active.
 	// When set, replaces the action shortcuts with: filtering: "query" ─── ᐅEsc close
@@ -42,8 +42,9 @@ type BorderConfig struct {
 // RenderPaneBorder wraps content in a btop-style border.
 //
 // The top border line contains the toggle key superscript, title, dash fill,
-// and action shortcuts (or filter query when active). All border characters
-// are colored with AccentColor when focused, or rendered faint when unfocused.
+// and action shortcuts (or filter query when active). Border characters always
+// use the pane's AccentColor: focused = full brightness + bold title; unfocused
+// = dimmed (Faint on top of AccentColor) so each pane retains its identity color.
 //
 // Content should be pre-sized to Width-2 × Height-2 (the interior dimensions).
 // Lines are padded or truncated to fit exactly inside the border.
@@ -55,12 +56,15 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 		cfg.Height = 2
 	}
 
-	// Build styled helper: applies border color or faint depending on focus.
+	// Build styled helper: always applies the accent Foreground color; unfocused
+	// adds Faint(true) on top so the color is dimmed but still visible as the
+	// pane's identity color (not flat grey).
 	borderStyle := func(s string) string {
-		if cfg.Focused {
-			return lipgloss.NewStyle().Foreground(cfg.AccentColor).Render(s)
+		style := lipgloss.NewStyle().Foreground(cfg.AccentColor)
+		if !cfg.Focused {
+			style = style.Faint(true)
 		}
-		return lipgloss.NewStyle().Faint(true).Render(s)
+		return style.Render(s)
 	}
 
 	keyHintStyle := func(s string) string {
@@ -77,11 +81,16 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 		return s
 	}
 
+	// titleStyle: focused renders with AccentColor + Bold; unfocused renders with
+	// AccentColor + Faint so each pane title retains its identity color when not focused.
 	titleStyle := func(s string) string {
+		style := lipgloss.NewStyle().Foreground(cfg.AccentColor)
 		if cfg.Focused {
-			return lipgloss.NewStyle().Foreground(cfg.AccentColor).Bold(true).Render(s)
+			style = style.Bold(true)
+		} else {
+			style = style.Faint(true)
 		}
-		return lipgloss.NewStyle().Faint(true).Render(s)
+		return style.Render(s)
 	}
 
 	// ── Build top border ─────────────────────────────────────────────────────
