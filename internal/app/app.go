@@ -1562,7 +1562,10 @@ func (a *App) handlePrefsMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case prefs.FlushedMsg:
 		if m.Err != nil {
 			// Non-critical — log to stderr; no user toast (a failed flush is invisible).
+			// Re-queue retry: re-queued changes sit in pending map (done by FlushCmd on
+			// error), and schedulePrefsFlush arms a new debounce timer to flush them.
 			fmt.Fprintf(os.Stderr, "spotnik: prefs flush failed: %v\n", m.Err)
+			return a, a.schedulePrefsFlush(), true
 		}
 		return a, nil, true
 	}

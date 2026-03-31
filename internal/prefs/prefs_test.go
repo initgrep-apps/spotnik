@@ -187,3 +187,51 @@ func TestFlushCmd_CoalescesMultipleChanges(t *testing.T) {
 	assert.Contains(t, content, "5", "visualizer should be written")
 	assert.False(t, s.HasPending(), "no pending changes after successful flush")
 }
+
+// TestFlushCmd_UnknownKeyReturnsError verifies that an unknown preference key
+// causes FlushCmd to return a FlushedMsg with a non-nil error (changes re-queued).
+func TestFlushCmd_UnknownKeyReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	s := prefs.New(path)
+	s.Set("typo_key", "oops")
+
+	msg := s.FlushCmd()()
+	flushed, ok := msg.(prefs.FlushedMsg)
+	require.True(t, ok, "FlushCmd must return a FlushedMsg")
+	require.Error(t, flushed.Err, "unknown key should produce an error")
+	assert.Contains(t, flushed.Err.Error(), "typo_key", "error should name the bad key")
+
+	// Changes must be re-queued so the caller can decide what to do.
+	assert.True(t, s.HasPending(), "unknown-key error should re-queue pending changes")
+}
+
+// TestFlushCmd_WrongTypeReturnsError verifies that passing the wrong Go type for
+// a known key causes FlushCmd to return an error rather than panicking.
+func TestFlushCmd_WrongTypeReturnsError(t *testing.T) {
+	tests := []struct {
+		name  string
+		key   string
+		value any
+	}{
+		{name: "theme with int", key: "theme", value: 42},
+		{name: "preset with string", key: "preset", value: "two"},
+		{name: "visualizer with bool", key: "visualizer", value: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.toml")
+
+			s := prefs.New(path)
+			s.Set(tt.key, tt.value)
+
+			msg := s.FlushCmd()()
+			flushed, ok := msg.(prefs.FlushedMsg)
+			require.True(t, ok, "FlushCmd must return a FlushedMsg")
+			require.Error(t, flushed.Err, "wrong type for %q should produce an error", tt.key)
+		})
+	}
+}

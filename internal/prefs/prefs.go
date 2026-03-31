@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/BurntSushi/toml"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/config"
 )
 
@@ -115,11 +115,25 @@ func (s *PreferenceStore) writeToDisk(snapshot map[string]any) error {
 	for key, val := range snapshot {
 		switch key {
 		case "theme":
-			raw.Preferences.Theme = val.(string)
+			s, ok := val.(string)
+			if !ok {
+				return fmt.Errorf("preference %q: expected string, got %T", key, val)
+			}
+			raw.Preferences.Theme = s
 		case "preset":
-			raw.Preferences.Preset = val.(int)
+			n, ok := val.(int)
+			if !ok {
+				return fmt.Errorf("preference %q: expected int, got %T", key, val)
+			}
+			raw.Preferences.Preset = n
 		case "visualizer":
-			raw.Preferences.Visualizer = val.(int)
+			n, ok := val.(int)
+			if !ok {
+				return fmt.Errorf("preference %q: expected int, got %T", key, val)
+			}
+			raw.Preferences.Visualizer = n
+		default:
+			return fmt.Errorf("unknown preference key %q", key)
 		}
 	}
 

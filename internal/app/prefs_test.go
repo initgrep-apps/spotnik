@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -115,4 +116,23 @@ func TestApp_FlushedMsg_NoErrorIsNoop(t *testing.T) {
 	_, cmd := a.Update(prefs.FlushedMsg{Err: nil})
 	// No error: Update should return nil cmd from the prefs handler.
 	_ = cmd // alerts model may return a non-nil cmd; we just verify no panic.
+}
+
+// TestApp_FlushedMsg_WithError_SchedulesRetry verifies that when FlushedMsg
+// carries a non-nil error, a retry is scheduled via schedulePrefsFlush so
+// the re-queued changes are not silently abandoned.
+func TestApp_FlushedMsg_WithError_SchedulesRetry(t *testing.T) {
+	a := newPrefsTestApp(t)
+
+	gen0 := a.PrefsDirtyGen()
+
+	// Simulate a failed flush — FlushCmd re-queues changes inside the store
+	// before returning FlushedMsg{Err: ...}.  Here we just send FlushedMsg
+	// directly to exercise the app-level retry logic.
+	_, cmd := a.Update(prefs.FlushedMsg{Err: fmt.Errorf("disk full")})
+
+	// schedulePrefsFlush must have been called: generation should have
+	// incremented and the returned Cmd must be non-nil.
+	assert.Greater(t, a.PrefsDirtyGen(), gen0, "error path should increment dirty generation")
+	assert.NotNil(t, cmd, "error path should return a retry Cmd")
 }
