@@ -238,3 +238,18 @@ func TestTopArtistsPane_RefreshRows(t *testing.T) {
 	view := pane.View()
 	assert.Contains(t, view, "Refreshed Artist")
 }
+
+// ── Story 71 Task 3: column color tokens ─────────────────────────────────────
+
+// TestTopArtistsPane_UsesColumnColors verifies that TopArtistsPane column definitions
+// use the new ColumnIndex/ColumnPrimary/ColumnSecondary tokens.
+func TestTopArtistsPane_UsesColumnColors(t *testing.T) {
+	th := theme.Load("black")
+	p := NewTopArtistsPane(state.New(), th, false)
+	cols := p.table.Columns()
+	require.Len(t, cols, 3, "TopArtistsPane should have 3 columns")
+
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Artist column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Genre column should use ColumnSecondary()")
+}

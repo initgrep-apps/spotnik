@@ -56,9 +56,9 @@ func NewTopArtistsPane(store *state.Store, th theme.Theme, focused bool) *TopArt
 	// Column widths per DESIGN.md §9: # 5% | Name 70% | Genre 25%
 	// Flex factors: 1 : 14 : 5 ≈ 5% / 70% / 25%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.TextMuted()},
-		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.TextPrimary()},
-		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.TextSecondary()},
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.ColumnPrimary()},
+		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.ColumnSecondary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
