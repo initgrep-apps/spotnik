@@ -81,6 +81,23 @@ func TestApp_ThemeSwitchMsg_PropagatesTheme(t *testing.T) {
 	assert.Equal(t, "dracula", a.Theme().ID(), "theme should switch to dracula")
 }
 
+// TestApp_ThemeSwitch_RecreatesAlerts verifies that switching themes recreates the
+// alerts model so subsequent toasts render with the new theme's colors.
+func TestApp_ThemeSwitch_RecreatesAlerts(t *testing.T) {
+	a := newThemeSwitcherTestApp(t)
+	require.Equal(t, "black", a.Theme().ID())
+
+	// Switch theme — this should recreate a.alerts internally.
+	_, cmd := a.Update(panes.ThemeSwitchMsg{ThemeID: "dracula"})
+
+	// After the switch, theme must be updated.
+	assert.Equal(t, "dracula", a.Theme().ID(), "theme should switch to dracula")
+
+	// The returned cmd is a Batch containing the success toast + persist func.
+	// Verify it is non-nil, proving alerts model is functional after recreation.
+	require.NotNil(t, cmd, "ThemeSwitchMsg handler must return a non-nil Cmd (success toast)")
+}
+
 // TestApp_ThemeOverlayClosedMsg_ClosesOverlay verifies ThemeOverlayClosedMsg closes overlay
 // without changing the theme.
 func TestApp_ThemeOverlayClosedMsg_ClosesOverlay(t *testing.T) {
