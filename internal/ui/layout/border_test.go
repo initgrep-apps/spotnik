@@ -260,7 +260,8 @@ func TestRenderPaneBorder_FocusedStyleApplied(t *testing.T) {
 	cfg.Focused = false
 	unfocusedResult := layout.RenderPaneBorder("", cfg)
 
-	// The outputs should differ — focused applies color, unfocused applies faint
+	// The outputs should differ — focused: full AccentColor + bold title;
+	// unfocused: AccentColor + Faint (dimmed but still colored).
 	assert.NotEqual(t, focusedResult, unfocusedResult, "focused and unfocused renders should differ")
 }
 
@@ -275,7 +276,7 @@ func TestRenderPaneBorder_UnfocusedFaintStyle(t *testing.T) {
 		Theme:       th,
 	}
 	result := layout.RenderPaneBorder("", cfg)
-	// Faint mode uses ANSI code 2 (dim)
+	// Unfocused border: AccentColor + Faint (dim). Both color escape and dim code are present.
 	assert.Contains(t, result, "\x1b[", "unfocused border should contain ANSI escape codes")
 }
 
