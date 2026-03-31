@@ -14,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
+	"github.com/initgrep-apps/spotnik/internal/prefs"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
@@ -147,11 +148,24 @@ type App struct {
 	// once to surface a possible stuck/disconnected state. The counter resets to 0 when
 	// a non-nil State is received.
 	nilPlaybackStateTicks int
+
+	// prefs is the preference store that coalesces in-memory changes and writes
+	// them to disk via FlushCmd. All runtime preference changes go through here.
+	prefs *prefs.PreferenceStore
+
+	// prefsDirtyGen is incremented on every prefs.Set call. Used by the debounce
+	// timer: a tick whose generation is less than prefsDirtyGen is stale and skipped.
+	prefsDirtyGen int
 }
 
 // throttleExpiredMsg is sent when the 429 backoff period has elapsed.
 // It clears the throttle observability state in the store.
 type throttleExpiredMsg struct{}
+
+// prefsFlushTickMsg is sent by the debounce timer started in schedulePrefsFlush.
+// Only the tick whose generation matches the current prefsDirtyGen triggers a flush;
+// stale ticks from superseded changes are ignored.
+type prefsFlushTickMsg struct{ generation int }
 
 // splashDismissMsg is sent after 2 seconds to close the splash screen.
 type splashDismissMsg struct{}
@@ -240,6 +254,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		tokenBaseURL:    opts.TokenBaseURL,
 		lastInteraction: time.Now(),
 		idleThreshold:   idleThresholdSecs * time.Second,
+		prefs:           prefs.New(config.DefaultConfigPath()),
 	}
 }
 
@@ -622,16 +637,32 @@ func (a *App) closeThemeSwitcher() (*App, tea.Cmd) {
 	return a, nil
 }
 
-// persistThemeChoice writes the selected theme ID to the user's config.toml.
-// Errors are logged to stderr but never surface to the user — a failed write
-// is non-critical (the theme is already applied in-session).
-func (a *App) persistThemeChoice(themeID string) {
-	if err := config.PersistTheme(themeID); err != nil {
-		// NOTE: theme persistence failure is non-critical — the theme is already
-		// active in-session. Log to stderr but do not emit a toast, as this would
-		// be confusing ("theme applied, but also an error?").
-		fmt.Fprintf(os.Stderr, "spotnik: failed to persist theme %q: %v\n", themeID, err)
-	}
+// schedulePrefsFlush marks preferences dirty and starts a 500ms debounce timer.
+// Returns the tea.Cmd for the timer. Call this after every prefs.Set().
+// The generation counter ensures only the latest change triggers a disk write.
+func (a *App) schedulePrefsFlush() tea.Cmd {
+	a.prefsDirtyGen++
+	gen := a.prefsDirtyGen
+	return tea.Tick(500*time.Millisecond, func(_ time.Time) tea.Msg {
+		return prefsFlushTickMsg{generation: gen}
+	})
+}
+
+// SchedulePrefsFlush is the exported test accessor for schedulePrefsFlush.
+// It increments the generation counter and returns the debounce tick Cmd.
+func (a *App) SchedulePrefsFlush() tea.Cmd {
+	return a.schedulePrefsFlush()
+}
+
+// Prefs returns the underlying PreferenceStore for inspection in tests.
+func (a *App) Prefs() *prefs.PreferenceStore {
+	return a.prefs
+}
+
+// PrefsDirtyGen returns the current preference dirty generation counter.
+// Used in tests to verify that schedulePrefsFlush increments it correctly.
+func (a *App) PrefsDirtyGen() int {
+	return a.prefsDirtyGen
 }
 
 // clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
@@ -674,6 +705,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleMsg contains the core application message routing logic.
 // It is called by Update() which also forwards messages to the alerts model.
 func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Preference flush messages are handled first and are independent of view mode.
+	if model, cmd, handled := a.handlePrefsMsg(msg); handled {
+		return model, cmd
+	}
+
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
@@ -1374,15 +1410,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// NOTE: Any in-flight toast is intentionally dropped — theme switch is
 		// user-initiated and the success toast fires immediately after.
 		a.alerts = *components.NewNotifications(newTheme)
-		// Persist the choice asynchronously via a Cmd (no side effects in Update).
+		// Queue the theme preference and schedule a debounced flush.
+		a.prefs.Set("theme", m.ThemeID)
 		alertInitCmd := a.alerts.Init()
 		return a, tea.Batch(
 			alertInitCmd,
 			a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name()),
-			func() tea.Msg {
-				a.persistThemeChoice(m.ThemeID)
-				return nil
-			},
+			a.schedulePrefsFlush(),
 		)
 
 	case panes.ThemeOverlayClosedMsg:
@@ -1508,4 +1542,28 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, nil
+}
+
+// handlePrefsMsg routes preference-related messages. Called from handleMsg switch
+// for prefsFlushTickMsg and prefs.FlushedMsg.
+//
+// prefsFlushTickMsg: debounce timer fired — flush only if generation matches.
+// prefs.FlushedMsg: log error to stderr on failure (non-critical, no toast).
+func (a *App) handlePrefsMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	switch m := msg.(type) {
+	case prefsFlushTickMsg:
+		// Only flush if no newer preference change has been made (debounce).
+		if m.generation == a.prefsDirtyGen {
+			return a, a.prefs.FlushCmd(), true
+		}
+		return a, nil, true
+
+	case prefs.FlushedMsg:
+		if m.Err != nil {
+			// Non-critical — log to stderr; no user toast (a failed flush is invisible).
+			fmt.Fprintf(os.Stderr, "spotnik: prefs flush failed: %v\n", m.Err)
+		}
+		return a, nil, true
+	}
+	return a, nil, false
 }
