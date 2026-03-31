@@ -217,6 +217,34 @@ func TestPersistTheme_OutputUsesPreferencesSection(t *testing.T) {
 	assert.Contains(t, string(data), "[preferences]", "output should use [preferences] not [ui]")
 }
 
+// TestLoad_UnknownTheme_ClampsToBlack verifies that an unrecognised theme ID is
+// clamped to the default "black" theme when a ThemeValidator is registered.
+func TestLoad_UnknownTheme_ClampsToBlack(t *testing.T) {
+	// Register a simple validator that only accepts known themes.
+	original := config.ThemeValidator
+	config.ThemeValidator = func(id string) bool {
+		known := []string{"black", "nord", "monokai", "dracula"}
+		for _, k := range known {
+			if k == id {
+				return true
+			}
+		}
+		return false
+	}
+	defer func() { config.ThemeValidator = original }()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `
+[preferences]
+theme = "absolutely-not-a-theme"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "black", cfg.Preferences.Theme, "unknown theme should be clamped to 'black'")
+}
+
 // TestLoad_NegativePreset_ClampsToZero verifies that a negative preset value is
 // clamped to 0 on load.
 func TestLoad_NegativePreset_ClampsToZero(t *testing.T) {

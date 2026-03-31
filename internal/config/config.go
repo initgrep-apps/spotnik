@@ -11,6 +11,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// ThemeValidator is an optional function that reports whether a theme ID is
+// valid. It is set by the caller (cmd/root.go) at startup to avoid an import
+// cycle between config and ui/theme. When nil, only the empty-string check is
+// applied.
+//
+// Swappable for testing: set to a function that knows the valid IDs.
+var ThemeValidator func(id string) bool
+
 // PreferencesConfig holds user-facing preference settings.
 type PreferencesConfig struct {
 	// Theme is the config key for the active colour theme.
@@ -85,12 +93,13 @@ func Load(path string) (*Config, error) {
 	cfg.ClientID = raw.Spotify.ClientID
 	cfg.Preferences = raw.Preferences
 
-	// Clamp theme: if unknown or empty, fall back to default.
-	// NOTE: full theme-registry validation (against Available()) cannot happen
-	// here because config cannot import ui/theme (import boundary). Empty string
-	// is handled here; callers that have access to the theme registry may clamp
-	// further.
+	// Clamp theme: if empty or not recognised by the registry, fall back to default.
+	// ThemeValidator is registered by cmd/root.go at startup to avoid an import
+	// cycle between config and ui/theme. When unset, only the empty-string case
+	// is handled here.
 	if cfg.Preferences.Theme == "" {
+		cfg.Preferences.Theme = "black"
+	} else if ThemeValidator != nil && !ThemeValidator(cfg.Preferences.Theme) {
 		cfg.Preferences.Theme = "black"
 	}
 

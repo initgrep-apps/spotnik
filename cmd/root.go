@@ -136,6 +136,19 @@ func LoadConfigWithEmbedded(path string, embeddedClientID string) (*config.Confi
 	return loadConfigFromPath(path, embeddedClientID)
 }
 
+// init registers the theme registry validator with the config package so that
+// config.Load() can clamp unknown theme IDs without importing ui/theme directly.
+func init() {
+	config.ThemeValidator = func(id string) bool {
+		for _, valid := range theme.Available() {
+			if valid == id {
+				return true
+			}
+		}
+		return false
+	}
+}
+
 // loadConfigFromPath is the testable implementation of LoadConfig that accepts
 // an explicit embedded client ID so tests can inject values without build flags.
 func loadConfigFromPath(path string, embeddedClientID string) (*config.Config, error) {
@@ -152,21 +165,6 @@ func loadConfigFromPath(path string, embeddedClientID string) (*config.Config, e
 	// Config client_id overrides embedded. Use embedded as fallback.
 	if cfg.ClientID == "" {
 		cfg.ClientID = embeddedClientID
-	}
-
-	// Clamp unknown theme IDs against the theme registry.
-	// config.Load() clamps empty → "black" but cannot check registry membership
-	// (import boundary). We do it here where theme is accessible.
-	available := theme.Available()
-	validTheme := false
-	for _, id := range available {
-		if id == cfg.Preferences.Theme {
-			validTheme = true
-			break
-		}
-	}
-	if !validTheme {
-		cfg.Preferences.Theme = theme.DefaultThemeID
 	}
 
 	// If still empty (no embedded, no config), show setup instructions.
