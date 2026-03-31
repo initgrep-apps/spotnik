@@ -153,8 +153,9 @@ type App struct {
 	// them to disk via FlushCmd. All runtime preference changes go through here.
 	prefs *prefs.PreferenceStore
 
-	// prefsDirtyGen is incremented on every prefs.Set call. Used by the debounce
-	// timer: a tick whose generation is less than prefsDirtyGen is stale and skipped.
+	// prefsDirtyGen is incremented on every schedulePrefsFlush call. Used by the
+	// debounce timer: a tick whose generation is less than prefsDirtyGen is stale
+	// and skipped.
 	prefsDirtyGen int
 }
 
