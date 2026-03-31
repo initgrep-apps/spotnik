@@ -828,10 +828,10 @@ func TestRenderPaneBorder_NoActions_FlushCorner(t *testing.T) {
 		"top border with no actions should end with ─╮ (no space before corner), got: %q", topLine)
 }
 
-// TestRenderPaneBorder_WithActions_SpaceBeforeCorner verifies that when actions are
-// present a space exists before the corner ╮ — providing breathing room after the last
-// corner-notch ╭.
-func TestRenderPaneBorder_WithActions_SpaceBeforeCorner(t *testing.T) {
+// TestRenderPaneBorder_WithActions_FlushCorner verifies that when actions are
+// present the last notch's ╭ is immediately followed by the corner ╮ with no space.
+// The notch ╭ already provides visual separation from ╮.
+func TestRenderPaneBorder_WithActions_FlushCorner(t *testing.T) {
 	th := theme.Load("black")
 	cfg := layout.BorderConfig{
 		Width:       60,
@@ -848,8 +848,7 @@ func TestRenderPaneBorder_WithActions_SpaceBeforeCorner(t *testing.T) {
 	require.NotEmpty(t, lines)
 
 	topLine := stripANSI(lines[0])
-	// The action segment ends with ╭, then a space, then the corner ╮.
-	// So the top line must end with " ╮" when actions are present.
-	assert.True(t, strings.HasSuffix(topLine, " ╮"),
-		"top border with actions should end with ' ╮' (space before corner), got: %q", topLine)
+	// The action segment ends with ╭, immediately followed by the corner ╮.
+	assert.True(t, strings.HasSuffix(topLine, "╭╮"),
+		"top border with actions should end with '╭╮' (no space before corner), got: %q", topLine)
 }
