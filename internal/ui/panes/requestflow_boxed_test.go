@@ -408,3 +408,31 @@ func TestBuildLeftArrowLines_BlockedDecision(t *testing.T) {
 	combined := strings.Join(lines, "")
 	assert.Contains(t, combined, "╳", "EventRequestBlocked should render ╳ in left arrow")
 }
+
+// --- Story 74 Task 1: renderSubBox uses accent color ---
+
+// TestRenderSubBox_UsesAccentColor verifies that renderSubBox() uses
+// PaneBorderRequestFlow() (orange accent) rather than TextSecondary() (grey)
+// for border color and title styling.
+//
+// The black theme maps:
+//
+//	PaneBorderRequestFlow() → #ffb86c → ANSI "38;2;255;184;108"
+//	TextSecondary()         → #888888 → ANSI "38;2;136;136;136"
+func TestRenderSubBox_UsesAccentColor(t *testing.T) {
+	p := newInternalTestPane()
+
+	// Rendered ANSI RGB codes for the black theme.
+	const accentANSI = "38;2;255;184;108" // #ffb86c — PaneBorderRequestFlow
+	const greyANSI = "38;2;136;136;136"   // #888888 — TextSecondary
+
+	out := p.renderSubBox("APP", []string{"line1", "line2"}, 30)
+
+	// Output must contain the accent color ANSI escape.
+	assert.Contains(t, out, accentANSI,
+		"renderSubBox should use PaneBorderRequestFlow() accent color for borders/title")
+
+	// Output must NOT contain TextSecondary color code anywhere in the box.
+	assert.NotContains(t, out, greyANSI,
+		"renderSubBox should NOT use TextSecondary() for borders/title")
+}
