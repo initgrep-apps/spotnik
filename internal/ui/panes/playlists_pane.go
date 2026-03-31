@@ -49,9 +49,9 @@ func NewPlaylistsPane(store *state.Store, th theme.Theme, focused bool) *Playlis
 	// Playlist list columns: # 5% | Name 70% | Tracks 25%
 	// Using flex factors: 1 : 14 : 5 ≈ 5% / 70% / 25%
 	listColumns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.TextMuted()},
-		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.TextPrimary()},
-		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.TextMuted()},
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.ColumnPrimary()},
+		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:      listColumns,
@@ -63,10 +63,10 @@ func NewPlaylistsPane(store *state.Store, th theme.Theme, focused bool) *Playlis
 	// Track sub-view columns: # 5% | Track 45% | Artist 35% | Duration 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	trackColumns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.TextMuted()},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.TextPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.TextSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.TextMuted()},
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	tt := components.NewTable(components.TableConfig{
 		Columns:      trackColumns,
