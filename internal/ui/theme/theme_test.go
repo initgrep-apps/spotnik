@@ -224,7 +224,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#ae81ff",
 				paneBorderTopArtists:     "#f92672",
 				paneBorderRequestFlow:    "#fd971f",
-				paneBorderNetworkLog:     "#66d9ef",
+				paneBorderNetworkLog:     "#f4a261",
 			},
 		},
 		{
@@ -245,7 +245,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#cba6f7",
 				paneBorderTopArtists:     "#f38ba8",
 				paneBorderRequestFlow:    "#fab387",
-				paneBorderNetworkLog:     "#94e2d5",
+				paneBorderNetworkLog:     "#eba0ac",
 			},
 		},
 		{
@@ -266,7 +266,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#b48ead",
 				paneBorderTopArtists:     "#bf616a",
 				paneBorderRequestFlow:    "#d08770",
-				paneBorderNetworkLog:     "#88c0d0",
+				paneBorderNetworkLog:     "#5e81ac",
 			},
 		},
 		{
@@ -287,7 +287,7 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#8839ef",
 				paneBorderTopArtists:     "#d20f39",
 				paneBorderRequestFlow:    "#fe640b",
-				paneBorderNetworkLog:     "#179299",
+				paneBorderNetworkLog:     "#ea76cb",
 			},
 		},
 	}
