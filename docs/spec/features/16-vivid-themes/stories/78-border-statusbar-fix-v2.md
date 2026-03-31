@@ -1,7 +1,7 @@
 ---
 title: "Fix: Border Corner Gap (rightSuffix) & Status Bar Key Pills (nested Render)"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background

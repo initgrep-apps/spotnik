@@ -30,3 +30,4 @@
 - [project_spotnik_feature64_complete.md](project_spotnik_feature64_complete.md) — Feature 64 (Gateway Liveness Watermarks): 200ms snapshot on viz.TickMsg, peak watermark fields, annotation rendering, exported accessor pattern
 - [project_spotnik_feature65_complete.md](project_spotnik_feature65_complete.md) — Feature 65 (Gateway-Internal Watermarks): minTokens in tokenBucket, peakConcurrent in Gateway.Do(), ResetWatermarks() with refill, mockGateway interface update
 - [project_spotnik_feature69_complete.md](project_spotnik_feature69_complete.md) — Feature 69 (Network Log Event Migration): NetLog retirement, cursor-based reads, PRIORITY/DECISION columns, blocked visibility, stale comment gotchas
+- [project_spotnik_feature77_complete.md](project_spotnik_feature77_complete.md) — Story 77 (Overlay Backgrounds, Border Corner, Network Log Colors, Status Bar Pills): TOML collision gotcha (8/11 themes collided), saturation test pattern, ANSI background test strategies
