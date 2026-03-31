@@ -1,6 +1,6 @@
 ---
 title: "Vivid Theme System"
-status: in-progress
+status: done
 ---
 
 ## Description

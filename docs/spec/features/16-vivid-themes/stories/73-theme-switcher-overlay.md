@@ -1,7 +1,7 @@
 ---
 title: "Theme Switcher Overlay and Runtime Switching"
 feature: 16-vivid-themes
-status: open
+status: done
 ---
 
 ## Background
