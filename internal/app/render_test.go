@@ -318,9 +318,8 @@ func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
 	a := newRenderTestApp()
 	result := a.renderStatusBar()
 
+	assert.Contains(t, result, "t", "status bar should contain 't' key for theme shortcut")
 	assert.Contains(t, result, "theme", "status bar should contain 'theme' shortcut label")
-	// "t" may appear as part of other words, so check alongside theme.
-	assert.Contains(t, result, "theme", "status bar should show t theme shortcut")
 }
 
 // --- Story 74 Task 3: key style no background ---
