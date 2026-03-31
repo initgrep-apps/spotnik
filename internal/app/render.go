@@ -235,12 +235,13 @@ func pageLabel(page layout.PageID) string {
 }
 
 // renderHeader renders the btop-style header bar containing:
-// Left: spotnik ─ Page A ─ ᐅp preset 0 ─ ᐅ/ search ─ ᐅd devices
-// Right: ◉ DeviceName  (or  ○ No device)
+// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName (or ○ No device)
+// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName (or ○ No device)
 //
-// All separator dashes use "─" (U+2500). Key labels are rendered in KeyHint() color,
-// descriptions in TextMuted() color, and the app name in TextPrimary()+Bold.
-// The background is StatusBarBg(). The line is padded/trimmed to match a.width exactly.
+// Shortcut hints (search, devices, preset key) are omitted from the header because
+// they already appear in the bottom status bar — the header is for contextual info only.
+// All separator dashes use "─" (U+2500). The app name uses TextPrimary()+Bold.
+// The background is StatusBarBg(). The line is padded to match a.width exactly.
 func (a *App) renderHeader() string {
 	bgStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
@@ -269,18 +270,19 @@ func (a *App) renderHeader() string {
 	// App name segment.
 	appName := appNameStyle.Render(" spotnik ")
 
-	// Page indicator: "Page A"
+	// Page indicator: "Page A" or "Page B"
 	page := mutedStyle.Render("Page ") + keyStyle.Render(pageLabel(a.layout.ActivePage()))
 
-	// Preset indicator: "ᐅp preset 0"
-	presetIdx := a.layout.ActivePresetIndex()
-	preset := mutedStyle.Render("ᐅ") + keyStyle.Render("p") + mutedStyle.Render(fmt.Sprintf(" preset %d", presetIdx))
-
-	// Action shortcuts: "ᐅ/ search"  "ᐅd devices"
-	search := mutedStyle.Render("ᐅ") + keyStyle.Render("/") + mutedStyle.Render(" search")
-	devices := mutedStyle.Render("ᐅ") + keyStyle.Render("d") + mutedStyle.Render(" devices")
-
-	left := appName + sep + page + sep + preset + sep + search + sep + devices
+	// Build left segment — Page A shows the active preset index as contextual info;
+	// Page B has a single fixed layout with no user-selectable presets, so it is omitted.
+	var left string
+	if a.layout.ActivePage() == layout.PageB {
+		left = appName + sep + page
+	} else {
+		presetIdx := a.layout.ActivePresetIndex()
+		preset := mutedStyle.Render(fmt.Sprintf("preset %d", presetIdx))
+		left = appName + sep + page + sep + preset
+	}
 
 	// Right side: device indicator.
 	device := a.store.ActiveDevice()
@@ -308,9 +310,12 @@ func (a *App) renderHeader() string {
 	return left + "  " + right
 }
 
-// renderStatusBar renders the global-only bottom status bar with fixed keybinding hints.
+// renderStatusBar renders the global-only bottom status bar with page-aware keybinding hints.
 // Pane-specific hints (filter, add, etc.) now live in pane borders — never here.
 // Toast notifications are shown as overlays via alerts.Render() — not in the status bar.
+//
+// Page A includes all hints including "p preset" and "1-8 toggle" (Page A has multiple
+// presets and toggleable panes). Page B omits those two since it has a single fixed layout.
 func (a *App) renderStatusBar() string {
 	bgStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
@@ -323,12 +328,18 @@ func (a *App) renderStatusBar() string {
 		Foreground(a.theme.KeyHint()).
 		Bold(true)
 
-	// Fixed global hints per DESIGN.md §15 — these never change per pane focus.
-	hints := []struct{ Key, Label string }{
+	// Common hints present on both pages.
+	common := []struct{ Key, Label string }{
 		{"/", "search"},
 		{"0", "page"},
+	}
+	// Page-A-only hints: multiple presets and toggleable panes.
+	pageAOnly := []struct{ Key, Label string }{
 		{"p", "preset"},
 		{"1-8", "toggle"},
+	}
+	// Shared tail hints.
+	tail := []struct{ Key, Label string }{
 		{"Tab", "pane"},
 		{"d", "devices"},
 		{"t", "theme"},
@@ -336,10 +347,17 @@ func (a *App) renderStatusBar() string {
 		{"q", "quit"},
 	}
 
+	hints := common
+	if a.layout.ActivePage() == layout.PageA {
+		hints = append(hints, pageAOnly...)
+	}
+	hints = append(hints, tail...)
+
 	var parts []string
 	for _, h := range hints {
 		parts = append(parts, keyStyle.Render(h.Key)+" "+bgStyle.Render(h.Label))
 	}
 
-	return bgStyle.Render("  " + strings.Join(parts, "   "))
+	// 2-space separator (tighter than the old 3-space gap).
+	return bgStyle.Render("  " + strings.Join(parts, "  "))
 }

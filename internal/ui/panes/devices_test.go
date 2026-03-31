@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -358,6 +359,69 @@ func TestDeviceOverlay_CursorClampedOnListShrink(t *testing.T) {
 	assert.NotPanics(t, func() {
 		overlay.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	}, "pressing Enter after list shrinks must not panic")
+}
+
+// ── Story 75 Task 4: Device overlay non-cursor row background ────────────────
+
+// TestDeviceOverlay_NonCursorRow_UsesBaseBackground verifies that non-cursor rows
+// in the device overlay use Base() (not SurfaceAlt()), so non-selected devices
+// visually recede and the cursor row (with SelectedBg()) clearly stands out.
+func TestDeviceOverlay_NonCursorRow_UsesBaseBackground(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	overlay := NewDeviceOverlay(s, th)
+	overlay.devices = testDevices()
+	overlay.cursor = 0
+
+	// renderDevice with idx=1 is a non-cursor row.
+	row := overlay.renderDevice(1, overlay.devices[1])
+
+	base := string(th.Base())
+	surfaceAlt := string(th.SurfaceAlt())
+	if base != surfaceAlt {
+		baseStyle := lipgloss.NewStyle().Background(th.Base()).Render("X")
+		surfaceStyle := lipgloss.NewStyle().Background(th.SurfaceAlt()).Render("X")
+		if baseStyle != surfaceStyle {
+			surfaceBg := extractDeviceBgANSI(surfaceStyle)
+			if surfaceBg != "" {
+				assert.NotContains(t, row, surfaceBg,
+					"non-cursor device row should use Base() background, not SurfaceAlt()")
+			}
+		}
+	}
+}
+
+// TestDeviceOverlay_CursorRow_UsesSelectedBg verifies that the cursor row in the
+// device overlay uses SelectedBg() so it clearly stands out.
+func TestDeviceOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	overlay := NewDeviceOverlay(s, th)
+	overlay.devices = testDevices()
+	overlay.cursor = 0
+
+	row := overlay.renderDevice(0, overlay.devices[0])
+
+	selectedBgStyle := lipgloss.NewStyle().Background(th.SelectedBg()).Render("X")
+	selectedBg := extractDeviceBgANSI(selectedBgStyle)
+	if selectedBg != "" {
+		assert.Contains(t, row, selectedBg,
+			"cursor device row should use SelectedBg() background")
+	}
+}
+
+// extractDeviceBgANSI extracts the "48;2;R;G;B" portion from an ANSI string.
+func extractDeviceBgANSI(s string) string {
+	const bgPrefix = "48;2;"
+	idx := strings.Index(s, bgPrefix)
+	if idx < 0 {
+		return ""
+	}
+	end := strings.Index(s[idx:], "m")
+	if end < 0 {
+		return ""
+	}
+	return s[idx : idx+end]
 }
 
 // TestDeviceOverlay_CursorClampedOnEmptyList verifies that when a DevicesLoadedMsg

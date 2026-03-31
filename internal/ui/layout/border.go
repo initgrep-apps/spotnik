@@ -206,6 +206,12 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 // buildRightSegment builds the right-side content of the top border:
 // either filter mode text or action shortcuts.
 // Returns an empty string if there are no actions and no filter.
+//
+// Filter mode is unchanged: "filtering: "query" ─── ᐅEsc close".
+// Action mode uses the corner-notch format: each action is rendered as
+// "╮ key label ╭" with a single "─" between consecutive notches.
+// The ╮ and ╭ characters use the pane's accent color (faint when unfocused)
+// so they visually blend into the border dashes as notch cutouts.
 func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) string) string {
 	if cfg.FilterQuery != "" {
 		// Filter mode: "filtering: "query" ─── ᐅEsc close"
@@ -218,13 +224,25 @@ func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) s
 	if len(cfg.Actions) == 0 {
 		return ""
 	}
-	// Build action list: ᐅkey label ─── ᐅkey2 label2
+
+	// borderChar renders a single character in the pane accent color (faint if unfocused).
+	// Used for the ╮ and ╭ notch characters so they blend into the border line.
+	borderChar := func(s string) string {
+		style := lipgloss.NewStyle().Foreground(cfg.AccentColor)
+		if !cfg.Focused {
+			style = style.Faint(true)
+		}
+		return style.Render(s)
+	}
+
+	// Corner-notch format: ╮ key label ╭ with ─ between consecutive notches.
 	parts := make([]string, len(cfg.Actions))
 	for i, a := range cfg.Actions {
-		parts[i] = mutedStyle("ᐅ") + keyHintStyle(a.Key) + " " + mutedStyle(a.Label)
+		parts[i] = borderChar("╮") + " " +
+			keyHintStyle(a.Key) + " " + mutedStyle(a.Label) + " " +
+			borderChar("╭")
 	}
-	sep := mutedStyle(" ─── ")
-	return strings.Join(parts, sep)
+	return strings.Join(parts, borderChar("─"))
 }
 
 // buildLeftInner builds the inner-left content of the top border:

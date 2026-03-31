@@ -110,7 +110,8 @@ func TestRenderPaneBorder_WithActions(t *testing.T) {
 	require.NotEmpty(t, lines)
 
 	topLine := stripANSI(lines[0])
-	assert.Contains(t, topLine, "ᐅ", "action prefix ᐅ should appear")
+	// Story 75: actions now use corner-notch format (╮ key label ╭) — no ᐅ prefix.
+	assert.NotContains(t, topLine, "ᐅ", "action prefix ᐅ should NOT appear in corner-notch format")
 	assert.Contains(t, topLine, "filter", "action label 'filter' should appear")
 	assert.Contains(t, topLine, "new", "action label 'new' should appear")
 }
@@ -680,6 +681,97 @@ func TestRenderPaneBorder_SideBySideNoOverlap(t *testing.T) {
 	combinedLines := strings.Split(combined, "\n")
 	for i, line := range combinedLines {
 		assert.Equal(t, 80, lipgloss.Width(line), "side-by-side line %d should be 80 wide", i)
+	}
+}
+
+// ── Story 75 Task 1: Corner-notch border actions ──────────────────────────────
+
+// TestBuildRightSegment_CornerNotchFormat verifies that the corner-notch format uses
+// ╮ and ╭ characters and does NOT use the old ᐅ prefix style for actions.
+func TestBuildRightSegment_CornerNotchFormat(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "s", Label: "shfl"},
+		{Key: "r", Label: "rpt"},
+	}
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      5,
+		Title:       "Now Playing",
+		ToggleKey:   1,
+		Actions:     actions,
+		AccentColor: th.PaneBorderNowPlaying(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	// The top line should contain multiple ╭ characters: the action notches embed them
+	// between each action. Count of ╭ must be at least len(actions) (one per action).
+	notchCount := strings.Count(topLine, "╭")
+	assert.GreaterOrEqual(t, notchCount, len(actions),
+		"corner-notch format should have at least one ╭ per action, got %d in: %q", notchCount, topLine)
+	assert.Contains(t, topLine, "shfl", "action label 'shfl' should appear")
+	assert.Contains(t, topLine, "rpt", "action label 'rpt' should appear")
+	// ᐅ must NOT appear in the action segment (corner-notch replaces it).
+	assert.NotContains(t, topLine, "ᐅ", "corner-notch format must not use ᐅ prefix for actions")
+}
+
+// TestBuildRightSegment_FilterMode_Unchanged verifies that the filter mode still uses
+// the ᐅEsc close format (unchanged by the corner-notch redesign).
+func TestBuildRightSegment_FilterMode_Unchanged(t *testing.T) {
+	th := theme.Load("black")
+	cfg := layout.BorderConfig{
+		Width:       60,
+		Height:      5,
+		Title:       "Queue",
+		ToggleKey:   2,
+		FilterQuery: "rock",
+		AccentColor: th.PaneBorderQueue(),
+		Focused:     true,
+		Theme:       th,
+	}
+	result := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines)
+
+	topLine := stripANSI(lines[0])
+	assert.Contains(t, topLine, "ᐅ", "filter mode should still use ᐅ prefix")
+	assert.Contains(t, topLine, "Esc", "filter mode should show Esc key")
+	assert.Contains(t, topLine, "close", "filter mode should show 'close' label")
+	assert.Contains(t, topLine, "filtering:", "filter mode should show 'filtering:' prefix")
+}
+
+// TestRenderPaneBorder_NotchActions_FitsWidth verifies that the total rendered
+// width matches config width exactly when actions use corner-notch format.
+func TestRenderPaneBorder_NotchActions_FitsWidth(t *testing.T) {
+	th := theme.Load("black")
+	actions := []layout.Action{
+		{Key: "s", Label: "shfl"},
+		{Key: "r", Label: "rpt"},
+		{Key: "space", Label: "play"},
+	}
+	widths := []int{60, 80, 100}
+	for _, w := range widths {
+		cfg := layout.BorderConfig{
+			Width:       w,
+			Height:      5,
+			Title:       "Now Playing",
+			ToggleKey:   1,
+			Actions:     actions,
+			AccentColor: th.PaneBorderNowPlaying(),
+			Focused:     true,
+			Theme:       th,
+		}
+		result := layout.RenderPaneBorder("", cfg)
+		lines := strings.Split(result, "\n")
+		for i, line := range lines {
+			assert.Equal(t, w, lipgloss.Width(line),
+				"line %d should be exactly %d wide with corner-notch actions", i, w)
+		}
 	}
 }
 
