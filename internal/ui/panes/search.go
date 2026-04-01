@@ -360,7 +360,7 @@ func (o *SearchOverlay) selectedURI() (uri string, isTrack bool) {
 
 // View renders the search overlay box with a btop-style border.
 // The border is rendered via layout.RenderPaneBorder() so that the title
-// ("Search") and action shortcuts ("Enter play", "Tab section") appear
+// ("Search") and action shortcuts ("Enter play", "Esc close") appear
 // embedded in the top border line, consistent with the main grid pane borders.
 func (o *SearchOverlay) View() string {
 	totalWidth := o.overlayWidth()
@@ -797,14 +797,6 @@ func (o *SearchOverlay) renderColumnHeaders(sec searchSection, contentWidth int)
 	headerLine := strings.Join(hParts, "  ")
 	underLine := strings.Join(uParts, "  ")
 	return headerLine + "\n" + underLine
-}
-
-// min returns the smaller of two ints.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // RenderColumnHeaders is the exported wrapper of renderColumnHeaders for use in tests.
