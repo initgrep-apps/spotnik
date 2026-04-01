@@ -46,17 +46,110 @@ func sampleSearchResultData() *panes.SearchResultData {
 	}
 }
 
+// applySearchResultsToStore mirrors what app.go's SearchResultsMsg handler does:
+// it writes the item buffers, totals, and fetched-offset sentinels to the store,
+// then delivers the msg to the overlay so the overlay can refresh its table rows.
+// Tests must call this instead of overlay.Update(msg) directly when they want the
+// overlay to show results, since store mutations are now owned by app.go.
+func applySearchResultsToStore(t *testing.T, s *state.Store, o *panes.SearchOverlay, msg panes.SearchResultsMsg) *panes.SearchOverlay {
+	t.Helper()
+	if msg.Results == nil {
+		model, _ := o.Update(msg)
+		return model.(*panes.SearchOverlay)
+	}
+	if !msg.IsPaged {
+		s.ClearSearchBuffers()
+		s.AppendSearchTracks(msg.Results.Tracks)
+		s.AppendSearchArtists(msg.Results.Artists)
+		s.AppendSearchAlbums(msg.Results.Albums)
+		s.AppendSearchPlaylists(msg.Results.Playlists)
+		s.SetSearchTotal(int(panes.SectionTracks), msg.Results.TotalTracks)
+		s.SetSearchTotal(int(panes.SectionArtists), msg.Results.TotalArtists)
+		s.SetSearchTotal(int(panes.SectionAlbums), msg.Results.TotalAlbums)
+		s.SetSearchTotal(int(panes.SectionPlaylists), msg.Results.TotalPlaylists)
+		s.MarkSearchOffsetFetched(int(panes.SectionTracks), 0)
+		s.MarkSearchOffsetFetched(int(panes.SectionArtists), 0)
+		s.MarkSearchOffsetFetched(int(panes.SectionAlbums), 0)
+		s.MarkSearchOffsetFetched(int(panes.SectionPlaylists), 0)
+	} else {
+		switch msg.Section {
+		case panes.SectionTracks:
+			s.AppendSearchTracks(msg.Results.Tracks)
+			if msg.Results.TotalTracks > 0 {
+				s.SetSearchTotal(int(panes.SectionTracks), msg.Results.TotalTracks)
+			}
+		case panes.SectionArtists:
+			s.AppendSearchArtists(msg.Results.Artists)
+			if msg.Results.TotalArtists > 0 {
+				s.SetSearchTotal(int(panes.SectionArtists), msg.Results.TotalArtists)
+			}
+		case panes.SectionAlbums:
+			s.AppendSearchAlbums(msg.Results.Albums)
+			if msg.Results.TotalAlbums > 0 {
+				s.SetSearchTotal(int(panes.SectionAlbums), msg.Results.TotalAlbums)
+			}
+		case panes.SectionPlaylists:
+			s.AppendSearchPlaylists(msg.Results.Playlists)
+			if msg.Results.TotalPlaylists > 0 {
+				s.SetSearchTotal(int(panes.SectionPlaylists), msg.Results.TotalPlaylists)
+			}
+		}
+		s.MarkSearchOffsetFetched(int(msg.Section), msg.Offset)
+	}
+	model, _ := o.Update(msg)
+	return model.(*panes.SearchOverlay)
+}
+
+// collectBatchMsgs executes a tea.Cmd and collects all resulting tea.Msg values,
+// including sub-commands produced by tea.Batch. This allows tests to assert that
+// a specific message type is (or is not) present in a batch command result.
+// tea.Batch returns a tea.BatchMsg (type alias for []tea.Cmd) when executed.
+func collectBatchMsgs(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	// tea.BatchMsg is the exported type for batch commands ([]tea.Cmd).
+	// Execute each sub-command and collect its result recursively.
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, subCmd := range batch {
+			msgs = append(msgs, collectBatchMsgs(subCmd)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
+
 // newTestSearchOverlayWithResults creates a SearchOverlay with pre-populated search
-// results delivered via SearchResultsMsg (not via store) and the query set in the store.
+// results. Both the store and overlay are populated, mirroring how app.go processes
+// SearchResultsMsg before forwarding to the overlay.
 func newTestSearchOverlayWithResults() (*panes.SearchOverlay, *state.Store) {
 	s := state.New()
-	t := theme.Load("black")
+	th := theme.Load("black")
 	s.SetSearchQuery("blinding")
 
-	overlay := panes.NewSearchOverlay(s, t)
+	overlay := panes.NewSearchOverlay(s, th)
 
-	// Deliver results the same way the root app model does: via SearchResultsMsg.
-	msg := panes.SearchResultsMsg{Results: sampleSearchResultData()}
+	// Populate store then deliver msg — mirrors what app.go's SearchResultsMsg handler does.
+	data := sampleSearchResultData()
+	s.ClearSearchBuffers()
+	s.AppendSearchTracks(data.Tracks)
+	s.AppendSearchArtists(data.Artists)
+	s.AppendSearchAlbums(data.Albums)
+	s.AppendSearchPlaylists(data.Playlists)
+	s.SetSearchTotal(int(panes.SectionTracks), data.TotalTracks)
+	s.SetSearchTotal(int(panes.SectionArtists), data.TotalArtists)
+	s.SetSearchTotal(int(panes.SectionAlbums), data.TotalAlbums)
+	s.SetSearchTotal(int(panes.SectionPlaylists), data.TotalPlaylists)
+	s.MarkSearchOffsetFetched(int(panes.SectionTracks), 0)
+	s.MarkSearchOffsetFetched(int(panes.SectionArtists), 0)
+	s.MarkSearchOffsetFetched(int(panes.SectionAlbums), 0)
+	s.MarkSearchOffsetFetched(int(panes.SectionPlaylists), 0)
+	msg := panes.SearchResultsMsg{Results: data}
 	model, _ := overlay.Update(msg)
 	overlay = model.(*panes.SearchOverlay)
 
@@ -336,8 +429,7 @@ func TestSearchOverlay_View_Truncation(t *testing.T) {
 			{URI: "spotify:track:t1", Name: longName, Artist: "Artist"},
 		},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 	o.SetSize(40, 20) // narrow overlay
 
 	view := o.View()
@@ -364,8 +456,7 @@ func TestSearchOverlay_View_NoResults(t *testing.T) {
 	o := panes.NewSearchOverlay(s, th)
 	// Deliver empty results via message
 	emptyResults := &panes.SearchResultData{} // all slices nil → zero items
-	model, _ := o.Update(panes.SearchResultsMsg{Results: emptyResults})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: emptyResults})
 	o.SetSize(80, 40)
 
 	view := o.View()
@@ -436,8 +527,7 @@ func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {
 	o := panes.NewSearchOverlay(s, th)
 
 	// Deliver empty results via SearchResultsMsg (the new way)
-	model, _ := o.Update(panes.SearchResultsMsg{Results: &panes.SearchResultData{}})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: &panes.SearchResultData{}})
 	o.SetSize(80, 30)
 
 	output := o.View()
@@ -450,14 +540,13 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(s, th)
 
-	// Deliver results via SearchResultsMsg
+	// Deliver results via SearchResultsMsg — populate store first, then overlay.
 	results := &panes.SearchResultData{
 		Tracks: []panes.SearchTrackItem{
 			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
 		},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 	o.SetSize(80, 30)
 
 	output := o.View()
@@ -551,8 +640,7 @@ func TestSearchOverlay_SearchResultsMsg_StoresResults(t *testing.T) {
 		},
 	}
 
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 
 	view := o.View()
 	assert.Contains(t, view, "Track One", "view should show track from SearchResultsMsg")
@@ -578,8 +666,7 @@ func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 		Albums:    []panes.SearchAlbumItem{{URI: "u3", Name: "Al1", Artist: "A3"}},
 		Playlists: []panes.SearchPlaylistItem{{URI: "u4", Name: "PL1", Owner: "Owner1"}},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 	o.SetSize(80, 40)
 
 	// In the tabbed design (Story 82), only the active section is shown in the view.
@@ -1044,8 +1131,7 @@ func TestActiveSection_Tracks_NarrowNoAlbumColumn(t *testing.T) {
 			{URI: "spotify:track:t1", Name: "My Song", Artist: "My Artist", Album: "My Album", DurationMs: 180000},
 		},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 
 	// Small terminal size → narrow mode
 	o.SetSize(40, 20)
@@ -1191,8 +1277,7 @@ func TestContentWidth_NoDoubleSubtraction(t *testing.T) {
 		},
 		TotalTracks: 1,
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 
 	// Check that the view renders without wrapping. With the bubble-table rewrite,
 	// we verify the view output contains the track name somewhere (not a broken render).
@@ -1348,8 +1433,7 @@ func TestSearchOverlay_HelpBarPresent_FewResults(t *testing.T) {
 		},
 		TotalTracks: 3,
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: results})
 	o.SetSize(200, 10)
 
 	view := o.View()
@@ -1374,7 +1458,7 @@ func TestSearchOverlay_HelpBarPresent_FewResults(t *testing.T) {
 // TestSearchOverlay_NewQuery_ClearsBuffers verifies that receiving a SearchResultsMsg
 // without IsPaged clears all accumulated buffers and starts fresh.
 func TestSearchOverlay_NewQuery_ClearsBuffers(t *testing.T) {
-	o, _ := newTestSearchOverlayWithResults()
+	o, s := newTestSearchOverlayWithResults()
 	// sampleSearchResultData has 2 tracks, 1 artist, 1 album, 1 playlist.
 	assert.Equal(t, 2, o.BufTracksLen(), "initial load should have 2 tracks")
 	assert.Equal(t, 1, o.BufArtistsLen(), "initial load should have 1 artist")
@@ -1384,8 +1468,7 @@ func TestSearchOverlay_NewQuery_ClearsBuffers(t *testing.T) {
 		Tracks:      []panes.SearchTrackItem{{Name: "New Track", URI: "uri:new"}},
 		TotalTracks: 1,
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: newData})
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: newData})
 
 	assert.Equal(t, 1, o.BufTracksLen(), "new query should clear old buffer and load new items")
 	assert.Equal(t, 0, o.BufArtistsLen(), "new query should clear artist buffer")
@@ -1394,7 +1477,7 @@ func TestSearchOverlay_NewQuery_ClearsBuffers(t *testing.T) {
 // TestSearchOverlay_PagedResult_AccumulatesBuffer verifies that a paged result appends
 // to the existing buffer instead of replacing it.
 func TestSearchOverlay_PagedResult_AccumulatesBuffer(t *testing.T) {
-	o, _ := newTestSearchOverlayWithResults()
+	o, s := newTestSearchOverlayWithResults()
 	// sampleSearchResultData has 2 tracks.
 	require.Equal(t, 2, o.BufTracksLen(), "initial load should have 2 tracks")
 
@@ -1410,8 +1493,7 @@ func TestSearchOverlay_PagedResult_AccumulatesBuffer(t *testing.T) {
 		Offset:  10,
 		IsPaged: true,
 	}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, msg)
 
 	assert.Equal(t, 5, o.BufTracksLen(), "buffer should accumulate: 2 initial + 3 paged = 5")
 }
@@ -1419,7 +1501,7 @@ func TestSearchOverlay_PagedResult_AccumulatesBuffer(t *testing.T) {
 // TestSearchOverlay_RowNumbers_Absolute verifies that after accumulating two pages,
 // row numbers continue from the last loaded index (absolute position in buffer).
 func TestSearchOverlay_RowNumbers_Absolute(t *testing.T) {
-	o, _ := newTestSearchOverlayWithResults()
+	o, s := newTestSearchOverlayWithResults()
 	// initial: 2 tracks loaded
 
 	// Load 3 more tracks on page 2.
@@ -1433,8 +1515,7 @@ func TestSearchOverlay_RowNumbers_Absolute(t *testing.T) {
 		Offset:  10,
 		IsPaged: true,
 	}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, msg)
 	o.SetSize(200, 40)
 
 	// View should contain "3" for the 3rd item and "5" for the 5th.
@@ -1478,7 +1559,10 @@ func TestPageIndicator_ShowsRange_WhenTotalExceeds10(t *testing.T) {
 // TestPageIndicator_NoIndicator_WhenTotalUnder10 verifies that pageIndicator returns
 // empty string when the active section has total <= 10 (all results fit on one page).
 func TestPageIndicator_NoIndicator_WhenTotalUnder10(t *testing.T) {
-	o := newTestSearchOverlay()
+	s := state.New()
+	s.SetSearchQuery("test")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
 
 	data := &panes.SearchResultData{
 		Tracks:       []panes.SearchTrackItem{{Name: "A"}, {Name: "B"}},
@@ -1486,8 +1570,7 @@ func TestPageIndicator_NoIndicator_WhenTotalUnder10(t *testing.T) {
 		TotalArtists: 0, TotalAlbums: 0, TotalPlaylists: 0,
 	}
 	msg := panes.SearchResultsMsg{Results: data, Offset: 0}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, msg)
 
 	indicator := o.PageIndicator()
 	assert.Empty(t, indicator, "page indicator should be empty when total <= 10")
@@ -1516,8 +1599,7 @@ func TestPageIndicator_AccumulatedBuffer(t *testing.T) {
 		Offset:  10,
 		IsPaged: true,
 	}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, msg)
 
 	// Buffer now has 2+6=8 items, total=16. Cursor at 0 → first page window (1-8 of 16).
 	indicator := o.PageIndicator()
@@ -1539,15 +1621,17 @@ func TestRenderHelpBar_ShowsPageIndicator_WhenTotalExceeds10(t *testing.T) {
 // TestRenderHelpBar_NoPageIndicator_WhenTotalUnder10 verifies that renderHelpBar
 // does not include a page indicator when total <= maxResultsPerSection.
 func TestRenderHelpBar_NoPageIndicator_WhenTotalUnder10(t *testing.T) {
-	o := newTestSearchOverlay()
+	s := state.New()
+	s.SetSearchQuery("test")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
 
 	data := &panes.SearchResultData{
 		Tracks:      []panes.SearchTrackItem{{Name: "A"}},
 		TotalTracks: 5, // under 10
 	}
 	msg := panes.SearchResultsMsg{Results: data, Offset: 0}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, msg)
 
 	helpBar := o.RenderHelpBar(80)
 	assert.NotContains(t, helpBar, "of 5", "help bar should NOT include page indicator when total <= 10")
@@ -1600,9 +1684,7 @@ func TestPrefetch_Fires_AtMidpoint(t *testing.T) {
 	for i := range items {
 		items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", i+1), URI: fmt.Sprintf("uri:%d", i)}
 	}
-	msg := panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 100}}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 100}})
 	o.SetSize(200, 40)
 
 	// Move cursor to position 5 (midpoint of page 1 with 10 items).
@@ -1611,19 +1693,23 @@ func TestPrefetch_Fires_AtMidpoint(t *testing.T) {
 	}
 
 	// The next down press should trigger prefetch for offset=10.
-	o, cmd := sendKey(t, o, "down")
-	_ = o
+	_, cmd := sendKey(t, o, "down")
 
-	// cmd is a Batch(tableCmd, prefetchCmd). Execute it to extract the page request.
+	// cmd is a Batch(tableCmd, prefetchCmd). Unwrap all sub-commands and collect messages.
 	require.NotNil(t, cmd, "cursor at midpoint should produce a cmd (prefetch)")
-	msg2 := cmd()
-	// The batch may return nil or a message. Check if it produces a SearchPageRequestMsg.
-	if pageReq, ok := msg2.(panes.SearchPageRequestMsg); ok {
-		assert.Equal(t, "blinding", pageReq.Query)
-		assert.Equal(t, 10, pageReq.Offset, "prefetch should request the next offset (10)")
-		assert.Equal(t, panes.SectionTracks, pageReq.Section)
+
+	// Execute sub-commands from the batch and collect any SearchPageRequestMsg.
+	msgs := collectBatchMsgs(cmd)
+	var pageReqs []panes.SearchPageRequestMsg
+	for _, m := range msgs {
+		if pr, ok := m.(panes.SearchPageRequestMsg); ok {
+			pageReqs = append(pageReqs, pr)
+		}
 	}
-	// Note: if cmd() returns a batch result we accept — prefetch was scheduled.
+	require.Len(t, pageReqs, 1, "exactly one SearchPageRequestMsg should be fired at midpoint")
+	assert.Equal(t, "blinding", pageReqs[0].Query)
+	assert.Equal(t, 10, pageReqs[0].Offset, "prefetch should request the next offset (10)")
+	assert.Equal(t, panes.SectionTracks, pageReqs[0].Section)
 }
 
 // TestPrefetch_NoFire_AllLoaded verifies that prefetch does not fire when
@@ -1639,22 +1725,19 @@ func TestPrefetch_NoFire_AllLoaded(t *testing.T) {
 	for i := range items {
 		items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", i+1), URI: fmt.Sprintf("uri:%d", i)}
 	}
-	msg := panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 5}}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 5}})
 
 	// Move cursor to the last item.
 	for i := 0; i < 4; i++ {
 		o, _ = sendKey(t, o, "down")
 	}
 	_, cmd := sendKey(t, o, "down")
-	if cmd == nil {
-		return // no cmd at all: correct
+	// No SearchPageRequestMsg should be present in any sub-commands.
+	msgs := collectBatchMsgs(cmd)
+	for _, m := range msgs {
+		_, isPageReq := m.(panes.SearchPageRequestMsg)
+		assert.False(t, isPageReq, "should not emit page request when buffer is full")
 	}
-	// If there is a cmd, it must not be a SearchPageRequestMsg.
-	result := cmd()
-	_, isPageReq := result.(panes.SearchPageRequestMsg)
-	assert.False(t, isPageReq, "should not emit page request when buffer is full")
 }
 
 // TestPrefetch_NoFire_AlreadyFetched verifies that prefetch does not fire
@@ -1670,9 +1753,7 @@ func TestPrefetch_NoFire_AlreadyFetched(t *testing.T) {
 	for i := range items {
 		items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", i+1), URI: fmt.Sprintf("uri:%d", i)}
 	}
-	msg := panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 100}}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 100}})
 
 	// Pre-mark offset 10 as already fetched in the store (simulates in-flight request).
 	s.MarkSearchOffsetFetched(int(panes.SectionTracks), 10)
@@ -1682,12 +1763,12 @@ func TestPrefetch_NoFire_AlreadyFetched(t *testing.T) {
 		o, _ = sendKey(t, o, "down")
 	}
 	_, cmd := sendKey(t, o, "down")
-	if cmd == nil {
-		return // no cmd: correct (already fetched)
+	// No SearchPageRequestMsg should be present in any sub-commands.
+	msgs := collectBatchMsgs(cmd)
+	for _, m := range msgs {
+		_, isPageReq := m.(panes.SearchPageRequestMsg)
+		assert.False(t, isPageReq, "should not emit page request when offset already fetched")
 	}
-	result := cmd()
-	_, isPageReq := result.(panes.SearchPageRequestMsg)
-	assert.False(t, isPageReq, "should not emit page request when offset already fetched")
 }
 
 // TestPrefetch_NoFire_BelowMidpoint verifies that prefetch does not fire
@@ -1703,9 +1784,7 @@ func TestPrefetch_NoFire_BelowMidpoint(t *testing.T) {
 	for i := range items {
 		items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", i+1), URI: fmt.Sprintf("uri:%d", i)}
 	}
-	msg := panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 100}}
-	model, _ := o.Update(msg)
-	o = model.(*panes.SearchOverlay)
+	o = applySearchResultsToStore(t, s, o, panes.SearchResultsMsg{Results: &panes.SearchResultData{Tracks: items, TotalTracks: 100}})
 
 	// Move cursor to position 3 (below midpoint=5).
 	for i := 0; i < 3; i++ {
@@ -1713,12 +1792,12 @@ func TestPrefetch_NoFire_BelowMidpoint(t *testing.T) {
 	}
 	// Press down once more (cursor → 4, still below midpoint 5).
 	_, cmd := sendKey(t, o, "down")
-	if cmd == nil {
-		return // no cmd at all: correct
+	// No SearchPageRequestMsg should be present in any sub-commands.
+	msgs := collectBatchMsgs(cmd)
+	for _, m := range msgs {
+		_, isPageReq := m.(panes.SearchPageRequestMsg)
+		assert.False(t, isPageReq, "cursor below midpoint should not trigger prefetch")
 	}
-	result := cmd()
-	_, isPageReq := result.(panes.SearchPageRequestMsg)
-	assert.False(t, isPageReq, "cursor below midpoint should not trigger prefetch")
 }
 
 // --- Story 85: Help bar key highlighting ---

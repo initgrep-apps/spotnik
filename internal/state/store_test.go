@@ -855,3 +855,57 @@ func TestStore_SearchBufQuery_SetAndGet(t *testing.T) {
 	s.SetSearchBufQuery("beatles")
 	assert.Equal(t, "beatles", s.SearchBufQuery())
 }
+
+func TestStore_AppendSearchTracks_AccumulatesAndReturns(t *testing.T) {
+	s := New()
+	assert.Empty(t, s.SearchTracks(), "initial track buffer should be empty")
+
+	s.AppendSearchTracks([]domain.SearchTrackItem{{Name: "T1"}, {Name: "T2"}})
+	assert.Len(t, s.SearchTracks(), 2, "should have 2 tracks after first append")
+
+	s.AppendSearchTracks([]domain.SearchTrackItem{{Name: "T3"}})
+	assert.Len(t, s.SearchTracks(), 3, "should accumulate: 2 + 1 = 3 tracks")
+}
+
+func TestStore_AppendSearchArtists_AccumulatesAndReturns(t *testing.T) {
+	s := New()
+	assert.Empty(t, s.SearchArtists())
+
+	s.AppendSearchArtists([]domain.SearchArtistItem{{Name: "A1"}})
+	assert.Len(t, s.SearchArtists(), 1)
+}
+
+func TestStore_AppendSearchAlbums_AccumulatesAndReturns(t *testing.T) {
+	s := New()
+	assert.Empty(t, s.SearchAlbums())
+
+	s.AppendSearchAlbums([]domain.SearchAlbumItem{{Name: "Al1"}, {Name: "Al2"}})
+	assert.Len(t, s.SearchAlbums(), 2)
+}
+
+func TestStore_AppendSearchPlaylists_AccumulatesAndReturns(t *testing.T) {
+	s := New()
+	assert.Empty(t, s.SearchPlaylists())
+
+	s.AppendSearchPlaylists([]domain.SearchPlaylistItem{{Name: "PL1"}})
+	assert.Len(t, s.SearchPlaylists(), 1)
+}
+
+func TestStore_ClearSearchBuffers_ClearsItemSlices(t *testing.T) {
+	s := New()
+	s.AppendSearchTracks([]domain.SearchTrackItem{{Name: "T1"}})
+	s.AppendSearchArtists([]domain.SearchArtistItem{{Name: "A1"}})
+	s.AppendSearchAlbums([]domain.SearchAlbumItem{{Name: "Al1"}})
+	s.AppendSearchPlaylists([]domain.SearchPlaylistItem{{Name: "PL1"}})
+	s.SetSearchTotal(0, 5)
+	s.MarkSearchOffsetFetched(0, 0)
+
+	s.ClearSearchBuffers()
+
+	assert.Empty(t, s.SearchTracks(), "ClearSearchBuffers should clear track buffer")
+	assert.Empty(t, s.SearchArtists(), "ClearSearchBuffers should clear artist buffer")
+	assert.Empty(t, s.SearchAlbums(), "ClearSearchBuffers should clear album buffer")
+	assert.Empty(t, s.SearchPlaylists(), "ClearSearchBuffers should clear playlist buffer")
+	assert.Equal(t, 0, s.SearchSectionTotal(0), "ClearSearchBuffers should reset totals")
+	assert.False(t, s.IsSearchOffsetFetched(0, 0), "ClearSearchBuffers should reset fetched offsets")
+}

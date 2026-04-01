@@ -100,16 +100,20 @@ type Store struct {
 	searchQuery   string
 	searchLoading bool
 
-	// Search buffer state — tracks pagination status for the accumulated search result buffers.
-	// The actual item slices are accumulated in the SearchOverlay (ui/panes) to avoid an import
-	// cycle between state/ and ui/panes/. The store tracks totals and fetched-offset sentinels.
+	// Search buffer state — accumulated item slices and pagination sentinels.
 	//
+	// searchBufTracks/Artists/Albums/Playlists hold the accumulated result pages so the
+	// SearchOverlay reads from the store rather than maintaining its own buffer fields.
 	// searchTotals[section] is the API-reported total for each section (0=tracks, 1=artists, 2=albums, 3=playlists).
 	// searchFetched[section][offset] is true when that offset has been fetched (prevents duplicate requests).
 	// searchBufQuery is the query these buffers belong to; used to detect stale results after query change.
-	searchTotals   [4]int
-	searchFetched  [4]map[int]bool
-	searchBufQuery string
+	searchBufTracks    []domain.SearchTrackItem
+	searchBufArtists   []domain.SearchArtistItem
+	searchBufAlbums    []domain.SearchAlbumItem
+	searchBufPlaylists []domain.SearchPlaylistItem
+	searchTotals       [4]int
+	searchFetched      [4]map[int]bool
+	searchBufQuery     string
 
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
@@ -953,14 +957,74 @@ func (s *Store) SetSearchBufQuery(query string) {
 	s.searchBufQuery = query
 }
 
-// ClearSearchBuffers resets all search buffer state: totals, fetched-offset maps, and query.
-// Called when a new query starts so stale page sentinels don't block fresh fetches.
+// ClearSearchBuffers resets all search buffer state: item slices, totals, fetched-offset maps, and query.
+// Called by app.Update() when a new query starts so stale page sentinels don't block fresh fetches.
 func (s *Store) ClearSearchBuffers() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.searchBufTracks = nil
+	s.searchBufArtists = nil
+	s.searchBufAlbums = nil
+	s.searchBufPlaylists = nil
 	s.searchTotals = [4]int{}
 	s.searchFetched = [4]map[int]bool{}
 	s.searchBufQuery = ""
+}
+
+// AppendSearchTracks appends a slice of track items to the accumulated tracks buffer.
+func (s *Store) AppendSearchTracks(items []domain.SearchTrackItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchBufTracks = append(s.searchBufTracks, items...)
+}
+
+// SearchTracks returns the accumulated track search result items.
+func (s *Store) SearchTracks() []domain.SearchTrackItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchBufTracks
+}
+
+// AppendSearchArtists appends a slice of artist items to the accumulated artists buffer.
+func (s *Store) AppendSearchArtists(items []domain.SearchArtistItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchBufArtists = append(s.searchBufArtists, items...)
+}
+
+// SearchArtists returns the accumulated artist search result items.
+func (s *Store) SearchArtists() []domain.SearchArtistItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchBufArtists
+}
+
+// AppendSearchAlbums appends a slice of album items to the accumulated albums buffer.
+func (s *Store) AppendSearchAlbums(items []domain.SearchAlbumItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchBufAlbums = append(s.searchBufAlbums, items...)
+}
+
+// SearchAlbums returns the accumulated album search result items.
+func (s *Store) SearchAlbums() []domain.SearchAlbumItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchBufAlbums
+}
+
+// AppendSearchPlaylists appends a slice of playlist items to the accumulated playlists buffer.
+func (s *Store) AppendSearchPlaylists(items []domain.SearchPlaylistItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchBufPlaylists = append(s.searchBufPlaylists, items...)
+}
+
+// SearchPlaylists returns the accumulated playlist search result items.
+func (s *Store) SearchPlaylists() []domain.SearchPlaylistItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchBufPlaylists
 }
 
 // --- Gateway Event Journal ---

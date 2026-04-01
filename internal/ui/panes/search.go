@@ -88,17 +88,6 @@ type SearchOverlay struct {
 	// page size, and row rendering. Replaces the former manual cursor/row rendering.
 	tables [numSections]*components.Table
 
-	// Accumulated result buffers — pages appended as they load.
-	// These replace the former single-page results *SearchResultData field.
-	bufTracks    []SearchTrackItem
-	bufArtists   []SearchArtistItem
-	bufAlbums    []SearchAlbumItem
-	bufPlaylists []SearchPlaylistItem
-
-	// totals holds the API-reported total per section (from SearchResultsMsg).
-	// Used for page indicator and prefetch decisions.
-	totals [numSections]int
-
 	// narrowTracks tracks whether the tracks table was last built in narrow mode.
 	// Used to detect width changes that require rebuilding the tracks table.
 	narrowTracks bool
@@ -230,10 +219,11 @@ func (o *SearchOverlay) rebuildTrackTable(narrow bool) {
 	o.refreshTrackRows()
 }
 
-// refreshTrackRows converts the accumulated track buffer into table rows.
+// refreshTrackRows converts the store's accumulated track buffer into table rows.
 func (o *SearchOverlay) refreshTrackRows() {
-	rows := make([]map[string]string, len(o.bufTracks))
-	for i, t := range o.bufTracks {
+	tracks := o.store.SearchTracks()
+	rows := make([]map[string]string, len(tracks))
+	for i, t := range tracks {
 		row := map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
 			"name":     t.Name,
@@ -248,10 +238,11 @@ func (o *SearchOverlay) refreshTrackRows() {
 	o.tables[sectionTracks].SetRows(rows)
 }
 
-// refreshArtistRows converts the accumulated artist buffer into table rows.
+// refreshArtistRows converts the store's accumulated artist buffer into table rows.
 func (o *SearchOverlay) refreshArtistRows() {
-	rows := make([]map[string]string, len(o.bufArtists))
-	for i, a := range o.bufArtists {
+	artists := o.store.SearchArtists()
+	rows := make([]map[string]string, len(artists))
+	for i, a := range artists {
 		rows[i] = map[string]string{
 			"index": fmt.Sprintf("%d", i+1),
 			"name":  a.Name,
@@ -260,10 +251,11 @@ func (o *SearchOverlay) refreshArtistRows() {
 	o.tables[sectionArtists].SetRows(rows)
 }
 
-// refreshAlbumRows converts the accumulated album buffer into table rows.
+// refreshAlbumRows converts the store's accumulated album buffer into table rows.
 func (o *SearchOverlay) refreshAlbumRows() {
-	rows := make([]map[string]string, len(o.bufAlbums))
-	for i, a := range o.bufAlbums {
+	albums := o.store.SearchAlbums()
+	rows := make([]map[string]string, len(albums))
+	for i, a := range albums {
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
 			"name":   a.Name,
@@ -275,10 +267,11 @@ func (o *SearchOverlay) refreshAlbumRows() {
 	o.tables[sectionAlbums].SetRows(rows)
 }
 
-// refreshPlaylistRows converts the accumulated playlist buffer into table rows.
+// refreshPlaylistRows converts the store's accumulated playlist buffer into table rows.
 func (o *SearchOverlay) refreshPlaylistRows() {
-	rows := make([]map[string]string, len(o.bufPlaylists))
-	for i, p := range o.bufPlaylists {
+	playlists := o.store.SearchPlaylists()
+	rows := make([]map[string]string, len(playlists))
+	for i, p := range playlists {
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
 			"name":   p.Name,
@@ -297,26 +290,29 @@ func (o *SearchOverlay) refreshAllRows() {
 	o.refreshPlaylistRows()
 }
 
-// clearBuffers wipes all accumulated item buffers and totals.
+// clearBuffers wipes all local table rows and resets the active section.
+// Item buffer clearing is handled by the store (via app.go ClearSearchBuffers call).
 func (o *SearchOverlay) clearBuffers() {
-	o.bufTracks = nil
-	o.bufArtists = nil
-	o.bufAlbums = nil
-	o.bufPlaylists = nil
-	o.totals = [numSections]int{}
+	// Wipe all table rows so the UI reflects the cleared state immediately.
+	for i := range o.tables {
+		if o.tables[i] != nil {
+			o.tables[i].SetRows(nil)
+		}
+	}
 }
 
-// sectionBufferLen returns the current accumulated buffer length for a section.
+// sectionBufferLen returns the current accumulated buffer length for a section
+// by reading from the store.
 func (o *SearchOverlay) sectionBufferLen(sec searchSection) int {
 	switch sec {
 	case sectionTracks:
-		return len(o.bufTracks)
+		return len(o.store.SearchTracks())
 	case sectionArtists:
-		return len(o.bufArtists)
+		return len(o.store.SearchArtists())
 	case sectionAlbums:
-		return len(o.bufAlbums)
+		return len(o.store.SearchAlbums())
 	case sectionPlaylists:
-		return len(o.bufPlaylists)
+		return len(o.store.SearchPlaylists())
 	}
 	return 0
 }
@@ -404,71 +400,33 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleSearchResults processes SearchResultsMsg — either a fresh query result or
-// a paginated page append.
+// a paginated page append. All store mutations (ClearSearchBuffers, AppendSearch*,
+// SetSearchTotal, MarkSearchOffsetFetched) are performed by app.go before this
+// method is called. This method only updates local UI state.
+// NOTE: m.Err is handled by app.go before reaching the overlay.
 func (o *SearchOverlay) handleSearchResults(m SearchResultsMsg) (tea.Model, tea.Cmd) {
-	if m.Results == nil && m.Err == nil {
-		return o, nil
-	}
 	if m.Results == nil {
 		return o, nil
 	}
 
 	if !m.IsPaged {
-		// New query — clear all buffers and load the first page for all sections.
+		// New query — clear local table rows, rebuild from store, switch to tracks tab.
 		o.clearBuffers()
-		o.store.ClearSearchBuffers()
-		o.bufTracks = append(o.bufTracks, m.Results.Tracks...)
-		o.bufArtists = append(o.bufArtists, m.Results.Artists...)
-		o.bufAlbums = append(o.bufAlbums, m.Results.Albums...)
-		o.bufPlaylists = append(o.bufPlaylists, m.Results.Playlists...)
-		o.totals[sectionTracks] = m.Results.TotalTracks
-		o.totals[sectionArtists] = m.Results.TotalArtists
-		o.totals[sectionAlbums] = m.Results.TotalAlbums
-		o.totals[sectionPlaylists] = m.Results.TotalPlaylists
-		// Sync totals to store for prefetch guard.
-		o.store.SetSearchTotal(int(sectionTracks), m.Results.TotalTracks)
-		o.store.SetSearchTotal(int(sectionArtists), m.Results.TotalArtists)
-		o.store.SetSearchTotal(int(sectionAlbums), m.Results.TotalAlbums)
-		o.store.SetSearchTotal(int(sectionPlaylists), m.Results.TotalPlaylists)
-		// Mark offset 0 as fetched for all sections.
-		o.store.MarkSearchOffsetFetched(int(sectionTracks), 0)
-		o.store.MarkSearchOffsetFetched(int(sectionArtists), 0)
-		o.store.MarkSearchOffsetFetched(int(sectionAlbums), 0)
-		o.store.MarkSearchOffsetFetched(int(sectionPlaylists), 0)
 		o.refreshAllRows()
-		// Switch to tracks tab, ensure it is focused.
 		o.activeSection = sectionTracks
 		o.syncTableFocus()
 	} else {
-		// Paginated load — append to the requesting section's buffer.
+		// Paginated load — refresh only the section that received new data.
 		switch m.Section {
 		case sectionTracks:
-			o.bufTracks = append(o.bufTracks, m.Results.Tracks...)
-			if m.Results.TotalTracks > 0 {
-				o.totals[sectionTracks] = m.Results.TotalTracks
-			}
 			o.refreshTrackRows()
 		case sectionArtists:
-			o.bufArtists = append(o.bufArtists, m.Results.Artists...)
-			if m.Results.TotalArtists > 0 {
-				o.totals[sectionArtists] = m.Results.TotalArtists
-			}
 			o.refreshArtistRows()
 		case sectionAlbums:
-			o.bufAlbums = append(o.bufAlbums, m.Results.Albums...)
-			if m.Results.TotalAlbums > 0 {
-				o.totals[sectionAlbums] = m.Results.TotalAlbums
-			}
 			o.refreshAlbumRows()
 		case sectionPlaylists:
-			o.bufPlaylists = append(o.bufPlaylists, m.Results.Playlists...)
-			if m.Results.TotalPlaylists > 0 {
-				o.totals[sectionPlaylists] = m.Results.TotalPlaylists
-			}
 			o.refreshPlaylistRows()
 		}
-		// Mark this offset as fetched in the store.
-		o.store.MarkSearchOffsetFetched(int(m.Section), m.Offset)
 	}
 	return o, nil
 }
@@ -570,14 +528,15 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 // handleAddToQueue adds the currently selected track to the queue.
 // Only valid when the active section is Tracks.
 func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
-	if o.activeSection != sectionTracks || len(o.bufTracks) == 0 {
+	tracks := o.store.SearchTracks()
+	if o.activeSection != sectionTracks || len(tracks) == 0 {
 		return o, nil
 	}
 	idx := o.tables[sectionTracks].SelectedIndex()
-	if idx < 0 || idx >= len(o.bufTracks) {
+	if idx < 0 || idx >= len(tracks) {
 		return o, nil
 	}
-	trackURI := o.bufTracks[idx].URI
+	trackURI := tracks[idx].URI
 	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: trackURI} }
 }
 
@@ -595,26 +554,30 @@ func (o *SearchOverlay) moveSectionBackward() (tea.Model, tea.Cmd) {
 	return o, nil
 }
 
-// selectedURI returns the URI for the currently selected result item,
+// selectedURI returns the URI for the currently selected result item
 // and whether it is a track (vs. a context URI).
 func (o *SearchOverlay) selectedURI() (uri string, isTrack bool) {
 	idx := o.tables[o.activeSection].SelectedIndex()
 	switch o.activeSection {
 	case sectionTracks:
-		if idx >= 0 && idx < len(o.bufTracks) {
-			return o.bufTracks[idx].URI, true
+		tracks := o.store.SearchTracks()
+		if idx >= 0 && idx < len(tracks) {
+			return tracks[idx].URI, true
 		}
 	case sectionArtists:
-		if idx >= 0 && idx < len(o.bufArtists) {
-			return o.bufArtists[idx].URI, false
+		artists := o.store.SearchArtists()
+		if idx >= 0 && idx < len(artists) {
+			return artists[idx].URI, false
 		}
 	case sectionAlbums:
-		if idx >= 0 && idx < len(o.bufAlbums) {
-			return o.bufAlbums[idx].URI, false
+		albums := o.store.SearchAlbums()
+		if idx >= 0 && idx < len(albums) {
+			return albums[idx].URI, false
 		}
 	case sectionPlaylists:
-		if idx >= 0 && idx < len(o.bufPlaylists) {
-			return o.bufPlaylists[idx].URI, false
+		playlists := o.store.SearchPlaylists()
+		if idx >= 0 && idx < len(playlists) {
+			return playlists[idx].URI, false
 		}
 	}
 	return "", false
@@ -626,7 +589,7 @@ func (o *SearchOverlay) checkPrefetch() tea.Cmd {
 	sec := o.activeSection
 	cursor := o.tables[sec].SelectedIndex()
 	bufLen := o.sectionBufferLen(sec)
-	total := o.totals[sec]
+	total := o.store.SearchSectionTotal(int(sec))
 
 	if bufLen == 0 || bufLen >= total {
 		return nil // empty or all pages loaded
@@ -729,7 +692,7 @@ func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 			Render("Type to search tracks, artists, albums...")
 	}
 
-	hasResults := len(o.bufTracks)+len(o.bufArtists)+len(o.bufAlbums)+len(o.bufPlaylists) > 0
+	hasResults := len(o.store.SearchTracks())+len(o.store.SearchArtists())+len(o.store.SearchAlbums())+len(o.store.SearchPlaylists()) > 0
 
 	if !hasResults {
 		return lipgloss.NewStyle().
@@ -868,7 +831,7 @@ func (o *SearchOverlay) renderTabBar(width int) string {
 	var parts []string
 
 	for i := searchSection(0); i < numSections; i++ {
-		label := fmt.Sprintf("%s %d", searchSectionLabels[i], o.totals[i])
+		label := fmt.Sprintf("%s %d", searchSectionLabels[i], o.store.SearchSectionTotal(int(i)))
 		if i == o.activeSection {
 			// Active tab: ▪ prefix + bold + tab-specific color
 			style := lipgloss.NewStyle().
@@ -891,12 +854,9 @@ func (o *SearchOverlay) RenderTabBar(width int) string {
 	return o.renderTabBar(width)
 }
 
-// totalForSection returns the total result count for the given section.
+// totalForSection returns the total result count for the given section from the store.
 func (o *SearchOverlay) totalForSection(sec searchSection) int {
-	if int(sec) < 0 || int(sec) >= numSections {
-		return 0
-	}
-	return o.totals[sec]
+	return o.store.SearchSectionTotal(int(sec))
 }
 
 // TotalForSection is the exported wrapper of totalForSection for use in tests.
@@ -925,7 +885,7 @@ func (o *SearchOverlay) requestPage(offset int) tea.Cmd {
 // Returns empty string when all results fit on one page.
 func (o *SearchOverlay) pageIndicator() string {
 	sec := o.activeSection
-	total := o.totals[sec]
+	total := o.store.SearchSectionTotal(int(sec))
 	bufLen := o.sectionBufferLen(sec)
 	if total <= maxResultsPerSection {
 		return ""
@@ -988,17 +948,17 @@ func (o *SearchOverlay) Tables() [numSections]*components.Table {
 	return o.tables
 }
 
-// BufTracksLen returns the number of accumulated track items. Used in tests.
-func (o *SearchOverlay) BufTracksLen() int { return len(o.bufTracks) }
+// BufTracksLen returns the number of accumulated track items in the store. Used in tests.
+func (o *SearchOverlay) BufTracksLen() int { return len(o.store.SearchTracks()) }
 
-// BufArtistsLen returns the number of accumulated artist items. Used in tests.
-func (o *SearchOverlay) BufArtistsLen() int { return len(o.bufArtists) }
+// BufArtistsLen returns the number of accumulated artist items in the store. Used in tests.
+func (o *SearchOverlay) BufArtistsLen() int { return len(o.store.SearchArtists()) }
 
-// BufAlbumsLen returns the number of accumulated album items. Used in tests.
-func (o *SearchOverlay) BufAlbumsLen() int { return len(o.bufAlbums) }
+// BufAlbumsLen returns the number of accumulated album items in the store. Used in tests.
+func (o *SearchOverlay) BufAlbumsLen() int { return len(o.store.SearchAlbums()) }
 
-// BufPlaylistsLen returns the number of accumulated playlist items. Used in tests.
-func (o *SearchOverlay) BufPlaylistsLen() int { return len(o.bufPlaylists) }
+// BufPlaylistsLen returns the number of accumulated playlist items in the store. Used in tests.
+func (o *SearchOverlay) BufPlaylistsLen() int { return len(o.store.SearchPlaylists()) }
 
 // --- Test helpers (exported only for test packages) ---
 
