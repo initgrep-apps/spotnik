@@ -101,8 +101,7 @@ func (s *PreferenceStore) writeToDisk(snapshot map[string]any) error {
 		Preferences config.PreferencesConfig `toml:"preferences"`
 	}{
 		Preferences: config.PreferencesConfig{
-			Theme:      "black",
-			VolumeStep: 5,
+			Theme: "black",
 		},
 	}
 

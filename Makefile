@@ -2,6 +2,10 @@
 # All commands should be run from the project root.
 # Usage: make <target>
 
+# Load .env if present (for SPOTIFY_CLIENT_ID and other secrets).
+-include .env
+export
+
 BINARY_NAME      = spotnik
 BINARY_DIR       = bin
 MODULE           = github.com/initgrep-apps/spotnik

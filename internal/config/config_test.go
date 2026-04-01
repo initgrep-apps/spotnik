@@ -140,11 +140,6 @@ func TestDefaultConfigPath_ContainsSpotnik(t *testing.T) {
 		"path should end with config.toml, got: %s", path)
 }
 
-func TestDefault_VolumeStep(t *testing.T) {
-	cfg := config.Default()
-	assert.Equal(t, 5, cfg.Preferences.VolumeStep, "default volume step should be 5")
-}
-
 // TestLoad_UnknownTheme_ClampsToBlack verifies that an unrecognised theme ID is
 // clamped to the default "black" theme when a ThemeValidator is registered.
 func TestLoad_UnknownTheme_ClampsToBlack(t *testing.T) {
@@ -211,7 +206,6 @@ func TestLoad_ValidPreferences_Preserved(t *testing.T) {
 	content := `
 [preferences]
 theme = "monokai"
-volume_step = 10
 preset = 2
 visualizer = 3
 `
@@ -219,7 +213,6 @@ visualizer = 3
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
 	assert.Equal(t, "monokai", cfg.Preferences.Theme)
-	assert.Equal(t, 10, cfg.Preferences.VolumeStep)
 	assert.Equal(t, 2, cfg.Preferences.Preset)
 	assert.Equal(t, 3, cfg.Preferences.Visualizer)
 }
@@ -286,7 +279,6 @@ func TestBootstrap_TemplateContent(t *testing.T) {
 	assert.Contains(t, content, "[spotify]", "template should have [spotify] section")
 	assert.Contains(t, content, "[preferences]", "template should have [preferences] section")
 	assert.Contains(t, content, "theme = \"black\"", "template should set default theme")
-	assert.Contains(t, content, "volume_step = 5", "template should set default volume_step")
 	assert.Contains(t, content, "client_id", "template should mention client_id as a comment")
 }
 

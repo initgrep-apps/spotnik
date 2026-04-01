@@ -85,7 +85,6 @@ client_id = "my-client-id"
 
 [preferences]
 theme = "black"
-volume_step = 5
 `
 	require.NoError(t, os.WriteFile(path, []byte(initial), 0o600))
 

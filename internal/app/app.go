@@ -233,11 +233,6 @@ func New(cfg *config.Config, opts AppOptions) *App {
 
 	mgr := layout.NewManager()
 
-	volStep := cfg.Preferences.VolumeStep
-	if volStep <= 0 {
-		volStep = 5
-	}
-
 	a := &App{
 		theme:           t,
 		store:           s,
@@ -248,7 +243,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		searchPane:      searchPane,
 		devicePane:      devicePane,
 		currentView:     viewSplash,
-		volumeStep:      volStep,
+		volumeStep:      5,
 		needsAuth:       opts.NeedsAuth,
 		clientID:        opts.ClientID,
 		tokenStore:      opts.TokenStore,

@@ -26,10 +26,6 @@ type PreferencesConfig struct {
 	// Defaults to "black" if unset or unknown.
 	Theme string `toml:"theme"`
 
-	// VolumeStep is the percentage change per volume up/down keypress.
-	// Defaults to 5 if unset or zero.
-	VolumeStep int `toml:"volume_step"`
-
 	// Preset is the Page A layout preset index (0-based).
 	// Negative values are clamped to 0 on load.
 	Preset int `toml:"preset"`
@@ -56,8 +52,7 @@ type Config struct {
 func Default() *Config {
 	return &Config{
 		Preferences: PreferencesConfig{
-			Theme:      "black",
-			VolumeStep: 5,
+			Theme: "black",
 		},
 	}
 }
@@ -142,7 +137,6 @@ const defaultTemplate = `# Spotnik configuration
 
 [preferences]
 theme = "black"
-volume_step = 5
 # preset = 0          # Page A layout preset index (0-based)
 # visualizer = 0      # Visualizer pattern index (0-6)
 `
