@@ -1,7 +1,7 @@
 ---
 title: "Fix Search Overlay Rendering Bugs"
 feature: 18-search-redesign
-status: open
+status: done
 ---
 
 ## Background

@@ -226,3 +226,19 @@ When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` wi
 **Feature:** 05-search (pre-existing)
 
 `handleAddToQueue()` in `search.go` emits `AddToQueueMsg{TrackURI: trackURI}` without setting `TrackName`. The status bar toast shows a blank track name. Fix: capture `items[o.cursorPos].Name` and pass it as `TrackName`.
+
+---
+
+## Missing Artist column width sum test
+**Found:** 2026-04-01 | **Source:** PR #102 Review
+**Feature:** 18-search-redesign
+
+All 4 section column width helpers have sum tests except Artists. Add `TestArtistColumnWidths_SumEqualsContentWidth` for consistency. The Artists section has a minimum clamp (`artistW < 4`) that could cause the sum to exceed contentWidth for degenerate widths.
+
+---
+
+## TestContentWidth_NoDoubleSubtraction doesn't exercise View() path
+**Found:** 2026-04-01 | **Source:** PR #102 Review
+**Feature:** 18-search-redesign
+
+`TestContentWidth_NoDoubleSubtraction` calls `RenderActiveSection(86)` directly instead of `View()`. The actual double-subtraction fix is in `renderResults()` line 467, which is only reached via `View()`. A regression reintroducing the bug would not be caught. Should call `View()` on a fixed-size terminal and verify content width.
