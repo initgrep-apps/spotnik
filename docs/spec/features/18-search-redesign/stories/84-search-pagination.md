@@ -1,7 +1,7 @@
 ---
 title: "Add Pagination to Search Overlay"
 feature: 18-search-redesign
-status: open
+status: done
 ---
 
 ## Background
