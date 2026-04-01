@@ -259,9 +259,12 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	}
 
 	// Apply saved layout preset (Page A only).
-	// SetPreset is a no-op for out-of-range indices, so no extra validation needed.
+	// SetPreset is a no-op for out-of-range indices; log a warning when it doesn't take.
 	if cfg.Preferences.Preset > 0 {
 		a.layout.SetPreset(cfg.Preferences.Preset)
+		if a.layout.ActivePresetIndex() != cfg.Preferences.Preset {
+			fmt.Fprintf(os.Stderr, "spotnik: warning: saved preset %d is out of range, using default\n", cfg.Preferences.Preset)
+		}
 		a.propagateSizes()
 		a.syncFocus()
 	}
@@ -269,7 +272,9 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	// Apply saved visualizer pattern.
 	// SetVisualizerPattern delegates to SetPattern which wraps out-of-range values.
 	if cfg.Preferences.Visualizer > 0 {
-		a.nowPlayingPane().SetVisualizerPattern(cfg.Preferences.Visualizer)
+		if np := a.nowPlayingPane(); np != nil {
+			np.SetVisualizerPattern(cfg.Preferences.Visualizer)
+		}
 	}
 
 	return a

@@ -444,9 +444,12 @@ func (p *NowPlayingPane) VisualizerPattern() int {
 // SetTheme updates the theme reference for runtime theme switching.
 // NowPlayingPane propagates the new theme to its sub-components.
 func (p *NowPlayingPane) SetTheme(th theme.Theme) {
+	// Save the current pattern index so theme changes don't reset the user's choice.
+	savedPattern := p.engine.Pattern()
 	p.theme = th
 	p.infoBox = components.NewInfoBox(th)
 	p.engine = viz.NewEngine(th)
+	p.engine.SetPattern(savedPattern)
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
 	// Propagate dimensions to newly created sub-components.

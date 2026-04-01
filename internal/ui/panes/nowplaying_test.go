@@ -864,3 +864,22 @@ func TestNowPlayingPane_VKey_EmitsVisualizerChangedMsg(t *testing.T) {
 	assert.Equal(t, initialPattern+1, changedMsg.PatternIndex,
 		"VisualizerPatternChangedMsg should carry the new pattern index")
 }
+
+// TestNowPlayingPane_SetTheme_PreservesVisualizerPattern verifies that switching
+// theme does not reset the visualizer pattern the user has selected.
+func TestNowPlayingPane_SetTheme_PreservesVisualizerPattern(t *testing.T) {
+	pane := newTestNowPlayingPane(false)
+	pane.SetSize(80, 24)
+
+	// Cycle to a non-default pattern (pattern 2).
+	pane.SetVisualizerPattern(2)
+	require.Equal(t, 2, pane.engine.Pattern(), "pattern should be 2 before theme change")
+
+	// Switch to a different theme.
+	newTheme := theme.Load("dracula")
+	pane.SetTheme(newTheme)
+
+	// Pattern must be preserved after the theme change.
+	assert.Equal(t, 2, pane.engine.Pattern(),
+		"SetTheme must not reset the visualizer pattern")
+}
