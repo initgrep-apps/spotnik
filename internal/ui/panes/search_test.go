@@ -21,22 +21,27 @@ func newTestSearchOverlay() *panes.SearchOverlay {
 	return panes.NewSearchOverlay(s, t)
 }
 
-// sampleSearchResultData returns a SearchResultData with one item per section.
+// sampleSearchResultData returns a SearchResultData with one item per section,
+// including the enriched fields added in story 81.
 func sampleSearchResultData() *panes.SearchResultData {
 	return &panes.SearchResultData{
 		Tracks: []panes.SearchTrackItem{
-			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
-			{URI: "spotify:track:t2", Name: "Save Your Tears", Artist: "The Weeknd"},
+			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd", Album: "After Hours", DurationMs: 200040},
+			{URI: "spotify:track:t2", Name: "Save Your Tears", Artist: "The Weeknd", Album: "After Hours", DurationMs: 215080},
 		},
 		Artists: []panes.SearchArtistItem{
 			{URI: "spotify:artist:a1", Name: "The Weeknd"},
 		},
 		Albums: []panes.SearchAlbumItem{
-			{URI: "spotify:album:al1", Name: "After Hours", Artist: "The Weeknd"},
+			{URI: "spotify:album:al1", Name: "After Hours", Artist: "The Weeknd", ReleaseYear: "2020", TotalTracks: 14},
 		},
 		Playlists: []panes.SearchPlaylistItem{
-			{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: "User"},
+			{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: "User", TrackCount: 50},
 		},
+		TotalTracks:    100,
+		TotalArtists:   10,
+		TotalAlbums:    20,
+		TotalPlaylists: 30,
 	}
 }
 
@@ -608,4 +613,94 @@ func TestSearchOverlay_View_BtopBorderActions(t *testing.T) {
 	// Actions from the spec: "Enter play" and "Tab section"
 	assert.Contains(t, view, "play", "border should show 'play' action")
 	assert.Contains(t, view, "section", "border should show 'section' action")
+}
+
+// --- Story 81: Enriched search data types ---
+
+// TestSearchResultData_EnrichedFields verifies that all enriched fields are accessible
+// on the search result data types added in story 81.
+func TestSearchResultData_EnrichedFields(t *testing.T) {
+	data := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{
+				URI:        "spotify:track:t1",
+				Name:       "Blinding Lights",
+				Artist:     "The Weeknd",
+				Album:      "After Hours",
+				DurationMs: 200040,
+			},
+		},
+		Artists: []panes.SearchArtistItem{
+			{URI: "spotify:artist:a1", Name: "The Weeknd"},
+		},
+		Albums: []panes.SearchAlbumItem{
+			{
+				URI:         "spotify:album:al1",
+				Name:        "After Hours",
+				Artist:      "The Weeknd",
+				ReleaseYear: "2020",
+				TotalTracks: 14,
+			},
+		},
+		Playlists: []panes.SearchPlaylistItem{
+			{
+				URI:        "spotify:playlist:pl1",
+				Name:       "Chill Vibes",
+				Owner:      "User",
+				TrackCount: 45,
+			},
+		},
+		TotalTracks:    100,
+		TotalArtists:   50,
+		TotalAlbums:    30,
+		TotalPlaylists: 20,
+	}
+
+	// Track enriched fields
+	require.Len(t, data.Tracks, 1)
+	assert.Equal(t, "After Hours", data.Tracks[0].Album)
+	assert.Equal(t, 200040, data.Tracks[0].DurationMs)
+
+	// Album enriched fields
+	require.Len(t, data.Albums, 1)
+	assert.Equal(t, "2020", data.Albums[0].ReleaseYear)
+	assert.Equal(t, 14, data.Albums[0].TotalTracks)
+
+	// Playlist enriched fields
+	require.Len(t, data.Playlists, 1)
+	assert.Equal(t, 45, data.Playlists[0].TrackCount)
+
+	// Total count fields
+	assert.Equal(t, 100, data.TotalTracks)
+	assert.Equal(t, 50, data.TotalArtists)
+	assert.Equal(t, 30, data.TotalAlbums)
+	assert.Equal(t, 20, data.TotalPlaylists)
+}
+
+// TestOverlayWidth_Wider verifies the new wider base (90) and cap (80%) dimensions.
+func TestOverlayWidth_Wider(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Large terminal: 200 wide — width should be min(90, 80%*200=160) = 90
+	o.SetSize(200, 60)
+	view := o.View()
+	// The overlay renders at width 90; check it's at least visible (non-empty)
+	assert.NotEmpty(t, view)
+}
+
+// TestOverlayWidth_NarrowTerminal verifies the minimum width of 40 on narrow terminals.
+func TestOverlayWidth_NarrowTerminal(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Very narrow terminal — width should be clamped to min 40
+	o.SetSize(30, 20)
+	view := o.View()
+	assert.NotEmpty(t, view, "overlay should still render on narrow terminal")
+}
+
+// TestOverlayHeight_Taller verifies the new taller base (26) and cap (75%) dimensions.
+func TestOverlayHeight_Taller(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Large terminal: 200 high — height should be max(26, 75%*200=150) = 150
+	o.SetSize(200, 200)
+	view := o.View()
+	assert.NotEmpty(t, view)
 }

@@ -320,6 +320,15 @@ type SearchResultData struct {
 	Artists   []SearchArtistItem
 	Albums    []SearchAlbumItem
 	Playlists []SearchPlaylistItem
+
+	// TotalTracks is the total number of matching tracks across all pages.
+	TotalTracks int
+	// TotalArtists is the total number of matching artists across all pages.
+	TotalArtists int
+	// TotalAlbums is the total number of matching albums across all pages.
+	TotalAlbums int
+	// TotalPlaylists is the total number of matching playlists across all pages.
+	TotalPlaylists int
 }
 
 // SearchTrackItem holds the display fields for a single track search result.
@@ -330,6 +339,10 @@ type SearchTrackItem struct {
 	Name string
 	// Artist is the pre-formatted first artist name.
 	Artist string
+	// Album is the album name for this track.
+	Album string
+	// DurationMs is the track duration in milliseconds.
+	DurationMs int
 }
 
 // SearchArtistItem holds the display fields for a single artist search result.
@@ -348,6 +361,10 @@ type SearchAlbumItem struct {
 	Name string
 	// Artist is the pre-formatted first artist name.
 	Artist string
+	// ReleaseYear is the 4-character year extracted from the release date string.
+	ReleaseYear string
+	// TotalTracks is the total number of tracks in the album.
+	TotalTracks int
 }
 
 // SearchPlaylistItem holds the display fields for a single playlist search result.
@@ -358,6 +375,8 @@ type SearchPlaylistItem struct {
 	Name string
 	// Owner is the pre-formatted playlist owner display name.
 	Owner string
+	// TrackCount is the total number of tracks in the playlist.
+	TrackCount int
 }
 
 // SearchResultsMsg is sent by the root app model after a search completes.
