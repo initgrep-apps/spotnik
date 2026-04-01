@@ -178,3 +178,19 @@ When `os.UserHomeDir()` fails, `DefaultConfigPath()` returns `"config.toml"` (re
 **Feature:** 17-bootstrap
 
 The `Visualizer` field comment in `PreferencesConfig` says "0-6" which will rot if patterns are added/removed. Should reference the viz engine instead of hardcoding the count.
+
+---
+
+## PreferenceStore exported test-only accessors on App
+**Found:** 2026-04-01 | **Source:** PR #98 Review
+**Feature:** 17-bootstrap
+
+`Prefs()`, `PrefsDirtyGen()`, and `SchedulePrefsFlush()` are exported on the App struct solely for testing. Should use `export_test.go` pattern to keep the public API clean.
+
+---
+
+## No flush-on-quit for PreferenceStore
+**Found:** 2026-04-01 | **Source:** PR #98 Review
+**Feature:** 17-bootstrap
+
+If the user changes a preference and quits within the 500ms debounce window, the change is lost. Consider adding a synchronous flush in the quit handler.
