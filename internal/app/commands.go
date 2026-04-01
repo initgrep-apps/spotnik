@@ -276,7 +276,7 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			api.WithPriority(context.Background(), api.Interactive),
 			query,
 			[]string{"track", "artist", "album", "playlist"},
-			5,
+			10,
 		)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
@@ -299,12 +299,19 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 		return nil
 	}
 
-	data := &panes.SearchResultData{}
+	data := &panes.SearchResultData{
+		TotalTracks:    r.Tracks.Total,
+		TotalArtists:   r.Artists.Total,
+		TotalAlbums:    r.Albums.Total,
+		TotalPlaylists: r.Playlists.Total,
+	}
 
 	for _, t := range r.Tracks.Items {
 		item := panes.SearchTrackItem{
-			URI:  t.URI,
-			Name: t.Name,
+			URI:        t.URI,
+			Name:       t.Name,
+			DurationMs: t.DurationMs,
+			Album:      t.Album.Name,
 		}
 		if len(t.Artists) > 0 {
 			item.Artist = t.Artists[0].Name
@@ -321,20 +328,26 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 
 	for _, a := range r.Albums.Items {
 		item := panes.SearchAlbumItem{
-			URI:  a.URI,
-			Name: a.Name,
+			URI:         a.URI,
+			Name:        a.Name,
+			TotalTracks: a.TotalTracks,
 		}
 		if len(a.Artists) > 0 {
 			item.Artist = a.Artists[0].Name
+		}
+		// Guard against short release dates (e.g. "20", "") — only extract if >= 4 chars.
+		if len(a.ReleaseDate) >= 4 {
+			item.ReleaseYear = a.ReleaseDate[:4]
 		}
 		data.Albums = append(data.Albums, item)
 	}
 
 	for _, p := range r.Playlists.Items {
 		data.Playlists = append(data.Playlists, panes.SearchPlaylistItem{
-			URI:   p.URI,
-			Name:  p.Name,
-			Owner: p.Owner.DisplayName,
+			URI:        p.URI,
+			Name:       p.Name,
+			Owner:      p.Owner.DisplayName,
+			TrackCount: p.TrackCount,
 		})
 	}
 
