@@ -1164,6 +1164,28 @@ func TestTrackColumnWidths_SumEqualsContentWidth(t *testing.T) {
 	}
 }
 
+// TestTrackColumnWidths_NarrowSumEqualsContentWidth verifies that for the Tracks section
+// in narrow mode (contentWidth < 60, 4 columns), all widths plus gaps sum to contentWidth.
+// Layout: indexW(3) + nameW + artistW + durationW(8) + gaps(3×2=6) = contentWidth
+func TestTrackColumnWidths_NarrowSumEqualsContentWidth(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	tests := []int{40, 50, 55, 59}
+	for _, contentWidth := range tests {
+		t.Run(fmt.Sprintf("width_%d", contentWidth), func(t *testing.T) {
+			nW, artW, albW, durW := o.TrackColumnWidths(contentWidth, true)
+			assert.Zero(t, albW, "narrow mode should have albumW=0")
+			indexW := 3
+			numCols := 4
+			gaps := (numCols - 1) * 2 // 3 gaps × 2 = 6
+			total := indexW + nW + artW + albW + durW + gaps
+			assert.Equal(t, contentWidth, total,
+				"narrow track columns + gaps should sum to contentWidth=%d (got %d+%d+%d+%d+%d=%d)",
+				contentWidth, indexW, nW, artW, durW, gaps, total)
+		})
+	}
+}
+
 // TestAlbumColumnWidths_SumEqualsContentWidth verifies that Albums section column widths
 // plus inter-column gaps sum to exactly contentWidth.
 // Layout: indexW(3) + nameW + artistW + yearW(6) + tracksW(8) + gaps(4×2=8) = contentWidth

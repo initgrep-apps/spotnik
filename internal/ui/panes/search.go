@@ -423,10 +423,11 @@ func (o *SearchOverlay) View() string {
 // Assembly order: tab bar → tab separator → column headers → active section rows →
 // [padding to push help bar to bottom] → help bar.
 //
+// innerWidth is the content width inside the border (View subtracts 2 for border chars).
 // availableHeight is innerHeight - 2 (input line + dot separator already consumed).
 // It is used to anchor the help bar at the bottom by inserting blank lines between
 // result rows and the help bar when there are fewer results than the available space.
-func (o *SearchOverlay) renderResults(overlayWidth, availableHeight int) string {
+func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 	query := o.store.SearchQuery()
 	loading := o.store.SearchLoading()
 
@@ -461,9 +462,9 @@ func (o *SearchOverlay) renderResults(overlayWidth, availableHeight int) string 
 			Render(fmt.Sprintf("No results for '%s'", query))
 	}
 
-	// overlayWidth here is innerWidth (border already removed in View). Subtract only
-	// left + right padding (1 char each side = 2 total) — not 4 (which double-subtracted border).
-	contentWidth := overlayWidth - 2 // left + right padding within the border
+	// innerWidth already has the border removed (View subtracts 2). Subtract only
+	// left + right padding (1 char each side = 2 total).
+	contentWidth := innerWidth - 2 // left + right padding within the border
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
@@ -681,6 +682,11 @@ func (o *SearchOverlay) artistColumnWidths(contentWidth int) (artistW int) {
 		artistW = 4
 	}
 	return
+}
+
+// ArtistColumnWidths is the exported wrapper of artistColumnWidths for use in tests.
+func (o *SearchOverlay) ArtistColumnWidths(contentWidth int) (artistW int) {
+	return o.artistColumnWidths(contentWidth)
 }
 
 // truncate shortens s to at most maxRunes runes, appending "…" if truncated.
