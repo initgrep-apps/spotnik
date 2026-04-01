@@ -530,7 +530,7 @@ func debounceSearch(query string) tea.Cmd {
 	})
 }
 
-// --- Clamping helpers (max 5 per section) ---
+// --- Clamping helpers (max 10 per section) ---
 
 func clampedTrackItems(r *SearchResultData) []SearchTrackItem {
 	items := r.Tracks
