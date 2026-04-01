@@ -1,7 +1,7 @@
 ---
 title: "Tabbed Search Overlay with Theme-Aware Rendering"
 feature: 18-search-redesign
-status: open
+status: done
 ---
 
 ## Background

@@ -1,6 +1,6 @@
 ---
 title: "Search Overlay Redesign"
-status: open
+status: done
 ---
 
 ## Description
