@@ -263,9 +263,10 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 
 // buildSearchCmd creates a command that calls the Spotify search API and delivers
 // pre-converted results via SearchResultsMsg so search.go never imports api/.
+// offset is the pagination offset (0 for the first page, multiples of 10 for subsequent pages).
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
-func (a *App) buildSearchCmd(query string) tea.Cmd {
+func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
@@ -277,6 +278,7 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			query,
 			[]string{"track", "artist", "album", "playlist"},
 			10,
+			offset,
 		)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {

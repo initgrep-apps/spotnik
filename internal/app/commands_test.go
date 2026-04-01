@@ -252,3 +252,32 @@ func TestBuildSearchCmd_Limit10(t *testing.T) {
 
 	assert.Equal(t, "10", capturedLimit, "buildSearchCmd should pass limit=10 to the search API")
 }
+
+// TestBuildSearchCmd_WithOffset verifies that buildSearchCmd passes the given offset
+// to the search API so paginated requests fetch the correct result page.
+func TestBuildSearchCmd_WithOffset(t *testing.T) {
+	var capturedOffset string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedOffset = r.URL.Query().Get("offset")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"tracks":{"items":[],"total":0},
+			"artists":{"items":[],"total":0},
+			"albums":{"items":[],"total":0},
+			"playlists":{"items":[],"total":0}
+		}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Directly call buildSearchCmd with offset=10 to simulate a page-2 request.
+	cmd := a.BuildSearchCmd("test", 10)
+	require.NotNil(t, cmd)
+	cmd() // execute to trigger HTTP call
+
+	assert.Equal(t, "10", capturedOffset, "buildSearchCmd should pass the given offset to the search API")
+}
