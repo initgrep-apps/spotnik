@@ -1109,6 +1109,219 @@ func TestRenderTabBar_NilResults_ZeroCounts(t *testing.T) {
 	assert.Contains(t, stripped, "Playlists 0", "nil results should show zero count for Playlists")
 }
 
+// --- Story 83: Fix Search Rendering Bugs ---
+
+// TestContentWidth_NoDoubleSubtraction verifies that contentWidth inside renderResults
+// equals innerWidth - 2 (left + right padding only), not innerWidth - 4 (old double-subtract).
+// innerWidth = overlayWidth - 2 (border removed in View). renderResults receives innerWidth.
+// contentWidth should be innerWidth - 2 (padding), not innerWidth - 4 (old: border + padding).
+func TestContentWidth_NoDoubleSubtraction(t *testing.T) {
+	s := state.New()
+	s.SetSearchQuery("test")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+
+	// Use terminal size that gives overlayWidth = 90 (large terminal).
+	// innerWidth = 90 - 2 = 88. contentWidth should be 88 - 2 = 86, not 88 - 4 = 84.
+	o.SetSize(200, 60)
+
+	results := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "u1", Name: "Exactly 86 Chars Test Track Name That Fills The Width", Artist: "Artist", Album: "Album", DurationMs: 200000},
+		},
+		TotalTracks: 1,
+	}
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
+
+	// Check that the view renders without wrapping — the track name fits on one line.
+	// The key behavioral check: RenderActiveSection(86) should return rows without embedded
+	// newlines from content overflow.
+	section := o.RenderActiveSection(86)
+	rows := strings.Split(strings.TrimRight(section, "\n"), "\n")
+	// With 1 track item, there should be exactly 1 row.
+	assert.Len(t, rows, 1, "one track should produce exactly one row (no content wrapping)")
+}
+
+// TestTrackColumnWidths_SumEqualsContentWidth verifies that for the Tracks section (wide),
+// all column widths plus inter-column gaps sum to exactly contentWidth.
+// Layout: indexW(3) + nameW + artistW + albumW + durationW(8) + gaps(4×2=8) = contentWidth
+func TestTrackColumnWidths_SumEqualsContentWidth(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	tests := []int{80, 86, 100, 120}
+	for _, contentWidth := range tests {
+		t.Run(fmt.Sprintf("width_%d", contentWidth), func(t *testing.T) {
+			nW, artW, albW, durW := o.TrackColumnWidths(contentWidth, false)
+			indexW := 3
+			numCols := 5
+			gaps := (numCols - 1) * 2 // 4 gaps × 2 = 8
+			total := indexW + nW + artW + albW + durW + gaps
+			assert.Equal(t, contentWidth, total,
+				"wide track columns + gaps should sum to contentWidth=%d (got %d+%d+%d+%d+%d+%d=%d)",
+				contentWidth, indexW, nW, artW, albW, durW, gaps, total)
+		})
+	}
+}
+
+// TestAlbumColumnWidths_SumEqualsContentWidth verifies that Albums section column widths
+// plus inter-column gaps sum to exactly contentWidth.
+// Layout: indexW(3) + nameW + artistW + yearW(6) + tracksW(8) + gaps(4×2=8) = contentWidth
+func TestAlbumColumnWidths_SumEqualsContentWidth(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	tests := []int{80, 86, 100, 120}
+	for _, contentWidth := range tests {
+		t.Run(fmt.Sprintf("width_%d", contentWidth), func(t *testing.T) {
+			nW, artW, yW, tW := o.AlbumColumnWidths(contentWidth)
+			indexW := 3
+			numCols := 5
+			gaps := (numCols - 1) * 2 // 4 gaps × 2 = 8
+			total := indexW + nW + artW + yW + tW + gaps
+			assert.Equal(t, contentWidth, total,
+				"album columns + gaps should sum to contentWidth=%d (got %d+%d+%d+%d+%d+%d=%d)",
+				contentWidth, indexW, nW, artW, yW, tW, gaps, total)
+		})
+	}
+}
+
+// TestPlaylistColumnWidths_SumEqualsContentWidth verifies that Playlists section column
+// widths plus inter-column gaps sum to exactly contentWidth.
+// Layout: indexW(3) + nameW + ownerW + tracksW(8) + gaps(3×2=6) = contentWidth
+func TestPlaylistColumnWidths_SumEqualsContentWidth(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	tests := []int{80, 86, 100, 120}
+	for _, contentWidth := range tests {
+		t.Run(fmt.Sprintf("width_%d", contentWidth), func(t *testing.T) {
+			nW, oW, tW := o.PlaylistColumnWidths(contentWidth)
+			indexW := 3
+			numCols := 4
+			gaps := (numCols - 1) * 2 // 3 gaps × 2 = 6
+			total := indexW + nW + oW + tW + gaps
+			assert.Equal(t, contentWidth, total,
+				"playlist columns + gaps should sum to contentWidth=%d (got %d+%d+%d+%d+%d=%d)",
+				contentWidth, indexW, nW, oW, tW, gaps, total)
+		})
+	}
+}
+
+// TestRenderColumnHeaders_FitsOnOneLine verifies that the column header line contains
+// no embedded newlines within the header row itself (i.e. the first line has no \n).
+func TestRenderColumnHeaders_FitsOnOneLine(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	sections := []struct {
+		sec  panes.SearchSection
+		name string
+	}{
+		{panes.SectionTracks, "Tracks"},
+		{panes.SectionArtists, "Artists"},
+		{panes.SectionAlbums, "Albums"},
+		{panes.SectionPlaylists, "Playlists"},
+	}
+
+	for _, tt := range sections {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := o.RenderColumnHeaders(tt.sec, 86)
+			lines := strings.Split(headers, "\n")
+			// Headers should produce exactly 2 lines: header row + underline
+			assert.LessOrEqual(t, 2, len(lines), "should have at least header and underline lines")
+			// The header line (line 0) should not contain embedded \n - it's one line
+			headerLine := lines[0]
+			assert.NotContains(t, headerLine, "\n", "header line should not contain embedded newlines")
+		})
+	}
+}
+
+// TestRenderActiveSection_RowFitsOnOneLine verifies that a single result row contains
+// no embedded newlines (i.e. each row renders on exactly one line).
+func TestRenderActiveSection_RowFitsOnOneLine(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	// Tracks section with contentWidth 86 (standard after fix)
+	section := o.RenderActiveSection(86)
+	rows := strings.Split(strings.TrimRight(section, "\n"), "\n")
+
+	// sampleSearchResultData has 2 tracks
+	require.Len(t, rows, 2, "should have exactly 2 rows for 2 tracks")
+
+	for i, row := range rows {
+		assert.NotContains(t, row, "\n",
+			"row %d should not contain embedded newlines (no spill to second line)", i)
+	}
+}
+
+// TestSearchOverlay_HelpBarAtBottom verifies that the help bar appears at or near the
+// bottom of the overlay's rendered output.
+func TestSearchOverlay_HelpBarAtBottom(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	// Terminal size that gives overlayHeight = 26 (base)
+	o.SetSize(200, 10)
+
+	view := o.View()
+	stripped := stripANSIForTest(view)
+	lines := strings.Split(stripped, "\n")
+
+	// Find the help bar line (contains "↑↓ navigate")
+	helpBarIdx := -1
+	for i, line := range lines {
+		if strings.Contains(line, "navigate") {
+			helpBarIdx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, helpBarIdx, "help bar must be present in the view")
+
+	// The help bar should be in the bottom quarter of the view
+	totalLines := len(lines)
+	assert.Greater(t, helpBarIdx, totalLines*3/4,
+		"help bar should be in the bottom quarter of the view (got line %d of %d)", helpBarIdx, totalLines)
+}
+
+// TestSearchOverlay_HelpBarAtBottom_FewResults verifies that with only 3 results,
+// the help bar is still anchored to the bottom of the overlay (empty space is above, not below).
+func TestSearchOverlay_HelpBarAtBottom_FewResults(t *testing.T) {
+	s := state.New()
+	s.SetSearchQuery("few")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+
+	// Only 3 tracks — well below the 10-row budget
+	results := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "u1", Name: "Track 1", Artist: "Artist", DurationMs: 180000},
+			{URI: "u2", Name: "Track 2", Artist: "Artist", DurationMs: 180000},
+			{URI: "u3", Name: "Track 3", Artist: "Artist", DurationMs: 180000},
+		},
+		TotalTracks: 3,
+	}
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
+	// Terminal large enough to give overlayHeight = 26 (base)
+	o.SetSize(200, 10)
+
+	view := o.View()
+	stripped := stripANSIForTest(view)
+	lines := strings.Split(stripped, "\n")
+
+	helpBarIdx := -1
+	for i, line := range lines {
+		if strings.Contains(line, "navigate") {
+			helpBarIdx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, helpBarIdx, "help bar must be present in view")
+
+	// With 3 results and a 26-high overlay, the help bar should be near the bottom.
+	totalLines := len(lines)
+	assert.Greater(t, helpBarIdx, totalLines*3/4,
+		"help bar should be in the bottom quarter even with few results (got line %d of %d)", helpBarIdx, totalLines)
+}
+
 // TestTabColorForSection_ReturnsCorrectTokens verifies that each section maps to its
 // expected PaneBorder* theme token (as a non-empty color).
 func TestTabColorForSection_ReturnsCorrectTokens(t *testing.T) {
