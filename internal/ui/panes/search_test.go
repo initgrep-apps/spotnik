@@ -677,30 +677,59 @@ func TestSearchResultData_EnrichedFields(t *testing.T) {
 	assert.Equal(t, 20, data.TotalPlaylists)
 }
 
+// stripANSIForTest removes ANSI escape sequences from a string so that rune-counting
+// reflects visible columns rather than raw bytes including color codes.
+func stripANSIForTest(s string) string {
+	var result strings.Builder
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			i += 2
+			for i < len(runes) && runes[i] != 'm' {
+				i++
+			}
+			i++ // skip 'm'
+		} else {
+			result.WriteRune(runes[i])
+			i++
+		}
+	}
+	return result.String()
+}
+
 // TestOverlayWidth_Wider verifies the new wider base (90) and cap (80%) dimensions.
+// The ANSI-stripped first line of the overlay equals its rendered width.
 func TestOverlayWidth_Wider(t *testing.T) {
 	o := newTestSearchOverlay()
-	// Large terminal: 200 wide — width should be min(90, 80%*200=160) = 90
+	// Large terminal: 200 wide — overlayWidth = min(90, 80%*200=160) = 90
 	o.SetSize(200, 60)
 	view := o.View()
-	// The overlay renders at width 90; check it's at least visible (non-empty)
-	assert.NotEmpty(t, view)
+	lines := strings.Split(view, "\n")
+	require.NotEmpty(t, lines)
+	strippedWidth := len([]rune(stripANSIForTest(lines[0])))
+	assert.Equal(t, 90, strippedWidth, "overlay width should be 90 on a large terminal")
 }
 
 // TestOverlayWidth_NarrowTerminal verifies the minimum width of 40 on narrow terminals.
 func TestOverlayWidth_NarrowTerminal(t *testing.T) {
 	o := newTestSearchOverlay()
-	// Very narrow terminal — width should be clamped to min 40
+	// Very narrow terminal (30 wide) — 80% of 30 = 24, but min is 40
 	o.SetSize(30, 20)
 	view := o.View()
-	assert.NotEmpty(t, view, "overlay should still render on narrow terminal")
+	lines := strings.Split(view, "\n")
+	require.NotEmpty(t, lines)
+	strippedWidth := len([]rune(stripANSIForTest(lines[0])))
+	assert.Equal(t, 40, strippedWidth, "overlay width should be clamped to min 40 on narrow terminal")
 }
 
 // TestOverlayHeight_Taller verifies the new taller base (26) and cap (75%) dimensions.
 func TestOverlayHeight_Taller(t *testing.T) {
 	o := newTestSearchOverlay()
-	// Large terminal: 200 high — height should be max(26, 75%*200=150) = 150
-	o.SetSize(200, 200)
+	// Terminal at exactly 40 high — 75% of 40 = 30, which is > base 26, so height = 30
+	o.SetSize(120, 40)
 	view := o.View()
-	assert.NotEmpty(t, view)
+	lines := strings.Split(view, "\n")
+	// Height should be 30 lines (75% of 40)
+	assert.Equal(t, 30, len(lines), "overlay height should be 75%% of terminal height when > base 26")
 }

@@ -35,7 +35,8 @@ var searchSectionLabels = [numSections]string{
 }
 
 // maxResultsPerSection is the number of results shown per section in the overlay.
-const maxResultsPerSection = 5
+// Set to 10 to match the Feb 2026 Spotify API maximum of 10 results per type.
+const maxResultsPerSection = 10
 
 // searchDebounceMsg carries a query snapshot fired 300ms after a keypress.
 // In Update, it is only acted on if msg.query still matches the current input.
@@ -489,34 +490,34 @@ func (o *SearchOverlay) renderSection(sec searchSection, rows []string, contentW
 	return sb.String()
 }
 
-// overlayWidth returns the effective overlay width clamped to 50 chars or 60%
-// of terminal width per DESIGN.md spec.
+// overlayWidth returns the effective overlay width: min(90, 80% terminal) with min 40.
+// The wider base (90 vs the old 50) accommodates the richer metadata columns.
 func (o *SearchOverlay) overlayWidth() int {
-	w := 50
+	w := 90
 	if o.width > 0 {
-		sixtyPct := o.width * 60 / 100
-		if sixtyPct < w {
-			w = sixtyPct
+		eightyPct := o.width * 80 / 100
+		if eightyPct < w {
+			w = eightyPct
 		}
 	}
-	if w < 20 {
-		w = 20
+	if w < 40 {
+		w = 40
 	}
 	return w
 }
 
-// overlayHeight returns the effective overlay height, clamped to 70% of
-// terminal height or a sensible default.
+// overlayHeight returns the effective overlay height: max(26, 75% terminal) with min 12.
+// The taller base (26 vs the old 20) provides enough room for 10 results per section.
 func (o *SearchOverlay) overlayHeight() int {
-	h := 20
+	h := 26
 	if o.height > 0 {
-		seventyPct := o.height * 70 / 100
-		if seventyPct > h {
-			h = seventyPct
+		seventyFivePct := o.height * 75 / 100
+		if seventyFivePct > h {
+			h = seventyFivePct
 		}
 	}
-	if h < 8 {
-		h = 8
+	if h < 12 {
+		h = 12
 	}
 	return h
 }
