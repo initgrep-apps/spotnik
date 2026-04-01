@@ -1,6 +1,6 @@
 ---
 title: "Search Overlay Redesign"
-status: in-progress
+status: done
 ---
 
 ## Description
