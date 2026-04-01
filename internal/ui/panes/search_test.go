@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -287,17 +288,19 @@ func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 
 // --- Task 4.4: Result rendering tests ---
 
-// TestSearchOverlay_View_Results verifies section headers and items are rendered.
+// TestSearchOverlay_View_Results verifies section labels and items are rendered.
 func TestSearchOverlay_View_Results(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
 	view := o.View()
+	stripped := stripANSIForTest(view)
 
-	assert.Contains(t, view, "TRACKS", "view should contain TRACKS section header")
-	assert.Contains(t, view, "ARTISTS", "view should contain ARTISTS section header")
-	assert.Contains(t, view, "ALBUMS", "view should contain ALBUMS section header")
-	assert.Contains(t, view, "PLAYLISTS", "view should contain PLAYLISTS section header")
+	// Title-case labels in the tab bar (from Story 82 redesign)
+	assert.Contains(t, stripped, "Tracks", "view should contain Tracks tab label")
+	assert.Contains(t, stripped, "Artists", "view should contain Artists tab label")
+	assert.Contains(t, stripped, "Albums", "view should contain Albums tab label")
+	assert.Contains(t, stripped, "Playlists", "view should contain Playlists tab label")
 	assert.Contains(t, view, "Blinding Lights", "view should contain track name")
 	assert.Contains(t, view, "The Weeknd", "view should contain artist name")
 }
@@ -453,7 +456,8 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	o.SetSize(80, 30)
 
 	output := o.View()
-	assert.Contains(t, output, "TRACKS", "should show tracks section header")
+	// Labels are now title case (Story 82 redesign)
+	assert.Contains(t, stripANSIForTest(output), "Tracks", "should show Tracks tab label")
 	assert.Contains(t, output, "Blinding Lights", "should show track name in results")
 }
 
@@ -547,7 +551,8 @@ func TestSearchOverlay_SearchResultsMsg_StoresResults(t *testing.T) {
 
 	view := o.View()
 	assert.Contains(t, view, "Track One", "view should show track from SearchResultsMsg")
-	assert.Contains(t, view, "TRACKS", "view should show TRACKS section header")
+	// Labels are now title case (Story 82 redesign)
+	assert.Contains(t, stripANSIForTest(view), "Tracks", "view should show Tracks tab label")
 	assert.Contains(t, view, "Artist One", "view should show artist from SearchResultsMsg")
 }
 
@@ -572,11 +577,25 @@ func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 40)
 
+	// In the tabbed design (Story 82), only the active section is shown in the view.
+	// The tab bar shows all sections. Navigate to each and verify.
 	view := o.View()
-	assert.Contains(t, view, "T1")
-	assert.Contains(t, view, "A2")
-	assert.Contains(t, view, "Al1")
-	assert.Contains(t, view, "PL1")
+	assert.Contains(t, view, "T1", "Tracks section (default) should show T1")
+
+	// Navigate to Artists tab to verify A2
+	o, _ = sendKey(t, o, "tab")
+	view = o.View()
+	assert.Contains(t, view, "A2", "Artists section should show A2 when active")
+
+	// Navigate to Albums tab to verify Al1
+	o, _ = sendKey(t, o, "tab")
+	view = o.View()
+	assert.Contains(t, view, "Al1", "Albums section should show Al1 when active")
+
+	// Navigate to Playlists tab to verify PL1
+	o, _ = sendKey(t, o, "tab")
+	view = o.View()
+	assert.Contains(t, view, "PL1", "Playlists section should show PL1 when active")
 }
 
 // --- F50 Task 4: btop-style border in search overlay ---
@@ -610,9 +629,9 @@ func TestSearchOverlay_View_BtopBorderActions(t *testing.T) {
 
 	view := o.View()
 
-	// Actions from the spec: "Enter play" and "Tab section"
+	// Actions from Story 82 spec: "Enter play" and "Esc close"
 	assert.Contains(t, view, "play", "border should show 'play' action")
-	assert.Contains(t, view, "section", "border should show 'section' action")
+	assert.Contains(t, view, "close", "border should show 'close' action")
 }
 
 // --- Story 81: Enriched search data types ---
@@ -732,4 +751,383 @@ func TestOverlayHeight_Taller(t *testing.T) {
 	lines := strings.Split(view, "\n")
 	// Height should be 30 lines (75% of 40)
 	assert.Equal(t, 30, len(lines), "overlay height should be 75%% of terminal height when > base 26")
+}
+
+// --- Story 82: Integration tests for tabbed overlay ---
+
+// TestSearchOverlayView_ContainsTabBar verifies that the full view contains tab labels.
+func TestSearchOverlayView_ContainsTabBar(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	stripped := stripANSIForTest(view)
+
+	assert.Contains(t, stripped, "Tracks", "view should contain 'Tracks' tab label")
+	assert.Contains(t, stripped, "Artists", "view should contain 'Artists' tab label")
+	assert.Contains(t, stripped, "Albums", "view should contain 'Albums' tab label")
+	assert.Contains(t, stripped, "Playlists", "view should contain 'Playlists' tab label")
+}
+
+// TestSearchOverlayView_ContainsColumnHeaders verifies that the full view contains the column header row.
+func TestSearchOverlayView_ContainsColumnHeaders(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	stripped := stripANSIForTest(view)
+
+	// Tracks section headers
+	assert.Contains(t, stripped, "Track", "view should contain 'Track' column header")
+	assert.Contains(t, stripped, "Duration", "view should contain 'Duration' column header")
+}
+
+// TestSearchOverlayView_ContainsHelpBar verifies that the full view contains help text.
+func TestSearchOverlayView_ContainsHelpBar(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	stripped := stripANSIForTest(view)
+
+	assert.Contains(t, stripped, "navigate", "view should contain '↑↓ navigate' in help bar")
+	assert.Contains(t, stripped, "Esc close", "view should contain 'Esc close' in help bar")
+}
+
+// TestSearchOverlayView_BorderActions verifies the border shows "Esc close" not "Tab section".
+func TestSearchOverlayView_BorderActions(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	view := o.View()
+
+	assert.Contains(t, view, "Esc", "border should show 'Esc' action")
+	assert.Contains(t, view, "close", "border should show 'close' action")
+	assert.NotContains(t, stripANSIForTest(view), "section", "border should NOT show 'section' action")
+}
+
+// --- Story 82: Tabbed Overlay UI tests ---
+
+// TestTotalForSection_AllSections verifies that totalForSection returns the correct
+// total count from the TotalTracks/Artists/Albums/Playlists fields.
+func TestTotalForSection_AllSections(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+
+	tests := []struct {
+		section panes.SearchSection
+		want    int
+	}{
+		{panes.SectionTracks, 100},
+		{panes.SectionArtists, 10},
+		{panes.SectionAlbums, 20},
+		{panes.SectionPlaylists, 30},
+	}
+
+	for _, tt := range tests {
+		got := o.TotalForSection(tt.section)
+		assert.Equal(t, tt.want, got, "section %d should return correct total", tt.section)
+	}
+}
+
+// TestTotalForSection_NilResults verifies that totalForSection returns 0 when results are nil.
+func TestTotalForSection_NilResults(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	tests := []panes.SearchSection{
+		panes.SectionTracks,
+		panes.SectionArtists,
+		panes.SectionAlbums,
+		panes.SectionPlaylists,
+	}
+
+	for _, sec := range tests {
+		got := o.TotalForSection(sec)
+		assert.Equal(t, 0, got, "section %d should return 0 when results are nil", sec)
+	}
+}
+
+// TestRenderHelpBar_TracksTab_ShowsCtrlA verifies that Ctrl+A queue appears on the Tracks tab.
+func TestRenderHelpBar_TracksTab_ShowsCtrlA(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	// Default active section is Tracks
+	helpBar := o.RenderHelpBar(80)
+	stripped := stripANSIForTest(helpBar)
+
+	assert.Contains(t, stripped, "Ctrl+A", "Tracks tab help bar should contain Ctrl+A")
+	assert.Contains(t, stripped, "queue", "Tracks tab help bar should contain 'queue'")
+	assert.Contains(t, stripped, "Tab", "help bar should show Tab keybinding")
+}
+
+// TestRenderHelpBar_OtherTab_NoCtrlA verifies that Ctrl+A queue does NOT appear on non-Tracks tabs.
+func TestRenderHelpBar_OtherTab_NoCtrlA(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	// Navigate to Artists section
+	o, _ = sendKey(t, o, "tab")
+
+	helpBar := o.RenderHelpBar(80)
+	stripped := stripANSIForTest(helpBar)
+
+	assert.NotContains(t, stripped, "Ctrl+A", "non-Tracks tab help bar should NOT contain Ctrl+A")
+	assert.Contains(t, stripped, "Tab", "help bar should still show Tab keybinding")
+}
+
+// TestFormatDurationMs_ShortTrack verifies formatting of a track < 1 hour (m:ss format).
+func TestFormatDurationMs_ShortTrack(t *testing.T) {
+	// 222000ms = 3 minutes 42 seconds
+	got := panes.FormatDurationMs(222000)
+	assert.Equal(t, "3:42", got, "222000ms should format as 3:42")
+}
+
+// TestFormatDurationMs_LongTrack verifies formatting of a track >= 1 hour (h:mm:ss format).
+func TestFormatDurationMs_LongTrack(t *testing.T) {
+	// 7290000ms = 2 hours 1 minute 30 seconds
+	got := panes.FormatDurationMs(7290000)
+	assert.Equal(t, "2:01:30", got, "7290000ms should format as 2:01:30")
+}
+
+// TestFormatDurationMs_Zero verifies formatting of 0ms.
+func TestFormatDurationMs_Zero(t *testing.T) {
+	got := panes.FormatDurationMs(0)
+	assert.Equal(t, "0:00", got, "0ms should format as 0:00")
+}
+
+// TestRenderActiveSection_Tracks_ShowsAlbumAndDuration verifies that the Tracks section
+// renders Album and Duration columns for each track row.
+func TestRenderActiveSection_Tracks_ShowsAlbumAndDuration(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	section := o.RenderActiveSection(80)
+	stripped := stripANSIForTest(section)
+
+	// sampleSearchResultData tracks: "Blinding Lights", Artist: "The Weeknd", Album: "After Hours", DurationMs: 200040
+	assert.Contains(t, stripped, "Blinding Lights", "should show track name")
+	assert.Contains(t, stripped, "The Weeknd", "should show artist name")
+	assert.Contains(t, stripped, "After Hours", "should show album name")
+	// 200040ms = 3 minutes 20.04 seconds → 3:20
+	assert.Contains(t, stripped, "3:20", "should show formatted duration")
+}
+
+// TestRenderActiveSection_Albums_ShowsYearAndCount verifies that the Albums section
+// renders Year and TotalTracks columns.
+func TestRenderActiveSection_Albums_ShowsYearAndCount(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	// Navigate to Albums section
+	o, _ = sendKey(t, o, "tab")
+	o, _ = sendKey(t, o, "tab")
+
+	section := o.RenderActiveSection(80)
+	stripped := stripANSIForTest(section)
+
+	// sampleSearchResultData albums: "After Hours", Artist: "The Weeknd", ReleaseYear: "2020", TotalTracks: 14
+	assert.Contains(t, stripped, "After Hours", "should show album name")
+	assert.Contains(t, stripped, "The Weeknd", "should show artist name")
+	assert.Contains(t, stripped, "2020", "should show release year")
+	assert.Contains(t, stripped, "14", "should show track count")
+}
+
+// TestRenderActiveSection_Playlists_ShowsTrackCount verifies that the Playlists section
+// renders the TrackCount column.
+func TestRenderActiveSection_Playlists_ShowsTrackCount(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	// Navigate to Playlists section
+	o, _ = sendKey(t, o, "tab")
+	o, _ = sendKey(t, o, "tab")
+	o, _ = sendKey(t, o, "tab")
+
+	section := o.RenderActiveSection(80)
+	stripped := stripANSIForTest(section)
+
+	// sampleSearchResultData playlists: "Blinding Pop Hits", Owner: "User", TrackCount: 50
+	assert.Contains(t, stripped, "Blinding Pop Hits", "should show playlist name")
+	assert.Contains(t, stripped, "User", "should show owner name")
+	assert.Contains(t, stripped, "50", "should show track count")
+}
+
+// TestRenderActiveSection_SelectedRow_UsesSelectedColors verifies that the selected row
+// uses the ▶ indicator.
+func TestRenderActiveSection_SelectedRow_UsesSelectedColors(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	section := o.RenderActiveSection(80)
+
+	// Selected row should have the ▶ marker
+	assert.Contains(t, section, "▶", "selected row should have ▶ indicator")
+}
+
+// TestRenderActiveSection_Tracks_NarrowNoAlbumColumn verifies that the narrow Tracks view
+// does not include the Album column when contentWidth < 60.
+func TestRenderActiveSection_Tracks_NarrowNoAlbumColumn(t *testing.T) {
+	// Create overlay with results that have an album name
+	s := state.New()
+	s.SetSearchQuery("test")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+
+	results := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "spotify:track:t1", Name: "My Song", Artist: "My Artist", Album: "My Album", DurationMs: 180000},
+		},
+	}
+	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
+	o.SetSize(80, 40)
+
+	// contentWidth 55 < 60 → drops Album column
+	section := o.RenderActiveSection(55)
+	stripped := stripANSIForTest(section)
+
+	assert.Contains(t, stripped, "My Song", "should still show track name")
+	assert.Contains(t, stripped, "My Artist", "should still show artist name")
+	assert.NotContains(t, stripped, "My Album", "narrow view should NOT show album name")
+}
+
+// TestRenderColumnHeaders_Tracks verifies that 5 column headers are rendered for the Tracks section.
+func TestRenderColumnHeaders_Tracks(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	headers := o.RenderColumnHeaders(panes.SectionTracks, 80)
+	stripped := stripANSIForTest(headers)
+
+	assert.Contains(t, stripped, "#", "Tracks headers should contain # column")
+	assert.Contains(t, stripped, "Track", "Tracks headers should contain Track column")
+	assert.Contains(t, stripped, "Artist", "Tracks headers should contain Artist column")
+	assert.Contains(t, stripped, "Album", "Tracks headers should contain Album column")
+	assert.Contains(t, stripped, "Duration", "Tracks headers should contain Duration column")
+}
+
+// TestRenderColumnHeaders_Artists verifies that 2 column headers are rendered for the Artists section.
+func TestRenderColumnHeaders_Artists(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	headers := o.RenderColumnHeaders(panes.SectionArtists, 80)
+	stripped := stripANSIForTest(headers)
+
+	assert.Contains(t, stripped, "#", "Artists headers should contain # column")
+	assert.Contains(t, stripped, "Artist", "Artists headers should contain Artist column")
+}
+
+// TestRenderColumnHeaders_Albums verifies that 5 column headers are rendered for the Albums section.
+func TestRenderColumnHeaders_Albums(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	headers := o.RenderColumnHeaders(panes.SectionAlbums, 80)
+	stripped := stripANSIForTest(headers)
+
+	assert.Contains(t, stripped, "#", "Albums headers should contain # column")
+	assert.Contains(t, stripped, "Album", "Albums headers should contain Album column")
+	assert.Contains(t, stripped, "Artist", "Albums headers should contain Artist column")
+	assert.Contains(t, stripped, "Year", "Albums headers should contain Year column")
+	assert.Contains(t, stripped, "Tracks", "Albums headers should contain Tracks column")
+}
+
+// TestRenderColumnHeaders_Playlists verifies that 4 column headers are rendered for the Playlists section.
+func TestRenderColumnHeaders_Playlists(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	headers := o.RenderColumnHeaders(panes.SectionPlaylists, 80)
+	stripped := stripANSIForTest(headers)
+
+	assert.Contains(t, stripped, "#", "Playlists headers should contain # column")
+	assert.Contains(t, stripped, "Playlist", "Playlists headers should contain Playlist column")
+	assert.Contains(t, stripped, "Owner", "Playlists headers should contain Owner column")
+	assert.Contains(t, stripped, "Tracks", "Playlists headers should contain Tracks column")
+}
+
+// TestRenderColumnHeaders_Tracks_NarrowDropsAlbum verifies that the Album column is dropped
+// when contentWidth < 60 on the Tracks section.
+func TestRenderColumnHeaders_Tracks_NarrowDropsAlbum(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+
+	// contentWidth < 60 → drops Album column
+	headers := o.RenderColumnHeaders(panes.SectionTracks, 55)
+	stripped := stripANSIForTest(headers)
+
+	assert.Contains(t, stripped, "#", "narrow Tracks headers should still contain # column")
+	assert.Contains(t, stripped, "Track", "narrow Tracks headers should still contain Track column")
+	assert.Contains(t, stripped, "Artist", "narrow Tracks headers should still contain Artist column")
+	assert.Contains(t, stripped, "Duration", "narrow Tracks headers should still contain Duration column")
+	assert.NotContains(t, stripped, "Album", "narrow Tracks headers should NOT contain Album column")
+}
+
+// TestRenderTabBar_ActiveHighlighted verifies that the active tab has the ▪ marker.
+func TestRenderTabBar_ActiveHighlighted(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	tabBar := o.RenderTabBar(80)
+	// Strip ANSI to get visible text
+	stripped := stripANSIForTest(tabBar)
+
+	assert.Contains(t, stripped, "▪", "active tab should have ▪ marker")
+	// The ▪ should appear before "Tracks" (active section by default)
+	tracksIdx := strings.Index(stripped, "Tracks")
+	bulletIdx := strings.Index(stripped, "▪")
+	assert.True(t, bulletIdx < tracksIdx, "▪ should appear before 'Tracks' label")
+}
+
+// TestRenderTabBar_ShowsCounts verifies that tabs display result totals from TotalXxx fields.
+func TestRenderTabBar_ShowsCounts(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(100, 40)
+
+	tabBar := o.RenderTabBar(80)
+	stripped := stripANSIForTest(tabBar)
+
+	// sampleSearchResultData has TotalTracks=100, TotalArtists=10, TotalAlbums=20, TotalPlaylists=30
+	assert.Contains(t, stripped, "Tracks 100", "tab bar should show TotalTracks count")
+	assert.Contains(t, stripped, "Artists 10", "tab bar should show TotalArtists count")
+	assert.Contains(t, stripped, "Albums 20", "tab bar should show TotalAlbums count")
+	assert.Contains(t, stripped, "Playlists 30", "tab bar should show TotalPlaylists count")
+}
+
+// TestRenderTabBar_NilResults_ZeroCounts verifies zero counts are shown when results are nil.
+func TestRenderTabBar_NilResults_ZeroCounts(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	tabBar := o.RenderTabBar(80)
+	stripped := stripANSIForTest(tabBar)
+
+	assert.Contains(t, stripped, "Tracks 0", "nil results should show zero count for Tracks")
+	assert.Contains(t, stripped, "Artists 0", "nil results should show zero count for Artists")
+	assert.Contains(t, stripped, "Albums 0", "nil results should show zero count for Albums")
+	assert.Contains(t, stripped, "Playlists 0", "nil results should show zero count for Playlists")
+}
+
+// TestTabColorForSection_ReturnsCorrectTokens verifies that each section maps to its
+// expected PaneBorder* theme token (as a non-empty color).
+func TestTabColorForSection_ReturnsCorrectTokens(t *testing.T) {
+	o := newTestSearchOverlay()
+	th := theme.Load("black")
+
+	tests := []struct {
+		section  panes.SearchSection
+		expected lipgloss.Color
+	}{
+		{panes.SectionTracks, th.PaneBorderTopTracks()},
+		{panes.SectionArtists, th.PaneBorderTopArtists()},
+		{panes.SectionAlbums, th.PaneBorderAlbums()},
+		{panes.SectionPlaylists, th.PaneBorderPlaylists()},
+	}
+
+	for _, tt := range tests {
+		got := o.TabColorForSection(tt.section)
+		assert.Equal(t, tt.expected, got, "section %d should map to the correct PaneBorder* token", tt.section)
+		assert.NotEmpty(t, string(got), "tab color should be a non-empty color string")
+	}
 }

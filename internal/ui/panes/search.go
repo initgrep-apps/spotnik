@@ -15,7 +15,11 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
-// searchSection enumerates the four result sections in display order.
+// SearchSection enumerates the four result sections in display order.
+// Exported so test packages can reference specific sections by name.
+type SearchSection = searchSection
+
+// searchSection is the underlying type for SearchSection.
 type searchSection int
 
 const (
@@ -26,12 +30,20 @@ const (
 	numSections      = 4
 )
 
-// searchSectionLabels are the header labels rendered above each section.
+// Exported section constants for use in tests and external packages.
+const (
+	SectionTracks    SearchSection = sectionTracks
+	SectionArtists   SearchSection = sectionArtists
+	SectionAlbums    SearchSection = sectionAlbums
+	SectionPlaylists SearchSection = sectionPlaylists
+)
+
+// searchSectionLabels are the labels used in the tab bar for each section.
 var searchSectionLabels = [numSections]string{
-	sectionTracks:    "TRACKS",
-	sectionArtists:   "ARTISTS",
-	sectionAlbums:    "ALBUMS",
-	sectionPlaylists: "PLAYLISTS",
+	sectionTracks:    "Tracks",
+	sectionArtists:   "Artists",
+	sectionAlbums:    "Albums",
+	sectionPlaylists: "Playlists",
 }
 
 // maxResultsPerSection is the number of results shown per section in the overlay.
@@ -395,7 +407,7 @@ func (o *SearchOverlay) View() string {
 		Title:  "Search",
 		Actions: []layout.Action{
 			{Key: "Enter", Label: "play"},
-			{Key: "Tab", Label: "section"},
+			{Key: "Esc", Label: "close"},
 		},
 		AccentColor: o.theme.ActiveBorder(),
 		Focused:     true, // overlays are always focused
@@ -405,7 +417,8 @@ func (o *SearchOverlay) View() string {
 	return layout.RenderPaneBorder(inner, cfg)
 }
 
-// renderResults builds the results area of the overlay.
+// renderResults builds the tabbed results area of the overlay.
+// Assembly order: tab bar → tab separator → column headers → active section rows → help bar.
 func (o *SearchOverlay) renderResults(overlayWidth int) string {
 	query := o.store.SearchQuery()
 	loading := o.store.SearchLoading()
@@ -446,47 +459,22 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 		contentWidth = 10
 	}
 
-	var sb strings.Builder
-	sb.WriteString(o.renderSection(sectionTracks, clampedTrackItemsAsRows(o.results, contentWidth), contentWidth))
-	sb.WriteString(o.renderSection(sectionArtists, clampedArtistItemsAsRows(o.results, contentWidth), contentWidth))
-	sb.WriteString(o.renderSection(sectionAlbums, clampedAlbumItemsAsRows(o.results, contentWidth), contentWidth))
-	sb.WriteString(o.renderSection(sectionPlaylists, clampedPlaylistItemsAsRows(o.results, contentWidth), contentWidth))
-	return sb.String()
-}
-
-// renderSection renders one section with its header and items.
-func (o *SearchOverlay) renderSection(sec searchSection, rows []string, contentWidth int) string {
-	if len(rows) == 0 {
-		return ""
-	}
-
-	headerStyle := lipgloss.NewStyle().
-		Foreground(o.theme.SectionHeader()).
-		Bold(true)
+	mutedStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 
 	var sb strings.Builder
+	// Tab bar
+	sb.WriteString(o.renderTabBar(contentWidth))
 	sb.WriteString("\n")
-	sb.WriteString(headerStyle.Render(fmt.Sprintf("● %s", searchSectionLabels[sec])))
+	// Tab separator
+	sb.WriteString(mutedStyle.Render(strings.Repeat("─", contentWidth)))
 	sb.WriteString("\n")
-
-	for i, row := range rows {
-		isSelected := o.activeSection == sec && o.cursorPos == i
-
-		if isSelected {
-			lineStyle := lipgloss.NewStyle().
-				Background(o.theme.SelectedBg()).
-				Foreground(o.theme.SelectedFg()).
-				Width(contentWidth)
-			sb.WriteString(lineStyle.Render("▶ " + row))
-		} else {
-			lineStyle := lipgloss.NewStyle().
-				Foreground(o.theme.TextPrimary()).
-				Width(contentWidth)
-			sb.WriteString(lineStyle.Render("  " + row))
-		}
-		sb.WriteString("\n")
-	}
-
+	// Column headers + underline
+	sb.WriteString(o.renderColumnHeaders(o.activeSection, contentWidth))
+	sb.WriteString("\n")
+	// Active section rows only
+	sb.WriteString(o.renderActiveSection(contentWidth))
+	// Help bar (separator + keybindings)
+	sb.WriteString(o.renderHelpBar(contentWidth))
 	return sb.String()
 }
 
@@ -564,47 +552,6 @@ func clampedPlaylistItems(r *SearchResultData) []SearchPlaylistItem {
 	return items
 }
 
-// --- Row string builders for each section ---
-
-func clampedTrackItemsAsRows(r *SearchResultData, width int) []string {
-	items := clampedTrackItems(r)
-	rows := make([]string, len(items))
-	for i, t := range items {
-		row := fmt.Sprintf("%-*s  %s", width/2, truncate(t.Name, width/2), truncate(t.Artist, width/2-4))
-		rows[i] = truncate(row, width-2)
-	}
-	return rows
-}
-
-func clampedArtistItemsAsRows(r *SearchResultData, width int) []string {
-	items := clampedArtistItems(r)
-	rows := make([]string, len(items))
-	for i, a := range items {
-		rows[i] = truncate(a.Name, width-2)
-	}
-	return rows
-}
-
-func clampedAlbumItemsAsRows(r *SearchResultData, width int) []string {
-	items := clampedAlbumItems(r)
-	rows := make([]string, len(items))
-	for i, a := range items {
-		row := fmt.Sprintf("%-*s  %s", width/2, truncate(a.Name, width/2), truncate(a.Artist, width/2-4))
-		rows[i] = truncate(row, width-2)
-	}
-	return rows
-}
-
-func clampedPlaylistItemsAsRows(r *SearchResultData, width int) []string {
-	items := clampedPlaylistItems(r)
-	rows := make([]string, len(items))
-	for i, p := range items {
-		row := fmt.Sprintf("%-*s  %s", width/2, truncate(p.Name, width/2), truncate(p.Owner, width/2-4))
-		rows[i] = truncate(row, width-2)
-	}
-	return rows
-}
-
 // truncate shortens s to at most maxRunes runes, appending "…" if truncated.
 func truncate(s string, maxRunes int) string {
 	if maxRunes <= 0 {
@@ -620,6 +567,327 @@ func truncate(s string, maxRunes int) string {
 	}
 	runes := []rune(s)
 	return string(runes[:maxRunes-1]) + "…"
+}
+
+// renderHelpBar renders a separator line and a contextual keybindings line, both in
+// TextMuted color. "Ctrl+A queue" only appears on the Tracks section.
+func (o *SearchOverlay) renderHelpBar(contentWidth int) string {
+	mutedStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
+	separator := mutedStyle.Render(strings.Repeat("─", contentWidth))
+
+	var keys string
+	if o.activeSection == sectionTracks {
+		keys = "Tab next section  ↑↓ navigate  Enter play  Ctrl+A queue  Esc close"
+	} else {
+		keys = "Tab next section  ↑↓ navigate  Enter play  Esc close"
+	}
+
+	helpLine := mutedStyle.Render(keys)
+	return separator + "\n" + helpLine
+}
+
+// RenderHelpBar is the exported wrapper of renderHelpBar for use in tests.
+func (o *SearchOverlay) RenderHelpBar(contentWidth int) string {
+	return o.renderHelpBar(contentWidth)
+}
+
+// FormatDurationMs is the exported wrapper for formatDurationMs (defined in nowplaying.go),
+// allowing tests to call it without importing package internals.
+func FormatDurationMs(ms int) string {
+	return formatDurationMs(ms)
+}
+
+// searchCol is a single column definition for column-aligned result row rendering.
+type searchCol struct {
+	text  string
+	style lipgloss.Style
+	width int
+}
+
+// renderActiveSection renders the numbered, column-aligned result rows for the
+// currently active section. Only the active section's results are shown.
+// Selected row: ▶ prefix + SelectedBg/Fg. Unselected rows: numbered prefix +
+// ColumnIndex/Primary/Secondary/Tertiary colors per column.
+// Tracks section drops the Album column when contentWidth < 60.
+func (o *SearchOverlay) renderActiveSection(contentWidth int) string {
+	if o.results == nil {
+		return ""
+	}
+
+	indexW := 3
+	indexStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnIndex())
+	primaryStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnPrimary())
+	secondaryStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnSecondary())
+	tertiaryStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnTertiary())
+	selectedStyle := lipgloss.NewStyle().
+		Background(o.theme.SelectedBg()).
+		Foreground(o.theme.SelectedFg())
+
+	var sb strings.Builder
+
+	renderRow := func(i int, isSelected bool, cols []searchCol) {
+		if isSelected {
+			// Build row content joined with spaces and apply selected style.
+			rowParts := make([]string, 0, len(cols)+1)
+			rowParts = append(rowParts, fmt.Sprintf("%-*s", indexW, "▶ "))
+			for _, col := range cols {
+				rowParts = append(rowParts, fmt.Sprintf("%-*s", col.width, truncate(col.text, col.width)))
+			}
+			rowText := strings.Join(rowParts, "  ")
+			sb.WriteString(selectedStyle.Width(contentWidth).Render(rowText))
+		} else {
+			parts := make([]string, 0, len(cols)+1)
+			parts = append(parts, indexStyle.Render(fmt.Sprintf("%-*s", indexW, fmt.Sprintf("%d", i+1))))
+			for _, col := range cols {
+				cell := truncate(col.text, col.width)
+				parts = append(parts, col.style.Render(fmt.Sprintf("%-*s", col.width, cell)))
+			}
+			sb.WriteString(strings.Join(parts, "  "))
+		}
+		sb.WriteString("\n")
+	}
+
+	switch o.activeSection {
+	case sectionTracks:
+		items := clampedTrackItems(o.results)
+		narrow := contentWidth < 60
+		durationW := 8
+		nameW := contentWidth * 35 / 100
+		if narrow {
+			artistW := contentWidth - indexW - nameW - durationW - 3
+			if artistW < 4 {
+				artistW = 4
+			}
+			for i, item := range items {
+				renderRow(i, o.cursorPos == i, []searchCol{
+					{item.Name, primaryStyle, nameW},
+					{item.Artist, secondaryStyle, artistW},
+					{formatDurationMs(item.DurationMs), tertiaryStyle, durationW},
+				})
+			}
+		} else {
+			artistW := contentWidth * 25 / 100
+			albumW := contentWidth * 25 / 100
+			for i, item := range items {
+				renderRow(i, o.cursorPos == i, []searchCol{
+					{item.Name, primaryStyle, nameW},
+					{item.Artist, secondaryStyle, artistW},
+					{item.Album, secondaryStyle, albumW},
+					{formatDurationMs(item.DurationMs), tertiaryStyle, durationW},
+				})
+			}
+		}
+
+	case sectionArtists:
+		items := clampedArtistItems(o.results)
+		artistW := contentWidth - indexW - 1
+		if artistW < 4 {
+			artistW = 4
+		}
+		for i, item := range items {
+			renderRow(i, o.cursorPos == i, []searchCol{
+				{item.Name, primaryStyle, artistW},
+			})
+		}
+
+	case sectionAlbums:
+		items := clampedAlbumItems(o.results)
+		nameW := contentWidth * 35 / 100
+		artistW := contentWidth * 25 / 100
+		for i, item := range items {
+			renderRow(i, o.cursorPos == i, []searchCol{
+				{item.Name, primaryStyle, nameW},
+				{item.Artist, secondaryStyle, artistW},
+				{item.ReleaseYear, tertiaryStyle, 6},
+				{fmt.Sprintf("%d", item.TotalTracks), tertiaryStyle, 8},
+			})
+		}
+
+	case sectionPlaylists:
+		items := clampedPlaylistItems(o.results)
+		nameW := contentWidth * 40 / 100
+		ownerW := contentWidth * 30 / 100
+		for i, item := range items {
+			renderRow(i, o.cursorPos == i, []searchCol{
+				{item.Name, primaryStyle, nameW},
+				{item.Owner, secondaryStyle, ownerW},
+				{fmt.Sprintf("%d", item.TrackCount), tertiaryStyle, 8},
+			})
+		}
+	}
+
+	return sb.String()
+}
+
+// RenderActiveSection is the exported wrapper of renderActiveSection for use in tests.
+func (o *SearchOverlay) RenderActiveSection(contentWidth int) string {
+	return o.renderActiveSection(contentWidth)
+}
+
+// renderColumnHeaders renders the column header row and an underline separator for
+// the given section. Headers are styled with the active section's tab color + bold.
+// The underline uses TextMuted dashes. Tracks drops the Album column when contentWidth < 60.
+func (o *SearchOverlay) renderColumnHeaders(sec searchSection, contentWidth int) string {
+	headerStyle := lipgloss.NewStyle().
+		Foreground(o.tabColorForSection(sec)).
+		Bold(true)
+	underlineStyle := lipgloss.NewStyle().
+		Foreground(o.theme.TextMuted())
+
+	indexW := 3
+	var labels []string
+	var widths []int
+
+	switch sec {
+	case sectionTracks:
+		durationW := 8
+		if contentWidth < 60 {
+			// Narrow: drop Album — 4 columns
+			nameW := contentWidth * 35 / 100
+			artistW := contentWidth - indexW - nameW - durationW - 3 // 3 gaps
+			if artistW < 4 {
+				artistW = 4
+			}
+			labels = []string{"#", "Track", "Artist", "Duration"}
+			widths = []int{indexW, nameW, artistW, durationW}
+		} else {
+			// Wide: 5 columns
+			nameW := contentWidth * 35 / 100
+			artistW := contentWidth * 25 / 100
+			albumW := contentWidth * 25 / 100
+			labels = []string{"#", "Track", "Artist", "Album", "Duration"}
+			widths = []int{indexW, nameW, artistW, albumW, durationW}
+		}
+	case sectionArtists:
+		artistW := contentWidth - indexW - 1
+		if artistW < 4 {
+			artistW = 4
+		}
+		labels = []string{"#", "Artist"}
+		widths = []int{indexW, artistW}
+	case sectionAlbums:
+		yearW := 6
+		tracksW := 8
+		nameW := contentWidth * 35 / 100
+		artistW := contentWidth * 25 / 100
+		labels = []string{"#", "Album", "Artist", "Year", "Tracks"}
+		widths = []int{indexW, nameW, artistW, yearW, tracksW}
+	case sectionPlaylists:
+		tracksW := 8
+		nameW := contentWidth * 40 / 100
+		ownerW := contentWidth * 30 / 100
+		labels = []string{"#", "Playlist", "Owner", "Tracks"}
+		widths = []int{indexW, nameW, ownerW, tracksW}
+	default:
+		return ""
+	}
+
+	// Build header line
+	var hParts []string
+	var uParts []string
+	for i, lbl := range labels {
+		w := widths[i]
+		if w <= 0 {
+			w = len(lbl)
+		}
+		hParts = append(hParts, headerStyle.Render(fmt.Sprintf("%-*s", w, truncate(lbl, w))))
+		uParts = append(uParts, underlineStyle.Render(strings.Repeat("─", min(w, len(lbl)+1))))
+	}
+
+	headerLine := strings.Join(hParts, "  ")
+	underLine := strings.Join(uParts, "  ")
+	return headerLine + "\n" + underLine
+}
+
+// min returns the smaller of two ints.
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// RenderColumnHeaders is the exported wrapper of renderColumnHeaders for use in tests.
+func (o *SearchOverlay) RenderColumnHeaders(sec searchSection, contentWidth int) string {
+	return o.renderColumnHeaders(sec, contentWidth)
+}
+
+// renderTabBar renders a horizontal tab bar showing all four sections with their
+// result counts. The active section is highlighted with ▪ + bold + its tab color.
+// Inactive sections use TextMuted. Tabs are separated by 5 spaces.
+func (o *SearchOverlay) renderTabBar(width int) string {
+	var parts []string
+
+	for i := searchSection(0); i < numSections; i++ {
+		label := fmt.Sprintf("%s %d", searchSectionLabels[i], o.totalForSection(i))
+		if i == o.activeSection {
+			// Active tab: ▪ prefix + bold + tab-specific color
+			style := lipgloss.NewStyle().
+				Foreground(o.tabColorForSection(i)).
+				Bold(true)
+			parts = append(parts, style.Render("▪ "+label))
+		} else {
+			// Inactive tab: plain + TextMuted
+			style := lipgloss.NewStyle().
+				Foreground(o.theme.TextMuted())
+			parts = append(parts, style.Render(label))
+		}
+	}
+
+	return strings.Join(parts, "     ")
+}
+
+// RenderTabBar is the exported wrapper of renderTabBar for use in tests.
+func (o *SearchOverlay) RenderTabBar(width int) string {
+	return o.renderTabBar(width)
+}
+
+// totalForSection returns the total result count for the given section from
+// SearchResultData.TotalTracks/Artists/Albums/Playlists. Returns 0 if results are nil.
+func (o *SearchOverlay) totalForSection(sec searchSection) int {
+	if o.results == nil {
+		return 0
+	}
+	switch sec {
+	case sectionTracks:
+		return o.results.TotalTracks
+	case sectionArtists:
+		return o.results.TotalArtists
+	case sectionAlbums:
+		return o.results.TotalAlbums
+	case sectionPlaylists:
+		return o.results.TotalPlaylists
+	default:
+		return 0
+	}
+}
+
+// TotalForSection is the exported wrapper of totalForSection for use in tests.
+func (o *SearchOverlay) TotalForSection(sec searchSection) int {
+	return o.totalForSection(sec)
+}
+
+// tabColorForSection returns the PaneBorder* theme token for the given section.
+// This gives each tab a distinct identity color consistent with its pane border color.
+// Falls back to ActiveBorder() for any unrecognized section value.
+func (o *SearchOverlay) tabColorForSection(sec searchSection) lipgloss.Color {
+	switch sec {
+	case sectionTracks:
+		return o.theme.PaneBorderTopTracks()
+	case sectionArtists:
+		return o.theme.PaneBorderTopArtists()
+	case sectionAlbums:
+		return o.theme.PaneBorderAlbums()
+	case sectionPlaylists:
+		return o.theme.PaneBorderPlaylists()
+	default:
+		return o.theme.ActiveBorder()
+	}
+}
+
+// TabColorForSection is the exported wrapper of tabColorForSection for use in tests.
+func (o *SearchOverlay) TabColorForSection(sec searchSection) lipgloss.Color {
+	return o.tabColorForSection(sec)
 }
 
 // SetTheme updates the theme reference for runtime theme switching.
