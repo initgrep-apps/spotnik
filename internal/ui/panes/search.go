@@ -165,8 +165,8 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return o.handleDebounce(m)
 
 	case SearchResultsMsg:
-		if m.Offset == 0 {
-			// New query (first page) — replace all results and reset pagination state.
+		if !m.IsPaged {
+			// New query (initial load) — replace all results and reset pagination state.
 			o.results = m.Results
 			o.cursorPos = 0
 			o.activeSection = sectionTracks
@@ -174,6 +174,7 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Paginated load — merge results for the requesting section only.
 			// Other sections' results and offsets are preserved.
+			// NOTE: offset=0 is valid here (back-navigation to page 1).
 			prevOffset := o.sectionOffsets[m.Section]
 			isPrevPage := m.Offset < prevOffset
 			if o.results == nil {

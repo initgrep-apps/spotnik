@@ -1460,9 +1460,6 @@ func TestMoveCursorUp_FirstRow_NoOffset_NoEmit(t *testing.T) {
 // TestSearchOverlay_PreviousPage_CursorAtBottom verifies that when a SearchResultsMsg
 // arrives for a previous page (new offset < previous offset), cursorPos is set to the
 // last item, not 0. This matches the spec: "navigate to previous page → cursor at bottom."
-//
-// This tests going from page 3 (offset=20) back to page 2 (offset=10), since going back
-// to offset=0 is indistinguishable from a new query in the current message design.
 func TestSearchOverlay_PreviousPage_CursorAtBottom(t *testing.T) {
 	o, s := newTestSearchOverlayWithResults()
 	s.SetSearchQuery("blinding")
@@ -1480,6 +1477,7 @@ func TestSearchOverlay_PreviousPage_CursorAtBottom(t *testing.T) {
 		Results: &panes.SearchResultData{Tracks: makeItems(11, 10), TotalTracks: 30},
 		Section: panes.SectionTracks,
 		Offset:  10,
+		IsPaged: true,
 	}
 	model, _ := o.Update(page2Msg)
 	o = model.(*panes.SearchOverlay)
@@ -1489,6 +1487,7 @@ func TestSearchOverlay_PreviousPage_CursorAtBottom(t *testing.T) {
 		Results: &panes.SearchResultData{Tracks: makeItems(21, 10), TotalTracks: 30},
 		Section: panes.SectionTracks,
 		Offset:  20,
+		IsPaged: true,
 	}
 	model, _ = o.Update(page3Msg)
 	o = model.(*panes.SearchOverlay)
@@ -1499,10 +1498,71 @@ func TestSearchOverlay_PreviousPage_CursorAtBottom(t *testing.T) {
 		Results: &panes.SearchResultData{Tracks: makeItems(11, 10), TotalTracks: 30},
 		Section: panes.SectionTracks,
 		Offset:  10, // 10 < 20 (previous offset) → isPrevPage
+		IsPaged: true,
 	}
 	model, _ = o.Update(backMsg)
 	o = model.(*panes.SearchOverlay)
 	assert.Equal(t, 9, o.CursorPos(), "cursor should be at bottom (index 9) after previous-page load")
+}
+
+// TestSearchOverlay_PreviousPage_BackToPage1 verifies that navigating backward from
+// page 2 (offset=10) to page 1 (offset=0) using IsPaged=true routes correctly as a
+// paginated load rather than a new-query load. Specifically:
+//  1. Cursor lands at the bottom (maxCursorForActiveSection()-1), not at 0.
+//  2. Other sections' offsets are preserved, not reset.
+//  3. activeSection is not changed.
+func TestSearchOverlay_PreviousPage_BackToPage1(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	makeItems := func(start, count int) []panes.SearchTrackItem {
+		items := make([]panes.SearchTrackItem, count)
+		for i := range items {
+			items[i] = panes.SearchTrackItem{
+				Name: fmt.Sprintf("Track %d", start+i),
+				URI:  fmt.Sprintf("uri:%d", start+i),
+			}
+		}
+		return items
+	}
+
+	// Advance to page 2 (offset=10) via a next-page load.
+	page2Msg := panes.SearchResultsMsg{
+		Results: &panes.SearchResultData{Tracks: makeItems(11, 10), TotalTracks: 30},
+		Section: panes.SectionTracks,
+		Offset:  10,
+		IsPaged: true,
+	}
+	model, _ := o.Update(page2Msg)
+	o = model.(*panes.SearchOverlay)
+	assert.Equal(t, 0, o.CursorPos(), "cursor at top after next-page load to page 2")
+
+	// Set non-zero offsets for other sections to verify they're preserved.
+	o = o.WithSectionOffsets([4]int{10, 20, 30, 40})
+
+	// Navigate back to page 1 (offset=0) — IsPaged=true disambiguates from new query.
+	backToPage1Msg := panes.SearchResultsMsg{
+		Results: &panes.SearchResultData{Tracks: makeItems(1, 10), TotalTracks: 30},
+		Section: panes.SectionTracks,
+		Offset:  0,
+		IsPaged: true,
+	}
+	model, _ = o.Update(backToPage1Msg)
+	o = model.(*panes.SearchOverlay)
+
+	// 1. Cursor must be at the bottom of the results (10 items → index 9).
+	assert.Equal(t, 9, o.CursorPos(),
+		"cursor should be at bottom after navigating back to page 1 via IsPaged=true")
+
+	// 2. Other sections' offsets must be preserved.
+	offsets := o.SectionOffsets()
+	assert.Equal(t, 0, offsets[panes.SectionTracks], "tracks offset updated to 0")
+	assert.Equal(t, 20, offsets[panes.SectionArtists], "artists offset should be preserved")
+	assert.Equal(t, 30, offsets[panes.SectionAlbums], "albums offset should be preserved")
+	assert.Equal(t, 40, offsets[panes.SectionPlaylists], "playlists offset should be preserved")
+
+	// 3. activeSection must not change.
+	assert.Equal(t, panes.SectionTracks, o.ActiveSection(), "activeSection must not change on paginated load")
 }
 
 // TestSearchOverlay_NextPage_CursorAtTop verifies that when a SearchResultsMsg arrives
@@ -1520,6 +1580,7 @@ func TestSearchOverlay_NextPage_CursorAtTop(t *testing.T) {
 		Results: &panes.SearchResultData{Tracks: page2Items, TotalTracks: 20},
 		Section: panes.SectionTracks,
 		Offset:  10,
+		IsPaged: true,
 	}
 	model, _ := o.Update(msg)
 	o = model.(*panes.SearchOverlay)
@@ -1595,6 +1656,7 @@ func TestPageIndicator_Page2(t *testing.T) {
 		Results: data,
 		Section: panes.SectionTracks,
 		Offset:  10,
+		IsPaged: true,
 	}
 	model, _ := o.Update(msg)
 	o = model.(*panes.SearchOverlay)

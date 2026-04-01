@@ -289,7 +289,7 @@ func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 			}
 			return panes.SearchResultsMsg{Err: err}
 		}
-		return panes.SearchResultsMsg{Results: convertSearchResult(results)}
+		return panes.SearchResultsMsg{Results: convertSearchResult(results), IsPaged: false}
 	}
 }
 
@@ -311,11 +311,13 @@ func (a *App) buildSearchPageCmd(query string, offset int, section panes.SearchS
 	typeStr, ok := sectionTypeStrings[section]
 	if !ok {
 		// Unknown section — should never happen; return a no-op command.
-		return func() tea.Msg { return panes.SearchResultsMsg{Section: section, Offset: offset} }
+		return func() tea.Msg {
+			return panes.SearchResultsMsg{Section: section, Offset: offset, IsPaged: true}
+		}
 	}
 	return func() tea.Msg {
 		if search == nil {
-			return panes.SearchResultsMsg{Err: errNilClient, Section: section, Offset: offset}
+			return panes.SearchResultsMsg{Err: errNilClient, Section: section, Offset: offset, IsPaged: true}
 		}
 		// Search is user-triggered — bypass token bucket.
 		// Only request the single type relevant to this section for efficiency.
@@ -333,12 +335,13 @@ func (a *App) buildSearchPageCmd(query string, offset int, section panes.SearchS
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.SearchResultsMsg{Err: err, Section: section, Offset: offset}
+			return panes.SearchResultsMsg{Err: err, Section: section, Offset: offset, IsPaged: true}
 		}
 		msg := panes.SearchResultsMsg{
 			Results: convertSearchResult(results),
 			Section: section,
 			Offset:  offset,
+			IsPaged: true,
 		}
 		return msg
 	}
