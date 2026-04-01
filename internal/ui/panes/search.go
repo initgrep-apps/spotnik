@@ -389,7 +389,9 @@ func (o *SearchOverlay) View() string {
 		Render(strings.Repeat("·", innerWidth)))
 
 	// Results area — fills the remaining inner lines.
-	resultsStr := o.renderResults(innerWidth)
+	// Pass innerHeight - 2 (subtract input line + dot separator) so renderResults can
+	// compute padding to anchor the help bar at the bottom.
+	resultsStr := o.renderResults(innerWidth, innerHeight-2)
 	resultLines := strings.Split(resultsStr, "\n")
 	lines = append(lines, resultLines...)
 
@@ -418,8 +420,14 @@ func (o *SearchOverlay) View() string {
 }
 
 // renderResults builds the tabbed results area of the overlay.
-// Assembly order: tab bar → tab separator → column headers → active section rows → help bar.
-func (o *SearchOverlay) renderResults(overlayWidth int) string {
+// Assembly order: tab bar → tab separator → column headers → active section rows →
+// [padding to push help bar to bottom] → help bar.
+//
+// innerWidth is the content width inside the border (View subtracts 2 for border chars).
+// availableHeight is innerHeight - 2 (input line + dot separator already consumed).
+// It is used to anchor the help bar at the bottom by inserting blank lines between
+// result rows and the help bar when there are fewer results than the available space.
+func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 	query := o.store.SearchQuery()
 	loading := o.store.SearchLoading()
 
@@ -454,7 +462,9 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 			Render(fmt.Sprintf("No results for '%s'", query))
 	}
 
-	contentWidth := overlayWidth - 4 // subtract border + padding
+	// innerWidth already has the border removed (View subtracts 2). Subtract only
+	// left + right padding (1 char each side = 2 total).
+	contentWidth := innerWidth - 2 // left + right padding within the border
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
@@ -472,7 +482,24 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 	sb.WriteString(o.renderColumnHeaders(o.activeSection, contentWidth))
 	sb.WriteString("\n")
 	// Active section rows only
-	sb.WriteString(o.renderActiveSection(contentWidth))
+	activeSection := o.renderActiveSection(contentWidth)
+	sb.WriteString(activeSection)
+
+	// Anchor help bar to the bottom by inserting padding lines.
+	// Chrome lines: tab bar(1) + tab sep(1) + header(1) + underline(1) = 4
+	// Help bar lines: separator(1) + text(1) = 2
+	// Row budget = availableHeight - 4(chrome) - 2(help bar)
+	const chromeLines = 4
+	const helpBarLines = 2
+	rowBudget := availableHeight - chromeLines - helpBarLines
+	resultLineCount := strings.Count(activeSection, "\n")
+	if rowBudget > 0 {
+		padLines := rowBudget - resultLineCount
+		if padLines > 0 {
+			sb.WriteString(strings.Repeat("\n", padLines))
+		}
+	}
+
 	// Help bar (separator + keybindings)
 	sb.WriteString(o.renderHelpBar(contentWidth))
 	return sb.String()
@@ -550,6 +577,116 @@ func clampedPlaylistItems(r *SearchResultData) []SearchPlaylistItem {
 		items = items[:maxResultsPerSection]
 	}
 	return items
+}
+
+// --- Column width helpers ---
+// Each helper computes column widths that sum exactly to contentWidth.
+// Fixed columns (indexW, durationW, yearW, tracksW) are subtracted first;
+// inter-column gaps (2 chars per gap, (numCols-1) gaps) are also subtracted;
+// the remaining flex space is distributed proportionally among name/artist/album columns.
+// The last flex column gets the remainder to prevent any rounding-induced overflow.
+
+// trackColumnWidths computes column widths for the Tracks section.
+//
+//	Returns (nameW, artistW, albumW, durationW). In narrow mode, albumW is 0 and
+//	artistW absorbs the flex space.
+func (o *SearchOverlay) trackColumnWidths(contentWidth int, narrow bool) (nameW, artistW, albumW, durationW int) {
+	indexW := 3
+	durationW = 8
+	if narrow {
+		// 4 columns: # | Track | Artist | Duration — gaps = (4-1)*2 = 6
+		gaps := (4 - 1) * 2
+		fixed := indexW + durationW + gaps
+		flex := contentWidth - fixed
+		if flex < 0 {
+			flex = 0
+		}
+		nameW = flex * 50 / 100
+		artistW = flex - nameW // remainder prevents overflow
+		albumW = 0
+		return
+	}
+	// 5 columns: # | Track | Artist | Album | Duration — gaps = (5-1)*2 = 8
+	gaps := (5 - 1) * 2
+	fixed := indexW + durationW + gaps
+	flex := contentWidth - fixed
+	if flex < 0 {
+		flex = 0
+	}
+	nameW = flex * 40 / 100
+	artistW = flex * 30 / 100
+	albumW = flex - nameW - artistW // remainder prevents overflow
+	return
+}
+
+// TrackColumnWidths is the exported wrapper of trackColumnWidths for use in tests.
+func (o *SearchOverlay) TrackColumnWidths(contentWidth int, narrow bool) (nameW, artistW, albumW, durationW int) {
+	return o.trackColumnWidths(contentWidth, narrow)
+}
+
+// albumColumnWidths computes column widths for the Albums section.
+//
+//	Returns (nameW, artistW, yearW, tracksW).
+//	5 columns: # | Album | Artist | Year | Tracks — gaps = (5-1)*2 = 8
+func (o *SearchOverlay) albumColumnWidths(contentWidth int) (nameW, artistW, yearW, tracksW int) {
+	indexW := 3
+	yearW = 6
+	tracksW = 8
+	gaps := (5 - 1) * 2
+	fixed := indexW + yearW + tracksW + gaps
+	flex := contentWidth - fixed
+	if flex < 0 {
+		flex = 0
+	}
+	nameW = flex * 55 / 100
+	artistW = flex - nameW // remainder prevents overflow
+	return
+}
+
+// AlbumColumnWidths is the exported wrapper of albumColumnWidths for use in tests.
+func (o *SearchOverlay) AlbumColumnWidths(contentWidth int) (nameW, artistW, yearW, tracksW int) {
+	return o.albumColumnWidths(contentWidth)
+}
+
+// playlistColumnWidths computes column widths for the Playlists section.
+//
+//	Returns (nameW, ownerW, tracksW).
+//	4 columns: # | Playlist | Owner | Tracks — gaps = (4-1)*2 = 6
+func (o *SearchOverlay) playlistColumnWidths(contentWidth int) (nameW, ownerW, tracksW int) {
+	indexW := 3
+	tracksW = 8
+	gaps := (4 - 1) * 2
+	fixed := indexW + tracksW + gaps
+	flex := contentWidth - fixed
+	if flex < 0 {
+		flex = 0
+	}
+	nameW = flex * 55 / 100
+	ownerW = flex - nameW // remainder prevents overflow
+	return
+}
+
+// PlaylistColumnWidths is the exported wrapper of playlistColumnWidths for use in tests.
+func (o *SearchOverlay) PlaylistColumnWidths(contentWidth int) (nameW, ownerW, tracksW int) {
+	return o.playlistColumnWidths(contentWidth)
+}
+
+// artistColumnWidths computes the artist column width for the Artists section.
+//
+//	2 columns: # | Artist — gaps = (2-1)*2 = 2
+func (o *SearchOverlay) artistColumnWidths(contentWidth int) (artistW int) {
+	indexW := 3
+	gaps := (2 - 1) * 2
+	artistW = contentWidth - indexW - gaps
+	if artistW < 4 {
+		artistW = 4
+	}
+	return
+}
+
+// ArtistColumnWidths is the exported wrapper of artistColumnWidths for use in tests.
+func (o *SearchOverlay) ArtistColumnWidths(contentWidth int) (artistW int) {
+	return o.artistColumnWidths(contentWidth)
 }
 
 // truncate shortens s to at most maxRunes runes, appending "…" if truncated.
@@ -651,13 +788,8 @@ func (o *SearchOverlay) renderActiveSection(contentWidth int) string {
 	case sectionTracks:
 		items := clampedTrackItems(o.results)
 		narrow := contentWidth < 60
-		durationW := 8
-		nameW := contentWidth * 35 / 100
+		nameW, artistW, albumW, durationW := o.trackColumnWidths(contentWidth, narrow)
 		if narrow {
-			artistW := contentWidth - indexW - nameW - durationW - 3
-			if artistW < 4 {
-				artistW = 4
-			}
 			for i, item := range items {
 				renderRow(i, o.cursorPos == i, []searchCol{
 					{item.Name, primaryStyle, nameW},
@@ -666,8 +798,6 @@ func (o *SearchOverlay) renderActiveSection(contentWidth int) string {
 				})
 			}
 		} else {
-			artistW := contentWidth * 25 / 100
-			albumW := contentWidth * 25 / 100
 			for i, item := range items {
 				renderRow(i, o.cursorPos == i, []searchCol{
 					{item.Name, primaryStyle, nameW},
@@ -680,10 +810,7 @@ func (o *SearchOverlay) renderActiveSection(contentWidth int) string {
 
 	case sectionArtists:
 		items := clampedArtistItems(o.results)
-		artistW := contentWidth - indexW - 1
-		if artistW < 4 {
-			artistW = 4
-		}
+		artistW := o.artistColumnWidths(contentWidth)
 		for i, item := range items {
 			renderRow(i, o.cursorPos == i, []searchCol{
 				{item.Name, primaryStyle, artistW},
@@ -692,26 +819,24 @@ func (o *SearchOverlay) renderActiveSection(contentWidth int) string {
 
 	case sectionAlbums:
 		items := clampedAlbumItems(o.results)
-		nameW := contentWidth * 35 / 100
-		artistW := contentWidth * 25 / 100
+		nameW, artistW, yearW, tracksW := o.albumColumnWidths(contentWidth)
 		for i, item := range items {
 			renderRow(i, o.cursorPos == i, []searchCol{
 				{item.Name, primaryStyle, nameW},
 				{item.Artist, secondaryStyle, artistW},
-				{item.ReleaseYear, tertiaryStyle, 6},
-				{fmt.Sprintf("%d", item.TotalTracks), tertiaryStyle, 8},
+				{item.ReleaseYear, tertiaryStyle, yearW},
+				{fmt.Sprintf("%d", item.TotalTracks), tertiaryStyle, tracksW},
 			})
 		}
 
 	case sectionPlaylists:
 		items := clampedPlaylistItems(o.results)
-		nameW := contentWidth * 40 / 100
-		ownerW := contentWidth * 30 / 100
+		nameW, ownerW, tracksW := o.playlistColumnWidths(contentWidth)
 		for i, item := range items {
 			renderRow(i, o.cursorPos == i, []searchCol{
 				{item.Name, primaryStyle, nameW},
 				{item.Owner, secondaryStyle, ownerW},
-				{fmt.Sprintf("%d", item.TrackCount), tertiaryStyle, 8},
+				{fmt.Sprintf("%d", item.TrackCount), tertiaryStyle, tracksW},
 			})
 		}
 	}
@@ -738,44 +863,28 @@ func (o *SearchOverlay) renderColumnHeaders(sec searchSection, contentWidth int)
 	var labels []string
 	var widths []int
 
+	// Use shared column width helpers so headers and row widths are always identical.
 	switch sec {
 	case sectionTracks:
-		durationW := 8
-		if contentWidth < 60 {
-			// Narrow: drop Album — 4 columns
-			nameW := contentWidth * 35 / 100
-			artistW := contentWidth - indexW - nameW - durationW - 3 // 3 gaps
-			if artistW < 4 {
-				artistW = 4
-			}
+		narrow := contentWidth < 60
+		nameW, artistW, albumW, durationW := o.trackColumnWidths(contentWidth, narrow)
+		if narrow {
 			labels = []string{"#", "Track", "Artist", "Duration"}
 			widths = []int{indexW, nameW, artistW, durationW}
 		} else {
-			// Wide: 5 columns
-			nameW := contentWidth * 35 / 100
-			artistW := contentWidth * 25 / 100
-			albumW := contentWidth * 25 / 100
 			labels = []string{"#", "Track", "Artist", "Album", "Duration"}
 			widths = []int{indexW, nameW, artistW, albumW, durationW}
 		}
 	case sectionArtists:
-		artistW := contentWidth - indexW - 1
-		if artistW < 4 {
-			artistW = 4
-		}
+		artistW := o.artistColumnWidths(contentWidth)
 		labels = []string{"#", "Artist"}
 		widths = []int{indexW, artistW}
 	case sectionAlbums:
-		yearW := 6
-		tracksW := 8
-		nameW := contentWidth * 35 / 100
-		artistW := contentWidth * 25 / 100
+		nameW, artistW, yearW, tracksW := o.albumColumnWidths(contentWidth)
 		labels = []string{"#", "Album", "Artist", "Year", "Tracks"}
 		widths = []int{indexW, nameW, artistW, yearW, tracksW}
 	case sectionPlaylists:
-		tracksW := 8
-		nameW := contentWidth * 40 / 100
-		ownerW := contentWidth * 30 / 100
+		nameW, ownerW, tracksW := o.playlistColumnWidths(contentWidth)
 		labels = []string{"#", "Playlist", "Owner", "Tracks"}
 		widths = []int{indexW, nameW, ownerW, tracksW}
 	default:

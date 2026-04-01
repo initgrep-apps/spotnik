@@ -165,6 +165,66 @@ func TestConvertSearchResult_ShortReleaseDate(t *testing.T) {
 	assert.Empty(t, searchMsg.Results.Albums[0].ReleaseYear, "short ReleaseDate should yield empty ReleaseYear")
 }
 
+// TestSearchPlaylist_UnmarshalJSON_TracksTotal verifies that SearchPlaylist.UnmarshalJSON
+// correctly extracts tracks.total from a realistic Spotify search response fixture.
+func TestSearchPlaylist_UnmarshalJSON_TracksTotal(t *testing.T) {
+	// Real Spotify search API response shape for a playlist item (truncated to essentials).
+	jsonData := []byte(`{
+		"id": "pl1",
+		"name": "Chill Vibes",
+		"uri": "spotify:playlist:pl1",
+		"owner": {"id": "user1", "display_name": "User"},
+		"tracks": {"href": "https://api.spotify.com/...", "total": 45}
+	}`)
+
+	var pl api.SearchPlaylist
+	require.NoError(t, json.Unmarshal(jsonData, &pl), "should unmarshal without error")
+	assert.Equal(t, 45, pl.TrackCount, "TrackCount should be extracted from nested tracks.total")
+}
+
+// TestConvertSearchResult_PlaylistTrackCount verifies the end-to-end path from API
+// response to UI type preserves the playlist TrackCount.
+func TestConvertSearchResult_PlaylistTrackCount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]interface{}{
+			"tracks":  map[string]interface{}{"items": []interface{}{}, "total": 0},
+			"artists": map[string]interface{}{"items": []interface{}{}, "total": 0},
+			"albums":  map[string]interface{}{"items": []interface{}{}, "total": 0},
+			"playlists": map[string]interface{}{
+				"items": []map[string]interface{}{
+					{
+						"id":    "pl1",
+						"name":  "My Playlist",
+						"uri":   "spotify:playlist:pl1",
+						"owner": map[string]interface{}{"id": "u1", "display_name": "Owner1"},
+						// Spotify search API returns tracks as a simplified object with href + total.
+						"tracks": map[string]interface{}{"href": "https://api.spotify.com/v1/playlists/pl1/tracks", "total": 99},
+					},
+				},
+				"total": 1,
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	searchMsg, ok := msg.(panes.SearchResultsMsg)
+	require.True(t, ok)
+	require.NotNil(t, searchMsg.Results)
+	require.Len(t, searchMsg.Results.Playlists, 1)
+	assert.Equal(t, 99, searchMsg.Results.Playlists[0].TrackCount,
+		"playlist TrackCount should be 99 from the nested tracks.total field in the API response")
+}
+
 // TestBuildSearchCmd_Limit10 verifies that buildSearchCmd passes limit=10 to the search API.
 func TestBuildSearchCmd_Limit10(t *testing.T) {
 	var capturedLimit string
