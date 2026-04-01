@@ -263,9 +263,10 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 
 // buildSearchCmd creates a command that calls the Spotify search API and delivers
 // pre-converted results via SearchResultsMsg so search.go never imports api/.
+// offset is the pagination offset (0 for the first page, multiples of 10 for subsequent pages).
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
-func (a *App) buildSearchCmd(query string) tea.Cmd {
+func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
@@ -277,6 +278,7 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			query,
 			[]string{"track", "artist", "album", "playlist"},
 			10,
+			offset,
 		)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
@@ -287,7 +289,61 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			}
 			return panes.SearchResultsMsg{Err: err}
 		}
-		return panes.SearchResultsMsg{Results: convertSearchResult(results)}
+		return panes.SearchResultsMsg{Results: convertSearchResult(results), IsPaged: false}
+	}
+}
+
+// buildSearchPageCmd creates a command that fetches a specific page of search results
+// for a single section (tracks, artists, albums, or playlists). The result is
+// delivered as a SearchResultsMsg with Section and Offset set so the overlay can
+// merge only the relevant section's results while preserving the others.
+// sectionTypeStrings maps each search section to the Spotify API type string used
+// when fetching a page for that section in isolation.
+var sectionTypeStrings = map[panes.SearchSection]string{
+	panes.SectionTracks:    "track",
+	panes.SectionArtists:   "artist",
+	panes.SectionAlbums:    "album",
+	panes.SectionPlaylists: "playlist",
+}
+
+func (a *App) buildSearchPageCmd(query string, offset int, section panes.SearchSection) tea.Cmd {
+	search := a.search
+	typeStr, ok := sectionTypeStrings[section]
+	if !ok {
+		// Unknown section — should never happen; return a no-op command.
+		return func() tea.Msg {
+			return panes.SearchResultsMsg{Section: section, Offset: offset, IsPaged: true}
+		}
+	}
+	return func() tea.Msg {
+		if search == nil {
+			return panes.SearchResultsMsg{Err: errNilClient, Section: section, Offset: offset, IsPaged: true}
+		}
+		// Search is user-triggered — bypass token bucket.
+		// Only request the single type relevant to this section for efficiency.
+		results, err := search.Search(
+			api.WithPriority(context.Background(), api.Interactive),
+			query,
+			[]string{typeStr},
+			10,
+			offset,
+		)
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.SearchResultsMsg{Err: err, Section: section, Offset: offset, IsPaged: true}
+		}
+		msg := panes.SearchResultsMsg{
+			Results: convertSearchResult(results),
+			Section: section,
+			Offset:  offset,
+			IsPaged: true,
+		}
+		return msg
 	}
 }
 

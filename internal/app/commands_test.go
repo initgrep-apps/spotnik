@@ -252,3 +252,118 @@ func TestBuildSearchCmd_Limit10(t *testing.T) {
 
 	assert.Equal(t, "10", capturedLimit, "buildSearchCmd should pass limit=10 to the search API")
 }
+
+// TestBuildSearchCmd_WithOffset verifies that buildSearchCmd passes the given offset
+// to the search API so paginated requests fetch the correct result page.
+func TestBuildSearchCmd_WithOffset(t *testing.T) {
+	var capturedOffset string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedOffset = r.URL.Query().Get("offset")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"tracks":{"items":[],"total":0},
+			"artists":{"items":[],"total":0},
+			"albums":{"items":[],"total":0},
+			"playlists":{"items":[],"total":0}
+		}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Directly call buildSearchCmd with offset=10 to simulate a page-2 request.
+	cmd := a.BuildSearchCmd("test", 10)
+	require.NotNil(t, cmd)
+	cmd() // execute to trigger HTTP call
+
+	assert.Equal(t, "10", capturedOffset, "buildSearchCmd should pass the given offset to the search API")
+}
+
+// TestApp_SearchPageRequestMsg_DispatchesSearch verifies that the root app dispatches
+// a search command carrying the correct offset when it receives a SearchPageRequestMsg.
+func TestApp_SearchPageRequestMsg_DispatchesSearch(t *testing.T) {
+	var capturedOffset string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedOffset = r.URL.Query().Get("offset")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"tracks":{"items":[],"total":0},
+			"artists":{"items":[],"total":0},
+			"albums":{"items":[],"total":0},
+			"playlists":{"items":[],"total":0}
+		}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Emit a page request for offset=10 (page 2).
+	_, cmd := a.Update(panes.SearchPageRequestMsg{
+		Query:   "test",
+		Offset:  10,
+		Section: panes.SectionTracks,
+	})
+	require.NotNil(t, cmd, "SearchPageRequestMsg should produce a search command")
+
+	msg := cmd() // execute to trigger HTTP call
+	searchMsg, ok := msg.(panes.SearchResultsMsg)
+	require.True(t, ok, "search command should return SearchResultsMsg, got %T", msg)
+	assert.Equal(t, 10, searchMsg.Offset, "SearchResultsMsg should carry the requested offset")
+	assert.Equal(t, panes.SectionTracks, searchMsg.Section, "SearchResultsMsg should carry the requesting section")
+	assert.Equal(t, "10", capturedOffset, "HTTP request should include offset=10")
+}
+
+// TestApp_SearchPageCmd_FetchesSingleType verifies that buildSearchPageCmd sends only
+// the type string for the requested section, not all four types.
+// This matches the spec requirement that "each type is paginated independently."
+func TestApp_SearchPageCmd_FetchesSingleType(t *testing.T) {
+	tests := []struct {
+		name     string
+		section  panes.SearchSection
+		wantType string
+	}{
+		{"tracks section", panes.SectionTracks, "track"},
+		{"artists section", panes.SectionArtists, "artist"},
+		{"albums section", panes.SectionAlbums, "album"},
+		{"playlists section", panes.SectionPlaylists, "playlist"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedType string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedType = r.URL.Query().Get("type")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{
+					"tracks":{"items":[],"total":0},
+					"artists":{"items":[],"total":0},
+					"albums":{"items":[],"total":0},
+					"playlists":{"items":[],"total":0}
+				}`))
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{}
+			a := app.New(cfg, app.AppOptions{})
+			a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+			_, cmd := a.Update(panes.SearchPageRequestMsg{
+				Query:   "test",
+				Offset:  10,
+				Section: tt.section,
+			})
+			require.NotNil(t, cmd)
+			cmd() // trigger HTTP call
+
+			assert.Equal(t, tt.wantType, capturedType,
+				"buildSearchPageCmd should fetch only the type for section %v", tt.section)
+		})
+	}
+}

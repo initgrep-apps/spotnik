@@ -25,11 +25,12 @@ func (s *SearchClient) SetHTTPClient(c *http.Client) {
 	s.setHTTPClient(c)
 }
 
-// Search calls GET /v1/search with the given query, types, and per-type limit.
+// Search calls GET /v1/search with the given query, types, per-type limit, and offset.
 // Always includes market=from_token per Spotify API recommendations.
 // types should contain one or more of: "track", "artist", "album", "playlist".
+// offset controls pagination (0-based, multiples of limit); use 0 for the first page.
 // Returns a fully populated SearchResult on success.
-func (s *SearchClient) Search(ctx context.Context, query string, types []string, limit int) (*SearchResult, error) {
+func (s *SearchClient) Search(ctx context.Context, query string, types []string, limit, offset int) (*SearchResult, error) {
 	req, err := s.newRequest(ctx, http.MethodGet, "/v1/search", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating search request: %w", err)
@@ -39,6 +40,7 @@ func (s *SearchClient) Search(ctx context.Context, query string, types []string,
 	q.Set("q", query)
 	q.Set("type", strings.Join(types, ","))
 	q.Set("limit", strconv.Itoa(limit))
+	q.Set("offset", strconv.Itoa(offset))
 	q.Set("market", "from_token")
 	req.URL.RawQuery = q.Encode()
 

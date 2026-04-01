@@ -384,4 +384,25 @@ type SearchPlaylistItem struct {
 type SearchResultsMsg struct {
 	Results *SearchResultData
 	Err     error
+	// Section identifies which section the results belong to when loading a paginated page.
+	// Zero value (SectionTracks = 0) is used for initial full-result loads.
+	Section SearchSection
+	// Offset is the pagination offset that was requested; used by SearchOverlay to
+	// update sectionOffsets[Section] after the page loads.
+	Offset int
+	// IsPaged distinguishes a paginated load from a new-query load. When true the
+	// overlay merges only the requesting section's results; when false it replaces
+	// all results and resets pagination state. This allows offset=0 to be used
+	// legitimately as the first page of a paginated back-navigation.
+	IsPaged bool
+}
+
+// SearchPageRequestMsg is emitted when the user navigates past the current page boundary.
+// The root app handles it by calling buildSearchCmd with the given offset.
+// Section identifies which section triggered the page request so the overlay can
+// store results for only that section.
+type SearchPageRequestMsg struct {
+	Query   string
+	Offset  int
+	Section SearchSection
 }

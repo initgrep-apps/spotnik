@@ -300,6 +300,13 @@ func (a *App) SetSearch(search api.SearchAPI) {
 	a.search = search
 }
 
+// BuildSearchCmd is an exported wrapper around buildSearchCmd for use in tests.
+// It allows test packages (package app_test) to construct paginated search commands
+// without accessing the unexported method directly.
+func (a *App) BuildSearchCmd(query string, offset int) tea.Cmd {
+	return a.buildSearchCmd(query, offset)
+}
+
 // SetDevices injects the Spotify Connect devices API client into the app.
 func (a *App) SetDevices(devices api.DevicesAPI) {
 	a.devices = devices
@@ -791,7 +798,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store writes belong in Update, not inside command builders.
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
-		return a, a.buildSearchCmd(m.Query)
+		return a, a.buildSearchCmd(m.Query, 0)
 
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
@@ -801,6 +808,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSearchResults(nil)
 		a.store.SetSearchQuery("")
 		return a, nil
+
+	case panes.SearchPageRequestMsg:
+		// User navigated past the page boundary — fetch the next/previous page for
+		// the given section. We do NOT reset SearchLoading or change the query;
+		// the overlay stays interactive while the page loads in the background.
+		return a, a.buildSearchPageCmd(m.Query, m.Offset, m.Section)
 
 	case panes.SearchResultsMsg:
 		// Search command returned — write error state to store, then deliver results to overlay.
