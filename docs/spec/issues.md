@@ -210,3 +210,19 @@ If the user changes a preference and quits within the 500ms debounce window, the
 **Feature:** 17-bootstrap
 
 When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` with no retry limit. On a permanently unwritable config file, this retries every 500ms indefinitely with only stderr logging (invisible in TUI). Consider capping retries and emitting a toast after N failures.
+
+---
+
+## Brittle overlay height test
+**Found:** 2026-04-01 | **Source:** PR #100 Review
+**Feature:** 18-search-redesign
+
+`TestOverlayHeight_Taller` in `search_test.go` counts newlines in rendered `View()` output to verify overlay height. This conflates rendered line count with logical height and may break across lipgloss versions. Consider testing the height formula directly (export `overlayHeight` for tests or use a test helper).
+
+---
+
+## Search AddToQueue missing TrackName
+**Found:** 2026-04-01 | **Source:** PR #100 Review
+**Feature:** 05-search (pre-existing)
+
+`handleAddToQueue()` in `search.go` emits `AddToQueueMsg{TrackURI: trackURI}` without setting `TrackName`. The status bar toast shows a blank track name. Fix: capture `items[o.cursorPos].Name` and pass it as `TrackName`.

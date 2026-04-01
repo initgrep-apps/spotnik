@@ -1,7 +1,7 @@
 ---
 title: "Enrich Search Data Types & Widen Overlay"
 feature: 18-search-redesign
-status: open
+status: done
 ---
 
 ## Background
