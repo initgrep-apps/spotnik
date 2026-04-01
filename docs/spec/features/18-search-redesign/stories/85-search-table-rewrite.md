@@ -1,7 +1,7 @@
 ---
 title: "Rewrite Search Overlay Tables to Use components.Table"
 feature: 18-search-redesign
-status: open
+status: done
 ---
 
 ## Background
@@ -325,10 +325,10 @@ The overlay `View()` structure stays similar but the active section is now rende
 by `components.Table.View()` instead of manual string construction:
 
 ```
-╭─ Search ─────────────────────── Enter play  Esc close ──╮
+╭─ Search ─────────────────────── Enter play  Esc close ─── ─╮
 │ > query                                                   │  ← textinput
 │ ·······················                                   │  ← dot separator
-│  ▪ Tracks 14   Artists 5   Albums 39   Playlists 12      │  ← renderTabBar (manual, kept)
+│  ▪ Tracks 14   Artists 5   Albums 39   Playlists 12       │  ← renderTabBar (manual, kept)
 │ ──────────────────────────────────────────────            │  ← tab separator (manual, kept)
 │  [components.Table.View() for active section]             │  ← bubble-table handles headers,
 │  # Album         Artist         Year  Tracks              │     rows, selection, pagination
@@ -337,9 +337,9 @@ by `components.Table.View()` instead of manual string construction:
 │  ...                                                      │
 │                                                 1/4       │  ← bubble-table page indicator
 │ ──────────────────────────────────────────────            │  ← help bar separator
-│  Tab next section  ↑↓ navigate  Enter play  Esc close    │  ← help bar with KeyHint colors
+│  Tab next section  ↑↓ navigate  Enter play  Esc close     │  ← help bar with KeyHint colors
 │                                              31-39 of 39  │  ← range indicator (right-aligned)
-╰──────────────────────────────────────────────────────────╯
+╰───────────────────────────────────────────────────────────╯
 ```
 
 The `renderResults` method simplifies significantly: tab bar + tab separator + table

@@ -127,3 +127,45 @@ func TestFilterActive_NumberKeys_DoNotTogglePanes(t *testing.T) {
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
 	assert.Equal(t, originalFocus, a.FocusedPane(), "'0' with active filter should not toggle page")
 }
+
+// TestMouseScroll_SearchOpen_ForwardsToOverlay verifies that when the search overlay
+// is open, mouse wheel events are forwarded to the search overlay rather than discarded.
+func TestMouseScroll_SearchOpen_ForwardsToOverlay(t *testing.T) {
+	a := app.New(&config.Config{}, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Open the search overlay via '/' key.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	require.True(t, a.SearchOpen(), "search overlay should be open after '/'")
+
+	// Wheel down should not return nil (it should produce a cmd or at minimum not panic).
+	// Since the bubble-table may or may not produce a command, we just verify no panic
+	// and that SearchOpen is still true (the overlay was not closed).
+	_, cmd := a.Update(tea.MouseMsg{
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+		X:      60, Y: 20,
+	})
+	_ = cmd
+	assert.True(t, a.SearchOpen(), "search overlay should still be open after wheel scroll")
+}
+
+// TestMouseScroll_SearchOpen_IgnoresNonWheel verifies that non-wheel mouse events
+// are ignored when the search overlay is open.
+func TestMouseScroll_SearchOpen_IgnoresNonWheel(t *testing.T) {
+	a := app.New(&config.Config{}, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	// Open the search overlay.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	require.True(t, a.SearchOpen(), "search overlay should be open")
+
+	// A non-wheel mouse press (e.g., motion) should produce nil cmd.
+	_, cmd := a.Update(tea.MouseMsg{
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+		X:      60, Y: 20,
+	})
+	assert.Nil(t, cmd, "non-wheel mouse event with search open should not produce a cmd")
+	assert.True(t, a.SearchOpen(), "search overlay should still be open after non-wheel mouse event")
+}

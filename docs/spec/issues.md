@@ -242,3 +242,16 @@ All 4 section column width helpers have sum tests except Artists. Add `TestArtis
 **Feature:** 18-search-redesign
 
 `TestContentWidth_NoDoubleSubtraction` calls `RenderActiveSection(86)` directly instead of `View()`. The actual double-subtraction fix is in `renderResults()` line 467, which is only reached via `View()`. A regression reintroducing the bug would not be caught. Should call `View()` on a fixed-size terminal and verify content width.
+
+---
+
+## Search Overlay: Prefetch test coverage gaps
+**Found:** 2026-04-01 | **Source:** PR #104 Review
+**Feature:** 18-search-redesign
+
+Minor test coverage gaps identified during external review:
+
+1. Prefetch tests only exercise sectionTracks — no coverage for artists/albums/playlists sections
+2. No multi-page accumulation test (3+ pages) to verify midpoint calculation with bufLen > 20
+3. Mouse scroll-up forwarding not tested (only wheel-down tested)
+4. Page indicator test assertions are loose — use exact string matching

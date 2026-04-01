@@ -6,7 +6,9 @@
 // Messages that carry data use domain/ types so that ui/ never imports api/.
 package panes
 
-import "github.com/initgrep-apps/spotnik/internal/domain"
+import (
+	"github.com/initgrep-apps/spotnik/internal/domain"
+)
 
 // TickMsg is sent every second by the polling tick loop.
 // It drives both progress interpolation and playback state refresh.
@@ -316,10 +318,10 @@ type SearchClearedMsg struct{}
 // It carries only the fields the overlay needs for rendering, pre-converted
 // from domain.SearchResult in commands.go so that search.go never imports api/.
 type SearchResultData struct {
-	Tracks    []SearchTrackItem
-	Artists   []SearchArtistItem
-	Albums    []SearchAlbumItem
-	Playlists []SearchPlaylistItem
+	Tracks    []domain.SearchTrackItem
+	Artists   []domain.SearchArtistItem
+	Albums    []domain.SearchAlbumItem
+	Playlists []domain.SearchPlaylistItem
 
 	// TotalTracks is the total number of matching tracks across all pages.
 	TotalTracks int
@@ -331,53 +333,18 @@ type SearchResultData struct {
 	TotalPlaylists int
 }
 
-// SearchTrackItem holds the display fields for a single track search result.
-type SearchTrackItem struct {
-	// URI is the Spotify track URI used for playback and queue commands.
-	URI string
-	// Name is the track display name.
-	Name string
-	// Artist is the pre-formatted first artist name.
-	Artist string
-	// Album is the album name for this track.
-	Album string
-	// DurationMs is the track duration in milliseconds.
-	DurationMs int
-}
+// SearchTrackItem is the UI-facing track item type, aliased from domain for zero-cost reuse.
+// Defined here for backward compat — panes code can use panes.SearchTrackItem directly.
+type SearchTrackItem = domain.SearchTrackItem
 
-// SearchArtistItem holds the display fields for a single artist search result.
-type SearchArtistItem struct {
-	// URI is the Spotify artist URI used for playback context.
-	URI string
-	// Name is the artist display name.
-	Name string
-}
+// SearchArtistItem is the UI-facing artist item type, aliased from domain.
+type SearchArtistItem = domain.SearchArtistItem
 
-// SearchAlbumItem holds the display fields for a single album search result.
-type SearchAlbumItem struct {
-	// URI is the Spotify album URI used for playback context.
-	URI string
-	// Name is the album display name.
-	Name string
-	// Artist is the pre-formatted first artist name.
-	Artist string
-	// ReleaseYear is the 4-character year extracted from the release date string.
-	ReleaseYear string
-	// TotalTracks is the total number of tracks in the album.
-	TotalTracks int
-}
+// SearchAlbumItem is the UI-facing album item type, aliased from domain.
+type SearchAlbumItem = domain.SearchAlbumItem
 
-// SearchPlaylistItem holds the display fields for a single playlist search result.
-type SearchPlaylistItem struct {
-	// URI is the Spotify playlist URI used for playback context.
-	URI string
-	// Name is the playlist display name.
-	Name string
-	// Owner is the pre-formatted playlist owner display name.
-	Owner string
-	// TrackCount is the total number of tracks in the playlist.
-	TrackCount int
-}
+// SearchPlaylistItem is the UI-facing playlist item type, aliased from domain.
+type SearchPlaylistItem = domain.SearchPlaylistItem
 
 // SearchResultsMsg is sent by the root app model after a search completes.
 // Results carries the pre-converted UI data; Err is non-nil if the search failed.
