@@ -59,6 +59,7 @@ func applySearchResultsToStore(t *testing.T, s *state.Store, o *panes.SearchOver
 	}
 	if !msg.IsPaged {
 		s.ClearSearchBuffers()
+		s.SetSearchBufQuery(s.SearchQuery())
 		s.AppendSearchTracks(msg.Results.Tracks)
 		s.AppendSearchArtists(msg.Results.Artists)
 		s.AppendSearchAlbums(msg.Results.Albums)
@@ -137,6 +138,7 @@ func newTestSearchOverlayWithResults() (*panes.SearchOverlay, *state.Store) {
 	// Populate store then deliver msg — mirrors what app.go's SearchResultsMsg handler does.
 	data := sampleSearchResultData()
 	s.ClearSearchBuffers()
+	s.SetSearchBufQuery(s.SearchQuery())
 	s.AppendSearchTracks(data.Tracks)
 	s.AppendSearchArtists(data.Artists)
 	s.AppendSearchAlbums(data.Albums)

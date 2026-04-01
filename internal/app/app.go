@@ -813,6 +813,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// User navigated past the page boundary — fetch the next/previous page for
 		// the given section. We do NOT reset SearchLoading or change the query;
 		// the overlay stays interactive while the page loads in the background.
+		// Mark the offset as in-flight immediately so that checkPrefetch does not
+		// fire a duplicate request while the command is executing.
+		a.store.MarkSearchOffsetFetched(int(m.Section), m.Offset)
 		return a, a.buildSearchPageCmd(m.Query, m.Offset, m.Section)
 
 	case panes.SearchResultsMsg:
@@ -837,7 +840,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Results != nil {
 			if !m.IsPaged {
 				// New query — clear all buffers and load the first page for all sections.
+				// ClearSearchBuffers also resets searchBufQuery; record the current query so
+				// callers can detect whether a page result belongs to the current query.
 				a.store.ClearSearchBuffers()
+				a.store.SetSearchBufQuery(a.store.SearchQuery())
 				a.store.AppendSearchTracks(m.Results.Tracks)
 				a.store.AppendSearchArtists(m.Results.Artists)
 				a.store.AppendSearchAlbums(m.Results.Albums)
