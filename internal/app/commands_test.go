@@ -281,3 +281,40 @@ func TestBuildSearchCmd_WithOffset(t *testing.T) {
 
 	assert.Equal(t, "10", capturedOffset, "buildSearchCmd should pass the given offset to the search API")
 }
+
+// TestApp_SearchPageRequestMsg_DispatchesSearch verifies that the root app dispatches
+// a search command carrying the correct offset when it receives a SearchPageRequestMsg.
+func TestApp_SearchPageRequestMsg_DispatchesSearch(t *testing.T) {
+	var capturedOffset string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedOffset = r.URL.Query().Get("offset")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"tracks":{"items":[],"total":0},
+			"artists":{"items":[],"total":0},
+			"albums":{"items":[],"total":0},
+			"playlists":{"items":[],"total":0}
+		}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Emit a page request for offset=10 (page 2).
+	_, cmd := a.Update(panes.SearchPageRequestMsg{
+		Query:   "test",
+		Offset:  10,
+		Section: panes.SectionTracks,
+	})
+	require.NotNil(t, cmd, "SearchPageRequestMsg should produce a search command")
+
+	msg := cmd() // execute to trigger HTTP call
+	searchMsg, ok := msg.(panes.SearchResultsMsg)
+	require.True(t, ok, "search command should return SearchResultsMsg, got %T", msg)
+	assert.Equal(t, 10, searchMsg.Offset, "SearchResultsMsg should carry the requested offset")
+	assert.Equal(t, panes.SectionTracks, searchMsg.Section, "SearchResultsMsg should carry the requesting section")
+	assert.Equal(t, "10", capturedOffset, "HTTP request should include offset=10")
+}

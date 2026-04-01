@@ -293,6 +293,42 @@ func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 	}
 }
 
+// buildSearchPageCmd creates a command that fetches a specific page of search results
+// for a single section (tracks, artists, albums, or playlists). The result is
+// delivered as a SearchResultsMsg with Section and Offset set so the overlay can
+// merge only the relevant section's results while preserving the others.
+func (a *App) buildSearchPageCmd(query string, offset int, section panes.SearchSection) tea.Cmd {
+	search := a.search
+	return func() tea.Msg {
+		if search == nil {
+			return panes.SearchResultsMsg{Err: errNilClient, Section: section, Offset: offset}
+		}
+		// Search is user-triggered — bypass token bucket.
+		results, err := search.Search(
+			api.WithPriority(context.Background(), api.Interactive),
+			query,
+			[]string{"track", "artist", "album", "playlist"},
+			10,
+			offset,
+		)
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.SearchResultsMsg{Err: err, Section: section, Offset: offset}
+		}
+		msg := panes.SearchResultsMsg{
+			Results: convertSearchResult(results),
+			Section: section,
+			Offset:  offset,
+		}
+		return msg
+	}
+}
+
 // convertSearchResult converts *api.SearchResult (= *domain.SearchResult) to *panes.SearchResultData,
 // extracting only the fields the UI needs. This is the sole place where search
 // types cross the app/ui boundary.

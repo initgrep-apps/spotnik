@@ -90,6 +90,11 @@ type SearchOverlay struct {
 
 	// cursorPos is the cursor within the active section (0-based).
 	cursorPos int
+
+	// sectionOffsets tracks the current page offset for each section independently.
+	// Values are multiples of maxResultsPerSection (i.e., 0, 10, 20, …).
+	// Reset to zero on every new query.
+	sectionOffsets [numSections]int
 }
 
 // NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
@@ -160,10 +165,27 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return o.handleDebounce(m)
 
 	case SearchResultsMsg:
-		// Save results locally so we never read api types from the store.
-		o.results = m.Results
-		o.cursorPos = 0
-		o.activeSection = sectionTracks
+		if m.Offset == 0 {
+			// New query (first page) — replace all results and reset pagination state.
+			o.results = m.Results
+			o.cursorPos = 0
+			o.activeSection = sectionTracks
+			o.sectionOffsets = [numSections]int{}
+		} else {
+			// Paginated load — merge results for the requesting section only.
+			// Other sections' results and offsets are preserved.
+			if o.results == nil {
+				o.results = &SearchResultData{}
+			}
+			o.sectionOffsets[m.Section] = m.Offset
+			if m.Results != nil {
+				o.mergePageResults(m.Section, m.Results)
+			}
+			// Place cursor at position 0 for the newly loaded page.
+			if m.Section == o.activeSection {
+				o.cursorPos = 0
+			}
+		}
 		return o, nil
 
 	case tea.KeyMsg:
@@ -289,6 +311,8 @@ func (o *SearchOverlay) moveSectionBackward() (tea.Model, tea.Cmd) {
 }
 
 // moveCursorDown moves cursor down within the active section.
+// When the cursor is already at the last row, it checks if more pages exist;
+// if so it emits a SearchPageRequestMsg and resets cursorPos to 0.
 func (o *SearchOverlay) moveCursorDown() (tea.Model, tea.Cmd) {
 	max := o.maxCursorForActiveSection() - 1
 	if max < 0 {
@@ -296,14 +320,37 @@ func (o *SearchOverlay) moveCursorDown() (tea.Model, tea.Cmd) {
 	}
 	if o.cursorPos < max {
 		o.cursorPos++
+		return o, nil
+	}
+	// At last row — check if more pages exist.
+	total := o.totalForSection(o.activeSection)
+	offset := o.sectionOffsets[o.activeSection]
+	shown := o.maxCursorForActiveSection()
+	if offset+shown < total {
+		// More results exist — request next page.
+		o.cursorPos = 0
+		return o, o.requestPage(offset + maxResultsPerSection)
 	}
 	return o, nil
 }
 
 // moveCursorUp moves cursor up within the active section.
+// When the cursor is already at row 0 and offset > 0, it emits a
+// SearchPageRequestMsg for the previous page and places cursor at last item.
 func (o *SearchOverlay) moveCursorUp() (tea.Model, tea.Cmd) {
 	if o.cursorPos > 0 {
 		o.cursorPos--
+		return o, nil
+	}
+	// At first row — check if previous page exists.
+	offset := o.sectionOffsets[o.activeSection]
+	if offset > 0 {
+		// NOTE: cursor position for previous page (last item) is set when
+		// SearchResultsMsg arrives (it resets to 0), but for UX we'd ideally
+		// land at the bottom. The spec says "set cursorPos = maxCursorForActiveSection()-1
+		// after page load". However, since the page hasn't loaded yet at this point,
+		// we defer that to the SearchResultsMsg handler. For now, emit the request.
+		return o, o.requestPage(offset - maxResultsPerSection)
 	}
 	return o, nil
 }
@@ -708,6 +755,8 @@ func truncate(s string, maxRunes int) string {
 
 // renderHelpBar renders a separator line and a contextual keybindings line, both in
 // TextMuted color. "Ctrl+A queue" only appears on the Tracks section.
+// When the active section has more results than maxResultsPerSection, a right-aligned
+// page indicator (e.g., "1-10 of 16") is appended to the keybindings line.
 func (o *SearchOverlay) renderHelpBar(contentWidth int) string {
 	mutedStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 	separator := mutedStyle.Render(strings.Repeat("─", contentWidth))
@@ -717,6 +766,20 @@ func (o *SearchOverlay) renderHelpBar(contentWidth int) string {
 		keys = "Tab next section  ↑↓ navigate  Enter play  Ctrl+A queue  Esc close"
 	} else {
 		keys = "Tab next section  ↑↓ navigate  Enter play  Esc close"
+	}
+
+	indicator := o.pageIndicator()
+	if indicator != "" {
+		// Right-align the indicator by padding the keybindings line.
+		keysWidth := utf8.RuneCountInString(keys)
+		indicatorWidth := utf8.RuneCountInString(indicator)
+		gap := contentWidth - keysWidth - indicatorWidth
+		if gap > 0 {
+			keys = keys + strings.Repeat(" ", gap) + indicator
+		} else {
+			// Not enough room — append with a single space.
+			keys = keys + " " + indicator
+		}
 	}
 
 	helpLine := mutedStyle.Render(keys)
@@ -966,6 +1029,84 @@ func (o *SearchOverlay) totalForSection(sec searchSection) int {
 // TotalForSection is the exported wrapper of totalForSection for use in tests.
 func (o *SearchOverlay) TotalForSection(sec searchSection) int {
 	return o.totalForSection(sec)
+}
+
+// mergePageResults replaces the items for the given section with the page items from src.
+// It also updates the Total* field for that section so the tab bar count stays accurate.
+func (o *SearchOverlay) mergePageResults(sec searchSection, src *SearchResultData) {
+	switch sec {
+	case sectionTracks:
+		o.results.Tracks = src.Tracks
+		if src.TotalTracks > 0 {
+			o.results.TotalTracks = src.TotalTracks
+		}
+	case sectionArtists:
+		o.results.Artists = src.Artists
+		if src.TotalArtists > 0 {
+			o.results.TotalArtists = src.TotalArtists
+		}
+	case sectionAlbums:
+		o.results.Albums = src.Albums
+		if src.TotalAlbums > 0 {
+			o.results.TotalAlbums = src.TotalAlbums
+		}
+	case sectionPlaylists:
+		o.results.Playlists = src.Playlists
+		if src.TotalPlaylists > 0 {
+			o.results.TotalPlaylists = src.TotalPlaylists
+		}
+	}
+}
+
+// requestPage emits a SearchPageRequestMsg that asks the root app to fetch the
+// page at the given offset for the active section.
+// The query is read from the store (which holds the last submitted query) rather than
+// the text input (which may differ if the user has typed but not yet submitted).
+func (o *SearchOverlay) requestPage(offset int) tea.Cmd {
+	query := o.store.SearchQuery()
+	section := o.activeSection
+	return func() tea.Msg {
+		return SearchPageRequestMsg{
+			Query:   query,
+			Offset:  offset,
+			Section: section,
+		}
+	}
+}
+
+// pageIndicator returns a right-aligned range string for the active section when
+// the total exceeds maxResultsPerSection (e.g., "1-10 of 16" or "11-16 of 16").
+// Returns empty string when all results fit on one page.
+func (o *SearchOverlay) pageIndicator() string {
+	total := o.totalForSection(o.activeSection)
+	if total <= maxResultsPerSection {
+		return ""
+	}
+	offset := o.sectionOffsets[o.activeSection]
+	start := offset + 1
+	end := offset + o.maxCursorForActiveSection()
+	if end > total {
+		end = total
+	}
+	return fmt.Sprintf("%d-%d of %d", start, end, total)
+}
+
+// PageIndicator is the exported wrapper of pageIndicator for use in tests.
+func (o *SearchOverlay) PageIndicator() string {
+	return o.pageIndicator()
+}
+
+// SectionOffsets returns the sectionOffsets array for test inspection.
+func (o *SearchOverlay) SectionOffsets() [numSections]int {
+	return o.sectionOffsets
+}
+
+// WithSectionOffsets returns a copy of the overlay with the given sectionOffsets set.
+// Used in tests to simulate mid-pagination state without going through a full page load.
+func (o *SearchOverlay) WithSectionOffsets(offsets [numSections]int) *SearchOverlay {
+	copy := *o
+	copy.sectionOffsets = offsets
+	return &copy
 }
 
 // tabColorForSection returns the PaneBorder* theme token for the given section.

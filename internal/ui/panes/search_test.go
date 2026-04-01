@@ -1344,6 +1344,232 @@ func TestSearchOverlay_HelpBarAtBottom_FewResults(t *testing.T) {
 		"help bar should be in the bottom quarter even with few results (got line %d of %d)", helpBarIdx, totalLines)
 }
 
+// --- Story 84: Pagination state and cursor boundary ---
+
+// TestSearchOverlay_NewQuery_ResetsOffsets verifies that receiving a SearchResultsMsg
+// with a new query (Offset == 0) resets all sectionOffsets to 0.
+func TestSearchOverlay_NewQuery_ResetsOffsets(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Simulate that offsets are non-zero from a prior page navigation.
+	o = o.WithSectionOffsets([4]int{10, 0, 20, 0})
+
+	// Deliver a SearchResultsMsg with Offset==0 (new query, page 1).
+	msg := panes.SearchResultsMsg{Results: sampleSearchResultData(), Offset: 0}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+
+	// All offsets should be reset to 0.
+	offsets := o.SectionOffsets()
+	for i, off := range offsets {
+		assert.Equal(t, 0, off, "sectionOffsets[%d] should be reset to 0 on new query", i)
+	}
+}
+
+// TestMoveCursorDown_LastRow_EmitsPageRequest verifies that moving the cursor down
+// when at the last row and more pages exist emits a SearchPageRequestMsg.
+func TestMoveCursorDown_LastRow_EmitsPageRequest(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	// Set up: 2 tracks shown, total=100 → more pages exist.
+	// cursorPos starts at 0 (from SearchResultsMsg handler), move to last item.
+	// sampleSearchResultData has 2 tracks.
+	o, _ = sendKey(t, o, "down") // cursor 0→1 (last)
+
+	// Now press down again — should emit page request.
+	o, cmd := sendKey(t, o, "down")
+	_ = o
+	require.NotNil(t, cmd, "down at last row with more pages should return a command")
+
+	msg := cmd()
+	pageReq, ok := msg.(panes.SearchPageRequestMsg)
+	require.True(t, ok, "command should produce SearchPageRequestMsg, got %T", msg)
+	assert.Equal(t, "blinding", pageReq.Query)
+	assert.Equal(t, 10, pageReq.Offset, "page request offset should be maxResultsPerSection (10)")
+	assert.Equal(t, panes.SectionTracks, pageReq.Section)
+}
+
+// TestMoveCursorDown_LastRow_NoMorePages_NoEmit verifies that moving down at the last
+// row when no more pages exist does not emit a page request.
+func TestMoveCursorDown_LastRow_NoMorePages_NoEmit(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	// Override results: total matches item count (no more pages).
+	data := sampleSearchResultData()
+	data.TotalTracks = len(data.Tracks) // exact match — no more pages
+	msg := panes.SearchResultsMsg{Results: data, Offset: 0}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+
+	// Move to last item.
+	o, _ = sendKey(t, o, "down") // 0→1
+
+	// Press down at last row — no more pages, so no page request.
+	o, cmd := sendKey(t, o, "down")
+	_ = o
+	if cmd == nil {
+		return // pass: no cmd at all
+	}
+	// cmd might be non-nil if it does something else; ensure it's NOT a page request.
+	result := cmd()
+	_, isPageReq := result.(panes.SearchPageRequestMsg)
+	assert.False(t, isPageReq, "should not emit page request when no more pages exist")
+}
+
+// TestMoveCursorUp_FirstRow_EmitsPreviousPageRequest verifies that moving up at row 0
+// when offset > 0 emits a page request for the previous page.
+func TestMoveCursorUp_FirstRow_EmitsPreviousPageRequest(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	// Simulate being on page 2: inject offset=10 into the overlay.
+	o = o.WithSectionOffsets([4]int{10, 0, 0, 0})
+
+	// Press up at row 0 — should emit page request for offset 0 (previous page).
+	o, cmd := sendKey(t, o, "up")
+	_ = o
+	require.NotNil(t, cmd, "up at first row with offset>0 should return a command")
+
+	msg := cmd()
+	pageReq, ok := msg.(panes.SearchPageRequestMsg)
+	require.True(t, ok, "command should produce SearchPageRequestMsg, got %T", msg)
+	assert.Equal(t, "blinding", pageReq.Query)
+	assert.Equal(t, 0, pageReq.Offset, "going back should request offset 10-10=0")
+	assert.Equal(t, panes.SectionTracks, pageReq.Section)
+}
+
+// TestMoveCursorUp_FirstRow_NoOffset_NoEmit verifies that moving up at row 0
+// when offset==0 (already on first page) does not emit a page request.
+func TestMoveCursorUp_FirstRow_NoOffset_NoEmit(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	// offset defaults to 0 (first page), cursorPos starts at 0.
+	o, cmd := sendKey(t, o, "up")
+	_ = o
+	if cmd == nil {
+		return // pass: no cmd
+	}
+	result := cmd()
+	_, isPageReq := result.(panes.SearchPageRequestMsg)
+	assert.False(t, isPageReq, "should not emit page request when already on first page")
+}
+
+// TestSearchOverlay_TabSwitch_PreservesPageOffset verifies that switching sections
+// via Tab does not reset sectionOffsets (each section retains its own page position).
+func TestSearchOverlay_TabSwitch_PreservesPageOffset(t *testing.T) {
+	o := newTestSearchOverlayWithResultsCustom([4]int{10, 20, 0, 5})
+
+	// Switch to Artists section via Tab.
+	o, _ = sendKey(t, o, "tab")
+	assert.Equal(t, panes.SectionArtists, o.ActiveSection(), "should be on Artists after Tab")
+
+	// Offsets should be unchanged.
+	offsets := o.SectionOffsets()
+	assert.Equal(t, 10, offsets[panes.SectionTracks], "tracks offset should be preserved")
+	assert.Equal(t, 20, offsets[panes.SectionArtists], "artists offset should be preserved")
+	assert.Equal(t, 0, offsets[panes.SectionAlbums], "albums offset should be preserved")
+	assert.Equal(t, 5, offsets[panes.SectionPlaylists], "playlists offset should be preserved")
+}
+
+// --- Story 84: Page indicator ---
+
+// TestPageIndicator_ShowsRange_WhenTotalExceeds10 verifies that pageIndicator returns
+// a non-empty range string when the total for the active section exceeds maxResultsPerSection.
+func TestPageIndicator_ShowsRange_WhenTotalExceeds10(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+	// sampleSearchResultData has TotalTracks=100, 2 items — total > 10 ⇒ indicator shown.
+
+	indicator := o.PageIndicator()
+	assert.NotEmpty(t, indicator, "page indicator should be non-empty when total > 10")
+	assert.Contains(t, indicator, "of 100", "indicator should show total")
+}
+
+// TestPageIndicator_NoIndicator_WhenTotalUnder10 verifies that pageIndicator returns
+// empty string when the active section has total <= 10 (all results fit on one page).
+func TestPageIndicator_NoIndicator_WhenTotalUnder10(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	data := &panes.SearchResultData{
+		Tracks:       []panes.SearchTrackItem{{Name: "A"}, {Name: "B"}},
+		TotalTracks:  2, // fits on one page
+		TotalArtists: 0, TotalAlbums: 0, TotalPlaylists: 0,
+	}
+	msg := panes.SearchResultsMsg{Results: data, Offset: 0}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+
+	indicator := o.PageIndicator()
+	assert.Empty(t, indicator, "page indicator should be empty when total <= 10")
+}
+
+// TestPageIndicator_Page2 verifies that on page 2 (offset=10) with total=16,
+// pageIndicator returns "11-16 of 16".
+func TestPageIndicator_Page2(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	// Simulate page 2: deliver a page-2 SearchResultsMsg (Offset=10) with 6 items shown.
+	page2Items := make([]panes.SearchTrackItem, 6)
+	for i := range page2Items {
+		page2Items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", i+11)}
+	}
+	data := &panes.SearchResultData{
+		Tracks:      page2Items,
+		TotalTracks: 16,
+	}
+	msg := panes.SearchResultsMsg{
+		Results: data,
+		Section: panes.SectionTracks,
+		Offset:  10,
+	}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+
+	indicator := o.PageIndicator()
+	assert.Equal(t, "11-16 of 16", indicator, "page 2 with 6 items of 16 should show '11-16 of 16'")
+}
+
+// TestRenderHelpBar_ShowsPageIndicator_WhenTotalExceeds10 verifies that renderHelpBar
+// appends the page indicator to the right side when total > maxResultsPerSection.
+func TestRenderHelpBar_ShowsPageIndicator_WhenTotalExceeds10(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+	// sampleSearchResultData has TotalTracks=100, so indicator should appear.
+
+	helpBar := o.RenderHelpBar(80)
+	assert.Contains(t, helpBar, "of 100", "help bar should include page indicator when total > 10")
+}
+
+// TestRenderHelpBar_NoPageIndicator_WhenTotalUnder10 verifies that renderHelpBar
+// does not include a page indicator when total <= maxResultsPerSection.
+func TestRenderHelpBar_NoPageIndicator_WhenTotalUnder10(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	data := &panes.SearchResultData{
+		Tracks:      []panes.SearchTrackItem{{Name: "A"}},
+		TotalTracks: 5, // under 10
+	}
+	msg := panes.SearchResultsMsg{Results: data, Offset: 0}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+
+	helpBar := o.RenderHelpBar(80)
+	assert.NotContains(t, helpBar, "of 5", "help bar should NOT include page indicator when total <= 10")
+}
+
+// --- Story 84: helper constructors ---
+
+// newTestSearchOverlayWithResultsCustom creates a SearchOverlay with results and
+// pre-set sectionOffsets for testing pagination state.
+func newTestSearchOverlayWithResultsCustom(offsets [4]int) *panes.SearchOverlay {
+	o, _ := newTestSearchOverlayWithResults()
+	return o.WithSectionOffsets(offsets)
+}
+
 // TestTabColorForSection_ReturnsCorrectTokens verifies that each section maps to its
 // expected PaneBorder* theme token (as a non-empty color).
 func TestTabColorForSection_ReturnsCorrectTokens(t *testing.T) {

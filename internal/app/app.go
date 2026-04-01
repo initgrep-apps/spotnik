@@ -809,6 +809,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSearchQuery("")
 		return a, nil
 
+	case panes.SearchPageRequestMsg:
+		// User navigated past the page boundary — fetch the next/previous page for
+		// the given section. We do NOT reset SearchLoading or change the query;
+		// the overlay stays interactive while the page loads in the background.
+		return a, a.buildSearchPageCmd(m.Query, m.Offset, m.Section)
+
 	case panes.SearchResultsMsg:
 		// Search command returned — write error state to store, then deliver results to overlay.
 		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
