@@ -1,7 +1,7 @@
 ---
 title: "Wire Preset & Visualizer Preference Persistence"
 feature: 17-bootstrap
-status: open
+status: done
 ---
 
 ## Background
