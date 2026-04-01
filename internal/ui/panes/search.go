@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -81,20 +81,27 @@ type SearchOverlay struct {
 	width   int
 	height  int
 
-	// results holds the most recent search results delivered via SearchResultsMsg.
-	// This avoids reading domain.SearchResult from the store, keeping the ui/api boundary clean.
-	results *SearchResultData
-
 	// activeSection is which section (Tracks/Artists/Albums/Playlists) has focus.
 	activeSection searchSection
 
-	// cursorPos is the cursor within the active section (0-based).
-	cursorPos int
+	// tables holds one components.Table per section. They manage cursor position,
+	// page size, and row rendering. Replaces the former manual cursor/row rendering.
+	tables [numSections]*components.Table
 
-	// sectionOffsets tracks the current page offset for each section independently.
-	// Values are multiples of maxResultsPerSection (i.e., 0, 10, 20, …).
-	// Reset to zero on every new query.
-	sectionOffsets [numSections]int
+	// Accumulated result buffers — pages appended as they load.
+	// These replace the former single-page results *SearchResultData field.
+	bufTracks    []SearchTrackItem
+	bufArtists   []SearchArtistItem
+	bufAlbums    []SearchAlbumItem
+	bufPlaylists []SearchPlaylistItem
+
+	// totals holds the API-reported total per section (from SearchResultsMsg).
+	// Used for page indicator and prefetch decisions.
+	totals [numSections]int
+
+	// narrowTracks tracks whether the tracks table was last built in narrow mode.
+	// Used to detect width changes that require rebuilding the tracks table.
+	narrowTracks bool
 }
 
 // NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
@@ -108,14 +115,210 @@ func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
 
-	return &SearchOverlay{
+	o := &SearchOverlay{
 		store:         store,
 		theme:         t,
 		input:         ti,
 		spinner:       sp,
 		activeSection: sectionTracks,
-		cursorPos:     0,
 	}
+	o.buildAllTables(false)
+	return o
+}
+
+// buildAllTables constructs or replaces all 4 components.Table instances.
+// narrowTracks controls whether the tracks table is built without the Album column.
+func (o *SearchOverlay) buildAllTables(narrowTracks bool) {
+	o.narrowTracks = narrowTracks
+	o.tables[sectionTracks] = components.NewTable(components.TableConfig{
+		Columns:      o.trackColumns(narrowTracks),
+		Theme:        o.theme,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+		HeaderColor:  o.tabColorForSection(sectionTracks),
+	})
+	o.tables[sectionTracks].SetFocused(o.activeSection == sectionTracks)
+
+	o.tables[sectionArtists] = components.NewTable(components.TableConfig{
+		Columns:      o.artistColumns(),
+		Theme:        o.theme,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+		HeaderColor:  o.tabColorForSection(sectionArtists),
+	})
+	o.tables[sectionArtists].SetFocused(o.activeSection == sectionArtists)
+
+	o.tables[sectionAlbums] = components.NewTable(components.TableConfig{
+		Columns:      o.albumColumns(),
+		Theme:        o.theme,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+		HeaderColor:  o.tabColorForSection(sectionAlbums),
+	})
+	o.tables[sectionAlbums].SetFocused(o.activeSection == sectionAlbums)
+
+	o.tables[sectionPlaylists] = components.NewTable(components.TableConfig{
+		Columns:      o.playlistColumns(),
+		Theme:        o.theme,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+		HeaderColor:  o.tabColorForSection(sectionPlaylists),
+	})
+	o.tables[sectionPlaylists].SetFocused(o.activeSection == sectionPlaylists)
+}
+
+// trackColumns returns ColumnDef slice for the tracks table.
+// When narrow is true, the Album column is omitted.
+func (o *SearchOverlay) trackColumns(narrow bool) []components.ColumnDef {
+	th := o.theme
+	cols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+	}
+	if !narrow {
+		cols = append(cols, components.ColumnDef{Key: "album", Header: "Album", FlexFactor: 7, Color: th.ColumnSecondary()})
+	}
+	cols = append(cols, components.ColumnDef{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary()})
+	return cols
+}
+
+// artistColumns returns ColumnDef slice for the artists table.
+func (o *SearchOverlay) artistColumns() []components.ColumnDef {
+	th := o.theme
+	return []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Artist", FlexFactor: 9, Color: th.ColumnPrimary()},
+	}
+}
+
+// albumColumns returns ColumnDef slice for the albums table.
+func (o *SearchOverlay) albumColumns() []components.ColumnDef {
+	th := o.theme
+	return []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Album", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "year", Header: "Year", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "tracks", Header: "Tracks", FlexFactor: 2, Color: th.ColumnTertiary()},
+	}
+}
+
+// playlistColumns returns ColumnDef slice for the playlists table.
+func (o *SearchOverlay) playlistColumns() []components.ColumnDef {
+	th := o.theme
+	return []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "name", Header: "Playlist", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "owner", Header: "Owner", FlexFactor: 6, Color: th.ColumnSecondary()},
+		{Key: "tracks", Header: "Tracks", FlexFactor: 2, Color: th.ColumnTertiary()},
+	}
+}
+
+// rebuildTrackTable reconstructs the tracks table — needed when terminal width
+// crosses the narrow threshold (< 60 content chars) to add/remove the Album column.
+func (o *SearchOverlay) rebuildTrackTable(narrow bool) {
+	o.narrowTracks = narrow
+	o.tables[sectionTracks] = components.NewTable(components.TableConfig{
+		Columns:      o.trackColumns(narrow),
+		Theme:        o.theme,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+		HeaderColor:  o.tabColorForSection(sectionTracks),
+	})
+	o.tables[sectionTracks].SetFocused(o.activeSection == sectionTracks)
+	o.refreshTrackRows()
+}
+
+// refreshTrackRows converts the accumulated track buffer into table rows.
+func (o *SearchOverlay) refreshTrackRows() {
+	rows := make([]map[string]string, len(o.bufTracks))
+	for i, t := range o.bufTracks {
+		row := map[string]string{
+			"index":    fmt.Sprintf("%d", i+1),
+			"name":     t.Name,
+			"artist":   t.Artist,
+			"duration": formatDurationMs(t.DurationMs),
+		}
+		if !o.narrowTracks {
+			row["album"] = t.Album
+		}
+		rows[i] = row
+	}
+	o.tables[sectionTracks].SetRows(rows)
+}
+
+// refreshArtistRows converts the accumulated artist buffer into table rows.
+func (o *SearchOverlay) refreshArtistRows() {
+	rows := make([]map[string]string, len(o.bufArtists))
+	for i, a := range o.bufArtists {
+		rows[i] = map[string]string{
+			"index": fmt.Sprintf("%d", i+1),
+			"name":  a.Name,
+		}
+	}
+	o.tables[sectionArtists].SetRows(rows)
+}
+
+// refreshAlbumRows converts the accumulated album buffer into table rows.
+func (o *SearchOverlay) refreshAlbumRows() {
+	rows := make([]map[string]string, len(o.bufAlbums))
+	for i, a := range o.bufAlbums {
+		rows[i] = map[string]string{
+			"index":  fmt.Sprintf("%d", i+1),
+			"name":   a.Name,
+			"artist": a.Artist,
+			"year":   a.ReleaseYear,
+			"tracks": fmt.Sprintf("%d", a.TotalTracks),
+		}
+	}
+	o.tables[sectionAlbums].SetRows(rows)
+}
+
+// refreshPlaylistRows converts the accumulated playlist buffer into table rows.
+func (o *SearchOverlay) refreshPlaylistRows() {
+	rows := make([]map[string]string, len(o.bufPlaylists))
+	for i, p := range o.bufPlaylists {
+		rows[i] = map[string]string{
+			"index":  fmt.Sprintf("%d", i+1),
+			"name":   p.Name,
+			"owner":  p.Owner,
+			"tracks": fmt.Sprintf("%d", p.TrackCount),
+		}
+	}
+	o.tables[sectionPlaylists].SetRows(rows)
+}
+
+// refreshAllRows refreshes all 4 table row sets from the accumulated buffers.
+func (o *SearchOverlay) refreshAllRows() {
+	o.refreshTrackRows()
+	o.refreshArtistRows()
+	o.refreshAlbumRows()
+	o.refreshPlaylistRows()
+}
+
+// clearBuffers wipes all accumulated item buffers and totals.
+func (o *SearchOverlay) clearBuffers() {
+	o.bufTracks = nil
+	o.bufArtists = nil
+	o.bufAlbums = nil
+	o.bufPlaylists = nil
+	o.totals = [numSections]int{}
+}
+
+// sectionBufferLen returns the current accumulated buffer length for a section.
+func (o *SearchOverlay) sectionBufferLen(sec searchSection) int {
+	switch sec {
+	case sectionTracks:
+		return len(o.bufTracks)
+	case sectionArtists:
+		return len(o.bufArtists)
+	case sectionAlbums:
+		return len(o.bufAlbums)
+	case sectionPlaylists:
+		return len(o.bufPlaylists)
+	}
+	return 0
 }
 
 // InputFocused returns true if the text input currently has focus.
@@ -136,16 +339,39 @@ func (o *SearchOverlay) ActiveSection() searchSection {
 	return o.activeSection
 }
 
-// CursorPos returns the current cursor position within the active section.
-// Exposed for tests.
-func (o *SearchOverlay) CursorPos() int {
-	return o.cursorPos
-}
-
 // SetSize updates the overlay dimensions (forwarded from root app on resize).
+// Rebuilds the tracks table if the narrow threshold is crossed.
 func (o *SearchOverlay) SetSize(width, height int) {
 	o.width = width
 	o.height = height
+
+	// Compute content width (inner border - 2 padding) to decide narrow mode.
+	innerWidth := o.overlayWidth() - 2
+	if innerWidth < 2 {
+		innerWidth = 2
+	}
+	contentWidth := innerWidth - 2
+	narrow := contentWidth < 60
+
+	if narrow != o.narrowTracks {
+		o.rebuildTrackTable(narrow)
+	}
+
+	// Set table sizes: table gets height = innerHeight - 4 (input + sep + tabbar + sep).
+	innerHeight := o.overlayHeight() - 2
+	tableHeight := innerHeight - 4 - 2 // subtract input(1)+sep(1)+tabbar(1)+tabsep(1) and helpbar(2)
+	if tableHeight < 4 {
+		tableHeight = 4
+	}
+	tableWidth := innerWidth
+	if tableWidth < 10 {
+		tableWidth = 10
+	}
+	for i := range o.tables {
+		if o.tables[i] != nil {
+			o.tables[i].SetSize(tableWidth, tableHeight)
+		}
+	}
 }
 
 // Init starts the cursor blink loop.
@@ -165,39 +391,7 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return o.handleDebounce(m)
 
 	case SearchResultsMsg:
-		if !m.IsPaged {
-			// New query (initial load) — replace all results and reset pagination state.
-			o.results = m.Results
-			o.cursorPos = 0
-			o.activeSection = sectionTracks
-			o.sectionOffsets = [numSections]int{}
-		} else {
-			// Paginated load — merge results for the requesting section only.
-			// Other sections' results and offsets are preserved.
-			// NOTE: offset=0 is valid here (back-navigation to page 1).
-			prevOffset := o.sectionOffsets[m.Section]
-			isPrevPage := m.Offset < prevOffset
-			if o.results == nil {
-				o.results = &SearchResultData{}
-			}
-			o.sectionOffsets[m.Section] = m.Offset
-			if m.Results != nil {
-				o.mergePageResults(m.Section, m.Results)
-			}
-			// Place cursor at the appropriate position for the newly loaded page.
-			// Previous-page loads land at the bottom; next-page loads land at the top.
-			if m.Section == o.activeSection {
-				if isPrevPage {
-					o.cursorPos = o.maxCursorForActiveSection() - 1
-					if o.cursorPos < 0 {
-						o.cursorPos = 0
-					}
-				} else {
-					o.cursorPos = 0
-				}
-			}
-		}
-		return o, nil
+		return o.handleSearchResults(m)
 
 	case tea.KeyMsg:
 		return o.handleKey(m)
@@ -207,6 +401,85 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	o.input, cmd = o.input.Update(msg)
 	return o, cmd
+}
+
+// handleSearchResults processes SearchResultsMsg — either a fresh query result or
+// a paginated page append.
+func (o *SearchOverlay) handleSearchResults(m SearchResultsMsg) (tea.Model, tea.Cmd) {
+	if m.Results == nil && m.Err == nil {
+		return o, nil
+	}
+	if m.Results == nil {
+		return o, nil
+	}
+
+	if !m.IsPaged {
+		// New query — clear all buffers and load the first page for all sections.
+		o.clearBuffers()
+		o.store.ClearSearchBuffers()
+		o.bufTracks = append(o.bufTracks, m.Results.Tracks...)
+		o.bufArtists = append(o.bufArtists, m.Results.Artists...)
+		o.bufAlbums = append(o.bufAlbums, m.Results.Albums...)
+		o.bufPlaylists = append(o.bufPlaylists, m.Results.Playlists...)
+		o.totals[sectionTracks] = m.Results.TotalTracks
+		o.totals[sectionArtists] = m.Results.TotalArtists
+		o.totals[sectionAlbums] = m.Results.TotalAlbums
+		o.totals[sectionPlaylists] = m.Results.TotalPlaylists
+		// Sync totals to store for prefetch guard.
+		o.store.SetSearchTotal(int(sectionTracks), m.Results.TotalTracks)
+		o.store.SetSearchTotal(int(sectionArtists), m.Results.TotalArtists)
+		o.store.SetSearchTotal(int(sectionAlbums), m.Results.TotalAlbums)
+		o.store.SetSearchTotal(int(sectionPlaylists), m.Results.TotalPlaylists)
+		// Mark offset 0 as fetched for all sections.
+		o.store.MarkSearchOffsetFetched(int(sectionTracks), 0)
+		o.store.MarkSearchOffsetFetched(int(sectionArtists), 0)
+		o.store.MarkSearchOffsetFetched(int(sectionAlbums), 0)
+		o.store.MarkSearchOffsetFetched(int(sectionPlaylists), 0)
+		o.refreshAllRows()
+		// Switch to tracks tab, ensure it is focused.
+		o.activeSection = sectionTracks
+		o.syncTableFocus()
+	} else {
+		// Paginated load — append to the requesting section's buffer.
+		switch m.Section {
+		case sectionTracks:
+			o.bufTracks = append(o.bufTracks, m.Results.Tracks...)
+			if m.Results.TotalTracks > 0 {
+				o.totals[sectionTracks] = m.Results.TotalTracks
+			}
+			o.refreshTrackRows()
+		case sectionArtists:
+			o.bufArtists = append(o.bufArtists, m.Results.Artists...)
+			if m.Results.TotalArtists > 0 {
+				o.totals[sectionArtists] = m.Results.TotalArtists
+			}
+			o.refreshArtistRows()
+		case sectionAlbums:
+			o.bufAlbums = append(o.bufAlbums, m.Results.Albums...)
+			if m.Results.TotalAlbums > 0 {
+				o.totals[sectionAlbums] = m.Results.TotalAlbums
+			}
+			o.refreshAlbumRows()
+		case sectionPlaylists:
+			o.bufPlaylists = append(o.bufPlaylists, m.Results.Playlists...)
+			if m.Results.TotalPlaylists > 0 {
+				o.totals[sectionPlaylists] = m.Results.TotalPlaylists
+			}
+			o.refreshPlaylistRows()
+		}
+		// Mark this offset as fetched in the store.
+		o.store.MarkSearchOffsetFetched(int(m.Section), m.Offset)
+	}
+	return o, nil
+}
+
+// syncTableFocus ensures only the active section's table is focused.
+func (o *SearchOverlay) syncTableFocus() {
+	for i := range o.tables {
+		if o.tables[i] != nil {
+			o.tables[i].SetFocused(searchSection(i) == o.activeSection)
+		}
+	}
 }
 
 // handleDebounce processes a searchDebounceMsg. Only fires a search request if
@@ -241,20 +514,21 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyShiftTab:
 		return o.moveSectionBackward()
 
-	case tea.KeyUp:
-		return o.moveCursorUp()
-
-	case tea.KeyDown:
-		return o.moveCursorDown()
+	case tea.KeyUp, tea.KeyDown:
+		// Forward navigation to the active table, then check for prefetch.
+		cmd := o.tables[o.activeSection].Update(m)
+		prefetchCmd := o.checkPrefetch()
+		return o, tea.Batch(cmd, prefetchCmd)
 
 	case tea.KeyCtrlA:
 		return o.handleAddToQueue()
 
 	case tea.KeyCtrlU:
-		// Clear local input and cursor — visual reset happens immediately.
+		// Clear local input, buffers, and reset tables — visual reset happens immediately.
 		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
 		o.input.SetValue("")
-		o.cursorPos = 0
+		o.clearBuffers()
+		o.refreshAllRows()
 		return o, func() tea.Msg { return SearchClearedMsg{} }
 
 	case tea.KeyBackspace:
@@ -296,121 +570,80 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 // handleAddToQueue adds the currently selected track to the queue.
 // Only valid when the active section is Tracks.
 func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
-	if o.results == nil || o.activeSection != sectionTracks {
+	if o.activeSection != sectionTracks || len(o.bufTracks) == 0 {
 		return o, nil
 	}
-	items := clampedTrackItems(o.results)
-	if o.cursorPos >= len(items) {
+	idx := o.tables[sectionTracks].SelectedIndex()
+	if idx < 0 || idx >= len(o.bufTracks) {
 		return o, nil
 	}
-	trackURI := items[o.cursorPos].URI
+	trackURI := o.bufTracks[idx].URI
 	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: trackURI} }
 }
 
 // moveSectionForward advances the active section, wrapping from last to first.
 func (o *SearchOverlay) moveSectionForward() (tea.Model, tea.Cmd) {
 	o.activeSection = (o.activeSection + 1) % numSections
-	o.cursorPos = 0
+	o.syncTableFocus()
 	return o, nil
 }
 
 // moveSectionBackward retreats the active section, wrapping from first to last.
 func (o *SearchOverlay) moveSectionBackward() (tea.Model, tea.Cmd) {
 	o.activeSection = (o.activeSection + numSections - 1) % numSections
-	o.cursorPos = 0
+	o.syncTableFocus()
 	return o, nil
-}
-
-// moveCursorDown moves cursor down within the active section.
-// When the cursor is already at the last row, it checks if more pages exist;
-// if so it emits a SearchPageRequestMsg and resets cursorPos to 0.
-func (o *SearchOverlay) moveCursorDown() (tea.Model, tea.Cmd) {
-	max := o.maxCursorForActiveSection() - 1
-	if max < 0 {
-		return o, nil
-	}
-	if o.cursorPos < max {
-		o.cursorPos++
-		return o, nil
-	}
-	// At last row — check if more pages exist.
-	total := o.totalForSection(o.activeSection)
-	offset := o.sectionOffsets[o.activeSection]
-	shown := o.maxCursorForActiveSection()
-	if offset+shown < total {
-		// More results exist — request next page.
-		o.cursorPos = 0
-		return o, o.requestPage(offset + maxResultsPerSection)
-	}
-	return o, nil
-}
-
-// moveCursorUp moves cursor up within the active section.
-// When the cursor is already at row 0 and offset > 0, it emits a
-// SearchPageRequestMsg for the previous page and places cursor at last item.
-func (o *SearchOverlay) moveCursorUp() (tea.Model, tea.Cmd) {
-	if o.cursorPos > 0 {
-		o.cursorPos--
-		return o, nil
-	}
-	// At first row — check if previous page exists.
-	offset := o.sectionOffsets[o.activeSection]
-	if offset > 0 {
-		// Emit the page request; cursor will be placed at the bottom of the
-		// previous page when SearchResultsMsg arrives (isPrevPage detection).
-		return o, o.requestPage(offset - maxResultsPerSection)
-	}
-	return o, nil
-}
-
-// maxCursorForActiveSection returns the count of items in the current section.
-func (o *SearchOverlay) maxCursorForActiveSection() int {
-	if o.results == nil {
-		return 0
-	}
-	switch o.activeSection {
-	case sectionTracks:
-		return len(clampedTrackItems(o.results))
-	case sectionArtists:
-		return len(clampedArtistItems(o.results))
-	case sectionAlbums:
-		return len(clampedAlbumItems(o.results))
-	case sectionPlaylists:
-		return len(clampedPlaylistItems(o.results))
-	}
-	return 0
 }
 
 // selectedURI returns the URI for the currently selected result item,
 // and whether it is a track (vs. a context URI).
 func (o *SearchOverlay) selectedURI() (uri string, isTrack bool) {
-	if o.results == nil {
-		return "", false
-	}
-
+	idx := o.tables[o.activeSection].SelectedIndex()
 	switch o.activeSection {
 	case sectionTracks:
-		items := clampedTrackItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, true
+		if idx >= 0 && idx < len(o.bufTracks) {
+			return o.bufTracks[idx].URI, true
 		}
 	case sectionArtists:
-		items := clampedArtistItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, false
+		if idx >= 0 && idx < len(o.bufArtists) {
+			return o.bufArtists[idx].URI, false
 		}
 	case sectionAlbums:
-		items := clampedAlbumItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, false
+		if idx >= 0 && idx < len(o.bufAlbums) {
+			return o.bufAlbums[idx].URI, false
 		}
 	case sectionPlaylists:
-		items := clampedPlaylistItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, false
+		if idx >= 0 && idx < len(o.bufPlaylists) {
+			return o.bufPlaylists[idx].URI, false
 		}
 	}
 	return "", false
+}
+
+// checkPrefetch fires a SearchPageRequestMsg when the cursor crosses the 50%
+// mark of the last fetched page and more results exist.
+func (o *SearchOverlay) checkPrefetch() tea.Cmd {
+	sec := o.activeSection
+	cursor := o.tables[sec].SelectedIndex()
+	bufLen := o.sectionBufferLen(sec)
+	total := o.totals[sec]
+
+	if bufLen == 0 || bufLen >= total {
+		return nil // empty or all pages loaded
+	}
+
+	// Prefetch when cursor crosses 50% of the last loaded page.
+	lastPageStart := bufLen - min(bufLen, maxResultsPerSection)
+	midpoint := lastPageStart + maxResultsPerSection/2
+
+	if cursor >= midpoint {
+		nextOffset := bufLen // next unloaded offset
+		if o.store.IsSearchOffsetFetched(int(sec), nextOffset) {
+			return nil // already fetched or in-flight
+		}
+		return o.requestPage(nextOffset)
+	}
+	return nil
 }
 
 // View renders the search overlay box with a btop-style border.
@@ -475,13 +708,10 @@ func (o *SearchOverlay) View() string {
 }
 
 // renderResults builds the tabbed results area of the overlay.
-// Assembly order: tab bar → tab separator → column headers → active section rows →
-// [padding to push help bar to bottom] → help bar.
+// Assembly order: tab bar → tab separator → table.View() → [padding] → help bar.
 //
 // innerWidth is the content width inside the border (View subtracts 2 for border chars).
 // availableHeight is innerHeight - 2 (input line + dot separator already consumed).
-// It is used to anchor the help bar at the bottom by inserting blank lines between
-// result rows and the help bar when there are fewer results than the available space.
 func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 	query := o.store.SearchQuery()
 	loading := o.store.SearchLoading()
@@ -499,19 +729,9 @@ func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 			Render("Type to search tracks, artists, albums...")
 	}
 
-	if o.results == nil {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render("Type to search tracks, artists, albums...")
-	}
+	hasResults := len(o.bufTracks)+len(o.bufArtists)+len(o.bufAlbums)+len(o.bufPlaylists) > 0
 
-	// Check if all sections are empty
-	totalItems := len(clampedTrackItems(o.results)) +
-		len(clampedArtistItems(o.results)) +
-		len(clampedAlbumItems(o.results)) +
-		len(clampedPlaylistItems(o.results))
-
-	if totalItems == 0 {
+	if !hasResults {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Render(fmt.Sprintf("No results for '%s'", query))
@@ -524,6 +744,24 @@ func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 		contentWidth = 10
 	}
 
+	// Rebuild tracks table if narrow mode changed.
+	narrow := contentWidth < 60
+	if narrow != o.narrowTracks {
+		o.rebuildTrackTable(narrow)
+	}
+
+	// Set table size for correct page size calculation.
+	// tableHeight = availableHeight - tabbar(1) - tabsep(1) - helpbar(2)
+	tableHeight := availableHeight - 1 - 1 - 2
+	if tableHeight < 4 {
+		tableHeight = 4
+	}
+	for i := range o.tables {
+		if o.tables[i] != nil {
+			o.tables[i].SetSize(contentWidth, tableHeight)
+		}
+	}
+
 	mutedStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 
 	var sb strings.Builder
@@ -533,27 +771,9 @@ func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 	// Tab separator
 	sb.WriteString(mutedStyle.Render(strings.Repeat("─", contentWidth)))
 	sb.WriteString("\n")
-	// Column headers + underline
-	sb.WriteString(o.renderColumnHeaders(o.activeSection, contentWidth))
+	// Active section table output
+	sb.WriteString(o.tables[o.activeSection].View())
 	sb.WriteString("\n")
-	// Active section rows only
-	activeSection := o.renderActiveSection(contentWidth)
-	sb.WriteString(activeSection)
-
-	// Anchor help bar to the bottom by inserting padding lines.
-	// Chrome lines: tab bar(1) + tab sep(1) + header(1) + underline(1) = 4
-	// Help bar lines: separator(1) + text(1) = 2
-	// Row budget = availableHeight - 4(chrome) - 2(help bar)
-	const chromeLines = 4
-	const helpBarLines = 2
-	rowBudget := availableHeight - chromeLines - helpBarLines
-	resultLineCount := strings.Count(activeSection, "\n")
-	if rowBudget > 0 {
-		padLines := rowBudget - resultLineCount
-		if padLines > 0 {
-			sb.WriteString(strings.Repeat("\n", padLines))
-		}
-	}
 
 	// Help bar (separator + keybindings)
 	sb.WriteString(o.renderHelpBar(contentWidth))
@@ -600,198 +820,47 @@ func debounceSearch(query string) tea.Cmd {
 	})
 }
 
-// --- Clamping helpers (max 10 per section) ---
-
-func clampedTrackItems(r *SearchResultData) []SearchTrackItem {
-	items := r.Tracks
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-func clampedArtistItems(r *SearchResultData) []SearchArtistItem {
-	items := r.Artists
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-func clampedAlbumItems(r *SearchResultData) []SearchAlbumItem {
-	items := r.Albums
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-func clampedPlaylistItems(r *SearchResultData) []SearchPlaylistItem {
-	items := r.Playlists
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-// --- Column width helpers ---
-// Each helper computes column widths that sum exactly to contentWidth.
-// Fixed columns (indexW, durationW, yearW, tracksW) are subtracted first;
-// inter-column gaps (2 chars per gap, (numCols-1) gaps) are also subtracted;
-// the remaining flex space is distributed proportionally among name/artist/album columns.
-// The last flex column gets the remainder to prevent any rounding-induced overflow.
-
-// trackColumnWidths computes column widths for the Tracks section.
-//
-//	Returns (nameW, artistW, albumW, durationW). In narrow mode, albumW is 0 and
-//	artistW absorbs the flex space.
-func (o *SearchOverlay) trackColumnWidths(contentWidth int, narrow bool) (nameW, artistW, albumW, durationW int) {
-	indexW := 3
-	durationW = 8
-	if narrow {
-		// 4 columns: # | Track | Artist | Duration — gaps = (4-1)*2 = 6
-		gaps := (4 - 1) * 2
-		fixed := indexW + durationW + gaps
-		flex := contentWidth - fixed
-		if flex < 0 {
-			flex = 0
-		}
-		nameW = flex * 50 / 100
-		artistW = flex - nameW // remainder prevents overflow
-		albumW = 0
-		return
-	}
-	// 5 columns: # | Track | Artist | Album | Duration — gaps = (5-1)*2 = 8
-	gaps := (5 - 1) * 2
-	fixed := indexW + durationW + gaps
-	flex := contentWidth - fixed
-	if flex < 0 {
-		flex = 0
-	}
-	nameW = flex * 40 / 100
-	artistW = flex * 30 / 100
-	albumW = flex - nameW - artistW // remainder prevents overflow
-	return
-}
-
-// TrackColumnWidths is the exported wrapper of trackColumnWidths for use in tests.
-func (o *SearchOverlay) TrackColumnWidths(contentWidth int, narrow bool) (nameW, artistW, albumW, durationW int) {
-	return o.trackColumnWidths(contentWidth, narrow)
-}
-
-// albumColumnWidths computes column widths for the Albums section.
-//
-//	Returns (nameW, artistW, yearW, tracksW).
-//	5 columns: # | Album | Artist | Year | Tracks — gaps = (5-1)*2 = 8
-func (o *SearchOverlay) albumColumnWidths(contentWidth int) (nameW, artistW, yearW, tracksW int) {
-	indexW := 3
-	yearW = 6
-	tracksW = 8
-	gaps := (5 - 1) * 2
-	fixed := indexW + yearW + tracksW + gaps
-	flex := contentWidth - fixed
-	if flex < 0 {
-		flex = 0
-	}
-	nameW = flex * 55 / 100
-	artistW = flex - nameW // remainder prevents overflow
-	return
-}
-
-// AlbumColumnWidths is the exported wrapper of albumColumnWidths for use in tests.
-func (o *SearchOverlay) AlbumColumnWidths(contentWidth int) (nameW, artistW, yearW, tracksW int) {
-	return o.albumColumnWidths(contentWidth)
-}
-
-// playlistColumnWidths computes column widths for the Playlists section.
-//
-//	Returns (nameW, ownerW, tracksW).
-//	4 columns: # | Playlist | Owner | Tracks — gaps = (4-1)*2 = 6
-func (o *SearchOverlay) playlistColumnWidths(contentWidth int) (nameW, ownerW, tracksW int) {
-	indexW := 3
-	tracksW = 8
-	gaps := (4 - 1) * 2
-	fixed := indexW + tracksW + gaps
-	flex := contentWidth - fixed
-	if flex < 0 {
-		flex = 0
-	}
-	nameW = flex * 55 / 100
-	ownerW = flex - nameW // remainder prevents overflow
-	return
-}
-
-// PlaylistColumnWidths is the exported wrapper of playlistColumnWidths for use in tests.
-func (o *SearchOverlay) PlaylistColumnWidths(contentWidth int) (nameW, ownerW, tracksW int) {
-	return o.playlistColumnWidths(contentWidth)
-}
-
-// artistColumnWidths computes the artist column width for the Artists section.
-//
-//	2 columns: # | Artist — gaps = (2-1)*2 = 2
-func (o *SearchOverlay) artistColumnWidths(contentWidth int) (artistW int) {
-	indexW := 3
-	gaps := (2 - 1) * 2
-	artistW = contentWidth - indexW - gaps
-	if artistW < 4 {
-		artistW = 4
-	}
-	return
-}
-
-// ArtistColumnWidths is the exported wrapper of artistColumnWidths for use in tests.
-func (o *SearchOverlay) ArtistColumnWidths(contentWidth int) (artistW int) {
-	return o.artistColumnWidths(contentWidth)
-}
-
-// truncate shortens s to at most maxRunes runes, appending "…" if truncated.
-func truncate(s string, maxRunes int) string {
-	if maxRunes <= 0 {
-		return ""
-	}
-	count := utf8.RuneCountInString(s)
-	if count <= maxRunes {
-		return s
-	}
-	// Leave room for the ellipsis
-	if maxRunes <= 1 {
-		return "…"
-	}
-	runes := []rune(s)
-	return string(runes[:maxRunes-1]) + "…"
-}
-
-// renderHelpBar renders a separator line and a contextual keybindings line, both in
-// TextMuted color. "Ctrl+A queue" only appears on the Tracks section.
+// renderHelpBar renders a separator line and a contextual keybindings line.
+// Key labels use KeyHint() + Bold(true); descriptions use TextMuted().
+// "Ctrl+A queue" only appears on the Tracks section.
 // When the active section has more results than maxResultsPerSection, a right-aligned
-// page indicator (e.g., "1-10 of 16") is appended to the keybindings line.
+// page indicator (e.g., "1-10 of 39") is appended to the keybindings line.
 func (o *SearchOverlay) renderHelpBar(contentWidth int) string {
 	mutedStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
+	keyStyle := lipgloss.NewStyle().Foreground(o.theme.KeyHint()).Bold(true)
 	separator := mutedStyle.Render(strings.Repeat("─", contentWidth))
 
-	var keys string
-	if o.activeSection == sectionTracks {
-		keys = "Tab next section  ↑↓ navigate  Enter play  Ctrl+A queue  Esc close"
-	} else {
-		keys = "Tab next section  ↑↓ navigate  Enter play  Esc close"
+	type hint struct{ Key, Label string }
+	hints := []hint{
+		{"Tab", "next section"},
+		{"↑↓", "navigate"},
+		{"Enter", "play"},
 	}
+	if o.activeSection == sectionTracks {
+		hints = append(hints, hint{"Ctrl+A", "queue"})
+	}
+	hints = append(hints, hint{"Esc", "close"})
 
+	var parts []string
+	for _, h := range hints {
+		parts = append(parts, keyStyle.Render(h.Key)+" "+mutedStyle.Render(h.Label))
+	}
+	keysLine := strings.Join(parts, "  ")
+
+	// Right-align page indicator when present.
 	indicator := o.pageIndicator()
 	if indicator != "" {
-		// Right-align the indicator by padding the keybindings line.
-		keysWidth := utf8.RuneCountInString(keys)
-		indicatorWidth := utf8.RuneCountInString(indicator)
+		keysWidth := lipgloss.Width(keysLine)
+		indicatorWidth := lipgloss.Width(mutedStyle.Render(indicator))
 		gap := contentWidth - keysWidth - indicatorWidth
 		if gap > 0 {
-			keys = keys + strings.Repeat(" ", gap) + indicator
+			keysLine += strings.Repeat(" ", gap) + mutedStyle.Render(indicator)
 		} else {
-			// Not enough room — append with a single space.
-			keys = keys + " " + indicator
+			keysLine += " " + mutedStyle.Render(indicator)
 		}
 	}
 
-	helpLine := mutedStyle.Render(keys)
-	return separator + "\n" + helpLine
+	return separator + "\n" + keysLine
 }
 
 // RenderHelpBar is the exported wrapper of renderHelpBar for use in tests.
@@ -805,185 +874,6 @@ func FormatDurationMs(ms int) string {
 	return formatDurationMs(ms)
 }
 
-// searchCol is a single column definition for column-aligned result row rendering.
-type searchCol struct {
-	text  string
-	style lipgloss.Style
-	width int
-}
-
-// renderActiveSection renders the numbered, column-aligned result rows for the
-// currently active section. Only the active section's results are shown.
-// Selected row: ▶ prefix + SelectedBg/Fg. Unselected rows: numbered prefix +
-// ColumnIndex/Primary/Secondary/Tertiary colors per column.
-// Tracks section drops the Album column when contentWidth < 60.
-func (o *SearchOverlay) renderActiveSection(contentWidth int) string {
-	if o.results == nil {
-		return ""
-	}
-
-	indexW := 3
-	indexStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnIndex())
-	primaryStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnPrimary())
-	secondaryStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnSecondary())
-	tertiaryStyle := lipgloss.NewStyle().Foreground(o.theme.ColumnTertiary())
-	selectedStyle := lipgloss.NewStyle().
-		Background(o.theme.SelectedBg()).
-		Foreground(o.theme.SelectedFg())
-
-	var sb strings.Builder
-
-	renderRow := func(i int, isSelected bool, cols []searchCol) {
-		if isSelected {
-			// Build row content joined with spaces and apply selected style.
-			rowParts := make([]string, 0, len(cols)+1)
-			rowParts = append(rowParts, fmt.Sprintf("%-*s", indexW, "▶ "))
-			for _, col := range cols {
-				rowParts = append(rowParts, fmt.Sprintf("%-*s", col.width, truncate(col.text, col.width)))
-			}
-			rowText := strings.Join(rowParts, "  ")
-			sb.WriteString(selectedStyle.Width(contentWidth).Render(rowText))
-		} else {
-			parts := make([]string, 0, len(cols)+1)
-			parts = append(parts, indexStyle.Render(fmt.Sprintf("%-*s", indexW, fmt.Sprintf("%d", i+1))))
-			for _, col := range cols {
-				cell := truncate(col.text, col.width)
-				parts = append(parts, col.style.Render(fmt.Sprintf("%-*s", col.width, cell)))
-			}
-			sb.WriteString(strings.Join(parts, "  "))
-		}
-		sb.WriteString("\n")
-	}
-
-	switch o.activeSection {
-	case sectionTracks:
-		items := clampedTrackItems(o.results)
-		narrow := contentWidth < 60
-		nameW, artistW, albumW, durationW := o.trackColumnWidths(contentWidth, narrow)
-		if narrow {
-			for i, item := range items {
-				renderRow(i, o.cursorPos == i, []searchCol{
-					{item.Name, primaryStyle, nameW},
-					{item.Artist, secondaryStyle, artistW},
-					{formatDurationMs(item.DurationMs), tertiaryStyle, durationW},
-				})
-			}
-		} else {
-			for i, item := range items {
-				renderRow(i, o.cursorPos == i, []searchCol{
-					{item.Name, primaryStyle, nameW},
-					{item.Artist, secondaryStyle, artistW},
-					{item.Album, secondaryStyle, albumW},
-					{formatDurationMs(item.DurationMs), tertiaryStyle, durationW},
-				})
-			}
-		}
-
-	case sectionArtists:
-		items := clampedArtistItems(o.results)
-		artistW := o.artistColumnWidths(contentWidth)
-		for i, item := range items {
-			renderRow(i, o.cursorPos == i, []searchCol{
-				{item.Name, primaryStyle, artistW},
-			})
-		}
-
-	case sectionAlbums:
-		items := clampedAlbumItems(o.results)
-		nameW, artistW, yearW, tracksW := o.albumColumnWidths(contentWidth)
-		for i, item := range items {
-			renderRow(i, o.cursorPos == i, []searchCol{
-				{item.Name, primaryStyle, nameW},
-				{item.Artist, secondaryStyle, artistW},
-				{item.ReleaseYear, tertiaryStyle, yearW},
-				{fmt.Sprintf("%d", item.TotalTracks), tertiaryStyle, tracksW},
-			})
-		}
-
-	case sectionPlaylists:
-		items := clampedPlaylistItems(o.results)
-		nameW, ownerW, tracksW := o.playlistColumnWidths(contentWidth)
-		for i, item := range items {
-			renderRow(i, o.cursorPos == i, []searchCol{
-				{item.Name, primaryStyle, nameW},
-				{item.Owner, secondaryStyle, ownerW},
-				{fmt.Sprintf("%d", item.TrackCount), tertiaryStyle, tracksW},
-			})
-		}
-	}
-
-	return sb.String()
-}
-
-// RenderActiveSection is the exported wrapper of renderActiveSection for use in tests.
-func (o *SearchOverlay) RenderActiveSection(contentWidth int) string {
-	return o.renderActiveSection(contentWidth)
-}
-
-// renderColumnHeaders renders the column header row and an underline separator for
-// the given section. Headers are styled with the active section's tab color + bold.
-// The underline uses TextMuted dashes. Tracks drops the Album column when contentWidth < 60.
-func (o *SearchOverlay) renderColumnHeaders(sec searchSection, contentWidth int) string {
-	headerStyle := lipgloss.NewStyle().
-		Foreground(o.tabColorForSection(sec)).
-		Bold(true)
-	underlineStyle := lipgloss.NewStyle().
-		Foreground(o.theme.TextMuted())
-
-	indexW := 3
-	var labels []string
-	var widths []int
-
-	// Use shared column width helpers so headers and row widths are always identical.
-	switch sec {
-	case sectionTracks:
-		narrow := contentWidth < 60
-		nameW, artistW, albumW, durationW := o.trackColumnWidths(contentWidth, narrow)
-		if narrow {
-			labels = []string{"#", "Track", "Artist", "Duration"}
-			widths = []int{indexW, nameW, artistW, durationW}
-		} else {
-			labels = []string{"#", "Track", "Artist", "Album", "Duration"}
-			widths = []int{indexW, nameW, artistW, albumW, durationW}
-		}
-	case sectionArtists:
-		artistW := o.artistColumnWidths(contentWidth)
-		labels = []string{"#", "Artist"}
-		widths = []int{indexW, artistW}
-	case sectionAlbums:
-		nameW, artistW, yearW, tracksW := o.albumColumnWidths(contentWidth)
-		labels = []string{"#", "Album", "Artist", "Year", "Tracks"}
-		widths = []int{indexW, nameW, artistW, yearW, tracksW}
-	case sectionPlaylists:
-		nameW, ownerW, tracksW := o.playlistColumnWidths(contentWidth)
-		labels = []string{"#", "Playlist", "Owner", "Tracks"}
-		widths = []int{indexW, nameW, ownerW, tracksW}
-	default:
-		return ""
-	}
-
-	// Build header line
-	var hParts []string
-	var uParts []string
-	for i, lbl := range labels {
-		w := widths[i]
-		if w <= 0 {
-			w = len(lbl)
-		}
-		hParts = append(hParts, headerStyle.Render(fmt.Sprintf("%-*s", w, truncate(lbl, w))))
-		uParts = append(uParts, underlineStyle.Render(strings.Repeat("─", min(w, len(lbl)+1))))
-	}
-
-	headerLine := strings.Join(hParts, "  ")
-	underLine := strings.Join(uParts, "  ")
-	return headerLine + "\n" + underLine
-}
-
-// RenderColumnHeaders is the exported wrapper of renderColumnHeaders for use in tests.
-func (o *SearchOverlay) RenderColumnHeaders(sec searchSection, contentWidth int) string {
-	return o.renderColumnHeaders(sec, contentWidth)
-}
-
 // renderTabBar renders a horizontal tab bar showing all four sections with their
 // result counts. The active section is highlighted with ▪ + bold + its tab color.
 // Inactive sections use TextMuted. Tabs are separated by 5 spaces.
@@ -991,7 +881,7 @@ func (o *SearchOverlay) renderTabBar(width int) string {
 	var parts []string
 
 	for i := searchSection(0); i < numSections; i++ {
-		label := fmt.Sprintf("%s %d", searchSectionLabels[i], o.totalForSection(i))
+		label := fmt.Sprintf("%s %d", searchSectionLabels[i], o.totals[i])
 		if i == o.activeSection {
 			// Active tab: ▪ prefix + bold + tab-specific color
 			style := lipgloss.NewStyle().
@@ -1014,56 +904,17 @@ func (o *SearchOverlay) RenderTabBar(width int) string {
 	return o.renderTabBar(width)
 }
 
-// totalForSection returns the total result count for the given section from
-// SearchResultData.TotalTracks/Artists/Albums/Playlists. Returns 0 if results are nil.
+// totalForSection returns the total result count for the given section.
 func (o *SearchOverlay) totalForSection(sec searchSection) int {
-	if o.results == nil {
+	if int(sec) < 0 || int(sec) >= numSections {
 		return 0
 	}
-	switch sec {
-	case sectionTracks:
-		return o.results.TotalTracks
-	case sectionArtists:
-		return o.results.TotalArtists
-	case sectionAlbums:
-		return o.results.TotalAlbums
-	case sectionPlaylists:
-		return o.results.TotalPlaylists
-	default:
-		return 0
-	}
+	return o.totals[sec]
 }
 
 // TotalForSection is the exported wrapper of totalForSection for use in tests.
 func (o *SearchOverlay) TotalForSection(sec searchSection) int {
 	return o.totalForSection(sec)
-}
-
-// mergePageResults replaces the items for the given section with the page items from src.
-// It also updates the Total* field for that section so the tab bar count stays accurate.
-func (o *SearchOverlay) mergePageResults(sec searchSection, src *SearchResultData) {
-	switch sec {
-	case sectionTracks:
-		o.results.Tracks = src.Tracks
-		if src.TotalTracks > 0 {
-			o.results.TotalTracks = src.TotalTracks
-		}
-	case sectionArtists:
-		o.results.Artists = src.Artists
-		if src.TotalArtists > 0 {
-			o.results.TotalArtists = src.TotalArtists
-		}
-	case sectionAlbums:
-		o.results.Albums = src.Albums
-		if src.TotalAlbums > 0 {
-			o.results.TotalAlbums = src.TotalAlbums
-		}
-	case sectionPlaylists:
-		o.results.Playlists = src.Playlists
-		if src.TotalPlaylists > 0 {
-			o.results.TotalPlaylists = src.TotalPlaylists
-		}
-	}
 }
 
 // requestPage emits a SearchPageRequestMsg that asks the root app to fetch the
@@ -1083,16 +934,24 @@ func (o *SearchOverlay) requestPage(offset int) tea.Cmd {
 }
 
 // pageIndicator returns a right-aligned range string for the active section when
-// the total exceeds maxResultsPerSection (e.g., "1-10 of 16" or "11-16 of 16").
+// the total exceeds maxResultsPerSection (e.g., "1-10 of 39").
 // Returns empty string when all results fit on one page.
 func (o *SearchOverlay) pageIndicator() string {
-	total := o.totalForSection(o.activeSection)
+	sec := o.activeSection
+	total := o.totals[sec]
+	bufLen := o.sectionBufferLen(sec)
 	if total <= maxResultsPerSection {
 		return ""
 	}
-	offset := o.sectionOffsets[o.activeSection]
-	start := offset + 1
-	end := offset + o.maxCursorForActiveSection()
+	if bufLen == 0 {
+		return ""
+	}
+	// Show range based on the visible page window (bubble-table pagination).
+	cursor := o.tables[sec].SelectedIndex()
+	pageSize := maxResultsPerSection
+	pageStart := (cursor / pageSize) * pageSize
+	start := pageStart + 1
+	end := min(pageStart+pageSize, bufLen)
 	if end > total {
 		end = total
 	}
@@ -1102,19 +961,6 @@ func (o *SearchOverlay) pageIndicator() string {
 // PageIndicator is the exported wrapper of pageIndicator for use in tests.
 func (o *SearchOverlay) PageIndicator() string {
 	return o.pageIndicator()
-}
-
-// SectionOffsets returns the sectionOffsets array for test inspection.
-func (o *SearchOverlay) SectionOffsets() [numSections]int {
-	return o.sectionOffsets
-}
-
-// WithSectionOffsets returns a copy of the overlay with the given sectionOffsets set.
-// Used in tests to simulate mid-pagination state without going through a full page load.
-func (o *SearchOverlay) WithSectionOffsets(offsets [numSections]int) *SearchOverlay {
-	clone := *o
-	clone.sectionOffsets = offsets
-	return &clone
 }
 
 // tabColorForSection returns the PaneBorder* theme token for the given section.
@@ -1141,9 +987,31 @@ func (o *SearchOverlay) TabColorForSection(sec searchSection) lipgloss.Color {
 }
 
 // SetTheme updates the theme reference for runtime theme switching.
+// Rebuilds all 4 tables with the new theme colors and re-populates rows.
 func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.theme = th
+	o.buildAllTables(o.narrowTracks)
+	o.refreshAllRows()
+	// Update spinner style for the new theme.
+	o.spinner.Style = lipgloss.NewStyle().Foreground(th.TextMuted())
 }
+
+// Tables returns the array of table pointers for inspection in tests.
+func (o *SearchOverlay) Tables() [numSections]*components.Table {
+	return o.tables
+}
+
+// BufTracksLen returns the number of accumulated track items. Used in tests.
+func (o *SearchOverlay) BufTracksLen() int { return len(o.bufTracks) }
+
+// BufArtistsLen returns the number of accumulated artist items. Used in tests.
+func (o *SearchOverlay) BufArtistsLen() int { return len(o.bufArtists) }
+
+// BufAlbumsLen returns the number of accumulated album items. Used in tests.
+func (o *SearchOverlay) BufAlbumsLen() int { return len(o.bufAlbums) }
+
+// BufPlaylistsLen returns the number of accumulated playlist items. Used in tests.
+func (o *SearchOverlay) BufPlaylistsLen() int { return len(o.bufPlaylists) }
 
 // --- Test helpers (exported only for test packages) ---
 
