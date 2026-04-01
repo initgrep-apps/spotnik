@@ -27,7 +27,7 @@
 | 15 | CI/CD | `features/15-cicd/` | open | 57 | GitHub Actions, GoReleaser, multi-platform distribution |
 | 16 | Vivid Theme System | `features/16-vivid-themes/` | in-progress | 70, 71, 72, 73, 74, 75, 77, 78, 79 | Config-driven TOML themes, colorful borders, per-column colors, 6 new themes, runtime switcher overlay |
 | 17 | Bootstrap | `features/17-bootstrap/` | done | 76, 79, 80 | First-launch config bootstrap, embedded client ID, preference persistence engine |
-| 18 | Search Overlay Redesign | `features/18-search-redesign/` | done | 81, 82 | Wide tabbed search overlay with rich metadata columns, per-tab theme colors, contextual help bar |
+| 18 | Search Overlay Redesign | `features/18-search-redesign/` | in-progress | 81, 82, 83, 84 | Wide tabbed search overlay with rich metadata columns, per-tab theme colors, contextual help bar, pagination |
 
 ---
 
