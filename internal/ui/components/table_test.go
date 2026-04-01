@@ -203,6 +203,44 @@ func TestTable_ColumnDefsHaveCorrectColors(t *testing.T) {
 	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[3].Color)
 }
 
+// TestTable_HeaderColor_Override verifies that when HeaderColor is set in TableConfig,
+// it is reflected in the Columns() configuration (and thus passed to rebuild).
+func TestTable_HeaderColor_Override(t *testing.T) {
+	th := testTheme()
+	customColor := lipgloss.Color("#FF0000")
+	cfg := components.TableConfig{
+		Columns:     makeColumns(),
+		Theme:       th,
+		ShowHeader:  true,
+		HeaderColor: customColor,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(80, 20)
+	// View should render without panic; the color is applied internally to HeaderStyle.
+	view := tbl.View()
+	assert.NotEmpty(t, view)
+	// Verify the config stored the HeaderColor.
+	assert.Equal(t, customColor, tbl.HeaderColorForTest())
+}
+
+// TestTable_HeaderColor_Default verifies that when HeaderColor is empty,
+// th.TableHeader() is used as the default header color.
+func TestTable_HeaderColor_Default(t *testing.T) {
+	th := testTheme()
+	cfg := components.TableConfig{
+		Columns:    makeColumns(),
+		Theme:      th,
+		ShowHeader: true,
+		// HeaderColor intentionally not set — should fall back to th.TableHeader().
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(80, 20)
+	view := tbl.View()
+	assert.NotEmpty(t, view)
+	// Empty HeaderColor means default path is used.
+	assert.Equal(t, lipgloss.Color(""), tbl.HeaderColorForTest())
+}
+
 func TestTable_SetFocused(t *testing.T) {
 	cfg := components.TableConfig{
 		Columns:      makeColumns(),

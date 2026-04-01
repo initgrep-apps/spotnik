@@ -100,6 +100,17 @@ type Store struct {
 	searchQuery   string
 	searchLoading bool
 
+	// Search buffer state — tracks pagination status for the accumulated search result buffers.
+	// The actual item slices are accumulated in the SearchOverlay (ui/panes) to avoid an import
+	// cycle between state/ and ui/panes/. The store tracks totals and fetched-offset sentinels.
+	//
+	// searchTotals[section] is the API-reported total for each section (0=tracks, 1=artists, 2=albums, 3=playlists).
+	// searchFetched[section][offset] is true when that offset has been fetched (prevents duplicate requests).
+	// searchBufQuery is the query these buffers belong to; used to detect stale results after query change.
+	searchTotals   [4]int
+	searchFetched  [4]map[int]bool
+	searchBufQuery string
+
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
 	// NOTE: cached per range and re-fetched after StatsTTL (10 min) via staleness check in Update().
@@ -876,6 +887,80 @@ func (s *Store) ClearPlaylistsError() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlistsError = nil
+}
+
+// --- Search buffer state ---
+
+// SearchSectionTotal returns the API-reported total result count for the given section index.
+// Section indices match the searchSection constants in ui/panes: 0=tracks, 1=artists, 2=albums, 3=playlists.
+func (s *Store) SearchSectionTotal(section int) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if section < 0 || section >= len(s.searchTotals) {
+		return 0
+	}
+	return s.searchTotals[section]
+}
+
+// SetSearchTotal records the API-reported total for a search section.
+// Called by app.Update() when SearchResultsMsg arrives.
+func (s *Store) SetSearchTotal(section, total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if section < 0 || section >= len(s.searchTotals) {
+		return
+	}
+	s.searchTotals[section] = total
+}
+
+// IsSearchOffsetFetched returns true if the given offset for the given section
+// has already been fetched or is in-flight. Used by the prefetch guard.
+func (s *Store) IsSearchOffsetFetched(section, offset int) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if section < 0 || section >= len(s.searchFetched) {
+		return false
+	}
+	return s.searchFetched[section][offset]
+}
+
+// MarkSearchOffsetFetched marks the given offset for the given section as fetched.
+// Called by app.Update() just before dispatching a page fetch command so that
+// the prefetch guard prevents duplicate in-flight requests.
+func (s *Store) MarkSearchOffsetFetched(section, offset int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if section < 0 || section >= len(s.searchFetched) {
+		return
+	}
+	if s.searchFetched[section] == nil {
+		s.searchFetched[section] = make(map[int]bool)
+	}
+	s.searchFetched[section][offset] = true
+}
+
+// SearchBufQuery returns the query string that the current search buffers belong to.
+func (s *Store) SearchBufQuery() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.searchBufQuery
+}
+
+// SetSearchBufQuery updates the buffer query string.
+func (s *Store) SetSearchBufQuery(query string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchBufQuery = query
+}
+
+// ClearSearchBuffers resets all search buffer state: totals, fetched-offset maps, and query.
+// Called when a new query starts so stale page sentinels don't block fresh fetches.
+func (s *Store) ClearSearchBuffers() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchTotals = [4]int{}
+	s.searchFetched = [4]map[int]bool{}
+	s.searchBufQuery = ""
 }
 
 // --- Gateway Event Journal ---

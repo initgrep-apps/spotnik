@@ -790,3 +790,68 @@ func TestStore_ReadEventsFrom_IncrementalCursor(t *testing.T) {
 	require.Len(t, events2, 1)
 	assert.Equal(t, domain.EventSemaphoreAcquired, events2[0].Kind)
 }
+
+// --- Search buffer tests ---
+
+func TestStore_SetSearchTotal_TracksSection(t *testing.T) {
+	s := New()
+	s.SetSearchTotal(0, 39)
+	assert.Equal(t, 39, s.SearchSectionTotal(0))
+	// Other sections are still zero.
+	assert.Equal(t, 0, s.SearchSectionTotal(1))
+}
+
+func TestStore_SearchSectionTotal_AllSections(t *testing.T) {
+	s := New()
+	s.SetSearchTotal(0, 10)
+	s.SetSearchTotal(1, 5)
+	s.SetSearchTotal(2, 39)
+	s.SetSearchTotal(3, 12)
+	assert.Equal(t, 10, s.SearchSectionTotal(0))
+	assert.Equal(t, 5, s.SearchSectionTotal(1))
+	assert.Equal(t, 39, s.SearchSectionTotal(2))
+	assert.Equal(t, 12, s.SearchSectionTotal(3))
+}
+
+func TestStore_IsSearchOffsetFetched_InitiallyFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.IsSearchOffsetFetched(0, 0))
+	assert.False(t, s.IsSearchOffsetFetched(2, 10))
+}
+
+func TestStore_MarkSearchOffsetFetched_SetsTrue(t *testing.T) {
+	s := New()
+	s.MarkSearchOffsetFetched(0, 0)
+	assert.True(t, s.IsSearchOffsetFetched(0, 0))
+	// Different section still false.
+	assert.False(t, s.IsSearchOffsetFetched(1, 0))
+	// Different offset still false.
+	assert.False(t, s.IsSearchOffsetFetched(0, 10))
+}
+
+func TestStore_ClearSearchBuffers_ResetsAllState(t *testing.T) {
+	s := New()
+	// Set some state.
+	s.SetSearchTotal(0, 39)
+	s.SetSearchTotal(2, 12)
+	s.MarkSearchOffsetFetched(0, 0)
+	s.MarkSearchOffsetFetched(0, 10)
+	s.SetSearchBufQuery("alpha")
+
+	// Clear.
+	s.ClearSearchBuffers()
+
+	// All state reset.
+	assert.Equal(t, 0, s.SearchSectionTotal(0))
+	assert.Equal(t, 0, s.SearchSectionTotal(2))
+	assert.False(t, s.IsSearchOffsetFetched(0, 0))
+	assert.False(t, s.IsSearchOffsetFetched(0, 10))
+	assert.Equal(t, "", s.SearchBufQuery())
+}
+
+func TestStore_SearchBufQuery_SetAndGet(t *testing.T) {
+	s := New()
+	assert.Equal(t, "", s.SearchBufQuery())
+	s.SetSearchBufQuery("beatles")
+	assert.Equal(t, "beatles", s.SearchBufQuery())
+}
