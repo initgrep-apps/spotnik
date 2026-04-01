@@ -125,7 +125,7 @@ func TestConvertSearchResult_ShortReleaseDate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		resp := map[string]interface{}{
-			"tracks": map[string]interface{}{"items": []interface{}{}, "total": 0},
+			"tracks":  map[string]interface{}{"items": []interface{}{}, "total": 0},
 			"artists": map[string]interface{}{"items": []interface{}{}, "total": 0},
 			"albums": map[string]interface{}{
 				"items": []map[string]interface{}{
