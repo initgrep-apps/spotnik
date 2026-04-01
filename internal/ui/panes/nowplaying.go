@@ -435,6 +435,12 @@ func (p *NowPlayingPane) SetVisualizerPattern(index int) {
 	p.engine.SetPattern(index)
 }
 
+// VisualizerPattern returns the current visualizer pattern index.
+// Used by tests and the app layer to read back the active pattern.
+func (p *NowPlayingPane) VisualizerPattern() int {
+	return p.engine.Pattern()
+}
+
 // SetTheme updates the theme reference for runtime theme switching.
 // NowPlayingPane propagates the new theme to its sub-components.
 func (p *NowPlayingPane) SetTheme(th theme.Theme) {

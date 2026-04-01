@@ -2,6 +2,8 @@ package app_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -135,4 +137,128 @@ func TestApp_FlushedMsg_WithError_SchedulesRetry(t *testing.T) {
 	// incremented and the returned Cmd must be non-nil.
 	assert.Greater(t, a.PrefsDirtyGen(), gen0, "error path should increment dirty generation")
 	assert.NotNil(t, cmd, "error path should return a retry Cmd")
+}
+
+// ---------------------------------------------------------------------------
+// Story 80: startup preference loading and persistence wiring
+// ---------------------------------------------------------------------------
+
+// TestAppNew_AppliesSavedPreset verifies that a non-zero Preset value in config
+// is applied to the layout manager at startup.
+func TestAppNew_AppliesSavedPreset(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	cfg.Preferences.Preset = 2
+
+	a := app.New(cfg, app.AppOptions{})
+	// Resize so the layout has been initialized.
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+
+	assert.Equal(t, 2, a.ActivePresetIndex(), "App.New should apply saved preset to layout")
+}
+
+// TestAppNew_AppliesSavedVisualizer verifies that a non-zero Visualizer value
+// in config is applied to the NowPlayingPane's viz engine at startup.
+func TestAppNew_AppliesSavedVisualizer(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	cfg.Preferences.Visualizer = 3
+
+	a := app.New(cfg, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+
+	np := a.NowPlayingPane()
+	require.NotNil(t, np, "NowPlayingPane should exist")
+	assert.Equal(t, 3, np.VisualizerPattern(), "App.New should apply saved visualizer to NowPlayingPane")
+}
+
+// TestAppNew_InvalidPreset_NoOp verifies that an out-of-range Preset in config
+// is silently ignored (layout.SetPreset no-ops on invalid indices).
+func TestAppNew_InvalidPreset_NoOp(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	cfg.Preferences.Preset = 99 // no such preset index
+
+	assert.NotPanics(t, func() {
+		a := app.New(cfg, app.AppOptions{})
+		a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+		// layout.SetPreset is a no-op for out-of-range: active preset stays at 0.
+		assert.Equal(t, 0, a.ActivePresetIndex(), "out-of-range preset should fall back to 0")
+	})
+}
+
+// TestAppNew_InvalidVisualizer_Wraps verifies that a large Visualizer in config
+// is wrapped with modulo by the viz engine (no panic, valid index).
+func TestAppNew_InvalidVisualizer_Wraps(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	cfg.Preferences.Visualizer = 99 // will wrap with modulo
+
+	assert.NotPanics(t, func() {
+		a := app.New(cfg, app.AppOptions{})
+		a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+		np := a.NowPlayingPane()
+		require.NotNil(t, np)
+		// Must be in [0, patternCount). 99 % 7 = 1
+		pat := np.VisualizerPattern()
+		assert.True(t, pat >= 0 && pat < 7, "out-of-range visualizer should wrap to valid index, got %d", pat)
+	})
+}
+
+// TestApp_VisualizerChanged_PersistsPreference verifies that receiving a
+// VisualizerPatternChangedMsg calls prefs.Set and schedules a flush.
+func TestApp_VisualizerChanged_PersistsPreference(t *testing.T) {
+	a := newPrefsTestApp(t)
+
+	assert.False(t, a.Prefs().HasPending(), "no pending prefs before visualizer change")
+
+	_, cmd := a.Update(panes.VisualizerPatternChangedMsg{PatternIndex: 4})
+
+	assert.True(t, a.Prefs().HasPending(), "VisualizerPatternChangedMsg should mark prefs as pending")
+	assert.NotNil(t, cmd, "VisualizerPatternChangedMsg should schedule a flush Cmd")
+}
+
+// TestApp_PresetCycle_PersistsPreference verifies that pressing 'p' persists
+// the new preset index via PreferenceStore.
+func TestApp_PresetCycle_PersistsPreference(t *testing.T) {
+	a := newPrefsTestApp(t)
+
+	assert.False(t, a.Prefs().HasPending(), "no pending prefs before preset cycle")
+
+	pMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+	_, cmd := a.Update(pMsg)
+
+	assert.True(t, a.Prefs().HasPending(), "pressing p should mark prefs as pending")
+	assert.NotNil(t, cmd, "pressing p should schedule a flush Cmd")
+}
+
+// TestPreferenceRoundTrip_PresetAndVisualizer verifies that preset and visualizer
+// preferences survive a write → reload cycle. This is the end-to-end round-trip test.
+func TestPreferenceRoundTrip_PresetAndVisualizer(t *testing.T) {
+	// Use a temp file so we don't touch real config.
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+
+	// Create a PreferenceStore pointing at the temp file.
+	ps := prefs.New(cfgPath)
+	ps.Set("preset", 2)
+	ps.Set("visualizer", 5)
+
+	// Flush to disk.
+	flushCmd := ps.FlushCmd()
+	require.NotNil(t, flushCmd)
+	result := flushCmd()
+	flushedMsg, ok := result.(prefs.FlushedMsg)
+	require.True(t, ok, "FlushCmd should return FlushedMsg, got %T", result)
+	require.NoError(t, flushedMsg.Err, "flush should succeed")
+
+	// Verify the file was written.
+	_, err := os.Stat(cfgPath)
+	require.NoError(t, err, "config file should exist after flush")
+
+	// Reload config and verify the values survived.
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	assert.Equal(t, 2, cfg.Preferences.Preset, "preset should survive round-trip")
+	assert.Equal(t, 5, cfg.Preferences.Visualizer, "visualizer should survive round-trip")
 }

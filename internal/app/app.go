@@ -238,7 +238,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		volStep = 5
 	}
 
-	return &App{
+	a := &App{
 		theme:           t,
 		store:           s,
 		alerts:          *components.NewNotifications(t),
@@ -257,6 +257,22 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		idleThreshold:   idleThresholdSecs * time.Second,
 		prefs:           prefs.New(config.DefaultConfigPath()),
 	}
+
+	// Apply saved layout preset (Page A only).
+	// SetPreset is a no-op for out-of-range indices, so no extra validation needed.
+	if cfg.Preferences.Preset > 0 {
+		a.layout.SetPreset(cfg.Preferences.Preset)
+		a.propagateSizes()
+		a.syncFocus()
+	}
+
+	// Apply saved visualizer pattern.
+	// SetVisualizerPattern delegates to SetPattern which wraps out-of-range values.
+	if cfg.Preferences.Visualizer > 0 {
+		a.nowPlayingPane().SetVisualizerPattern(cfg.Preferences.Visualizer)
+	}
+
+	return a
 }
 
 // Theme returns the active theme instance.
@@ -516,6 +532,16 @@ func (a *App) topArtistsPane() *panes.TopArtistsPane {
 		return tp
 	}
 	return nil
+}
+
+// NowPlayingPane returns the NowPlayingPane from the panes map (exported for testing).
+func (a *App) NowPlayingPane() *panes.NowPlayingPane {
+	return a.nowPlayingPane()
+}
+
+// ActivePresetIndex returns the active preset index from the layout manager (exported for testing).
+func (a *App) ActivePresetIndex() int {
+	return a.layout.ActivePresetIndex()
 }
 
 // RequestFlowPane returns the RequestFlowPane from the panes map (exported for testing).
@@ -1546,10 +1572,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handlePrefsMsg routes preference-related messages. Called from handleMsg switch
-// for prefsFlushTickMsg and prefs.FlushedMsg.
+// for prefsFlushTickMsg, prefs.FlushedMsg, and panes.VisualizerPatternChangedMsg.
 //
 // prefsFlushTickMsg: debounce timer fired — flush only if generation matches.
 // prefs.FlushedMsg: log error to stderr on failure (non-critical, no toast).
+// panes.VisualizerPatternChangedMsg: persist new visualizer index via PreferenceStore.
 func (a *App) handlePrefsMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch m := msg.(type) {
 	case prefsFlushTickMsg:
@@ -1568,6 +1595,11 @@ func (a *App) handlePrefsMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return a, a.schedulePrefsFlush(), true
 		}
 		return a, nil, true
+
+	case panes.VisualizerPatternChangedMsg:
+		// User cycled the visualizer pattern — persist via PreferenceStore.
+		a.prefs.Set("visualizer", m.PatternIndex)
+		return a, a.schedulePrefsFlush(), true
 	}
 	return a, nil, false
 }

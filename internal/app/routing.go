@@ -122,7 +122,8 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.layout.CyclePreset()
 		a.propagateSizes()
 		a.syncFocus()
-		return a, nil
+		a.prefs.Set("preset", a.layout.ActivePresetIndex())
+		return a, a.schedulePrefsFlush()
 	}
 
 	// '1'-'8' toggle pane visibility (Page A only).
