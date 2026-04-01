@@ -744,23 +744,10 @@ func (o *SearchOverlay) renderResults(innerWidth, availableHeight int) string {
 		contentWidth = 10
 	}
 
-	// Rebuild tracks table if narrow mode changed.
-	narrow := contentWidth < 60
-	if narrow != o.narrowTracks {
-		o.rebuildTrackTable(narrow)
-	}
-
-	// Set table size for correct page size calculation.
-	// tableHeight = availableHeight - tabbar(1) - tabsep(1) - helpbar(2)
-	tableHeight := availableHeight - 1 - 1 - 2
-	if tableHeight < 4 {
-		tableHeight = 4
-	}
-	for i := range o.tables {
-		if o.tables[i] != nil {
-			o.tables[i].SetSize(contentWidth, tableHeight)
-		}
-	}
+	// NOTE: Table SetSize and narrow-mode rebuild are intentionally NOT done here.
+	// renderResults is called from View() which must be pure (no state mutations).
+	// SetSize() and SetSize-driven rebuilds are handled by the overlay's SetSize() method,
+	// which is called by the root app on every WindowSizeMsg before the next View().
 
 	mutedStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 
