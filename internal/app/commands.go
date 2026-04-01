@@ -297,17 +297,32 @@ func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 // for a single section (tracks, artists, albums, or playlists). The result is
 // delivered as a SearchResultsMsg with Section and Offset set so the overlay can
 // merge only the relevant section's results while preserving the others.
+// sectionTypeStrings maps each search section to the Spotify API type string used
+// when fetching a page for that section in isolation.
+var sectionTypeStrings = map[panes.SearchSection]string{
+	panes.SectionTracks:    "track",
+	panes.SectionArtists:   "artist",
+	panes.SectionAlbums:    "album",
+	panes.SectionPlaylists: "playlist",
+}
+
 func (a *App) buildSearchPageCmd(query string, offset int, section panes.SearchSection) tea.Cmd {
 	search := a.search
+	typeStr, ok := sectionTypeStrings[section]
+	if !ok {
+		// Unknown section — should never happen; return a no-op command.
+		return func() tea.Msg { return panes.SearchResultsMsg{Section: section, Offset: offset} }
+	}
 	return func() tea.Msg {
 		if search == nil {
 			return panes.SearchResultsMsg{Err: errNilClient, Section: section, Offset: offset}
 		}
 		// Search is user-triggered — bypass token bucket.
+		// Only request the single type relevant to this section for efficiency.
 		results, err := search.Search(
 			api.WithPriority(context.Background(), api.Interactive),
 			query,
-			[]string{"track", "artist", "album", "playlist"},
+			[]string{typeStr},
 			10,
 			offset,
 		)

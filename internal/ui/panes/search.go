@@ -174,6 +174,8 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Paginated load — merge results for the requesting section only.
 			// Other sections' results and offsets are preserved.
+			prevOffset := o.sectionOffsets[m.Section]
+			isPrevPage := m.Offset < prevOffset
 			if o.results == nil {
 				o.results = &SearchResultData{}
 			}
@@ -181,9 +183,17 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Results != nil {
 				o.mergePageResults(m.Section, m.Results)
 			}
-			// Place cursor at position 0 for the newly loaded page.
+			// Place cursor at the appropriate position for the newly loaded page.
+			// Previous-page loads land at the bottom; next-page loads land at the top.
 			if m.Section == o.activeSection {
-				o.cursorPos = 0
+				if isPrevPage {
+					o.cursorPos = o.maxCursorForActiveSection() - 1
+					if o.cursorPos < 0 {
+						o.cursorPos = 0
+					}
+				} else {
+					o.cursorPos = 0
+				}
 			}
 		}
 		return o, nil
@@ -345,11 +355,8 @@ func (o *SearchOverlay) moveCursorUp() (tea.Model, tea.Cmd) {
 	// At first row — check if previous page exists.
 	offset := o.sectionOffsets[o.activeSection]
 	if offset > 0 {
-		// NOTE: cursor position for previous page (last item) is set when
-		// SearchResultsMsg arrives (it resets to 0), but for UX we'd ideally
-		// land at the bottom. The spec says "set cursorPos = maxCursorForActiveSection()-1
-		// after page load". However, since the page hasn't loaded yet at this point,
-		// we defer that to the SearchResultsMsg handler. For now, emit the request.
+		// Emit the page request; cursor will be placed at the bottom of the
+		// previous page when SearchResultsMsg arrives (isPrevPage detection).
 		return o, o.requestPage(offset - maxResultsPerSection)
 	}
 	return o, nil
@@ -1104,9 +1111,9 @@ func (o *SearchOverlay) SectionOffsets() [numSections]int {
 // WithSectionOffsets returns a copy of the overlay with the given sectionOffsets set.
 // Used in tests to simulate mid-pagination state without going through a full page load.
 func (o *SearchOverlay) WithSectionOffsets(offsets [numSections]int) *SearchOverlay {
-	copy := *o
-	copy.sectionOffsets = offsets
-	return &copy
+	clone := *o
+	clone.sectionOffsets = offsets
+	return &clone
 }
 
 // tabColorForSection returns the PaneBorder* theme token for the given section.

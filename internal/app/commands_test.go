@@ -318,3 +318,52 @@ func TestApp_SearchPageRequestMsg_DispatchesSearch(t *testing.T) {
 	assert.Equal(t, panes.SectionTracks, searchMsg.Section, "SearchResultsMsg should carry the requesting section")
 	assert.Equal(t, "10", capturedOffset, "HTTP request should include offset=10")
 }
+
+// TestApp_SearchPageCmd_FetchesSingleType verifies that buildSearchPageCmd sends only
+// the type string for the requested section, not all four types.
+// This matches the spec requirement that "each type is paginated independently."
+func TestApp_SearchPageCmd_FetchesSingleType(t *testing.T) {
+	tests := []struct {
+		name     string
+		section  panes.SearchSection
+		wantType string
+	}{
+		{"tracks section", panes.SectionTracks, "track"},
+		{"artists section", panes.SectionArtists, "artist"},
+		{"albums section", panes.SectionAlbums, "album"},
+		{"playlists section", panes.SectionPlaylists, "playlist"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedType string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedType = r.URL.Query().Get("type")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{
+					"tracks":{"items":[],"total":0},
+					"artists":{"items":[],"total":0},
+					"albums":{"items":[],"total":0},
+					"playlists":{"items":[],"total":0}
+				}`))
+			}))
+			defer srv.Close()
+
+			cfg := &config.Config{}
+			a := app.New(cfg, app.AppOptions{})
+			a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+			_, cmd := a.Update(panes.SearchPageRequestMsg{
+				Query:   "test",
+				Offset:  10,
+				Section: tt.section,
+			})
+			require.NotNil(t, cmd)
+			cmd() // trigger HTTP call
+
+			assert.Equal(t, tt.wantType, capturedType,
+				"buildSearchPageCmd should fetch only the type for section %v", tt.section)
+		})
+	}
+}

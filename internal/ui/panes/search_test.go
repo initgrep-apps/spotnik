@@ -1457,6 +1457,76 @@ func TestMoveCursorUp_FirstRow_NoOffset_NoEmit(t *testing.T) {
 	assert.False(t, isPageReq, "should not emit page request when already on first page")
 }
 
+// TestSearchOverlay_PreviousPage_CursorAtBottom verifies that when a SearchResultsMsg
+// arrives for a previous page (new offset < previous offset), cursorPos is set to the
+// last item, not 0. This matches the spec: "navigate to previous page → cursor at bottom."
+//
+// This tests going from page 3 (offset=20) back to page 2 (offset=10), since going back
+// to offset=0 is indistinguishable from a new query in the current message design.
+func TestSearchOverlay_PreviousPage_CursorAtBottom(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	makeItems := func(start, count int) []panes.SearchTrackItem {
+		items := make([]panes.SearchTrackItem, count)
+		for i := range items {
+			items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", start+i), URI: fmt.Sprintf("uri:%d", start+i)}
+		}
+		return items
+	}
+
+	// Advance to page 3 (offset=20) via two next-page loads.
+	page2Msg := panes.SearchResultsMsg{
+		Results: &panes.SearchResultData{Tracks: makeItems(11, 10), TotalTracks: 30},
+		Section: panes.SectionTracks,
+		Offset:  10,
+	}
+	model, _ := o.Update(page2Msg)
+	o = model.(*panes.SearchOverlay)
+	assert.Equal(t, 0, o.CursorPos(), "cursor at top after next-page load to page 2")
+
+	page3Msg := panes.SearchResultsMsg{
+		Results: &panes.SearchResultData{Tracks: makeItems(21, 10), TotalTracks: 30},
+		Section: panes.SectionTracks,
+		Offset:  20,
+	}
+	model, _ = o.Update(page3Msg)
+	o = model.(*panes.SearchOverlay)
+	assert.Equal(t, 0, o.CursorPos(), "cursor at top after next-page load to page 3")
+
+	// Go back to page 2 (offset=10) — previous page: cursor must land at the bottom (index 9).
+	backMsg := panes.SearchResultsMsg{
+		Results: &panes.SearchResultData{Tracks: makeItems(11, 10), TotalTracks: 30},
+		Section: panes.SectionTracks,
+		Offset:  10, // 10 < 20 (previous offset) → isPrevPage
+	}
+	model, _ = o.Update(backMsg)
+	o = model.(*panes.SearchOverlay)
+	assert.Equal(t, 9, o.CursorPos(), "cursor should be at bottom (index 9) after previous-page load")
+}
+
+// TestSearchOverlay_NextPage_CursorAtTop verifies that when a SearchResultsMsg arrives
+// for a next page (new offset > previous offset), cursorPos is set to 0.
+func TestSearchOverlay_NextPage_CursorAtTop(t *testing.T) {
+	o, s := newTestSearchOverlayWithResults()
+	s.SetSearchQuery("blinding")
+
+	// Move to page 2 (offset 10) — cursor should land at 0.
+	page2Items := make([]panes.SearchTrackItem, 10)
+	for i := range page2Items {
+		page2Items[i] = panes.SearchTrackItem{Name: fmt.Sprintf("Track %d", i+11)}
+	}
+	msg := panes.SearchResultsMsg{
+		Results: &panes.SearchResultData{Tracks: page2Items, TotalTracks: 20},
+		Section: panes.SectionTracks,
+		Offset:  10,
+	}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+
+	assert.Equal(t, 0, o.CursorPos(), "cursor should be at top (0) after next-page load")
+}
+
 // TestSearchOverlay_TabSwitch_PreservesPageOffset verifies that switching sections
 // via Tab does not reset sectionOffsets (each section retains its own page position).
 func TestSearchOverlay_TabSwitch_PreservesPageOffset(t *testing.T) {
