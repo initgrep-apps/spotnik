@@ -394,9 +394,12 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		return p, emitPlaybackRequest(ActionCycleRepeat)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "v":
-		// Cycle engine animation pattern locally — no API call needed.
+		// Cycle engine animation pattern and emit a message so the app can persist
+		// the new index via PreferenceStore.
 		p.engine.CyclePattern()
-		return p, nil
+		return p, func() tea.Msg {
+			return VisualizerPatternChangedMsg{PatternIndex: p.engine.Pattern()}
+		}
 	}
 
 	return p, nil
@@ -418,12 +421,35 @@ func emitPlaybackRequest(action PlaybackAction) tea.Cmd {
 	}
 }
 
+// VisualizerPatternChangedMsg is emitted when the user cycles the visualizer
+// pattern via the 'v' key. The root app handles this to persist the preference
+// via PreferenceStore.
+type VisualizerPatternChangedMsg struct {
+	PatternIndex int
+}
+
+// SetVisualizerPattern sets the visualizer engine to a specific pattern index.
+// Used at startup to restore the saved preference from config.
+// Delegates directly to engine.SetPattern which wraps out-of-range values with modulo.
+func (p *NowPlayingPane) SetVisualizerPattern(index int) {
+	p.engine.SetPattern(index)
+}
+
+// VisualizerPattern returns the current visualizer pattern index.
+// Used by tests and the app layer to read back the active pattern.
+func (p *NowPlayingPane) VisualizerPattern() int {
+	return p.engine.Pattern()
+}
+
 // SetTheme updates the theme reference for runtime theme switching.
 // NowPlayingPane propagates the new theme to its sub-components.
 func (p *NowPlayingPane) SetTheme(th theme.Theme) {
+	// Save the current pattern index so theme changes don't reset the user's choice.
+	savedPattern := p.engine.Pattern()
 	p.theme = th
 	p.infoBox = components.NewInfoBox(th)
 	p.engine = viz.NewEngine(th)
+	p.engine.SetPattern(savedPattern)
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
 	// Propagate dimensions to newly created sub-components.

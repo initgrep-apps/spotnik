@@ -194,3 +194,19 @@ The `Visualizer` field comment in `PreferencesConfig` says "0-6" which will rot 
 **Feature:** 17-bootstrap
 
 If the user changes a preference and quits within the 500ms debounce window, the change is lost. Consider adding a synchronous flush in the quit handler.
+
+---
+
+## CyclePattern lacks empty-patterns guard
+**Found:** 2026-04-01 | **Source:** PR #99 Review
+**Feature:** 13-nowplaying
+
+`Engine.CyclePattern()` does `(e.patternIdx + 1) % len(e.patterns)` without checking for an empty patterns slice, while the new `SetPattern()` correctly guards against it. Add the same `len(e.patterns) == 0` guard for consistency.
+
+---
+
+## Unbounded prefs flush retry with no user notification
+**Found:** 2026-04-01 | **Source:** PR #99 Review
+**Feature:** 17-bootstrap
+
+When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` with no retry limit. On a permanently unwritable config file, this retries every 500ms indefinitely with only stderr logging (invisible in TUI). Consider capping retries and emitting a toast after N failures.

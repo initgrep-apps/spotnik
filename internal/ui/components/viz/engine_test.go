@@ -765,6 +765,48 @@ func TestEngine_SetSize_SameDimensions_NoReset(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Story 80: SetPattern
+// ---------------------------------------------------------------------------
+
+func TestSetPattern_ValidIndex(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(20, 4)
+	e.SetPattern(3)
+	assert.Equal(t, 3, e.Pattern())
+}
+
+func TestSetPattern_OutOfRange_Wraps(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	// 7 patterns → index 8 wraps to 8 % 7 = 1
+	e.SetPattern(8)
+	assert.Equal(t, 1, e.Pattern())
+}
+
+func TestSetPattern_Negative_ClampsToZero(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	e.SetPattern(-1)
+	assert.Equal(t, 0, e.Pattern())
+}
+
+func TestSetPattern_RegeneratesFrames(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(20, 4)
+	e.SetPlaying(true)
+	e.Advance()
+	// After SetPattern the frame index resets to 0 and frames are regenerated.
+	e.SetPattern(2)
+	assert.Equal(t, 0, e.FrameIndex(), "SetPattern should reset frameIdx to 0")
+	f := e.CurrentFrame()
+	assert.Len(t, f, 4, "SetPattern should regenerate frames with correct height")
+}
+
+func TestSetPattern_NoSizeYet_NoPanic(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	assert.NotPanics(t, func() { e.SetPattern(2) })
+	assert.Equal(t, 2, e.Pattern(), "pattern should be set even before SetSize")
+}
+
+// ---------------------------------------------------------------------------
 // MaxHeight interface method (Issue 1 fix)
 // ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 ---
 title: "First-Launch Bootstrap & Preference Persistence Engine"
-status: open
+status: done
 ---
 
 ## Description

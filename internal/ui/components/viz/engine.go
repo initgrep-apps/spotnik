@@ -120,6 +120,24 @@ func (e *Engine) CyclePattern() {
 	}
 }
 
+// SetPattern sets the active pattern to the given index.
+// If index is out of range, it wraps with modulo (same as CyclePattern).
+// Negative values are clamped to 0.
+// Resets frameIdx to 0 and regenerates frames if the engine has been sized.
+func (e *Engine) SetPattern(index int) {
+	if len(e.patterns) == 0 {
+		return
+	}
+	e.patternIdx = index % len(e.patterns)
+	if e.patternIdx < 0 {
+		e.patternIdx = 0
+	}
+	e.frameIdx = 0
+	if e.width > 0 && e.height > 0 {
+		e.frames = e.generateFrames()
+	}
+}
+
 // Pattern returns the current pattern index.
 func (e *Engine) Pattern() int {
 	return e.patternIdx

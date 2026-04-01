@@ -568,7 +568,7 @@ func TestNowPlayingPane_ZeroDuration(t *testing.T) {
 // ── v key cycles engine pattern ──────────────────────────────────────────────
 
 // TestNowPlayingPane_V_CyclesEnginePattern verifies that pressing 'v' while
-// focused advances the engine's pattern index, wrapping around.
+// focused advances the engine's pattern index and emits a VisualizerPatternChangedMsg.
 func TestNowPlayingPane_V_CyclesEnginePattern(t *testing.T) {
 	pane := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
@@ -579,7 +579,12 @@ func TestNowPlayingPane_V_CyclesEnginePattern(t *testing.T) {
 	vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
 	_, cmd := pane.Update(vMsg)
 
-	assert.Nil(t, cmd, "v key should return nil cmd (local state change only)")
+	// v now emits VisualizerPatternChangedMsg for preference persistence.
+	require.NotNil(t, cmd, "v key should return a Cmd for persistence")
+	msg := cmd()
+	_, ok := msg.(VisualizerPatternChangedMsg)
+	assert.True(t, ok, "v key cmd should return VisualizerPatternChangedMsg, got %T", msg)
+
 	patternCount := pane.engine.PatternCount()
 	assert.Equal(t, (startPat+1)%patternCount, pane.engine.Pattern(),
 		"engine pattern should advance by 1 on v key")
@@ -826,4 +831,55 @@ func splitLines(s string) []string {
 	}
 	lines = append(lines, s[start:])
 	return lines
+}
+
+// ---------------------------------------------------------------------------
+// Story 80: SetVisualizerPattern and VisualizerPatternChangedMsg
+// ---------------------------------------------------------------------------
+
+// TestNowPlayingPane_SetVisualizerPattern verifies that SetVisualizerPattern
+// delegates to the engine and changes the current pattern index.
+func TestNowPlayingPane_SetVisualizerPattern(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.SetSize(80, 24)
+
+	pane.SetVisualizerPattern(3)
+	assert.Equal(t, 3, pane.engine.Pattern(), "SetVisualizerPattern should delegate to engine.SetPattern")
+}
+
+// TestNowPlayingPane_VKey_EmitsVisualizerChangedMsg verifies that pressing 'v'
+// cycles the pattern AND emits a VisualizerPatternChangedMsg carrying the new index.
+func TestNowPlayingPane_VKey_EmitsVisualizerChangedMsg(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.SetSize(80, 24)
+	initialPattern := pane.engine.Pattern()
+
+	vMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
+	_, cmd := pane.Update(vMsg)
+
+	require.NotNil(t, cmd, "v key should return a Cmd")
+	msg := cmd()
+	changedMsg, ok := msg.(VisualizerPatternChangedMsg)
+	require.True(t, ok, "v key cmd should return VisualizerPatternChangedMsg, got %T", msg)
+	assert.Equal(t, initialPattern+1, changedMsg.PatternIndex,
+		"VisualizerPatternChangedMsg should carry the new pattern index")
+}
+
+// TestNowPlayingPane_SetTheme_PreservesVisualizerPattern verifies that switching
+// theme does not reset the visualizer pattern the user has selected.
+func TestNowPlayingPane_SetTheme_PreservesVisualizerPattern(t *testing.T) {
+	pane := newTestNowPlayingPane(false)
+	pane.SetSize(80, 24)
+
+	// Cycle to a non-default pattern (pattern 2).
+	pane.SetVisualizerPattern(2)
+	require.Equal(t, 2, pane.engine.Pattern(), "pattern should be 2 before theme change")
+
+	// Switch to a different theme.
+	newTheme := theme.Load("dracula")
+	pane.SetTheme(newTheme)
+
+	// Pattern must be preserved after the theme change.
+	assert.Equal(t, 2, pane.engine.Pattern(),
+		"SetTheme must not reset the visualizer pattern")
 }
