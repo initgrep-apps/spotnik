@@ -927,7 +927,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		types := searchTypesForActiveType(activeType)
 		nextOffset := m.Offset + SearchPageSize
 		batchEnd := ((m.Offset / SearchPrefetchItems) + 1) * SearchPrefetchItems
-		if nextOffset < batchEnd && a.store.SearchHasMore(activeType) && nextOffset <= SearchMaxOffset {
+		if nextOffset < batchEnd && a.store.SearchHasMore(activeType) && nextOffset < SearchMaxOffset {
 			// Batch still in progress — dispatch the next page, keep loading flag true.
 			updated, _ := a.searchPane.Update(m)
 			if sp, ok := updated.(*panes.SearchOverlay); ok {

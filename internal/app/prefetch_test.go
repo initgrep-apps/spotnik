@@ -240,7 +240,7 @@ func TestBuildSearchBatchCmd_FewerCommandsNearMaxOffset(t *testing.T) {
 
 // TestBuildSearchBatchCmd_Offset1001_ExcludesAll verifies that when startOffset
 // is 1001 (beyond SearchMaxOffset), no commands are created.
-// The guard is `offset > searchMaxOffset`, so offset=1001 > 1000 → no pages generated.
+// The guard is `offset >= searchMaxOffset`, so offset=1001 >= 1000 → no pages generated.
 func TestBuildSearchBatchCmd_Offset1001_ExcludesAll(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -266,7 +266,37 @@ func TestBuildSearchBatchCmd_Offset1001_ExcludesAll(t *testing.T) {
 	})
 	// buildSearchBatchCmd returns nil when no commands are generated.
 	assert.Nil(t, cmd, "offset=1001 should return nil (no commands created)")
-	assert.Equal(t, 0, callCount, "no API calls should be made when offset > searchMaxOffset")
+	assert.Equal(t, 0, callCount, "no API calls should be made when offset >= searchMaxOffset")
+}
+
+// TestBuildSearchBatchCmd_Offset1000_ExcludesAll verifies that when startOffset
+// equals SearchMaxOffset (1000), no commands are created (>= guard).
+func TestBuildSearchBatchCmd_Offset1000_ExcludesAll(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":2000},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Pre-populate store: 50 items loaded, total=2000 → has more.
+	a.Store().SetSearchQuery("jazz")
+	a.Store().AppendSearchTracks(makeDomainTracks(50), 2000)
+
+	_, cmd := a.Update(panes.SearchPrefetchMsg{
+		Query:      "jazz",
+		Types:      []string{"track"},
+		NextOffset: 1000, // == SearchMaxOffset → guard fires, no cmds created
+	})
+	// buildSearchBatchCmd returns nil when offset >= SearchMaxOffset.
+	assert.Nil(t, cmd, "offset=1000 should return nil (Spotify API hard cap)")
+	assert.Equal(t, 0, callCount, "no API calls should be made when offset == searchMaxOffset")
 }
 
 // --- Task 4: SearchPageLoadedMsg handler ---

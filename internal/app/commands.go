@@ -288,7 +288,9 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
 func (a *App) buildSearchBatchCmd(query string, types []string, startOffset int) tea.Cmd {
-	if startOffset > SearchMaxOffset {
+	// Spotify API caps offset at SearchMaxOffset (1000). Do not fetch at or beyond this value
+	// since the API would return an error for any offset >= 1000.
+	if startOffset >= SearchMaxOffset {
 		return nil
 	}
 	return a.buildSearchPageCmd(query, types, startOffset)
