@@ -1,7 +1,7 @@
 ---
 title: "Search Results: bubbles/list with Custom Delegate"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

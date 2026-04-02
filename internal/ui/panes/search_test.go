@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -283,30 +284,31 @@ func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 
 // --- Task 4.4: Result rendering tests ---
 
-// TestSearchOverlay_View_Results verifies section headers and items are rendered.
+// TestSearchOverlay_View_Results verifies list items are rendered with badge symbols.
+// After Story 84, section headers (TRACKS/ARTISTS/etc.) are replaced by badge symbols (♫/●/◆/☰).
 func TestSearchOverlay_View_Results(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
 	view := o.View()
 
-	assert.Contains(t, view, "TRACKS", "view should contain TRACKS section header")
-	assert.Contains(t, view, "ARTISTS", "view should contain ARTISTS section header")
-	assert.Contains(t, view, "ALBUMS", "view should contain ALBUMS section header")
-	assert.Contains(t, view, "PLAYLISTS", "view should contain PLAYLISTS section header")
+	// Category badge symbols replace old section headers.
+	assert.True(t, strings.ContainsAny(view, "♫●◆☰"), "view should contain category badge symbols")
 	assert.Contains(t, view, "Blinding Lights", "view should contain track name")
 	assert.Contains(t, view, "The Weeknd", "view should contain artist name")
 }
 
-// TestSearchOverlay_View_SelectedHighlight verifies the selected item uses SelectedBg styling.
+// TestSearchOverlay_View_SelectedHighlight verifies the selected item is shown.
+// After Story 84, the list delegate handles selection highlighting; the first item
+// is shown as selected by default (index 0).
 func TestSearchOverlay_View_SelectedHighlight(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
 	view := o.View()
 
-	// The selected item should render with a selection indicator (▶)
-	assert.Contains(t, view, "▶", "selected item should have ▶ prefix")
+	// The selected item (first item, "Blinding Lights") should be visible.
+	assert.Contains(t, view, "Blinding Lights", "selected item should be rendered")
 }
 
 // TestSearchOverlay_View_Truncation verifies long names are truncated at narrow widths.
@@ -449,8 +451,9 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	o.SetSize(80, 30)
 
 	output := o.View()
-	assert.Contains(t, output, "TRACKS", "should show tracks section header")
+	// After Story 84, badge symbols replace old section headers.
 	assert.Contains(t, output, "Blinding Lights", "should show track name in results")
+	assert.Contains(t, output, "♫", "should show track badge symbol")
 }
 
 func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
@@ -543,7 +546,8 @@ func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
 
 	view := o.View()
 	assert.Contains(t, view, "Track One", "view should show track from SearchPageLoadedMsg")
-	assert.Contains(t, view, "TRACKS", "view should show TRACKS section header")
+	// After Story 84: badge symbols replace old section headers.
+	assert.True(t, strings.ContainsAny(view, "♫●"), "view should show badge symbols")
 	assert.Contains(t, view, "Artist One", "view should show artist from SearchPageLoadedMsg")
 }
 
@@ -818,4 +822,382 @@ func TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults(t *testing.T) {
 	o = model.(*panes.SearchOverlay)
 
 	assert.Contains(t, o.View(), "Jazz Track", "error response must not wipe existing displayed results")
+}
+
+// --- Story 84: bubbles/list with custom delegate ---
+
+// TestSearchListItem_InterfaceMethods verifies SearchListItem implements list.Item correctly.
+func TestSearchListItem_InterfaceMethods(t *testing.T) {
+	item := panes.SearchListItem{
+		Category: "track",
+		Name:     "Blinding Lights",
+		Subtitle: "The Weeknd",
+		URI:      "spotify:track:t1",
+		IsTrack:  true,
+	}
+	assert.Equal(t, "Blinding Lights", item.Title(), "Title() should return name")
+	assert.Equal(t, "The Weeknd", item.Description(), "Description() should return subtitle")
+	assert.Equal(t, "Blinding Lights", item.FilterValue(), "FilterValue() should return name")
+}
+
+// TestSearchListItem_AllCategories verifies each category badge symbol is non-empty.
+func TestSearchListItem_AllCategories(t *testing.T) {
+	categories := []string{"track", "artist", "album", "playlist"}
+	for _, cat := range categories {
+		item := panes.SearchListItem{Category: cat, Name: "Test", URI: "u"}
+		assert.NotEmpty(t, item.Category, "category should be set for %s", cat)
+	}
+}
+
+// TestSearchItemDelegate_Height verifies delegate height is 2.
+func TestSearchItemDelegate_Height(t *testing.T) {
+	th := theme.Load("black")
+	d := panes.NewSearchItemDelegate(th)
+	assert.Equal(t, 2, d.Height(), "delegate height should be 2")
+}
+
+// TestSearchItemDelegate_Spacing verifies delegate spacing is 0.
+func TestSearchItemDelegate_Spacing(t *testing.T) {
+	th := theme.Load("black")
+	d := panes.NewSearchItemDelegate(th)
+	assert.Equal(t, 0, d.Spacing(), "delegate spacing should be 0")
+}
+
+// TestSearchItemDelegate_Render_BadgeAndName verifies Render outputs badge symbol + name.
+func TestSearchItemDelegate_Render_BadgeAndName(t *testing.T) {
+	th := theme.Load("black")
+	d := panes.NewSearchItemDelegate(th)
+
+	tests := []struct {
+		category   string
+		wantSymbol string
+	}{
+		{"track", "♫"},
+		{"artist", "●"},
+		{"album", "◆"},
+		{"playlist", "☰"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.category, func(t *testing.T) {
+			item := panes.SearchListItem{
+				Category: tt.category,
+				Name:     "Test Item",
+				Subtitle: "subtitle",
+				URI:      "spotify:test",
+				IsTrack:  tt.category == "track",
+			}
+			var buf strings.Builder
+			l := panes.NewTestList(d)
+			d.Render(&buf, l, 0, item)
+			output := buf.String()
+			assert.Contains(t, output, tt.wantSymbol, "render should include badge symbol for %s", tt.category)
+			assert.Contains(t, output, "Test Item", "render should include item name")
+		})
+	}
+}
+
+// TestSearchItemDelegate_Render_Subtitle verifies subtitle line is rendered.
+func TestSearchItemDelegate_Render_Subtitle(t *testing.T) {
+	th := theme.Load("black")
+	d := panes.NewSearchItemDelegate(th)
+
+	item := panes.SearchListItem{
+		Category: "track",
+		Name:     "Track Name",
+		Subtitle: "Artist Name",
+		URI:      "u1",
+		IsTrack:  true,
+	}
+	var buf strings.Builder
+	l := panes.NewTestList(d)
+	d.Render(&buf, l, 0, item)
+	assert.Contains(t, buf.String(), "Artist Name", "render should include subtitle")
+}
+
+// TestSearchOverlay_RebuildListItems_AllTab verifies tabAll includes all 4 types.
+func TestSearchOverlay_RebuildListItems_AllTab(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	// Populate store with one item of each type.
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Artist A"}}},
+	}, 1)
+	s.AppendSearchArtists([]domain.SearchArtist{
+		{ID: "a1", Name: "Artist B", URI: "spotify:artist:a1"},
+	}, 1)
+	s.AppendSearchAlbums([]domain.SearchAlbum{
+		{ID: "al1", Name: "Album C", URI: "spotify:album:al1", Artists: []domain.Artist{{Name: "Artist C"}}},
+	}, 1)
+	s.AppendSearchPlaylists([]domain.SearchPlaylist{
+		{ID: "pl1", Name: "Playlist D", URI: "spotify:playlist:pl1"},
+	}, 1)
+
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	// After rebuild, the list should have 4 items (one per type).
+	assert.Equal(t, 4, panes.ListItemCount(o), "tabAll should include all 4 items")
+}
+
+// TestSearchOverlay_RebuildListItems_SongsTab verifies tabSongs includes only tracks.
+func TestSearchOverlay_RebuildListItems_SongsTab(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1"},
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2"},
+	}, 2)
+	s.AppendSearchArtists([]domain.SearchArtist{
+		{ID: "a1", Name: "Artist B", URI: "spotify:artist:a1"},
+	}, 1)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	// Switch to Songs tab.
+	panes.SetActiveTab(o, panes.TabSongs)
+	panes.CallRebuildListItems(o)
+
+	assert.Equal(t, 2, panes.ListItemCount(o), "tabSongs should include only tracks")
+}
+
+// TestSearchOverlay_RebuildListItems_EmptyStore verifies empty store produces empty list.
+func TestSearchOverlay_RebuildListItems_EmptyStore(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	assert.Equal(t, 0, panes.ListItemCount(o), "empty store should produce empty list")
+}
+
+// TestCheckPrefetch_BelowThreshold verifies no prefetch cmd at 30% scroll.
+func TestCheckPrefetch_BelowThreshold(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	// Load 10 items, cursor at index 2 (20% — below 60% threshold).
+	tracks := make([]domain.Track, 10)
+	for i := range tracks {
+		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
+	}
+	s.AppendSearchTracks(tracks, 100) // total=100, has more
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	// Cursor at 0 (default) — 0/10 = 0%, well below 60%.
+	cmd := panes.CallCheckPrefetch(o)
+	assert.Nil(t, cmd, "cursor at 0%% should not trigger prefetch")
+}
+
+// TestCheckPrefetch_AtThreshold verifies prefetch emits SearchPrefetchMsg at 60%.
+func TestCheckPrefetch_AtThreshold(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	// Load 10 items with total=100 (has more).
+	tracks := make([]domain.Track, 10)
+	for i := range tracks {
+		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
+	}
+	s.AppendSearchTracks(tracks, 100)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	// Move cursor to index 6 (60% of 10).
+	panes.SetListCursor(o, 6)
+
+	cmd := panes.CallCheckPrefetch(o)
+	require.NotNil(t, cmd, "cursor at 60%% should trigger prefetch")
+	msg := cmd()
+	pfMsg, ok := msg.(panes.SearchPrefetchMsg)
+	require.True(t, ok, "should emit SearchPrefetchMsg, got %T", msg)
+	assert.Equal(t, 10, pfMsg.NextOffset, "NextOffset should be current offset (len of loaded items)")
+	assert.Equal(t, "test", pfMsg.Query, "Query should match store query")
+}
+
+// TestCheckPrefetch_NoMoreData verifies nil returned when no more data available.
+func TestCheckPrefetch_NoMoreData(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+
+	// Load 10 items with total=10 (no more).
+	tracks := make([]domain.Track, 10)
+	for i := range tracks {
+		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
+	}
+	s.AppendSearchTracks(tracks, 10) // offset=10, total=10 → no more
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	// Cursor at 6 (60%) but no more data.
+	panes.SetListCursor(o, 6)
+
+	cmd := panes.CallCheckPrefetch(o)
+	assert.Nil(t, cmd, "should return nil when no more data available")
+}
+
+// TestSearchOverlay_DownKey_MovesCursor verifies down key advances list cursor.
+func TestSearchOverlay_DownKey_MovesCursor(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1"},
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2"},
+	}, 2)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	initialIdx := panes.ListCursorIndex(o)
+	o, _ = sendKey(t, o, "down")
+	assert.Equal(t, initialIdx+1, panes.ListCursorIndex(o), "down key should advance list cursor")
+}
+
+// TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg verifies Enter on a track emits PlayTrackMsg.
+func TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1"},
+	}, 1)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	_, cmd := sendKey(t, o, "enter")
+	require.NotNil(t, cmd)
+	// handleEnter returns tea.Batch(playCmd, closeCmd); execute and inspect messages.
+	msg := cmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "Enter should return BatchMsg (play + close), got %T", msg)
+	var found bool
+	for _, subCmd := range batchMsg {
+		if subCmd == nil {
+			continue
+		}
+		if ptMsg, ok2 := subCmd().(panes.PlayTrackMsg); ok2 {
+			assert.Equal(t, "spotify:track:t1", ptMsg.TrackURI)
+			found = true
+		}
+	}
+	assert.True(t, found, "Enter on track should produce PlayTrackMsg in batch")
+}
+
+// TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg verifies Enter on an album emits PlayContextMsg.
+func TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.AppendSearchAlbums([]domain.SearchAlbum{
+		{ID: "al1", Name: "Album One", URI: "spotify:album:al1"},
+	}, 1)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	// Switch to Albums tab so albums show up first.
+	panes.SetActiveTab(o, panes.TabAlbums)
+	panes.CallRebuildListItems(o)
+
+	_, cmd := sendKey(t, o, "enter")
+	require.NotNil(t, cmd)
+	msg := cmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "Enter should return BatchMsg (play + close), got %T", msg)
+	var found bool
+	for _, subCmd := range batchMsg {
+		if subCmd == nil {
+			continue
+		}
+		if pcMsg, ok2 := subCmd().(panes.PlayContextMsg); ok2 {
+			assert.Equal(t, "spotify:album:al1", pcMsg.ContextURI)
+			found = true
+		}
+	}
+	assert.True(t, found, "Enter on album should produce PlayContextMsg in batch")
+}
+
+// TestSearchOverlay_CtrlA_TrackEmitsAddToQueueMsg verifies Ctrl+A on track emits AddToQueueMsg.
+func TestSearchOverlay_CtrlA_ListDelegate_EmitsAddToQueueMsg(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1"},
+	}, 1)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	_, cmd := sendKey(t, o, "ctrl+a")
+	require.NotNil(t, cmd)
+	msg := cmd()
+	qMsg, ok := msg.(panes.AddToQueueMsg)
+	require.True(t, ok, "Ctrl+A on track should emit AddToQueueMsg, got %T", msg)
+	assert.Equal(t, "spotify:track:t1", qMsg.TrackURI)
+}
+
+// TestSearchOverlay_View_ListDelegate_ContainsBadgeSymbol verifies list items show category badges.
+func TestSearchOverlay_View_ListDelegate_ContainsBadgeSymbol(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "My Track", URI: "spotify:track:t1"},
+	}, 1)
+	s.AppendSearchArtists([]domain.SearchArtist{
+		{ID: "a1", Name: "My Artist", URI: "spotify:artist:a1"},
+	}, 1)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
+		Tracks:  []panes.SearchTrackItem{{URI: "spotify:track:t1", Name: "My Track", Artist: "Ar"}},
+		Artists: []panes.SearchArtistItem{{URI: "spotify:artist:a1", Name: "My Artist"}},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	view := o.View()
+	assert.Contains(t, view, "My Track", "view should contain track name")
+	// Badge symbols should be present.
+	assert.True(t, strings.ContainsAny(view, "♫●◆☰"), "view should contain at least one badge symbol")
+}
+
+// TestSearchOverlay_View_NoSectionHeaders verifies old TRACKS/ARTISTS headers are gone.
+func TestSearchOverlay_View_NoSectionHeaders(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.SetSearchQuery("test")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{{URI: "u1", Name: "T1", Artist: "A1"}},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	view := o.View()
+	assert.NotContains(t, view, "● TRACKS", "old TRACKS section header should be gone")
+	assert.NotContains(t, view, "● ARTISTS", "old ARTISTS section header should be gone")
 }
