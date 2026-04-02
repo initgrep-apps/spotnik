@@ -142,30 +142,6 @@ func TestStore_SetGetRecentlyPlayed(t *testing.T) {
 	assert.Equal(t, "2024-03-01T22:15:00Z", got[0].PlayedAt)
 }
 
-func TestStore_SearchResults(t *testing.T) {
-	s := New()
-
-	// Initially nil.
-	assert.Nil(t, s.SearchResults())
-
-	results := &api.SearchResult{
-		Tracks: api.SearchTracksResult{
-			Items: []api.Track{{ID: "t1", Name: "Blinding Lights"}},
-			Total: 1,
-		},
-	}
-	s.SetSearchResults(results)
-
-	got := s.SearchResults()
-	require.NotNil(t, got)
-	require.Len(t, got.Tracks.Items, 1)
-	assert.Equal(t, "Blinding Lights", got.Tracks.Items[0].Name)
-
-	// Clear results.
-	s.SetSearchResults(nil)
-	assert.Nil(t, s.SearchResults())
-}
-
 func TestStore_SearchQuery(t *testing.T) {
 	s := New()
 
@@ -789,4 +765,211 @@ func TestStore_ReadEventsFrom_IncrementalCursor(t *testing.T) {
 	_, events2 := s.ReadEventsFrom(cursor)
 	require.Len(t, events2, 1)
 	assert.Equal(t, domain.EventSemaphoreAcquired, events2[0].Kind)
+}
+
+// --- SearchState and TypePage ---
+
+func TestStore_SearchState_InitiallyEmpty(t *testing.T) {
+	s := New()
+	assert.Equal(t, "", s.SearchQuery())
+	assert.False(t, s.SearchLoading())
+	assert.Nil(t, s.SearchError())
+	assert.Equal(t, "", s.SearchActiveType())
+
+	tracks := s.SearchTracks()
+	assert.Empty(t, tracks.Items)
+	assert.Equal(t, 0, tracks.Offset)
+	assert.Equal(t, 0, tracks.Total)
+
+	artists := s.SearchArtists()
+	assert.Empty(t, artists.Items)
+
+	albums := s.SearchAlbums()
+	assert.Empty(t, albums.Items)
+
+	playlists := s.SearchPlaylists()
+	assert.Empty(t, playlists.Items)
+}
+
+func TestStore_SearchQuery_SetGet(t *testing.T) {
+	s := New()
+	s.SetSearchQuery("blinding lights")
+	assert.Equal(t, "blinding lights", s.SearchQuery())
+}
+
+func TestStore_SearchLoading_SetGet(t *testing.T) {
+	s := New()
+	s.SetSearchLoading(true)
+	assert.True(t, s.SearchLoading())
+	s.SetSearchLoading(false)
+	assert.False(t, s.SearchLoading())
+}
+
+func TestStore_SearchError_SetClear(t *testing.T) {
+	s := New()
+	testErr := fmt.Errorf("search failed")
+	s.SetSearchError(testErr)
+	require.Error(t, s.SearchError())
+	assert.Equal(t, testErr, s.SearchError())
+	s.ClearSearchError()
+	assert.Nil(t, s.SearchError())
+}
+
+func TestStore_SearchActiveType_SetGet(t *testing.T) {
+	s := New()
+	assert.Equal(t, "", s.SearchActiveType())
+	s.SetSearchActiveType("track")
+	assert.Equal(t, "track", s.SearchActiveType())
+}
+
+func TestStore_AppendSearchTracks(t *testing.T) {
+	tests := []struct {
+		name    string
+		appends []struct {
+			items []domain.Track
+			total int
+		}
+		wantLen     int
+		wantOffset  int
+		wantTotal   int
+		wantHasMore bool
+	}{
+		{
+			name: "append 10 items → offset=10",
+			appends: []struct {
+				items []domain.Track
+				total int
+			}{
+				{items: makeTracks(10), total: 100},
+			},
+			wantLen:     10,
+			wantOffset:  10,
+			wantTotal:   100,
+			wantHasMore: true,
+		},
+		{
+			name: "append 10 then 10 more → offset=20",
+			appends: []struct {
+				items []domain.Track
+				total int
+			}{
+				{items: makeTracks(10), total: 100},
+				{items: makeTracks(10), total: 100},
+			},
+			wantLen:     20,
+			wantOffset:  20,
+			wantTotal:   100,
+			wantHasMore: true,
+		},
+		{
+			name: "total=20 all loaded → HasMore=false",
+			appends: []struct {
+				items []domain.Track
+				total int
+			}{
+				{items: makeTracks(10), total: 20},
+				{items: makeTracks(10), total: 20},
+			},
+			wantLen:     20,
+			wantOffset:  20,
+			wantTotal:   20,
+			wantHasMore: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New()
+			for _, a := range tt.appends {
+				s.AppendSearchTracks(a.items, a.total)
+			}
+			page := s.SearchTracks()
+			assert.Len(t, page.Items, tt.wantLen)
+			assert.Equal(t, tt.wantOffset, page.Offset)
+			assert.Equal(t, tt.wantTotal, page.Total)
+			assert.Equal(t, tt.wantHasMore, s.SearchHasMore("track"))
+		})
+	}
+}
+
+func TestStore_AppendSearchArtists(t *testing.T) {
+	s := New()
+	s.AppendSearchArtists([]domain.SearchArtist{{ID: "a1", Name: "Artist 1"}}, 50)
+	page := s.SearchArtists()
+	assert.Len(t, page.Items, 1)
+	assert.Equal(t, 1, page.Offset)
+	assert.Equal(t, 50, page.Total)
+	assert.True(t, s.SearchHasMore("artist"))
+}
+
+func TestStore_AppendSearchAlbums(t *testing.T) {
+	s := New()
+	s.AppendSearchAlbums([]domain.SearchAlbum{{ID: "al1", Name: "Album 1"}}, 30)
+	page := s.SearchAlbums()
+	assert.Len(t, page.Items, 1)
+	assert.Equal(t, 1, page.Offset)
+	assert.Equal(t, 30, page.Total)
+	assert.True(t, s.SearchHasMore("album"))
+}
+
+func TestStore_AppendSearchPlaylists(t *testing.T) {
+	s := New()
+	s.AppendSearchPlaylists([]domain.SearchPlaylist{{ID: "pl1", Name: "Playlist 1"}}, 10)
+	page := s.SearchPlaylists()
+	assert.Len(t, page.Items, 1)
+	assert.Equal(t, 1, page.Offset)
+	assert.Equal(t, 10, page.Total)
+	// offset(1) == total(10) is false, so HasMore = true
+	assert.True(t, s.SearchHasMore("playlist"))
+}
+
+func TestStore_ClearSearchResults_ResetsAllPages(t *testing.T) {
+	s := New()
+	s.SetSearchQuery("test query")
+	s.AppendSearchTracks(makeTracks(5), 50)
+	s.AppendSearchArtists([]domain.SearchArtist{{ID: "a1"}}, 10)
+	s.AppendSearchAlbums([]domain.SearchAlbum{{ID: "al1"}}, 10)
+	s.AppendSearchPlaylists([]domain.SearchPlaylist{{ID: "pl1"}}, 10)
+
+	s.ClearSearchResults()
+
+	assert.Empty(t, s.SearchTracks().Items)
+	assert.Equal(t, 0, s.SearchTracks().Offset)
+	assert.Equal(t, 0, s.SearchTracks().Total)
+	assert.Empty(t, s.SearchArtists().Items)
+	assert.Empty(t, s.SearchAlbums().Items)
+	assert.Empty(t, s.SearchPlaylists().Items)
+	// Query and loading state preserved (ClearSearchResults only resets pages)
+}
+
+func TestStore_SearchHasMore_UnknownType(t *testing.T) {
+	s := New()
+	// Unknown type returns false (no data, offset=0, total=0 → not more)
+	assert.False(t, s.SearchHasMore("unknown"))
+}
+
+func TestStore_SearchHasMore_AllType(t *testing.T) {
+	s := New()
+	// "all" type: HasMore = true if any type has more
+	s.AppendSearchTracks(makeTracks(5), 50) // HasMore
+	assert.True(t, s.SearchHasMore("all"))
+}
+
+func TestStore_SearchHasMore_AllType_NoneRemaining(t *testing.T) {
+	s := New()
+	// All types fully loaded → all HasMore = false
+	s.AppendSearchTracks(makeTracks(5), 5)
+	s.AppendSearchArtists([]domain.SearchArtist{{ID: "a1"}}, 1)
+	s.AppendSearchAlbums([]domain.SearchAlbum{{ID: "al1"}}, 1)
+	s.AppendSearchPlaylists([]domain.SearchPlaylist{{ID: "pl1"}}, 1)
+	assert.False(t, s.SearchHasMore("all"))
+}
+
+// makeTracks creates a slice of n domain.Track items for testing.
+func makeTracks(n int) []domain.Track {
+	tracks := make([]domain.Track, n)
+	for i := range tracks {
+		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i)}
+	}
+	return tracks
 }

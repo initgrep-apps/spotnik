@@ -210,3 +210,15 @@ If the user changes a preference and quits within the 500ms debounce window, the
 **Feature:** 17-bootstrap
 
 When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` with no retry limit. On a permanently unwritable config file, this retries every 500ms indefinitely with only stderr logging (invisible in TUI). Consider capping retries and emitting a toast after N failures.
+
+---
+
+## Search Store: Type safety and convenience improvements
+**Found:** 2026-04-02 | **Source:** PR #105 Review
+**Feature:** 19-search-redesign
+
+1. Introduce `SearchType` string constants (e.g. `SearchTypeTrack`, `SearchTypeAll`) to replace bare strings in `SearchHasMore`, `SearchPageLoadedMsg.Type`, and `SearchState.ActiveType` — prevents typo bugs
+2. Consider removing redundant `TypePage.Offset` field — derive from `len(Items)` instead to eliminate consistency hazard
+3. Add `Store.ResetForNewQuery(query string)` method that atomically sets query, clears pages, and sets loading — prevents callers from forgetting a step
+4. `SearchHasMore` silently returns false for unknown type names — add logging for debugging
+5. `convertSearch*Items` functions in commands.go have no direct unit tests — add table-driven tests

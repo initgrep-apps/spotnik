@@ -50,6 +50,38 @@ func IsStale(fetchedAt time.Time, ttl time.Duration) bool {
 	return fetchedAt.IsZero() || time.Since(fetchedAt) > ttl
 }
 
+// TypePage holds one type's worth of paginated search results.
+// Items accumulates appended pages; Offset tracks the next fetch position
+// (always equal to len(Items) for contiguous pages); Total is the API-reported
+// count of all available results for this type.
+type TypePage[T any] struct {
+	// Items is the accumulated slice of results loaded so far.
+	Items []T
+	// Offset is the next offset to fetch (= len(Items) when pages are contiguous).
+	Offset int
+	// Total is the total number of results available from the API for this type.
+	Total int
+}
+
+// SearchState holds all per-type paginated search data in the Store.
+// It replaces the former flat searchResults/searchQuery/searchLoading/searchError fields.
+type SearchState struct {
+	// Query is the current search query string.
+	Query string
+	// ActiveType filters results to a specific type: "all", "track", "artist", "album", "playlist".
+	ActiveType string
+	// Loading is true while any search API call is in-flight.
+	Loading bool
+	// Error holds the last search failure, nil on success.
+	Error error
+
+	// Per-type paginated results. Each TypePage accumulates pages independently.
+	Tracks    TypePage[domain.Track]
+	Artists   TypePage[domain.SearchArtist]
+	Albums    TypePage[domain.SearchAlbum]
+	Playlists TypePage[domain.SearchPlaylist]
+}
+
 // Store is the central application state. All panes read from here; only
 // the root app.Update() writes to it via Msg payloads. Fields are never accessed
 // directly — use the accessor methods to ensure safe concurrent access.
@@ -95,10 +127,8 @@ type Store struct {
 	// Queue data
 	queue []domain.Track
 
-	// Search data — searchResults holds the raw search response for the SearchClearedMsg handler.
-	searchResults *domain.SearchResult
-	searchQuery   string
-	searchLoading bool
+	// Search data — structured per-type paginated storage for the redesigned search overlay.
+	search SearchState
 
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
@@ -126,7 +156,7 @@ type Store struct {
 
 	// Error state — one per data-fetching feature.
 	// Set by Update() handlers on failure, cleared on successful retry.
-	searchError          error
+	// NOTE: search errors live inside search.Error (part of SearchState).
 	statsError           error
 	devicesError         error
 	queueError           error
@@ -332,46 +362,150 @@ func (s *Store) SetQueue(tracks []domain.Track) {
 	s.queue = tracks
 }
 
-// SearchResults returns the most recent search result, or nil if no search has completed.
-func (s *Store) SearchResults() *domain.SearchResult {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.searchResults
-}
-
-// SetSearchResults updates the search results in the store.
-func (s *Store) SetSearchResults(results *domain.SearchResult) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.searchResults = results
-}
-
-// SearchQuery returns the most recent search query string.
+// SearchQuery returns the current search query string.
 func (s *Store) SearchQuery() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.searchQuery
+	return s.search.Query
 }
 
 // SetSearchQuery updates the current search query string in the store.
 func (s *Store) SetSearchQuery(query string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.searchQuery = query
+	s.search.Query = query
 }
 
 // SearchLoading returns true while a search API call is in flight.
 func (s *Store) SearchLoading() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.searchLoading
+	return s.search.Loading
 }
 
 // SetSearchLoading sets the search loading flag.
 func (s *Store) SetSearchLoading(loading bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.searchLoading = loading
+	s.search.Loading = loading
+}
+
+// SearchActiveType returns the active search type filter.
+// Returns "" if no filter is set (show all).
+func (s *Store) SearchActiveType() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.search.ActiveType
+}
+
+// SetSearchActiveType sets the active search type filter.
+// typeName should be "all", "track", "artist", "album", or "playlist".
+func (s *Store) SetSearchActiveType(typeName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.search.ActiveType = typeName
+}
+
+// SearchTracks returns the current tracks TypePage from the search state.
+func (s *Store) SearchTracks() TypePage[domain.Track] {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.search.Tracks
+}
+
+// SearchArtists returns the current artists TypePage from the search state.
+func (s *Store) SearchArtists() TypePage[domain.SearchArtist] {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.search.Artists
+}
+
+// SearchAlbums returns the current albums TypePage from the search state.
+func (s *Store) SearchAlbums() TypePage[domain.SearchAlbum] {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.search.Albums
+}
+
+// SearchPlaylists returns the current playlists TypePage from the search state.
+func (s *Store) SearchPlaylists() TypePage[domain.SearchPlaylist] {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.search.Playlists
+}
+
+// AppendSearchTracks appends items to the tracks TypePage and updates offset and total.
+// Subsequent calls accumulate pages without overwriting existing data.
+func (s *Store) AppendSearchTracks(items []domain.Track, total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.search.Tracks.Items = append(s.search.Tracks.Items, items...)
+	s.search.Tracks.Offset = len(s.search.Tracks.Items)
+	s.search.Tracks.Total = total
+}
+
+// AppendSearchArtists appends items to the artists TypePage and updates offset and total.
+func (s *Store) AppendSearchArtists(items []domain.SearchArtist, total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.search.Artists.Items = append(s.search.Artists.Items, items...)
+	s.search.Artists.Offset = len(s.search.Artists.Items)
+	s.search.Artists.Total = total
+}
+
+// AppendSearchAlbums appends items to the albums TypePage and updates offset and total.
+func (s *Store) AppendSearchAlbums(items []domain.SearchAlbum, total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.search.Albums.Items = append(s.search.Albums.Items, items...)
+	s.search.Albums.Offset = len(s.search.Albums.Items)
+	s.search.Albums.Total = total
+}
+
+// AppendSearchPlaylists appends items to the playlists TypePage and updates offset and total.
+func (s *Store) AppendSearchPlaylists(items []domain.SearchPlaylist, total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.search.Playlists.Items = append(s.search.Playlists.Items, items...)
+	s.search.Playlists.Offset = len(s.search.Playlists.Items)
+	s.search.Playlists.Total = total
+}
+
+// ClearSearchResults resets all TypePage slices, offsets, and totals to zero.
+// The query and loading flag are left unchanged — callers manage those separately.
+func (s *Store) ClearSearchResults() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.search.Tracks = TypePage[domain.Track]{}
+	s.search.Artists = TypePage[domain.SearchArtist]{}
+	s.search.Albums = TypePage[domain.SearchAlbum]{}
+	s.search.Playlists = TypePage[domain.SearchPlaylist]{}
+}
+
+// SearchHasMore returns true if more pages are available for the given type.
+// typeName should be "track", "artist", "album", "playlist", or "all".
+// For "all", returns true if any type has remaining pages.
+// Returns false for unknown type names.
+func (s *Store) SearchHasMore(typeName string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	switch typeName {
+	case "track":
+		return s.search.Tracks.Offset < s.search.Tracks.Total
+	case "artist":
+		return s.search.Artists.Offset < s.search.Artists.Total
+	case "album":
+		return s.search.Albums.Offset < s.search.Albums.Total
+	case "playlist":
+		return s.search.Playlists.Offset < s.search.Playlists.Total
+	case "all":
+		return s.search.Tracks.Offset < s.search.Tracks.Total ||
+			s.search.Artists.Offset < s.search.Artists.Total ||
+			s.search.Albums.Offset < s.search.Albums.Total ||
+			s.search.Playlists.Offset < s.search.Playlists.Total
+	default:
+		return false
+	}
 }
 
 // TopTracks returns the cached top tracks for the given time range,
@@ -693,21 +827,21 @@ func (s *Store) SetDevicesFetching(f bool) {
 func (s *Store) SearchError() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.searchError
+	return s.search.Error
 }
 
 // SetSearchError records a search failure.
 func (s *Store) SetSearchError(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.searchError = err
+	s.search.Error = err
 }
 
 // ClearSearchError clears the search error state on successful retry.
 func (s *Store) ClearSearchError() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.searchError = nil
+	s.search.Error = nil
 }
 
 // StatsError returns the last stats fetch error, or nil if successful.
