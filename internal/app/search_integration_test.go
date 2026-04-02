@@ -120,11 +120,9 @@ func driveSearchBatch(t *testing.T, a *app.App, initCmd tea.Cmd, maxIter int) *a
 		if !ok {
 			break
 		}
-		var nextCmd tea.Cmd
 		model, c := a.Update(pageMsg)
 		a = model.(*app.App)
-		nextCmd = c
-		cmd = nextCmd
+		cmd = c
 	}
 	return a
 }
