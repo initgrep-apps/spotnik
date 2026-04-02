@@ -851,7 +851,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSearchLoading(false)
 		if m.Err != nil {
 			a.store.SetSearchError(m.Err)
-			// Route search error through toast; search overlay shows loading→empty (not error).
+			// Route search error through toast; the overlay preserves its existing results
+			// (it returns early on Err != nil in Update) so the screen is not blanked.
 			updated, _ := a.searchPane.Update(m)
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp
