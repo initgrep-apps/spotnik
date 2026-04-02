@@ -513,12 +513,15 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
 // It rebuilds the list items for the new tab and emits SearchTabChangedMsg so the
 // root app re-fires the search with the new type filter.
+// NOTE: Tab cycling is only reachable when prefixState is not PrefixTyping (Tab routing
+// in handleKey sends PrefixTyping → tabCompletePrefix instead). When a prefix is locked
+// the clean query (prefix stripped) is used so the API never sees the raw ":songs kk".
 func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + 1) % NumTabs)
 	o.activeSection = sectionTracks
 	o.cursorPos = 0
 	o.rebuildListItems()
-	query := o.input.Value()
+	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
 	return o, func() tea.Msg {
 		return SearchTabChangedMsg{Types: types, Query: query}
@@ -533,7 +536,7 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.activeSection = sectionTracks
 	o.cursorPos = 0
 	o.rebuildListItems()
-	query := o.input.Value()
+	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
 	return o, func() tea.Msg {
 		return SearchTabChangedMsg{Types: types, Query: query}
