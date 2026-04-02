@@ -437,10 +437,10 @@ func TestBuildStatsCmd_RunsConcurrently(t *testing.T) {
 
 // --- Feature 39: Additional Elm purity and coverage gap tests ---
 
-// TestBuildSearchCmd_DoesNotWriteToStore verifies that the command closure returned by
-// buildSearchCmd does NOT write to the store. Store mutations belong in Update(), not in
-// command closures (Elm Architecture purity rule). The command only returns a SearchResultsMsg
-// payload; only Update() writes to the store when it receives that message.
+// TestBuildSearchCmd_DoesNotWriteToStore verifies that the page-fetch command closures
+// in buildSearchBatchCmd do NOT write to the store. Store mutations belong in Update(), not in
+// command closures (Elm Architecture purity rule). Each page-fetch command only returns a
+// SearchPageLoadedMsg payload; only Update() writes to the store when it receives that message.
 func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -459,7 +459,7 @@ func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
 	a := app.New(cfg, app.AppOptions{})
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
-	// Trigger SearchRequestMsg to get the buildSearchCmd closure.
+	// Trigger SearchRequestMsg to get the buildSearchBatchCmd sequence.
 	// NOTE: SearchRequestMsg handler intentionally writes SetSearchQuery and SetSearchLoading
 	// to the store BEFORE dispatching the command — this is correct Update() behaviour.
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
@@ -469,18 +469,18 @@ func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
 	beforeQuery := a.Store().SearchQuery()
 	beforeLoading := a.Store().SearchLoading()
 
-	// Execute the command closure. This performs the HTTP call and returns SearchResultsMsg.
-	// The closure must NOT touch the store.
-	resultMsg := cmd()
+	// Execute the first page-fetch command from the sequence. Each page command performs
+	// an HTTP call and returns SearchPageLoadedMsg. None of them must touch the store.
+	resultMsg := executeFirstSequenceCmd(cmd)
 	require.NotNil(t, resultMsg, "search command should return a message")
 
 	// Store state must be unchanged by the command execution.
 	assert.Equal(t, beforeQuery, a.Store().SearchQuery(),
-		"buildSearchCmd closure must not modify store.SearchQuery")
+		"buildSearchBatchCmd page closure must not modify store.SearchQuery")
 	assert.Equal(t, beforeLoading, a.Store().SearchLoading(),
-		"buildSearchCmd closure must not modify store.SearchLoading")
+		"buildSearchBatchCmd page closure must not modify store.SearchLoading")
 	assert.Empty(t, a.Store().SearchTracks().Items,
-		"buildSearchCmd closure must not write search results to store (only Update() may do that)")
+		"buildSearchBatchCmd page closure must not write search results to store (only Update() may do that)")
 
 	// Verify the message carries the results — Update() will write them when it receives the msg.
 	searchMsg, ok := resultMsg.(panes.SearchPageLoadedMsg)

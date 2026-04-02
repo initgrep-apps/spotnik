@@ -375,6 +375,19 @@ type SearchPlaylistItem struct {
 	Owner string
 }
 
+// SearchPrefetchMsg is emitted by the search overlay when the user scrolls past
+// searchPrefetchThreshold of the loaded results. The root app model responds by
+// fetching the next batch of pages starting at NextOffset.
+type SearchPrefetchMsg struct {
+	// Query is the current search query at the time of the scroll event,
+	// used by the root app to discard stale prefetch requests.
+	Query string
+	// Types is the list of Spotify API type strings for the active tab.
+	Types []string
+	// NextOffset is the starting offset for the next batch of pages.
+	NextOffset int
+}
+
 // SearchPageLoadedMsg is sent by the root app model after a search page fetch completes.
 // Query is included so stale results (for a superseded query) can be discarded.
 // Type identifies which category was searched ("all", "track", "artist", "album", "playlist").

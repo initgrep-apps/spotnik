@@ -797,7 +797,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
-		return a, a.buildSearchCmd(m.Query)
+		return a, a.buildSearchBatchCmd(m.Query, []string{"track", "artist", "album", "playlist"}, 0)
 
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
@@ -812,13 +812,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SearchTabChangedMsg:
 		// User switched the category tab in the search overlay.
-		// Update the active type filter and re-fire the search so results reflect the new tab.
+		// Update the active type filter and re-fire the search with a fresh 5-page batch
+		// so results always reflect the new tab completely.
 		// Only fire if there is a non-empty query — no point searching with empty input.
 		if m.Query == "" {
 			return a, nil
 		}
 		// Derive active type: "all" when multiple types are present (All tab), otherwise
-		// use the single type name. This mirrors the logic in buildSearchCmdWithTypes.
+		// use the single type name.
 		activeType := "all"
 		if len(m.Types) == 1 {
 			activeType = m.Types[0]
@@ -829,7 +830,25 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		a.store.ClearSearchResults()
 		a.store.SetSearchLoading(true)
-		return a, a.buildSearchCmdWithTypes(m.Query, m.Types)
+		return a, a.buildSearchBatchCmd(m.Query, m.Types, 0)
+
+	case panes.SearchPrefetchMsg:
+		// Scroll threshold reached — prefetch the next batch of pages.
+		// Discard if the query has changed since the scroll event was emitted.
+		if m.Query != a.store.SearchQuery() {
+			return a, nil
+		}
+		// Determine the relevant type name for SearchHasMore.
+		// For single-type tabs, use that type; for All tab, use "all".
+		prefetchType := "all"
+		if len(m.Types) == 1 {
+			prefetchType = m.Types[0]
+		}
+		if !a.store.SearchHasMore(prefetchType) {
+			return a, nil
+		}
+		a.store.SetSearchLoading(true)
+		return a, a.buildSearchBatchCmd(m.Query, m.Types, m.NextOffset)
 
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — check for staleness, append to store, deliver to overlay.

@@ -1685,8 +1685,9 @@ func TestApp_BuildSearchCmd_SetsErrorOnFailure(t *testing.T) {
 
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
 	require.NotNil(t, cmd)
-	// Execute command, feed result back to Update() — store writes happen in Update().
-	msg := cmd()
+	// buildSearchBatchCmd returns a tea.Sequence. Execute the first page-fetch command
+	// in the sequence, then feed its result to Update() — store writes happen in Update().
+	msg := executeFirstSequenceCmd(cmd)
 	m, _ := a.Update(msg)
 	a = m.(*app.App)
 
@@ -1704,8 +1705,9 @@ func TestApp_BuildSearchCmd_ClearsErrorOnSuccess(t *testing.T) {
 
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
 	require.NotNil(t, cmd)
-	// Execute command, feed result back to Update() — store writes happen in Update().
-	msg := cmd()
+	// buildSearchBatchCmd returns a tea.Sequence. Execute the first page-fetch command
+	// in the sequence, then feed its result to Update() — store writes happen in Update().
+	msg := executeFirstSequenceCmd(cmd)
 	m, _ := a.Update(msg)
 	a = m.(*app.App)
 
