@@ -222,3 +222,12 @@ When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` wi
 3. Add `Store.ResetForNewQuery(query string)` method that atomically sets query, clears pages, and sets loading — prevents callers from forgetting a step
 4. `SearchHasMore` silently returns false for unknown type names — add logging for debugging
 5. `convertSearch*Items` functions in commands.go have no direct unit tests — add table-driven tests
+
+---
+
+## Search Prefetch: Dead Type field and toast dedup
+**Found:** 2026-04-02 | **Source:** PR #107 Review
+**Feature:** 19-search-redesign
+
+1. `SearchPageLoadedMsg.Type` field is always empty string after prefetch engine rewrite — either remove the field or add proper `TODO(84-search-list-delegate):` tag
+2. Consider debounce/dedup for search error toasts — rapid failures from batch pages could stack multiple identical toasts
