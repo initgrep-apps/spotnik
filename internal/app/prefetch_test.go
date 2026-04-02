@@ -144,15 +144,19 @@ func TestBuildSearchPageCmd_NilClient_ReturnsError(t *testing.T) {
 // --- Task 3: buildSearchBatchCmd ---
 
 // TestBuildSearchBatchCmd_CreatesExactly5Commands verifies that a batch starting at
-// offset 0 schedules exactly 5 page-fetch commands (offsets 0,10,20,30,40).
+// offset 0 results in exactly 5 API calls via the chain-through-Update pattern.
+// buildSearchBatchCmd dispatches only the first page; each SearchPageLoadedMsg
+// handler chains the next page until the batch boundary (offset 40+10=50 = batchEnd).
 func TestBuildSearchBatchCmd_CreatesExactly5Commands(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		// Return total > 50 so SearchHasMore returns true throughout the batch,
+		// allowing the chain to continue until the batch boundary.
 		_, _ = w.Write([]byte(`{
-			"tracks":{"items":[],"total":0},
+			"tracks":{"items":[],"total":500},
 			"artists":{"items":[],"total":0},
 			"albums":{"items":[],"total":0},
 			"playlists":{"items":[],"total":0}
@@ -164,20 +168,27 @@ func TestBuildSearchBatchCmd_CreatesExactly5Commands(t *testing.T) {
 	a := app.New(cfg, app.AppOptions{})
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
-	// A search request at offset 0 triggers buildSearchBatchCmd.
-	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
+	// A search request at offset 0 triggers buildSearchBatchCmd (dispatches first page only).
+	model, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
+	a = model.(*app.App)
 	require.NotNil(t, cmd)
 
-	// Execute all commands in the sequence to count HTTP calls.
-	executeAllCmds(cmd)
+	// Drive the chain through Update: each SearchPageLoadedMsg chains the next page.
+	// 5 iterations: offsets 0,10,20,30,40; offset 50 = batchEnd so chain stops.
+	for i := 0; i < 5 && cmd != nil; i++ {
+		msg := cmd()
+		model, cmd = a.Update(msg)
+		a = model.(*app.App)
+	}
 
-	assert.Equal(t, 5, callCount, "buildSearchBatchCmd with offset=0 should fire exactly 5 API calls")
+	assert.Equal(t, 5, callCount, "buildSearchBatchCmd chain-through-Update should fire exactly 5 API calls")
 }
 
 // TestBuildSearchBatchCmd_FewerCommandsNearMaxOffset verifies that when startOffset
-// is near the Spotify API cap (1000), fewer than 5 commands are created.
-// Offset 990 creates 2 commands: offsets 990 and 1000 (guard is `> 1000`, not `>= 1000`).
-// Offset 1001 would be excluded since 1001 > 1000.
+// is near the Spotify API cap (1000), the chain-through-Update stops at SearchMaxOffset.
+// Batch at offset 990: batchEnd = ((990/50)+1)*50 = 20*50 = 1000.
+// Pages: 990 (batchEnd=1000, next=1000 < 1000 is false) → only 1 API call.
+// Note: the old seq guard was `offset > 1000`; the chain now stops when nextOffset >= batchEnd.
 func TestBuildSearchBatchCmd_FewerCommandsNearMaxOffset(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -201,19 +212,30 @@ func TestBuildSearchBatchCmd_FewerCommandsNearMaxOffset(t *testing.T) {
 	a.Store().SetSearchQuery("jazz")
 	a.Store().AppendSearchTracks(makeDomainTracks(50), 2000) // 50 loaded, 2000 total → has more
 
-	// Trigger prefetch at offset 990. Guard is `offset > 1000`, so:
-	// offset=990 → included, offset=1000 → included (1000 is not > 1000), offset=1010 → excluded.
-	_, cmd := a.Update(panes.SearchPrefetchMsg{
+	// Trigger prefetch at offset 990.
+	// batchEnd = ((990/50)+1)*50 = 20*50 = 1000.
+	// Page at offset 990 fires; nextOffset=1000, 1000 < 1000 is false → chain stops after 1 page.
+	model, cmd := a.Update(panes.SearchPrefetchMsg{
 		Query:      "jazz",
 		Types:      []string{"track"},
 		NextOffset: 990,
 	})
+	a = model.(*app.App)
 	require.NotNil(t, cmd)
 
-	executeAllCmds(cmd)
+	// Drive chain: offset 990 fires, then chain stops (nextOffset 1000 is not < batchEnd 1000).
+	for cmd != nil {
+		msg := cmd()
+		pageMsg, ok := msg.(panes.SearchPageLoadedMsg)
+		if !ok {
+			break
+		}
+		model, cmd = a.Update(pageMsg)
+		a = model.(*app.App)
+	}
 
-	// 2 commands: offset=990 and offset=1000 (1010 excluded by > 1000 guard).
-	assert.Equal(t, 2, callCount, "offset=990 should fire 2 commands (990 and 1000; 1010 > 1000 excluded)")
+	// Chain stops after 1 page: offset=990 (nextOffset=1000 not < batchEnd=1000).
+	assert.Equal(t, 1, callCount, "offset=990 with batchEnd=1000: chain fires 1 page (990), stops when nextOffset==batchEnd")
 }
 
 // TestBuildSearchBatchCmd_Offset1001_ExcludesAll verifies that when startOffset
@@ -333,10 +355,149 @@ func TestSearchPageLoadedMsg_LoadingClearedAfterLoad(t *testing.T) {
 	assert.False(t, a.Store().SearchLoading(), "loading should be cleared when SearchPageLoadedMsg is processed")
 }
 
+// TestSearchPageLoadedMsg_ChainStopsOn429 verifies that a 429 (RateLimitedMsg)
+// returned during a chain-through-Update batch stops the chain naturally, because
+// RateLimitedMsg is not a SearchPageLoadedMsg so the handler never chains another page.
+func TestSearchPageLoadedMsg_ChainStopsOn429(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// First page succeeds with total=500 to keep SearchHasMore true.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":500},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+			return
+		}
+		// Second page gets 429 — chain should stop here.
+		w.Header().Set("Retry-After", "5")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+	a.Store().SetSearchQuery("jazz")
+
+	model, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
+	a = model.(*app.App)
+	require.NotNil(t, cmd)
+
+	// Step 1: Execute first page command → SearchPageLoadedMsg (success) → chains page 2.
+	msg := cmd()
+	model, chainCmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, chainCmd, "first page success should chain next page")
+
+	// Step 2: Execute chained page 2 → RateLimitedMsg.
+	msg2 := chainCmd()
+	rateLimitMsg, ok := msg2.(panes.RateLimitedMsg)
+	assert.True(t, ok, "second page 429 should produce RateLimitedMsg, got %T", msg2)
+	assert.Equal(t, 5, rateLimitMsg.RetryAfterSecs)
+
+	// Step 3: Feed RateLimitedMsg to Update — it clears SearchLoading.
+	model, _ = a.Update(msg2)
+	a = model.(*app.App)
+	assert.False(t, a.Store().SearchLoading(), "RateLimitedMsg should clear SearchLoading")
+
+	// Only 2 API calls — chain stopped after the 429.
+	assert.Equal(t, 2, callCount, "chain should stop after 429: only 2 API calls made")
+}
+
+// TestRateLimitedMsg_ClearsSearchLoading verifies that clearAllFetchingSentinels
+// (called from RateLimitedMsg handler) clears the SearchLoading flag. This prevents
+// the overlay from staying stuck in a loading state when a 429 interrupts a batch.
+func TestRateLimitedMsg_ClearsSearchLoading(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.Store().SetSearchLoading(true)
+
+	model, _ := a.Update(panes.RateLimitedMsg{RetryAfterSecs: 10})
+	a = model.(*app.App)
+
+	assert.False(t, a.Store().SearchLoading(), "RateLimitedMsg should clear SearchLoading via clearAllFetchingSentinels")
+}
+
+// TestUnauthorizedMsg_ClearsSearchLoading verifies that clearAllFetchingSentinels
+// (called from unauthorizedMsg handler) clears the SearchLoading flag.
+func TestUnauthorizedMsg_ClearsSearchLoading(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.Store().SetSearchLoading(true)
+
+	// unauthorizedMsg is unexported; trigger it via a 401 response from the search API.
+	srv := unauthorizedServer()
+	defer srv.Close()
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+
+	// Trigger search → get page cmd → execute to get 401 → feed unauthorizedMsg to Update.
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "test"})
+	require.NotNil(t, cmd)
+	unauthorizedResult := executeFirstSequenceCmd(cmd)
+
+	model, _ := a.Update(unauthorizedResult)
+	a = model.(*app.App)
+
+	assert.False(t, a.Store().SearchLoading(), "unauthorizedMsg should clear SearchLoading via clearAllFetchingSentinels")
+}
+
+// TestSearchPrefetchMsg_SkippedWhenAlreadyLoading verifies that concurrent
+// prefetch batches are blocked: if SearchLoading is true, the SearchPrefetchMsg is ignored.
+func TestSearchPrefetchMsg_SkippedWhenAlreadyLoading(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":500},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
+	a.Store().SetSearchQuery("jazz")
+	a.Store().AppendSearchTracks(makeDomainTracks(50), 500)
+	// Simulate an in-flight batch already running.
+	a.Store().SetSearchLoading(true)
+
+	_, cmd := a.Update(panes.SearchPrefetchMsg{
+		Query:      "jazz",
+		Types:      []string{"track"},
+		NextOffset: 50,
+	})
+	assert.Nil(t, cmd, "SearchPrefetchMsg should be a no-op when SearchLoading is already true")
+	assert.Equal(t, 0, callCount, "no API calls should be made when a batch is already in-flight")
+}
+
+// TestSearchRequestMsg_NilBatchCmd_ClearsLoading verifies that when buildSearchBatchCmd
+// returns nil (startOffset > SearchMaxOffset), the SearchLoading flag is cleared.
+// This guards against the loading flag leaking when an offset is out of range.
+func TestSearchRequestMsg_NilBatchCmd_ClearsLoading(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Use SearchPrefetchMsg at offset > 1000 — buildSearchBatchCmd returns nil.
+	a.Store().SetSearchQuery("jazz")
+	a.Store().AppendSearchTracks(makeDomainTracks(50), 2000)
+
+	model, cmd := a.Update(panes.SearchPrefetchMsg{
+		Query:      "jazz",
+		Types:      []string{"track"},
+		NextOffset: 1001, // > SearchMaxOffset=1000 → buildSearchBatchCmd returns nil
+	})
+	a = model.(*app.App)
+
+	assert.Nil(t, cmd, "nil batch cmd guard should produce no command")
+	assert.False(t, a.Store().SearchLoading(), "nil batch cmd guard should clear SearchLoading")
+}
+
 // --- Task 5: SearchPrefetchMsg handler ---
 
 // TestSearchPrefetchMsg_DispatchesBatchWithCorrectOffset verifies that
-// SearchPrefetchMsg triggers a new batch command at the specified NextOffset.
+// SearchPrefetchMsg triggers a new batch via chain-through-Update starting at NextOffset.
+// The chain fires 5 pages (offsets 50,60,70,80,90) then stops at batchEnd=100.
 func TestSearchPrefetchMsg_DispatchesBatchWithCorrectOffset(t *testing.T) {
 	callCount := 0
 	var capturedOffsets []string
@@ -357,14 +518,21 @@ func TestSearchPrefetchMsg_DispatchesBatchWithCorrectOffset(t *testing.T) {
 	a.Store().SetSearchQuery("jazz")
 	a.Store().AppendSearchTracks(makeDomainTracks(50), 500)
 
-	_, cmd := a.Update(panes.SearchPrefetchMsg{
+	model, cmd := a.Update(panes.SearchPrefetchMsg{
 		Query:      "jazz",
 		Types:      []string{"track"},
 		NextOffset: 50,
 	})
+	a = model.(*app.App)
 	require.NotNil(t, cmd, "SearchPrefetchMsg with more pages should return a batch command")
 
-	executeAllCmds(cmd)
+	// Drive chain through Update: batch at offset 50 has batchEnd=((50/50)+1)*50=100.
+	// Pages: 50,60,70,80,90 — nextOffset 100 is not < batchEnd 100 → stops after 5.
+	for i := 0; i < 5 && cmd != nil; i++ {
+		msg := cmd()
+		model, cmd = a.Update(msg)
+		a = model.(*app.App)
+	}
 
 	assert.Equal(t, 5, callCount, "prefetch at offset 50 should fire 5 API calls (offsets 50-90)")
 	if len(capturedOffsets) > 0 {
@@ -408,14 +576,17 @@ func TestSearchPrefetchMsg_SkippedWhenQueryStale(t *testing.T) {
 
 // TestSearchRequestMsg_UsesBatchCommand_ClearsPreviousAndSetsLoading verifies that
 // the updated SearchRequestMsg handler clears old results, sets loading, and dispatches
-// buildSearchBatchCmd (which produces 5 sequential page fetches starting at offset 0).
+// buildSearchBatchCmd. The chain-through-Update fires 5 page fetches starting at offset 0.
+// (total=0 on each page → SearchHasMore returns false; chain stops after 1 page.)
+// To verify 5 pages fire, we use total=500 so SearchHasMore stays true through the batch.
 func TestSearchRequestMsg_UsesBatchCommand_ClearsPreviousAndSetsLoading(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":0},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+		// total=500 ensures SearchHasMore stays true throughout the 5-page batch.
+		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":500},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
 	}))
 	defer srv.Close()
 
@@ -427,8 +598,8 @@ func TestSearchRequestMsg_UsesBatchCommand_ClearsPreviousAndSetsLoading(t *testi
 	a.Store().SetSearchQuery("old")
 	a.Store().AppendSearchTracks(makeDomainTracks(5), 5)
 
-	m, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
-	a = m.(*app.App)
+	model, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
+	a = model.(*app.App)
 
 	// Store should be cleared and loading set.
 	assert.Equal(t, "jazz", a.Store().SearchQuery(), "store query should be updated")
@@ -436,22 +607,28 @@ func TestSearchRequestMsg_UsesBatchCommand_ClearsPreviousAndSetsLoading(t *testi
 	assert.Empty(t, a.Store().SearchTracks().Items, "previous results should be cleared")
 	require.NotNil(t, cmd, "SearchRequestMsg should dispatch a batch command")
 
-	// Execute all commands in the batch — should fire 5 API calls.
-	executeAllCmds(cmd)
-	assert.Equal(t, 5, callCount, "SearchRequestMsg should fire 5 sequential page fetches")
+	// Drive chain through Update: batch at offset 0 has batchEnd=50.
+	// Pages: 0,10,20,30,40 → 5 API calls. nextOffset=50 not < batchEnd=50 → stops.
+	for i := 0; i < 5 && cmd != nil; i++ {
+		msg := cmd()
+		model, cmd = a.Update(msg)
+		a = model.(*app.App)
+	}
+	assert.Equal(t, 5, callCount, "SearchRequestMsg chain-through-Update should fire 5 API calls")
 }
 
 // --- Task 7: SearchTabChangedMsg clears and re-fetches ---
 
 // TestSearchTabChangedMsg_ClearsAndRefetchesBatch verifies that switching tabs
-// clears results and dispatches a full 5-page batch for the new type.
+// clears results and triggers a 5-page chain-through-Update batch for the new type.
 func TestSearchTabChangedMsg_ClearsAndRefetchesBatch(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":0},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+		// total=500 ensures SearchHasMore stays true throughout the 5-page batch.
+		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":500},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
 	}))
 	defer srv.Close()
 
@@ -463,24 +640,29 @@ func TestSearchTabChangedMsg_ClearsAndRefetchesBatch(t *testing.T) {
 	a.Store().SetSearchQuery("jazz")
 	a.Store().AppendSearchTracks(makeDomainTracks(10), 50)
 
-	m, cmd := a.Update(panes.SearchTabChangedMsg{
+	model, cmd := a.Update(panes.SearchTabChangedMsg{
 		Query: "jazz",
 		Types: []string{"track"},
 	})
-	a = m.(*app.App)
+	a = model.(*app.App)
 
 	assert.Empty(t, a.Store().SearchTracks().Items, "tab change should clear previous results")
 	assert.Equal(t, "track", a.Store().SearchActiveType(), "tab change should update active type")
 	assert.True(t, a.Store().SearchLoading(), "loading should be set true after tab change")
 	require.NotNil(t, cmd, "tab change should dispatch a search command")
 
-	// Execute the sequence — should fire 5 API calls.
-	executeAllCmds(cmd)
-	assert.Equal(t, 5, callCount, "SearchTabChangedMsg should fire 5 sequential page fetches")
+	// Drive chain through Update: batch at offset 0 has batchEnd=50.
+	// Pages: 0,10,20,30,40 → 5 API calls.
+	for i := 0; i < 5 && cmd != nil; i++ {
+		msg := cmd()
+		model, cmd = a.Update(msg)
+		a = model.(*app.App)
+	}
+	assert.Equal(t, 5, callCount, "SearchTabChangedMsg chain-through-Update should fire 5 API calls")
 }
 
 // TestSearchTabChangedMsg_AllTab_SetsBatchForAllTypes verifies that switching to
-// the All tab dispatches a batch with all 4 type strings.
+// the All tab dispatches a batch with all 4 type strings via chain-through-Update.
 func TestSearchTabChangedMsg_AllTab_SetsBatchForAllTypes(t *testing.T) {
 	callCount := 0
 	var capturedTypes []string
@@ -489,7 +671,8 @@ func TestSearchTabChangedMsg_AllTab_SetsBatchForAllTypes(t *testing.T) {
 		capturedTypes = append(capturedTypes, r.URL.Query().Get("type"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":0},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+		// total=500 so SearchHasMore("all") stays true for all 5 pages.
+		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":500},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
 	}))
 	defer srv.Close()
 
@@ -498,16 +681,22 @@ func TestSearchTabChangedMsg_AllTab_SetsBatchForAllTypes(t *testing.T) {
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 	a.Store().SetSearchQuery("jazz")
 
-	_, cmd := a.Update(panes.SearchTabChangedMsg{
+	model, cmd := a.Update(panes.SearchTabChangedMsg{
 		Query: "jazz",
 		Types: []string{"track", "artist", "album", "playlist"},
 	})
+	a = model.(*app.App)
 	require.NotNil(t, cmd)
 
-	executeAllCmds(cmd)
+	// Drive chain through Update: 5 pages for batchEnd=50.
+	for i := 0; i < 5 && cmd != nil; i++ {
+		msg := cmd()
+		model, cmd = a.Update(msg)
+		a = model.(*app.App)
+	}
 
-	assert.Equal(t, 5, callCount, "All tab should fire 5 sequential page fetches")
-	// Each request should request all 4 types.
+	assert.Equal(t, 5, callCount, "All tab chain-through-Update should fire 5 API calls")
+	// Each request should use all 4 types.
 	for _, typeStr := range capturedTypes {
 		assert.Contains(t, typeStr, "track", "All-tab requests should include track type")
 	}
@@ -578,57 +767,6 @@ func makeDomainTracks(n int) []domain.Track {
 		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: "Track"}
 	}
 	return tracks
-}
-
-// executeAllCmds executes all commands produced by a tea.Cmd, handling both
-// tea.BatchMsg (exported) and the unexported tea.sequenceMsg via reflection.
-// This simulates what the Bubble Tea framework does when processing commands.
-func executeAllCmds(cmd tea.Cmd) {
-	if cmd == nil {
-		return
-	}
-	msg := cmd()
-	if msg == nil {
-		return
-	}
-	executeMsgCmds(msg)
-}
-
-// executeMsgCmds recursively executes all sub-commands in a message.
-// Uses reflection to handle the unexported tea.sequenceMsg type.
-func executeMsgCmds(msg tea.Msg) {
-	if msg == nil {
-		return
-	}
-	switch m := msg.(type) {
-	case tea.BatchMsg:
-		for _, c := range m {
-			if c != nil {
-				subMsg := c()
-				executeMsgCmds(subMsg)
-			}
-		}
-	default:
-		// Use reflection to handle unexported tea.sequenceMsg ([]tea.Cmd).
-		execSequenceViaReflect(msg)
-	}
-}
-
-// execSequenceViaReflect handles tea.sequenceMsg (unexported type in bubbletea v0.27)
-// by iterating the underlying slice via reflection and executing each cmd.
-// Elements are typed tea.Cmd (named type alias for func() tea.Msg).
-func execSequenceViaReflect(msg tea.Msg) {
-	v := reflect.ValueOf(msg)
-	if v.Kind() != reflect.Slice {
-		return
-	}
-	for i := 0; i < v.Len(); i++ {
-		elem := v.Index(i).Interface()
-		if fn, ok := elem.(tea.Cmd); ok {
-			subMsg := fn()
-			executeMsgCmds(subMsg)
-		}
-	}
 }
 
 // executeFirstCmd executes a tea.Cmd and returns the first concrete payload message.

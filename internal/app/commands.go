@@ -278,25 +278,30 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	}
 }
 
-// buildSearchBatchCmd fires searchPrefetchPages sequential page-fetch commands
-// starting at startOffset, each requesting SearchPageSize items.
-// Pages are executed via tea.Sequence so they run one-at-a-time (not concurrently),
-// respecting the gateway's 5-slot concurrency cap.
+// buildSearchBatchCmd dispatches only the FIRST page of a prefetch batch.
+// Subsequent pages are chained through Update() via the SearchPageLoadedMsg handler,
+// which dispatches the next page on each successful result. This chain-through-Update
+// pattern ensures that a 429 (RateLimitedMsg) or 401 (unauthorizedMsg) naturally
+// stops the chain — the next page is never dispatched because the handler only
+// runs on SearchPageLoadedMsg success.
+//
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
 func (a *App) buildSearchBatchCmd(query string, types []string, startOffset int) tea.Cmd {
-	var cmds []tea.Cmd
-	for i := 0; i < SearchPrefetchPages; i++ {
-		offset := startOffset + (i * SearchPageSize)
-		if offset > SearchMaxOffset {
-			break
-		}
-		cmds = append(cmds, a.buildSearchPageCmd(query, types, offset))
-	}
-	if len(cmds) == 0 {
+	if startOffset > SearchMaxOffset {
 		return nil
 	}
-	return tea.Sequence(cmds...)
+	return a.buildSearchPageCmd(query, types, startOffset)
+}
+
+// searchTypesForActiveType converts a store active-type value ("all" or a single type
+// name) back into the []string types slice expected by buildSearchPageCmd.
+// "all" expands to all four Spotify search types; any other value is returned as-is.
+func searchTypesForActiveType(activeType string) []string {
+	if activeType == "all" || activeType == "" {
+		return []string{"track", "artist", "album", "playlist"}
+	}
+	return []string{activeType}
 }
 
 // buildSearchPageCmd creates a command that fetches a single page of search results
