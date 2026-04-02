@@ -83,8 +83,11 @@ type SearchClosedMsg struct{}
 
 // SearchRequestMsg is emitted when the debounce fires and the query is non-empty.
 // The root app model receives it and dispatches the actual Spotify API call.
+// Types carries the Spotify API type filter derived from the locked prefix (e.g. ["track"]
+// for ":songs"). When empty the app handler defaults to all four types.
 type SearchRequestMsg struct {
 	Query string
+	Types []string
 }
 
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
@@ -183,6 +186,13 @@ type SearchOverlay struct {
 	// cursorPos is the cursor within the active section (0-based).
 	// Used by the legacy selectedURI fallback path when the list has no items.
 	cursorPos int
+
+	// prefixState tracks which stage of command-prefix entry the user is in.
+	// See search_prefix.go for the state machine.
+	prefixState prefixState
+
+	// lockedPrefix holds the confirmed prefix once prefixState == PrefixLocked (e.g. ":songs").
+	lockedPrefix string
 }
 
 // NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
@@ -341,9 +351,13 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleDebounce processes a searchDebounceMsg. Only fires a search request if
-// the snapshot query still matches the current input value (discards stale ticks).
+// the snapshot query still matches the current clean query (discards stale ticks).
+// When a prefix is locked, the debounce snapshot is the clean query (prefix stripped).
 func (o *SearchOverlay) handleDebounce(m searchDebounceMsg) (tea.Model, tea.Cmd) {
-	if m.query != o.input.Value() {
+	// Compare the snapshot against the current clean query, not the raw input value.
+	// This ensures debounce ticks are discarded correctly when a prefix is present.
+	currentClean := o.cleanQuery()
+	if m.query != currentClean {
 		// Query changed since this tick was scheduled — discard.
 		return o, nil
 	}
@@ -351,9 +365,15 @@ func (o *SearchOverlay) handleDebounce(m searchDebounceMsg) (tea.Model, tea.Cmd)
 		// Never fire on empty query.
 		return o, nil
 	}
+	// Never fire while the user is still typing the command prefix (no space yet).
+	if o.prefixState == PrefixTyping {
+		return o, nil
+	}
+	types := o.activeAPITypes()
+	query := m.query
 	// Fire a search request — root app model handles it.
 	return o, func() tea.Msg {
-		return SearchRequestMsg{Query: m.query}
+		return SearchRequestMsg{Query: query, Types: types}
 	}
 }
 
@@ -367,6 +387,10 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o.handleEnter()
 
 	case tea.KeyTab:
+		// Prefix takes priority: if still typing a prefix, attempt completion.
+		if o.prefixState == PrefixTyping {
+			return o.tabCompletePrefix()
+		}
 		return o.cycleTabForward()
 
 	case tea.KeyShiftTab:
@@ -398,16 +422,26 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Let textinput handle backspace normally.
 		var cmd tea.Cmd
 		o.input, cmd = o.input.Update(m)
-		// Schedule debounce for updated value.
-		q := o.input.Value()
+		// Re-parse prefix state after backspace so it can unlock/re-type.
+		o.parsePrefix()
+		if o.prefixState == PrefixTyping {
+			// Still editing the prefix — don't fire debounce yet.
+			return o, cmd
+		}
+		q := o.cleanQuery()
 		debounceCmd := debounceSearch(q)
 		return o, tea.Batch(cmd, debounceCmd)
 
 	default:
-		// Regular typing — update input, schedule debounce.
+		// Regular typing — update input, re-parse prefix, schedule debounce.
 		var cmd tea.Cmd
 		o.input, cmd = o.input.Update(m)
-		q := o.input.Value()
+		o.parsePrefix()
+		if o.prefixState == PrefixTyping {
+			// User is still typing the command prefix — don't fire debounce yet.
+			return o, cmd
+		}
+		q := o.cleanQuery()
 		debounceCmd := debounceSearch(q)
 		return o, tea.Batch(cmd, debounceCmd)
 	}
@@ -563,10 +597,15 @@ func (o *SearchOverlay) View() string {
 	}
 	resultsPanel := o.renderResultsPanel(w, resultsH)
 
-	// Compose: Panel1 + 1 empty line (margin) + Panel2 + Panel3 (flush, no margin).
+	// The 1-line margin between Panel 1 and Panel 2 doubles as the prefix hint line.
+	// When the user is typing a command prefix (e.g. ":so") matching prefixes are
+	// shown here. Otherwise the line is empty (layout height is unchanged either way).
+	margin := o.renderPrefixHints(w)
+
+	// Compose: Panel1 + 1-line hint/margin + Panel2 + Panel3 (flush, no margin).
 	return lipgloss.JoinVertical(lipgloss.Left,
 		searchPanel,
-		"", // 1-line margin between search and results
+		margin,
 		resultsPanel,
 		helpPanel,
 	)

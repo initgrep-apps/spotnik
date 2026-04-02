@@ -800,7 +800,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
-		cmd := a.buildSearchBatchCmd(m.Query, []string{"track", "artist", "album", "playlist"}, 0)
+		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
+		// Fall back to all four types when no prefix filter is active.
+		searchTypes := m.Types
+		if len(searchTypes) == 0 {
+			searchTypes = []string{"track", "artist", "album", "playlist"}
+		}
+		cmd := a.buildSearchBatchCmd(m.Query, searchTypes, 0)
 		if cmd == nil {
 			a.store.SetSearchLoading(false)
 			return a, nil
