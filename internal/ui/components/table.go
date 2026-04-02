@@ -53,10 +53,6 @@ type TableConfig struct {
 	PlayingIndex int
 	// ShowHeader controls whether the column header row is rendered.
 	ShowHeader bool
-	// HeaderColor overrides th.TableHeader() when non-empty.
-	// Use this when a table should use a per-tab or per-section accent color
-	// for its column headers instead of the global TableHeader() token.
-	HeaderColor lipgloss.Color
 }
 
 // Table wraps bubble-table with Spotnik styling conventions: borderless mode,
@@ -93,15 +89,9 @@ func (t *Table) rebuild() {
 			WithStyle(lipgloss.NewStyle().Foreground(col.Color).Align(lipgloss.Left))
 	}
 
-	// Use HeaderColor override when provided, otherwise fall back to the theme token.
-	headerColor := th.TableHeader()
-	if t.config.HeaderColor != "" {
-		headerColor = t.config.HeaderColor
-	}
-
 	inner := btable.New(btCols).
 		Border(emptyBorder).
-		HeaderStyle(lipgloss.NewStyle().Foreground(headerColor).Bold(false).Align(lipgloss.Left)).
+		HeaderStyle(lipgloss.NewStyle().Foreground(th.TableHeader()).Bold(false).Align(lipgloss.Left)).
 		WithTargetWidth(t.width)
 
 	if !t.config.ShowHeader {
@@ -232,10 +222,4 @@ func (t *Table) Columns() []ColumnDef {
 // View renders the table to a string. Call SetSize before first render.
 func (t *Table) View() string {
 	return t.inner.View()
-}
-
-// HeaderColorForTest returns the configured HeaderColor value.
-// Used by tests to verify that the override was stored correctly.
-func (t *Table) HeaderColorForTest() lipgloss.Color {
-	return t.config.HeaderColor
 }

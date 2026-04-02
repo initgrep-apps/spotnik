@@ -6,9 +6,7 @@
 // Messages that carry data use domain/ types so that ui/ never imports api/.
 package panes
 
-import (
-	"github.com/initgrep-apps/spotnik/internal/domain"
-)
+import "github.com/initgrep-apps/spotnik/internal/domain"
 
 // TickMsg is sent every second by the polling tick loop.
 // It drives both progress interpolation and playback state refresh.
@@ -318,58 +316,53 @@ type SearchClearedMsg struct{}
 // It carries only the fields the overlay needs for rendering, pre-converted
 // from domain.SearchResult in commands.go so that search.go never imports api/.
 type SearchResultData struct {
-	Tracks    []domain.SearchTrackItem
-	Artists   []domain.SearchArtistItem
-	Albums    []domain.SearchAlbumItem
-	Playlists []domain.SearchPlaylistItem
-
-	// TotalTracks is the total number of matching tracks across all pages.
-	TotalTracks int
-	// TotalArtists is the total number of matching artists across all pages.
-	TotalArtists int
-	// TotalAlbums is the total number of matching albums across all pages.
-	TotalAlbums int
-	// TotalPlaylists is the total number of matching playlists across all pages.
-	TotalPlaylists int
+	Tracks    []SearchTrackItem
+	Artists   []SearchArtistItem
+	Albums    []SearchAlbumItem
+	Playlists []SearchPlaylistItem
 }
 
-// SearchTrackItem is the UI-facing track item type, aliased from domain for zero-cost reuse.
-// Defined here for backward compat — panes code can use panes.SearchTrackItem directly.
-type SearchTrackItem = domain.SearchTrackItem
+// SearchTrackItem holds the display fields for a single track search result.
+type SearchTrackItem struct {
+	// URI is the Spotify track URI used for playback and queue commands.
+	URI string
+	// Name is the track display name.
+	Name string
+	// Artist is the pre-formatted first artist name.
+	Artist string
+}
 
-// SearchArtistItem is the UI-facing artist item type, aliased from domain.
-type SearchArtistItem = domain.SearchArtistItem
+// SearchArtistItem holds the display fields for a single artist search result.
+type SearchArtistItem struct {
+	// URI is the Spotify artist URI used for playback context.
+	URI string
+	// Name is the artist display name.
+	Name string
+}
 
-// SearchAlbumItem is the UI-facing album item type, aliased from domain.
-type SearchAlbumItem = domain.SearchAlbumItem
+// SearchAlbumItem holds the display fields for a single album search result.
+type SearchAlbumItem struct {
+	// URI is the Spotify album URI used for playback context.
+	URI string
+	// Name is the album display name.
+	Name string
+	// Artist is the pre-formatted first artist name.
+	Artist string
+}
 
-// SearchPlaylistItem is the UI-facing playlist item type, aliased from domain.
-type SearchPlaylistItem = domain.SearchPlaylistItem
+// SearchPlaylistItem holds the display fields for a single playlist search result.
+type SearchPlaylistItem struct {
+	// URI is the Spotify playlist URI used for playback context.
+	URI string
+	// Name is the playlist display name.
+	Name string
+	// Owner is the pre-formatted playlist owner display name.
+	Owner string
+}
 
 // SearchResultsMsg is sent by the root app model after a search completes.
 // Results carries the pre-converted UI data; Err is non-nil if the search failed.
 type SearchResultsMsg struct {
 	Results *SearchResultData
 	Err     error
-	// Section identifies which section the results belong to when loading a paginated page.
-	// Zero value (SectionTracks = 0) is used for initial full-result loads.
-	Section SearchSection
-	// Offset is the pagination offset that was requested; used by SearchOverlay to
-	// update sectionOffsets[Section] after the page loads.
-	Offset int
-	// IsPaged distinguishes a paginated load from a new-query load. When true the
-	// overlay merges only the requesting section's results; when false it replaces
-	// all results and resets pagination state. This allows offset=0 to be used
-	// legitimately as the first page of a paginated back-navigation.
-	IsPaged bool
-}
-
-// SearchPageRequestMsg is emitted when the user navigates past the current page boundary.
-// The root app handles it by calling buildSearchCmd with the given offset.
-// Section identifies which section triggered the page request so the overlay can
-// store results for only that section.
-type SearchPageRequestMsg struct {
-	Query   string
-	Offset  int
-	Section SearchSection
 }

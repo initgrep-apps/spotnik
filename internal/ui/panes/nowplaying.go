@@ -405,16 +405,11 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	return p, nil
 }
 
-// formatDurationMs formats milliseconds as "m:ss" for tracks under 1 hour,
-// or "h:mm:ss" for tracks 1 hour or longer.
+// formatDurationMs formats milliseconds as "m:ss".
 func formatDurationMs(ms int) string {
 	totalSec := ms / 1000
-	hours := totalSec / 3600
-	minutes := (totalSec % 3600) / 60
+	minutes := totalSec / 60
 	seconds := totalSec % 60
-	if hours > 0 {
-		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
-	}
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
 

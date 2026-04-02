@@ -188,30 +188,11 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Only mouse wheel scroll events are handled — clicks and motion are ignored.
 // Scroll events are converted to j/k key messages and routed to the pane under
 // the cursor via PaneAt(), WITHOUT changing keyboard focus (btop behavior).
-// When the search overlay is open, wheel events are forwarded to it as KeyUp/KeyDown.
-// Mouse scroll is ignored when the device overlay is open.
+// Mouse scroll is ignored when an overlay (search or device) is open.
 func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
-	// When search overlay is open, forward wheel scroll to the search overlay.
-	if a.searchOpen {
-		if m.Action == tea.MouseActionPress &&
-			(m.Button == tea.MouseButtonWheelUp || m.Button == tea.MouseButtonWheelDown) {
-			var scrollKey tea.KeyMsg
-			if m.Button == tea.MouseButtonWheelUp {
-				scrollKey = tea.KeyMsg{Type: tea.KeyUp}
-			} else {
-				scrollKey = tea.KeyMsg{Type: tea.KeyDown}
-			}
-			updated, cmd := a.searchPane.Update(scrollKey)
-			if sp, ok := updated.(*panes.SearchOverlay); ok {
-				a.searchPane = sp
-			}
-			return cmd
-		}
-		return nil
-	}
-
-	// Ignore mouse events when the device overlay is open.
-	if a.deviceOverlayOpen {
+	// Ignore mouse events when any overlay is open.
+	// Overlays handle their own input; scroll behind them is unintuitive.
+	if a.deviceOverlayOpen || a.searchOpen {
 		return nil
 	}
 

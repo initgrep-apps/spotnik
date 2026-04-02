@@ -300,13 +300,6 @@ func (a *App) SetSearch(search api.SearchAPI) {
 	a.search = search
 }
 
-// BuildSearchCmd is an exported wrapper around buildSearchCmd for use in tests.
-// It allows test packages (package app_test) to construct paginated search commands
-// without accessing the unexported method directly.
-func (a *App) BuildSearchCmd(query string, offset int) tea.Cmd {
-	return a.buildSearchCmd(query, offset)
-}
-
 // SetDevices injects the Spotify Connect devices API client into the app.
 func (a *App) SetDevices(devices api.DevicesAPI) {
 	a.devices = devices
@@ -798,7 +791,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store writes belong in Update, not inside command builders.
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
-		return a, a.buildSearchCmd(m.Query, 0)
+		return a, a.buildSearchCmd(m.Query)
 
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
@@ -809,18 +802,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSearchQuery("")
 		return a, nil
 
-	case panes.SearchPageRequestMsg:
-		// User navigated past the page boundary — fetch the next/previous page for
-		// the given section. We do NOT reset SearchLoading or change the query;
-		// the overlay stays interactive while the page loads in the background.
-		// Mark the offset as in-flight immediately so that checkPrefetch does not
-		// fire a duplicate request while the command is executing.
-		a.store.MarkSearchOffsetFetched(int(m.Section), m.Offset)
-		return a, a.buildSearchPageCmd(m.Query, m.Offset, m.Section)
-
 	case panes.SearchResultsMsg:
-		// Search command returned — perform ALL store mutations before forwarding to overlay.
-		// The overlay's handleSearchResults only updates local UI state (cursor, table rows).
+		// Search command returned — write error state to store, then deliver results to overlay.
+		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
+		// *domain.SearchResult stored in store.SearchResults(). The overlay stores results in its
+		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
+		// in production rendering and can be ignored here.
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -837,56 +824,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
 		}
 		a.store.ClearSearchError()
-		if m.Results != nil {
-			if !m.IsPaged {
-				// New query — clear all buffers and load the first page for all sections.
-				// ClearSearchBuffers also resets searchBufQuery; record the current query so
-				// callers can detect whether a page result belongs to the current query.
-				a.store.ClearSearchBuffers()
-				a.store.SetSearchBufQuery(a.store.SearchQuery())
-				a.store.AppendSearchTracks(m.Results.Tracks)
-				a.store.AppendSearchArtists(m.Results.Artists)
-				a.store.AppendSearchAlbums(m.Results.Albums)
-				a.store.AppendSearchPlaylists(m.Results.Playlists)
-				// Record API totals for prefetch guard.
-				a.store.SetSearchTotal(int(panes.SectionTracks), m.Results.TotalTracks)
-				a.store.SetSearchTotal(int(panes.SectionArtists), m.Results.TotalArtists)
-				a.store.SetSearchTotal(int(panes.SectionAlbums), m.Results.TotalAlbums)
-				a.store.SetSearchTotal(int(panes.SectionPlaylists), m.Results.TotalPlaylists)
-				// Mark offset 0 as fetched for all sections.
-				a.store.MarkSearchOffsetFetched(int(panes.SectionTracks), 0)
-				a.store.MarkSearchOffsetFetched(int(panes.SectionArtists), 0)
-				a.store.MarkSearchOffsetFetched(int(panes.SectionAlbums), 0)
-				a.store.MarkSearchOffsetFetched(int(panes.SectionPlaylists), 0)
-			} else {
-				// Paginated load — append to the requesting section's buffer.
-				switch m.Section {
-				case panes.SectionTracks:
-					a.store.AppendSearchTracks(m.Results.Tracks)
-					if m.Results.TotalTracks > 0 {
-						a.store.SetSearchTotal(int(panes.SectionTracks), m.Results.TotalTracks)
-					}
-				case panes.SectionArtists:
-					a.store.AppendSearchArtists(m.Results.Artists)
-					if m.Results.TotalArtists > 0 {
-						a.store.SetSearchTotal(int(panes.SectionArtists), m.Results.TotalArtists)
-					}
-				case panes.SectionAlbums:
-					a.store.AppendSearchAlbums(m.Results.Albums)
-					if m.Results.TotalAlbums > 0 {
-						a.store.SetSearchTotal(int(panes.SectionAlbums), m.Results.TotalAlbums)
-					}
-				case panes.SectionPlaylists:
-					a.store.AppendSearchPlaylists(m.Results.Playlists)
-					if m.Results.TotalPlaylists > 0 {
-						a.store.SetSearchTotal(int(panes.SectionPlaylists), m.Results.TotalPlaylists)
-					}
-				}
-				// Mark this offset as fetched — inside section-aware logic to avoid
-				// marking an invalid section as fetched without appending results.
-				a.store.MarkSearchOffsetFetched(int(m.Section), m.Offset)
-			}
-		}
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp

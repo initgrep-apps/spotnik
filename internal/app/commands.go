@@ -263,10 +263,9 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 
 // buildSearchCmd creates a command that calls the Spotify search API and delivers
 // pre-converted results via SearchResultsMsg so search.go never imports api/.
-// offset is the pagination offset (0 for the first page, multiples of 10 for subsequent pages).
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
-func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
+func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
@@ -277,8 +276,7 @@ func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 			api.WithPriority(context.Background(), api.Interactive),
 			query,
 			[]string{"track", "artist", "album", "playlist"},
-			10,
-			offset,
+			5,
 		)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
@@ -289,61 +287,7 @@ func (a *App) buildSearchCmd(query string, offset int) tea.Cmd {
 			}
 			return panes.SearchResultsMsg{Err: err}
 		}
-		return panes.SearchResultsMsg{Results: convertSearchResult(results), IsPaged: false}
-	}
-}
-
-// buildSearchPageCmd creates a command that fetches a specific page of search results
-// for a single section (tracks, artists, albums, or playlists). The result is
-// delivered as a SearchResultsMsg with Section and Offset set so the overlay can
-// merge only the relevant section's results while preserving the others.
-// sectionTypeStrings maps each search section to the Spotify API type string used
-// when fetching a page for that section in isolation.
-var sectionTypeStrings = map[panes.SearchSection]string{
-	panes.SectionTracks:    "track",
-	panes.SectionArtists:   "artist",
-	panes.SectionAlbums:    "album",
-	panes.SectionPlaylists: "playlist",
-}
-
-func (a *App) buildSearchPageCmd(query string, offset int, section panes.SearchSection) tea.Cmd {
-	search := a.search
-	typeStr, ok := sectionTypeStrings[section]
-	if !ok {
-		// Unknown section — should never happen; return a no-op command.
-		return func() tea.Msg {
-			return panes.SearchResultsMsg{Section: section, Offset: offset, IsPaged: true}
-		}
-	}
-	return func() tea.Msg {
-		if search == nil {
-			return panes.SearchResultsMsg{Err: errNilClient, Section: section, Offset: offset, IsPaged: true}
-		}
-		// Search is user-triggered — bypass token bucket.
-		// Only request the single type relevant to this section for efficiency.
-		results, err := search.Search(
-			api.WithPriority(context.Background(), api.Interactive),
-			query,
-			[]string{typeStr},
-			10,
-			offset,
-		)
-		if err != nil {
-			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
-				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
-			}
-			if isUnauthorizedError(err) {
-				return unauthorizedMsg{}
-			}
-			return panes.SearchResultsMsg{Err: err, Section: section, Offset: offset, IsPaged: true}
-		}
-		msg := panes.SearchResultsMsg{
-			Results: convertSearchResult(results),
-			Section: section,
-			Offset:  offset,
-			IsPaged: true,
-		}
-		return msg
+		return panes.SearchResultsMsg{Results: convertSearchResult(results)}
 	}
 }
 
@@ -355,19 +299,12 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 		return nil
 	}
 
-	data := &panes.SearchResultData{
-		TotalTracks:    r.Tracks.Total,
-		TotalArtists:   r.Artists.Total,
-		TotalAlbums:    r.Albums.Total,
-		TotalPlaylists: r.Playlists.Total,
-	}
+	data := &panes.SearchResultData{}
 
 	for _, t := range r.Tracks.Items {
 		item := panes.SearchTrackItem{
-			URI:        t.URI,
-			Name:       t.Name,
-			DurationMs: t.DurationMs,
-			Album:      t.Album.Name,
+			URI:  t.URI,
+			Name: t.Name,
 		}
 		if len(t.Artists) > 0 {
 			item.Artist = t.Artists[0].Name
@@ -384,26 +321,20 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 
 	for _, a := range r.Albums.Items {
 		item := panes.SearchAlbumItem{
-			URI:         a.URI,
-			Name:        a.Name,
-			TotalTracks: a.TotalTracks,
+			URI:  a.URI,
+			Name: a.Name,
 		}
 		if len(a.Artists) > 0 {
 			item.Artist = a.Artists[0].Name
-		}
-		// Guard against short release dates (e.g. "20", "") — only extract if >= 4 chars.
-		if len(a.ReleaseDate) >= 4 {
-			item.ReleaseYear = a.ReleaseDate[:4]
 		}
 		data.Albums = append(data.Albums, item)
 	}
 
 	for _, p := range r.Playlists.Items {
 		data.Playlists = append(data.Playlists, panes.SearchPlaylistItem{
-			URI:        p.URI,
-			Name:       p.Name,
-			Owner:      p.Owner.DisplayName,
-			TrackCount: p.TrackCount,
+			URI:   p.URI,
+			Name:  p.Name,
+			Owner: p.Owner.DisplayName,
 		})
 	}
 

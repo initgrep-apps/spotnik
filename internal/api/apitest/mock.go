@@ -171,7 +171,7 @@ type MockSearch struct {
 var _ api.SearchAPI = (*MockSearch)(nil)
 
 // Search returns the configured result and error.
-func (m *MockSearch) Search(_ context.Context, _ string, _ []string, _, _ int) (*api.SearchResult, error) {
+func (m *MockSearch) Search(_ context.Context, _ string, _ []string, _ int) (*api.SearchResult, error) {
 	return m.SearchResult, m.SearchErr
 }
 
