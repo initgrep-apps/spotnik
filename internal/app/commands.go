@@ -261,11 +261,17 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	}
 }
 
-// buildSearchCmd creates a command that calls the Spotify search API and delivers
-// pre-converted results via SearchPageLoadedMsg so search.go never imports api/.
+// buildSearchCmd creates a command that calls the Spotify search API across all
+// four types and delivers pre-converted results via SearchPageLoadedMsg.
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
 func (a *App) buildSearchCmd(query string) tea.Cmd {
+	return a.buildSearchCmdWithTypes(query, []string{"track", "artist", "album", "playlist"})
+}
+
+// buildSearchCmdWithTypes creates a search command scoped to specific API types.
+// Used when the user switches the category tab so only the selected type is fetched.
+func (a *App) buildSearchCmdWithTypes(query string, types []string) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
@@ -276,7 +282,7 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 		results, err := search.Search(
 			api.WithPriority(context.Background(), api.Interactive),
 			query,
-			[]string{"track", "artist", "album", "playlist"},
+			types,
 			10, 0,
 		)
 		if err != nil {

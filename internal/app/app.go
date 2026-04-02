@@ -807,6 +807,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		return a, nil
 
+	case panes.SearchTabChangedMsg:
+		// User switched the category tab in the search overlay.
+		// Update the active type filter and re-fire the search so results reflect the new tab.
+		// Only fire if there is a non-empty query — no point searching with empty input.
+		if m.Query == "" {
+			return a, nil
+		}
+		if len(m.Types) > 0 {
+			a.store.SetSearchActiveType(m.Types[0])
+		}
+		a.store.ClearSearchResults()
+		a.store.SetSearchLoading(true)
+		return a, a.buildSearchCmdWithTypes(m.Query, m.Types)
+
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — check for staleness, append to store, deliver to overlay.
 		if m.Err != nil {

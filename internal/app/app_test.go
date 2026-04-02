@@ -726,6 +726,27 @@ func TestApp_SearchRequestMsg_DispatchesSearch(t *testing.T) {
 	assert.NotNil(t, cmd, "SearchRequestMsg should produce a search command")
 }
 
+// TestApp_SearchTabChangedMsg_UpdatesStoreAndDispatches verifies that
+// SearchTabChangedMsg updates store.SearchActiveType and dispatches a search command.
+func TestApp_SearchTabChangedMsg_UpdatesStoreAndDispatches(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Pre-set a query in the store so the search cmd can fire.
+	a.Store().SetSearchQuery("blinding")
+
+	tabMsg := panes.SearchTabChangedMsg{
+		Types: []string{"track"},
+		Query: "blinding",
+	}
+	_, cmd := a.Update(tabMsg)
+
+	// Store should have updated active type.
+	assert.Equal(t, "track", a.Store().SearchActiveType(), "SearchTabChangedMsg should update store SearchActiveType")
+	// A search command should be dispatched.
+	assert.NotNil(t, cmd, "SearchTabChangedMsg should dispatch a search command")
+}
+
 // TestApp_StatusDismiss_AlertAutoDismissl verifies that toast alerts are handled
 // by BubbleUp's auto-dismiss mechanism (not a statusDismissMsg).
 // After Task 3, statusDismissMsg is removed — BubbleUp handles dismiss internally.

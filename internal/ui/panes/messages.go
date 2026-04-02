@@ -312,6 +312,16 @@ type PlaylistReorderResultMsg struct {
 // Panes must never write to the store directly — they emit messages instead.
 type SearchClearedMsg struct{}
 
+// SearchTabChangedMsg is emitted by SearchOverlay when the user cycles the active
+// category tab (Tab / Shift+Tab). The root app model re-fires the search with the
+// new type filter so results refresh immediately for the chosen category.
+type SearchTabChangedMsg struct {
+	// Types is the list of Spotify API type strings for the new tab (e.g. ["track"]).
+	Types []string
+	// Query is the current search query string at the time of the tab change.
+	Query string
+}
+
 // SearchResultData is the UI-facing representation of one page of search results.
 // It carries only the fields the overlay needs for rendering, pre-converted
 // from domain.SearchResult in commands.go so that search.go never imports api/.

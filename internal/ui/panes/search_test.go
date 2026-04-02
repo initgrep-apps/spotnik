@@ -214,29 +214,30 @@ func TestSearchOverlay_Update_A(t *testing.T) {
 	assert.Equal(t, "spotify:track:t1", qMsg.TrackURI)
 }
 
-// TestSearchOverlay_Update_Tab verifies Tab moves to the next section.
+// TestSearchOverlay_Update_Tab verifies Tab advances the active category tab.
+// In the redesigned overlay, Tab/Shift+Tab cycle the tab bar (not the section).
 func TestSearchOverlay_Update_Tab(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
-	initialSection := o.ActiveSection()
+	initialTab := o.ActiveTab()
 	o, _ = sendKey(t, o, "tab")
 
-	assert.NotEqual(t, initialSection, o.ActiveSection(), "Tab should move to next section")
+	assert.NotEqual(t, initialTab, o.ActiveTab(), "Tab should advance to next category tab")
 }
 
-// TestSearchOverlay_Update_ShiftTab verifies Shift+Tab moves to the previous section.
+// TestSearchOverlay_Update_ShiftTab verifies Shift+Tab retreats the active category tab.
 func TestSearchOverlay_Update_ShiftTab(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
 
-	// Move forward first, then back
+	// Move forward twice, then Shift+Tab to go back once.
 	o, _ = sendKey(t, o, "tab")
 	o, _ = sendKey(t, o, "tab")
-	afterForward := o.ActiveSection()
+	afterForward := o.ActiveTab()
 	o, _ = sendKey(t, o, "shift+tab")
 
-	assert.NotEqual(t, afterForward, o.ActiveSection(), "Shift+Tab should move to previous section")
+	assert.NotEqual(t, afterForward, o.ActiveTab(), "Shift+Tab should retreat to previous category tab")
 }
 
 // TestSearchOverlay_Update_JK verifies arrow key navigation moves cursor within section.
@@ -599,13 +600,187 @@ func TestSearchOverlay_View_BtopBorderTitle(t *testing.T) {
 }
 
 // TestSearchOverlay_View_BtopBorderActions verifies action shortcuts appear in the border.
+// In the three-panel design, "Enter play" and "Ctrl+A queue" appear in the Results panel border.
 func TestSearchOverlay_View_BtopBorderActions(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 
 	view := o.View()
 
-	// Actions from the spec: "Enter play" and "Tab section"
-	assert.Contains(t, view, "play", "border should show 'play' action")
-	assert.Contains(t, view, "section", "border should show 'section' action")
+	// Results panel border shows "Enter play" and "Ctrl+A queue" actions.
+	assert.Contains(t, view, "play", "results border should show 'play' action")
+	assert.Contains(t, view, "queue", "results border should show 'queue' action")
+}
+
+// --- Story 82: Three-panel layout tests ---
+
+// TestSearchTab_EnumValues verifies numTabs==5 and tabToAPITypes returns correct types.
+func TestSearchTab_EnumValues(t *testing.T) {
+	assert.Equal(t, 5, panes.NumTabs, "numTabs should be 5")
+
+	tests := []struct {
+		tab       panes.SearchTab
+		wantTypes []string
+	}{
+		{panes.TabAll, []string{"track", "artist", "album", "playlist"}},
+		{panes.TabSongs, []string{"track"}},
+		{panes.TabArtists, []string{"artist"}},
+		{panes.TabAlbums, []string{"album"}},
+		{panes.TabPlaylists, []string{"playlist"}},
+	}
+	for _, tt := range tests {
+		types := panes.TabToAPITypes(tt.tab)
+		assert.Equal(t, tt.wantTypes, types, "API types for tab %d", tt.tab)
+	}
+}
+
+// TestSearchOverlay_Tab_CyclesForward verifies Tab cycles the active tab forward with wrapping.
+func TestSearchOverlay_Tab_CyclesForward(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+
+	// Default should be tabAll (0).
+	assert.Equal(t, panes.TabAll, o.ActiveTab(), "default tab should be tabAll")
+
+	// Cycle through all tabs and verify wrapping.
+	for i := 1; i < panes.NumTabs; i++ {
+		o, _ = sendKey(t, o, "tab")
+		assert.Equal(t, panes.SearchTab(i), o.ActiveTab(), "tab %d after %d forward press(es)", i, i)
+	}
+
+	// One more Tab should wrap back to tabAll.
+	o, _ = sendKey(t, o, "tab")
+	assert.Equal(t, panes.TabAll, o.ActiveTab(), "tab should wrap to tabAll after numTabs presses")
+}
+
+// TestSearchOverlay_Tab_CyclesBackward verifies Shift+Tab cycles the active tab backward with wrapping.
+func TestSearchOverlay_ShiftTab_CyclesBackward(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+
+	// At tabAll (0), Shift+Tab should wrap to tabPlaylists (numTabs-1).
+	o, _ = sendKey(t, o, "shift+tab")
+	assert.Equal(t, panes.SearchTab(panes.NumTabs-1), o.ActiveTab(), "shift+tab from tabAll should wrap to last tab")
+}
+
+// TestSearchOverlay_Tab_EmitsSearchTabChangedMsg verifies tab change emits SearchTabChangedMsg.
+func TestSearchOverlay_Tab_EmitsSearchTabChangedMsg(t *testing.T) {
+	o, _ := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+
+	_, cmd := sendKey(t, o, "tab")
+	require.NotNil(t, cmd, "tab change should return a command")
+	msg := cmd()
+	tcMsg, ok := msg.(panes.SearchTabChangedMsg)
+	require.True(t, ok, "tab change command should produce SearchTabChangedMsg, got %T", msg)
+	assert.Equal(t, []string{"track"}, tcMsg.Types, "Songs tab should map to track type")
+}
+
+// TestSearchOverlay_View_ThreePanels verifies View() contains three ╭ border starts.
+func TestSearchOverlay_View_ThreePanels(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	count := strings.Count(view, "╭")
+	assert.GreaterOrEqual(t, count, 3, "view should contain at least 3 panel borders (╭)")
+}
+
+// TestSearchOverlay_View_SearchPanelTitle verifies Panel 1 has "Search" title.
+func TestSearchOverlay_View_SearchPanelTitle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	view := o.View()
+	assert.Contains(t, view, "Search", "Panel 1 border should have 'Search' title")
+}
+
+// TestSearchOverlay_View_ResultsPanelTitle verifies Panel 2 has "Results" title.
+func TestSearchOverlay_View_ResultsPanelTitle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	view := o.View()
+	assert.Contains(t, view, "Results", "Panel 2 border should have 'Results' title")
+}
+
+// TestSearchOverlay_View_KeysPanelTitle verifies Panel 3 has "Keys" title.
+func TestSearchOverlay_View_KeysPanelTitle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	view := o.View()
+	assert.Contains(t, view, "Keys", "Panel 3 border should have 'Keys' title")
+}
+
+// TestSearchOverlay_View_TabBarPresent verifies tab labels appear in the results panel.
+func TestSearchOverlay_View_TabBarPresent(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	view := o.View()
+	assert.Contains(t, view, "All", "tab bar should show 'All' tab")
+	assert.Contains(t, view, "Songs", "tab bar should show 'Songs' tab")
+	assert.Contains(t, view, "Artists", "tab bar should show 'Artists' tab")
+	assert.Contains(t, view, "Albums", "tab bar should show 'Albums' tab")
+	assert.Contains(t, view, "Playlists", "tab bar should show 'Playlists' tab")
+}
+
+// TestSearchOverlay_View_TabBarActiveHighlight verifies the active tab uses bracket style.
+func TestSearchOverlay_View_TabBarActiveHighlight(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	view := o.View()
+	// Active tab (All) should render with brackets.
+	assert.Contains(t, view, "[All]", "active tab should be shown with brackets")
+}
+
+// TestSearchOverlay_View_HelpPanelContent verifies help bar contains keybinding text.
+func TestSearchOverlay_View_HelpPanelContent(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	view := o.View()
+	// Help bar should contain some key hint text (at least "Esc").
+	assert.Contains(t, view, "esc", "help bar should show esc keybinding")
+}
+
+// TestSearchOverlay_OverlaySize_80Pct verifies overlayWidth/Height return 80% of terminal size.
+func TestSearchOverlay_OverlaySize_80Pct(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 50)
+	assert.Equal(t, 80, o.OverlayWidth(), "100-wide terminal should give 80-wide overlay")
+	assert.Equal(t, 40, o.OverlayHeight(), "50-high terminal should give 40-high overlay")
+}
+
+// TestSearchOverlay_OverlaySize_MinClamp verifies minimum clamping.
+func TestSearchOverlay_OverlaySize_MinClamp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(10, 5) // very small terminal
+	assert.Equal(t, 40, o.OverlayWidth(), "overlay width minimum should be 40")
+	assert.Equal(t, 15, o.OverlayHeight(), "overlay height minimum should be 15")
+}
+
+// TestSearchOverlay_SetSize_PropagatesList verifies SetSize propagates to list.Model inner dims.
+func TestSearchOverlay_SetSize_PropagatesList(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Should not panic when called — verifies list.Model is initialized and SetSize works.
+	o.SetSize(120, 40)
+	// If we get here, SetSize correctly propagated to list.Model without panic.
+	// The overlay should also render without error.
+	view := o.View()
+	assert.NotEmpty(t, view, "view should not be empty after SetSize")
+}
+
+// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 5 bindings.
+func TestSearchKeyMap_ShortHelp(t *testing.T) {
+	km := panes.NewSearchKeyMap()
+	assert.Len(t, km.ShortHelp(), 5, "ShortHelp should return 5 bindings")
+}
+
+// TestSearchKeyMap_FullHelp verifies FullHelp returns 6 bindings.
+func TestSearchKeyMap_FullHelp(t *testing.T) {
+	km := panes.NewSearchKeyMap()
+	allBindings := km.FullHelp()
+	require.NotEmpty(t, allBindings)
+	total := 0
+	for _, group := range allBindings {
+		total += len(group)
+	}
+	assert.Equal(t, 6, total, "FullHelp should return 6 bindings total")
 }
