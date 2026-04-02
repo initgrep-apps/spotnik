@@ -1876,6 +1876,109 @@ func TestApp_SearchClearedMsg_ClearsStoreState(t *testing.T) {
 	assert.Empty(t, a.Store().SearchTracks().Items, "store search tracks should be empty after clear")
 }
 
+// TestApp_SearchPageLoadedMsg_StaleQueryDiscarded verifies that results for a superseded
+// query are discarded without writing anything to the store. This exercises the staleness
+// guard `m.Query != a.store.SearchQuery()` in the SearchPageLoadedMsg handler.
+func TestApp_SearchPageLoadedMsg_StaleQueryDiscarded(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Set the current live query in the store.
+	a.Store().SetSearchQuery("new query")
+
+	// Build a result message for the OLD query with non-empty data.
+	staleResults := &panes.SearchResultData{
+		Tracks:         []panes.SearchTrackItem{{URI: "spotify:track:stale", Name: "Stale Track", Artist: "Stale Artist"}},
+		TracksTotal:    1,
+		Artists:        []panes.SearchArtistItem{{URI: "spotify:artist:stale", Name: "Stale Artist"}},
+		ArtistsTotal:   1,
+		Albums:         []panes.SearchAlbumItem{{URI: "spotify:album:stale", Name: "Stale Album"}},
+		AlbumsTotal:    1,
+		Playlists:      []panes.SearchPlaylistItem{{URI: "spotify:playlist:stale", Name: "Stale Playlist"}},
+		PlaylistsTotal: 1,
+	}
+	staleMsg := panes.SearchPageLoadedMsg{
+		Query:   "old query",
+		Results: staleResults,
+	}
+
+	// Handle the stale message — results should be discarded because Query != store query.
+	m, cmd := a.Update(staleMsg)
+	a = m.(*app.App)
+
+	// Nothing should be written to the store.
+	assert.Empty(t, a.Store().SearchTracks().Items, "stale tracks should not be appended to store")
+	assert.Empty(t, a.Store().SearchArtists().Items, "stale artists should not be appended to store")
+	assert.Empty(t, a.Store().SearchAlbums().Items, "stale albums should not be appended to store")
+	assert.Empty(t, a.Store().SearchPlaylists().Items, "stale playlists should not be appended to store")
+	assert.Nil(t, cmd, "stale SearchPageLoadedMsg should return no command")
+}
+
+// TestApp_SearchClearedMsg_ClearsLoadingAndError verifies that SearchClearedMsg clears
+// the loading flag and error, so an in-flight search does not leave the store permanently
+// loading or errored after the user clears input with Ctrl+U.
+func TestApp_SearchClearedMsg_ClearsLoadingAndError(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Simulate an in-flight search: loading=true and a prior error set.
+	a.Store().SetSearchLoading(true)
+	a.Store().SetSearchError(fmt.Errorf("network error"))
+
+	require.True(t, a.Store().SearchLoading(), "pre-condition: store should be loading")
+	require.Error(t, a.Store().SearchError(), "pre-condition: store should have error")
+
+	// Handle SearchClearedMsg — loading and error must be cleared.
+	m, _ := a.Update(panes.SearchClearedMsg{})
+	a = m.(*app.App)
+
+	assert.False(t, a.Store().SearchLoading(), "store loading should be false after SearchClearedMsg")
+	assert.NoError(t, a.Store().SearchError(), "store error should be nil after SearchClearedMsg")
+}
+
+// TestApp_SearchPageLoadedMsg_NilResults_ClearsLoading verifies that a successful
+// SearchPageLoadedMsg with nil Results still clears the loading flag, so the overlay
+// does not remain stuck in a loading state when the API returns an empty response.
+func TestApp_SearchPageLoadedMsg_NilResults_ClearsLoading(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Prime the store: live query = "jazz", loading = true.
+	a.Store().SetSearchQuery("jazz")
+	a.Store().SetSearchLoading(true)
+
+	// Deliver a successful page with nil Results (empty API response).
+	m, _ := a.Update(panes.SearchPageLoadedMsg{
+		Query:   "jazz",
+		Results: nil,
+	})
+	a = m.(*app.App)
+
+	assert.False(t, a.Store().SearchLoading(), "store loading should be cleared even when Results is nil")
+	assert.NoError(t, a.Store().SearchError(), "store error should remain nil for a successful fetch")
+}
+
+// TestApp_SearchRequestMsg_ClearsPreviousResults verifies that firing a new search
+// clears the previous query's results so that back-to-back searches do not mix result sets.
+func TestApp_SearchRequestMsg_ClearsPreviousResults(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Pre-populate the store with results from a previous "jazz" search.
+	a.Store().SetSearchQuery("jazz")
+	a.Store().AppendSearchTracks(
+		[]domain.Track{{ID: "t1", Name: "Jazz Track", URI: "spotify:track:t1"}}, 10)
+	require.Len(t, a.Store().SearchTracks().Items, 1, "pre-condition: jazz results should be present")
+
+	// Fire a new search for "rock" — old results must be cleared before the cmd dispatches.
+	m, cmd := a.Update(panes.SearchRequestMsg{Query: "rock"})
+	a = m.(*app.App)
+
+	assert.Empty(t, a.Store().SearchTracks().Items, "previous query results should be cleared on new search")
+	assert.Equal(t, "rock", a.Store().SearchQuery(), "store query should be updated to new query")
+	assert.NotNil(t, cmd, "new search should produce a command")
+}
+
 // TestApp_OverlayRendering_UsesThemeBaseColor verifies that overlay rendering
 // uses the theme's Base() color instead of a hardcoded #000000.
 // With a non-black theme (monokai), the rendered overlay view must not panic

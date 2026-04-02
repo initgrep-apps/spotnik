@@ -789,6 +789,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.SearchRequestMsg:
 		// Debounce fired — set store state here (in Update) before dispatching.
 		// Store writes belong in Update, not inside command builders.
+		// Clear previous query's results before appending new ones so that
+		// back-to-back searches (e.g. "jazz" then "rock") never mix result sets.
+		a.store.ClearSearchResults()
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
 		return a, a.buildSearchCmd(m.Query)
@@ -796,14 +799,21 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
 		// Clear search state in store — store writes belong in Update, not in panes.
+		// Also clear loading and error so an in-flight search does not leave the
+		// store in a permanently-loading or errored state after the user clears input.
 		a.store.ClearSearchResults()
 		a.store.SetSearchQuery("")
+		a.store.SetSearchLoading(false)
+		a.store.ClearSearchError()
 		return a, nil
 
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — check for staleness, append to store, deliver to overlay.
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				// Client not yet initialised (pre-auth startup) — clear the loading
+				// flag so the overlay does not get stuck in a loading state.
+				a.store.SetSearchLoading(false)
 				return a, nil
 			}
 		}
@@ -823,6 +833,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearSearchError()
 		// Append each type's items to the per-type TypePage in the Store.
+		// SetSearchLoading(false) is already called above, so a nil Results payload
+		// (e.g. an empty successful response) still correctly clears the loading flag.
 		if r := m.Results; r != nil {
 			a.store.AppendSearchTracks(convertSearchTrackItems(r.Tracks), r.TracksTotal)
 			a.store.AppendSearchArtists(convertSearchArtistItems(r.Artists), r.ArtistsTotal)
