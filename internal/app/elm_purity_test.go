@@ -459,7 +459,7 @@ func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
 	a := app.New(cfg, app.AppOptions{})
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
-	// Trigger SearchRequestMsg to get the buildSearchBatchCmd sequence.
+	// Trigger SearchRequestMsg to get the first page command from buildSearchBatchCmd.
 	// NOTE: SearchRequestMsg handler intentionally writes SetSearchQuery and SetSearchLoading
 	// to the store BEFORE dispatching the command — this is correct Update() behaviour.
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
@@ -469,8 +469,8 @@ func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
 	beforeQuery := a.Store().SearchQuery()
 	beforeLoading := a.Store().SearchLoading()
 
-	// Execute the first page-fetch command from the sequence. Each page command performs
-	// an HTTP call and returns SearchPageLoadedMsg. None of them must touch the store.
+	// Execute the page command — it performs an HTTP call and returns SearchPageLoadedMsg.
+	// The closure must not touch the store; only Update() may write store state.
 	resultMsg := executeFirstSequenceCmd(cmd)
 	require.NotNil(t, resultMsg, "search command should return a message")
 

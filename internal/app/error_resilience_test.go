@@ -118,8 +118,8 @@ func TestBuildFetchRecentlyPlayedCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 
 // TestBuildSearchCmd_429_EmitsRateLimitedMsg verifies that a 429 from
 // the search endpoint causes buildSearchBatchCmd to emit RateLimitedMsg.
-// buildSearchBatchCmd returns a tea.Sequence; the first page in the sequence
-// hits the 429 and emits RateLimitedMsg from that sub-command.
+// buildSearchBatchCmd dispatches a single page command; executing it returns
+// RateLimitedMsg when the server responds 429.
 func TestBuildSearchCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	srv := rateLimitServer("12")
 	defer srv.Close()
@@ -131,8 +131,7 @@ func TestBuildSearchCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "beatles"})
 	require.NotNil(t, cmd)
 
-	// buildSearchBatchCmd returns a tea.Sequence. Execute the first page-fetch command
-	// in the sequence to get the RateLimitedMsg from the 429 response.
+	// Execute the first page command to get the RateLimitedMsg from the 429 response.
 	msg := executeFirstSequenceCmd(cmd)
 	rateLimitMsg, ok := msg.(panes.RateLimitedMsg)
 	assert.True(t, ok, "429 from search endpoint should emit RateLimitedMsg, got %T", msg)
@@ -337,8 +336,8 @@ func TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired(t *testing.T) {
 }
 
 // TestBuildSearchCmd_401_ShowsSessionExpired verifies the same pattern for search.
-// buildSearchBatchCmd returns a tea.Sequence; the first page-fetch hits 401 and
-// emits unauthorizedMsg, triggering the token refresh flow.
+// buildSearchBatchCmd dispatches a single page command; the first page-fetch hits 401
+// and emits unauthorizedMsg, triggering the token refresh flow.
 func TestBuildSearchCmd_401_ShowsSessionExpired(t *testing.T) {
 	srv := unauthorizedServer()
 	defer srv.Close()
@@ -353,8 +352,7 @@ func TestBuildSearchCmd_401_ShowsSessionExpired(t *testing.T) {
 	a = model.(*app.App)
 	require.NotNil(t, fetchCmd)
 
-	// buildSearchBatchCmd returns a tea.Sequence. Execute the first page-fetch command
-	// in the sequence to get the unauthorizedMsg from the 401 response.
+	// Execute the first page command to get the unauthorizedMsg from the 401 response.
 	unauthorizedMsgResult := executeFirstSequenceCmd(fetchCmd)
 
 	model, refreshCmd := a.Update(unauthorizedMsgResult)

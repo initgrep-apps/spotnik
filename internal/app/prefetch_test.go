@@ -4,7 +4,7 @@ package app_test
 //
 // Task 1: Prefetch constants match spec values.
 // Task 2: buildSearchPageCmd fires a single API call with correct offset/limit.
-// Task 3: buildSearchBatchCmd sequences exactly 5 page commands (or fewer near maxOffset).
+// Task 3: buildSearchBatchCmd dispatches 1 page; chain-through-Update fires exactly 5 total (or fewer near maxOffset).
 // Task 4: SearchPageLoadedMsg handler: stale discarded, results appended, error toast, loading cleared.
 // Task 5: SearchPrefetchMsg handler: dispatches batch, skipped when no more, skipped when stale.
 // Task 6: SearchRequestMsg handler uses batch command (offset 0, clears previous results).
@@ -88,8 +88,8 @@ func TestBuildSearchPageCmd_CorrectOffsetAndLimit(t *testing.T) {
 	})
 	require.NotNil(t, cmd, "SearchPrefetchMsg should return a batch command")
 
-	// Execute all commands in the sequence to trigger the first HTTP call.
-	executeSequenceCmds(cmd, 1) // execute first command in sequence
+	// Execute the first page command (buildSearchBatchCmd dispatches one page at a time).
+	executeSequenceCmds(cmd, 1)
 
 	// The first page-fetch should have used offset=30 and limit=10.
 	assert.Equal(t, "30", capturedOffset, "buildSearchPageCmd should use the provided offset")
@@ -111,10 +111,10 @@ func TestBuildSearchPageCmd_CarriesQueryAndOffset(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "rock"})
 	require.NotNil(t, cmd)
 
-	// Execute the sequence — first command fires offset=0.
+	// Execute the batch command — fires the first (and only initial) page at offset=0.
 	msg := executeFirstCmd(cmd)
 	pageMsg, ok := msg.(panes.SearchPageLoadedMsg)
-	require.True(t, ok, "first command in sequence should return SearchPageLoadedMsg, got %T", msg)
+	require.True(t, ok, "batch command should return SearchPageLoadedMsg, got %T", msg)
 
 	assert.Equal(t, "rock", pageMsg.Query, "SearchPageLoadedMsg should carry the query")
 	assert.Equal(t, 0, pageMsg.Offset, "first page should have offset=0")
@@ -751,10 +751,9 @@ func TestBuildSearchPageCmd_ElmPurity_NoStoreWrites(t *testing.T) {
 // --- Helpers ---
 
 // executeFirstSequenceCmd executes a tea.Cmd and returns the first concrete payload
-// message from the resulting sequence. Used in error resilience tests that need
-// the message from the first page-fetch in a buildSearchBatchCmd sequence.
-// This is an alias for executeFirstCmd — named explicitly for clarity in test contexts
-// that document the sequence step being exercised.
+// message. Used in error resilience tests that need the message from the first
+// page-fetch command dispatched by buildSearchBatchCmd.
+// This is an alias for executeFirstCmd — named explicitly for clarity in test contexts.
 func executeFirstSequenceCmd(cmd tea.Cmd) tea.Msg {
 	return executeFirstCmd(cmd)
 }
