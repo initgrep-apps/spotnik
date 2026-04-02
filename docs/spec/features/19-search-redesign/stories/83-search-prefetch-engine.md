@@ -12,6 +12,20 @@ This story implements the prefetch pagination engine: on each search query, fire
 
 The gateway supports 5 concurrent requests max, so pages are fetched sequentially within a batch (using `tea.Sequence`), not in parallel.
 
+## Bubble Tea Components
+
+This story is primarily about command/message plumbing (Elm architecture), not UI components. However, it relies on these Bubble Tea patterns:
+
+| Pattern | Import | Role in This Story |
+|---|---|---|
+| **tea.Sequence** | `github.com/charmbracelet/bubbletea` | Sequences 5 page-fetch commands so they execute in order (respecting gateway's 5-concurrency cap) |
+| **tea.Cmd / tea.Msg** | `github.com/charmbracelet/bubbletea` | Each `buildSearchPageCmd` returns a `tea.Cmd` that produces a `SearchPageLoadedMsg` |
+| **tea.Batch** | `github.com/charmbracelet/bubbletea` | NOT used for page fetches (would overwhelm gateway); used only for combining unrelated commands |
+
+**Reference**: See `/bubbletea` skill for Cmd/Msg flow patterns. Key distinction:
+- `tea.Batch(cmds...)` — runs commands concurrently (NOT appropriate here — gateway has 5-slot semaphore)
+- `tea.Sequence(cmds...)` — runs commands in order, each waits for previous to complete (correct for sequential page fetching)
+
 ## Design
 
 ### Constants

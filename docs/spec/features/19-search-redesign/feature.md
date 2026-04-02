@@ -23,14 +23,27 @@ Tab switching always re-fires the search with the selected type filter to ensure
 | Help bar | Actions in border only | Dedicated `bubbles/help` zone at bottom |
 | Store design | Single `SearchResult` blob | Per-type paginated storage with offset/total |
 
-### Components Used
+### Bubble Tea Components (Mandatory)
 
-- `bubbles/textinput` — search bar with `:prefix` autocomplete
-- `bubbles/list` — scrollable results with custom delegate per view mode
-- `bubbles/help` + `bubbles/key` — context-sensitive keybinding bar
-- `bubbles/spinner` — loading state
-- `bubbletea-overlay` — overlay compositing (existing)
-- `layout.RenderPaneBorder` — btop-style border (existing)
+Implementers **must** use these specific Bubble Tea components. Refer to the `/bubbletea` skill (`references/components.md`) for API signatures, usage patterns, and initialization examples.
+
+| Component | Import | Where Used | Story |
+|---|---|---|---|
+| **textinput** | `github.com/charmbracelet/bubbles/textinput` | Panel 1: search bar with `:prefix` autocomplete. `SetValue()` for Tab completion, `Value()` for prefix parsing. | 82, 85 |
+| **spinner** | `github.com/charmbracelet/bubbles/spinner` | Panel 2: loading indicator during API fetch. `spinner.Dot` style, themed with `TextMuted()`. | 82 |
+| **list** | `github.com/charmbracelet/bubbles/list` | Panel 2: scrollable results with custom `ItemDelegate`. Replaces all manual string rendering. Handles viewport scroll, keyboard nav, selection. Disable built-in title/filter/help/pagination (we render our own). | 84 |
+| **list.ItemDelegate** | `github.com/charmbracelet/bubbles/list` | Custom `SearchItemDelegate` renders type badge + name + subtitle. `Height()=2`, `Render()` writes to `io.Writer`. | 84 |
+| **help** | `github.com/charmbracelet/bubbles/help` | Panel 3: keybinding bar. `help.New()` + `help.View(searchKeyMap)`. | 82 |
+| **key** | `github.com/charmbracelet/bubbles/key` | Defines `key.Binding` entries for the `searchKeyMap` used by help component. `key.NewBinding(key.WithKeys(...), key.WithHelp(...))`. | 82 |
+| **tea.Sequence** | `github.com/charmbracelet/bubbletea` | Prefetch engine: sequences 5 page-fetch commands so they execute in order (NOT `tea.Batch`). | 83 |
+
+**Existing components (no changes needed):**
+
+| Component | Import | Where Used |
+|---|---|---|
+| **bubbletea-overlay** | `github.com/rmhubbert/bubbletea-overlay` | Composites search overlay on dimmed background (`btoverlay.Composite`) |
+| **RenderPaneBorder** | `internal/ui/layout` | Wraps each of the 3 panels in btop-style rounded-corner borders |
+| **lipgloss** | `github.com/charmbracelet/lipgloss` | Styling, `JoinVertical` for panel composition, width/height capping |
 
 ## Acceptance Criteria
 

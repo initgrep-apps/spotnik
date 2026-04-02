@@ -10,6 +10,26 @@ The current `SearchOverlay` in `internal/ui/panes/search.go` is a compact overla
 
 This story rebuilds the `SearchOverlay` as **three visually distinct bordered panels** stacked vertically at 80% terminal size, with 1-line margins between them. Each panel is its own `layout.RenderPaneBorder()` call with rounded corners. The overlay is NOT a single box with internal divisions — it is three separate boxes composed vertically.
 
+## Bubble Tea Components
+
+This story introduces or reuses these components from `charmbracelet/bubbles` (Tier 1) and the existing project:
+
+| Component | Import | Role in This Story |
+|---|---|---|
+| **textinput** | `github.com/charmbracelet/bubbles/textinput` | Panel 1: search bar input (already used, resized) |
+| **spinner** | `github.com/charmbracelet/bubbles/spinner` | Panel 2: loading indicator while search is in-flight (already used) |
+| **help** | `github.com/charmbracelet/bubbles/help` | Panel 3: renders context-sensitive keybinding bar from `searchKeyMap` |
+| **key** | `github.com/charmbracelet/bubbles/key` | Defines `key.Binding` entries for the help component |
+| **list** | `github.com/charmbracelet/bubbles/list` | Panel 2: scrollable results area (initialized here, fully wired in Story 84) |
+| **RenderPaneBorder** | `internal/ui/layout` | Wraps each of the 3 panels in btop-style rounded-corner borders |
+| **bubbletea-overlay** | `github.com/rmhubbert/bubbletea-overlay` | Composites the overlay on dimmed background (existing, no changes) |
+
+**Reference**: See `/bubbletea` skill `references/components.md` for component APIs and usage patterns. Key patterns used:
+- `help.New()` + `help.View(keyMap)` for the help bar
+- `key.NewBinding(key.WithKeys(...), key.WithHelp(...))` for keybinding definitions
+- `list.New(items, delegate, width, height)` with `SetShowTitle(false)`, `SetShowFilter(false)`, etc.
+- `textinput.New()` with `.Focus()`, `.Placeholder`, `.CharLimit`
+
 ## Design
 
 ### Visual Layout

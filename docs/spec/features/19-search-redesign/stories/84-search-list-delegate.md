@@ -10,6 +10,27 @@ The current search overlay renders results as manually built strings: section he
 
 This story replaces the custom string rendering with `bubbles/list` using a custom `ItemDelegate`. The list handles scrolling (via internal viewport), keyboard navigation, and selection highlighting. A custom delegate renders each item with a type badge, name, and secondary info.
 
+## Bubble Tea Components
+
+This story's core component is `bubbles/list` — a Tier 1 charmbracelet component that provides scrollable lists with custom rendering, keyboard navigation, and built-in viewport.
+
+| Component | Import | Role in This Story |
+|---|---|---|
+| **list** | `github.com/charmbracelet/bubbles/list` | Scrollable results area with custom `ItemDelegate` for themed rendering |
+| **list.Item** | `github.com/charmbracelet/bubbles/list` | Interface implemented by `SearchListItem` (`Title()`, `Description()`, `FilterValue()`) |
+| **list.ItemDelegate** | `github.com/charmbracelet/bubbles/list` | `SearchItemDelegate` renders type badge + name + subtitle per item |
+
+**Reference**: See `/bubbletea` skill `references/components.md` for list patterns. Key APIs used:
+- `list.New(items, delegate, width, height)` — constructor
+- `list.SetShowTitle(false)`, `SetShowStatusBar(false)`, `SetShowFilter(false)`, `SetShowHelp(false)`, `SetShowPagination(false)` — disable built-in chrome (we render our own tab bar and help panel)
+- `list.SetItems(items)` — replace items when store data changes or tab switches
+- `list.Index()` — current cursor position (used for prefetch threshold check)
+- `list.SelectedItem()` — get the selected `SearchListItem` for play/queue actions
+- `list.SetSize(w, h)` — propagate dimensions from SetSize
+- Custom `ItemDelegate.Render(w, m, index, item)` — renders each item with `fmt.Fprintf(w, ...)`, uses `m.Index()` to detect selection
+
+**Why `bubbles/list` over `bubble-table`**: The list component handles mixed-type results naturally via custom delegates (type badges, variable subtitles), has built-in viewport scrolling for prefetch detection, and provides a richer visual experience than columnar tables for search results.
+
 ## Design
 
 ### Search Result Item Type

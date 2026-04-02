@@ -8,6 +8,20 @@ status: open
 
 The search bar supports command prefixes (`:songs`, `:artists`, `:albums`, `:playlists`) that filter results to a single category. This story implements the prefix parsing, inline autocomplete hints, and Tab-completion.
 
+## Bubble Tea Components
+
+This story extends the `textinput.Model` (already in use) with custom prefix parsing and inline hint rendering. No new Bubble Tea components are introduced — the autocomplete hints are rendered as styled lipgloss text below the input.
+
+| Component | Import | Role in This Story |
+|---|---|---|
+| **textinput** | `github.com/charmbracelet/bubbles/textinput` | Search bar input — `SetValue()` for Tab completion, `Value()` for prefix parsing, `CursorEnd()` after completion |
+
+**Reference**: See `/bubbletea` skill `references/components.md` for textinput API. Key methods used:
+- `textinput.SetValue(s)` — programmatically set input (used by Tab completion to insert completed prefix)
+- `textinput.CursorEnd()` — move cursor to end after completion
+- `textinput.Value()` — read current input for prefix parsing on every keystroke
+- `textinput.Update(msg)` — forward key events for normal typing/backspace handling
+
 ## Design
 
 ### Prefix Definitions
