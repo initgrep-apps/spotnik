@@ -1,25 +1,184 @@
 ---
-title: "Search Overlay: Three-Zone Layout with Tabs and Help Bar"
+title: "Search Overlay: Three-Panel Vertical Layout with Tabs and Help Bar"
 feature: 19-search-redesign
 status: open
 ---
 
 ## Background
 
-The current `SearchOverlay` in `internal/ui/panes/search.go` is a compact overlay (~60%x70%) that renders a text input, a dot separator, and four vertically stacked result sections with custom string rendering. It has no tab bar, no help component, and no concept of category filtering.
+The current `SearchOverlay` in `internal/ui/panes/search.go` is a compact overlay (~60%x70%) that renders everything inside a single bordered box: a text input, a dot separator, and four vertically stacked result sections. It has no tab bar, no help component, and no concept of category filtering.
 
-This story rebuilds the `SearchOverlay` as a three-zone layout at 80% terminal size:
-1. **Zone 1 (top)**: `textinput.Model` search bar — preserved from current, resized
-2. **Zone 2 (middle)**: Tab bar + `list.Model` results area (Story 84 wires the list; this story sets up the layout skeleton and tab state)
-3. **Zone 3 (bottom)**: `help.Model` keybinding bar
-
-This story focuses on the structural layout, tab bar rendering/navigation, and help bar integration. The `list.Model` wiring and custom delegate are in Story 84. Until then, Zone 2 renders a placeholder or the existing section-based rendering.
+This story rebuilds the `SearchOverlay` as **three visually distinct bordered panels** stacked vertically at 80% terminal size, with 1-line margins between them. Each panel is its own `layout.RenderPaneBorder()` call with rounded corners. The overlay is NOT a single box with internal divisions — it is three separate boxes composed vertically.
 
 ## Design
 
-### Overlay Size
+### Visual Layout
 
-Change `overlayWidth()` and `overlayHeight()` to return 80% of terminal dimensions:
+The overlay renders as three separate bordered panels with 1-line gaps between them:
+
+```
+╭─ Search ─────────────────────────────────────────────────────────╮
+│  > :songs query text here_                                       │
+│    :songs  :artists  :albums  :playlists                         │  ← hint line (only when typing prefix)
+╰─────────────────────────────────────────────────────────────────╯
+                                                                      ← 1-line margin
+╭─ Results ─────────────────────── Enter play  Ctrl+A queue ──────╮
+│  [All]  Songs  Artists  Albums  Playlists                        │  ← tab bar row
+│  ─────────────────────────────────────────────────────────────── │  ← thin separator
+│  ♫ Labon Ko                                    Pritam            │
+│  ♫ Kya Mujhe Pyar Hai                          Pritam            │
+│  ● KK                                                            │
+│  ● Atif Aslam                                                    │
+│  ◆ Pal                                          KK               │
+│  ◆ Teri Yaadon Mein                             KK               │
+│  ☰ KK Super Hit Songs                          Samiran Dey       │
+│                                                                   │
+│                                                                   │
+╰─────────────────────────────────────────────────────────────────╯
+                                                                      ← 1-line margin
+╭─ Keys ──────────────────────────────────────────────────────────╮
+│  Enter play  Ctrl+A queue  Tab filter  Shift+Tab prev  Esc close │
+╰─────────────────────────────────────────────────────────────────╯
+```
+
+### Panel 1: Search Bar (top)
+
+A bordered panel containing:
+- The `textinput.Model` (1 line)
+- Optional prefix hint line (1 line, only when `prefixState == prefixTyping` — see Story 85)
+
+Height: **3 lines** (border top + input + border bottom) or **4 lines** when hint is visible.
+
+Border config:
+```go
+searchBarCfg := layout.BorderConfig{
+    Width:       overlayWidth,
+    Height:      searchBarHeight, // 3 or 4
+    Title:       "Search",
+    Actions:     []layout.Action{}, // no actions in search bar border
+    AccentColor: o.theme.ActiveBorder(),
+    Focused:     true,
+    Theme:       o.theme,
+}
+```
+
+The search bar panel is always focused (bright border) since the overlay captures all input.
+
+### Panel 2: Results (middle)
+
+A bordered panel containing:
+- Tab bar row (1 line): `[All]  Songs  Artists  Albums  Playlists`
+- Thin separator (1 line): styled `─` characters in `TextMuted()`
+- Results list area: fills remaining height — `list.Model` output (Story 84 wires this; until then, placeholder or existing section rendering)
+
+Height: **overlayHeight - searchBarHeight - helpBarHeight - 2** (2 lines for margins).
+
+This panel is the largest and expands/contracts with terminal size.
+
+Border config:
+```go
+resultsCfg := layout.BorderConfig{
+    Width:       overlayWidth,
+    Height:      resultsHeight,
+    Title:       "Results",
+    Actions: []layout.Action{
+        {Key: "Enter", Label: "play"},
+        {Key: "Ctrl+A", Label: "queue"},
+    },
+    AccentColor: o.theme.SectionHeader(),
+    Focused:     false, // dimmer border than search bar
+    Theme:       o.theme,
+}
+```
+
+#### Tab Bar Rendering
+
+Rendered as the first line inside the results panel. Active tab gets `SelectedBg()`/`SelectedFg()` styling with brackets. Inactive tabs use `TextMuted()`:
+
+```
+ [All]  Songs  Artists  Albums  Playlists
+```
+
+#### Tab Separator
+
+A thin line of `─` characters in `TextMuted()` below the tab bar, spanning inner width. Visually separates the tab selector from the scrollable results.
+
+### Panel 3: Help Bar (bottom)
+
+A bordered panel containing a single line from `help.Model`:
+
+```
+ Enter play  Ctrl+A queue  Tab filter  Shift+Tab prev  Esc close
+```
+
+Height: **3 lines** (border top + help content + border bottom).
+
+Border config:
+```go
+helpCfg := layout.BorderConfig{
+    Width:       overlayWidth,
+    Height:      3,
+    Title:       "Keys",
+    Actions:     []layout.Action{},
+    AccentColor: o.theme.TextMuted(),
+    Focused:     false,
+    Theme:       o.theme,
+}
+```
+
+### View() Composition
+
+`View()` renders the three panels and joins them with 1-line margins:
+
+```go
+func (o *SearchOverlay) View() string {
+    w := o.overlayWidth()
+    totalH := o.overlayHeight()
+
+    // Panel 1: Search bar
+    searchBarH := 3
+    if o.prefixState == prefixTyping { searchBarH = 4 }
+    searchPanel := o.renderSearchPanel(w, searchBarH)
+
+    // Panel 3: Help bar (fixed height)
+    helpH := 3
+    helpPanel := o.renderHelpPanel(w, helpH)
+
+    // Panel 2: Results (takes remaining space)
+    resultsH := totalH - searchBarH - helpH - 2 // 2 margin lines
+    if resultsH < 5 { resultsH = 5 }
+    resultsPanel := o.renderResultsPanel(w, resultsH)
+
+    // Compose: panel1 + margin + panel2 + margin + panel3
+    margin := ""  // empty line as visual gap
+    return lipgloss.JoinVertical(lipgloss.Left,
+        searchPanel,
+        margin,
+        resultsPanel,
+        margin,
+        helpPanel,
+    )
+}
+```
+
+Each `render*Panel()` method builds inner content, then wraps it with `layout.RenderPaneBorder(content, cfg)`.
+
+### Height Budget
+
+For a 40-line terminal (80% = 32 lines):
+
+| Element | Lines |
+|---|---|
+| Panel 1: Search bar | 3 |
+| Margin | 1 |
+| Panel 2: Results | 22 |
+| Margin | 1 |
+| Panel 3: Help bar | 3 |
+| **Total** | **30** |
+
+Results panel inner area: 22 - 2 (border) = 20 lines. Tab bar takes 1, separator takes 1, leaving **18 lines** for the `list.Model` — enough for ~9 items at height=2 per item.
+
+### Overlay Size
 
 ```go
 func (o *SearchOverlay) overlayWidth() int {
@@ -37,8 +196,6 @@ func (o *SearchOverlay) overlayHeight() int {
 
 ### Tab State
 
-Add tab tracking to `SearchOverlay`:
-
 ```go
 type searchTab int
 
@@ -53,7 +210,6 @@ const (
 
 var tabLabels = [numTabs]string{"All", "Songs", "Artists", "Albums", "Playlists"}
 
-// Maps tab → API type parameter
 var tabToAPITypes = map[searchTab][]string{
     tabAll:       {"track", "artist", "album", "playlist"},
     tabSongs:     {"track"},
@@ -65,37 +221,22 @@ var tabToAPITypes = map[searchTab][]string{
 
 Add `activeTab searchTab` field to `SearchOverlay`. Default: `tabAll`.
 
-### Tab Bar Rendering
-
-Render a horizontal row of tab labels. The active tab gets `SelectedBg()`/`SelectedFg()` styling with brackets. Inactive tabs use `TextMuted()`:
-
-```
- [All]  Songs  Artists  Albums  Playlists
-```
-
-Tab bar is rendered between the separator line and the results area in `View()`.
-
 ### Tab Navigation
 
-`Tab` key behavior changes based on context:
-- When input has a `:prefix` being typed → `Tab` completes the prefix (Story 85)
-- Otherwise → `Tab` cycles active tab forward, `Shift+Tab` cycles backward
-- Switching tab emits `SearchTabChangedMsg{Tab, Query}` which the root app handles by re-firing the search with the new type filter
+- `Tab` cycles active tab forward, `Shift+Tab` cycles backward (when not in prefix-typing mode — Story 85 handles that)
+- Switching tab emits `SearchTabChangedMsg` which the root app handles by re-firing the search with the new type filter
 
 ```go
 type SearchTabChangedMsg struct {
-    Types []string // API type values for the selected tab
+    Types []string
     Query string
 }
 ```
 
 ### Help Bar (`bubbles/help`)
 
-Add `help.Model` and a `searchKeyMap` struct implementing `help.KeyMap`:
-
 ```go
 type searchKeyMap struct {
-    Search   key.Binding
     Play     key.Binding
     Queue    key.Binding
     TabNext  key.Binding
@@ -105,60 +246,48 @@ type searchKeyMap struct {
 }
 
 func (k searchKeyMap) ShortHelp() []key.Binding {
-    return []key.Binding{k.Play, k.Queue, k.TabNext, k.Close}
+    return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close}
 }
 
 func (k searchKeyMap) FullHelp() [][]key.Binding {
-    return [][]key.Binding{{k.Search, k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear}}
+    return [][]key.Binding{{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear}}
 }
 ```
 
-The help bar renders at the bottom of the overlay via `h.View(searchKeys)`, styled with `TextMuted()`.
+### SetSize Propagation
 
-### View() Rewrite
-
-```
-┌──────────────── Search ─── Enter play  Tab filter  Esc close ──┐
-│  > query text here_                                             │  ← Zone 1: textinput
-│  ·····························································  │  ← separator
-│  [All]  Songs  Artists  Albums  Playlists                       │  ← tab bar
-│                                                                 │
-│  (results area — placeholder until Story 84)                    │  ← Zone 2: list.Model
-│                                                                 │
-│                                                                 │
-│  Enter play  Ctrl+A queue  Tab next  Shift+Tab prev  Esc close  │  ← Zone 3: help bar
-└─────────────────────────────────────────────────────────────────┘
-```
-
-Height budget:
-- Border: 2 lines (top + bottom)
-- Input: 1 line
-- Separator: 1 line
-- Tab bar: 1 line
-- Help bar: 1 line
-- Results area: `totalHeight - 6` lines
-
-### Border Actions Update
-
-Update the `layout.BorderConfig` actions to reflect the new keybindings:
+When `SetSize` is called, recalculate all panel heights and propagate the results area dimensions to the `list.Model`:
 
 ```go
-Actions: []layout.Action{
-    {Key: "Enter", Label: "play"},
-    {Key: "Tab", Label: "filter"},
-    {Key: "Esc", Label: "close"},
-},
+func (o *SearchOverlay) SetSize(width, height int) {
+    o.width = width
+    o.height = height
+
+    w := o.overlayWidth()
+    totalH := o.overlayHeight()
+
+    searchBarH := 3
+    helpH := 3
+    resultsH := totalH - searchBarH - helpH - 2
+
+    listW := w - 2          // inside results border
+    listH := resultsH - 4   // border(2) + tab bar(1) + separator(1)
+    o.resultList.SetSize(listW, listH)
+}
 ```
 
 ## Acceptance Criteria
 
-- [ ] Overlay renders at 80% terminal width and height
-- [ ] Three-zone layout: input + separator, tab bar + results, help bar
-- [ ] Tab bar renders with active tab highlighted
+- [ ] Overlay renders as **three separate bordered panels** stacked vertically
+- [ ] 1-line margin between Panel 1 and Panel 2, and between Panel 2 and Panel 3
+- [ ] Panel 1 (Search bar): rounded border, title "Search", contains textinput
+- [ ] Panel 2 (Results): rounded border, title "Results", actions in border, contains tab bar + separator + results area
+- [ ] Panel 3 (Help bar): rounded border, title "Keys", contains `help.Model` output
+- [ ] Total overlay size = 80% of terminal width and height
+- [ ] Tab bar renders inside Panel 2 with active tab highlighted
 - [ ] Tab/Shift+Tab cycles active tab
 - [ ] Tab change emits `SearchTabChangedMsg` with correct API types
-- [ ] `bubbles/help` renders keybindings at bottom
-- [ ] Border actions updated
+- [ ] SetSize propagates to all sub-components including list.Model
 - [ ] Existing key handlers (Esc, Enter, Ctrl+A, Ctrl+U) still work
 - [ ] make ci passes
 
@@ -170,11 +299,19 @@ Actions: []layout.Action{
       - test: Tab cycles forward wrapping; Shift+Tab cycles backward wrapping; default is tabAll
 - [ ] Add `SearchTabChangedMsg` to `messages.go` and emit on tab change
       - test: switching tab emits msg with correct Types and current Query
+- [ ] Implement `renderSearchPanel()` — Panel 1 with textinput inside its own border
+      - test: panel output starts with `╭`; contains "Search" title; inner content has input prompt; height is 3 (or 4 with hints)
+- [ ] Implement `renderResultsPanel()` — Panel 2 with tab bar, separator, and results area inside its own border
+      - test: panel contains tab labels; active tab has highlight; separator line present; border has "Results" title and actions
+- [ ] Implement `renderHelpPanel()` — Panel 3 with help.Model inside its own border
+      - test: panel contains keybinding text; border has "Keys" title; height is exactly 3
 - [ ] Implement `searchKeyMap` and `help.Model` integration
-      - test: ShortHelp returns 4 bindings; FullHelp returns all 7; help.View() produces non-empty string
-- [ ] Rewrite `View()` with three-zone layout and tab bar rendering
-      - test: View output contains tab labels; active tab has highlight; help bar visible; height matches overlay dimensions
+      - test: ShortHelp returns 5 bindings; FullHelp returns all 6; help.View() produces non-empty string
+- [ ] Rewrite `View()` to compose three panels with margins via `lipgloss.JoinVertical`
+      - test: View output contains three `╭` border starts; two empty margin lines between panels; total height matches overlayHeight
 - [ ] Update `overlayWidth`/`overlayHeight` to 80%
-      - test: 100-wide terminal → overlay 80 wide; 50-high terminal → overlay 40 high; minimum clamps work
+      - test: 100-wide terminal → overlay 80 wide; 40-high terminal → overlay 32 high; minimum clamps work
+- [ ] Update `SetSize` to propagate dimensions to list.Model
+      - test: SetSize(120, 40) → list gets correct inner dimensions accounting for all 3 panels + margins
 - [ ] Wire `SearchTabChangedMsg` handler in `app.go` to re-fire search
       - test: receiving SearchTabChangedMsg updates store.SearchActiveType and dispatches buildSearchCmd with correct types
