@@ -796,22 +796,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
 		// Clear search state in store — store writes belong in Update, not in panes.
-		// NOTE: store.SetSearchResults(nil) is kept for symmetry with SetSearchQuery;
-		// store.SearchResults() is not used in production rendering (overlay uses o.results).
-		a.store.SetSearchResults(nil)
+		a.store.ClearSearchResults()
 		a.store.SetSearchQuery("")
 		return a, nil
 
-	case panes.SearchResultsMsg:
-		// Search command returned — write error state to store, then deliver results to overlay.
-		// NOTE: SearchResultsMsg.Results is a UI-adapted *panes.SearchResultData, not the raw
-		// *domain.SearchResult stored in store.SearchResults(). The overlay stores results in its
-		// own model field (o.results) from the Msg payload; store.SearchResults() is not used
-		// in production rendering and can be ignored here.
+	case panes.SearchPageLoadedMsg:
+		// Search page fetch returned — check for staleness, append to store, deliver to overlay.
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+		}
+		// Discard stale results: if the query changed since this fetch was dispatched, ignore.
+		if m.Query != a.store.SearchQuery() {
+			return a, nil
 		}
 		a.store.SetSearchLoading(false)
 		if m.Err != nil {
@@ -824,6 +822,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
 		}
 		a.store.ClearSearchError()
+		// Append each type's items to the per-type TypePage in the Store.
+		if r := m.Results; r != nil {
+			a.store.AppendSearchTracks(convertSearchTrackItems(r.Tracks), r.TracksTotal)
+			a.store.AppendSearchArtists(convertSearchArtistItems(r.Artists), r.ArtistsTotal)
+			a.store.AppendSearchAlbums(convertSearchAlbumItems(r.Albums), r.AlbumsTotal)
+			a.store.AppendSearchPlaylists(convertSearchPlaylistItems(r.Playlists), r.PlaylistsTotal)
+		}
+		// Forward to the search pane so it can update its local display state.
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp

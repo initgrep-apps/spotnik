@@ -166,23 +166,24 @@ func TestNilClientFallback_RecentlyPlayedCmd(t *testing.T) {
 	assert.Error(t, loaded.Err, "nil library client must set Err on RecentlyPlayedLoadedMsg")
 }
 
-// TestNilClientFallback_SearchCmd verifies that the SearchResultsMsg handler
+// TestNilClientFallback_SearchCmd verifies that the SearchPageLoadedMsg handler
 // silently skips when Err is errNilClient (no toast emitted).
-// The search client nil path produces SearchResultsMsg{Err: errNilClient}.
+// The search client nil path produces SearchPageLoadedMsg{Err: errNilClient}.
 // This test verifies the Update() handler respects that sentinel.
 func TestNilClientFallback_SearchCmd(t *testing.T) {
 	a := newSafetyTestApp()
 
-	// The nil search client path produces SearchResultsMsg{Err: errNilClient}.
+	// The nil search client path produces SearchPageLoadedMsg{Err: errNilClient}.
 	// We can't easily trigger buildSearchCmd directly (requires open search overlay),
 	// so we verify the Update() handler behavior: errNilClient must not emit a toast.
 	// The handler uses errors.Is(m.Err, errNilClient) — any error that wraps it
 	// will also match. We verify that real errors DO toast (to confirm the guard
-	// is specifically for errNilClient, not all SearchResultsMsg errors).
+	// is specifically for errNilClient, not all SearchPageLoadedMsg errors).
 
-	// Real error path — must emit toast.
+	// Real error path — must emit toast. Use matching query so staleness check passes.
+	a.Store().SetSearchQuery("jazz")
 	realErr := errors.New("search network error")
-	_, realCmd := a.Update(panes.SearchResultsMsg{Err: realErr})
+	_, realCmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Err: realErr})
 	require.NotNil(t, realCmd, "real search error must emit a toast cmd")
 }
 

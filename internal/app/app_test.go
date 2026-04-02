@@ -1856,24 +1856,24 @@ func TestApp_SearchRequestMsg_SetsStoreBeforeCmd(t *testing.T) {
 }
 
 // TestApp_SearchClearedMsg_ClearsStoreState verifies that app.Update(SearchClearedMsg)
-// clears both search results and search query in the store.
+// clears search results pages and query in the store.
 func TestApp_SearchClearedMsg_ClearsStoreState(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Pre-populate the store with search state.
+	// Pre-populate the store with search state via sanctioned Update() path.
 	a.Store().SetSearchQuery("blinding lights")
-	a.Store().SetSearchResults(&api.SearchResult{})
+	a.Store().AppendSearchTracks([]domain.Track{{ID: "t1", Name: "Track 1", URI: "spotify:track:t1"}}, 10)
 
 	require.Equal(t, "blinding lights", a.Store().SearchQuery())
-	require.NotNil(t, a.Store().SearchResults())
+	require.Len(t, a.Store().SearchTracks().Items, 1)
 
 	// Handle SearchClearedMsg — store should be cleared.
 	m, _ := a.Update(panes.SearchClearedMsg{})
 	a = m.(*app.App)
 
 	assert.Equal(t, "", a.Store().SearchQuery(), "store search query should be cleared")
-	assert.Nil(t, a.Store().SearchResults(), "store search results should be nil after clear")
+	assert.Empty(t, a.Store().SearchTracks().Items, "store search tracks should be empty after clear")
 }
 
 // TestApp_OverlayRendering_UsesThemeBaseColor verifies that overlay rendering

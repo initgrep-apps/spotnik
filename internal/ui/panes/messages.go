@@ -312,14 +312,19 @@ type PlaylistReorderResultMsg struct {
 // Panes must never write to the store directly — they emit messages instead.
 type SearchClearedMsg struct{}
 
-// SearchResultData is the UI-facing representation of search results.
+// SearchResultData is the UI-facing representation of one page of search results.
 // It carries only the fields the overlay needs for rendering, pre-converted
 // from domain.SearchResult in commands.go so that search.go never imports api/.
+// Total fields report the API-level count for each type, enabling HasMore checks.
 type SearchResultData struct {
-	Tracks    []SearchTrackItem
-	Artists   []SearchArtistItem
-	Albums    []SearchAlbumItem
-	Playlists []SearchPlaylistItem
+	Tracks         []SearchTrackItem
+	TracksTotal    int
+	Artists        []SearchArtistItem
+	ArtistsTotal   int
+	Albums         []SearchAlbumItem
+	AlbumsTotal    int
+	Playlists      []SearchPlaylistItem
+	PlaylistsTotal int
 }
 
 // SearchTrackItem holds the display fields for a single track search result.
@@ -360,9 +365,20 @@ type SearchPlaylistItem struct {
 	Owner string
 }
 
-// SearchResultsMsg is sent by the root app model after a search completes.
-// Results carries the pre-converted UI data; Err is non-nil if the search failed.
-type SearchResultsMsg struct {
+// SearchPageLoadedMsg is sent by the root app model after a search page fetch completes.
+// Query is included so stale results (for a superseded query) can be discarded.
+// Type identifies which category was searched ("all", "track", "artist", "album", "playlist").
+// Offset is the page offset that was fetched. Results carries the pre-converted UI data.
+// Err is non-nil if the search failed.
+type SearchPageLoadedMsg struct {
+	// Query is the query string that triggered this search, for staleness detection.
+	Query string
+	// Type is the search type filter used ("all", "track", etc.).
+	Type string
+	// Offset is the page offset that was fetched.
+	Offset int
+	// Results carries the pre-converted UI data on success.
 	Results *SearchResultData
-	Err     error
+	// Err is non-nil if the fetch failed.
+	Err error
 }

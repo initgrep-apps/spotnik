@@ -54,7 +54,7 @@ type SearchRequestMsg struct {
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
 type searchSpinnerTickMsg spinner.TickMsg
 
-// NOTE: SearchResultsMsg is defined in messages.go alongside all other shared
+// NOTE: SearchPageLoadedMsg is defined in messages.go alongside all other shared
 // message types. Search result data types (SearchResultData, SearchTrackItem, etc.)
 // are also in messages.go.
 
@@ -68,7 +68,7 @@ type SearchOverlay struct {
 	width   int
 	height  int
 
-	// results holds the most recent search results delivered via SearchResultsMsg.
+	// results holds the most recent search results delivered via SearchPageLoadedMsg.
 	// This avoids reading domain.SearchResult from the store, keeping the ui/api boundary clean.
 	results *SearchResultData
 
@@ -146,7 +146,7 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case searchDebounceMsg:
 		return o.handleDebounce(m)
 
-	case SearchResultsMsg:
+	case SearchPageLoadedMsg:
 		// Save results locally so we never read api types from the store.
 		o.results = m.Results
 		o.cursorPos = 0

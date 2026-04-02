@@ -479,32 +479,32 @@ func TestBuildSearchCmd_DoesNotWriteToStore(t *testing.T) {
 		"buildSearchCmd closure must not modify store.SearchQuery")
 	assert.Equal(t, beforeLoading, a.Store().SearchLoading(),
 		"buildSearchCmd closure must not modify store.SearchLoading")
-	assert.Nil(t, a.Store().SearchResults(),
+	assert.Empty(t, a.Store().SearchTracks().Items,
 		"buildSearchCmd closure must not write search results to store (only Update() may do that)")
 
 	// Verify the message carries the results — Update() will write them when it receives the msg.
-	searchMsg, ok := resultMsg.(panes.SearchResultsMsg)
-	require.True(t, ok, "command should return SearchResultsMsg, got %T", resultMsg)
-	assert.NotNil(t, searchMsg.Results, "SearchResultsMsg should carry results payload")
+	searchMsg, ok := resultMsg.(panes.SearchPageLoadedMsg)
+	require.True(t, ok, "command should return SearchPageLoadedMsg, got %T", resultMsg)
+	assert.NotNil(t, searchMsg.Results, "SearchPageLoadedMsg should carry results payload")
 }
 
-// TestSearchResultsMsg_ErrorPath verifies that SearchResultsMsg with a non-nil error
+// TestSearchPageLoadedMsg_ErrorPath verifies that SearchPageLoadedMsg with a non-nil error
 // does NOT update store search results and emits an error toast.
-func TestSearchResultsMsg_ErrorPath(t *testing.T) {
+func TestSearchPageLoadedMsg_ErrorPath(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Pre-populate store with existing results to verify they are not cleared on error.
-	// (We can't set store.SearchResults directly in tests, so we just verify it stays nil.)
-	require.Nil(t, a.Store().SearchResults(), "search results should start nil")
+	// Pre-populate store query so the staleness check passes (query matches).
+	a.Store().SetSearchQuery("jazz")
+	require.Empty(t, a.Store().SearchTracks().Items, "search results should start empty")
 
 	searchErr := errors.New("search timed out")
-	_, cmd := a.Update(panes.SearchResultsMsg{Err: searchErr})
+	_, cmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Err: searchErr})
 	require.NotNil(t, cmd, "error path should emit an error toast cmd")
 
-	// Store search results must remain nil — error does not clear or set them.
-	assert.Nil(t, a.Store().SearchResults(),
-		"SearchResultsMsg with error must not write to store search results")
+	// Store search results must remain empty — error does not append to store.
+	assert.Empty(t, a.Store().SearchTracks().Items,
+		"SearchPageLoadedMsg with error must not write to store search results")
 
 	// Two-pass: verify the toast contains the error detail.
 	alertMsg := cmd()
@@ -512,8 +512,8 @@ func TestSearchResultsMsg_ErrorPath(t *testing.T) {
 	assert.Contains(t, a.View(), "search timed out", "error toast should include the error text")
 }
 
-// TestSearchResultsMsg_ClearPath verifies that SearchClearedMsg clears store search state.
-func TestSearchResultsMsg_ClearPath(t *testing.T) {
+// TestSearchClearedMsg_ClearPath verifies that SearchClearedMsg clears store search state.
+func TestSearchClearedMsg_ClearPath(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -522,10 +522,10 @@ func TestSearchResultsMsg_ClearPath(t *testing.T) {
 	assert.Equal(t, "jazz", a.Store().SearchQuery(), "query should be set after SearchRequestMsg")
 	assert.True(t, a.Store().SearchLoading(), "loading should be true after SearchRequestMsg")
 
-	// SearchClearedMsg should clear query and results (loading is cleared by SearchResultsMsg handler).
+	// SearchClearedMsg should clear query and results (loading is cleared by SearchPageLoadedMsg handler).
 	_, _ = a.Update(panes.SearchClearedMsg{})
 	assert.Equal(t, "", a.Store().SearchQuery(), "SearchClearedMsg should clear the search query")
-	assert.Nil(t, a.Store().SearchResults(), "SearchClearedMsg should clear search results")
+	assert.Empty(t, a.Store().SearchTracks().Items, "SearchClearedMsg should clear search track results")
 }
 
 // TestStatsLoadedMsg_PartialFailure verifies that when a StatsLoadedMsg carries

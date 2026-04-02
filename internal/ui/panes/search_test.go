@@ -41,7 +41,7 @@ func sampleSearchResultData() *panes.SearchResultData {
 }
 
 // newTestSearchOverlayWithResults creates a SearchOverlay with pre-populated search
-// results delivered via SearchResultsMsg (not via store) and the query set in the store.
+// results delivered via SearchPageLoadedMsg (not via store) and the query set in the store.
 func newTestSearchOverlayWithResults() (*panes.SearchOverlay, *state.Store) {
 	s := state.New()
 	t := theme.Load("black")
@@ -49,8 +49,8 @@ func newTestSearchOverlayWithResults() (*panes.SearchOverlay, *state.Store) {
 
 	overlay := panes.NewSearchOverlay(s, t)
 
-	// Deliver results the same way the root app model does: via SearchResultsMsg.
-	msg := panes.SearchResultsMsg{Results: sampleSearchResultData()}
+	// Deliver results the same way the root app model does: via SearchPageLoadedMsg.
+	msg := panes.SearchPageLoadedMsg{Results: sampleSearchResultData()}
 	model, _ := overlay.Update(msg)
 	overlay = model.(*panes.SearchOverlay)
 
@@ -323,7 +323,7 @@ func TestSearchOverlay_View_Truncation(t *testing.T) {
 			{URI: "spotify:track:t1", Name: longName, Artist: "Artist"},
 		},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(40, 20) // narrow overlay
 
@@ -351,7 +351,7 @@ func TestSearchOverlay_View_NoResults(t *testing.T) {
 	o := panes.NewSearchOverlay(s, th)
 	// Deliver empty results via message
 	emptyResults := &panes.SearchResultData{} // all slices nil → zero items
-	model, _ := o.Update(panes.SearchResultsMsg{Results: emptyResults})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: emptyResults})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 40)
 
@@ -422,8 +422,8 @@ func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(s, th)
 
-	// Deliver empty results via SearchResultsMsg (the new way)
-	model, _ := o.Update(panes.SearchResultsMsg{Results: &panes.SearchResultData{}})
+	// Deliver empty results via SearchPageLoadedMsg (the new way)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{}})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 30)
 
@@ -437,13 +437,13 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(s, th)
 
-	// Deliver results via SearchResultsMsg
+	// Deliver results via SearchPageLoadedMsg
 	results := &panes.SearchResultData{
 		Tracks: []panes.SearchTrackItem{
 			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
 		},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 30)
 
@@ -519,9 +519,9 @@ func TestSearchOverlay_CtrlU_ClearsLocalInput(t *testing.T) {
 }
 
 // TestConvertSearchResult_RoundTrip verifies that convertSearchResult (indirectly via
-// SearchResultsMsg) correctly maps api fields to SearchResultData fields.
-// We test the data visible in the overlay after receiving a SearchResultsMsg.
-func TestSearchOverlay_SearchResultsMsg_StoresResults(t *testing.T) {
+// SearchPageLoadedMsg) correctly maps api fields to SearchResultData fields.
+// We test the data visible in the overlay after receiving a SearchPageLoadedMsg.
+func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
 	s := state.New()
 	s.SetSearchQuery("test")
 	th := theme.Load("black")
@@ -537,13 +537,13 @@ func TestSearchOverlay_SearchResultsMsg_StoresResults(t *testing.T) {
 		},
 	}
 
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 
 	view := o.View()
-	assert.Contains(t, view, "Track One", "view should show track from SearchResultsMsg")
+	assert.Contains(t, view, "Track One", "view should show track from SearchPageLoadedMsg")
 	assert.Contains(t, view, "TRACKS", "view should show TRACKS section header")
-	assert.Contains(t, view, "Artist One", "view should show artist from SearchResultsMsg")
+	assert.Contains(t, view, "Artist One", "view should show artist from SearchPageLoadedMsg")
 }
 
 // TestSearchOverlay_View_Truncation_NoApiImport verifies the import boundary:
@@ -563,7 +563,7 @@ func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 		Albums:    []panes.SearchAlbumItem{{URI: "u3", Name: "Al1", Artist: "A3"}},
 		Playlists: []panes.SearchPlaylistItem{{URI: "u4", Name: "PL1", Owner: "Owner1"}},
 	}
-	model, _ := o.Update(panes.SearchResultsMsg{Results: results})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 40)
 

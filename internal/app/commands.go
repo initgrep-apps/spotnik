@@ -262,21 +262,22 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 }
 
 // buildSearchCmd creates a command that calls the Spotify search API and delivers
-// pre-converted results via SearchResultsMsg so search.go never imports api/.
+// pre-converted results via SearchPageLoadedMsg so search.go never imports api/.
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
 func (a *App) buildSearchCmd(query string) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
-			return panes.SearchResultsMsg{Err: errNilClient}
+			return panes.SearchPageLoadedMsg{Query: query, Err: errNilClient}
 		}
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
+		// offset=0: initial search always starts at the first page.
 		results, err := search.Search(
 			api.WithPriority(context.Background(), api.Interactive),
 			query,
 			[]string{"track", "artist", "album", "playlist"},
-			5,
+			10, 0,
 		)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
@@ -285,21 +286,32 @@ func (a *App) buildSearchCmd(query string) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.SearchResultsMsg{Err: err}
+			return panes.SearchPageLoadedMsg{Query: query, Err: err}
 		}
-		return panes.SearchResultsMsg{Results: convertSearchResult(results)}
+		return panes.SearchPageLoadedMsg{
+			Query:   query,
+			Type:    "all",
+			Offset:  0,
+			Results: convertSearchResult(results),
+		}
 	}
 }
 
 // convertSearchResult converts *api.SearchResult (= *domain.SearchResult) to *panes.SearchResultData,
 // extracting only the fields the UI needs. This is the sole place where search
-// types cross the app/ui boundary.
+// types cross the app/ui boundary. Total fields are populated from the API response
+// to enable HasMore pagination checks in the Store.
 func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 	if r == nil {
 		return nil
 	}
 
-	data := &panes.SearchResultData{}
+	data := &panes.SearchResultData{
+		TracksTotal:    r.Tracks.Total,
+		ArtistsTotal:   r.Artists.Total,
+		AlbumsTotal:    r.Albums.Total,
+		PlaylistsTotal: r.Playlists.Total,
+	}
 
 	for _, t := range r.Tracks.Items {
 		item := panes.SearchTrackItem{
@@ -339,6 +351,55 @@ func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 	}
 
 	return data
+}
+
+// convertSearchTrackItems converts a slice of panes.SearchTrackItem to domain.Track
+// for storage in the per-type TypePage. Only URI and Name are available from SearchTrackItem.
+func convertSearchTrackItems(items []panes.SearchTrackItem) []domain.Track {
+	tracks := make([]domain.Track, 0, len(items))
+	for _, item := range items {
+		tracks = append(tracks, domain.Track{
+			URI:  item.URI,
+			Name: item.Name,
+		})
+	}
+	return tracks
+}
+
+// convertSearchArtistItems converts a slice of panes.SearchArtistItem to domain.SearchArtist.
+func convertSearchArtistItems(items []panes.SearchArtistItem) []domain.SearchArtist {
+	artists := make([]domain.SearchArtist, 0, len(items))
+	for _, item := range items {
+		artists = append(artists, domain.SearchArtist{
+			URI:  item.URI,
+			Name: item.Name,
+		})
+	}
+	return artists
+}
+
+// convertSearchAlbumItems converts a slice of panes.SearchAlbumItem to domain.SearchAlbum.
+func convertSearchAlbumItems(items []panes.SearchAlbumItem) []domain.SearchAlbum {
+	albums := make([]domain.SearchAlbum, 0, len(items))
+	for _, item := range items {
+		albums = append(albums, domain.SearchAlbum{
+			URI:  item.URI,
+			Name: item.Name,
+		})
+	}
+	return albums
+}
+
+// convertSearchPlaylistItems converts a slice of panes.SearchPlaylistItem to domain.SearchPlaylist.
+func convertSearchPlaylistItems(items []panes.SearchPlaylistItem) []domain.SearchPlaylist {
+	playlists := make([]domain.SearchPlaylist, 0, len(items))
+	for _, item := range items {
+		playlists = append(playlists, domain.SearchPlaylist{
+			URI:  item.URI,
+			Name: item.Name,
+		})
+	}
+	return playlists
 }
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices

@@ -110,14 +110,16 @@ func TestApp_TransferPlaybackMsg_EmitsInfoToast(t *testing.T) {
 	require.NotNil(t, cmd, "TransferPlaybackMsg must return non-nil cmd")
 }
 
-func TestApp_SearchResultsMsg_ErrorToastIncludesDetail(t *testing.T) {
-	// SearchResultsMsg with error must trigger a toast cmd; the error detail is
+func TestApp_SearchPageLoadedMsg_ErrorToastIncludesDetail(t *testing.T) {
+	// SearchPageLoadedMsg with error must trigger a toast cmd; the error detail is
 	// carried in the alert so the user can diagnose the failure.
 	a := newToastTestApp()
+	// Set matching query so staleness check passes.
+	a.Store().SetSearchQuery("jazz")
 	searchErr := errors.New("context deadline exceeded")
-	_, cmd := a.Update(panes.SearchResultsMsg{Err: searchErr})
+	_, cmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Err: searchErr})
 
-	require.NotNil(t, cmd, "SearchResultsMsg with error must return non-nil cmd for toast")
+	require.NotNil(t, cmd, "SearchPageLoadedMsg with error must return non-nil cmd for toast")
 }
 
 func TestApp_StatusBar_AlwaysShowsHints(t *testing.T) {
