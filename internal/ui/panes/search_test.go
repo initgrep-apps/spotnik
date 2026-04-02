@@ -460,7 +460,7 @@ func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
 	o.SetSize(80, 30)
 
 	// Type a character to get the input populated.
-	sendKey(t, o, "b")
+	o, _ = sendKey(t, o, "b")
 
 	// Simulate the debounce msg arriving with the correct query snapshot.
 	_, cmd := o.Update(panes.SearchDebounceMsgForTest("b"))

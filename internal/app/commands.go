@@ -294,9 +294,15 @@ func (a *App) buildSearchCmdWithTypes(query string, types []string) tea.Cmd {
 			}
 			return panes.SearchPageLoadedMsg{Query: query, Err: err}
 		}
+		// Derive the Type field from the types slice:
+		// single-type searches (tab filter) use that type; multi-type uses "all".
+		msgType := "all"
+		if len(types) == 1 {
+			msgType = types[0]
+		}
 		return panes.SearchPageLoadedMsg{
 			Query:   query,
-			Type:    "all",
+			Type:    msgType,
 			Offset:  0,
 			Results: convertSearchResult(results),
 		}

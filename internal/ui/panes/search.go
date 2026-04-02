@@ -53,8 +53,7 @@ func TabToAPITypes(tab SearchTab) []string {
 }
 
 // searchSection enumerates the four result sections in display order.
-// Kept for backward-compatibility with existing section-based rendering; will be
-// replaced by bubbles/list delegate in Story 84.
+// TODO(search-redesign): replace with bubbles/list delegate in Story 84.
 type searchSection int
 
 const (
@@ -701,13 +700,7 @@ func (o *SearchOverlay) renderResults(overlayWidth int) string {
 	// NOTE: Search errors are now routed through toast notifications (app.go).
 	// store.SearchError() is preserved for retry logic but no longer read in View().
 
-	if query == "" {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render("Type to search tracks, artists, albums...")
-	}
-
-	if o.results == nil {
+	if query == "" || o.results == nil {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Render("Type to search tracks, artists, albums...")
