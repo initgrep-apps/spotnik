@@ -53,7 +53,8 @@ func TabToAPITypes(tab SearchTab) []string {
 }
 
 // searchSection enumerates the four result sections in display order.
-// TODO(search-redesign): replace with bubbles/list delegate in Story 84.
+// NOTE: retained as legacy fallback for selectedURI / handleAddToQueue when the
+// list has no items (e.g., before the first search page loads).
 type searchSection int
 
 const (
@@ -175,10 +176,12 @@ type SearchOverlay struct {
 	activeTab SearchTab
 
 	// activeSection is which section (Tracks/Artists/Albums/Playlists) has focus.
-	// Kept for backward-compatibility with cursor-based selection until Story 84.
+	// Used by the legacy selectedURI / handleAddToQueue fallback path when the
+	// list has no items.
 	activeSection searchSection
 
 	// cursorPos is the cursor within the active section (0-based).
+	// Used by the legacy selectedURI fallback path when the list has no items.
 	cursorPos int
 }
 
@@ -723,12 +726,6 @@ func (o *SearchOverlay) renderResults(_ int) string {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Render(fmt.Sprintf("No results for '%s'", query))
-	}
-
-	if len(o.resultList.Items()) == 0 && query == "" {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render("Type to search tracks, artists, albums...")
 	}
 
 	// Render the list component — it handles scrolling and selection highlighting.
