@@ -791,7 +791,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store writes belong in Update, not inside command builders.
 		// Clear previous query's results before appending new ones so that
 		// back-to-back searches (e.g. "jazz" then "rock") never mix result sets.
+		// Also clear any prior error so the overlay never shows a stale error
+		// from the previous query while the new fetch is in-flight.
 		a.store.ClearSearchResults()
+		a.store.ClearSearchError()
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
 		return a, a.buildSearchCmd(m.Query)
@@ -814,9 +817,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Query == "" {
 			return a, nil
 		}
-		if len(m.Types) > 0 {
-			a.store.SetSearchActiveType(m.Types[0])
+		// Derive active type: "all" when multiple types are present (All tab), otherwise
+		// use the single type name. This mirrors the logic in buildSearchCmdWithTypes.
+		activeType := "all"
+		if len(m.Types) == 1 {
+			activeType = m.Types[0]
 		}
+		a.store.SetSearchActiveType(activeType)
+		// Clear any prior error so the overlay does not show a stale error from the
+		// previous query while the new fetch is in-flight.
+		a.store.ClearSearchError()
 		a.store.ClearSearchResults()
 		a.store.SetSearchLoading(true)
 		return a, a.buildSearchCmdWithTypes(m.Query, m.Types)
@@ -832,7 +842,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Discard stale results: if the query changed since this fetch was dispatched, ignore.
+		// Still clear the loading flag so the overlay does not stay stuck in a loading state
+		// when the user types a second query before the first response arrives.
 		if m.Query != a.store.SearchQuery() {
+			a.store.SetSearchLoading(false)
 			return a, nil
 		}
 		a.store.SetSearchLoading(false)

@@ -784,3 +784,38 @@ func TestSearchKeyMap_FullHelp(t *testing.T) {
 	}
 	assert.Equal(t, 6, total, "FullHelp should return 6 bindings total")
 }
+
+// TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults verifies that when a
+// SearchPageLoadedMsg carries a non-nil Err, the overlay does NOT wipe its existing
+// displayed results. The toast (handled by app.go) is the user-facing feedback; the
+// overlay should keep showing whatever it already had so the screen isn't blanked.
+func TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.SetSearchQuery("jazz")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+
+	// First deliver a successful page so the overlay has results to display.
+	initialResults := &panes.SearchResultData{
+		Tracks: []panes.SearchTrackItem{
+			{URI: "spotify:track:t1", Name: "Jazz Track", Artist: "Miles Davis"},
+		},
+		TracksTotal: 1,
+	}
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: initialResults})
+	o = model.(*panes.SearchOverlay)
+
+	// Verify results are visible before the error arrives.
+	require.Contains(t, o.View(), "Jazz Track", "pre-condition: initial results must be shown")
+
+	// Now deliver an error page — results should be preserved, not wiped.
+	model, _ = o.Update(panes.SearchPageLoadedMsg{
+		Query: "jazz",
+		Err:   fmt.Errorf("network error"),
+	})
+	o = model.(*panes.SearchOverlay)
+
+	assert.Contains(t, o.View(), "Jazz Track", "error response must not wipe existing displayed results")
+}

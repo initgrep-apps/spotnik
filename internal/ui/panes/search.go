@@ -314,6 +314,11 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return o.handleDebounce(m)
 
 	case SearchPageLoadedMsg:
+		if m.Err != nil {
+			// Error response — preserve existing results so the screen is not
+			// blanked. Toast notifications (handled by app.go) give user feedback.
+			return o, nil
+		}
 		// Save results locally so we never read api types from the store.
 		o.results = m.Results
 		o.cursorPos = 0
