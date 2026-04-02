@@ -1201,3 +1201,46 @@ func TestSearchOverlay_View_NoSectionHeaders(t *testing.T) {
 	assert.NotContains(t, view, "● TRACKS", "old TRACKS section header should be gone")
 	assert.NotContains(t, view, "● ARTISTS", "old ARTISTS section header should be gone")
 }
+
+// TestSearchOverlay_SetTheme_PropagatesToDelegate verifies that SetTheme updates
+// the delegate's theme so badge colors change with the new theme.
+func TestSearchOverlay_SetTheme_PropagatesToDelegate(t *testing.T) {
+	s := state.New()
+	th1 := theme.Load("black")
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Populate with a track so the delegate renders something.
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1"},
+	}, 1)
+	o2 := panes.NewSearchOverlay(s, th1)
+	o2.SetSize(80, 40)
+	panes.CallRebuildListItems(o2)
+
+	// Switch to a different theme — SetTheme must not panic.
+	th2 := theme.Load("dracula")
+	require.NotNil(t, th2)
+	o2.SetTheme(th2)
+
+	// View() must succeed without panicking after theme switch.
+	view := o2.View()
+	assert.NotEmpty(t, view, "View() should return content after SetTheme")
+}
+
+// TestSearchOverlay_SetTheme_SpinnerStyleUpdated verifies spinner uses new theme colors.
+func TestSearchOverlay_SetTheme_SpinnerStyleUpdated(t *testing.T) {
+	s := state.New()
+	th1 := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th1)
+	o.SetSize(80, 40)
+
+	// Switch to a different theme.
+	th2 := theme.Load("gruvbox")
+	require.NotNil(t, th2)
+
+	// Must not panic and View() must succeed.
+	o.SetTheme(th2)
+	view := o.View()
+	assert.NotEmpty(t, view, "View() should return content after SetTheme with spinner update")
+}

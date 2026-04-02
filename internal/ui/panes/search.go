@@ -859,8 +859,14 @@ func debounceSearch(query string) tea.Cmd {
 }
 
 // SetTheme updates the theme reference for runtime theme switching.
+// Propagates to the list delegate (badge/selection colors), spinner style,
+// and tab/help/input styles (which read o.theme at render time).
 func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.theme = th
+	// Update the list delegate so badge and selection colors use the new theme.
+	o.resultList.SetDelegate(NewSearchItemDelegate(th))
+	// Update spinner foreground so loading indicator uses the new theme.
+	o.spinner.Style = lipgloss.NewStyle().Foreground(th.TextMuted())
 }
 
 // --- Test helpers (exported only for test packages) ---
