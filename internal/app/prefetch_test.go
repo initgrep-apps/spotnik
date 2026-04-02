@@ -13,6 +13,7 @@ package app_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -570,10 +571,11 @@ func executeFirstSequenceCmd(cmd tea.Cmd) tea.Msg {
 }
 
 // makeDomainTracks returns n minimal domain.Track values for populating the store.
+// IDs are formatted as "t0", "t1", ..., "tN" so they are valid for any N.
 func makeDomainTracks(n int) []domain.Track {
 	tracks := make([]domain.Track, n)
 	for i := range tracks {
-		tracks[i] = domain.Track{ID: "t" + string(rune('0'+i)), Name: "Track"}
+		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: "Track"}
 	}
 	return tracks
 }

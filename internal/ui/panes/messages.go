@@ -390,13 +390,16 @@ type SearchPrefetchMsg struct {
 
 // SearchPageLoadedMsg is sent by the root app model after a search page fetch completes.
 // Query is included so stale results (for a superseded query) can be discarded.
-// Type identifies which category was searched ("all", "track", "artist", "album", "playlist").
 // Offset is the page offset that was fetched. Results carries the pre-converted UI data.
 // Err is non-nil if the search failed.
 type SearchPageLoadedMsg struct {
 	// Query is the query string that triggered this search, for staleness detection.
 	Query string
-	// Type is the search type filter used ("all", "track", etc.).
+	// Type was the search type filter hint ("all", "track", etc.).
+	// As of story 83, buildSearchPageCmd no longer populates this field (always "").
+	// The store's per-type Append methods (AppendSearchTracks, etc.) derive the type
+	// from the Results payload directly. This field is retained for struct compatibility
+	// and may be removed once story 84 confirms it is not needed by the search overlay.
 	Type string
 	// Offset is the page offset that was fetched.
 	Offset int
