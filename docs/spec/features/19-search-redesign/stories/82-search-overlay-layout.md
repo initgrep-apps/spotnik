@@ -14,7 +14,7 @@ This story rebuilds the `SearchOverlay` as **three visually distinct bordered pa
 
 ### Visual Layout
 
-The overlay renders as three separate bordered panels with 1-line gaps between them:
+The overlay renders as three separate bordered panels stacked vertically. A 1-line margin separates Panel 1 (Search) from Panel 2 (Results). Panel 2 and Panel 3 (Keys) sit flush against each other with no margin:
 
 ```
 ╭─ Search ─────────────────────────────────────────────────────────╮
@@ -33,9 +33,8 @@ The overlay renders as three separate bordered panels with 1-line gaps between t
 │  ◆ Teri Yaadon Mein                             KK               │
 │  ☰ KK Super Hit Songs                          Samiran Dey       │
 │                                                                   │
-│                                                                   │
+│                                                                  │
 ╰─────────────────────────────────────────────────────────────────╯
-                                                                      ← 1-line margin
 ╭─ Keys ──────────────────────────────────────────────────────────╮
 │  Enter play  Ctrl+A queue  Tab filter  Shift+Tab prev  Esc close │
 ╰─────────────────────────────────────────────────────────────────╯
@@ -145,17 +144,16 @@ func (o *SearchOverlay) View() string {
     helpPanel := o.renderHelpPanel(w, helpH)
 
     // Panel 2: Results (takes remaining space)
-    resultsH := totalH - searchBarH - helpH - 2 // 2 margin lines
+    resultsH := totalH - searchBarH - helpH - 1 // 1 margin line (between search and results only)
     if resultsH < 5 { resultsH = 5 }
     resultsPanel := o.renderResultsPanel(w, resultsH)
 
-    // Compose: panel1 + margin + panel2 + margin + panel3
+    // Compose: panel1 + margin + panel2 + panel3 (no margin between results and keys)
     margin := ""  // empty line as visual gap
     return lipgloss.JoinVertical(lipgloss.Left,
         searchPanel,
         margin,
         resultsPanel,
-        margin,
         helpPanel,
     )
 }
@@ -171,12 +169,13 @@ For a 40-line terminal (80% = 32 lines):
 |---|---|
 | Panel 1: Search bar | 3 |
 | Margin | 1 |
-| Panel 2: Results | 22 |
-| Margin | 1 |
-| Panel 3: Help bar | 3 |
+| Panel 2: Results | 23 |
+| Panel 3: Help bar (flush) | 3 |
 | **Total** | **30** |
 
-Results panel inner area: 22 - 2 (border) = 20 lines. Tab bar takes 1, separator takes 1, leaving **18 lines** for the `list.Model` — enough for ~9 items at height=2 per item.
+Panel 2 and Panel 3 sit flush — no margin between them. They are still separate bordered panels (each with their own `layout.RenderPaneBorder()` call and rounded corners), but visually adjacent.
+
+Results panel inner area: 23 - 2 (border) = 21 lines. Tab bar takes 1, separator takes 1, leaving **19 lines** for the `list.Model` — enough for ~9 items at height=2 per item.
 
 ### Overlay Size
 
@@ -268,7 +267,7 @@ func (o *SearchOverlay) SetSize(width, height int) {
 
     searchBarH := 3
     helpH := 3
-    resultsH := totalH - searchBarH - helpH - 2
+    resultsH := totalH - searchBarH - helpH - 1  // 1 margin (between search and results only)
 
     listW := w - 2          // inside results border
     listH := resultsH - 4   // border(2) + tab bar(1) + separator(1)
@@ -279,7 +278,7 @@ func (o *SearchOverlay) SetSize(width, height int) {
 ## Acceptance Criteria
 
 - [ ] Overlay renders as **three separate bordered panels** stacked vertically
-- [ ] 1-line margin between Panel 1 and Panel 2, and between Panel 2 and Panel 3
+- [ ] 1-line margin between Panel 1 (Search) and Panel 2 (Results); Panel 2 and Panel 3 (Keys) sit flush with no margin
 - [ ] Panel 1 (Search bar): rounded border, title "Search", contains textinput
 - [ ] Panel 2 (Results): rounded border, title "Results", actions in border, contains tab bar + separator + results area
 - [ ] Panel 3 (Help bar): rounded border, title "Keys", contains `help.Model` output
@@ -308,7 +307,7 @@ func (o *SearchOverlay) SetSize(width, height int) {
 - [ ] Implement `searchKeyMap` and `help.Model` integration
       - test: ShortHelp returns 5 bindings; FullHelp returns all 6; help.View() produces non-empty string
 - [ ] Rewrite `View()` to compose three panels with margins via `lipgloss.JoinVertical`
-      - test: View output contains three `╭` border starts; two empty margin lines between panels; total height matches overlayHeight
+      - test: View output contains three `╭` border starts; one margin line between search and results; results and keys flush; total height matches overlayHeight
 - [ ] Update `overlayWidth`/`overlayHeight` to 80%
       - test: 100-wide terminal → overlay 80 wide; 40-high terminal → overlay 32 high; minimum clamps work
 - [ ] Update `SetSize` to propagate dimensions to list.Model
