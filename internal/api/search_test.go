@@ -32,7 +32,7 @@ func TestSearch_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestSearch(srv.URL, "test-token")
-	result, err := client.Search(context.Background(), "blinding lights", []string{"track", "artist", "album", "playlist"}, 5)
+	result, err := client.Search(context.Background(), "blinding lights", []string{"track", "artist", "album", "playlist"}, 5, 0)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -65,7 +65,7 @@ func TestSearch_EmptyResults(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestSearch(srv.URL, "test-token")
-	result, err := client.Search(context.Background(), "zzznoresults", []string{"track"}, 5)
+	result, err := client.Search(context.Background(), "zzznoresults", []string{"track"}, 5, 0)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -84,7 +84,7 @@ func TestSearch_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestSearch(srv.URL, "test-token")
-	result, err := client.Search(context.Background(), "blinding lights", []string{"track"}, 5)
+	result, err := client.Search(context.Background(), "blinding lights", []string{"track"}, 5, 0)
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -101,21 +101,22 @@ func TestSearch_InvalidJSON(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestSearch(srv.URL, "test-token")
-	result, err := client.Search(context.Background(), "test", []string{"track"}, 5)
+	result, err := client.Search(context.Background(), "test", []string{"track"}, 5, 0)
 
 	require.Error(t, err)
 	assert.Nil(t, result)
 }
 
-// TestSearch_RequestParams verifies that Search sends the correct query params.
+// TestSearch_RequestParams verifies that Search sends the correct query params including offset.
 func TestSearch_RequestParams(t *testing.T) {
-	var capturedQuery, capturedType, capturedLimit, capturedMarket string
+	var capturedQuery, capturedType, capturedLimit, capturedMarket, capturedOffset string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedQuery = r.URL.Query().Get("q")
 		capturedType = r.URL.Query().Get("type")
 		capturedLimit = r.URL.Query().Get("limit")
 		capturedMarket = r.URL.Query().Get("market")
+		capturedOffset = r.URL.Query().Get("offset")
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -129,11 +130,36 @@ func TestSearch_RequestParams(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestSearch(srv.URL, "test-token")
-	_, err := client.Search(context.Background(), "hello world", []string{"track", "artist", "album", "playlist"}, 5)
+	_, err := client.Search(context.Background(), "hello world", []string{"track", "artist", "album", "playlist"}, 5, 0)
 
 	require.NoError(t, err)
 	assert.Equal(t, "hello world", capturedQuery)
 	assert.Equal(t, "track,artist,album,playlist", capturedType)
 	assert.Equal(t, "5", capturedLimit)
 	assert.Equal(t, "from_token", capturedMarket)
+	assert.Equal(t, "0", capturedOffset)
+}
+
+// TestSearch_OffsetParam verifies that Search sends the offset query parameter correctly.
+func TestSearch_OffsetParam(t *testing.T) {
+	var capturedOffset string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedOffset = r.URL.Query().Get("offset")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"tracks":    {"items": [], "total": 0},
+			"artists":   {"items": [], "total": 0},
+			"albums":    {"items": [], "total": 0},
+			"playlists": {"items": [], "total": 0}
+		}`))
+	}))
+	defer srv.Close()
+
+	client := newTestSearch(srv.URL, "test-token")
+	_, err := client.Search(context.Background(), "test", []string{"track"}, 10, 20)
+
+	require.NoError(t, err)
+	assert.Equal(t, "20", capturedOffset)
 }
