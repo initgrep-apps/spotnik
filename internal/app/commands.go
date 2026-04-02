@@ -28,6 +28,23 @@ import (
 // expected startup condition, not a user-facing failure.
 var errNilClient = fmt.Errorf("API client not initialized")
 
+// Search prefetch pagination constants.
+// The Spotify API caps limit at 10 per type per request (Feb 2026).
+// Initial search fires searchPrefetchPages sequential calls to load searchPrefetchItems
+// results upfront. The next batch is triggered when scroll passes searchPrefetchThreshold.
+const (
+	// SearchPageSize is the Spotify API max limit per search request (Feb 2026 cap).
+	SearchPageSize = 10
+	// SearchPrefetchPages is the number of pages fetched per batch.
+	SearchPrefetchPages = 5
+	// SearchPrefetchItems is the total items loaded per batch (SearchPageSize * SearchPrefetchPages).
+	SearchPrefetchItems = SearchPageSize * SearchPrefetchPages
+	// SearchPrefetchThreshold is the scroll fraction (0–1) that triggers the next batch.
+	SearchPrefetchThreshold = 0.6
+	// SearchMaxOffset is the Spotify API hard cap on the offset query parameter.
+	SearchMaxOffset = 1000
+)
+
 // buildPlaybackAPICmd dispatches the Spotify API call for the given playback action.
 // Store values are snapshotted here in Update() context (which is safe) before the
 // closure is returned. The closure must never read from the Store — only use snapshots.
@@ -261,29 +278,49 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	}
 }
 
-// buildSearchCmd creates a command that calls the Spotify search API across all
-// four types and delivers pre-converted results via SearchPageLoadedMsg.
+// buildSearchBatchCmd dispatches only the FIRST page of a prefetch batch.
+// Subsequent pages are chained through Update() via the SearchPageLoadedMsg handler,
+// which dispatches the next page on each successful result. This chain-through-Update
+// pattern ensures that a 429 (RateLimitedMsg) or 401 (unauthorizedMsg) naturally
+// stops the chain — the next page is never dispatched because the handler only
+// runs on SearchPageLoadedMsg success.
+//
 // NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
 // before this command is dispatched — not inside the closure.
-func (a *App) buildSearchCmd(query string) tea.Cmd {
-	return a.buildSearchCmdWithTypes(query, []string{"track", "artist", "album", "playlist"})
+func (a *App) buildSearchBatchCmd(query string, types []string, startOffset int) tea.Cmd {
+	if startOffset > SearchMaxOffset {
+		return nil
+	}
+	return a.buildSearchPageCmd(query, types, startOffset)
 }
 
-// buildSearchCmdWithTypes creates a search command scoped to specific API types.
-// Used when the user switches the category tab so only the selected type is fetched.
-func (a *App) buildSearchCmdWithTypes(query string, types []string) tea.Cmd {
+// searchTypesForActiveType converts a store active-type value ("all" or a single type
+// name) back into the []string types slice expected by buildSearchPageCmd.
+// "all" expands to all four Spotify search types; any other value is returned as-is.
+func searchTypesForActiveType(activeType string) []string {
+	if activeType == "all" || activeType == "" {
+		return []string{"track", "artist", "album", "playlist"}
+	}
+	return []string{activeType}
+}
+
+// buildSearchPageCmd creates a command that fetches a single page of search results
+// at the given offset and delivers pre-converted results via SearchPageLoadedMsg.
+// The query and offset are captured at dispatch time; the closure is Elm-pure
+// (no store reads or writes inside).
+func (a *App) buildSearchPageCmd(query string, types []string, offset int) tea.Cmd {
 	search := a.search
 	return func() tea.Msg {
 		if search == nil {
-			return panes.SearchPageLoadedMsg{Query: query, Err: errNilClient}
+			return panes.SearchPageLoadedMsg{Query: query, Offset: offset, Err: errNilClient}
 		}
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
-		// offset=0: initial search always starts at the first page.
 		results, err := search.Search(
 			api.WithPriority(context.Background(), api.Interactive),
 			query,
 			types,
-			10, 0,
+			SearchPageSize,
+			offset,
 		)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
@@ -292,18 +329,11 @@ func (a *App) buildSearchCmdWithTypes(query string, types []string) tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.SearchPageLoadedMsg{Query: query, Err: err}
-		}
-		// Derive the Type field from the types slice:
-		// single-type searches (tab filter) use that type; multi-type uses "all".
-		msgType := "all"
-		if len(types) == 1 {
-			msgType = types[0]
+			return panes.SearchPageLoadedMsg{Query: query, Offset: offset, Err: err}
 		}
 		return panes.SearchPageLoadedMsg{
 			Query:   query,
-			Type:    msgType,
-			Offset:  0,
+			Offset:  offset,
 			Results: convertSearchResult(results),
 		}
 	}

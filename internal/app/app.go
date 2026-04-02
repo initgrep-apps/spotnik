@@ -707,6 +707,9 @@ func (a *App) clearAllFetchingSentinels() {
 	for _, r := range []string{"short_term", "medium_term", "long_term"} {
 		a.store.SetStatsFetching(r, false)
 	}
+	// Clear search loading so a 429 or 401 interrupting a search batch does not
+	// leave the overlay stuck in a loading state.
+	a.store.SetSearchLoading(false)
 }
 
 // Update handles all messages routed through the root model.
@@ -797,7 +800,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
-		return a, a.buildSearchCmd(m.Query)
+		cmd := a.buildSearchBatchCmd(m.Query, []string{"track", "artist", "album", "playlist"}, 0)
+		if cmd == nil {
+			a.store.SetSearchLoading(false)
+			return a, nil
+		}
+		return a, cmd
 
 	case panes.SearchClearedMsg:
 		// SearchOverlay emitted this when the user pressed Ctrl+U.
@@ -812,13 +820,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SearchTabChangedMsg:
 		// User switched the category tab in the search overlay.
-		// Update the active type filter and re-fire the search so results reflect the new tab.
+		// Update the active type filter and re-fire the search with a fresh 5-page batch
+		// so results always reflect the new tab completely.
 		// Only fire if there is a non-empty query — no point searching with empty input.
 		if m.Query == "" {
 			return a, nil
 		}
 		// Derive active type: "all" when multiple types are present (All tab), otherwise
-		// use the single type name. This mirrors the logic in buildSearchCmdWithTypes.
+		// use the single type name.
 		activeType := "all"
 		if len(m.Types) == 1 {
 			activeType = m.Types[0]
@@ -829,7 +838,40 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		a.store.ClearSearchResults()
 		a.store.SetSearchLoading(true)
-		return a, a.buildSearchCmdWithTypes(m.Query, m.Types)
+		cmd := a.buildSearchBatchCmd(m.Query, m.Types, 0)
+		if cmd == nil {
+			a.store.SetSearchLoading(false)
+			return a, nil
+		}
+		return a, cmd
+
+	case panes.SearchPrefetchMsg:
+		// Scroll threshold reached — prefetch the next batch of pages.
+		// Guard against concurrent prefetch batches: if a batch is already in-flight,
+		// ignore this scroll event to avoid duplicate page fetches.
+		if a.store.SearchLoading() {
+			return a, nil
+		}
+		// Discard if the query has changed since the scroll event was emitted.
+		if m.Query != a.store.SearchQuery() {
+			return a, nil
+		}
+		// Determine the relevant type name for SearchHasMore.
+		// For single-type tabs, use that type; for All tab, use "all".
+		prefetchType := "all"
+		if len(m.Types) == 1 {
+			prefetchType = m.Types[0]
+		}
+		if !a.store.SearchHasMore(prefetchType) {
+			return a, nil
+		}
+		a.store.SetSearchLoading(true)
+		cmd := a.buildSearchBatchCmd(m.Query, m.Types, m.NextOffset)
+		if cmd == nil {
+			a.store.SetSearchLoading(false)
+			return a, nil
+		}
+		return a, cmd
 
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — check for staleness, append to store, deliver to overlay.
@@ -848,8 +890,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.store.SetSearchLoading(false)
 			return a, nil
 		}
-		a.store.SetSearchLoading(false)
 		if m.Err != nil {
+			a.store.SetSearchLoading(false)
 			a.store.SetSearchError(m.Err)
 			// Route search error through toast; the overlay preserves its existing results
 			// (it returns early on Err != nil in Update) so the screen is not blanked.
@@ -861,14 +903,34 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearSearchError()
 		// Append each type's items to the per-type TypePage in the Store.
-		// SetSearchLoading(false) is already called above, so a nil Results payload
-		// (e.g. an empty successful response) still correctly clears the loading flag.
 		if r := m.Results; r != nil {
 			a.store.AppendSearchTracks(convertSearchTrackItems(r.Tracks), r.TracksTotal)
 			a.store.AppendSearchArtists(convertSearchArtistItems(r.Artists), r.ArtistsTotal)
 			a.store.AppendSearchAlbums(convertSearchAlbumItems(r.Albums), r.AlbumsTotal)
 			a.store.AppendSearchPlaylists(convertSearchPlaylistItems(r.Playlists), r.PlaylistsTotal)
 		}
+		// Chain-through-Update: dispatch the next page if the batch is not yet complete.
+		// This replaces tea.Sequence — by chaining through Update, a 429 (RateLimitedMsg)
+		// or 401 (unauthorizedMsg) returned by a page naturally stops the chain because
+		// those messages do not arrive as SearchPageLoadedMsg.
+		// Normalize activeType: an empty string (no tab selected yet) behaves as "all".
+		activeType := a.store.SearchActiveType()
+		if activeType == "" {
+			activeType = "all"
+		}
+		types := searchTypesForActiveType(activeType)
+		nextOffset := m.Offset + SearchPageSize
+		batchEnd := ((m.Offset / SearchPrefetchItems) + 1) * SearchPrefetchItems
+		if nextOffset < batchEnd && a.store.SearchHasMore(activeType) && nextOffset <= SearchMaxOffset {
+			// Batch still in progress — dispatch the next page, keep loading flag true.
+			updated, _ := a.searchPane.Update(m)
+			if sp, ok := updated.(*panes.SearchOverlay); ok {
+				a.searchPane = sp
+			}
+			return a, a.buildSearchPageCmd(m.Query, types, nextOffset)
+		}
+		// Batch complete — clear loading flag.
+		a.store.SetSearchLoading(false)
 		// Forward to the search pane so it can update its local display state.
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
