@@ -52,7 +52,6 @@ func TabToAPITypes(tab SearchTab) []string {
 	}
 }
 
-
 // searchPrefetchThreshold is the fraction of loaded items at which the next
 // prefetch batch is triggered. Kept in sync with app.SearchPrefetchThreshold (0.6).
 // Defined here to avoid a circular dependency between panes and app packages.

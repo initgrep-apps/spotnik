@@ -210,8 +210,8 @@ func TestSearchIntegration_TabSwitching(t *testing.T) {
 	assert.True(t, a.Store().SearchLoading(), "tab switch should set loading")
 	require.NotNil(t, cmd, "tab switch should fire a new search batch command")
 
-	// Drive the first page.
-	a = driveSearchBatch(t, a, cmd, 1)
+	// Drive the first page (discarding the returned app — we only need lastTypeParam).
+	driveSearchBatch(t, a, cmd, 1)
 
 	// The API should have been called with type=track.
 	assert.Equal(t, "track", lastTypeParam, "tab switch should fire API with type=track")
@@ -303,7 +303,7 @@ func TestSearchIntegration_StaleResultDiscard(t *testing.T) {
 
 	// Simulate results arriving for the OLD query "kk".
 	staleMsg := panes.SearchPageLoadedMsg{
-		Query:  "kk",  // stale — doesn't match store's "jazz"
+		Query:  "kk", // stale — doesn't match store's "jazz"
 		Offset: 0,
 		Results: &panes.SearchResultData{
 			Tracks: []panes.SearchTrackItem{
