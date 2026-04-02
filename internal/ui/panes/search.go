@@ -278,9 +278,11 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	o.help.Width = w - 4 // inside help panel border
 }
 
-// Init starts the cursor blink loop.
+// Init starts the cursor blink loop and emits SearchClearedMsg so each search
+// session begins with a clean state (previous results and query are discarded).
 func (o *SearchOverlay) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, o.spinner.Tick)
+	clearCmd := func() tea.Msg { return SearchClearedMsg{} }
+	return tea.Batch(textinput.Blink, o.spinner.Tick, clearCmd)
 }
 
 // Update handles all messages for the search overlay.
@@ -293,6 +295,13 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case searchDebounceMsg:
 		return o.handleDebounce(m)
+
+	case SearchClearedMsg:
+		// Root app has cleared the store; clear local overlay state too so the
+		// results panel shows the empty-query hint rather than stale items.
+		o.results = nil
+		o.resultList.SetItems(nil)
+		return o, nil
 
 	case SearchPageLoadedMsg:
 		if m.Err != nil {

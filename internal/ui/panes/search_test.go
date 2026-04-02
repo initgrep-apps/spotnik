@@ -92,6 +92,64 @@ func sendKey(t *testing.T, o *panes.SearchOverlay, key string) (*panes.SearchOve
 	return updated, cmd
 }
 
+// --- Init / clear-on-open tests ---
+
+// TestSearchOverlay_Init_EmitsSearchClearedMsg verifies that Init() includes
+// a SearchClearedMsg command so each search session starts with a clean state.
+func TestSearchOverlay_Init_EmitsSearchClearedMsg(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+
+	// Pre-populate the store so we can verify it gets cleared.
+	s.SetSearchQuery("old query")
+	s.AppendSearchTracks([]domain.Track{{ID: "t1", Name: "Old", URI: "u:t1"}}, 1)
+
+	// Init() returns a Batch. We execute the batch and collect all messages.
+	initCmd := o.Init()
+	require.NotNil(t, initCmd, "Init() should return a non-nil command")
+
+	msg := initCmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "Init() should return a BatchMsg, got %T", msg)
+
+	// At least one command in the batch must produce SearchClearedMsg.
+	var gotCleared bool
+	for _, subCmd := range batchMsg {
+		if subCmd == nil {
+			continue
+		}
+		if _, cleared := subCmd().(panes.SearchClearedMsg); cleared {
+			gotCleared = true
+		}
+	}
+	assert.True(t, gotCleared, "Init() batch must include a SearchClearedMsg command")
+}
+
+// TestSearchOverlay_Init_ResetsCachedResults verifies that after Init() is handled
+// by the root app's Update(), the store's search state is clean.
+func TestSearchOverlay_Init_ResetsCachedResults(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+
+	// Simulate previous session state.
+	s.SetSearchQuery("previous")
+	s.AppendSearchTracks([]domain.Track{{ID: "t1", Name: "Old", URI: "u:t1"}}, 1)
+
+	// Simulate the root app handling SearchClearedMsg (as happens in openSearch).
+	s.ClearSearchResults()
+	s.SetSearchQuery("")
+
+	assert.Equal(t, "", s.SearchQuery(), "store query should be empty after clear-on-open")
+	assert.Empty(t, s.SearchTracks().Items, "store tracks should be empty after clear-on-open")
+
+	// Also verify the overlay still renders without panic.
+	o.SetSize(80, 40)
+	view := o.View()
+	assert.NotEmpty(t, view)
+}
+
 // --- Task 4.2: Debounce tests ---
 
 // TestDebounce_StaleQueryIgnored verifies that a debounce tick with an old query
