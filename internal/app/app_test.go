@@ -726,6 +726,27 @@ func TestApp_SearchRequestMsg_DispatchesSearch(t *testing.T) {
 	assert.NotNil(t, cmd, "SearchRequestMsg should produce a search command")
 }
 
+// TestApp_SearchTabChangedMsg_UpdatesStoreAndDispatches verifies that
+// SearchTabChangedMsg updates store.SearchActiveType and dispatches a search command.
+func TestApp_SearchTabChangedMsg_UpdatesStoreAndDispatches(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Pre-set a query in the store so the search cmd can fire.
+	a.Store().SetSearchQuery("blinding")
+
+	tabMsg := panes.SearchTabChangedMsg{
+		Types: []string{"track"},
+		Query: "blinding",
+	}
+	_, cmd := a.Update(tabMsg)
+
+	// Store should have updated active type.
+	assert.Equal(t, "track", a.Store().SearchActiveType(), "SearchTabChangedMsg should update store SearchActiveType")
+	// A search command should be dispatched.
+	assert.NotNil(t, cmd, "SearchTabChangedMsg should dispatch a search command")
+}
+
 // TestApp_StatusDismiss_AlertAutoDismissl verifies that toast alerts are handled
 // by BubbleUp's auto-dismiss mechanism (not a statusDismissMsg).
 // After Task 3, statusDismissMsg is removed — BubbleUp handles dismiss internally.
@@ -2613,4 +2634,85 @@ func TestApp_NilPlaybackState_CounterResets(t *testing.T) {
 		a = m.(*app.App)
 	}
 	assert.NotContains(t, a.View(), "No playback state", "counter reset should prevent re-warn before 30 ticks")
+}
+
+// TestApp_SearchPageLoadedMsg_StaleDiscard_ClearsLoading verifies that when a stale
+// SearchPageLoadedMsg is discarded (its Query does not match the store's current query),
+// the loading flag is still cleared. Without this fix the overlay would stay in a
+// "loading" spinner state indefinitely after the user types a second query.
+func TestApp_SearchPageLoadedMsg_StaleDiscard_ClearsLoading(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Simulate: user typed "old", search was dispatched (loading=true), then user
+	// typed "new" — store query is now "new" while the old fetch is still in-flight.
+	a.Store().SetSearchQuery("new")
+	a.Store().SetSearchLoading(true)
+
+	// Deliver the stale response for "old" — it should be discarded.
+	m, cmd := a.Update(panes.SearchPageLoadedMsg{Query: "old", Results: nil})
+	a = m.(*app.App)
+
+	assert.False(t, a.Store().SearchLoading(), "stale discard should still clear the loading flag")
+	assert.Nil(t, cmd, "stale discard should return no command")
+}
+
+// TestApp_SearchTabChangedMsg_AllTab_SetsActiveTypeAll verifies that switching to
+// the "All" tab (which sends multiple types) sets SearchActiveType to "all", not
+// to the first element of the slice ("track").
+func TestApp_SearchTabChangedMsg_AllTab_SetsActiveTypeAll(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Pre-set a query so the search command fires.
+	a.Store().SetSearchQuery("jazz")
+
+	// All-tab message: Types has more than one entry.
+	tabMsg := panes.SearchTabChangedMsg{
+		Types: []string{"track", "artist", "album", "playlist"},
+		Query: "jazz",
+	}
+	m, cmd := a.Update(tabMsg)
+	a = m.(*app.App)
+
+	assert.Equal(t, "all", a.Store().SearchActiveType(), "All tab should set SearchActiveType to \"all\"")
+	assert.NotNil(t, cmd, "All tab should dispatch a search command")
+}
+
+// TestApp_SearchTabChangedMsg_ClearsError verifies that SearchTabChangedMsg clears
+// any pre-existing SearchError in the store before dispatching the new search, so the
+// overlay never shows a stale error from a previous query.
+func TestApp_SearchTabChangedMsg_ClearsError(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Prime the store with a pre-existing error and a live query.
+	a.Store().SetSearchQuery("jazz")
+	a.Store().SetSearchError(fmt.Errorf("previous network error"))
+	require.Error(t, a.Store().SearchError(), "pre-condition: store should have an error")
+
+	m, _ := a.Update(panes.SearchTabChangedMsg{
+		Types: []string{"track"},
+		Query: "jazz",
+	})
+	a = m.(*app.App)
+
+	assert.NoError(t, a.Store().SearchError(), "SearchTabChangedMsg should clear a pre-existing SearchError")
+}
+
+// TestApp_SearchRequestMsg_ClearsError verifies that SearchRequestMsg clears any
+// pre-existing SearchError in the store before dispatching the new search.
+func TestApp_SearchRequestMsg_ClearsError(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Prime store with a prior error.
+	a.Store().SetSearchError(fmt.Errorf("previous fetch error"))
+	require.Error(t, a.Store().SearchError(), "pre-condition: store should have an error")
+
+	m, cmd := a.Update(panes.SearchRequestMsg{Query: "rock"})
+	a = m.(*app.App)
+
+	assert.NoError(t, a.Store().SearchError(), "SearchRequestMsg should clear a pre-existing SearchError")
+	assert.NotNil(t, cmd, "SearchRequestMsg should still dispatch a search command")
 }

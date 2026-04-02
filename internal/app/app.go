@@ -791,7 +791,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store writes belong in Update, not inside command builders.
 		// Clear previous query's results before appending new ones so that
 		// back-to-back searches (e.g. "jazz" then "rock") never mix result sets.
+		// Also clear any prior error so the overlay never shows a stale error
+		// from the previous query while the new fetch is in-flight.
 		a.store.ClearSearchResults()
+		a.store.ClearSearchError()
 		a.store.SetSearchQuery(m.Query)
 		a.store.SetSearchLoading(true)
 		return a, a.buildSearchCmd(m.Query)
@@ -807,6 +810,27 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.ClearSearchError()
 		return a, nil
 
+	case panes.SearchTabChangedMsg:
+		// User switched the category tab in the search overlay.
+		// Update the active type filter and re-fire the search so results reflect the new tab.
+		// Only fire if there is a non-empty query — no point searching with empty input.
+		if m.Query == "" {
+			return a, nil
+		}
+		// Derive active type: "all" when multiple types are present (All tab), otherwise
+		// use the single type name. This mirrors the logic in buildSearchCmdWithTypes.
+		activeType := "all"
+		if len(m.Types) == 1 {
+			activeType = m.Types[0]
+		}
+		a.store.SetSearchActiveType(activeType)
+		// Clear any prior error so the overlay does not show a stale error from the
+		// previous query while the new fetch is in-flight.
+		a.store.ClearSearchError()
+		a.store.ClearSearchResults()
+		a.store.SetSearchLoading(true)
+		return a, a.buildSearchCmdWithTypes(m.Query, m.Types)
+
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — check for staleness, append to store, deliver to overlay.
 		if m.Err != nil {
@@ -818,13 +842,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Discard stale results: if the query changed since this fetch was dispatched, ignore.
+		// Still clear the loading flag so the overlay does not stay stuck in a loading state
+		// when the user types a second query before the first response arrives.
 		if m.Query != a.store.SearchQuery() {
+			a.store.SetSearchLoading(false)
 			return a, nil
 		}
 		a.store.SetSearchLoading(false)
 		if m.Err != nil {
 			a.store.SetSearchError(m.Err)
-			// Route search error through toast; search overlay shows loading→empty (not error).
+			// Route search error through toast; the overlay preserves its existing results
+			// (it returns early on Err != nil in Update) so the screen is not blanked.
 			updated, _ := a.searchPane.Update(m)
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp

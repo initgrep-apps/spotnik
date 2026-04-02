@@ -1,7 +1,7 @@
 ---
 title: "Search Overlay: Three-Panel Vertical Layout with Tabs and Help Bar"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
