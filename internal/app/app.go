@@ -814,7 +814,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case panes.SearchClearedMsg:
-		// SearchOverlay emitted this when the user pressed Ctrl+U.
+		// SearchOverlay emits this in two cases: when the user presses Ctrl+U to
+		// clear the input, and when Init() fires on overlay open (clear-on-open).
 		// Clear search state in store — store writes belong in Update, not in panes.
 		// Also clear loading and error so an in-flight search does not leave the
 		// store in a permanently-loading or errored state after the user clears input.
@@ -927,7 +928,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		types := searchTypesForActiveType(activeType)
 		nextOffset := m.Offset + SearchPageSize
 		batchEnd := ((m.Offset / SearchPrefetchItems) + 1) * SearchPrefetchItems
-		if nextOffset < batchEnd && a.store.SearchHasMore(activeType) && nextOffset <= SearchMaxOffset {
+		if nextOffset < batchEnd && a.store.SearchHasMore(activeType) && nextOffset < SearchMaxOffset {
 			// Batch still in progress — dispatch the next page, keep loading flag true.
 			updated, _ := a.searchPane.Update(m)
 			if sp, ok := updated.(*panes.SearchOverlay); ok {

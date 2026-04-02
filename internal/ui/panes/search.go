@@ -52,22 +52,6 @@ func TabToAPITypes(tab SearchTab) []string {
 	}
 }
 
-// searchSection enumerates the four result sections in display order.
-// NOTE: retained as legacy fallback for selectedURI / handleAddToQueue when the
-// list has no items (e.g., before the first search page loads).
-type searchSection int
-
-const (
-	sectionTracks    searchSection = iota // 0
-	sectionArtists                        // 1
-	sectionAlbums                         // 2
-	sectionPlaylists                      // 3
-	numSections      = 4
-)
-
-// maxResultsPerSection is the number of results shown per section in the overlay.
-const maxResultsPerSection = 5
-
 // searchPrefetchThreshold is the fraction of loaded items at which the next
 // prefetch batch is triggered. Kept in sync with app.SearchPrefetchThreshold (0.6).
 // Defined here to avoid a circular dependency between panes and app packages.
@@ -178,15 +162,6 @@ type SearchOverlay struct {
 	// activeTab is which category tab (All/Songs/Artists/Albums/Playlists) is selected.
 	activeTab SearchTab
 
-	// activeSection is which section (Tracks/Artists/Albums/Playlists) has focus.
-	// Used by the legacy selectedURI / handleAddToQueue fallback path when the
-	// list has no items.
-	activeSection searchSection
-
-	// cursorPos is the cursor within the active section (0-based).
-	// Used by the legacy selectedURI fallback path when the list has no items.
-	cursorPos int
-
 	// prefixState tracks which stage of command-prefix entry the user is in.
 	// See search_prefix.go for the state machine.
 	prefixState prefixState
@@ -222,16 +197,14 @@ func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
 	rl.InfiniteScrolling = true
 
 	return &SearchOverlay{
-		store:         store,
-		theme:         t,
-		input:         ti,
-		spinner:       sp,
-		help:          h,
-		keyMap:        km,
-		resultList:    rl,
-		activeTab:     TabAll,
-		activeSection: sectionTracks,
-		cursorPos:     0,
+		store:      store,
+		theme:      t,
+		input:      ti,
+		spinner:    sp,
+		help:       h,
+		keyMap:     km,
+		resultList: rl,
+		activeTab:  TabAll,
 	}
 }
 
@@ -245,12 +218,6 @@ func (o *SearchOverlay) InputFocused() bool {
 // Exposed for tests.
 func (o *SearchOverlay) Query() string {
 	return o.input.Value()
-}
-
-// ActiveSection returns the currently active result section index.
-// Exposed for tests.
-func (o *SearchOverlay) ActiveSection() searchSection {
-	return o.activeSection
 }
 
 // ActiveTab returns the currently active category tab.
@@ -310,9 +277,11 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	o.help.Width = w - 4 // inside help panel border
 }
 
-// Init starts the cursor blink loop.
+// Init starts the cursor blink loop and emits SearchClearedMsg so each search
+// session begins with a clean state (previous results and query are discarded).
 func (o *SearchOverlay) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, o.spinner.Tick)
+	clearCmd := func() tea.Msg { return SearchClearedMsg{} }
+	return tea.Batch(textinput.Blink, o.spinner.Tick, clearCmd)
 }
 
 // Update handles all messages for the search overlay.
@@ -326,6 +295,13 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case searchDebounceMsg:
 		return o.handleDebounce(m)
 
+	case SearchClearedMsg:
+		// Root app has cleared the store; clear local overlay state too so the
+		// results panel shows the empty-query hint rather than stale items.
+		o.results = nil
+		o.resultList.SetItems(nil)
+		return o, nil
+
 	case SearchPageLoadedMsg:
 		if m.Err != nil {
 			// Error response — preserve existing results so the screen is not
@@ -334,8 +310,6 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Save results locally so we never read api types from the store.
 		o.results = m.Results
-		o.cursorPos = 0
-		o.activeSection = sectionTracks
 		// Rebuild the list from the store (which has been updated by app.go).
 		o.rebuildListItems()
 		return o, nil
@@ -412,10 +386,9 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o.handleAddToQueue()
 
 	case tea.KeyCtrlU:
-		// Clear local input and cursor — visual reset happens immediately.
+		// Clear local input — visual reset happens immediately.
 		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
 		o.input.SetValue("")
-		o.cursorPos = 0
 		return o, func() tea.Msg { return SearchClearedMsg{} }
 
 	case tea.KeyBackspace:
@@ -448,35 +421,22 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleEnter plays the currently selected result.
-// It reads the selected item from the list.Model delegate first; if the list is
-// empty (no results loaded yet) it falls back to the legacy selectedURI helper.
+// Reads the selected item from the list.Model delegate; no-op when list is empty.
 func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
-	// Try list-based selection first.
-	if selected := o.resultList.SelectedItem(); selected != nil {
-		si, ok := selected.(SearchListItem)
-		if ok && si.URI != "" {
-			var playCmd tea.Cmd
-			if si.IsTrack {
-				uri := si.URI
-				playCmd = func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
-			} else {
-				uri := si.URI
-				playCmd = func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
-			}
-			closeCmd := func() tea.Msg { return SearchClosedMsg{} }
-			return o, tea.Batch(playCmd, closeCmd)
-		}
+	selected := o.resultList.SelectedItem()
+	if selected == nil {
+		return o, nil
 	}
-
-	// Fallback: legacy selectedURI (used when list is empty but o.results is set).
-	uri, isTrack := o.selectedURI()
-	if uri == "" {
+	si, ok := selected.(SearchListItem)
+	if !ok || si.URI == "" {
 		return o, nil
 	}
 	var playCmd tea.Cmd
-	if isTrack {
+	if si.IsTrack {
+		uri := si.URI
 		playCmd = func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
 	} else {
+		uri := si.URI
 		playCmd = func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
 	}
 	closeCmd := func() tea.Msg { return SearchClosedMsg{} }
@@ -484,30 +444,20 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 // handleAddToQueue adds the currently selected track to the queue.
-// Uses list.SelectedItem() to get the selection; falls back to legacy logic
-// when the list is empty.
+// Uses list.SelectedItem() to get the selection; no-op when list is empty
+// or when the selected item is not a track.
 func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
-	// List-based selection first.
-	if selected := o.resultList.SelectedItem(); selected != nil {
-		si, ok := selected.(SearchListItem)
-		if ok && si.IsTrack && si.URI != "" {
-			uri := si.URI
-			return o, func() tea.Msg { return AddToQueueMsg{TrackURI: uri} }
-		}
+	selected := o.resultList.SelectedItem()
+	if selected == nil {
+		return o, nil
+	}
+	si, ok := selected.(SearchListItem)
+	if !ok || !si.IsTrack || si.URI == "" {
 		// Selected item is not a track — Ctrl+A is a no-op.
 		return o, nil
 	}
-
-	// Fallback: legacy logic when list has no items yet.
-	if o.results == nil || o.activeSection != sectionTracks {
-		return o, nil
-	}
-	items := clampedTrackItems(o.results)
-	if o.cursorPos >= len(items) {
-		return o, nil
-	}
-	trackURI := items[o.cursorPos].URI
-	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: trackURI} }
+	uri := si.URI
+	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: uri} }
 }
 
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
@@ -518,8 +468,6 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 // the clean query (prefix stripped) is used so the API never sees the raw ":songs kk".
 func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + 1) % NumTabs)
-	o.activeSection = sectionTracks
-	o.cursorPos = 0
 	o.rebuildListItems()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
@@ -533,46 +481,12 @@ func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 // root app re-fires the search with the new type filter.
 func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + NumTabs - 1) % NumTabs)
-	o.activeSection = sectionTracks
-	o.cursorPos = 0
 	o.rebuildListItems()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
 	return o, func() tea.Msg {
 		return SearchTabChangedMsg{Types: types, Query: query}
 	}
-}
-
-// selectedURI returns the URI for the currently selected result item,
-// and whether it is a track (vs. a context URI).
-func (o *SearchOverlay) selectedURI() (uri string, isTrack bool) {
-	if o.results == nil {
-		return "", false
-	}
-
-	switch o.activeSection {
-	case sectionTracks:
-		items := clampedTrackItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, true
-		}
-	case sectionArtists:
-		items := clampedArtistItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, false
-		}
-	case sectionAlbums:
-		items := clampedAlbumItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, false
-		}
-	case sectionPlaylists:
-		items := clampedPlaylistItems(o.results)
-		if o.cursorPos < len(items) {
-			return items[o.cursorPos].URI, false
-		}
-	}
-	return "", false
 }
 
 // View renders the search overlay as three separate bordered panels stacked vertically:
@@ -952,43 +866,15 @@ func debounceSearch(query string) tea.Cmd {
 	})
 }
 
-// --- Clamping helpers (max 5 per section) ---
-
-func clampedTrackItems(r *SearchResultData) []SearchTrackItem {
-	items := r.Tracks
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-func clampedArtistItems(r *SearchResultData) []SearchArtistItem {
-	items := r.Artists
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-func clampedAlbumItems(r *SearchResultData) []SearchAlbumItem {
-	items := r.Albums
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
-func clampedPlaylistItems(r *SearchResultData) []SearchPlaylistItem {
-	items := r.Playlists
-	if len(items) > maxResultsPerSection {
-		items = items[:maxResultsPerSection]
-	}
-	return items
-}
-
 // SetTheme updates the theme reference for runtime theme switching.
+// Propagates to the list delegate (badge/selection colors), spinner style,
+// and tab/help/input styles (which read o.theme at render time).
 func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.theme = th
+	// Update the list delegate so badge and selection colors use the new theme.
+	o.resultList.SetDelegate(NewSearchItemDelegate(th))
+	// Update spinner foreground so loading indicator uses the new theme.
+	o.spinner.Style = lipgloss.NewStyle().Foreground(th.TextMuted())
 }
 
 // --- Test helpers (exported only for test packages) ---
