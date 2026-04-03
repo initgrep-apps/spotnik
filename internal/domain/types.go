@@ -54,6 +54,9 @@ type Track struct {
 
 	// Album is the album this track belongs to.
 	Album Album `json:"album"`
+
+	// Explicit indicates whether the track contains explicit content.
+	Explicit bool `json:"explicit"`
 }
 
 // Artist represents a Spotify artist.

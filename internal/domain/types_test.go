@@ -77,6 +77,38 @@ func TestSimplePlaylist_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+// TestTrack_Explicit verifies that the Explicit field unmarshals correctly from JSON.
+func TestTrack_Explicit(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		wantExpl bool
+	}{
+		{
+			name:     "explicit true",
+			json:     `{"id":"t1","name":"Bad","uri":"spotify:track:t1","explicit":true}`,
+			wantExpl: true,
+		},
+		{
+			name:     "explicit false",
+			json:     `{"id":"t2","name":"Clean","uri":"spotify:track:t2","explicit":false}`,
+			wantExpl: false,
+		},
+		{
+			name:     "explicit missing defaults to false",
+			json:     `{"id":"t3","name":"Old","uri":"spotify:track:t3"}`,
+			wantExpl: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var tr Track
+			require.NoError(t, json.Unmarshal([]byte(tt.json), &tr))
+			assert.Equal(t, tt.wantExpl, tr.Explicit)
+		})
+	}
+}
+
 // TestDomainTypes_JSONRoundtrip verifies that domain types serialize and
 // deserialize correctly.
 func TestDomainTypes_JSONRoundtrip(t *testing.T) {

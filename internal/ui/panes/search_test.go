@@ -958,22 +958,27 @@ func TestSearchItemDelegate_Render_BadgeAndName(t *testing.T) {
 	}
 }
 
-// TestSearchItemDelegate_Render_Subtitle verifies subtitle line is rendered.
+// TestSearchItemDelegate_Render_Subtitle verifies artist and album are rendered on line 2.
 func TestSearchItemDelegate_Render_Subtitle(t *testing.T) {
 	th := theme.Load("black")
 	d := panes.NewSearchItemDelegate(th)
 
 	item := panes.SearchListItem{
-		Category: "track",
-		Name:     "Track Name",
-		Subtitle: "Artist Name",
-		URI:      "u1",
-		IsTrack:  true,
+		Category:    "track",
+		Name:        "Track Name",
+		Subtitle:    "Artist Name · Album Name · 3:00",
+		URI:         "u1",
+		IsTrack:     true,
+		ArtistNames: "Artist Name",
+		AlbumName:   "Album Name",
+		Duration:    "3:00",
 	}
 	var buf strings.Builder
 	l := panes.NewTestList(d)
 	d.Render(&buf, l, 0, item)
-	assert.Contains(t, buf.String(), "Artist Name", "render should include subtitle")
+	output := buf.String()
+	assert.Contains(t, output, "Artist Name", "render should include artist name on line 2")
+	assert.Contains(t, output, "Album Name", "render should include album name on line 2")
 }
 
 // TestSearchOverlay_RebuildListItems_AllTab verifies tabAll includes all 4 types.

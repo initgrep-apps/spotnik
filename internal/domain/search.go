@@ -3,6 +3,8 @@ package domain
 import "encoding/json"
 
 // SearchArtist represents an artist returned in a search result.
+// NOTE: UnmarshalJSON is required because the Spotify API nests follower count
+// under "followers.total" rather than exposing it as a flat field.
 type SearchArtist struct {
 	// ID is the Spotify artist ID.
 	ID string `json:"id"`
@@ -12,6 +14,43 @@ type SearchArtist struct {
 
 	// URI is the Spotify URI of the artist.
 	URI string `json:"uri"`
+
+	// Genres is the list of musical genres associated with this artist.
+	// Populated via custom UnmarshalJSON — the json tag is not used by encoding/json.
+	Genres []string `json:"-"`
+
+	// Followers is the total follower count for this artist.
+	// Populated from the nested "followers.total" field via custom UnmarshalJSON.
+	Followers int `json:"-"`
+
+	// Popularity is the artist's popularity score (0–100).
+	// Populated via custom UnmarshalJSON — the json tag is not used by encoding/json.
+	Popularity int `json:"-"`
+}
+
+// UnmarshalJSON implements custom unmarshaling to extract the nested followers.total
+// into the flat Followers field.
+func (a *SearchArtist) UnmarshalJSON(data []byte) error {
+	raw := &struct {
+		ID         string   `json:"id"`
+		Name       string   `json:"name"`
+		URI        string   `json:"uri"`
+		Genres     []string `json:"genres"`
+		Popularity int      `json:"popularity"`
+		Followers  struct {
+			Total int `json:"total"`
+		} `json:"followers"`
+	}{}
+	if err := json.Unmarshal(data, raw); err != nil {
+		return err
+	}
+	a.ID = raw.ID
+	a.Name = raw.Name
+	a.URI = raw.URI
+	a.Genres = raw.Genres
+	a.Popularity = raw.Popularity
+	a.Followers = raw.Followers.Total
+	return nil
 }
 
 // SearchAlbum represents an album returned in a search result.
@@ -24,6 +63,9 @@ type SearchAlbum struct {
 
 	// URI is the Spotify URI of the album.
 	URI string `json:"uri"`
+
+	// AlbumType is the type of album: "album", "single", or "compilation".
+	AlbumType string `json:"album_type"`
 
 	// TotalTracks is the total number of tracks in the album.
 	TotalTracks int `json:"total_tracks"`
@@ -54,17 +96,21 @@ type SearchPlaylist struct {
 	// TrackCount is the total number of tracks in the playlist.
 	// Populated from the nested "tracks.total" field in the Spotify response.
 	TrackCount int `json:"-"`
+
+	// Description is the playlist description text.
+	Description string `json:"-"`
 }
 
 // UnmarshalJSON implements custom unmarshaling to extract the nested tracks.total
 // into the flat TrackCount field, mirroring the pattern used by SimplePlaylist.
 func (p *SearchPlaylist) UnmarshalJSON(data []byte) error {
 	raw := &struct {
-		ID     string              `json:"id"`
-		Name   string              `json:"name"`
-		URI    string              `json:"uri"`
-		Owner  SimplePlaylistOwner `json:"owner"`
-		Tracks struct {
+		ID          string              `json:"id"`
+		Name        string              `json:"name"`
+		URI         string              `json:"uri"`
+		Owner       SimplePlaylistOwner `json:"owner"`
+		Description string              `json:"description"`
+		Tracks      struct {
 			Total int `json:"total"`
 		} `json:"tracks"`
 	}{}
@@ -76,6 +122,7 @@ func (p *SearchPlaylist) UnmarshalJSON(data []byte) error {
 	p.URI = raw.URI
 	p.Owner = raw.Owner
 	p.TrackCount = raw.Tracks.Total
+	p.Description = raw.Description
 	return nil
 }
 
