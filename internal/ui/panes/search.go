@@ -226,7 +226,7 @@ func (o *SearchOverlay) ActiveTab() SearchTab {
 	return o.activeTab
 }
 
-// OverlayWidth returns the computed overlay width (80% of terminal width, min 40).
+// OverlayWidth returns the computed overlay width (70% of terminal width, min 40).
 // Exported for tests.
 func (o *SearchOverlay) OverlayWidth() int {
 	return o.overlayWidth()
@@ -429,7 +429,9 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleEnter plays the currently selected result.
+// handleEnter plays the currently selected result without closing the overlay.
+// The overlay stays open so users can continue browsing after playing a track.
+// Only Esc emits SearchClosedMsg.
 // Reads the selected item from the list.Model delegate; no-op when list is empty.
 func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 	selected := o.resultList.SelectedItem()
@@ -440,16 +442,12 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 	if !ok || si.URI == "" {
 		return o, nil
 	}
-	var playCmd tea.Cmd
 	if si.IsTrack {
 		uri := si.URI
-		playCmd = func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
-	} else {
-		uri := si.URI
-		playCmd = func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
+		return o, func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
 	}
-	closeCmd := func() tea.Msg { return SearchClosedMsg{} }
-	return o, tea.Batch(playCmd, closeCmd)
+	uri := si.URI
+	return o, func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
 }
 
 // handleAddToQueue adds the currently selected track to the queue.
@@ -863,9 +861,9 @@ func (o *SearchOverlay) nextOffsetForTab() int {
 	}
 }
 
-// overlayWidth returns the effective overlay width: 80% of terminal width, minimum 40.
+// overlayWidth returns the effective overlay width: 70% of terminal width, minimum 40.
 func (o *SearchOverlay) overlayWidth() int {
-	w := o.width * 80 / 100
+	w := o.width * 70 / 100
 	if w < 40 {
 		w = 40
 	}
