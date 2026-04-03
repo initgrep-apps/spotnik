@@ -387,8 +387,13 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyCtrlU:
 		// Clear local input — visual reset happens immediately.
+		// parsePrefix() must be called after clearing so that prefixState and
+		// lockedPrefix are reset to PrefixNone/empty. Without this, a subsequent
+		// cleanQuery() call would do value[len(lockedPrefix):] on an empty string,
+		// causing an index out of range panic.
 		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
 		o.input.SetValue("")
+		o.parsePrefix()
 		return o, func() tea.Msg { return SearchClearedMsg{} }
 
 	case tea.KeyBackspace:
