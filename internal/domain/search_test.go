@@ -12,12 +12,12 @@ import (
 // are correctly extracted from the nested API JSON structure.
 func TestSearchArtist_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
-		name            string
-		json            string
-		wantGenres      []string
-		wantFollowers   int
-		wantPopularity  int
-		wantErr         bool
+		name           string
+		json           string
+		wantGenres     []string
+		wantFollowers  int
+		wantPopularity int
+		wantErr        bool
 	}{
 		{
 			name: "full artist with all fields",
@@ -144,9 +144,9 @@ func TestSearchAlbum_AlbumType(t *testing.T) {
 // from the JSON response.
 func TestSearchPlaylist_Description(t *testing.T) {
 	tests := []struct {
-		name        string
-		json        string
-		wantDesc    string
+		name     string
+		json     string
+		wantDesc string
 	}{
 		{
 			name: "playlist with description",
