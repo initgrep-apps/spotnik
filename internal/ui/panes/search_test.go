@@ -947,11 +947,11 @@ func TestSearchListItem_AllCategories(t *testing.T) {
 	}
 }
 
-// TestSearchItemDelegate_Height verifies delegate height is 2.
+// TestSearchItemDelegate_Height verifies delegate height is 3 (3-line layout).
 func TestSearchItemDelegate_Height(t *testing.T) {
 	th := theme.Load("black")
 	d := panes.NewSearchItemDelegate(th)
-	assert.Equal(t, 2, d.Height(), "delegate height should be 2")
+	assert.Equal(t, 3, d.Height(), "delegate height should be 3")
 }
 
 // TestSearchItemDelegate_Spacing verifies delegate spacing is 0.

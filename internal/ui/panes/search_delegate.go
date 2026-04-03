@@ -88,8 +88,27 @@ func NewSearchItemDelegate(t theme.Theme) SearchItemDelegate {
 	return SearchItemDelegate{theme: t}
 }
 
-// Height returns the number of lines each item occupies (2: name + subtitle).
-func (d SearchItemDelegate) Height() int { return 2 }
+// Height returns the number of lines each item occupies (3: title + subtitle + description).
+func (d SearchItemDelegate) Height() int { return 3 }
+
+// wrapLine applies full-width styling to a content line.
+// Selected items get a left border bar + background highlight; normal items get left padding only.
+// The caller is responsible for pre-sizing content to the inner width (width - 2) so that
+// lipgloss does not word-wrap it. wrapLine applies decoration-only styles (border, padding, colors).
+func (d SearchItemDelegate) wrapLine(content string, _ int, selected bool) string {
+	if selected {
+		return lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(d.theme.ActiveBorder()).
+			Background(d.theme.SelectedBg()).
+			Foreground(d.theme.SelectedFg()).
+			Padding(0, 0, 0, 1).
+			Render(content)
+	}
+	return lipgloss.NewStyle().
+		Padding(0, 0, 0, 2).
+		Render(content)
+}
 
 // Spacing returns the number of empty lines between items (0 = flush).
 func (d SearchItemDelegate) Spacing() int { return 0 }
@@ -123,10 +142,16 @@ func (d SearchItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 }
 
 // renderTrack renders a track item:
-// Line 1: ♪ name ......... [E] duration
-// Line 2:   artists · album
+// Line 1: ♪ bold name ......... [E] duration
+// Line 2: artists
+// Line 3: album
 func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected bool, width int) {
 	badge := d.styledBadge(si.Category)
+	// innerW is the content area inside wrapLine's own left decorations (border+pad or pad).
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
 
 	// Right-side metadata: optional [E] + duration.
 	explicitStr := ""
@@ -136,52 +161,75 @@ func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected
 	durationStr := lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(si.Duration)
 	rightMeta := explicitStr + durationStr
 
-	// Calculate max width for name: badge(1) + space(1) + name + padding + rightMeta
+	// Calculate max width for name within the inner content area.
 	rightMetaPlain := plainLen(explicitStr) + plainLen(durationStr)
-	nameMaxW := width - 2 - rightMetaPlain - 1
+	nameMaxW := innerW - 2 - rightMetaPlain - 1
 	if nameMaxW < 1 {
 		nameMaxW = 1
 	}
 	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
-	line1 := d.rightAlign(badge+" "+name, rightMeta, width)
+	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
-	// Line 2: artists · album
+	// Line 2: artists — padded to innerW so background covers full width.
 	artistStyle := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary())
-	albumStyle := lipgloss.NewStyle().Foreground(d.theme.ColumnTertiary())
-	line2 := "  " + artistStyle.Render(si.ArtistNames) + d.styledDot() + albumStyle.Render(si.AlbumName)
+	line2Content := d.padToInner(artistStyle.Render(si.ArtistNames), innerW)
 
-	_, _ = fmt.Fprintf(w, "%s\n%s\n", line1, line2)
+	// Line 3: album — padded to innerW.
+	albumStyle := lipgloss.NewStyle().Foreground(d.theme.ColumnTertiary())
+	line3Content := d.padToInner(albumStyle.Render(si.AlbumName), innerW)
+
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, width, selected),
+		d.wrapLine(line2Content, width, selected),
+		d.wrapLine(line3Content, width, selected))
 }
 
 // renderArtist renders an artist item:
-// Line 1: ★ name
-// Line 2:   genres · followers
+// Line 1: ★ bold name
+// Line 2: genres
+// Line 3: followers · popularity
 func (d SearchItemDelegate) renderArtist(w io.Writer, si SearchListItem, selected bool, width int) {
 	badge := d.styledBadge(si.Category)
-	name := d.styledName(si.Name, selected, width-2)
-	line1 := badge + " " + name
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
 
-	// Line 2: genres · followers (omit dot if genres empty)
+	name := d.styledName(truncateString(si.Name, innerW-2), selected, innerW-2)
+	line1Content := d.padToInner(badge+" "+name, innerW)
+
+	// Line 2: genres
 	genreStyle := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary())
+	line2Content := d.padToInner(genreStyle.Render(si.Genres), innerW)
+
+	// Line 3: followers · popularity
 	followerStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
-
-	var line2Parts []string
-	if si.Genres != "" {
-		line2Parts = append(line2Parts, genreStyle.Render(si.Genres))
-	}
+	var line3Parts []string
 	if si.Followers != "" {
-		line2Parts = append(line2Parts, followerStyle.Render(si.Followers))
+		line3Parts = append(line3Parts, followerStyle.Render(si.Followers))
 	}
-	line2 := "  " + strings.Join(line2Parts, d.styledDot())
+	if si.Popularity > 0 {
+		popStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
+		line3Parts = append(line3Parts, popStyle.Render(fmt.Sprintf("Pop: %d", si.Popularity)))
+	}
+	line3Content := d.padToInner(strings.Join(line3Parts, d.styledDot()), innerW)
 
-	_, _ = fmt.Fprintf(w, "%s\n%s\n", line1, line2)
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, width, selected),
+		d.wrapLine(line2Content, width, selected),
+		d.wrapLine(line3Content, width, selected))
 }
 
 // renderAlbum renders an album item:
-// Line 1: ◎ name ......... albumType · year
-// Line 2:   artists · trackCount
+// Line 1: ◎ bold name ......... albumType · year
+// Line 2: artists
+// Line 3: trackCount
 func (d SearchItemDelegate) renderAlbum(w io.Writer, si SearchListItem, selected bool, width int) {
 	badge := d.styledBadge(si.Category)
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
 
 	// Right meta: albumType · year
 	typeStyle := lipgloss.NewStyle().Foreground(d.theme.Info())
@@ -189,64 +237,83 @@ func (d SearchItemDelegate) renderAlbum(w io.Writer, si SearchListItem, selected
 	rightMeta := typeStyle.Render(si.AlbumType) + d.styledDot() + yearStyle.Render(si.ReleaseYear)
 
 	rightMetaPlain := len(si.AlbumType) + len(" · ") + len(si.ReleaseYear)
-	nameMaxW := width - 2 - rightMetaPlain - 1
+	nameMaxW := innerW - 2 - rightMetaPlain - 1
 	if nameMaxW < 1 {
 		nameMaxW = 1
 	}
 	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
-	line1 := d.rightAlign(badge+" "+name, rightMeta, width)
+	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
-	// Line 2: artists · trackCount
+	// Line 2: artists
 	artistStyle := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary())
-	tcStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
-	line2 := "  " + artistStyle.Render(si.AlbumArtists) + d.styledDot() + tcStyle.Render(si.TrackCount)
+	line2Content := d.padToInner(artistStyle.Render(si.AlbumArtists), innerW)
 
-	_, _ = fmt.Fprintf(w, "%s\n%s\n", line1, line2)
+	// Line 3: track count
+	tcStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
+	line3Content := d.padToInner(tcStyle.Render(si.TrackCount), innerW)
+
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, width, selected),
+		d.wrapLine(line2Content, width, selected),
+		d.wrapLine(line3Content, width, selected))
 }
 
 // renderPlaylist renders a playlist item:
-// Line 1: ▤ name ......... trackCount
-// Line 2:   by owner [· description]
+// Line 1: ▤ bold name ......... trackCount
+// Line 2: by owner
+// Line 3: description (italic)
 func (d SearchItemDelegate) renderPlaylist(w io.Writer, si SearchListItem, selected bool, width int) {
 	badge := d.styledBadge(si.Category)
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
 
 	// Right meta: trackCount
 	tcStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
 	rightMeta := tcStyle.Render(si.PlaylistTracks)
 
-	nameMaxW := width - 2 - len(si.PlaylistTracks) - 1
+	nameMaxW := innerW - 2 - len(si.PlaylistTracks) - 1
 	if nameMaxW < 1 {
 		nameMaxW = 1
 	}
 	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
-	line1 := d.rightAlign(badge+" "+name, rightMeta, width)
+	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
-	// Line 2: by owner [· description]
+	// Line 2: by owner
 	ownerStyle := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary())
+	line2Content := d.padToInner(ownerStyle.Render("by "+si.Owner), innerW)
+
+	// Line 3: description (italic, truncated to fit)
 	descStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Italic(true)
+	desc := truncateString(si.PlaylistDesc, innerW)
+	line3Content := d.padToInner(descStyle.Render(desc), innerW)
 
-	line2 := "  " + ownerStyle.Render("by "+si.Owner)
-	if si.PlaylistDesc != "" {
-		// Truncate description to fit available width.
-		availW := width - 2 - len("by "+si.Owner) - len(" · ") - 4
-		desc := truncateString(si.PlaylistDesc, availW)
-		line2 += d.styledDot() + descStyle.Render(desc)
-	}
-
-	_, _ = fmt.Fprintf(w, "%s\n%s\n", line1, line2)
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, width, selected),
+		d.wrapLine(line2Content, width, selected),
+		d.wrapLine(line3Content, width, selected))
 }
 
-// renderDefault renders items with unknown category using a simple two-line layout.
-func (d SearchItemDelegate) renderDefault(w io.Writer, si SearchListItem, selected bool, _ int) {
+// renderDefault renders items with unknown category using a simple 3-line layout.
+func (d SearchItemDelegate) renderDefault(w io.Writer, si SearchListItem, selected bool, width int) {
 	badge := d.styledBadge(si.Category)
-	name := d.styledName(si.Name, selected, 0)
-	_, _ = fmt.Fprintf(w, "%s %s\n", badge, name)
-	subtitleStyle := lipgloss.NewStyle().Foreground(d.theme.TextSecondary())
-	if si.Subtitle != "" {
-		_, _ = fmt.Fprintf(w, "  %s\n", subtitleStyle.Render(si.Subtitle))
-	} else {
-		_, _ = fmt.Fprintln(w, "")
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
 	}
+
+	name := d.styledName(truncateString(si.Name, innerW-2), selected, innerW-2)
+	line1Content := d.padToInner(badge+" "+name, innerW)
+
+	subtitleStyle := lipgloss.NewStyle().Foreground(d.theme.TextSecondary())
+	line2Content := d.padToInner(subtitleStyle.Render(si.Subtitle), innerW)
+	line3Content := d.padToInner("", innerW)
+
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, width, selected),
+		d.wrapLine(line2Content, width, selected),
+		d.wrapLine(line3Content, width, selected))
 }
 
 // --- Shared delegate helpers ---
@@ -259,16 +326,14 @@ func (d SearchItemDelegate) styledBadge(category string) string {
 		Render(categorySymbol(category))
 }
 
-// styledName renders the item name with appropriate color.
-// When selected, applies SelectedBg/SelectedFg. The name should be pre-truncated by the caller.
-func (d SearchItemDelegate) styledName(name string, selected bool, _ int) string {
-	style := lipgloss.NewStyle().Foreground(d.theme.TextPrimary())
-	if selected {
-		style = style.
-			Background(d.theme.SelectedBg()).
-			Foreground(d.theme.SelectedFg())
-	}
-	return style.Render(name)
+// styledName renders the item name in bold primary text color.
+// Selection styling is handled at the line level by wrapLine(); this function
+// always applies Bold(true) regardless of the selected parameter.
+func (d SearchItemDelegate) styledName(name string, _ bool, _ int) string {
+	return lipgloss.NewStyle().
+		Foreground(d.theme.TextPrimary()).
+		Bold(true).
+		Render(name)
 }
 
 // styledDot returns " · " rendered in TextMuted color.
@@ -286,6 +351,16 @@ func (d SearchItemDelegate) rightAlign(left, right string, width int) string {
 		pad = 1
 	}
 	return left + strings.Repeat(" ", pad) + right
+}
+
+// padToInner right-pads content with spaces so its visible width equals innerW.
+// This ensures wrapLine's background/border styling covers the full line width.
+func (d SearchItemDelegate) padToInner(content string, innerW int) string {
+	cw := lipgloss.Width(content)
+	if cw >= innerW {
+		return content
+	}
+	return content + strings.Repeat(" ", innerW-cw)
 }
 
 // badgeColor returns the lipgloss color for the given category badge.
