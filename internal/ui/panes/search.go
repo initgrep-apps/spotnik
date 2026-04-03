@@ -168,13 +168,28 @@ type SearchOverlay struct {
 
 	// lockedPrefix holds the confirmed prefix once prefixState == PrefixLocked (e.g. ":songs").
 	lockedPrefix string
+
+	// placeholderIdx cycles through searchPlaceholders (0..3) on a 2-second tick.
+	// The tick stops when the user starts typing and restarts when the input is cleared.
+	placeholderIdx int
 }
 
 // NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
 // The text input is focused by default.
 func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
 	ti := textinput.New()
-	ti.Placeholder = "Type to search tracks, artists, albums..."
+	// Start with the first cycling placeholder — the tick will advance it every 2s.
+	ti.Placeholder = searchPlaceholders[0]
+	// Placeholder uses Info() color so it looks like an actionable suggestion,
+	// not a passive muted hint.
+	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.Info())
+	// Enable native inline ghost completion for command prefixes.
+	// Each suggestion has a trailing space so that acceptance immediately
+	// triggers parsePrefix() and the lock + Prompt-tag promotion.
+	ti.ShowSuggestions = true
+	ti.SetSuggestions([]string{":songs ", ":artists ", ":albums ", ":playlists "})
+	// Ghost/completion text appears dim so it doesn't compete with the typed input.
+	ti.CompletionStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
 	ti.Focus()
 
 	sp := spinner.New()
@@ -281,11 +296,11 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	o.help.Width = w - 4 // inside help panel border
 }
 
-// Init starts the cursor blink loop and emits SearchClearedMsg so each search
-// session begins with a clean state (previous results and query are discarded).
+// Init starts the cursor blink loop, placeholder ticker, and emits SearchClearedMsg
+// so each search session begins with a clean state (previous results and query are discarded).
 func (o *SearchOverlay) Init() tea.Cmd {
 	clearCmd := func() tea.Msg { return SearchClearedMsg{} }
-	return tea.Batch(textinput.Blink, o.spinner.Tick, clearCmd)
+	return tea.Batch(textinput.Blink, o.spinner.Tick, clearCmd, searchPlaceholderTick())
 }
 
 // Update handles all messages for the search overlay.
@@ -295,6 +310,17 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		o.spinner, cmd = o.spinner.Update(spinner.TickMsg(m))
 		return o, cmd
+
+	case searchPlaceholderTickMsg:
+		// Advance the cycling placeholder only when the input is empty.
+		// When the user has typed something the tick is not re-armed, so cycling stops.
+		// Re-arming happens in handleKey(KeyCtrlU) when the input is cleared.
+		if o.input.Value() == "" && o.prefixState == PrefixNone {
+			o.placeholderIdx = (o.placeholderIdx + 1) % len(searchPlaceholders)
+			o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
+			return o, searchPlaceholderTick()
+		}
+		return o, nil
 
 	case searchDebounceMsg:
 		return o.handleDebounce(m)
@@ -365,9 +391,18 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o.handleEnter()
 
 	case tea.KeyTab:
-		// Prefix takes priority: if still typing a prefix, attempt completion.
 		if o.prefixState == PrefixTyping {
-			return o.tabCompletePrefix()
+			// Forward Tab to textinput so it can accept the ghost suggestion
+			// (textinput.KeyMap.AcceptSuggestion is bound to Tab by default).
+			var cmd tea.Cmd
+			o.input, cmd = o.input.Update(m)
+			// Re-parse after acceptance: if the suggestion was accepted (e.g. ":songs "),
+			// parsePrefix() will detect PrefixLocked and we promote the prefix to the Prompt.
+			o.parsePrefix()
+			if o.prefixState == PrefixLocked {
+				o.promoteToPromptTag()
+			}
+			return o, cmd
 		}
 		return o.cycleTabForward()
 
@@ -391,27 +426,50 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyCtrlU:
 		// Clear local input — visual reset happens immediately.
-		// parsePrefix() must be called after clearing so that prefixState and
-		// lockedPrefix are reset to PrefixNone/empty. Without this, a subsequent
-		// cleanQuery() call would do value[len(lockedPrefix):] on an empty string,
-		// causing an index out of range panic.
+		// Reset the Prompt to the default and force-clear prefix state so that
+		// a subsequent cleanQuery() call does not index into a stale lockedPrefix.
+		// Restart the placeholder ticker so the animated cycling resumes.
 		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
+		o.input.Prompt = "> "
 		o.input.SetValue("")
-		o.parsePrefix()
-		return o, func() tea.Msg { return SearchClearedMsg{} }
+		o.lockedPrefix = ""
+		o.prefixState = PrefixNone
+		return o, tea.Batch(
+			func() tea.Msg { return SearchClearedMsg{} },
+			searchPlaceholderTick(),
+		)
 
 	case tea.KeyBackspace:
-		// Let textinput handle backspace normally.
+		// When a prefix is locked (in Prompt) and the cursor is at position 0,
+		// demote the tag back into the input value so the user can edit the prefix.
+		if o.prefixState == PrefixLocked && o.input.Position() == 0 {
+			o.demoteFromPromptTag()
+			return o, nil
+		}
+		// Otherwise let textinput handle backspace normally.
 		var cmd tea.Cmd
 		o.input, cmd = o.input.Update(m)
 		// Re-parse prefix state after backspace so it can unlock/re-type.
-		o.parsePrefix()
+		// NOTE: parsePrefix() guard skips re-parsing if already locked+promoted,
+		// so we only need to force-reset when the prefix is NOT locked.
+		if o.prefixState != PrefixLocked {
+			o.parsePrefix()
+		}
+		// After a demote→re-lock cycle, the Prompt is still "> " but parsePrefix
+		// has set PrefixLocked again. Promote so cleanQuery() works correctly.
+		if o.prefixState == PrefixLocked && o.input.Prompt == "> " {
+			o.promoteToPromptTag()
+		}
 		if o.prefixState == PrefixTyping {
 			// Still editing the prefix — don't fire debounce yet.
 			return o, cmd
 		}
 		q := o.cleanQuery()
 		debounceCmd := debounceSearch(q)
+		// Restart placeholder tick when backspace clears input to empty.
+		if o.input.Value() == "" && o.prefixState == PrefixNone {
+			return o, tea.Batch(cmd, debounceCmd, searchPlaceholderTick())
+		}
 		return o, tea.Batch(cmd, debounceCmd)
 
 	default:
@@ -419,6 +477,11 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		o.input, cmd = o.input.Update(m)
 		o.parsePrefix()
+		if o.prefixState == PrefixLocked && o.input.Prompt == "> " {
+			// Prefix just locked (e.g. user typed the trailing space) and the Prompt
+			// tag hasn't been applied yet — promote the prefix to the Prompt field.
+			o.promoteToPromptTag()
+		}
 		if o.prefixState == PrefixTyping {
 			// User is still typing the command prefix — don't fire debounce yet.
 			return o, cmd
@@ -471,10 +534,11 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 // It rebuilds the list items for the new tab and emits SearchTabChangedMsg so the
 // root app re-fires the search with the new type filter.
 // NOTE: Tab cycling is only reachable when prefixState is not PrefixTyping (Tab routing
-// in handleKey sends PrefixTyping → tabCompletePrefix instead). When a prefix is locked
-// the clean query (prefix stripped) is used so the API never sees the raw ":songs kk".
+// in handleKey sends PrefixTyping → textinput suggestion acceptance instead). When a
+// prefix is locked the clean query (prefix stripped) is used so the API never sees raw ":songs kk".
 func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + 1) % NumTabs)
+	o.syncInputToTab()
 	o.rebuildListItems()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
@@ -488,6 +552,7 @@ func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 // root app re-fires the search with the new type filter.
 func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + NumTabs - 1) % NumTabs)
+	o.syncInputToTab()
 	o.rebuildListItems()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
@@ -889,13 +954,21 @@ func debounceSearch(query string) tea.Cmd {
 
 // SetTheme updates the theme reference for runtime theme switching.
 // Propagates to the list delegate (badge/selection colors), spinner style,
-// and tab/help/input styles (which read o.theme at render time).
+// placeholder/completion styles, and the active Prompt tag if one is set.
 func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.theme = th
 	// Update the list delegate so badge and selection colors use the new theme.
 	o.resultList.SetDelegate(NewSearchItemDelegate(th))
 	// Update spinner foreground so loading indicator uses the new theme.
 	o.spinner.Style = lipgloss.NewStyle().Foreground(th.TextMuted())
+	// Update placeholder style so the cycling hints use the new Info() color.
+	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
+	// Update completion/ghost text style so suggestions use the new TextMuted() color.
+	o.input.CompletionStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
+	// Re-render the Prompt tag if a prefix is locked, applying the new theme colors.
+	if o.prefixState == PrefixLocked {
+		o.promoteToPromptTag()
+	}
 }
 
 // --- Test helpers (exported only for test packages) ---
@@ -904,6 +977,13 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 // that need to inspect configuration without triggering store reads.
 // Uses the provided theme; store-dependent methods must not be called on the result.
 func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
+	ti := textinput.New()
+	ti.Placeholder = searchPlaceholders[0]
+	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.Info())
+	ti.ShowSuggestions = true
+	ti.SetSuggestions([]string{":songs ", ":artists ", ":albums ", ":playlists "})
+	ti.CompletionStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
+
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
@@ -922,7 +1002,7 @@ func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
 	return &SearchOverlay{
 		store:      nil, // store-dependent methods must not be called
 		theme:      t,
-		input:      textinput.New(),
+		input:      ti,
 		spinner:    sp,
 		help:       h,
 		keyMap:     km,
@@ -1006,4 +1086,56 @@ func NewTestList(d SearchItemDelegate) list.Model {
 	l.SetShowHelp(false)
 	l.SetShowPagination(false)
 	return l
+}
+
+// SearchPlaceholderTickMsgForTest creates a searchPlaceholderTickMsg for use in tests.
+// This allows the test package to inject placeholder tick messages without exposing
+// the unexported type in the production API.
+func SearchPlaceholderTickMsgForTest() tea.Msg {
+	return searchPlaceholderTickMsg{}
+}
+
+// PlaceholderIdx returns the current placeholder cycle index — exported for tests.
+func (o *SearchOverlay) PlaceholderIdx() int {
+	return o.placeholderIdx
+}
+
+// Placeholder returns the current textinput placeholder string — exported for tests.
+func (o *SearchOverlay) Placeholder() string {
+	return o.input.Placeholder
+}
+
+// InputShowSuggestions returns whether the textinput has ShowSuggestions enabled — exported for tests.
+func (o *SearchOverlay) InputShowSuggestions() bool {
+	return o.input.ShowSuggestions
+}
+
+// InputAvailableSuggestions returns the available suggestions — exported for tests.
+func (o *SearchOverlay) InputAvailableSuggestions() []string {
+	return o.input.AvailableSuggestions()
+}
+
+// PlaceholderStyleFg returns the foreground color of the input's PlaceholderStyle — exported for tests.
+func (o *SearchOverlay) PlaceholderStyleFg() lipgloss.TerminalColor {
+	return o.input.PlaceholderStyle.GetForeground()
+}
+
+// CompletionStyleFg returns the foreground color of the input's CompletionStyle — exported for tests.
+func (o *SearchOverlay) CompletionStyleFg() lipgloss.TerminalColor {
+	return o.input.CompletionStyle.GetForeground()
+}
+
+// SyncInputToTab is the exported wrapper for syncInputToTab — used in tests.
+func (o *SearchOverlay) SyncInputToTab() {
+	o.syncInputToTab()
+}
+
+// PromoteToPromptTag is the exported wrapper for promoteToPromptTag — used in tests.
+func (o *SearchOverlay) PromoteToPromptTag() {
+	o.promoteToPromptTag()
+}
+
+// DemoteFromPromptTag is the exported wrapper for demoteFromPromptTag — used in tests.
+func (o *SearchOverlay) DemoteFromPromptTag() {
+	o.demoteFromPromptTag()
 }

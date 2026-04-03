@@ -2,6 +2,7 @@ package panes
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,6 +17,8 @@ const (
 	// PrefixTyping means the user is typing a prefix (e.g. ":so") — no space yet.
 	PrefixTyping
 	// PrefixLocked means a complete valid prefix + space was typed (e.g. ":songs ").
+	// When locked, the prefix is promoted to the textinput Prompt field as a styled tag.
+	// The input Value() holds only the clean query.
 	PrefixLocked
 )
 
@@ -23,12 +26,43 @@ const (
 // Exported so tests and the help text can reference them.
 var SearchPrefixes = []string{":songs", ":artists", ":albums", ":playlists"}
 
+// searchPlaceholders cycles through animated placeholder messages that demonstrate
+// the command prefix syntax. One entry per prefix, shown in order on a 2s tick.
+var searchPlaceholders = []string{
+	":songs search for tracks...",
+	":artists find your favorite artists...",
+	":albums browse albums...",
+	":playlists discover playlists...",
+}
+
+// SearchPlaceholders exposes the placeholder list for tests.
+var SearchPlaceholders = searchPlaceholders
+
+// searchPlaceholderTickMsg fires every 2 seconds to advance the cycling placeholder.
+type searchPlaceholderTickMsg struct{}
+
+// searchPlaceholderTick returns a tea.Cmd that fires searchPlaceholderTickMsg after 2 seconds.
+func searchPlaceholderTick() tea.Cmd {
+	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+		return searchPlaceholderTickMsg{}
+	})
+}
+
 // prefixToTabMap maps each command prefix to its corresponding SearchTab.
 var prefixToTabMap = map[string]SearchTab{
 	":songs":     TabSongs,
 	":artists":   TabArtists,
 	":albums":    TabAlbums,
 	":playlists": TabPlaylists,
+}
+
+// tabToPrefixMap maps each non-All SearchTab to its command prefix.
+// Used by syncInputToTab() to set the Prompt tag when cycling tabs.
+var tabToPrefixMap = map[SearchTab]string{
+	TabSongs:     ":songs",
+	TabArtists:   ":artists",
+	TabAlbums:    ":albums",
+	TabPlaylists: ":playlists",
 }
 
 // PrefixToTab returns the SearchTab for the given command prefix, and whether it is valid.
@@ -40,7 +74,15 @@ func PrefixToTab(prefix string) (SearchTab, bool) {
 
 // parsePrefix updates o.prefixState and o.lockedPrefix based on the current input value.
 // It is called on every keystroke (typing, backspace) to keep the prefix state in sync.
+// When the prefix is already promoted to the Prompt tag (PrefixLocked with lockedPrefix set),
+// this function is a no-op so it does not incorrectly reset state from the Prompt.
 func (o *SearchOverlay) parsePrefix() {
+	// If prefix is already promoted to Prompt tag, skip re-parsing.
+	// The Prompt holds the prefix; Value holds only the query.
+	if o.prefixState == PrefixLocked && o.lockedPrefix != "" {
+		return
+	}
+
 	value := o.input.Value()
 
 	if !strings.HasPrefix(value, ":") {
@@ -73,12 +115,12 @@ func (o *SearchOverlay) parsePrefix() {
 }
 
 // cleanQuery returns the portion of the input that should be sent to the API.
-// When a prefix is locked, it strips the prefix from the front.
+// When a prefix is locked (Prompt-based), the Value() already holds only the clean query.
 // Otherwise it returns the full raw input value.
 func (o *SearchOverlay) cleanQuery() string {
 	if o.prefixState == PrefixLocked {
-		value := o.input.Value()
-		return strings.TrimSpace(value[len(o.lockedPrefix):])
+		// Value is already clean — prefix is in the Prompt tag.
+		return strings.TrimSpace(o.input.Value())
 	}
 	return o.input.Value()
 }
@@ -95,10 +137,14 @@ func (o *SearchOverlay) activeAPITypes() []string {
 }
 
 // showHintLine reports whether the prefix hint row should be rendered inside the
-// Search panel. It returns true when the input is empty (show all prefixes as
-// placeholder guidance) or when the user is actively typing a prefix (PrefixTyping).
-// Returns false when a prefix is locked (compact mode) or a normal query is active.
+// Search panel. It returns true when the input is empty and no prefix is locked
+// (show all prefixes as placeholder guidance) or when the user is actively typing
+// a prefix (PrefixTyping). Returns false when a prefix is locked (the Prompt tag
+// is enough) or a normal query is active.
 func (o *SearchOverlay) showHintLine() bool {
+	if o.prefixState == PrefixLocked {
+		return false
+	}
 	return o.input.Value() == "" || o.prefixState == PrefixTyping
 }
 
@@ -107,52 +153,148 @@ func (o *SearchOverlay) ShowHintLine() bool {
 	return o.showHintLine()
 }
 
-// renderPrefixHints renders inline autocomplete hints when the user is typing a prefix.
-// Returns an empty string when not in prefixTyping state.
+// prefixToCategory maps a command prefix to its Spotify API category name.
+// Used by renderPrefixHints() to look up the badge color for each pill.
+func prefixToCategory(prefix string) string {
+	switch prefix {
+	case ":songs":
+		return "track"
+	case ":artists":
+		return "artist"
+	case ":albums":
+		return "album"
+	case ":playlists":
+		return "playlist"
+	default:
+		return ""
+	}
+}
+
+// renderPrefixHints renders the hint row below the text input as styled pills.
+// Each pill shows a command prefix in its category badge color.
+//
+// Visibility rules:
+//   - Empty input (PrefixNone, value==""): all 4 pills in their badge colors
+//   - Typing a prefix (PrefixTyping): matching pills highlighted, others dimmed
+//   - Prefix locked (PrefixLocked): returns "" — the Prompt tag is visible enough
+//   - Normal query (PrefixNone, value!="" and no ":"): returns "" — hide pills
 func (o *SearchOverlay) renderPrefixHints(width int) string {
-	if o.prefixState != PrefixTyping {
+	// Hide when prefix is locked — the Prompt tag is visible enough.
+	if o.prefixState == PrefixLocked {
 		return ""
 	}
 
 	partial := o.input.Value()
-	var matches []string
-	for _, p := range SearchPrefixes {
-		if strings.HasPrefix(p, partial) {
-			matches = append(matches, p)
-		}
-	}
 
-	if len(matches) == 0 {
+	// Hide for normal (non-prefix) queries — pills are not relevant.
+	if partial != "" && o.prefixState == PrefixNone {
 		return ""
 	}
 
-	hintStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
-	hint := hintStyle.Render("  " + strings.Join(matches, "  "))
-	// Clamp to width so it never overflows the panel border.
+	delegate := NewSearchItemDelegate(o.theme)
+
+	var pills []string
+	for _, prefix := range SearchPrefixes {
+		category := prefixToCategory(prefix)
+		color := delegate.badgeColor(category)
+
+		var style lipgloss.Style
+		if partial == "" || strings.HasPrefix(prefix, partial) {
+			// Empty input or matching prefix — show in category color, bold.
+			style = lipgloss.NewStyle().Foreground(color).Bold(true)
+		} else {
+			// Non-matching — dim.
+			style = lipgloss.NewStyle().Foreground(o.theme.TextMuted())
+		}
+		pills = append(pills, style.Render(prefix))
+	}
+
+	hint := "  " + strings.Join(pills, "   ")
 	return lipgloss.NewStyle().MaxWidth(width).Render(hint)
 }
 
-// tabCompletePrefix attempts to complete the partial prefix in the input.
-// If exactly one prefix matches the current partial, it is completed with a trailing space.
-// With zero or more-than-one matches the input is left unchanged.
-// Returns (tea.Model, tea.Cmd) — the command is always nil (no async work needed).
-func (o *SearchOverlay) tabCompletePrefix() (tea.Model, tea.Cmd) {
-	partial := o.input.Value()
-	var matches []string
-	for _, p := range SearchPrefixes {
-		if strings.HasPrefix(p, partial) {
-			matches = append(matches, p)
+// buildPromptTag returns a styled lipgloss string for the prefix tag shown in the Prompt field.
+// Uses SelectedBg()/SelectedFg() colors with bold and padding.
+func (o *SearchOverlay) buildPromptTag(prefix string) string {
+	tagStyle := lipgloss.NewStyle().
+		Background(o.theme.SelectedBg()).
+		Foreground(o.theme.SelectedFg()).
+		Bold(true).
+		PaddingLeft(1).
+		PaddingRight(1)
+	return tagStyle.Render(prefix) + " "
+}
+
+// promoteToPromptTag moves the locked prefix from the input Value into the textinput
+// Prompt field as a styled colored tag. After promotion, Value() holds only the clean query.
+// Called when a prefix is locked (either by typing the trailing space or Tab-accepting a suggestion),
+// or when SetTheme re-renders the Prompt tag with new colors.
+//
+// Handles two states:
+//   - First promotion: Prompt is still "> ", Value = ":prefix query" → strips prefix from Value
+//   - Re-render (e.g. SetTheme): Prompt already has the tag, Value = "query" → preserved as-is
+func (o *SearchOverlay) promoteToPromptTag() {
+	var query string
+	if o.input.Prompt == "> " {
+		// First promotion: Value still contains the full ":prefix query".
+		// Extract the query portion after the locked prefix.
+		raw := o.input.Value()
+		if len(raw) > len(o.lockedPrefix) {
+			query = strings.TrimSpace(raw[len(o.lockedPrefix):])
 		}
+		// If raw == lockedPrefix (no space + query yet), query stays "".
+	} else {
+		// Already promoted: Value is already the clean query.
+		query = strings.TrimSpace(o.input.Value())
 	}
 
-	if len(matches) == 1 {
-		// Unique match — insert completed prefix with trailing space and re-parse.
-		o.input.SetValue(matches[0] + " ")
-		o.input.CursorEnd()
-		o.parsePrefix()
+	// Style the prefix as a tag in the Prompt.
+	o.input.Prompt = o.buildPromptTag(o.lockedPrefix)
+
+	// Value now holds only the clean query.
+	o.input.SetValue(query)
+	o.input.CursorEnd()
+}
+
+// demoteFromPromptTag moves the Prompt tag back into the input Value so the user can
+// edit the prefix. Called when the user presses Backspace at cursor position 0 while
+// a prefix is locked.
+func (o *SearchOverlay) demoteFromPromptTag() {
+	// Reconstruct the full input with prefix + space + current query.
+	query := o.input.Value()
+	o.input.Prompt = "> " // reset to default prompt
+	o.input.SetValue(o.lockedPrefix + " " + query)
+	o.input.CursorEnd()
+
+	// Reset prefix state — user is now editing the full input freely.
+	o.lockedPrefix = ""
+	o.prefixState = PrefixNone
+	// NOTE: We intentionally do NOT call parsePrefix() here. The restored value
+	// contains ":prefix query" which would re-lock immediately. Instead we let the
+	// next keypress (typically another Backspace to remove the space) drive parsePrefix.
+}
+
+// syncInputToTab updates the Prompt tag and prefix state to match the newly-selected tab.
+// Called from cycleTabForward() and cycleTabBackward() after advancing o.activeTab.
+// Preserves the clean query across tab switches.
+func (o *SearchOverlay) syncInputToTab() {
+	// Get the clean query so we can preserve it across the tab switch.
+	query := o.cleanQuery()
+
+	if o.activeTab == TabAll {
+		// Strip the prefix tag — restore default prompt.
+		o.input.Prompt = "> "
+		o.input.SetValue(query)
+		o.lockedPrefix = ""
+		o.prefixState = PrefixNone
+	} else if prefix, ok := tabToPrefixMap[o.activeTab]; ok {
+		// Set the prefix tag in the Prompt.
+		o.lockedPrefix = prefix
+		o.prefixState = PrefixLocked
+		o.input.Prompt = o.buildPromptTag(prefix)
+		o.input.SetValue(query)
 	}
-	// Zero or multiple matches — do nothing.
-	return o, nil
+	o.input.CursorEnd()
 }
 
 // --- Exported accessors for tests ---
@@ -185,4 +327,10 @@ func (o *SearchOverlay) ActiveAPITypes() []string {
 // Exported for tests.
 func (o *SearchOverlay) RenderPrefixHints(width int) string {
 	return o.renderPrefixHints(width)
+}
+
+// PromptTag returns the current textinput Prompt string.
+// Exported for tests that verify Prompt-based prefix tag behavior.
+func (o *SearchOverlay) PromptTag() string {
+	return o.input.Prompt
 }
