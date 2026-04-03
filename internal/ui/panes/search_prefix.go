@@ -254,6 +254,10 @@ func (o *SearchOverlay) promoteToPromptTag() {
 	// Value now holds only the clean query.
 	o.input.SetValue(query)
 	o.input.CursorEnd()
+
+	// Replace the cycling placeholder — the prefix tag makes prefix hints redundant
+	// and prevents the placeholder from flickering behind a locked prefix.
+	o.input.Placeholder = "search..."
 }
 
 // demoteFromPromptTag moves the Prompt tag back into the input Value so the user can
@@ -272,6 +276,10 @@ func (o *SearchOverlay) demoteFromPromptTag() {
 	// NOTE: We intentionally do NOT call parsePrefix() here. The restored value
 	// contains ":prefix query" which would re-lock immediately. Instead we let the
 	// next keypress (typically another Backspace to remove the space) drive parsePrefix.
+
+	// Restore the cycling placeholder — the prefix tag is gone so the animated hints
+	// should resume when the input is cleared.
+	o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
 }
 
 // syncInputToTab updates the Prompt tag and prefix state to match the newly-selected tab.
@@ -282,17 +290,21 @@ func (o *SearchOverlay) syncInputToTab() {
 	query := o.cleanQuery()
 
 	if o.activeTab == TabAll {
-		// Strip the prefix tag — restore default prompt.
+		// Strip the prefix tag — restore default prompt and cycling placeholder.
 		o.input.Prompt = "> "
 		o.input.SetValue(query)
 		o.lockedPrefix = ""
 		o.prefixState = PrefixNone
+		// Restore cycling placeholder — we're back to normal input mode.
+		o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
 	} else if prefix, ok := tabToPrefixMap[o.activeTab]; ok {
 		// Set the prefix tag in the Prompt.
 		o.lockedPrefix = prefix
 		o.prefixState = PrefixLocked
 		o.input.Prompt = o.buildPromptTag(prefix)
 		o.input.SetValue(query)
+		// Replace cycling placeholder — the prefix tag makes prefix hints redundant.
+		o.input.Placeholder = "search..."
 	}
 	o.input.CursorEnd()
 }

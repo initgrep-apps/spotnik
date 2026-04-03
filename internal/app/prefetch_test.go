@@ -312,7 +312,7 @@ func TestSearchPageLoadedMsg_StaleQueryDiscarded_NoBatchAccumulation(t *testing.
 	m, cmd := a.Update(panes.SearchPageLoadedMsg{
 		Query:   "old",
 		Offset:  0,
-		Results: &panes.SearchResultData{Tracks: []panes.SearchTrackItem{{URI: "t1"}}},
+		Results: &panes.SearchResultData{Tracks: []domain.Track{{URI: "t1"}}},
 	})
 	a = m.(*app.App)
 
@@ -327,8 +327,8 @@ func TestSearchPageLoadedMsg_FreshResultsAppended(t *testing.T) {
 	a := app.New(cfg, app.AppOptions{})
 	a.Store().SetSearchQuery("jazz")
 
-	tracks := []panes.SearchTrackItem{
-		{URI: "spotify:track:t1", Name: "Track 1", Artist: "Artist 1"},
+	tracks := []domain.Track{
+		{URI: "spotify:track:t1", Name: "Track 1", Artists: []domain.Artist{{Name: "Artist 1"}}},
 	}
 	m, _ := a.Update(panes.SearchPageLoadedMsg{
 		Query:  "jazz",

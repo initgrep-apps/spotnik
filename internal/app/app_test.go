@@ -679,8 +679,10 @@ func TestApp_EscClosesSearch(t *testing.T) {
 	assert.False(t, a.SearchOpen(), "SearchClosedMsg should close the overlay")
 }
 
-// TestApp_SearchPlayClosesOverlay verifies that a play command from search closes the overlay.
-func TestApp_SearchPlayClosesOverlay(t *testing.T) {
+// TestApp_SearchPlay_OverlayStaysOpen verifies that playing a track/context does NOT close
+// the search overlay — only Esc (SearchClosedMsg) closes it. This allows users to continue
+// browsing after playing a result.
+func TestApp_SearchPlay_OverlayStaysOpen(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -689,11 +691,20 @@ func TestApp_SearchPlayClosesOverlay(t *testing.T) {
 	a = model.(*app.App)
 	require.True(t, a.SearchOpen())
 
-	// Send a PlayTrackMsg (simulating Enter on a search result)
+	// PlayTrackMsg should NOT close the overlay.
 	model, _ = a.Update(panes.PlayTrackMsg{TrackURI: "spotify:track:t1"})
 	a = model.(*app.App)
+	assert.True(t, a.SearchOpen(), "PlayTrackMsg should not close the search overlay")
 
-	assert.False(t, a.SearchOpen(), "playing from search should close the overlay")
+	// PlayContextMsg should also NOT close the overlay.
+	model, _ = a.Update(panes.PlayContextMsg{ContextURI: "spotify:playlist:pl1"})
+	a = model.(*app.App)
+	assert.True(t, a.SearchOpen(), "PlayContextMsg should not close the search overlay")
+
+	// Only Esc (SearchClosedMsg) should close the overlay.
+	model, _ = a.Update(panes.SearchClosedMsg{})
+	a = model.(*app.App)
+	assert.False(t, a.SearchOpen(), "SearchClosedMsg should close the overlay")
 }
 
 // TestApp_BackgroundDimmed verifies the view contains faint styling hint when overlay open.
@@ -1909,13 +1920,13 @@ func TestApp_SearchPageLoadedMsg_StaleQueryDiscarded(t *testing.T) {
 
 	// Build a result message for the OLD query with non-empty data.
 	staleResults := &panes.SearchResultData{
-		Tracks:         []panes.SearchTrackItem{{URI: "spotify:track:stale", Name: "Stale Track", Artist: "Stale Artist"}},
+		Tracks:         []domain.Track{{URI: "spotify:track:stale", Name: "Stale Track"}},
 		TracksTotal:    1,
-		Artists:        []panes.SearchArtistItem{{URI: "spotify:artist:stale", Name: "Stale Artist"}},
+		Artists:        []domain.SearchArtist{{URI: "spotify:artist:stale", Name: "Stale Artist"}},
 		ArtistsTotal:   1,
-		Albums:         []panes.SearchAlbumItem{{URI: "spotify:album:stale", Name: "Stale Album"}},
+		Albums:         []domain.SearchAlbum{{URI: "spotify:album:stale", Name: "Stale Album"}},
 		AlbumsTotal:    1,
-		Playlists:      []panes.SearchPlaylistItem{{URI: "spotify:playlist:stale", Name: "Stale Playlist"}},
+		Playlists:      []domain.SearchPlaylist{{URI: "spotify:playlist:stale", Name: "Stale Playlist"}},
 		PlaylistsTotal: 1,
 	}
 	staleMsg := panes.SearchPageLoadedMsg{

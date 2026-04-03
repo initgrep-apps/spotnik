@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -318,53 +319,77 @@ func TestPlaylistsToListItems_NoDescription(t *testing.T) {
 	assert.NotContains(t, si.Subtitle, " · \n")
 }
 
-// --- Fallback conversion helpers ---
+// --- rebuildFromResults uses same converters as rebuildFromStore (rich path) ---
 
-func TestSearchTrackItemsToListItems(t *testing.T) {
-	tracks := []SearchTrackItem{
-		{URI: "spotify:track:t1", Name: "Track One", Artist: "Artist One"},
+// TestRebuildFromResults_DomainTypes verifies that SearchResultData (which now carries
+// domain types) produces the same rich SearchListItems as rebuildFromStore would produce.
+// This guards against regression where the fallback path strips metadata.
+func TestRebuildFromResults_DomainTypes(t *testing.T) {
+	// Build a SearchResultData with rich domain types.
+	results := &SearchResultData{
+		Tracks: []domain.Track{
+			{
+				URI:  "spotify:track:t1",
+				Name: "Track One",
+				Artists: []domain.Artist{
+					{Name: "Artist A"},
+					{Name: "Artist B"},
+				},
+				Album:      domain.Album{Name: "Album X"},
+				DurationMs: 220000, // 3:40
+				Explicit:   true,
+			},
+		},
+		Artists: []domain.SearchArtist{
+			{URI: "spotify:artist:a1", Name: "Artist One", Genres: []string{"rock", "indie"}, Followers: 12400},
+		},
+		Albums: []domain.SearchAlbum{
+			{URI: "spotify:album:al1", Name: "Album One", AlbumType: "album", TotalTracks: 13, ReleaseDate: "2021-03-15"},
+		},
+		Playlists: []domain.SearchPlaylist{
+			{URI: "spotify:playlist:pl1", Name: "Playlist One", Owner: domain.SimplePlaylistOwner{DisplayName: "bob"}, TrackCount: 40},
+		},
 	}
-	items := searchTrackItemsToListItems(tracks)
-	require.Len(t, items, 1)
-	si := items[0].(SearchListItem)
-	assert.Equal(t, "track", si.Category)
-	assert.Equal(t, "Track One", si.Name)
-	assert.Equal(t, "Artist One", si.ArtistNames)
-}
 
-func TestSearchArtistItemsToListItems(t *testing.T) {
-	artists := []SearchArtistItem{
-		{URI: "spotify:artist:a1", Name: "Artist One"},
-	}
-	items := searchArtistItemsToListItems(artists)
-	require.Len(t, items, 1)
-	si := items[0].(SearchListItem)
-	assert.Equal(t, "artist", si.Category)
-	assert.Equal(t, "Artist One", si.Name)
-}
+	// Populate a store and feed through SearchPageLoadedMsg so rebuildFromResults is exercised.
+	s := state.New()
+	o := NewSearchOverlay(s, theme.Load("black"))
+	o.SetSize(80, 40)
 
-func TestSearchAlbumItemsToListItems(t *testing.T) {
-	albums := []SearchAlbumItem{
-		{URI: "spotify:album:al1", Name: "Album One", Artist: "Artist One"},
-	}
-	items := searchAlbumItemsToListItems(albums)
-	require.Len(t, items, 1)
-	si := items[0].(SearchListItem)
-	assert.Equal(t, "album", si.Category)
-	assert.Equal(t, "Album One", si.Name)
-	assert.Equal(t, "Artist One", si.AlbumArtists)
-}
+	msg := SearchPageLoadedMsg{Results: results}
+	m, _ := o.Update(msg)
+	o = m.(*SearchOverlay)
 
-func TestSearchPlaylistItemsToListItems(t *testing.T) {
-	playlists := []SearchPlaylistItem{
-		{URI: "spotify:playlist:pl1", Name: "Playlist One", Owner: "bob"},
-	}
-	items := searchPlaylistItemsToListItems(playlists)
-	require.Len(t, items, 1)
-	si := items[0].(SearchListItem)
-	assert.Equal(t, "playlist", si.Category)
-	assert.Equal(t, "Playlist One", si.Name)
-	assert.Equal(t, "bob", si.Owner)
+	items := o.ResultListItems()
+	require.Len(t, items, 4, "should have one item per type in TabAll")
+
+	// Verify track item carries full metadata.
+	track := items[0].(SearchListItem)
+	assert.Equal(t, "track", track.Category)
+	assert.Equal(t, "Track One", track.Name)
+	assert.Equal(t, "Artist A, Artist B", track.ArtistNames, "all artist names should be present")
+	assert.Equal(t, "Album X", track.AlbumName)
+	assert.Equal(t, "3:40", track.Duration)
+	assert.True(t, track.Explicit, "explicit flag should be set")
+
+	// Verify artist item carries genres and followers.
+	artist := items[1].(SearchListItem)
+	assert.Equal(t, "artist", artist.Category)
+	assert.Equal(t, "Artist One", artist.Name)
+	assert.Equal(t, "rock, indie", artist.Genres)
+	assert.Contains(t, artist.Followers, "12")
+
+	// Verify album item carries track count.
+	album := items[2].(SearchListItem)
+	assert.Equal(t, "album", album.Category)
+	assert.Equal(t, "Album One", album.Name)
+	assert.Equal(t, "13 tracks", album.TrackCount)
+
+	// Verify playlist item carries owner.
+	playlist := items[3].(SearchListItem)
+	assert.Equal(t, "playlist", playlist.Category)
+	assert.Equal(t, "Playlist One", playlist.Name)
+	assert.Equal(t, "bob", playlist.Owner)
 }
 
 // --- Render method tests ---

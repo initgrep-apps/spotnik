@@ -917,11 +917,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.ClearSearchError()
 		// Append each type's items to the per-type TypePage in the Store.
+		// SearchResultData now carries domain types directly — no conversion needed.
 		if r := m.Results; r != nil {
-			a.store.AppendSearchTracks(convertSearchTrackItems(r.Tracks), r.TracksTotal)
-			a.store.AppendSearchArtists(convertSearchArtistItems(r.Artists), r.ArtistsTotal)
-			a.store.AppendSearchAlbums(convertSearchAlbumItems(r.Albums), r.AlbumsTotal)
-			a.store.AppendSearchPlaylists(convertSearchPlaylistItems(r.Playlists), r.PlaylistsTotal)
+			a.store.AppendSearchTracks(r.Tracks, r.TracksTotal)
+			a.store.AppendSearchArtists(r.Artists, r.ArtistsTotal)
+			a.store.AppendSearchAlbums(r.Albums, r.AlbumsTotal)
+			a.store.AppendSearchPlaylists(r.Playlists, r.PlaylistsTotal)
 		}
 		// Chain-through-Update: dispatch the next page if the batch is not yet complete.
 		// This replaces tea.Sequence — by chaining through Update, a 429 (RateLimitedMsg)
@@ -1304,18 +1305,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildPlaybackAPICmd(m.Action)
 
 	case panes.PlayContextMsg:
-		// Close search overlay when playing from search results.
-		if a.searchOpen {
-			a.searchOpen = false
-		}
+		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
 		return a, a.buildPlayContextCmd(m.ContextURI)
 
 	case panes.PlayTrackMsg:
-		// Close search overlay when playing from search results, clearing any
-		// in-flight search state so it doesn't pollute a subsequent session.
-		if a.searchOpen {
-			a, _ = a.closeSearch()
-		}
+		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
 		return a, a.buildPlayTrackCmd(m.TrackURI)
 
 	case panes.AddToQueueMsg:

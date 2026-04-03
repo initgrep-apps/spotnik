@@ -341,109 +341,24 @@ func (a *App) buildSearchPageCmd(query string, types []string, offset int) tea.C
 	}
 }
 
-// convertSearchResult converts *api.SearchResult (= *domain.SearchResult) to *panes.SearchResultData,
-// extracting only the fields the UI needs. This is the sole place where search
-// types cross the app/ui boundary. Total fields are populated from the API response
-// to enable HasMore pagination checks in the Store.
+// convertSearchResult converts *api.SearchResult to *panes.SearchResultData.
+// Domain slices are passed through directly — no field-picking — so all rich
+// metadata (artists, duration, explicit, genres, followers, etc.) is preserved.
+// Total fields are populated from the API response to enable HasMore pagination checks.
 func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
 	if r == nil {
 		return nil
 	}
-
-	data := &panes.SearchResultData{
+	return &panes.SearchResultData{
+		Tracks:         r.Tracks.Items,
 		TracksTotal:    r.Tracks.Total,
+		Artists:        r.Artists.Items,
 		ArtistsTotal:   r.Artists.Total,
+		Albums:         r.Albums.Items,
 		AlbumsTotal:    r.Albums.Total,
+		Playlists:      r.Playlists.Items,
 		PlaylistsTotal: r.Playlists.Total,
 	}
-
-	for _, t := range r.Tracks.Items {
-		item := panes.SearchTrackItem{
-			URI:  t.URI,
-			Name: t.Name,
-		}
-		if len(t.Artists) > 0 {
-			item.Artist = t.Artists[0].Name
-		}
-		data.Tracks = append(data.Tracks, item)
-	}
-
-	for _, a := range r.Artists.Items {
-		data.Artists = append(data.Artists, panes.SearchArtistItem{
-			URI:  a.URI,
-			Name: a.Name,
-		})
-	}
-
-	for _, a := range r.Albums.Items {
-		item := panes.SearchAlbumItem{
-			URI:  a.URI,
-			Name: a.Name,
-		}
-		if len(a.Artists) > 0 {
-			item.Artist = a.Artists[0].Name
-		}
-		data.Albums = append(data.Albums, item)
-	}
-
-	for _, p := range r.Playlists.Items {
-		data.Playlists = append(data.Playlists, panes.SearchPlaylistItem{
-			URI:   p.URI,
-			Name:  p.Name,
-			Owner: p.Owner.DisplayName,
-		})
-	}
-
-	return data
-}
-
-// convertSearchTrackItems converts a slice of panes.SearchTrackItem to domain.Track
-// for storage in the per-type TypePage. Only URI and Name are available from SearchTrackItem.
-func convertSearchTrackItems(items []panes.SearchTrackItem) []domain.Track {
-	tracks := make([]domain.Track, 0, len(items))
-	for _, item := range items {
-		tracks = append(tracks, domain.Track{
-			URI:  item.URI,
-			Name: item.Name,
-		})
-	}
-	return tracks
-}
-
-// convertSearchArtistItems converts a slice of panes.SearchArtistItem to domain.SearchArtist.
-func convertSearchArtistItems(items []panes.SearchArtistItem) []domain.SearchArtist {
-	artists := make([]domain.SearchArtist, 0, len(items))
-	for _, item := range items {
-		artists = append(artists, domain.SearchArtist{
-			URI:  item.URI,
-			Name: item.Name,
-		})
-	}
-	return artists
-}
-
-// convertSearchAlbumItems converts a slice of panes.SearchAlbumItem to domain.SearchAlbum.
-func convertSearchAlbumItems(items []panes.SearchAlbumItem) []domain.SearchAlbum {
-	albums := make([]domain.SearchAlbum, 0, len(items))
-	for _, item := range items {
-		albums = append(albums, domain.SearchAlbum{
-			URI:  item.URI,
-			Name: item.Name,
-		})
-	}
-	return albums
-}
-
-// convertSearchPlaylistItems converts a slice of panes.SearchPlaylistItem to domain.SearchPlaylist.
-func convertSearchPlaylistItems(items []panes.SearchPlaylistItem) []domain.SearchPlaylist {
-	playlists := make([]domain.SearchPlaylist, 0, len(items))
-	for _, item := range items {
-		playlists = append(playlists, domain.SearchPlaylist{
-			URI:  item.URI,
-			Name: item.Name,
-		})
-	}
-	return playlists
 }
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices
