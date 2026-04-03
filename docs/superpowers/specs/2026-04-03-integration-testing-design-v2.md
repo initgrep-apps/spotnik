@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-03
 **Status:** Approved
-**Supersedes:** `2026-04-02-integration-testing-design.md` (research document, retained as reference)
+**Supersedes:** `2026-04-02-integration-testing-design.md` (removed)
 **Scope:** Testing architecture, tool decisions, agent skills, and retroactive test roadmap
 
 ---
@@ -24,49 +24,9 @@ Spotnik has 77 test files with 1,074+ test functions and 80%+ coverage. All test
 
 ---
 
-## 2. Research Summary
+## 2. Testing Architecture
 
-Extensive research was conducted across the Go ecosystem, Bubble Tea ecosystem, and cross-framework TUI testing patterns (Textual/Python, Ratatui/Rust, Ink/Node.js). Key findings:
-
-### What exists in Go
-
-| Tool | Type | Maturity | Relevance |
-|---|---|---|---|
-| `testing` + `testify` + `httptest` | Unit testing | Production | Already in use (77 files) |
-| `charmbracelet/x/exp/teatest` | Bubble Tea integration testing | Experimental | Primary integration tool |
-| `knz/catwalk` | Data-driven Bubble Tea component testing | Stable (Apache-2.0) | Primary component tool |
-| `charmbracelet/x/vt` | Virtual terminal emulator | Experimental | Screen parsing for assertions |
-| `charmbracelet/x/exp/golden` | Golden file comparison | Experimental | Snapshot assertions |
-| `charmbracelet/vhs` | Terminal recording | Production | Demos only, not assertions |
-| Ginkgo/GoConvey | BDD frameworks | Production | Too heavy, not idiomatic |
-| `creack/pty` | PTY automation | Production | Too low-level |
-
-### Cross-ecosystem insights
-
-- **Textual (Python)** — gold standard: headless execution + Pilot API + CSS-selector targeting + SVG snapshots
-- **Ratatui (Rust)** — TestBackend + insta snapshots for visual regression
-- **Lazygit** — custom integration framework: setup state → replay keystrokes → assert outcomes
-- **Charm team's vision** — `teatest` + `x/vt` + `x/xpty` combined, building blocks exist but no integrated framework yet
-
-### What the previous spec got right
-
-- Teatest is the right integration tool
-- VHS is for demos, not testing
-- Direct `Update()`/`View()` can't catch wiring bugs
-- The 60+ workflow catalog is comprehensive
-
-### What the previous spec missed
-
-- **`charmbracelet/x/vt`** — full virtual terminal emulator for structured screen assertions (not just raw ANSI string matching)
-- **`knz/catwalk`** — data-driven component testing via plain text scripts (not considered at all)
-- **Teatest has very low adoption** (~6 importers) — even Charm's own apps don't use it
-- **No custom harness needed** — catwalk + teatest + x/vt used directly, no maintenance burden
-
----
-
-## 3. Testing Architecture
-
-### 3.1 Three Test Layers
+### 2.1 Three Test Layers
 
 ```
         /  Teatest  \          few — full workflows through real event loop
@@ -77,15 +37,15 @@ Extensive research was conducted across the Go ecosystem, Bubble Tea ecosystem, 
    /--------------------------\
 ```
 
-x/vt sits alongside as a utility used by both catwalk and teatest for cleaner assertions and golden files.
+[x/vt](https://github.com/charmbracelet/x/tree/main/vt) sits alongside as a utility used by both [catwalk](https://github.com/knz/catwalk) and [teatest](https://github.com/charmbracelet/x/tree/main/exp/teatest) for cleaner assertions and golden files.
 
 | Layer | Tool | What It Proves | Speed | Volume |
 |---|---|---|---|---|
-| **Unit** (existing) | `testing` + `testify` + `httptest` | Functions return correct values. API parsing works. State getters/setters are correct. | Fast (ms) | ~1,074 tests (keep) |
-| **Component** (new) | `catwalk` + `x/vt` | Each pane's keybindings work. Filter activates. Content renders. Scroll works. A single pane does what it claims. | Fast (ms) | Many — one script per pane per feature |
-| **Integration** (new) | `teatest` + `x/vt` | The full app wires together. Overlay routing works. Cross-pane effects happen. Command chains fire through the real event loop. | Medium (100ms-3s) | Few — one per critical workflow |
+| **Unit** (existing) | [`testing`](https://pkg.go.dev/testing) + [`testify`](https://github.com/stretchr/testify) + [`httptest`](https://pkg.go.dev/net/http/httptest) | Functions return correct values. API parsing works. State getters/setters are correct. | Fast (ms) | ~1,074 tests (keep) |
+| **Component** (new) | [`catwalk`](https://github.com/knz/catwalk) + [`x/vt`](https://github.com/charmbracelet/x/tree/main/vt) | Each pane's keybindings work. Filter activates. Content renders. Scroll works. A single pane does what it claims. | Fast (ms) | Many — one script per pane per feature |
+| **Integration** (new) | [`teatest`](https://github.com/charmbracelet/x/tree/main/exp/teatest) + [`x/vt`](https://github.com/charmbracelet/x/tree/main/vt) | The full app wires together. Overlay routing works. Cross-pane effects happen. Command chains fire through the real event loop. | Medium (100ms-3s) | Few — one per critical workflow |
 
-### 3.2 Layer Relationships
+### 2.2 Layer Relationships
 
 **Rule:** If component tests fail, don't run integration tests. Fix the pane first.
 
@@ -95,7 +55,7 @@ x/vt sits alongside as a utility used by both catwalk and teatest for cleaner as
 - **Integration tests (teatest)** = drive the full car — turn the wheel, does the car actually turn?
 - **x/vt** = the dashboard camera — tells you what the driver actually sees
 
-### 3.3 Execution Order (Always)
+### 2.3 Execution Order (Always)
 
 ```
 1. make test            ← unit tests pass first
@@ -106,9 +66,9 @@ x/vt sits alongside as a utility used by both catwalk and teatest for cleaner as
 
 ---
 
-## 4. Tool Decisions
+## 3. Tool Decisions
 
-### 4.1 New Test-Only Dependencies
+### 3.1 New Test-Only Dependencies
 
 | Package | Import Path | Purpose | Production Impact |
 |---|---|---|---|
@@ -116,7 +76,7 @@ x/vt sits alongside as a utility used by both catwalk and teatest for cleaner as
 | **catwalk** | `github.com/knz/catwalk` | Data-driven component test runner | Zero — test files only |
 | **x/vt** | `github.com/charmbracelet/x/vt` | Virtual terminal emulator for screen parsing | Zero — test files only |
 
-### 4.2 What Each Tool Does
+### 3.2 What Each Tool Does
 
 **Catwalk** — You write a plain text file that says "send these inputs, expect this output." The test runner feeds inputs to your model's `Update()` and compares `View()` output against expected text. Run with `-rewrite` to regenerate expectations.
 
@@ -124,7 +84,7 @@ x/vt sits alongside as a utility used by both catwalk and teatest for cleaner as
 
 **x/vt** — Not a testing tool itself. It's a screen parser. Both teatest and catwalk produce ANSI output. x/vt takes that raw output and gives you "here's what the user actually sees on screen" — plain text, cell positions, colors. Enables structured assertions instead of raw ANSI string matching.
 
-### 4.3 Build Tag Separation
+### 3.3 Build Tag Separation
 
 | Tag | What Runs | Command |
 |---|---|---|
@@ -133,7 +93,7 @@ x/vt sits alongside as a utility used by both catwalk and teatest for cleaner as
 | `integration` | Teatest integration tests | `go test -tags=integration ./...` |
 | `component,integration` | Both new layers | `go test -tags=component,integration ./...` |
 
-### 4.4 Makefile Additions
+### 3.4 Makefile Additions
 
 ```makefile
 test-component:    go test -tags=component ./... -race -count=1
@@ -142,7 +102,7 @@ test-all:          go test -tags=component,integration ./... -race -count=1
 ci:                fmt-check tidy-check lint test-coverage test-component test-integration build
 ```
 
-### 4.5 File Naming Conventions
+### 3.5 File Naming Conventions
 
 | Layer | File Pattern | Build Tag |
 |---|---|---|
@@ -154,7 +114,7 @@ ci:                fmt-check tidy-check lint test-coverage test-component test-i
 
 ---
 
-## 5. Shared Test Utilities Package
+## 4. Shared Test Utilities Package
 
 **Problem:** 77 test files with duplicated helpers — `errorServer()`, `successServer()`, `testTheme()`, `sendKey()` scattered everywhere.
 
@@ -172,9 +132,9 @@ This replaces per-file helper duplication. Existing unit tests can optionally ad
 
 ---
 
-## 6. Component Testing with Catwalk
+## 5. Component Testing with Catwalk
 
-### 6.1 Directory Structure
+### 5.1 Directory Structure
 
 ```
 testdata/components/
@@ -229,7 +189,7 @@ testdata/components/
     └── scroll.txt
 ```
 
-### 6.2 Script Format Example
+### 5.2 Script Format Example
 
 File: `testdata/components/toptracks/time_range_cycle.txt`
 ```
@@ -268,7 +228,7 @@ key t
                                     4wk
 ```
 
-### 6.3 Go Driver File (Minimal Boilerplate per Pane)
+### 5.3 Go Driver File (Minimal Boilerplate per Pane)
 
 ```go
 //go:build component
@@ -281,7 +241,7 @@ func TestTopTracksComponent(t *testing.T) {
 }
 ```
 
-### 6.4 What Component Tests Catch
+### 5.4 What Component Tests Catch
 
 - Keybinding `f` actually activates the filter (not just shown in help bar)
 - Typing in filter actually narrows results
@@ -290,7 +250,7 @@ func TestTopTracksComponent(t *testing.T) {
 - Enter plays the selected item
 - Rendered output matches what users should see
 
-### 6.5 What Component Tests Do NOT Catch
+### 5.5 What Component Tests Do NOT Catch
 
 - Whether pressing `f` in the queue pane reaches the queue pane when the search overlay is open (that's routing — integration layer)
 - Whether filtered results come from the real API (store is pre-populated)
@@ -298,9 +258,9 @@ func TestTopTracksComponent(t *testing.T) {
 
 ---
 
-## 7. Integration Testing with Teatest
+## 6. Integration Testing with Teatest
 
-### 7.1 File Organization
+### 6.1 File Organization
 
 ```
 internal/app/
@@ -314,7 +274,7 @@ internal/app/
 └── integration_golden_test.go       — visual snapshots via x/vt
 ```
 
-### 7.2 Example: Search → Play → Now-Playing Updates
+### 6.2 Example: Search → Play → Now-Playing Updates
 
 ```go
 //go:build integration
@@ -350,7 +310,7 @@ func TestSearchPlayUpdatesNowPlaying(t *testing.T) {
 }
 ```
 
-### 7.3 Example: Overlay Captures Input
+### 6.3 Example: Overlay Captures Input
 
 ```go
 //go:build integration
@@ -376,7 +336,7 @@ func TestOverlayBlocksQuit(t *testing.T) {
 }
 ```
 
-### 7.4 Example: Golden File with x/vt
+### 6.4 Example: Golden File with x/vt
 
 ```go
 //go:build integration
@@ -403,7 +363,7 @@ func TestGridDefaultLayoutGolden(t *testing.T) {
 }
 ```
 
-### 7.5 What Integration Tests Catch That Component Tests Miss
+### 6.5 What Integration Tests Catch That Component Tests Miss
 
 | Scenario | Why Catwalk Can't Catch It |
 |---|---|
@@ -416,7 +376,7 @@ func TestGridDefaultLayoutGolden(t *testing.T) {
 
 ---
 
-## 8. Decision Rules — When to Use What
+## 7. Decision Rules — When to Use What
 
 ```
 Is it a new function in api/, state/, config/, domain/?
@@ -438,7 +398,7 @@ Does it involve visual correctness (layout, colors, golden file)?
   → Golden file test (x/vt + golden, can be either layer)
 ```
 
-### 8.1 For Story Implementation
+### 7.1 For Story Implementation
 
 Every story in `docs/spec/features/` has a `## Tests` section. When implementing a story:
 
@@ -447,25 +407,25 @@ Every story in `docs/spec/features/` has a `## Tests` section. When implementing
 3. **Write integration tests** only if the story involves cross-pane effects, overlay routing, or command chains
 4. **Update golden files** if the story changes visible layout (`go test -tags=integration -update`)
 
-### 8.2 What Does NOT Need New Tests
+### 7.2 What Does NOT Need New Tests
 
 - Refactors that don't change behavior (existing tests cover it)
 - Documentation changes
 - Config key additions (unit test the config loader, not the pane)
 
-### 8.3 Retroactive Coverage
+### 7.3 Retroactive Coverage
 
 All 17 completed features currently have unit tests only. When the integration/component testing infrastructure is set up (Story S1), subsequent stories will systematically add catwalk and teatest tests to every existing feature. Each feature gets its own story. This is not optional cleanup — it is the primary deliverable of this testing initiative. Existing unit tests stay untouched. The new layers are additive.
 
 ---
 
-## 9. Skills & Agents for Test Writing
+## 8. Skills & Agents for Test Writing
 
-### 9.1 Why Skills, Not Agents
+### 8.1 Why Skills, Not Agents
 
 The feature-implementer agent already has the full feature context (story spec, implementation code, pane behavior). A skill teaches it the testing patterns. A separate agent would duplicate context and produce disconnected tests.
 
-### 9.2 Skill: `component-test`
+### 8.2 Skill: `component-test`
 
 **Triggers when:** Agent is implementing a pane feature, keybinding, filter, or rendering change.
 
@@ -477,7 +437,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 - Reminder to pre-populate store with test data in the driver
 - Command: `make test-component` and `-rewrite` for intentional output changes
 
-### 9.3 Skill: `integration-test`
+### 8.3 Skill: `integration-test`
 
 **Triggers when:** Agent is implementing overlay routing, cross-pane workflows, command chains, error recovery flows, or golden file updates.
 
@@ -490,7 +450,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 - Build tag reminder: `//go:build integration`
 - Command: `make test-integration`
 
-### 9.4 Feature-Implementer Workflow (Updated)
+### 8.4 Feature-Implementer Workflow (Updated)
 
 ```
 1. Read story spec → understand tasks and tests needed
@@ -504,9 +464,9 @@ The feature-implementer agent already has the full feature context (story spec, 
 
 ---
 
-## 10. Existing Test Inventory
+## 9. Existing Test Inventory
 
-### 10.1 Current State (Unchanged by This Design)
+### 9.1 Current State (Unchanged by This Design)
 
 | Package | Test Files | Test Functions | Approach |
 |---|---|---|---|
@@ -524,13 +484,13 @@ The feature-implementer agent already has the full feature context (story spec, 
 | `cmd/` | 1 | 24 | CLI initialization, flag parsing |
 | **Total** | **77** | **1,074+** | |
 
-### 10.2 Test Data
+### 9.2 Test Data
 
 - 16 JSON fixture files in `testdata/fixtures/`
 - No golden files yet (will be added)
 - No component test scripts yet (will be added)
 
-### 10.3 Existing Patterns to Preserve
+### 9.3 Existing Patterns to Preserve
 
 - Table-driven tests with `t.Run()` subtests
 - `TestMain` for ANSI color profile setup (`lipgloss.SetColorProfile(termenv.TrueColor)`)
@@ -540,9 +500,9 @@ The feature-implementer agent already has the full feature context (story spec, 
 
 ---
 
-## 11. Testable Workflows Catalog
+## 10. Testable Workflows Catalog
 
-### 11.1 Search
+### 10.1 Search
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -557,7 +517,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | S-9 | Fewer results than page size → no further prefetch | Component | Medium |
 | S-10 | Esc → overlay closes → focus returns to previous pane | Integration | High |
 
-### 11.2 Playback (Now Playing)
+### 10.2 Playback (Now Playing)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -570,7 +530,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | P-7 | V → visualizer pattern cycles → preference persisted | Integration | Low |
 | P-8 | Pause → polling widens → resume → polling narrows | Integration | Medium |
 
-### 11.3 Queue
+### 10.3 Queue
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -579,7 +539,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | Q-3 | Enter → track plays | Component | Medium |
 | Q-4 | Play from search → queue reflects new tracks on refresh | Integration | High |
 
-### 11.4 Playlists
+### 10.4 Playlists
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -591,7 +551,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | PL-6 | F → filter playlists → results narrow | Component | Medium |
 | PL-7 | Rapid reorders (Shift+Up 3x) → all applied in correct order | Integration | Medium |
 
-### 11.5 Devices
+### 10.5 Devices
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -601,7 +561,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | D-4 | Esc → overlay closes → focus returns | Integration | Medium |
 | D-5 | Open past TTL → close → reopen → fresh fetch | Integration | Low |
 
-### 11.6 Library (Liked Songs, Albums, Recently Played)
+### 10.6 Library (Liked Songs, Albums, Recently Played)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -611,7 +571,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | L-4 | I on Liked Songs → like/unlike toggles | Component | Medium |
 | L-5 | Like from one pane → Liked Songs reflects on refresh | Integration | Medium |
 
-### 11.7 Stats (Top Tracks, Top Artists)
+### 10.7 Stats (Top Tracks, Top Artists)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -620,7 +580,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | ST-3 | Switch range → cached → switch back → cached shown | Integration | Medium |
 | ST-4 | Top Tracks and Top Artists cycle independently | Integration | Low |
 
-### 11.8 Overlay & Focus Routing
+### 10.8 Overlay & Focus Routing
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -631,7 +591,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | F-5 | Filter active → globals blocked → Esc → globals restored | Integration | High |
 | F-6 | Only one overlay at a time | Integration | Medium |
 
-### 11.9 Layout & Navigation
+### 10.9 Layout & Navigation
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -641,7 +601,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | N-4 | 0 → toggle Page A/B | Integration | Medium |
 | N-5 | Terminal resize → all panes adjust | Integration | Medium |
 
-### 11.10 Error Recovery
+### 10.10 Error Recovery
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -653,7 +613,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | E-6 | Action during backoff → queued or rejected with feedback | Integration | Medium |
 | E-7 | 5+ consecutive failures → connection warning toast | Integration | Low |
 
-### 11.11 Preferences
+### 10.11 Preferences
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -661,7 +621,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | PR-2 | Change theme + preset rapidly → single flush | Integration | Medium |
 | PR-3 | Restart → theme, preset, visualizer restored | Integration | Medium |
 
-### 11.12 Startup & Auth
+### 10.12 Startup & Auth
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -670,7 +630,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | A-3 | Expired token → auto-refresh → grid loads | Integration | Medium |
 | A-4 | Terminal too small → message → resize → grid renders | Integration | Low |
 
-### 11.13 Cross-Feature
+### 10.13 Cross-Feature
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -680,7 +640,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | X-4 | Like track → search reflects updated state | Integration | Low |
 | X-5 | Play from any pane → now-playing always updates | Integration | Medium |
 
-### 11.14 Golden Files / Visual Regression
+### 10.14 Golden Files / Visual Regression
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -691,7 +651,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | G-5 | Each layout preset → matches golden | Integration | Low |
 | G-6 | Various terminal sizes → matches golden | Integration | Low |
 
-### 11.15 Nerd Status (Page B)
+### 10.15 Nerd Status (Page B)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -702,9 +662,9 @@ The feature-implementer agent already has the full feature context (story spec, 
 
 ---
 
-## 12. Feature Test Roadmap
+## 11. Feature Test Roadmap
 
-### 12.1 Story Sequencing
+### 11.1 Story Sequencing
 
 | Story | Scope | Depends On |
 |---|---|---|
@@ -723,11 +683,11 @@ The feature-implementer agent already has the full feature context (story spec, 
 | **S13: Golden Files** | Golden: G-1, G-3 through G-6. | S1, S2-S9 |
 | **S14: Nerd Status** | Catwalk: NB-2, NB-3. Integration: NB-1, NB-4. | S1 |
 
-### 12.2 Priority Order
+### 11.2 Priority Order
 
 **S1** (infrastructure) → **S4** (search, most complex) → **S10** (overlay routing, biggest bug source) → **S2** (playback, most used) → then S3-S14 in any order.
 
-### 12.3 Each Story Produces
+### 11.3 Each Story Produces
 
 - Catwalk scripts in `testdata/components/`
 - Integration tests in `internal/app/integration_*_test.go`
@@ -736,9 +696,9 @@ The feature-implementer agent already has the full feature context (story spec, 
 
 ---
 
-## 13. Pane & Keybinding Reference
+## 12. Pane & Keybinding Reference
 
-### 13.1 Page A — Music Panes
+### 12.1 Page A — Music Panes
 
 | # | Pane | Toggle | Key Features | Filter | Scroll |
 |---|---|---|---|---|---|
@@ -751,14 +711,14 @@ The feature-implementer agent already has the full feature context (story spec, 
 | 7 | Top Tracks | `7` | f=filter, t=time range, Enter=play | Yes | Yes |
 | 8 | Top Artists | `8` | f=filter, t=time range, Enter=play artist | Yes | Yes |
 
-### 13.2 Page B — Nerd Status
+### 12.2 Page B — Nerd Status
 
 | Pane | Key Features | Filter | Scroll |
 |---|---|---|---|
 | Request Flow | Read-only visualization, 200ms animation tick | No | No |
 | Network Log | f=filter, j/k=scroll, 200-entry ring buffer | Yes | Yes |
 
-### 13.3 Overlays
+### 12.3 Overlays
 
 | Overlay | Open | Close | Navigation | Action |
 |---|---|---|---|---|
@@ -766,7 +726,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 | Devices | `d` | Esc | j/k=list | Enter=transfer |
 | Themes | `t` | Esc | j/k=list | Enter=apply |
 
-### 13.4 Global Keys
+### 12.4 Global Keys
 
 | Key | Action | Scope |
 |---|---|---|
@@ -779,7 +739,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 
 ---
 
-## 14. CI Integration
+## 13. CI Integration
 
 - `make ci` updated to: `fmt-check tidy-check lint test-coverage test-component test-integration build`
 - Integration tests tagged with `//go:build integration`
