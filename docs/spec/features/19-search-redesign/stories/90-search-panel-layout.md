@@ -1,7 +1,7 @@
 ---
 title: "Search Panel Layout: Flush Panels, Interior Hints, Per-Panel Border Colors"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

@@ -764,12 +764,14 @@ func TestSearchOverlay_View_ResultsPanelTitle(t *testing.T) {
 	assert.Contains(t, view, "Results", "Panel 2 border should have 'Results' title")
 }
 
-// TestSearchOverlay_View_KeysPanelTitle verifies Panel 3 has "Keys" title.
-func TestSearchOverlay_View_KeysPanelTitle(t *testing.T) {
+// TestSearchOverlay_View_KeysPanelTitle_NoTitle verifies Panel 3 has no title label.
+// Story 90: Keys panel title removed — keybinding content is self-explanatory.
+func TestSearchOverlay_View_KeysPanelTitle_NoTitle(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
 	view := o.View()
-	assert.Contains(t, view, "Keys", "Panel 3 border should have 'Keys' title")
+	// "Keys" label should NOT appear in the border — it was removed in Story 90.
+	assert.NotContains(t, view, "─ Keys", "Panel 3 border should NOT have 'Keys' title label")
 }
 
 // TestSearchOverlay_View_TabBarPresent verifies tab labels appear in the results panel.
@@ -1325,6 +1327,262 @@ func TestSearchOverlay_EmptyQueryAfterPrefix_NoSearch(t *testing.T) {
 	updated := model.(*panes.SearchOverlay)
 	_ = updated
 	assert.Nil(t, cmd, "debounce on empty clean query should not fire a search request")
+}
+
+// --- Story 90: Flush panels, interior hints, per-panel border colors ---
+
+// TestSearchOverlay_View_FlushPanels verifies no blank line exists between consecutive panel borders.
+// Between the first two panels and the second and third panel, the ╰ of one panel must be
+// directly adjacent to the ╭ of the next (no empty lines between).
+// Lines may contain ANSI escape codes so we use strings.Contains for matching.
+func TestSearchOverlay_View_FlushPanels(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	lines := strings.Split(view, "\n")
+
+	// Collect indices of all ╭ lines (panel starts) and ╰ lines (panel ends).
+	var startLines, endLines []int
+	for i, line := range lines {
+		if strings.Contains(line, "╭") {
+			startLines = append(startLines, i)
+		}
+		if strings.Contains(line, "╰") {
+			endLines = append(endLines, i)
+		}
+	}
+	require.Len(t, startLines, 3, "should have 3 panel top borders")
+	require.Len(t, endLines, 3, "should have 3 panel bottom borders")
+
+	// For each consecutive pair of panels, the end of panel N must be immediately
+	// followed by the start of panel N+1.
+	for i := 0; i < 2; i++ {
+		endLine := endLines[i]
+		nextStartLine := startLines[i+1]
+		assert.Equal(t, endLine+1, nextStartLine,
+			"panel %d end (line %d) must be immediately followed by panel %d start (line %d), got %d",
+			i+1, endLine, i+2, nextStartLine, nextStartLine,
+		)
+	}
+}
+
+// TestSearchOverlay_View_ThreePanelBorderCount verifies exactly 3 panel start borders.
+// Lines may contain ANSI escape codes so we use strings.Contains for matching.
+func TestSearchOverlay_View_ThreePanelBorderCount(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	lines := strings.Split(view, "\n")
+
+	// Count lines that contain ╭ (panel top borders).
+	count := 0
+	for _, line := range lines {
+		if strings.Contains(line, "╭") {
+			count++
+		}
+	}
+	assert.Equal(t, 3, count, "view should have exactly 3 panel top borders (╭)")
+}
+
+// TestSearchOverlay_View_NoBlankLineBetweenPanels verifies there is no blank line
+// between any two consecutive panel borders.
+func TestSearchOverlay_View_NoBlankLineBetweenPanels(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	view := o.View()
+	// There should be no empty line between the panels.
+	// We check that the ╰ of panel 1 is immediately followed by ╭ of panel 2.
+	assert.NotRegexp(t, `╰[^\n]*\n\s*\n[^\n]*╭`, view,
+		"no blank line should appear between panel end ╰ and next panel start ╭")
+}
+
+// TestSearchOverlay_ShowHintLine_EmptyInput returns true when input is empty.
+func TestSearchOverlay_ShowHintLine_EmptyInput(t *testing.T) {
+	o := newTestSearchOverlay()
+	assert.True(t, o.ShowHintLine(), "empty input should show hint line")
+}
+
+// TestSearchOverlay_ShowHintLine_PrefixTyping returns true during prefix typing.
+func TestSearchOverlay_ShowHintLine_PrefixTyping(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	// Type ":so" — no space yet = PrefixTyping.
+	o, _ = sendKey(t, o, ":")
+	o, _ = sendKey(t, o, "s")
+	o, _ = sendKey(t, o, "o")
+	require.Equal(t, panes.PrefixTyping, o.PrefixState())
+	assert.True(t, o.ShowHintLine(), "PrefixTyping should show hint line")
+}
+
+// TestSearchOverlay_ShowHintLine_PrefixLocked returns false when prefix is locked.
+func TestSearchOverlay_ShowHintLine_PrefixLocked(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	// Type ":songs " to lock the prefix.
+	for _, ch := range ":songs " {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	assert.False(t, o.ShowHintLine(), "PrefixLocked should not show hint line")
+}
+
+// TestSearchOverlay_ShowHintLine_NormalQuery returns false during normal query.
+func TestSearchOverlay_ShowHintLine_NormalQuery(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	// Type a regular query without prefix.
+	for _, ch := range "hello" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixNone, o.PrefixState())
+	assert.False(t, o.ShowHintLine(), "normal query should not show hint line")
+}
+
+// TestSearchOverlay_View_HintInsideSearchPanel verifies hint text appears inside
+// the Search panel border (between ╭─ Search and ╰─), not floating between panels.
+// Lines may contain ANSI escape codes so we use strings.Contains for all matching.
+func TestSearchOverlay_View_HintInsideSearchPanel(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	// Type ":so" to trigger PrefixTyping (hints visible).
+	o, _ = sendKey(t, o, ":")
+	o, _ = sendKey(t, o, "s")
+	o, _ = sendKey(t, o, "o")
+	require.Equal(t, panes.PrefixTyping, o.PrefixState())
+
+	view := o.View()
+	lines := strings.Split(view, "\n")
+
+	// Find the Search panel boundaries using strings.Contains (ANSI codes may precede ╭/╰).
+	searchStart := -1
+	searchEnd := -1
+	for i, line := range lines {
+		if strings.Contains(line, "╭") && strings.Contains(line, "Search") {
+			searchStart = i
+		}
+		if searchStart >= 0 && searchEnd < 0 && i > searchStart && strings.Contains(line, "╰") {
+			searchEnd = i
+			break
+		}
+	}
+	require.Greater(t, searchStart, -1, "Search panel top border not found in view")
+	require.Greater(t, searchEnd, -1, "Search panel bottom border not found in view")
+
+	// The hint text ":songs" should appear INSIDE the search panel boundaries.
+	hintFound := false
+	for i := searchStart + 1; i < searchEnd; i++ {
+		if strings.Contains(lines[i], ":songs") {
+			hintFound = true
+			break
+		}
+	}
+	assert.True(t, hintFound, "hint text ':songs' should appear inside the Search panel border (lines %d to %d)", searchStart, searchEnd)
+
+	// The hint text must NOT appear outside the search panel (between ╰ and the next ╭).
+	outsideHint := false
+	inGap := false
+	for i, line := range lines {
+		if i == searchEnd {
+			inGap = true
+		}
+		if inGap && strings.Contains(line, "╭") && i > searchEnd {
+			break // reached next panel — stop checking gap
+		}
+		if inGap && i > searchEnd && strings.Contains(line, ":songs") {
+			outsideHint = true
+		}
+	}
+	assert.False(t, outsideHint, "hint text ':songs' must NOT appear outside the Search panel border")
+}
+
+// TestSearchOverlay_View_SearchPanelHeight_WithHints verifies Search panel is 4 lines when hints visible.
+// Lines may contain ANSI escape codes so we use strings.Contains for matching.
+func TestSearchOverlay_View_SearchPanelHeight_WithHints(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	// Type ":so" to trigger PrefixTyping (hints visible).
+	o, _ = sendKey(t, o, ":")
+	o, _ = sendKey(t, o, "s")
+	require.Equal(t, panes.PrefixTyping, o.PrefixState())
+	require.True(t, o.ShowHintLine())
+
+	view := o.View()
+	lines := strings.Split(view, "\n")
+
+	// Find Search panel boundaries using strings.Contains.
+	searchStart := -1
+	searchEnd := -1
+	for i, line := range lines {
+		if strings.Contains(line, "╭") && strings.Contains(line, "Search") {
+			searchStart = i
+		}
+		if searchStart >= 0 && searchEnd < 0 && i > searchStart && strings.Contains(line, "╰") {
+			searchEnd = i
+			break
+		}
+	}
+	require.Greater(t, searchStart, -1, "Search panel top border not found")
+	require.Greater(t, searchEnd, -1, "Search panel bottom border not found")
+
+	panelHeight := searchEnd - searchStart + 1
+	assert.Equal(t, 4, panelHeight, "Search panel should be 4 lines tall when hints are visible (border top + input + hint + border bottom)")
+}
+
+// TestSearchOverlay_View_SearchPanelHeight_WithoutHints verifies Search panel is 3 lines when no hints.
+// Lines may contain ANSI escape codes so we use strings.Contains for matching.
+func TestSearchOverlay_View_SearchPanelHeight_WithoutHints(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	// Type a regular query — no hints.
+	for _, ch := range "hello" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixNone, o.PrefixState())
+	require.False(t, o.ShowHintLine())
+
+	view := o.View()
+	lines := strings.Split(view, "\n")
+
+	searchStart := -1
+	searchEnd := -1
+	for i, line := range lines {
+		if strings.Contains(line, "╭") && strings.Contains(line, "Search") {
+			searchStart = i
+		}
+		if searchStart >= 0 && searchEnd < 0 && i > searchStart && strings.Contains(line, "╰") {
+			searchEnd = i
+			break
+		}
+	}
+	require.Greater(t, searchStart, -1, "Search panel top border not found")
+	require.Greater(t, searchEnd, -1, "Search panel bottom border not found")
+
+	panelHeight := searchEnd - searchStart + 1
+	assert.Equal(t, 3, panelHeight, "Search panel should be 3 lines tall when no hints (border top + input + border bottom)")
+}
+
+// TestSearchOverlay_ResultsBorderColor_UsesSeekBar verifies Results panel uses SeekBar color token.
+func TestSearchOverlay_ResultsBorderColor_UsesSeekBar(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Verify the rendered border config uses SeekBar — accessible via the exported accessor.
+	th := theme.Load("black")
+	o2 := panes.NewSearchOverlayForTest(th)
+	assert.Equal(t, th.SeekBar(), o2.ResultsBorderAccentColor(),
+		"Results panel should use theme.SeekBar() as its AccentColor")
+	_ = o
+}
+
+// TestSearchOverlay_KeysBorderHasNoTitle verifies Keys panel has no title in its border config.
+func TestSearchOverlay_KeysBorderHasNoTitle(t *testing.T) {
+	o := newTestSearchOverlay()
+	th := theme.Load("black")
+	o2 := panes.NewSearchOverlayForTest(th)
+	assert.Equal(t, "", o2.KeysPanelTitle(),
+		"Keys panel should have empty Title in border config")
+	_ = o
 }
 
 // TestSearchOverlay_Resize_PropagatesListAndHelp verifies that SetSize correctly

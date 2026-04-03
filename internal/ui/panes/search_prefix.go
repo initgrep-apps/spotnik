@@ -94,6 +94,19 @@ func (o *SearchOverlay) activeAPITypes() []string {
 	return TabToAPITypes(o.activeTab)
 }
 
+// showHintLine reports whether the prefix hint row should be rendered inside the
+// Search panel. It returns true when the input is empty (show all prefixes as
+// placeholder guidance) or when the user is actively typing a prefix (PrefixTyping).
+// Returns false when a prefix is locked (compact mode) or a normal query is active.
+func (o *SearchOverlay) showHintLine() bool {
+	return o.input.Value() == "" || o.prefixState == PrefixTyping
+}
+
+// ShowHintLine is the exported accessor for showHintLine — used by tests.
+func (o *SearchOverlay) ShowHintLine() bool {
+	return o.showHintLine()
+}
+
 // renderPrefixHints renders inline autocomplete hints when the user is typing a prefix.
 // Returns an empty string when not in prefixTyping state.
 func (o *SearchOverlay) renderPrefixHints(width int) string {
