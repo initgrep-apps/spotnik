@@ -1,6 +1,6 @@
 ---
 title: "Search Redesign"
-status: in-progress
+status: done
 ---
 
 ## Description

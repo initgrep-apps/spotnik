@@ -1,7 +1,7 @@
 ---
 title: "Search Prefix UX: Animated Placeholder, Ghost Completion, Tag Highlight, Tab Sync"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
