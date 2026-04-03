@@ -627,9 +627,16 @@ func (a *App) openSearch() (*App, tea.Cmd) {
 	return a, cmd
 }
 
-// closeSearch closes the search overlay.
+// closeSearch closes the search overlay and clears any in-flight search state from
+// the store. Without this, in-flight search batches may continue executing and append
+// results to the store after the overlay is dismissed, which would pollute the next
+// search session. The staleness guard in driveSearchBatch handles most races, but
+// clearing state on close is the authoritative reset.
 func (a *App) closeSearch() (*App, tea.Cmd) {
 	a.searchOpen = false
+	a.store.SetSearchQuery("")
+	a.store.SetSearchLoading(false)
+	a.store.ClearSearchError()
 	return a, nil
 }
 

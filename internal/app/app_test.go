@@ -2716,3 +2716,27 @@ func TestApp_SearchRequestMsg_ClearsError(t *testing.T) {
 	assert.NoError(t, a.Store().SearchError(), "SearchRequestMsg should clear a pre-existing SearchError")
 	assert.NotNil(t, cmd, "SearchRequestMsg should still dispatch a search command")
 }
+
+// TestApp_SearchClosedMsg_ClearsInFlightState verifies that closing the search overlay
+// clears any in-flight search state from the store. This prevents stale in-flight
+// batches from leaking their results into a subsequent search session.
+func TestApp_SearchClosedMsg_ClearsInFlightState(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Simulate an in-flight search: query set and loading flag active.
+	a.Store().SetSearchQuery("blinding lights")
+	a.Store().SetSearchLoading(true)
+
+	require.Equal(t, "blinding lights", a.Store().SearchQuery(), "pre-condition: query should be set")
+	require.True(t, a.Store().SearchLoading(), "pre-condition: loading should be true")
+
+	// Close the search overlay via SearchClosedMsg.
+	m, _ := a.Update(panes.SearchClosedMsg{})
+	a = m.(*app.App)
+
+	assert.False(t, a.SearchOpen(), "SearchClosedMsg should close the overlay")
+	assert.Equal(t, "", a.Store().SearchQuery(), "closing search should clear the store query")
+	assert.False(t, a.Store().SearchLoading(), "closing search should clear the loading flag")
+	assert.NoError(t, a.Store().SearchError(), "closing search should clear any search error")
+}
