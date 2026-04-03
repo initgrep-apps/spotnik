@@ -343,7 +343,7 @@ func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 // --- Task 4.4: Result rendering tests ---
 
 // TestSearchOverlay_View_Results verifies list items are rendered with badge symbols.
-// After Story 84, section headers (TRACKS/ARTISTS/etc.) are replaced by badge symbols (♫/●/◆/☰).
+// After Story 84, section headers (TRACKS/ARTISTS/etc.) are replaced by badge symbols (♪/★/◎/▤).
 func TestSearchOverlay_View_Results(t *testing.T) {
 	o, _ := newTestSearchOverlayWithResults()
 	o.SetSize(80, 40)
@@ -351,7 +351,7 @@ func TestSearchOverlay_View_Results(t *testing.T) {
 	view := o.View()
 
 	// Category badge symbols replace old section headers.
-	assert.True(t, strings.ContainsAny(view, "♫●◆☰"), "view should contain category badge symbols")
+	assert.True(t, strings.ContainsAny(view, "♪★◎▤"), "view should contain category badge symbols")
 	assert.Contains(t, view, "Blinding Lights", "view should contain track name")
 	assert.Contains(t, view, "The Weeknd", "view should contain artist name")
 }
@@ -511,7 +511,7 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	output := o.View()
 	// After Story 84, badge symbols replace old section headers.
 	assert.Contains(t, output, "Blinding Lights", "should show track name in results")
-	assert.Contains(t, output, "♫", "should show track badge symbol")
+	assert.Contains(t, output, "♪", "should show track badge symbol")
 }
 
 func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
@@ -605,7 +605,7 @@ func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
 	view := o.View()
 	assert.Contains(t, view, "Track One", "view should show track from SearchPageLoadedMsg")
 	// After Story 84: badge symbols replace old section headers.
-	assert.True(t, strings.ContainsAny(view, "♫●"), "view should show badge symbols")
+	assert.True(t, strings.ContainsAny(view, "♪★"), "view should show badge symbols")
 	assert.Contains(t, view, "Artist One", "view should show artist from SearchPageLoadedMsg")
 }
 
@@ -798,18 +798,19 @@ func TestSearchOverlay_View_TabBarActiveHighlight(t *testing.T) {
 // TestSearchOverlay_View_HelpPanelContent verifies help bar contains keybinding text.
 func TestSearchOverlay_View_HelpPanelContent(t *testing.T) {
 	o := newTestSearchOverlay()
-	o.SetSize(100, 40)
+	// Use a wide terminal so the help bar has room to show keybinding text.
+	o.SetSize(150, 40)
 	view := o.View()
-	// Help bar should contain some key hint text (at least "Esc").
+	// Help bar should contain some key hint text (at least "esc").
 	assert.Contains(t, view, "esc", "help bar should show esc keybinding")
 }
 
-// TestSearchOverlay_OverlaySize_80Pct verifies overlayWidth/Height return 80% of terminal size.
-func TestSearchOverlay_OverlaySize_80Pct(t *testing.T) {
+// TestSearchOverlay_OverlayWidth_70Pct verifies overlayWidth returns 70% of terminal width.
+func TestSearchOverlay_OverlayWidth_70Pct(t *testing.T) {
 	o := newTestSearchOverlay()
-	o.SetSize(100, 50)
-	assert.Equal(t, 80, o.OverlayWidth(), "100-wide terminal should give 80-wide overlay")
-	assert.Equal(t, 40, o.OverlayHeight(), "50-high terminal should give 40-high overlay")
+	o.SetSize(200, 50)
+	assert.Equal(t, 140, o.OverlayWidth(), "200-wide terminal should give 140-wide overlay (70%)")
+	assert.Equal(t, 40, o.OverlayHeight(), "50-high terminal should give 40-high overlay (80%)")
 }
 
 // TestSearchOverlay_OverlaySize_MinClamp verifies minimum clamping.
@@ -932,10 +933,10 @@ func TestSearchItemDelegate_Render_BadgeAndName(t *testing.T) {
 		category   string
 		wantSymbol string
 	}{
-		{"track", "♫"},
-		{"artist", "●"},
-		{"album", "◆"},
-		{"playlist", "☰"},
+		{"track", "♪"},
+		{"artist", "★"},
+		{"album", "◎"},
+		{"playlist", "▤"},
 	}
 
 	for _, tt := range tests {
@@ -1133,7 +1134,7 @@ func TestSearchOverlay_DownKey_MovesCursor(t *testing.T) {
 	assert.Equal(t, initialIdx+1, panes.ListCursorIndex(o), "down key should advance list cursor")
 }
 
-// TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg verifies Enter on a track emits PlayTrackMsg.
+// TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg verifies Enter on a track emits PlayTrackMsg only (no close).
 func TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
@@ -1148,24 +1149,34 @@ func TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg(t *testing.T) {
 
 	_, cmd := sendKey(t, o, "enter")
 	require.NotNil(t, cmd)
-	// handleEnter returns tea.Batch(playCmd, closeCmd); execute and inspect messages.
+	// handleEnter should return only the play command — no SearchClosedMsg.
 	msg := cmd()
-	batchMsg, ok := msg.(tea.BatchMsg)
-	require.True(t, ok, "Enter should return BatchMsg (play + close), got %T", msg)
-	var found bool
-	for _, subCmd := range batchMsg {
-		if subCmd == nil {
-			continue
-		}
-		if ptMsg, ok2 := subCmd().(panes.PlayTrackMsg); ok2 {
-			assert.Equal(t, "spotify:track:t1", ptMsg.TrackURI)
-			found = true
-		}
-	}
-	assert.True(t, found, "Enter on track should produce PlayTrackMsg in batch")
+	ptMsg, ok := msg.(panes.PlayTrackMsg)
+	require.True(t, ok, "Enter on track should return PlayTrackMsg directly, got %T", msg)
+	assert.Equal(t, "spotify:track:t1", ptMsg.TrackURI)
 }
 
-// TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg verifies Enter on an album emits PlayContextMsg.
+// TestSearchOverlay_Enter_TrackDoesNotCloseOverlay verifies Enter does NOT emit SearchClosedMsg.
+func TestSearchOverlay_Enter_TrackDoesNotCloseOverlay(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	s.AppendSearchTracks([]domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1"},
+	}, 1)
+	s.SetSearchQuery("test")
+
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+	panes.CallRebuildListItems(o)
+
+	_, cmd := sendKey(t, o, "enter")
+	require.NotNil(t, cmd)
+	msg := cmd()
+	_, isClose := msg.(panes.SearchClosedMsg)
+	assert.False(t, isClose, "Enter should NOT emit SearchClosedMsg — only Esc closes the overlay")
+}
+
+// TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg verifies Enter on an album emits PlayContextMsg only (no close).
 func TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
@@ -1182,20 +1193,11 @@ func TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg(t *testing.T) {
 
 	_, cmd := sendKey(t, o, "enter")
 	require.NotNil(t, cmd)
+	// handleEnter should return only the play command — no SearchClosedMsg.
 	msg := cmd()
-	batchMsg, ok := msg.(tea.BatchMsg)
-	require.True(t, ok, "Enter should return BatchMsg (play + close), got %T", msg)
-	var found bool
-	for _, subCmd := range batchMsg {
-		if subCmd == nil {
-			continue
-		}
-		if pcMsg, ok2 := subCmd().(panes.PlayContextMsg); ok2 {
-			assert.Equal(t, "spotify:album:al1", pcMsg.ContextURI)
-			found = true
-		}
-	}
-	assert.True(t, found, "Enter on album should produce PlayContextMsg in batch")
+	pcMsg, ok := msg.(panes.PlayContextMsg)
+	require.True(t, ok, "Enter on album should return PlayContextMsg directly, got %T", msg)
+	assert.Equal(t, "spotify:album:al1", pcMsg.ContextURI)
 }
 
 // TestSearchOverlay_CtrlA_TrackEmitsAddToQueueMsg verifies Ctrl+A on track emits AddToQueueMsg.
@@ -1241,8 +1243,8 @@ func TestSearchOverlay_View_ListDelegate_ContainsBadgeSymbol(t *testing.T) {
 
 	view := o.View()
 	assert.Contains(t, view, "My Track", "view should contain track name")
-	// Badge symbols should be present.
-	assert.True(t, strings.ContainsAny(view, "♫●◆☰"), "view should contain at least one badge symbol")
+	// Badge symbols should be present (new symbols: ♪ ★ ◎ ▤).
+	assert.True(t, strings.ContainsAny(view, "♪★◎▤"), "view should contain at least one badge symbol")
 }
 
 // TestSearchOverlay_View_NoSectionHeaders verifies old TRACKS/ARTISTS headers are gone.

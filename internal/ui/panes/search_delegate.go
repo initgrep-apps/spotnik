@@ -36,16 +36,17 @@ func (i SearchListItem) Description() string { return i.Subtitle }
 func (i SearchListItem) FilterValue() string { return i.Name }
 
 // categorySymbol returns the single-character badge for the given category.
+// Symbols are BMP Unicode glyphs (not emoji) so lipgloss Foreground() coloring works reliably.
 func categorySymbol(category string) string {
 	switch category {
 	case "track":
-		return "♫"
+		return "♪" // U+266A Eighth Note — musical, single-width
 	case "artist":
-		return "●"
+		return "★" // U+2605 Black Star — fame/artist, single-width
 	case "album":
-		return "◆"
+		return "◎" // U+25CE Bullseye — disc-like, single-width
 	case "playlist":
-		return "☰"
+		return "▤" // U+25A4 Square with horizontal fill — list, single-width
 	default:
 		return "·"
 	}
