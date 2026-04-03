@@ -130,8 +130,7 @@ func NewSearchKeyMap() searchKeyMap {
 }
 
 // NOTE: SearchPageLoadedMsg is defined in messages.go alongside all other shared
-// message types. Search result data types (SearchResultData, SearchTrackItem, etc.)
-// are also in messages.go.
+// message types. SearchResultData is also in messages.go.
 
 // SearchOverlay is the floating search UI model. It is layered above the
 // three-pane view while open — it does not replace any pane.
