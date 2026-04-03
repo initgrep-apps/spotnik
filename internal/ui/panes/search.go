@@ -260,6 +260,22 @@ func (o *SearchOverlay) CursorPos() int {
 	return o.resultList.Index()
 }
 
+// panelHeights returns the computed heights for the three overlay panels:
+// searchH (3 or 4 depending on hint line), resultsH (fills remaining), helpH (always 3).
+func (o *SearchOverlay) panelHeights() (searchH, resultsH, helpH int) {
+	searchH = 3
+	if o.showHintLine() {
+		searchH = 4
+	}
+	helpH = 3
+	totalH := o.overlayHeight()
+	resultsH = totalH - searchH - helpH
+	if resultsH < 5 {
+		resultsH = 5
+	}
+	return
+}
+
 // SetSize updates the overlay dimensions (forwarded from root app on resize).
 // Dimensions are propagated to the list.Model inner area.
 func (o *SearchOverlay) SetSize(width, height int) {
@@ -267,19 +283,7 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	o.height = height
 
 	w := o.overlayWidth()
-	totalH := o.overlayHeight()
-
-	// Search panel height is dynamic: 3 lines normally, 4 when hint line is visible.
-	searchBarH := 3
-	if o.showHintLine() {
-		searchBarH = 4
-	}
-	helpH := 3
-	// No margin between panels — results panel fills all remaining space.
-	resultsH := totalH - searchBarH - helpH
-	if resultsH < 5 {
-		resultsH = 5
-	}
+	_, resultsH, _ := o.panelHeights()
 
 	// Inner list dimensions: subtract results border (2) + tab bar (1) + separator (1).
 	listW := w - 2
@@ -570,24 +574,10 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 // directly touches the ╭╮ of the next. Hints render inside Panel 1, not between panels.
 func (o *SearchOverlay) View() string {
 	w := o.overlayWidth()
-	totalH := o.overlayHeight()
 
-	// Panel 1: Search bar — 4 lines when hint visible, 3 otherwise.
-	searchBarH := 3
-	if o.showHintLine() {
-		searchBarH = 4
-	}
+	searchBarH, resultsH, helpH := o.panelHeights()
 	searchPanel := o.renderSearchPanel(w, searchBarH)
-
-	// Panel 3: Help bar (fixed height 3).
-	helpH := 3
 	helpPanel := o.renderHelpPanel(w, helpH)
-
-	// Panel 2: Results (fills all remaining space; no margin deduction).
-	resultsH := totalH - searchBarH - helpH
-	if resultsH < 5 {
-		resultsH = 5
-	}
 	resultsPanel := o.renderResultsPanel(w, resultsH)
 
 	// Compose: all three panels flush (no margin between them).
@@ -977,38 +967,7 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 // that need to inspect configuration without triggering store reads.
 // Uses the provided theme; store-dependent methods must not be called on the result.
 func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
-	ti := textinput.New()
-	ti.Placeholder = searchPlaceholders[0]
-	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.Info())
-	ti.ShowSuggestions = true
-	ti.SetSuggestions([]string{":songs ", ":artists ", ":albums ", ":playlists "})
-	ti.CompletionStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
-
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
-
-	h := help.New()
-	km := NewSearchKeyMap()
-	delegate := NewSearchItemDelegate(t)
-	rl := list.New(nil, delegate, 0, 0)
-	rl.SetShowTitle(false)
-	rl.SetShowFilter(false)
-	rl.SetShowStatusBar(false)
-	rl.SetShowHelp(false)
-	rl.SetShowPagination(false)
-	rl.InfiniteScrolling = true
-
-	return &SearchOverlay{
-		store:      nil, // store-dependent methods must not be called
-		theme:      t,
-		input:      ti,
-		spinner:    sp,
-		help:       h,
-		keyMap:     km,
-		resultList: rl,
-		activeTab:  TabAll,
-	}
+	return NewSearchOverlay(nil, t)
 }
 
 // ResultsBorderAccentColor returns the AccentColor that renderResultsPanel() uses
