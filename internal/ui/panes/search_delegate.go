@@ -93,9 +93,9 @@ func (d SearchItemDelegate) Height() int { return 3 }
 
 // wrapLine applies full-width styling to a content line.
 // Selected items get a left border bar + background highlight; normal items get left padding only.
-// The caller is responsible for pre-sizing content to the inner width (width - 2) so that
-// lipgloss does not word-wrap it. wrapLine applies decoration-only styles (border, padding, colors).
-func (d SearchItemDelegate) wrapLine(content string, _ int, selected bool) string {
+// The caller is responsible for pre-sizing content to the inner content width (list width - 2) via
+// padToInner or rightAlign so that lipgloss does not word-wrap it. wrapLine adds decoration only.
+func (d SearchItemDelegate) wrapLine(content string, selected bool) string {
 	if selected {
 		return lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, false, true).
@@ -116,7 +116,7 @@ func (d SearchItemDelegate) Spacing() int { return 0 }
 // Update handles messages for list items (no-op — items are stateless).
 func (d SearchItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
-// Render writes the item's two-line representation to w.
+// Render writes the item's 3-line representation to w.
 // Dispatches to per-category render helpers for rich metadata display.
 func (d SearchItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	si, ok := item.(SearchListItem)
@@ -179,9 +179,9 @@ func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected
 	line3Content := d.padToInner(albumStyle.Render(si.AlbumName), innerW)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
-		d.wrapLine(line1Content, width, selected),
-		d.wrapLine(line2Content, width, selected),
-		d.wrapLine(line3Content, width, selected))
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
 }
 
 // renderArtist renders an artist item:
@@ -215,9 +215,9 @@ func (d SearchItemDelegate) renderArtist(w io.Writer, si SearchListItem, selecte
 	line3Content := d.padToInner(strings.Join(line3Parts, d.styledDot()), innerW)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
-		d.wrapLine(line1Content, width, selected),
-		d.wrapLine(line2Content, width, selected),
-		d.wrapLine(line3Content, width, selected))
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
 }
 
 // renderAlbum renders an album item:
@@ -253,9 +253,9 @@ func (d SearchItemDelegate) renderAlbum(w io.Writer, si SearchListItem, selected
 	line3Content := d.padToInner(tcStyle.Render(si.TrackCount), innerW)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
-		d.wrapLine(line1Content, width, selected),
-		d.wrapLine(line2Content, width, selected),
-		d.wrapLine(line3Content, width, selected))
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
 }
 
 // renderPlaylist renders a playlist item:
@@ -290,9 +290,9 @@ func (d SearchItemDelegate) renderPlaylist(w io.Writer, si SearchListItem, selec
 	line3Content := d.padToInner(descStyle.Render(desc), innerW)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
-		d.wrapLine(line1Content, width, selected),
-		d.wrapLine(line2Content, width, selected),
-		d.wrapLine(line3Content, width, selected))
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
 }
 
 // renderDefault renders items with unknown category using a simple 3-line layout.
@@ -311,9 +311,9 @@ func (d SearchItemDelegate) renderDefault(w io.Writer, si SearchListItem, select
 	line3Content := d.padToInner("", innerW)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
-		d.wrapLine(line1Content, width, selected),
-		d.wrapLine(line2Content, width, selected),
-		d.wrapLine(line3Content, width, selected))
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
 }
 
 // --- Shared delegate helpers ---

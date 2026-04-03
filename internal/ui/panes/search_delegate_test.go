@@ -746,7 +746,7 @@ func TestHeight(t *testing.T) {
 // TestWrapLine_Selected verifies that a selected line contains the left border │ character.
 func TestWrapLine_Selected(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", 40, true)
+	out := d.wrapLine("hello", true)
 	assert.Contains(t, out, "│", "selected wrapLine should contain left border │")
 	assert.Contains(t, out, "hello", "selected wrapLine should contain content")
 }
@@ -754,7 +754,7 @@ func TestWrapLine_Selected(t *testing.T) {
 // TestWrapLine_Normal verifies that an unselected line has at least 2-space left indent (no border).
 func TestWrapLine_Normal(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", 40, false)
+	out := d.wrapLine("hello", false)
 	assert.Contains(t, out, "hello", "normal wrapLine should contain content")
 	// Normal items use Padding(0,0,0,2) — output should start with spaces, not a border char.
 	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
