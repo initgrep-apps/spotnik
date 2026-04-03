@@ -259,6 +259,12 @@ func (o *SearchOverlay) CursorPos() int {
 	return o.resultList.Index()
 }
 
+// ResultListItems returns the current items in the result list.
+// Exported for tests that need to inspect list contents directly.
+func (o *SearchOverlay) ResultListItems() []list.Item {
+	return o.resultList.Items()
+}
+
 // panelHeights returns the computed heights for the three overlay panels:
 // searchH (3 or 4 depending on hint line), resultsH (fills remaining), helpH (always 3).
 func (o *SearchOverlay) panelHeights() (searchH, resultsH, helpH int) {
@@ -818,30 +824,15 @@ func (o *SearchOverlay) rebuildFromStore(
 
 // rebuildFromResults rebuilds the list from the locally cached SearchResultData.
 // Used when the store's TypePages are empty (overlay-standalone / test scenarios).
+// SearchResultData now carries domain types so we reuse the same converters as rebuildFromStore.
 func (o *SearchOverlay) rebuildFromResults() {
 	if o.results == nil {
 		return
 	}
-
-	var items []list.Item
-
-	switch o.activeTab {
-	case TabSongs:
-		items = searchTrackItemsToListItems(o.results.Tracks)
-	case TabArtists:
-		items = searchArtistItemsToListItems(o.results.Artists)
-	case TabAlbums:
-		items = searchAlbumItemsToListItems(o.results.Albums)
-	case TabPlaylists:
-		items = searchPlaylistItemsToListItems(o.results.Playlists)
-	default: // TabAll
-		items = append(items, searchTrackItemsToListItems(o.results.Tracks)...)
-		items = append(items, searchArtistItemsToListItems(o.results.Artists)...)
-		items = append(items, searchAlbumItemsToListItems(o.results.Albums)...)
-		items = append(items, searchPlaylistItemsToListItems(o.results.Playlists)...)
-	}
-
-	o.resultList.SetItems(items)
+	// Delegate to rebuildFromStore using domain slices from SearchResultData.
+	// This ensures the same rich rendering path is taken regardless of whether
+	// the data came via the store or directly through SearchPageLoadedMsg.
+	o.rebuildFromStore(o.results.Tracks, o.results.Artists, o.results.Albums, o.results.Playlists)
 }
 
 // checkPrefetch returns a SearchPrefetchMsg command when the list cursor has

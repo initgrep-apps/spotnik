@@ -304,8 +304,8 @@ func TestSearchIntegration_StaleResultDiscard(t *testing.T) {
 		Query:  "kk", // stale — doesn't match store's "jazz"
 		Offset: 0,
 		Results: &panes.SearchResultData{
-			Tracks: []panes.SearchTrackItem{
-				{URI: "spotify:track:old", Name: "Old Track", Artist: "Old Artist"},
+			Tracks: []domain.Track{
+				{URI: "spotify:track:old", Name: "Old Track", Artists: []domain.Artist{{Name: "Old Artist"}}},
 			},
 			TracksTotal: 1,
 		},
