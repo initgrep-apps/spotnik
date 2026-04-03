@@ -16,14 +16,16 @@ type SearchArtist struct {
 	URI string `json:"uri"`
 
 	// Genres is the list of musical genres associated with this artist.
-	Genres []string `json:"genres"`
+	// Populated via custom UnmarshalJSON — the json tag is not used by encoding/json.
+	Genres []string `json:"-"`
 
 	// Followers is the total follower count for this artist.
-	// Populated from the nested "followers.total" field in the Spotify response.
+	// Populated from the nested "followers.total" field via custom UnmarshalJSON.
 	Followers int `json:"-"`
 
 	// Popularity is the artist's popularity score (0–100).
-	Popularity int `json:"popularity"`
+	// Populated via custom UnmarshalJSON — the json tag is not used by encoding/json.
+	Popularity int `json:"-"`
 }
 
 // UnmarshalJSON implements custom unmarshaling to extract the nested followers.total

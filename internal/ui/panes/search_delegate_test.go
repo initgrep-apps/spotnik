@@ -157,6 +157,9 @@ func TestTruncateString(t *testing.T) {
 		{s: "exact", max: 5, want: "exact"},
 		{s: "", max: 10, want: ""},
 		{s: "café", max: 3, want: "ca…"},
+		// Edge cases: max=0 and max=1 must not panic.
+		{s: "hello", max: 0, want: ""},
+		{s: "hello", max: 1, want: "…"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.s, func(t *testing.T) {

@@ -260,7 +260,7 @@ func (d SearchItemDelegate) styledBadge(category string) string {
 }
 
 // styledName renders the item name with appropriate color.
-// When selected, applies SelectedBg/SelectedFg. maxW is used for truncation only if > 0.
+// When selected, applies SelectedBg/SelectedFg. The name should be pre-truncated by the caller.
 func (d SearchItemDelegate) styledName(name string, selected bool, _ int) string {
 	style := lipgloss.NewStyle().Foreground(d.theme.TextPrimary())
 	if selected {
@@ -525,9 +525,16 @@ func formatAlbumType(t string) string {
 }
 
 // truncateString truncates s to max runes, appending "…" if truncated.
+// When max <= 1, returns "…" for non-empty strings to avoid a slice panic.
 func truncateString(s string, max int) string {
 	runes := []rune(s)
+	if max <= 0 {
+		return ""
+	}
 	if len(runes) > max {
+		if max == 1 {
+			return "…"
+		}
 		return string(runes[:max-1]) + "…"
 	}
 	return s
