@@ -254,10 +254,14 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	w := o.overlayWidth()
 	totalH := o.overlayHeight()
 
+	// Search panel height is dynamic: 3 lines normally, 4 when hint line is visible.
 	searchBarH := 3
+	if o.showHintLine() {
+		searchBarH = 4
+	}
 	helpH := 3
-	// 1 margin between search bar and results only.
-	resultsH := totalH - searchBarH - helpH - 1
+	// No margin between panels — results panel fills all remaining space.
+	resultsH := totalH - searchBarH - helpH
 	if resultsH < 5 {
 		resultsH = 5
 	}
@@ -495,57 +499,67 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 }
 
 // View renders the search overlay as three separate bordered panels stacked vertically:
-//   - Panel 1 (Search): text input
-//   - Panel 2 (Results): tab bar + separator + results area
-//   - Panel 3 (Keys): help keybinding bar
+//   - Panel 1 (Search): text input + optional prefix hint line (inside the border)
+//   - Panel 2 (Results): tab bar + separator + scrollable results list
+//   - Panel 3 (Keys): help keybinding bar (no title)
 //
-// A 1-line margin separates Panel 1 from Panel 2. Panel 2 and Panel 3 are flush.
+// All three panels sit flush — no margin lines between them. The ╰╯ of one panel
+// directly touches the ╭╮ of the next. Hints render inside Panel 1, not between panels.
 func (o *SearchOverlay) View() string {
 	w := o.overlayWidth()
 	totalH := o.overlayHeight()
 
-	// Panel 1: Search bar (fixed height 3).
+	// Panel 1: Search bar — 4 lines when hint visible, 3 otherwise.
 	searchBarH := 3
+	if o.showHintLine() {
+		searchBarH = 4
+	}
 	searchPanel := o.renderSearchPanel(w, searchBarH)
 
 	// Panel 3: Help bar (fixed height 3).
 	helpH := 3
 	helpPanel := o.renderHelpPanel(w, helpH)
 
-	// Panel 2: Results (fills remaining space; subtract 1 for margin between search and results).
-	resultsH := totalH - searchBarH - helpH - 1
+	// Panel 2: Results (fills all remaining space; no margin deduction).
+	resultsH := totalH - searchBarH - helpH
 	if resultsH < 5 {
 		resultsH = 5
 	}
 	resultsPanel := o.renderResultsPanel(w, resultsH)
 
-	// The 1-line margin between Panel 1 and Panel 2 doubles as the prefix hint line.
-	// When the user is typing a command prefix (e.g. ":so") matching prefixes are
-	// shown here. Otherwise the line is empty (layout height is unchanged either way).
-	margin := o.renderPrefixHints(w)
-
-	// Compose: Panel1 + 1-line hint/margin + Panel2 + Panel3 (flush, no margin).
+	// Compose: all three panels flush (no margin between them).
 	return lipgloss.JoinVertical(lipgloss.Left,
 		searchPanel,
-		margin,
 		resultsPanel,
 		helpPanel,
 	)
 }
 
 // renderSearchPanel builds Panel 1: the search input box.
-// Height is 3 lines (border top + input + border bottom).
+// Height is 3 lines (border top + input + border bottom) when no hints are showing,
+// or 4 lines (border top + input + hint line + border bottom) when hints are visible.
+// The prefix hint line renders INSIDE the panel border, not between panels.
 func (o *SearchOverlay) renderSearchPanel(w, h int) string {
 	innerWidth := w - 2
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
 
-	// Inner content: just the text input view.
-	inner := lipgloss.NewStyle().
+	// Build inner content: text input + optional hint line.
+	inputView := o.input.View()
+	hintLine := o.renderPrefixHints(innerWidth)
+
+	var inner string
+	if hintLine != "" {
+		// 4-line panel: input row + hint row inside the border.
+		inner = lipgloss.JoinVertical(lipgloss.Left, inputView, hintLine)
+	} else {
+		inner = inputView
+	}
+	inner = lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
 		Height(h - 2).MaxHeight(h - 2).
-		Render(o.input.View())
+		Render(inner)
 
 	cfg := layout.BorderConfig{
 		Width:       w,
@@ -604,7 +618,9 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 			{Key: "Enter", Label: "play"},
 			{Key: "Ctrl+A", Label: "queue"},
 		},
-		AccentColor: o.theme.SectionHeader(),
+		// SeekBar() (cyan-family) is distinct from Search's ActiveBorder() (bright blue/green)
+		// and Keys' TextMuted() (dim), giving the three panels a clear visual hierarchy.
+		AccentColor: o.theme.SeekBar(),
 		Focused:     false, // dimmer than the search bar
 		Theme:       o.theme,
 	}
@@ -637,6 +653,8 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 
 // renderHelpPanel builds Panel 3: the keybinding help bar.
 // Height is always 3 lines (border top + help content + border bottom).
+// The panel has no title — the keybinding content is self-explanatory,
+// and an empty title lets the dim TextMuted() border recede into the background.
 func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 	innerWidth := w - 2
 	if innerWidth < 1 {
@@ -653,7 +671,7 @@ func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 	cfg := layout.BorderConfig{
 		Width:       w,
 		Height:      h,
-		Title:       "Keys",
+		Title:       "", // no title — keybinding content is self-explanatory
 		Actions:     []layout.Action{},
 		AccentColor: o.theme.TextMuted(),
 		Focused:     false,
@@ -883,6 +901,49 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 }
 
 // --- Test helpers (exported only for test packages) ---
+
+// NewSearchOverlayForTest creates a SearchOverlay with nil store for use in tests
+// that need to inspect configuration without triggering store reads.
+// Uses the provided theme; store-dependent methods must not be called on the result.
+func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
+
+	h := help.New()
+	km := NewSearchKeyMap()
+	delegate := NewSearchItemDelegate(t)
+	rl := list.New(nil, delegate, 0, 0)
+	rl.SetShowTitle(false)
+	rl.SetShowFilter(false)
+	rl.SetShowStatusBar(false)
+	rl.SetShowHelp(false)
+	rl.SetShowPagination(false)
+	rl.InfiniteScrolling = true
+
+	return &SearchOverlay{
+		store:      nil, // store-dependent methods must not be called
+		theme:      t,
+		input:      textinput.New(),
+		spinner:    sp,
+		help:       h,
+		keyMap:     km,
+		resultList: rl,
+		activeTab:  TabAll,
+	}
+}
+
+// ResultsBorderAccentColor returns the AccentColor that renderResultsPanel() uses
+// in its BorderConfig. Exported for tests verifying per-panel border color assignments.
+func (o *SearchOverlay) ResultsBorderAccentColor() lipgloss.Color {
+	return o.theme.SeekBar()
+}
+
+// KeysPanelTitle returns the Title string used in renderHelpPanel()'s BorderConfig.
+// Exported for tests verifying that the Keys panel has no title label.
+func (o *SearchOverlay) KeysPanelTitle() string {
+	return "" // Keys panel title is always empty (self-explanatory keybinding content)
+}
 
 // SearchDebounceMsgForTest creates a searchDebounceMsg for use in tests.
 // This allows the test package (panes_test) to inject debounce messages
