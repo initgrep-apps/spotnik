@@ -504,77 +504,112 @@ All 17 completed features currently have unit tests only. When the integration/c
 |---|---|---|---|
 | S-1 | Open search → type query → debounce fires → results appear | Integration | High |
 | S-2 | Type query → results load → switch tab → results refresh for new type | Integration | High |
-| S-3 | Type query → scroll down past 60% → next page prefetches | Integration | High |
-| S-4 | Switch tab mid-prefetch → stale pages discarded | Integration | High |
+| S-3 | Type query → scroll down past 60% → next page prefetches (5-page batch) | Integration | High |
+| S-4 | Switch tab mid-prefetch → stale pages discarded, fresh search fires | Integration | High |
 | S-5 | Select track → Enter → track plays → overlay closes | Integration | High |
-| S-6 | Select track → Ctrl+A → added to queue → confirmation shown | Integration | Medium |
+| S-6 | Select track → Ctrl+A → added to queue → confirmation toast | Integration | Medium |
 | S-7 | Ctrl+U → input clears → results clear | Component | Medium |
 | S-8 | Rapid typing (50ms between keys) → one search per 300ms debounce | Integration | Medium |
 | S-9 | Fewer results than page size → no further prefetch | Component | Medium |
 | S-10 | Esc → overlay closes → focus returns to previous pane | Integration | High |
+| S-11 | Type `:songs ` → prefix locks → search fires with track type only | Component | Medium |
+| S-12 | Type `:so` → prefix hints shown → Tab completes to `:songs ` | Component | Medium |
+| S-13 | Query changed while fetching → stale SearchPageLoadedMsg discarded | Integration | High |
+| S-14 | Offset reaches 1000 → prefetch stops, no error | Component | Low |
+| S-15 | Play album/playlist result → plays as context (not track URI) | Integration | Medium |
+| S-16 | Category badges render correctly (♫ track, ● artist, ◆ album, ☰ playlist) | Component | Low |
+| S-17 | 80% overlay sizing → resize terminal → overlay adjusts | Integration | Low |
 
 ### 10.2 Playback (Now Playing)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
-| P-1 | Space → playback toggles → UI reflects | Component | High |
-| P-2 | N → next track → now-playing updates | Integration | High |
-| P-3 | Tick fires → progress bar advances → clamps at duration | Component | High |
-| P-4 | +/- → volume changes → UI reflects | Component | Medium |
-| P-5 | S → shuffle toggles → indicator updates | Component | Medium |
-| P-6 | R → repeat cycles (off → context → track → off) | Component | Medium |
-| P-7 | V → visualizer pattern cycles → preference persisted | Integration | Low |
-| P-8 | Pause → polling widens → resume → polling narrows | Integration | Medium |
+| P-1 | Space → playback toggles → UI reflects (optimistic update) | Component | High |
+| P-2 | N or → → next track → now-playing updates | Integration | High |
+| P-3 | Tick fires → progress bar advances via interpolation → clamps at duration | Component | High |
+| P-4 | +/- → volume changes → UI reflects → clamped 0-100% | Component | Medium |
+| P-5 | S → shuffle toggles → indicator updates (⇄ dim/bright) | Component | Medium |
+| P-6 | R → repeat cycles (off → context → track → off) → indicator updates (↻/↻1) | Component | Medium |
+| P-7 | V → visualizer pattern cycles (7 patterns) → preference persisted | Integration | Low |
+| P-8 | Pause → polling widens (3s→10s) → resume → polling narrows (10s→3s) | Integration | Medium |
+| P-9 | L → like/unlike current track → optimistic toggle | Component | Medium |
+| P-10 | Nothing playing (204 response) → centered empty state message | Component | High |
+| P-11 | Volume 403 VOLUME_CONTROL_DISALLOW → friendly toast message | Integration | Medium |
+| P-12 | 5 consecutive playback poll errors → connection warning toast (once) | Integration | Low |
+| P-13 | Height < 8 → compact mode (single-line strip, no visualizer) | Component | Medium |
+| P-14 | Gradient seek bar renders with color interpolation (Gradient1→2→3) | Component | Low |
+| P-15 | Transport controls render as Unicode (▷ ⏸ ⇄ ↻) not emoji | Component | Low |
+| P-16 | ← → previous track → now-playing updates | Integration | Medium |
 
 ### 10.3 Queue
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
 | Q-1 | Tick fires → queue refreshes from API → table updates | Integration | High |
-| Q-2 | F → filter activates → type → table filters | Component | Medium |
+| Q-2 | F → filter activates → type → table filters → Esc closes | Component | Medium |
 | Q-3 | Enter → track plays | Component | Medium |
 | Q-4 | Play from search → queue reflects new tracks on refresh | Integration | High |
+| Q-5 | Empty queue → centered "Queue is empty" message | Component | Medium |
+| Q-6 | Queue with 20+ tracks → scroll indicators shown, j/k scrolls | Component | Medium |
+| Q-7 | Currently playing track shows ▶ indicator in index column | Component | Low |
 
 ### 10.4 Playlists
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
-| PL-1 | Enter on playlist → track list loads → sub-view shown | Component | High |
+| PL-1 | Enter on playlist → track list loads → sub-view shown with title | Component | High |
 | PL-2 | Shift+Up/Down → track reorders (optimistic) → API confirms | Integration | High |
 | PL-3 | Shift+Up → API fails → rollback to original order | Integration | High |
-| PL-4 | X → track removed from playlist | Component | Medium |
+| PL-4 | X → track removed from playlist (optimistic) | Component | Medium |
 | PL-5 | Esc in track view → returns to playlist list | Component | Medium |
 | PL-6 | F → filter playlists → results narrow | Component | Medium |
 | PL-7 | Rapid reorders (Shift+Up 3x) → all applied in correct order | Integration | Medium |
+| PL-8 | N → create new playlist → inline input → Enter confirms → API creates | Integration | Medium |
+| PL-9 | R → rename selected playlist → inline input → Enter saves | Integration | Medium |
+| PL-10 | X on track → API fails → track restored to original position | Integration | Medium |
+| PL-11 | Empty playlist → track pane shows "No tracks in this playlist" | Component | Low |
+| PL-12 | Reorder at boundary (first track up, last track down) → no-op | Component | Low |
 
 ### 10.5 Devices
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
 | D-1 | D → overlay opens → devices fetched → displayed | Integration | High |
-| D-2 | Enter → playback transfers → overlay closes → now-playing reflects | Integration | High |
+| D-2 | Enter → playback transfers → overlay closes → now-playing reflects new device | Integration | High |
 | D-3 | Select active device → "Already playing" feedback | Component | Medium |
-| D-4 | Esc → overlay closes → focus returns | Integration | Medium |
-| D-5 | Open past TTL → close → reopen → fresh fetch | Integration | Low |
+| D-4 | Esc → overlay closes → focus returns to grid | Integration | Medium |
+| D-5 | Open past TTL (5s) → close → reopen → fresh fetch fires | Integration | Low |
+| D-6 | No devices connected → "No devices found" message | Component | Medium |
+| D-7 | Active device shown in header (right-aligned, max 25 chars + truncation) | Component | Low |
+| D-8 | Device with long name → truncated with ellipsis | Component | Low |
 
-### 10.6 Library (Liked Songs, Albums, Recently Played)
+### 10.6 Library (Albums, Liked Songs)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
 | L-1 | Pane loads → data fetched → table populated | Integration | High |
-| L-2 | F → filter → type → Esc closes | Component | Medium |
-| L-3 | Enter → track plays | Component | Medium |
-| L-4 | I on Liked Songs → like/unlike toggles | Component | Medium |
+| L-2 | F → filter → type → Esc closes filter | Component | Medium |
+| L-3 | Enter on track → track plays | Component | Medium |
+| L-4 | I on Liked Songs → like/unlike toggles (optimistic) | Component | Medium |
 | L-5 | Like from one pane → Liked Songs reflects on refresh | Integration | Medium |
+| L-6 | Enter on album → plays album context (not single track) | Component | Medium |
+| L-7 | A → add selected track to queue → confirmation toast | Integration | Medium |
+| L-8 | Scroll near bottom → next page loads automatically (pagination) | Integration | Medium |
+| L-9 | Empty library section → appropriate empty state message | Component | Low |
+| L-10 | Filter with no matches → "No results" message | Component | Low |
 
-### 10.7 Stats (Top Tracks, Top Artists)
+### 10.7 Stats (Top Tracks, Top Artists, Recently Played)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
-| ST-1 | Stats pane loads → short_term data fetched | Integration | High |
-| ST-2 | T → time range cycles → data refreshes | Component | Medium |
-| ST-3 | Switch range → cached → switch back → cached shown | Integration | Medium |
-| ST-4 | Top Tracks and Top Artists cycle independently | Integration | Low |
+| ST-1 | Stats pane loads → short_term data fetched → table populated | Integration | High |
+| ST-2 | T → time range cycles (4wk → 6mo → all → 4wk) → data refreshes | Component | Medium |
+| ST-3 | Switch range → cached → switch back → cached data shown (no API call) | Integration | Medium |
+| ST-4 | Top Tracks and Top Artists cycle time ranges independently | Integration | Low |
+| ST-5 | Recently Played shows relative time (just now / Nm ago / Nh ago / Nd ago / date) | Component | Medium |
+| ST-6 | A on Recently Played → add track to queue | Integration | Medium |
+| ST-7 | Empty stats → "No listening data" message | Component | Low |
+| ST-8 | Artist with no genres → shows `--` in genre column | Component | Low |
 
 ### 10.8 Overlay & Focus Routing
 
@@ -583,60 +618,87 @@ All 17 completed features currently have unit tests only. When the integration/c
 | F-1 | / → search opens → keys route to search → Esc → keys route to grid | Integration | High |
 | F-2 | D → devices open → keys route to devices → Esc → keys route to grid | Integration | High |
 | F-3 | T → theme overlay → select → all panes re-render → overlay closes | Integration | Medium |
-| F-4 | Overlay open → Q → does NOT quit | Integration | High |
+| F-4 | Overlay open → Q → does NOT quit (overlay captures input) | Integration | High |
 | F-5 | Filter active → globals blocked → Esc → globals restored | Integration | High |
-| F-6 | Only one overlay at a time | Integration | Medium |
+| F-6 | Only one overlay at a time (T while search open → blocked) | Integration | Medium |
+| F-7 | Overlay close restores a.focus to a.prevFocus exactly | Integration | Medium |
 
 ### 10.9 Layout & Navigation
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
-| N-1 | Tab → focus rotates visible panes only | Integration | High |
-| N-2 | 1-8 → toggle pane → Tab skips hidden | Integration | Medium |
-| N-3 | P → cycle preset → panes rearrange | Integration | Medium |
-| N-4 | 0 → toggle Page A/B | Integration | Medium |
-| N-5 | Terminal resize → all panes adjust | Integration | Medium |
+| N-1 | Tab → focus rotates visible panes only (wraps at end) | Integration | High |
+| N-2 | 1-8 → toggle pane → space redistributed → Tab skips hidden | Integration | Medium |
+| N-3 | P → cycle preset (0→1→2→3→0) → panes rearrange → preset persisted | Integration | Medium |
+| N-4 | 0 → toggle Page A/B → different pane set shown | Integration | Medium |
+| N-5 | Terminal resize → all panes adjust → no gaps, no overlap | Integration | Medium |
+| N-6 | Terminal below 120x30 → "too small" guard message | Integration | Low |
+| N-7 | Mouse wheel scroll within pane → scrolls without changing focus | Integration | Low |
 
 ### 10.10 Error Recovery
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
-| E-1 | 429 → backoff → toast → resume after backoff | Integration | High |
-| E-2 | 401 → token refresh → retry silently | Integration | High |
-| E-3 | 403 → "Premium required" toast | Integration | Medium |
-| E-4 | Multiple concurrent 401s → single refresh | Integration | High |
-| E-5 | Network error → toast → manual retry → success | Integration | Medium |
-| E-6 | Action during backoff → queued or rejected with feedback | Integration | Medium |
-| E-7 | 5+ consecutive failures → connection warning toast | Integration | Low |
+| E-1 | 429 → backoff → ratelimit toast → resume after Retry-After seconds | Integration | High |
+| E-2 | 401 → token refresh → retry original request silently | Integration | High |
+| E-3 | 403 playback → "Playback control not available" toast | Integration | Medium |
+| E-4 | 403 non-playback → "Spotify Premium required" toast | Integration | Medium |
+| E-5 | Multiple concurrent 401s → token refreshes only once (dedup) | Integration | High |
+| E-6 | Network error → error toast → next poll succeeds → error auto-clears | Integration | Medium |
+| E-7 | Action during backoff → rejected with feedback | Integration | Medium |
+| E-8 | 5+ consecutive playback errors → connection warning toast (once, not repeated) | Integration | Low |
+| E-9 | Proactive token refresh 5 min before expiry → seamless | Integration | Medium |
+| E-10 | Token refresh fails → "Session expired. Run: spotnik auth" error toast | Integration | Medium |
 
 ### 10.11 Preferences
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
 | PR-1 | Change theme → flushed after 500ms debounce | Integration | Medium |
-| PR-2 | Change theme + preset rapidly → single flush | Integration | Medium |
-| PR-3 | Restart → theme, preset, visualizer restored | Integration | Medium |
+| PR-2 | Change theme + preset + visualizer rapidly → single flush writes all 3 | Integration | Medium |
+| PR-3 | Restart → theme, preset, visualizer pattern restored from config | Integration | Medium |
+| PR-4 | V → visualizer pattern changes → persisted via PreferenceStore | Integration | Medium |
+| PR-5 | Flush failure → changes re-queued for next attempt | Integration | Low |
 
 ### 10.12 Startup & Auth
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
 | A-1 | Fresh launch → splash → auth → grid → data loads | Integration | High |
-| A-2 | Cached token → skip auth → grid loads | Integration | High |
+| A-2 | Cached token → skip auth → grid loads directly | Integration | High |
 | A-3 | Expired token → auto-refresh → grid loads | Integration | Medium |
-| A-4 | Terminal too small → message → resize → grid renders | Integration | Low |
+| A-4 | Terminal too small → "too small" message → resize → grid renders | Integration | Low |
+| A-5 | Missing client_id (no embedded, no config) → error with setup instructions → exit 1 | Integration | Medium |
+| A-6 | `spotnik auth logout` → clears keychain → next launch requires fresh auth | Integration | Medium |
+| A-7 | First launch with no config → Bootstrap creates config file automatically | Integration | Medium |
 
 ### 10.13 Cross-Feature
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
-| X-1 | Search → play → now-playing updates → queue updates on tick | Integration | High |
+| X-1 | Search → play track → now-playing updates → queue updates on tick | Integration | High |
 | X-2 | Search → add to queue → queue reflects on refresh | Integration | High |
 | X-3 | Device transfer → playback re-fetched → now-playing shows new device | Integration | High |
 | X-4 | Like track → search reflects updated state | Integration | Low |
-| X-5 | Play from any pane → now-playing always updates | Integration | Medium |
+| X-5 | Play from any pane (library, search, queue, playlist) → now-playing always updates | Integration | Medium |
+| X-6 | Theme switch → all panes re-render with new colors including borders | Integration | Medium |
+| X-7 | Playback keys (Space, n, +/-, s, r) route to NowPlaying regardless of pane focus | Integration | High |
 
-### 10.14 Golden Files / Visual Regression
+### 10.14 Theme System
+
+| # | Workflow | Layer | Priority |
+|---|---|---|---|
+| TH-1 | Load known theme ID → correct theme returned | Component | High |
+| TH-2 | Load unknown theme ID → fallback to "black" without panic | Component | High |
+| TH-3 | All 11 themes implement all 50 color tokens (non-empty) | Component | High |
+| TH-4 | Theme switcher overlay → navigate → Enter applies → toast shown | Integration | Medium |
+| TH-5 | Theme overlay → current theme marked with ◉, others with ○ | Component | Medium |
+| TH-6 | Theme overlay shows 5 color swatches per theme | Component | Low |
+| TH-7 | User TOML theme overrides built-in by ID | Component | Low |
+| TH-8 | Malformed user theme TOML → skipped without panic | Component | Medium |
+| TH-9 | Focused pane border uses bright accent color, unfocused uses dimmed | Component | Medium |
+
+### 10.15 Golden Files / Visual Regression
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
@@ -644,17 +706,37 @@ All 17 completed features currently have unit tests only. When the integration/c
 | G-2 | Each of 11 themes → matches golden | Integration | Medium |
 | G-3 | Search overlay over grid → matches golden | Integration | Medium |
 | G-4 | Device overlay over grid → matches golden | Integration | Medium |
-| G-5 | Each layout preset → matches golden | Integration | Low |
-| G-6 | Various terminal sizes → matches golden | Integration | Low |
+| G-5 | Theme overlay over grid → matches golden | Integration | Medium |
+| G-6 | Each layout preset → matches golden | Integration | Low |
+| G-7 | Various terminal sizes → matches golden | Integration | Low |
 
-### 10.15 Nerd Status (Page B)
+### 10.16 Nerd Status (Page B)
 
 | # | Workflow | Layer | Priority |
 |---|---|---|---|
 | NB-1 | 0 → switch to Page B → Request Flow + Network Log shown | Integration | Medium |
-| NB-2 | Network Log filter → F → type → narrows | Component | Medium |
-| NB-3 | Request Flow animation renders at 200ms tick | Component | Low |
+| NB-2 | Network Log filter → F → type → narrows entries | Component | Medium |
+| NB-3 | Request Flow event replay at 200ms tick → phases animate (entered → gateway → inflight → completed → done) | Component | Medium |
 | NB-4 | 0 → back to Page A → original pane focus restored | Integration | Medium |
+| NB-5 | Blocked request (429) shows in APP box but skips SPOTIFY box | Component | Medium |
+| NB-6 | Decisions age out after 3s, completed requests after 5s | Component | Low |
+| NB-7 | Network Log color-codes by status (2xx green, 429 yellow, 5xx red) | Component | Low |
+| NB-8 | Staleness display shows stale domains with elapsed time | Component | Low |
+| NB-9 | Request Flow width < 60 → flat fallback rendering | Component | Low |
+| NB-10 | Multiple concurrent requests animate at staggered phases | Component | Low |
+
+### 10.17 API Gateway Internals
+
+| # | Workflow | Layer | Priority |
+|---|---|---|---|
+| GW-1 | Token bucket: burst up to 10, blocks when empty, refills at 10/sec | Integration | High |
+| GW-2 | Concurrency cap: max 5 in-flight requests, 6th waits | Integration | High |
+| GW-3 | Request dedup: 2 concurrent same-key requests → 1 HTTP call, both get result | Integration | High |
+| GW-4 | Interactive priority requests bypass token bucket wait | Integration | Medium |
+| GW-5 | Background requests rejected during 429 backoff (return RateLimitError) | Integration | Medium |
+| GW-6 | Staleness: re-fetch after TTL (playlists 5m, devices 5s, stats 10m) | Integration | Medium |
+| GW-7 | Adaptive idle polling: active+playing 3s/9s → idle+paused 30s/60s | Integration | Medium |
+| GW-8 | KeyMsg resets tickCount → immediate fetch when returning from idle | Integration | Low |
 
 ---
 
@@ -665,23 +747,25 @@ All 17 completed features currently have unit tests only. When the integration/c
 | Story | Scope | Depends On |
 |---|---|---|
 | **S1: Infrastructure** | Add teatest, catwalk, x/vt deps. Create `internal/testutil/`. Set up build tags, Makefile targets, `testdata/components/` and `testdata/golden/` dirs. Create both skills. | — |
-| **S2: Now Playing** | Catwalk: P-1, P-3, P-4, P-5, P-6. Integration: P-2, P-7, P-8. | S1 |
-| **S3: Queue** | Catwalk: Q-2, Q-3. Integration: Q-1, Q-4. | S1 |
-| **S4: Search** | Catwalk: S-7, S-9. Integration: S-1 through S-6, S-8, S-10. | S1 |
-| **S5: Playlists** | Catwalk: PL-1, PL-4, PL-5, PL-6. Integration: PL-2, PL-3, PL-7. | S1 |
-| **S6: Library** | Catwalk: L-2, L-3, L-4. Integration: L-1, L-5. | S1 |
-| **S7: Stats** | Catwalk: ST-2. Integration: ST-1, ST-3, ST-4. | S1 |
-| **S8: Devices** | Catwalk: D-3. Integration: D-1, D-2, D-4, D-5. | S1 |
-| **S9: Themes** | Catwalk: theme list nav, enter applies, esc closes. Integration: F-3. Golden: G-2. | S1 |
-| **S10: Overlay & Focus** | Integration: F-1, F-2, F-4, F-5, F-6. | S1, S4, S8, S9 |
-| **S11: Navigation & Layout** | Integration: N-1 through N-5. | S1 |
-| **S12: Error Recovery** | Integration: E-1 through E-7. | S1 |
-| **S13: Golden Files** | Golden: G-1, G-3 through G-6. | S1, S2-S9 |
-| **S14: Nerd Status** | Catwalk: NB-2, NB-3. Integration: NB-1, NB-4. | S1 |
+| **S2: Now Playing** | Catwalk: P-1, P-3, P-4, P-5, P-6, P-9, P-10, P-13, P-14, P-15. Integration: P-2, P-7, P-8, P-11, P-12, P-16. | S1 |
+| **S3: Queue** | Catwalk: Q-2, Q-3, Q-5, Q-6, Q-7. Integration: Q-1, Q-4. | S1 |
+| **S4: Search** | Catwalk: S-7, S-9, S-11, S-12, S-14, S-16. Integration: S-1 through S-6, S-8, S-10, S-13, S-15, S-17. | S1 |
+| **S5: Playlists** | Catwalk: PL-1, PL-4, PL-5, PL-6, PL-11, PL-12. Integration: PL-2, PL-3, PL-7, PL-8, PL-9, PL-10. | S1 |
+| **S6: Library** | Catwalk: L-2, L-3, L-4, L-6, L-9, L-10. Integration: L-1, L-5, L-7, L-8. | S1 |
+| **S7: Stats** | Catwalk: ST-2, ST-5, ST-7, ST-8. Integration: ST-1, ST-3, ST-4, ST-6. | S1 |
+| **S8: Devices** | Catwalk: D-3, D-6, D-7, D-8. Integration: D-1, D-2, D-4, D-5. | S1 |
+| **S9: Themes** | Catwalk: TH-1 through TH-9. Integration: TH-4, F-3. Golden: G-2. | S1 |
+| **S10: Overlay & Focus** | Integration: F-1, F-2, F-4, F-5, F-6, F-7. | S1, S4, S8, S9 |
+| **S11: Navigation & Layout** | Integration: N-1 through N-7. | S1 |
+| **S12: Error Recovery** | Integration: E-1 through E-10. | S1 |
+| **S13: Golden Files** | Golden: G-1, G-3 through G-7. | S1, S2-S9 |
+| **S14: Nerd Status** | Catwalk: NB-2, NB-3, NB-5, NB-6, NB-7, NB-8, NB-9, NB-10. Integration: NB-1, NB-4. | S1 |
+| **S15: Gateway** | Integration: GW-1 through GW-8. | S1 |
+| **S16: Cross-Feature & Prefs** | Integration: X-1 through X-7, PR-1 through PR-5, A-1 through A-7. | S1, S2-S9 |
 
 ### 11.2 Priority Order
 
-**S1** (infrastructure) → **S4** (search, most complex) → **S10** (overlay routing, biggest bug source) → **S2** (playback, most used) → then S3-S14 in any order.
+**S1** (infrastructure) → **S4** (search, most complex) → **S10** (overlay routing, biggest bug source) → **S2** (playback, most used) → **S12** (error recovery) → then S3-S16 in any order.
 
 ### 11.3 Each Story Produces
 
