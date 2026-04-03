@@ -847,3 +847,44 @@ func TestSetTheme_ReRendersPromptTagWhenLocked(t *testing.T) {
 	assert.Equal(t, queryBefore, o.Query(), "Query must not change after SetTheme")
 	_ = promptBefore // exact ANSI codes differ by theme, just verify presence of prefix
 }
+
+// --- PR #115 review fixes ---
+
+// TestDemoteFromPromptTag_WithNonEmptyQuery verifies that demoting while the query
+// is non-empty restores the full ":prefix query" in Value and resets Prompt/state.
+func TestDemoteFromPromptTag_WithNonEmptyQuery(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type ":songs kk" → prefix locked, promoted. Value = "kk", Prompt = tag.
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "kk", o.Query())
+
+	// Move cursor to position 0 to trigger demote on backspace.
+	// Simulate by sending Home key to move cursor to start.
+	o, _ = sendKey(t, o, "home")
+
+	// Backspace at pos 0 → demote.
+	o, _ = sendKey(t, o, "backspace")
+
+	assert.Equal(t, ":songs kk", o.Query(), "after demote with non-empty query, Value should be ':songs ' + 'kk'")
+	assert.Equal(t, "> ", o.PromptTag(), "Prompt should be reset to '> ' after demote")
+	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "prefixState should be PrefixNone after demote")
+}
+
+// TestCleanQuery_PrefixTypingState verifies cleanQuery returns raw input during PrefixTyping.
+func TestCleanQuery_PrefixTypingState(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type ":so" — no space yet, PrefixTyping state.
+	o, _ = sendKey(t, o, ":")
+	o, _ = sendKey(t, o, "s")
+	o, _ = sendKey(t, o, "o")
+
+	require.Equal(t, panes.PrefixTyping, o.PrefixState(), "should be PrefixTyping without trailing space")
+	assert.Equal(t, ":so", o.CleanQuery(), "cleanQuery in PrefixTyping should return raw input ':so'")
+}

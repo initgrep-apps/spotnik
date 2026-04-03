@@ -81,6 +81,8 @@ func sendKey(t *testing.T, o *panes.SearchOverlay, key string) (*panes.SearchOve
 		msg = tea.KeyMsg{Type: tea.KeyCtrlU}
 	case "ctrl+a":
 		msg = tea.KeyMsg{Type: tea.KeyCtrlA}
+	case "home":
+		msg = tea.KeyMsg{Type: tea.KeyHome}
 	default:
 		// Regular rune key
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}

@@ -455,12 +455,21 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if o.prefixState != PrefixLocked {
 			o.parsePrefix()
 		}
+		// After a demote→re-lock cycle, the Prompt is still "> " but parsePrefix
+		// has set PrefixLocked again. Promote so cleanQuery() works correctly.
+		if o.prefixState == PrefixLocked && o.input.Prompt == "> " {
+			o.promoteToPromptTag()
+		}
 		if o.prefixState == PrefixTyping {
 			// Still editing the prefix — don't fire debounce yet.
 			return o, cmd
 		}
 		q := o.cleanQuery()
 		debounceCmd := debounceSearch(q)
+		// Restart placeholder tick when backspace clears input to empty.
+		if o.input.Value() == "" && o.prefixState == PrefixNone {
+			return o, tea.Batch(cmd, debounceCmd, searchPlaceholderTick())
+		}
 		return o, tea.Batch(cmd, debounceCmd)
 
 	default:
