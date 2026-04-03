@@ -3,7 +3,9 @@ package panes_test
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -106,22 +108,31 @@ func TestParsePrefix_InvalidPrefixWithSpace(t *testing.T) {
 	assert.Equal(t, "", o.LockedPrefix())
 }
 
-// TestParsePrefix_BackspaceUnlocks verifies that backspacing into a locked prefix
-// transitions back to prefixTyping.
+// TestParsePrefix_BackspaceUnlocks verifies that backspacing at position 0 when a
+// prefix is locked demotes the tag back into the input for editing (Prompt reset).
+// With the Prompt-based approach, one backspace at pos 0 demotes (restores prefix
+// to value); a second backspace removes the trailing space → PrefixTyping.
 func TestParsePrefix_BackspaceUnlocks(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 
-	// Type ":songs " to lock.
+	// Type ":songs " to lock. After promotion: Prompt = styled ":songs", Value = "".
 	for _, ch := range ":songs " {
 		o, _ = sendKey(t, o, string(ch))
 	}
 	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "", o.Query(), "after promotion, Value holds only clean query (empty)")
 
-	// Backspace removes the trailing space — back to typing.
+	// First backspace at pos 0 demotes the tag: Prompt reset to "> ", Value = ":songs ".
+	// demoteFromPromptTag() does NOT call parsePrefix(), so prefixState = PrefixNone.
 	o, _ = sendKey(t, o, "backspace")
+	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "after demote, prefixState is reset to PrefixNone")
+	assert.Equal(t, "> ", o.PromptTag(), "after demote, Prompt is reset to default")
+	assert.Equal(t, ":songs ", o.Query(), "after demote, Value is restored to :prefix + space + query")
 
-	assert.Equal(t, panes.PrefixTyping, o.PrefixState(), "backspace should unlock prefix back to prefixTyping")
+	// Second backspace removes the trailing space → PrefixTyping.
+	o, _ = sendKey(t, o, "backspace")
+	assert.Equal(t, panes.PrefixTyping, o.PrefixState(), "after removing the space, should be PrefixTyping")
 }
 
 // --- Task 3: cleanQuery() and activeAPITypes() ---
@@ -182,9 +193,24 @@ func TestActiveAPITypes_NoPrefix(t *testing.T) {
 	assert.Equal(t, []string{"track", "artist", "album", "playlist"}, types)
 }
 
-// --- Task 4: renderPrefixHints() ---
+// --- Task 4: renderPrefixHints() — redesigned as styled pills ---
 
-// TestRenderPrefixHints_SingleMatch shows :songs for :s input.
+// TestRenderPrefixHints_EmptyInput shows all 4 pills in their badge colors.
+func TestRenderPrefixHints_EmptyInput(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	require.Equal(t, panes.PrefixNone, o.PrefixState())
+	require.Equal(t, "", o.Query())
+	hint := o.RenderPrefixHints(80)
+	// All 4 pills should be present.
+	assert.Contains(t, hint, ":songs")
+	assert.Contains(t, hint, ":artists")
+	assert.Contains(t, hint, ":albums")
+	assert.Contains(t, hint, ":playlists")
+}
+
+// TestRenderPrefixHints_SingleMatch shows all pills; matching (:songs) is highlighted, others dimmed.
 func TestRenderPrefixHints_SingleMatch(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -194,12 +220,14 @@ func TestRenderPrefixHints_SingleMatch(t *testing.T) {
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
+	// All 4 pills are present (non-matching ones are dimmed, not hidden).
 	assert.Contains(t, hint, ":songs", "hint should contain :songs for :s input")
-	assert.NotContains(t, hint, ":artists")
-	assert.NotContains(t, hint, ":albums")
+	assert.Contains(t, hint, ":artists", "non-matching prefixes appear dimmed, not hidden")
+	assert.Contains(t, hint, ":albums", "non-matching prefixes appear dimmed, not hidden")
+	assert.Contains(t, hint, ":playlists", "non-matching prefixes appear dimmed, not hidden")
 }
 
-// TestRenderPrefixHints_MultipleMatches shows both :artists and :albums for :a input.
+// TestRenderPrefixHints_MultipleMatches shows both :artists and :albums highlighted for :a input.
 func TestRenderPrefixHints_MultipleMatches(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -213,7 +241,7 @@ func TestRenderPrefixHints_MultipleMatches(t *testing.T) {
 	assert.Contains(t, hint, ":albums")
 }
 
-// TestRenderPrefixHints_ExactMatch shows the exact prefix when typed fully.
+// TestRenderPrefixHints_ExactMatch shows the exact prefix highlighted when typed fully.
 func TestRenderPrefixHints_ExactMatch(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -227,21 +255,25 @@ func TestRenderPrefixHints_ExactMatch(t *testing.T) {
 	assert.Contains(t, hint, ":songs")
 }
 
-// TestRenderPrefixHints_NoMatch returns empty for no matching prefix.
+// TestRenderPrefixHints_NoMatch shows all pills dimmed when no prefix matches.
+// ":z" doesn't match any prefix, so all 4 are shown in muted color.
 func TestRenderPrefixHints_NoMatch(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 
-	// Type ":z" — no prefix starts with z.
+	// Type ":z" — no prefix starts with z. Still PrefixTyping (colon present, no space).
 	o, _ = sendKey(t, o, ":")
 	o, _ = sendKey(t, o, "z")
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
-	assert.Empty(t, hint, "no matching prefix should yield empty hint")
+	// All 4 pills are shown but dimmed (non-matching).
+	assert.Contains(t, hint, ":songs", "dimmed pills still appear in the row")
+	assert.Contains(t, hint, ":artists", "dimmed pills still appear in the row")
+	assert.NotEmpty(t, hint, "pills row is present even when no prefix matches")
 }
 
-// TestRenderPrefixHints_NormalInput returns empty for non-prefix input.
+// TestRenderPrefixHints_NormalInput returns empty for non-prefix input (PrefixNone, non-empty).
 func TestRenderPrefixHints_NormalInput(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -252,13 +284,29 @@ func TestRenderPrefixHints_NormalInput(t *testing.T) {
 
 	assert.Equal(t, panes.PrefixNone, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
-	assert.Empty(t, hint)
+	assert.Empty(t, hint, "normal query (no colon prefix) should hide the pills row")
 }
 
-// --- Task 5: tabCompletePrefix() ---
+// TestRenderPrefixHints_Locked returns empty when prefix is locked (Prompt tag is shown instead).
+func TestRenderPrefixHints_Locked(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
 
-// TestTabComplete_UniquePrefixCompletes completes :s to :songs + space.
-func TestTabComplete_UniquePrefixCompletes(t *testing.T) {
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	hint := o.RenderPrefixHints(80)
+	assert.Empty(t, hint, "pills row is hidden when prefix is locked")
+}
+
+// --- Task 5: SetSuggestions ghost completion (replaces tabCompletePrefix) ---
+
+// TestSetSuggestions_UniqueMatchCompletes verifies Tab accepts the ghost suggestion for :s.
+// SetSuggestions replaces the custom tabCompletePrefix(). After Tab acceptance and
+// Prompt-tag promotion, input.Value() holds only the clean query (empty here).
+func TestSetSuggestions_UniqueMatchCompletes(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 
@@ -266,15 +314,20 @@ func TestTabComplete_UniquePrefixCompletes(t *testing.T) {
 	o, _ = sendKey(t, o, "s")
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 
-	// Tab should complete :s → :songs (unique match).
+	// Tab forwards to textinput which accepts the suggestion ":songs ".
+	// parsePrefix() then locks, and promoteToPromptTag() moves prefix to Prompt.
 	o, _ = sendKey(t, o, "tab")
 
-	assert.Equal(t, ":songs ", o.Query(), "unique match should complete to :songs + space")
-	assert.Equal(t, panes.PrefixLocked, o.PrefixState(), "after completion prefix should be locked")
+	// After promotion: prefix is in Prompt, Value holds only clean query (empty).
+	assert.Equal(t, panes.PrefixLocked, o.PrefixState(), "after Tab acceptance prefix should be locked")
+	assert.Equal(t, ":songs", o.LockedPrefix(), "locked prefix should be :songs")
+	assert.Equal(t, "", o.Query(), "after Prompt-tag promotion, Value holds only the clean query")
+	assert.Contains(t, o.PromptTag(), ":songs", "Prompt should contain the prefix tag")
 }
 
-// TestTabComplete_MultipleMatchesNoChange does not complete :a (2 matches: :artists, :albums).
-func TestTabComplete_MultipleMatchesNoChange(t *testing.T) {
+// TestSetSuggestions_MultipleMatchesAcceptsFirst verifies Tab accepts the first suggestion for :a.
+// With SetSuggestions, Tab always accepts the first matched suggestion (alphabetically first).
+func TestSetSuggestions_MultipleMatchesAcceptsFirst(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 
@@ -282,15 +335,20 @@ func TestTabComplete_MultipleMatchesNoChange(t *testing.T) {
 	o, _ = sendKey(t, o, "a")
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 
-	// Tab should not complete — 2 matches.
+	// Tab forwards to textinput. For ":a", textinput matches both ":albums " and ":artists ".
+	// The first match is accepted (textinput accepts the first alphabetical match).
 	o, _ = sendKey(t, o, "tab")
 
-	assert.Equal(t, ":a", o.Query(), "multiple matches should not change input")
-	assert.Equal(t, panes.PrefixTyping, o.PrefixState())
+	// After Tab: prefix is locked and promoted to Prompt.
+	assert.Equal(t, panes.PrefixLocked, o.PrefixState(), "Tab should accept one of the matching suggestions")
+	// Accepted prefix is one of the :a prefixes.
+	lockedPrefix := o.LockedPrefix()
+	assert.True(t, lockedPrefix == ":albums" || lockedPrefix == ":artists",
+		"locked prefix should be one of the :a matching prefixes, got: %s", lockedPrefix)
 }
 
-// TestTabComplete_ExactPrefixCompletes completes :artists to :artists + space.
-func TestTabComplete_ExactPrefixCompletes(t *testing.T) {
+// TestSetSuggestions_ExactPrefixCompletes verifies Tab completes :artists to :artists + space.
+func TestSetSuggestions_ExactPrefixCompletes(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 
@@ -301,8 +359,9 @@ func TestTabComplete_ExactPrefixCompletes(t *testing.T) {
 
 	o, _ = sendKey(t, o, "tab")
 
-	assert.Equal(t, ":artists ", o.Query(), "exact prefix should complete to :artists + space")
-	assert.Equal(t, panes.PrefixLocked, o.PrefixState())
+	assert.Equal(t, panes.PrefixLocked, o.PrefixState(), "exact prefix should lock after Tab")
+	assert.Equal(t, ":artists", o.LockedPrefix(), "locked prefix should be :artists")
+	assert.Equal(t, "", o.Query(), "after Prompt-tag promotion, Value holds only the clean query")
 }
 
 // --- Task 6: Tab key routing ---
@@ -448,4 +507,343 @@ func TestCycleTabForward_UsesCleanQueryWhenPrefixLocked(t *testing.T) {
 	stcm, ok := msg.(panes.SearchTabChangedMsg)
 	require.True(t, ok, "should emit SearchTabChangedMsg, got %T", msg)
 	assert.Equal(t, "kk", stcm.Query, "tab cycle should use clean query, not raw ':songs kk'")
+}
+
+// ============================================================================
+// Story 89 — Animated placeholder, SetSuggestions, Prompt tag, pills, syncInputToTab, SetTheme
+// ============================================================================
+
+// --- Part 1: Animated cycling placeholder ---
+
+// TestSearchPlaceholders_FourEntries verifies all 4 placeholder messages are defined.
+func TestSearchPlaceholders_FourEntries(t *testing.T) {
+	require.Len(t, panes.SearchPlaceholders, 4, "should have exactly 4 placeholder messages")
+}
+
+// TestSearchPlaceholders_EachStartsWithPrefix verifies each placeholder starts with a valid prefix command.
+func TestSearchPlaceholders_EachStartsWithPrefix(t *testing.T) {
+	for i, ph := range panes.SearchPlaceholders {
+		t.Run(ph, func(t *testing.T) {
+			var found bool
+			for _, p := range panes.SearchPrefixes {
+				if len(ph) >= len(p) && ph[:len(p)] == p {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "placeholder[%d] %q should start with a valid prefix command", i, ph)
+		})
+	}
+}
+
+// TestPlaceholderTick_AdvancesIdx verifies that the placeholder tick increments placeholderIdx.
+func TestPlaceholderTick_AdvancesIdx(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	initialIdx := o.PlaceholderIdx()
+
+	// Fire the placeholder tick. Input is empty, so it should advance.
+	model, cmd := o.Update(panes.SearchPlaceholderTickMsgForTest())
+	updated := model.(*panes.SearchOverlay)
+
+	expectedIdx := (initialIdx + 1) % len(panes.SearchPlaceholders)
+	assert.Equal(t, expectedIdx, updated.PlaceholderIdx(), "tick should advance placeholderIdx")
+	assert.Equal(t, panes.SearchPlaceholders[expectedIdx], updated.Placeholder(), "placeholder text should update")
+	assert.NotNil(t, cmd, "tick should re-arm another tick")
+}
+
+// TestPlaceholderTick_WrapsAround verifies the placeholder wraps after N ticks (N = len of placeholders).
+func TestPlaceholderTick_WrapsAround(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Fire N ticks from index 0: index becomes 1, 2, 3, 0 — back to 0.
+	current := o
+	for i := 0; i < len(panes.SearchPlaceholders); i++ {
+		m, _ := current.Update(panes.SearchPlaceholderTickMsgForTest())
+		current = m.(*panes.SearchOverlay)
+	}
+	assert.Equal(t, 0, current.PlaceholderIdx(), "after N ticks placeholderIdx should wrap to 0")
+}
+
+// TestPlaceholderTick_StopsWhenTyping verifies tick is not re-armed when user has typed.
+func TestPlaceholderTick_StopsWhenTyping(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type a character.
+	o, _ = sendKey(t, o, "h")
+	require.Equal(t, "h", o.Query())
+
+	// Fire placeholder tick — input is not empty, tick should NOT re-arm.
+	_, cmd := o.Update(panes.SearchPlaceholderTickMsgForTest())
+	assert.Nil(t, cmd, "placeholder tick should not re-arm when user has typed")
+}
+
+// TestPlaceholderTick_RestartsOnCtrlU verifies Ctrl+U returns a command that includes a new placeholder tick.
+func TestPlaceholderTick_RestartsOnCtrlU(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type a character so placeholder cycling was stopped.
+	o, _ = sendKey(t, o, "h")
+	require.Equal(t, "h", o.Query())
+
+	// Ctrl+U should include a placeholder tick restart in its returned command.
+	_, cmd := sendKey(t, o, "ctrl+u")
+	require.NotNil(t, cmd, "Ctrl+U should return a command")
+
+	// The command batch must include a placeholder tick command (non-nil).
+	msg := cmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "Ctrl+U should return a BatchMsg, got %T", msg)
+	assert.Greater(t, len(batchMsg), 0, "batch should include at least one command")
+}
+
+// --- Part 2: SetSuggestions configuration ---
+
+// TestNewSearchOverlay_ShowSuggestionsEnabled verifies ShowSuggestions is true.
+func TestNewSearchOverlay_ShowSuggestionsEnabled(t *testing.T) {
+	o := newTestSearchOverlay()
+	assert.True(t, o.InputShowSuggestions(), "textinput.ShowSuggestions should be enabled")
+}
+
+// TestNewSearchOverlay_SuggestionsContainAllPrefixes verifies all 4 prefixes with trailing space.
+func TestNewSearchOverlay_SuggestionsContainAllPrefixes(t *testing.T) {
+	o := newTestSearchOverlay()
+	suggestions := o.InputAvailableSuggestions()
+	require.Len(t, suggestions, 4, "should have exactly 4 suggestions")
+	for _, s := range suggestions {
+		assert.True(t, len(s) > 0 && s[len(s)-1] == ' ',
+			"suggestion %q should end with a trailing space", s)
+	}
+	assert.Contains(t, suggestions, ":songs ")
+	assert.Contains(t, suggestions, ":artists ")
+	assert.Contains(t, suggestions, ":albums ")
+	assert.Contains(t, suggestions, ":playlists ")
+}
+
+// TestNewSearchOverlay_PlaceholderStyleIsInfo verifies PlaceholderStyle uses Info() color.
+func TestNewSearchOverlay_PlaceholderStyleIsInfo(t *testing.T) {
+	o := newTestSearchOverlay()
+	th := theme.Load("black")
+	assert.Equal(t, th.Info(), o.PlaceholderStyleFg(), "PlaceholderStyle foreground should match theme Info()")
+}
+
+// TestNewSearchOverlay_CompletionStyleIsTextMuted verifies CompletionStyle uses TextMuted() color.
+func TestNewSearchOverlay_CompletionStyleIsTextMuted(t *testing.T) {
+	o := newTestSearchOverlay()
+	th := theme.Load("black")
+	assert.Equal(t, th.TextMuted(), o.CompletionStyleFg(), "CompletionStyle foreground should match theme TextMuted()")
+}
+
+// --- Part 3: Prompt-based prefix tag ---
+
+// TestPromoteToPromptTag_PromptContainsPrefix verifies the Prompt contains the locked prefix text.
+func TestPromoteToPromptTag_PromptContainsPrefix(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type ":songs kk" to lock the prefix.
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+
+	// After promotion, Prompt should contain ":songs".
+	assert.Contains(t, o.PromptTag(), ":songs", "Prompt should contain locked prefix text")
+}
+
+// TestPromoteToPromptTag_ValueHoldsCleanQuery verifies Value() contains only the clean query.
+func TestPromoteToPromptTag_ValueHoldsCleanQuery(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+
+	assert.Equal(t, "kk", o.Query(), "Value() should hold only the clean query after Prompt promotion")
+}
+
+// TestDemoteFromPromptTag_PromptReset verifies that demote resets Prompt to "> ".
+// To trigger demote, cursor must be at pos 0. This happens when prefix is locked
+// with empty clean query (pos 0) and backspace is pressed.
+func TestDemoteFromPromptTag_PromptReset(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type ":songs " → locked, promoted. Value = "", pos = 0.
+	for _, ch := range ":songs " {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "", o.Query(), "after promotion with empty query, Value should be empty")
+	// Cursor is at pos 0 (end of empty string).
+
+	// Backspace at pos 0 → demote.
+	o, _ = sendKey(t, o, "backspace")
+
+	assert.Equal(t, "> ", o.PromptTag(), "Prompt should be reset to '> ' after demote")
+}
+
+// TestDemoteFromPromptTag_ValueRestoredWithPrefix verifies Value() has prefix+space+query after demote.
+func TestDemoteFromPromptTag_ValueRestoredWithPrefix(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type ":songs " → locked, promoted. Value = "", pos = 0.
+	for _, ch := range ":songs " {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "", o.Query(), "setup: empty query after promotion")
+
+	// Backspace at pos 0 → demote: restores ":songs " + "" = ":songs ".
+	o, _ = sendKey(t, o, "backspace")
+
+	assert.Equal(t, ":songs ", o.Query(), "after demote with empty query, Value should be ':songs ' (prefix + space + empty)")
+}
+
+// TestBackspaceNotAtPos0_NormalBackspace verifies backspace within the query does not demote.
+func TestBackspaceNotAtPos0_NormalBackspace(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "kk", o.Query())
+
+	// Backspace in the middle of the query ("kk") — cursor is at pos 2, not 0.
+	// Should remove the last char, NOT demote.
+	o, _ = sendKey(t, o, "backspace")
+	// After promotion, cursor is at end of "kk" (pos 2), not pos 0.
+	// So this backspace removes "k" → "k".
+	// Prefix is still locked.
+	assert.Equal(t, panes.PrefixLocked, o.PrefixState(), "backspace in the middle of query should not demote")
+	assert.Contains(t, o.PromptTag(), ":songs", "Prompt tag should still be present")
+}
+
+// --- Part 5: Bidirectional tab sync ---
+
+// TestSyncInputToTab_SongsSetsPromptTag verifies TabSongs sets styled Prompt tag.
+func TestSyncInputToTab_SongsSetsPromptTag(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type a query first.
+	for _, ch := range "kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+
+	// Cycle to TabSongs.
+	o, _ = sendKey(t, o, "tab")
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+
+	assert.Equal(t, panes.PrefixLocked, o.PrefixState(), "syncInputToTab should set PrefixLocked for TabSongs")
+	assert.Equal(t, ":songs", o.LockedPrefix(), "locked prefix should be :songs")
+	assert.Contains(t, o.PromptTag(), ":songs", "Prompt should contain :songs tag")
+	assert.Equal(t, "kk", o.Query(), "query should be preserved in Value()")
+}
+
+// TestSyncInputToTab_AllStripsTag verifies TabAll restores default Prompt and clears prefix.
+func TestSyncInputToTab_AllStripsTag(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// First cycle to TabSongs with query "kk".
+	for _, ch := range "kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	o, _ = sendKey(t, o, "tab") // → TabSongs
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+
+	// Shift+Tab back to TabAll.
+	o, _ = sendKey(t, o, "shift+tab") // → TabAll (wraps)
+	// Keep cycling until we reach TabAll.
+	for o.ActiveTab() != panes.TabAll {
+		o, _ = sendKey(t, o, "tab")
+	}
+
+	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "TabAll should clear prefix state")
+	assert.Equal(t, "", o.LockedPrefix(), "TabAll should clear lockedPrefix")
+	assert.Equal(t, "> ", o.PromptTag(), "TabAll should restore default '> ' Prompt")
+	assert.Equal(t, "kk", o.Query(), "query should be preserved when switching to TabAll")
+}
+
+// TestSyncInputToTab_PreservesQuery verifies the clean query is preserved across tab switches.
+func TestSyncInputToTab_PreservesQuery(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type ":songs kk" to lock.
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "kk", o.CleanQuery())
+
+	// Tab cycles to TabArtists (from TabSongs → TabArtists).
+	o, _ = sendKey(t, o, "tab")
+
+	assert.Equal(t, panes.TabArtists, o.ActiveTab())
+	assert.Equal(t, "kk", o.Query(), "clean query preserved after tab cycle")
+	assert.Equal(t, panes.PrefixLocked, o.PrefixState())
+	assert.Equal(t, ":artists", o.LockedPrefix())
+}
+
+// --- Part 6: SetTheme propagation ---
+
+// TestSetTheme_UpdatesPlaceholderStyle verifies PlaceholderStyle changes with new theme.
+func TestSetTheme_UpdatesPlaceholderStyle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	newTheme := theme.Load("dracula")
+	o.SetTheme(newTheme)
+
+	assert.Equal(t, newTheme.Info(), o.PlaceholderStyleFg(),
+		"PlaceholderStyle foreground should match new theme Info()")
+}
+
+// TestSetTheme_UpdatesCompletionStyle verifies CompletionStyle changes with new theme.
+func TestSetTheme_UpdatesCompletionStyle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	newTheme := theme.Load("dracula")
+	o.SetTheme(newTheme)
+
+	assert.Equal(t, newTheme.TextMuted(), o.CompletionStyleFg(),
+		"CompletionStyle foreground should match new theme TextMuted()")
+}
+
+// TestSetTheme_ReRendersPromptTagWhenLocked verifies active Prompt tag is re-styled on theme change.
+func TestSetTheme_ReRendersPromptTagWhenLocked(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Lock a prefix.
+	for _, ch := range ":songs kk" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+
+	promptBefore := o.PromptTag()
+	queryBefore := o.Query()
+
+	// Switch theme.
+	newTheme := theme.Load("dracula")
+	o.SetTheme(newTheme)
+
+	// Prompt tag should still contain ":songs" (re-rendered with new theme colors).
+	assert.Contains(t, o.PromptTag(), ":songs", "Prompt tag should still contain prefix after SetTheme")
+	// Query should be preserved (promoteToPromptTag re-applies, not re-extracts from scratch).
+	assert.Equal(t, queryBefore, o.Query(), "Query must not change after SetTheme")
+	_ = promptBefore // exact ANSI codes differ by theme, just verify presence of prefix
 }

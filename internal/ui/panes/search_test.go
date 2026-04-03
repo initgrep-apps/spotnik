@@ -537,6 +537,7 @@ func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
 
 // TestSearchOverlay_CtrlU_EmitsSearchClearedMsg verifies that pressing Ctrl+U
 // returns a command producing SearchClearedMsg instead of writing to the store directly.
+// Ctrl+U now returns a BatchMsg (SearchClearedMsg + placeholder tick restart).
 func TestSearchOverlay_CtrlU_EmitsSearchClearedMsg(t *testing.T) {
 	t.Helper()
 	s := state.New()
@@ -549,12 +550,28 @@ func TestSearchOverlay_CtrlU_EmitsSearchClearedMsg(t *testing.T) {
 	o.SetSize(80, 30)
 
 	// Press Ctrl+U — should NOT write to store directly, but emit SearchClearedMsg.
+	// The command is a BatchMsg containing SearchClearedMsg and a placeholder tick restart.
 	_, cmd := sendKey(t, o, "ctrl+u")
 
-	require.NotNil(t, cmd, "Ctrl+U should return a command (SearchClearedMsg)")
+	require.NotNil(t, cmd, "Ctrl+U should return a command")
 	msg := cmd()
-	_, ok := msg.(panes.SearchClearedMsg)
-	assert.True(t, ok, "Ctrl+U command should produce SearchClearedMsg, got %T", msg)
+
+	// Handle both direct SearchClearedMsg and BatchMsg (SearchClearedMsg + tick).
+	var gotCleared bool
+	switch m := msg.(type) {
+	case panes.SearchClearedMsg:
+		gotCleared = true
+	case tea.BatchMsg:
+		for _, subCmd := range m {
+			if subCmd == nil {
+				continue
+			}
+			if _, cleared := subCmd().(panes.SearchClearedMsg); cleared {
+				gotCleared = true
+			}
+		}
+	}
+	assert.True(t, gotCleared, "Ctrl+U must produce SearchClearedMsg (got %T)", msg)
 
 	// The store should NOT have been mutated directly by the overlay.
 	// (Actual clearing happens in app.go when SearchClearedMsg is handled.)
@@ -1316,6 +1333,7 @@ func TestSearchOverlay_SetTheme_SpinnerStyleUpdated(t *testing.T) {
 
 // TestSearchOverlay_EmptyQueryAfterPrefix_NoSearch verifies that ':songs ' (prefix
 // locked but no query after the space) shows the empty state and never fires a search.
+// With the Prompt-based approach, when prefix is locked, input.Value() == "" (clean query only).
 func TestSearchOverlay_EmptyQueryAfterPrefix_NoSearch(t *testing.T) {
 	o := newTestSearchOverlay()
 
@@ -1324,9 +1342,11 @@ func TestSearchOverlay_EmptyQueryAfterPrefix_NoSearch(t *testing.T) {
 		o, _ = sendKey(t, o, string(ch))
 	}
 
-	// The clean query should be empty.
-	q := o.Query() // raw input is ":songs "
-	assert.Equal(t, ":songs ", q, "raw input should contain the locked prefix")
+	// With Prompt-based approach: prefix is in Prompt, Value holds only the clean query.
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	assert.Equal(t, ":songs", o.LockedPrefix(), "locked prefix should be :songs")
+	assert.Equal(t, "", o.Query(), "with Prompt tag, input.Value() holds only the clean query (empty)")
+	assert.Equal(t, "", o.CleanQuery(), "clean query should be empty")
 
 	// Fire a debounce tick for the empty clean query — must be a no-op.
 	debounceMsg := panes.SearchDebounceMsgForTest("")
