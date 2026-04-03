@@ -231,3 +231,13 @@ When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` wi
 
 1. `SearchPageLoadedMsg.Type` field is always empty string after prefetch engine rewrite — either remove the field or add proper `TODO(84-search-list-delegate):` tag
 2. Consider debounce/dedup for search error toasts — rapid failures from batch pages could stack multiple identical toasts
+
+---
+
+## Search Redesign: Post-merge review minor items
+**Found:** 2026-04-03 | **Source:** Post-merge review of PRs #108-110
+**Feature:** 19-search-redesign
+
+1. `checkPrefetch()` fires on every arrow keypress past threshold — consider tracking last-requested prefetch offset to suppress duplicates (currently deduplicated by SearchLoading guard in app.go)
+2. `nextOffsetForTab()` returns 0 instead of -1 when Total == 0 — harmless in production but could cause redundant offset-0 fetch in tests
+3. Unknown prefix (`:foo `) sends colon-prefixed string to Spotify API with no user feedback that the prefix was not recognized
