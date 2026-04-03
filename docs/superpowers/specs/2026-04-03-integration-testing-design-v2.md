@@ -419,13 +419,9 @@ All 17 completed features currently have unit tests only. When the integration/c
 
 ---
 
-## 8. Skills & Agents for Test Writing
+## 8. Skills for Test Writing
 
-### 8.1 Why Skills, Not Agents
-
-The feature-implementer agent already has the full feature context (story spec, implementation code, pane behavior). A skill teaches it the testing patterns. A separate agent would duplicate context and produce disconnected tests.
-
-### 8.2 Skill: `component-test`
+### 8.1 Skill: `component-test`
 
 **Triggers when:** Agent is implementing a pane feature, keybinding, filter, or rendering change.
 
@@ -437,7 +433,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 - Reminder to pre-populate store with test data in the driver
 - Command: `make test-component` and `-rewrite` for intentional output changes
 
-### 8.3 Skill: `integration-test`
+### 8.2 Skill: `integration-test`
 
 **Triggers when:** Agent is implementing overlay routing, cross-pane workflows, command chains, error recovery flows, or golden file updates.
 
@@ -450,7 +446,7 @@ The feature-implementer agent already has the full feature context (story spec, 
 - Build tag reminder: `//go:build integration`
 - Command: `make test-integration`
 
-### 8.4 Feature-Implementer Workflow (Updated)
+### 8.3 Feature-Implementer Workflow (Updated)
 
 ```
 1. Read story spec → understand tasks and tests needed
