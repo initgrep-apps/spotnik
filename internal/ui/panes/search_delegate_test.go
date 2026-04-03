@@ -375,12 +375,21 @@ func newTestDelegate() SearchItemDelegate {
 
 func renderItem(d SearchItemDelegate, item SearchListItem, selected bool, width int) string {
 	// Build a minimal list model with the item.
-	rl := list.New([]list.Item{item}, d, width, 10)
+	// When selected=false, we need to ensure the list cursor does not point at our item's
+	// index. We place a dummy item at index 0 (where the cursor defaults) and render
+	// our item at index 1 so isSelected (index == m.Index()) evaluates to false.
 	if selected {
+		rl := list.New([]list.Item{item}, d, width, 10)
 		rl.Select(0)
+		var buf bytes.Buffer
+		d.Render(&buf, rl, 0, item)
+		return buf.String()
 	}
+	dummy := SearchListItem{Category: "track", Name: "dummy"}
+	rl := list.New([]list.Item{dummy, item}, d, width, 10)
+	rl.Select(0) // cursor on dummy, not our item
 	var buf bytes.Buffer
-	d.Render(&buf, rl, 0, item)
+	d.Render(&buf, rl, 1, item)
 	return buf.String()
 }
 
@@ -526,6 +535,25 @@ func TestRenderPlaylist_NoDescription(t *testing.T) {
 	assert.Contains(t, out, "10 tracks")
 }
 
+// TestRenderTrack_Selected verifies that a selected track renders differently from non-selected.
+func TestRenderTrack_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Blinding Lights",
+		Subtitle:    "The Weeknd · After Hours · 3:20",
+		URI:         "spotify:track:t1",
+		IsTrack:     true,
+		ArtistNames: "The Weeknd",
+		AlbumName:   "After Hours",
+		Duration:    "3:20",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Blinding Lights", "selected output should contain the track name")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
 // TestStyledDot verifies the dot separator is non-empty.
 func TestStyledDot(t *testing.T) {
 	d := newTestDelegate()
@@ -535,13 +563,20 @@ func TestStyledDot(t *testing.T) {
 	assert.Contains(t, dot, "·")
 }
 
-// TestRightAlign verifies that left and right content appear in the output.
+// TestRightAlign verifies that left and right content appear in the output,
+// and the total width matches the requested width, with right after left.
 func TestRightAlign(t *testing.T) {
 	d := newTestDelegate()
 	result := d.rightAlign("left", "right", 20)
 	// Both parts should be in the result.
 	assert.Contains(t, result, "left")
 	assert.Contains(t, result, "right")
+	// Output width should equal the requested width.
+	assert.Len(t, result, 20, "rightAlign output should have exactly the requested width")
+	// "right" should appear after "left" in the string.
+	leftIdx := strings.Index(result, "left")
+	rightIdx := strings.Index(result, "right")
+	assert.Greater(t, rightIdx, leftIdx, "right text should appear after left text")
 }
 
 // TestStyledName verifies that selected styling is applied when isSelected=true.
@@ -552,6 +587,8 @@ func TestStyledName(t *testing.T) {
 	// Both should contain the name.
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
+	// Selected styling should differ from normal styling.
+	assert.NotEqual(t, normal, selected, "selected and normal styling should differ")
 }
 
 // TestRenderDefault verifies non-matching category uses a fallback.

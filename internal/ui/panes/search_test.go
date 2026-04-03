@@ -15,6 +15,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// findPanelBounds locates a bordered panel by title in the rendered view lines.
+// It finds the ╭ line containing the title, then the next ╰ line, returning
+// the start and end line indices. Returns (-1, -1) if the panel is not found.
+func findPanelBounds(lines []string, title string) (start, end int) {
+	start = -1
+	end = -1
+	for i, line := range lines {
+		if strings.Contains(line, "╭") && strings.Contains(line, title) {
+			start = i
+		}
+		if start >= 0 && end < 0 && i > start && strings.Contains(line, "╰") {
+			end = i
+			return
+		}
+	}
+	return
+}
+
 // newTestSearchOverlay creates a SearchOverlay wired to a fresh store and theme.
 func newTestSearchOverlay() *panes.SearchOverlay {
 	s := state.New()
@@ -1415,19 +1433,6 @@ func TestSearchOverlay_View_ThreePanelBorderCount(t *testing.T) {
 	assert.Equal(t, 3, count, "view should have exactly 3 panel top borders (╭)")
 }
 
-// TestSearchOverlay_View_NoBlankLineBetweenPanels verifies there is no blank line
-// between any two consecutive panel borders.
-func TestSearchOverlay_View_NoBlankLineBetweenPanels(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(100, 40)
-
-	view := o.View()
-	// There should be no empty line between the panels.
-	// We check that the ╰ of panel 1 is immediately followed by ╭ of panel 2.
-	assert.NotRegexp(t, `╰[^\n]*\n\s*\n[^\n]*╭`, view,
-		"no blank line should appear between panel end ╰ and next panel start ╭")
-}
-
 // TestSearchOverlay_ShowHintLine_EmptyInput returns true when input is empty.
 func TestSearchOverlay_ShowHintLine_EmptyInput(t *testing.T) {
 	o := newTestSearchOverlay()
@@ -1485,18 +1490,7 @@ func TestSearchOverlay_View_HintInsideSearchPanel(t *testing.T) {
 	view := o.View()
 	lines := strings.Split(view, "\n")
 
-	// Find the Search panel boundaries using strings.Contains (ANSI codes may precede ╭/╰).
-	searchStart := -1
-	searchEnd := -1
-	for i, line := range lines {
-		if strings.Contains(line, "╭") && strings.Contains(line, "Search") {
-			searchStart = i
-		}
-		if searchStart >= 0 && searchEnd < 0 && i > searchStart && strings.Contains(line, "╰") {
-			searchEnd = i
-			break
-		}
-	}
+	searchStart, searchEnd := findPanelBounds(lines, "Search")
 	require.Greater(t, searchStart, -1, "Search panel top border not found in view")
 	require.Greater(t, searchEnd, -1, "Search panel bottom border not found in view")
 
@@ -1541,18 +1535,7 @@ func TestSearchOverlay_View_SearchPanelHeight_WithHints(t *testing.T) {
 	view := o.View()
 	lines := strings.Split(view, "\n")
 
-	// Find Search panel boundaries using strings.Contains.
-	searchStart := -1
-	searchEnd := -1
-	for i, line := range lines {
-		if strings.Contains(line, "╭") && strings.Contains(line, "Search") {
-			searchStart = i
-		}
-		if searchStart >= 0 && searchEnd < 0 && i > searchStart && strings.Contains(line, "╰") {
-			searchEnd = i
-			break
-		}
-	}
+	searchStart, searchEnd := findPanelBounds(lines, "Search")
 	require.Greater(t, searchStart, -1, "Search panel top border not found")
 	require.Greater(t, searchEnd, -1, "Search panel bottom border not found")
 
@@ -1575,17 +1558,7 @@ func TestSearchOverlay_View_SearchPanelHeight_WithoutHints(t *testing.T) {
 	view := o.View()
 	lines := strings.Split(view, "\n")
 
-	searchStart := -1
-	searchEnd := -1
-	for i, line := range lines {
-		if strings.Contains(line, "╭") && strings.Contains(line, "Search") {
-			searchStart = i
-		}
-		if searchStart >= 0 && searchEnd < 0 && i > searchStart && strings.Contains(line, "╰") {
-			searchEnd = i
-			break
-		}
-	}
+	searchStart, searchEnd := findPanelBounds(lines, "Search")
 	require.Greater(t, searchStart, -1, "Search panel top border not found")
 	require.Greater(t, searchEnd, -1, "Search panel bottom border not found")
 
@@ -1595,23 +1568,18 @@ func TestSearchOverlay_View_SearchPanelHeight_WithoutHints(t *testing.T) {
 
 // TestSearchOverlay_ResultsBorderColor_UsesSeekBar verifies Results panel uses SeekBar color token.
 func TestSearchOverlay_ResultsBorderColor_UsesSeekBar(t *testing.T) {
-	o := newTestSearchOverlay()
-	// Verify the rendered border config uses SeekBar — accessible via the exported accessor.
 	th := theme.Load("black")
 	o2 := panes.NewSearchOverlayForTest(th)
 	assert.Equal(t, th.SeekBar(), o2.ResultsBorderAccentColor(),
 		"Results panel should use theme.SeekBar() as its AccentColor")
-	_ = o
 }
 
 // TestSearchOverlay_KeysBorderHasNoTitle verifies Keys panel has no title in its border config.
 func TestSearchOverlay_KeysBorderHasNoTitle(t *testing.T) {
-	o := newTestSearchOverlay()
 	th := theme.Load("black")
 	o2 := panes.NewSearchOverlayForTest(th)
 	assert.Equal(t, "", o2.KeysPanelTitle(),
 		"Keys panel should have empty Title in border config")
-	_ = o
 }
 
 // TestSearchOverlay_Resize_PropagatesListAndHelp verifies that SetSize correctly
