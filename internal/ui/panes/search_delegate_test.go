@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -995,4 +996,133 @@ func TestRenderDefault_ThreeLines(t *testing.T) {
 	out := buf.String()
 	assert.Equal(t, 3, countLines(out), "default render should have 3 lines")
 	assert.Contains(t, out, "Mystery Item")
+}
+
+// --- padToInner tests ---
+
+// TestPadToInner verifies that padToInner right-pads content to the exact innerW.
+func TestPadToInner(t *testing.T) {
+	d := newTestDelegate()
+	tests := []struct {
+		name    string
+		content string
+		innerW  int
+		wantLen int  // expected visible width of result
+		wantGTE bool // true when we only check result >= innerW (content wider)
+	}{
+		{
+			name:    "shorter than innerW gets padded to exact width",
+			content: "hello",
+			innerW:  20,
+			wantLen: 20,
+		},
+		{
+			name:    "equal to innerW returned unchanged",
+			content: "exactly_ten_",
+			innerW:  12,
+			wantLen: 12,
+		},
+		{
+			name:    "wider than innerW returned unchanged (no truncation)",
+			content: strings.Repeat("x", 30),
+			innerW:  20,
+			wantLen: 30,
+		},
+		{
+			name:    "empty string padded to full width",
+			content: "",
+			innerW:  10,
+			wantLen: 10,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := d.padToInner(tt.content, tt.innerW)
+			gotWidth := lipgloss.Width(got)
+			assert.Equal(t, tt.wantLen, gotWidth,
+				"padToInner(%q, %d) visible width = %d, want %d", tt.content, tt.innerW, gotWidth, tt.wantLen)
+			// Original content must be preserved (padToInner never truncates).
+			assert.True(t, strings.HasPrefix(got, tt.content),
+				"padToInner must not alter the content prefix")
+		})
+	}
+}
+
+// --- Selected-state tests for artist, album, playlist, default ---
+
+// TestRenderArtist_Selected verifies that a selected artist renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderArtist_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:   "artist",
+		Name:       "Hans Zimmer",
+		Subtitle:   "film score · 7.6M followers",
+		URI:        "spotify:artist:a1",
+		Genres:     "film score, soundtrack",
+		Followers:  "7.6M followers",
+		Popularity: 79,
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Hans Zimmer", "selected artist output should contain the name")
+	assert.Contains(t, selected, "│", "selected artist should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestRenderAlbum_Selected verifies that a selected album renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderAlbum_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:     "album",
+		Name:         "Interstellar",
+		Subtitle:     "Hans Zimmer · 2014 · 1 tracks",
+		URI:          "spotify:album:al1",
+		AlbumType:    "Single",
+		ReleaseYear:  "2014",
+		TrackCount:   "1 tracks",
+		AlbumArtists: "Hans Zimmer",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Interstellar", "selected album output should contain the name")
+	assert.Contains(t, selected, "│", "selected album should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestRenderPlaylist_Selected verifies that a selected playlist renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderPlaylist_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:       "playlist",
+		Name:           "Epic Film Scores",
+		Subtitle:       "by john_doe · 245 tracks · Best scores",
+		URI:            "spotify:playlist:pl1",
+		Owner:          "john_doe",
+		PlaylistTracks: "245 tracks",
+		PlaylistDesc:   "Best scores ever",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Epic Film Scores", "selected playlist output should contain the name")
+	assert.Contains(t, selected, "│", "selected playlist should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestRenderDefault_Selected verifies that a selected default-category item renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderDefault_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category: "unknown",
+		Name:     "Mystery Item",
+		Subtitle: "some info",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Mystery Item", "selected default output should contain the name")
+	assert.Contains(t, selected, "│", "selected default should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
 }
