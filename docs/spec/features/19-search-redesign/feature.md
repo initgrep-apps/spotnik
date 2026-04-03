@@ -1,6 +1,6 @@
 ---
 title: "Search Redesign"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -59,4 +59,16 @@ Implementers **must** use these specific Bubble Tea components. Refer to the `/b
 - [ ] `bubbles/help` renders context-sensitive keybindings at bottom
 - [ ] All existing actions preserved: Enter=play, Ctrl+A=add to queue, Esc=close
 - [ ] 300ms debounce on input (existing behavior preserved)
+- [ ] Rich metadata in results: tracks show all artists, album, duration, explicit; artists show genres, followers; albums show type, year, track count; playlists show owner, track count
+- [ ] All result metadata styled with distinct theme color tokens
+- [ ] Enter plays selected item without closing overlay (only Esc closes)
+- [ ] Overlay width reduced to 70% of terminal
+- [ ] Category icons are theme-colorable Unicode symbols (♪ ★ ◎ ▤), not emoji
+- [ ] Prefix commands discoverable via placeholder text and ghost hints
+- [ ] Animated cycling placeholder shows prefix commands in theme color when input is empty
+- [ ] Native inline ghost completion for prefixes via `textinput.SetSuggestions`
+- [ ] Locked prefix shown as styled tag/chip in textinput Prompt with colored background
+- [ ] Hint pills row with category badge colors, dimming non-matching prefixes
+- [ ] Tab/Shift+Tab tab switching syncs bidirectionally with Prompt-based prefix tag
+- [ ] Three panels render flush (zero margin), hints inside Search panel, per-panel border colors
 - [ ] make ci passes
