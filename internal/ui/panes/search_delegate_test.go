@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -604,7 +605,8 @@ func TestRightAlign(t *testing.T) {
 	assert.Greater(t, rightIdx, leftIdx, "right text should appear after left text")
 }
 
-// TestStyledName verifies that selected styling is applied when isSelected=true.
+// TestStyledName verifies that styledName always produces bold output with the item name,
+// and that selected/normal produce identical output (selection is handled by wrapLine).
 func TestStyledName(t *testing.T) {
 	d := newTestDelegate()
 	normal := d.styledName("Track Name", false, 40)
@@ -612,8 +614,8 @@ func TestStyledName(t *testing.T) {
 	// Both should contain the name.
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
-	// Selected styling should differ from normal styling.
-	assert.NotEqual(t, normal, selected, "selected and normal styling should differ")
+	// Selection no longer affects styledName — wrapLine handles the selection highlight.
+	assert.Equal(t, normal, selected, "styledName should produce same output regardless of selected param")
 }
 
 // TestRenderDefault verifies non-matching category uses a fallback.
@@ -732,4 +734,395 @@ func TestPlaylistsToListItems_LongDescription(t *testing.T) {
 	si := items[0].(SearchListItem)
 	assert.True(t, len([]rune(si.PlaylistDesc)) <= 60, "description should be truncated to 60 runes")
 	assert.True(t, strings.HasSuffix(si.PlaylistDesc, "…"), "truncated desc should end with ellipsis")
+}
+
+// --- Task 19: Height() and wrapLine() tests ---
+
+// TestHeight returns 3 after the 3-line layout change.
+func TestHeight(t *testing.T) {
+	d := newTestDelegate()
+	assert.Equal(t, 3, d.Height(), "Height() should return 3 for 3-line items")
+}
+
+// TestWrapLine_Selected verifies that a selected line contains the left border │ character.
+func TestWrapLine_Selected(t *testing.T) {
+	d := newTestDelegate()
+	out := d.wrapLine("hello", true)
+	assert.Contains(t, out, "│", "selected wrapLine should contain left border │")
+	assert.Contains(t, out, "hello", "selected wrapLine should contain content")
+}
+
+// TestWrapLine_Normal verifies that an unselected line has at least 2-space left indent (no border).
+func TestWrapLine_Normal(t *testing.T) {
+	d := newTestDelegate()
+	out := d.wrapLine("hello", false)
+	assert.Contains(t, out, "hello", "normal wrapLine should contain content")
+	// Normal items use Padding(0,0,0,2) — output should start with spaces, not a border char.
+	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
+}
+
+// --- Task 20: styledName() always bold, no background ---
+
+// TestStyledName_AlwaysBold verifies styledName always applies bold regardless of selected.
+func TestStyledName_AlwaysBold(t *testing.T) {
+	d := newTestDelegate()
+	// Bold(true) produces \x1b[...1m or \x1b[1m in ANSI output.
+	normal := d.styledName("Track Name", false, 40)
+	selected := d.styledName("Track Name", true, 40)
+	assert.Contains(t, normal, "Track Name")
+	assert.Contains(t, selected, "Track Name")
+	// Both should contain an ANSI bold sequence (1m).
+	assert.Contains(t, normal, "\x1b[", "styledName should contain ANSI escape")
+	// The ANSI sequence should contain bold code "1" somewhere in the styling.
+	assert.True(t, strings.Contains(normal, "1m") || strings.Contains(normal, ";1;") ||
+		strings.Contains(normal, ";1m") || strings.Contains(normal, "1;"),
+		"styledName normal should contain bold ANSI code")
+}
+
+// TestStyledName_NoBackground verifies styledName no longer applies background color.
+// Previously selected=true applied SelectedBg; now selection is handled at line level.
+func TestStyledName_NoBackground(t *testing.T) {
+	d := newTestDelegate()
+	normalOut := d.styledName("Name", false, 40)
+	selectedOut := d.styledName("Name", true, 40)
+	// Both should produce identical output — selection no longer affects styledName.
+	assert.Equal(t, normalOut, selectedOut, "styledName should produce same output regardless of selected param")
+}
+
+// --- Task 21: renderTrack 3-line layout ---
+
+// countLines counts the number of lines (terminated by \n) in a rendered output string.
+// Trailing newlines on the last line are expected from the renderer.
+func countLines(s string) int {
+	return strings.Count(s, "\n")
+}
+
+// stripANSI strips ANSI escape codes from a string for plain-text assertions.
+func stripANSI(s string) string {
+	var result strings.Builder
+	inEscape := false
+	for _, r := range s {
+		switch {
+		case r == '\x1b':
+			inEscape = true
+		case inEscape && r == 'm':
+			inEscape = false
+		case inEscape:
+			// still inside escape sequence
+		default:
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
+}
+
+// TestRenderTrack_ThreeLines verifies track renders exactly 3 lines.
+func TestRenderTrack_ThreeLines(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Blinding Lights",
+		Subtitle:    "The Weeknd · After Hours · 3:20",
+		URI:         "spotify:track:t1",
+		IsTrack:     true,
+		ArtistNames: "The Weeknd",
+		AlbumName:   "After Hours",
+		Duration:    "3:20",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Equal(t, 3, countLines(out), "track render should have 3 lines (3 newlines)")
+}
+
+// TestRenderTrack_LineContents verifies each line carries the expected content.
+func TestRenderTrack_LineContents(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Blinding Lights",
+		ArtistNames: "The Weeknd",
+		AlbumName:   "After Hours",
+		Duration:    "3:20",
+	}
+	out := renderItem(d, item, false, 80)
+	plain := stripANSI(out)
+	lines := strings.SplitN(plain, "\n", 4)
+	require.GreaterOrEqual(t, len(lines), 3)
+	assert.Contains(t, lines[0], "Blinding Lights", "line 1 should contain track name")
+	assert.Contains(t, lines[0], "3:20", "line 1 should contain duration")
+	assert.Contains(t, lines[1], "The Weeknd", "line 2 should contain artists")
+	assert.Contains(t, lines[2], "After Hours", "line 3 should contain album name")
+}
+
+// TestRenderTrack_Selected_ThreeLines verifies selected track renders 3 lines with │.
+func TestRenderTrack_Selected_ThreeLines(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Blinding Lights",
+		ArtistNames: "The Weeknd",
+		AlbumName:   "After Hours",
+		Duration:    "3:20",
+	}
+	selected := renderItem(d, item, true, 80)
+	normal := renderItem(d, item, false, 80)
+	assert.Equal(t, 3, countLines(selected), "selected track should still have 3 lines")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+	assert.Contains(t, selected, "│", "selected track should contain left border │")
+}
+
+// --- Task 22: renderArtist 3-line layout ---
+
+// TestRenderArtist_ThreeLines verifies artist renders exactly 3 lines.
+func TestRenderArtist_ThreeLines(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:   "artist",
+		Name:       "Hans Zimmer",
+		Genres:     "film score, soundtrack",
+		Followers:  "7.6M followers",
+		Popularity: 79,
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Equal(t, 3, countLines(out), "artist render should have 3 lines")
+}
+
+// TestRenderArtist_LineContents verifies each artist line carries the expected content.
+func TestRenderArtist_LineContents(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:   "artist",
+		Name:       "Hans Zimmer",
+		Genres:     "film score, soundtrack",
+		Followers:  "7.6M followers",
+		Popularity: 79,
+	}
+	out := renderItem(d, item, false, 80)
+	plain := stripANSI(out)
+	lines := strings.SplitN(plain, "\n", 4)
+	require.GreaterOrEqual(t, len(lines), 3)
+	assert.Contains(t, lines[0], "Hans Zimmer", "line 1 should contain artist name")
+	assert.Contains(t, lines[1], "film score", "line 2 should contain genres")
+	assert.Contains(t, lines[2], "7.6M followers", "line 3 should contain followers")
+}
+
+// --- Task 23: renderAlbum 3-line layout ---
+
+// TestRenderAlbum_ThreeLines verifies album renders exactly 3 lines.
+func TestRenderAlbum_ThreeLines(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:     "album",
+		Name:         "Interstellar",
+		AlbumType:    "Single",
+		ReleaseYear:  "2014",
+		TrackCount:   "1 tracks",
+		AlbumArtists: "Hans Zimmer",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Equal(t, 3, countLines(out), "album render should have 3 lines")
+}
+
+// TestRenderAlbum_LineContents verifies each album line carries the expected content.
+func TestRenderAlbum_LineContents(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:     "album",
+		Name:         "Interstellar",
+		AlbumType:    "Single",
+		ReleaseYear:  "2014",
+		TrackCount:   "1 tracks",
+		AlbumArtists: "Hans Zimmer",
+	}
+	out := renderItem(d, item, false, 80)
+	plain := stripANSI(out)
+	lines := strings.SplitN(plain, "\n", 4)
+	require.GreaterOrEqual(t, len(lines), 3)
+	assert.Contains(t, lines[0], "Interstellar", "line 1 should contain album name")
+	assert.Contains(t, lines[0], "Single", "line 1 should contain album type")
+	assert.Contains(t, lines[0], "2014", "line 1 should contain release year")
+	assert.Contains(t, lines[1], "Hans Zimmer", "line 2 should contain artists")
+	assert.Contains(t, lines[2], "1 tracks", "line 3 should contain track count")
+}
+
+// --- Task 24: renderPlaylist 3-line layout ---
+
+// TestRenderPlaylist_ThreeLines verifies playlist renders exactly 3 lines.
+func TestRenderPlaylist_ThreeLines(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:       "playlist",
+		Name:           "Epic Film Scores",
+		Owner:          "john_doe",
+		PlaylistTracks: "245 tracks",
+		PlaylistDesc:   "Best scores ever",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Equal(t, 3, countLines(out), "playlist render should have 3 lines")
+}
+
+// TestRenderPlaylist_LineContents verifies each playlist line carries the expected content.
+func TestRenderPlaylist_LineContents(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:       "playlist",
+		Name:           "Epic Film Scores",
+		Owner:          "john_doe",
+		PlaylistTracks: "245 tracks",
+		PlaylistDesc:   "Best scores ever",
+	}
+	out := renderItem(d, item, false, 80)
+	plain := stripANSI(out)
+	lines := strings.SplitN(plain, "\n", 4)
+	require.GreaterOrEqual(t, len(lines), 3)
+	assert.Contains(t, lines[0], "Epic Film Scores", "line 1 should contain playlist name")
+	assert.Contains(t, lines[0], "245 tracks", "line 1 should contain track count")
+	assert.Contains(t, lines[1], "john_doe", "line 2 should contain owner")
+	assert.Contains(t, lines[2], "Best scores ever", "line 3 should contain description")
+}
+
+// --- Task 25: renderDefault 3-line layout ---
+
+// TestRenderDefault_ThreeLines verifies the fallback renderer outputs 3 lines.
+func TestRenderDefault_ThreeLines(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category: "unknown",
+		Name:     "Mystery Item",
+		Subtitle: "some info",
+	}
+	rl := list.New([]list.Item{item}, d, 80, 10)
+	var buf bytes.Buffer
+	d.Render(&buf, rl, 0, item)
+	out := buf.String()
+	assert.Equal(t, 3, countLines(out), "default render should have 3 lines")
+	assert.Contains(t, out, "Mystery Item")
+}
+
+// --- padToInner tests ---
+
+// TestPadToInner verifies that padToInner right-pads content to the exact innerW.
+func TestPadToInner(t *testing.T) {
+	d := newTestDelegate()
+	tests := []struct {
+		name    string
+		content string
+		innerW  int
+		wantLen int  // expected visible width of result
+		wantGTE bool // true when we only check result >= innerW (content wider)
+	}{
+		{
+			name:    "shorter than innerW gets padded to exact width",
+			content: "hello",
+			innerW:  20,
+			wantLen: 20,
+		},
+		{
+			name:    "equal to innerW returned unchanged",
+			content: "exactly_ten_",
+			innerW:  12,
+			wantLen: 12,
+		},
+		{
+			name:    "wider than innerW returned unchanged (no truncation)",
+			content: strings.Repeat("x", 30),
+			innerW:  20,
+			wantLen: 30,
+		},
+		{
+			name:    "empty string padded to full width",
+			content: "",
+			innerW:  10,
+			wantLen: 10,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := d.padToInner(tt.content, tt.innerW)
+			gotWidth := lipgloss.Width(got)
+			assert.Equal(t, tt.wantLen, gotWidth,
+				"padToInner(%q, %d) visible width = %d, want %d", tt.content, tt.innerW, gotWidth, tt.wantLen)
+			// Original content must be preserved (padToInner never truncates).
+			assert.True(t, strings.HasPrefix(got, tt.content),
+				"padToInner must not alter the content prefix")
+		})
+	}
+}
+
+// --- Selected-state tests for artist, album, playlist, default ---
+
+// TestRenderArtist_Selected verifies that a selected artist renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderArtist_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:   "artist",
+		Name:       "Hans Zimmer",
+		Subtitle:   "film score · 7.6M followers",
+		URI:        "spotify:artist:a1",
+		Genres:     "film score, soundtrack",
+		Followers:  "7.6M followers",
+		Popularity: 79,
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Hans Zimmer", "selected artist output should contain the name")
+	assert.Contains(t, selected, "│", "selected artist should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestRenderAlbum_Selected verifies that a selected album renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderAlbum_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:     "album",
+		Name:         "Interstellar",
+		Subtitle:     "Hans Zimmer · 2014 · 1 tracks",
+		URI:          "spotify:album:al1",
+		AlbumType:    "Single",
+		ReleaseYear:  "2014",
+		TrackCount:   "1 tracks",
+		AlbumArtists: "Hans Zimmer",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Interstellar", "selected album output should contain the name")
+	assert.Contains(t, selected, "│", "selected album should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestRenderPlaylist_Selected verifies that a selected playlist renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderPlaylist_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:       "playlist",
+		Name:           "Epic Film Scores",
+		Subtitle:       "by john_doe · 245 tracks · Best scores",
+		URI:            "spotify:playlist:pl1",
+		Owner:          "john_doe",
+		PlaylistTracks: "245 tracks",
+		PlaylistDesc:   "Best scores ever",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Epic Film Scores", "selected playlist output should contain the name")
+	assert.Contains(t, selected, "│", "selected playlist should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestRenderDefault_Selected verifies that a selected default-category item renders with │ border
+// and differs from the non-selected rendering.
+func TestRenderDefault_Selected(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category: "unknown",
+		Name:     "Mystery Item",
+		Subtitle: "some info",
+	}
+	normal := renderItem(d, item, false, 80)
+	selected := renderItem(d, item, true, 80)
+	assert.Contains(t, selected, "Mystery Item", "selected default output should contain the name")
+	assert.Contains(t, selected, "│", "selected default should contain left border │")
+	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
 }
