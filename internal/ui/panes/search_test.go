@@ -43,18 +43,18 @@ func newTestSearchOverlay() *panes.SearchOverlay {
 // sampleSearchResultData returns a SearchResultData with one item per section.
 func sampleSearchResultData() *panes.SearchResultData {
 	return &panes.SearchResultData{
-		Tracks: []panes.SearchTrackItem{
-			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
-			{URI: "spotify:track:t2", Name: "Save Your Tears", Artist: "The Weeknd"},
+		Tracks: []domain.Track{
+			{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+			{URI: "spotify:track:t2", Name: "Save Your Tears", Artists: []domain.Artist{{Name: "The Weeknd"}}},
 		},
-		Artists: []panes.SearchArtistItem{
+		Artists: []domain.SearchArtist{
 			{URI: "spotify:artist:a1", Name: "The Weeknd"},
 		},
-		Albums: []panes.SearchAlbumItem{
-			{URI: "spotify:album:al1", Name: "After Hours", Artist: "The Weeknd"},
+		Albums: []domain.SearchAlbum{
+			{URI: "spotify:album:al1", Name: "After Hours", Artists: []domain.Artist{{Name: "The Weeknd"}}},
 		},
-		Playlists: []panes.SearchPlaylistItem{
-			{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: "User"},
+		Playlists: []domain.SearchPlaylist{
+			{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: domain.SimplePlaylistOwner{DisplayName: "User"}},
 		},
 	}
 }
@@ -400,8 +400,8 @@ func TestSearchOverlay_View_Truncation(t *testing.T) {
 	// Very long track name
 	longName := strings.Repeat("A", 120)
 	results := &panes.SearchResultData{
-		Tracks: []panes.SearchTrackItem{
-			{URI: "spotify:track:t1", Name: longName, Artist: "Artist"},
+		Tracks: []domain.Track{
+			{URI: "spotify:track:t1", Name: longName, Artists: []domain.Artist{{Name: "Artist"}}},
 		},
 	}
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
@@ -520,8 +520,8 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 
 	// Deliver results via SearchPageLoadedMsg
 	results := &panes.SearchResultData{
-		Tracks: []panes.SearchTrackItem{
-			{URI: "spotify:track:t1", Name: "Blinding Lights", Artist: "The Weeknd"},
+		Tracks: []domain.Track{
+			{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
 		},
 	}
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
@@ -628,10 +628,10 @@ func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
 	o.SetSize(80, 40)
 
 	results := &panes.SearchResultData{
-		Tracks: []panes.SearchTrackItem{
-			{URI: "spotify:track:abc", Name: "Track One", Artist: "Artist One"},
+		Tracks: []domain.Track{
+			{URI: "spotify:track:abc", Name: "Track One", Artists: []domain.Artist{{Name: "Artist One"}}},
 		},
-		Artists: []panes.SearchArtistItem{
+		Artists: []domain.SearchArtist{
 			{URI: "spotify:artist:xyz", Name: "Artist One"},
 		},
 	}
@@ -658,10 +658,10 @@ func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 	o := panes.NewSearchOverlay(s, th)
 
 	results := &panes.SearchResultData{
-		Tracks:    []panes.SearchTrackItem{{URI: "u1", Name: "T1", Artist: "A1"}},
-		Artists:   []panes.SearchArtistItem{{URI: "u2", Name: "A2"}},
-		Albums:    []panes.SearchAlbumItem{{URI: "u3", Name: "Al1", Artist: "A3"}},
-		Playlists: []panes.SearchPlaylistItem{{URI: "u4", Name: "PL1", Owner: "Owner1"}},
+		Tracks:    []domain.Track{{URI: "u1", Name: "T1"}},
+		Artists:   []domain.SearchArtist{{URI: "u2", Name: "A2"}},
+		Albums:    []domain.SearchAlbum{{URI: "u3", Name: "Al1"}},
+		Playlists: []domain.SearchPlaylist{{URI: "u4", Name: "PL1"}},
 	}
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
@@ -901,8 +901,8 @@ func TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults(t *testing.T) {
 
 	// First deliver a successful page so the overlay has results to display.
 	initialResults := &panes.SearchResultData{
-		Tracks: []panes.SearchTrackItem{
-			{URI: "spotify:track:t1", Name: "Jazz Track", Artist: "Miles Davis"},
+		Tracks: []domain.Track{
+			{URI: "spotify:track:t1", Name: "Jazz Track", Artists: []domain.Artist{{Name: "Miles Davis"}}},
 		},
 		TracksTotal: 1,
 	}
@@ -1278,8 +1278,8 @@ func TestSearchOverlay_View_ListDelegate_ContainsBadgeSymbol(t *testing.T) {
 	o := panes.NewSearchOverlay(s, th)
 	o.SetSize(80, 40)
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks:  []panes.SearchTrackItem{{URI: "spotify:track:t1", Name: "My Track", Artist: "Ar"}},
-		Artists: []panes.SearchArtistItem{{URI: "spotify:artist:a1", Name: "My Artist"}},
+		Tracks:  []domain.Track{{URI: "spotify:track:t1", Name: "My Track", Artists: []domain.Artist{{Name: "Ar"}}}},
+		Artists: []domain.SearchArtist{{URI: "spotify:artist:a1", Name: "My Artist"}},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1297,7 +1297,7 @@ func TestSearchOverlay_View_NoSectionHeaders(t *testing.T) {
 	o := panes.NewSearchOverlay(s, th)
 	o.SetSize(80, 40)
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks: []panes.SearchTrackItem{{URI: "u1", Name: "T1", Artist: "A1"}},
+		Tracks: []domain.Track{{URI: "u1", Name: "T1"}},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1374,6 +1374,75 @@ func TestSearchOverlay_EmptyQueryAfterPrefix_NoSearch(t *testing.T) {
 	updated := model.(*panes.SearchOverlay)
 	_ = updated
 	assert.Nil(t, cmd, "debounce on empty clean query should not fire a search request")
+}
+
+// --- Story 91: Placeholder behavior when prefix is locked ---
+
+// TestSearchOverlay_Placeholder_LockedPrefix verifies that when a prefix is locked
+// (promoteToPromptTag() called), the input placeholder changes to the static "search..."
+// instead of the cycling prefix hints.
+func TestSearchOverlay_Placeholder_LockedPrefix(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Lock prefix by typing ":songs " (trailing space triggers lock + promotion).
+	for _, ch := range ":songs " {
+		o, _ = sendKey(t, o, string(ch))
+	}
+
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	assert.Equal(t, "search...", o.Placeholder(),
+		"placeholder should be 'search...' when prefix is locked, not the cycling hint")
+}
+
+// TestSearchOverlay_Placeholder_DemoteRestoresCycling verifies that demoting the
+// Prompt tag (Backspace at pos 0) restores the cycling placeholder.
+func TestSearchOverlay_Placeholder_DemoteRestoresCycling(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Lock prefix.
+	for _, ch := range ":songs " {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+
+	// Demote by pressing Backspace at cursor position 0.
+	o, _ = sendKey(t, o, "home")      // move cursor to position 0
+	o, _ = sendKey(t, o, "backspace") // demote the tag
+
+	// After demotion, prefix state should be None.
+	require.Equal(t, panes.PrefixNone, o.PrefixState())
+	// Placeholder should be back to a cycling placeholder, not "search...".
+	assert.Contains(t, panes.SearchPlaceholders, o.Placeholder(),
+		"placeholder should be a cycling placeholder after demotion, not 'search...'")
+}
+
+// TestSearchOverlay_Placeholder_TabSwitchToNonAll verifies that cycling to a non-All tab
+// (which locks a prefix) sets the placeholder to "search...".
+func TestSearchOverlay_Placeholder_TabSwitchToNonAll(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Cycle to Songs tab (first non-All tab).
+	o, _ = sendKey(t, o, "tab")
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+
+	assert.Equal(t, "search...", o.Placeholder(),
+		"placeholder should be 'search...' when non-All tab is active (prefix locked)")
+}
+
+// TestSearchOverlay_Placeholder_TabSwitchBackToAll verifies that cycling back to the All
+// tab restores the cycling placeholder.
+func TestSearchOverlay_Placeholder_TabSwitchBackToAll(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Go to Songs tab, then back to All via Shift+Tab.
+	o, _ = sendKey(t, o, "tab")
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+
+	o, _ = sendKey(t, o, "shift+tab")
+	require.Equal(t, panes.TabAll, o.ActiveTab())
+
+	assert.Contains(t, panes.SearchPlaceholders, o.Placeholder(),
+		"placeholder should be a cycling placeholder when back on All tab")
 }
 
 // --- Story 90: Flush panels, interior hints, per-panel border colors ---

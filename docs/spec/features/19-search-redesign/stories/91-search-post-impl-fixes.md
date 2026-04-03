@@ -1,7 +1,7 @@
 ---
 title: "Fix: Search Rich Data Pipeline, Enter-Close, Placeholder Leak"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
