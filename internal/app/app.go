@@ -1311,9 +1311,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildPlayContextCmd(m.ContextURI)
 
 	case panes.PlayTrackMsg:
-		// Close search overlay when playing from search results.
+		// Close search overlay when playing from search results, clearing any
+		// in-flight search state so it doesn't pollute a subsequent session.
 		if a.searchOpen {
-			a.searchOpen = false
+			a, _ = a.closeSearch()
 		}
 		return a, a.buildPlayTrackCmd(m.TrackURI)
 
