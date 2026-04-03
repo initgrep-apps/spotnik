@@ -1,7 +1,7 @@
 ---
 title: "Search Results: Rich Metadata Display"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
