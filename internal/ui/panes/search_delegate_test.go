@@ -1,9 +1,15 @@
 package panes
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCategorySymbol verifies the badge character returned for each category.
@@ -26,4 +32,639 @@ func TestCategorySymbol(t *testing.T) {
 			assert.Equal(t, tt.want, got, "categorySymbol(%q) should return %q", tt.category, tt.want)
 		})
 	}
+}
+
+// --- SearchListItem interface tests ---
+
+func TestSearchListItem_InterfaceMethods(t *testing.T) {
+	item := SearchListItem{
+		Category: "track",
+		Name:     "Pirates of the Caribbean Theme",
+		Subtitle: "Hans Zimmer · At World's End · 3:42",
+		URI:      "spotify:track:abc",
+		IsTrack:  true,
+	}
+	assert.Equal(t, "Pirates of the Caribbean Theme", item.Title())
+	assert.Equal(t, "Hans Zimmer · At World's End · 3:42", item.Description())
+	assert.Equal(t, "Pirates of the Caribbean Theme", item.FilterValue())
+}
+
+// --- Formatting helper tests ---
+
+func TestFormatFollowers(t *testing.T) {
+	tests := []struct {
+		n    int
+		want string
+	}{
+		{n: 7625607, want: "7.6M followers"},
+		{n: 1000000, want: "1.0M followers"},
+		{n: 3200, want: "3.2K followers"},
+		{n: 1000, want: "1.0K followers"},
+		{n: 847, want: "847 followers"},
+		{n: 0, want: "0 followers"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := formatFollowers(tt.n)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestJoinGenres(t *testing.T) {
+	tests := []struct {
+		genres []string
+		max    int
+		want   string
+	}{
+		{genres: []string{"a", "b", "c", "d"}, max: 3, want: "a, b, c"},
+		{genres: []string{"rock", "pop"}, max: 3, want: "rock, pop"},
+		{genres: []string{}, max: 3, want: ""},
+		{genres: nil, max: 3, want: ""},
+		{genres: []string{"only one"}, max: 3, want: "only one"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := joinGenres(tt.genres, tt.max)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestExtractYear(t *testing.T) {
+	tests := []struct {
+		date string
+		want string
+	}{
+		{date: "2020-03-20", want: "2020"},
+		{date: "2007", want: "2007"},
+		{date: "199", want: "199"},
+		{date: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.date, func(t *testing.T) {
+			got := extractYear(tt.date)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFormatSearchDuration(t *testing.T) {
+	tests := []struct {
+		ms   int
+		want string
+	}{
+		{ms: 222000, want: "3:42"},
+		{ms: 60000, want: "1:00"},
+		{ms: 3661000, want: "61:01"},
+		{ms: 0, want: "0:00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := formatSearchDuration(tt.ms)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFormatAlbumType(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "album", want: "Album"},
+		{input: "single", want: "Single"},
+		{input: "compilation", want: "Compilation"},
+		{input: "UNKNOWN", want: "UNKNOWN"},
+		{input: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := formatAlbumType(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestTruncateString(t *testing.T) {
+	tests := []struct {
+		s    string
+		max  int
+		want string
+	}{
+		{s: "hello world", max: 5, want: "hell…"},
+		{s: "short", max: 10, want: "short"},
+		{s: "exact", max: 5, want: "exact"},
+		{s: "", max: 10, want: ""},
+		{s: "café", max: 3, want: "ca…"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.s, func(t *testing.T) {
+			got := truncateString(tt.s, tt.max)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestJoinArtistNames(t *testing.T) {
+	tests := []struct {
+		artists []domain.Artist
+		want    string
+	}{
+		{
+			artists: []domain.Artist{{Name: "Artist A"}, {Name: "Artist B"}},
+			want:    "Artist A, Artist B",
+		},
+		{
+			artists: []domain.Artist{{Name: "Solo"}},
+			want:    "Solo",
+		},
+		{
+			artists: []domain.Artist{},
+			want:    "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := joinArtistNames(tt.artists)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// --- Conversion helper tests ---
+
+func TestTracksToListItems(t *testing.T) {
+	tracks := []domain.Track{
+		{
+			ID:         "t1",
+			Name:       "Pirates Theme",
+			URI:        "spotify:track:t1",
+			DurationMs: 222000, // 3:42
+			Explicit:   true,
+			Artists: []domain.Artist{
+				{ID: "a1", Name: "Hans Zimmer"},
+				{ID: "a2", Name: "Klaus Badelt"},
+			},
+			Album: domain.Album{ID: "al1", Name: "At World's End"},
+		},
+	}
+	items := tracksToListItems(tracks)
+	require.Len(t, items, 1)
+	si, ok := items[0].(SearchListItem)
+	require.True(t, ok)
+	assert.Equal(t, "track", si.Category)
+	assert.Equal(t, "Pirates Theme", si.Name)
+	assert.Equal(t, "Hans Zimmer, Klaus Badelt", si.ArtistNames)
+	assert.Equal(t, "At World's End", si.AlbumName)
+	assert.Equal(t, "3:42", si.Duration)
+	assert.True(t, si.Explicit)
+	assert.Contains(t, si.Subtitle, "Hans Zimmer")
+	assert.Contains(t, si.Subtitle, "At World's End")
+	assert.Contains(t, si.Subtitle, "3:42")
+}
+
+func TestArtistsToListItems(t *testing.T) {
+	artists := []domain.SearchArtist{
+		{
+			ID:         "a1",
+			Name:       "Hans Zimmer",
+			URI:        "spotify:artist:a1",
+			Genres:     []string{"film score", "soundtrack", "classical", "ambient", "electronic"},
+			Followers:  7625607,
+			Popularity: 79,
+		},
+	}
+	items := artistsToListItems(artists)
+	require.Len(t, items, 1)
+	si, ok := items[0].(SearchListItem)
+	require.True(t, ok)
+	assert.Equal(t, "artist", si.Category)
+	assert.Equal(t, "Hans Zimmer", si.Name)
+	// Top 3 genres only
+	assert.Equal(t, "film score, soundtrack, classical", si.Genres)
+	assert.Equal(t, "7.6M followers", si.Followers)
+	assert.Equal(t, 79, si.Popularity)
+	assert.Contains(t, si.Subtitle, "film score")
+	assert.Contains(t, si.Subtitle, "7.6M followers")
+}
+
+func TestAlbumsToListItems(t *testing.T) {
+	albums := []domain.SearchAlbum{
+		{
+			ID:          "al1",
+			Name:        "At World's End",
+			URI:         "spotify:album:al1",
+			AlbumType:   "album",
+			TotalTracks: 13,
+			ReleaseDate: "2007-05-22",
+			Artists:     []domain.Artist{{Name: "Hans Zimmer"}, {Name: "Klaus Badelt"}},
+		},
+	}
+	items := albumsToListItems(albums)
+	require.Len(t, items, 1)
+	si, ok := items[0].(SearchListItem)
+	require.True(t, ok)
+	assert.Equal(t, "album", si.Category)
+	assert.Equal(t, "Album", si.AlbumType)
+	assert.Equal(t, "2007", si.ReleaseYear)
+	assert.Equal(t, "13 tracks", si.TrackCount)
+	assert.Equal(t, "Hans Zimmer, Klaus Badelt", si.AlbumArtists)
+	assert.Contains(t, si.Subtitle, "2007")
+	assert.Contains(t, si.Subtitle, "13 tracks")
+}
+
+func TestPlaylistsToListItems(t *testing.T) {
+	playlists := []domain.SearchPlaylist{
+		{
+			ID:          "pl1",
+			Name:        "Epic Film Scores",
+			URI:         "spotify:playlist:pl1",
+			Owner:       domain.SimplePlaylistOwner{ID: "u1", DisplayName: "john_doe"},
+			TrackCount:  245,
+			Description: "The best orchestral movie scores ever recorded for cinema",
+		},
+	}
+	items := playlistsToListItems(playlists)
+	require.Len(t, items, 1)
+	si, ok := items[0].(SearchListItem)
+	require.True(t, ok)
+	assert.Equal(t, "playlist", si.Category)
+	assert.Equal(t, "john_doe", si.Owner)
+	assert.Equal(t, "245 tracks", si.PlaylistTracks)
+	// Long description should be truncated
+	assert.True(t, len([]rune(si.PlaylistDesc)) <= 60)
+	assert.Contains(t, si.Subtitle, "john_doe")
+	assert.Contains(t, si.Subtitle, "245 tracks")
+}
+
+func TestPlaylistsToListItems_NoDescription(t *testing.T) {
+	playlists := []domain.SearchPlaylist{
+		{
+			ID:         "pl2",
+			Name:       "Simple Playlist",
+			URI:        "spotify:playlist:pl2",
+			Owner:      domain.SimplePlaylistOwner{DisplayName: "bob"},
+			TrackCount: 10,
+		},
+	}
+	items := playlistsToListItems(playlists)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "", si.PlaylistDesc)
+	// Subtitle should not contain " · " at end (no description separator)
+	assert.NotContains(t, si.Subtitle, " · \n")
+}
+
+// --- Fallback conversion helpers ---
+
+func TestSearchTrackItemsToListItems(t *testing.T) {
+	tracks := []SearchTrackItem{
+		{URI: "spotify:track:t1", Name: "Track One", Artist: "Artist One"},
+	}
+	items := searchTrackItemsToListItems(tracks)
+	require.Len(t, items, 1)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "track", si.Category)
+	assert.Equal(t, "Track One", si.Name)
+	assert.Equal(t, "Artist One", si.ArtistNames)
+}
+
+func TestSearchArtistItemsToListItems(t *testing.T) {
+	artists := []SearchArtistItem{
+		{URI: "spotify:artist:a1", Name: "Artist One"},
+	}
+	items := searchArtistItemsToListItems(artists)
+	require.Len(t, items, 1)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "artist", si.Category)
+	assert.Equal(t, "Artist One", si.Name)
+}
+
+func TestSearchAlbumItemsToListItems(t *testing.T) {
+	albums := []SearchAlbumItem{
+		{URI: "spotify:album:al1", Name: "Album One", Artist: "Artist One"},
+	}
+	items := searchAlbumItemsToListItems(albums)
+	require.Len(t, items, 1)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "album", si.Category)
+	assert.Equal(t, "Album One", si.Name)
+	assert.Equal(t, "Artist One", si.AlbumArtists)
+}
+
+func TestSearchPlaylistItemsToListItems(t *testing.T) {
+	playlists := []SearchPlaylistItem{
+		{URI: "spotify:playlist:pl1", Name: "Playlist One", Owner: "bob"},
+	}
+	items := searchPlaylistItemsToListItems(playlists)
+	require.Len(t, items, 1)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "playlist", si.Category)
+	assert.Equal(t, "Playlist One", si.Name)
+	assert.Equal(t, "bob", si.Owner)
+}
+
+// --- Render method tests ---
+
+func newTestDelegate() SearchItemDelegate {
+	return NewSearchItemDelegate(theme.Load("black"))
+}
+
+func renderItem(d SearchItemDelegate, item SearchListItem, selected bool, width int) string {
+	// Build a minimal list model with the item.
+	rl := list.New([]list.Item{item}, d, width, 10)
+	if selected {
+		rl.Select(0)
+	}
+	var buf bytes.Buffer
+	d.Render(&buf, rl, 0, item)
+	return buf.String()
+}
+
+func TestRenderTrack_ExplicitFlag(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Bad Song",
+		Subtitle:    "Artist · Album · 3:00",
+		URI:         "spotify:track:t1",
+		IsTrack:     true,
+		ArtistNames: "Artist A",
+		AlbumName:   "My Album",
+		Duration:    "3:00",
+		Explicit:    true,
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "[E]", "explicit track should render [E]")
+	assert.Contains(t, out, "3:00", "duration should be in output")
+	assert.Contains(t, out, "Artist A", "artist names should be on line 2")
+	assert.Contains(t, out, "My Album", "album name should be on line 2")
+}
+
+func TestRenderTrack_NoExplicit(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Clean Song",
+		Subtitle:    "Artist · Album · 2:30",
+		URI:         "spotify:track:t2",
+		IsTrack:     true,
+		ArtistNames: "Artist B",
+		AlbumName:   "Clean Album",
+		Duration:    "2:30",
+		Explicit:    false,
+	}
+	out := renderItem(d, item, false, 80)
+	assert.NotContains(t, out, "[E]", "non-explicit track should not render [E]")
+	assert.Contains(t, out, "2:30", "duration should be in output")
+}
+
+func TestRenderTrack_TwoArtists(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:    "track",
+		Name:        "Duet",
+		Subtitle:    "A, B · Album · 4:00",
+		URI:         "spotify:track:t3",
+		IsTrack:     true,
+		ArtistNames: "Hans Zimmer, Klaus Badelt",
+		AlbumName:   "At World's End",
+		Duration:    "4:00",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "Hans Zimmer, Klaus Badelt")
+	assert.Contains(t, out, "At World's End")
+}
+
+func TestRenderArtist_WithGenres(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:   "artist",
+		Name:       "Hans Zimmer",
+		Subtitle:   "film score, soundtrack · 7.6M followers",
+		URI:        "spotify:artist:a1",
+		Genres:     "film score, soundtrack, classical",
+		Followers:  "7.6M followers",
+		Popularity: 79,
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "Hans Zimmer")
+	assert.Contains(t, out, "film score")
+	assert.Contains(t, out, "followers")
+}
+
+func TestRenderArtist_EmptyGenres(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:  "artist",
+		Name:      "New Artist",
+		Subtitle:  "0 followers",
+		URI:       "spotify:artist:a2",
+		Genres:    "",
+		Followers: "0 followers",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "New Artist")
+	assert.Contains(t, out, "0 followers")
+	// No dot separator when genres are empty
+	assert.NotContains(t, out, " · 0 followers")
+}
+
+func TestRenderAlbum_TypeAndYear(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:     "album",
+		Name:         "Interstellar",
+		Subtitle:     "Hans Zimmer · 2014 · 1 tracks",
+		URI:          "spotify:album:al1",
+		AlbumType:    "Single",
+		ReleaseYear:  "2014",
+		TrackCount:   "1 tracks",
+		AlbumArtists: "Hans Zimmer",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "Interstellar")
+	assert.Contains(t, out, "Single")
+	assert.Contains(t, out, "2014")
+	assert.Contains(t, out, "1 tracks")
+}
+
+func TestRenderPlaylist_WithDescription(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:       "playlist",
+		Name:           "Epic Film Scores",
+		Subtitle:       "by john_doe · 245 tracks · Best scores",
+		URI:            "spotify:playlist:pl1",
+		Owner:          "john_doe",
+		PlaylistTracks: "245 tracks",
+		PlaylistDesc:   "Best scores",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "Epic Film Scores")
+	assert.Contains(t, out, "245 tracks")
+	assert.Contains(t, out, "john_doe")
+	assert.Contains(t, out, "Best scores")
+}
+
+func TestRenderPlaylist_NoDescription(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category:       "playlist",
+		Name:           "Simple",
+		Subtitle:       "by bob · 10 tracks",
+		URI:            "spotify:playlist:pl2",
+		Owner:          "bob",
+		PlaylistTracks: "10 tracks",
+		PlaylistDesc:   "",
+	}
+	out := renderItem(d, item, false, 80)
+	assert.Contains(t, out, "bob")
+	assert.Contains(t, out, "10 tracks")
+}
+
+// TestStyledDot verifies the dot separator is non-empty.
+func TestStyledDot(t *testing.T) {
+	d := newTestDelegate()
+	dot := d.styledDot()
+	assert.NotEmpty(t, dot)
+	// Should contain the "·" character.
+	assert.Contains(t, dot, "·")
+}
+
+// TestRightAlign verifies that left and right content appear in the output.
+func TestRightAlign(t *testing.T) {
+	d := newTestDelegate()
+	result := d.rightAlign("left", "right", 20)
+	// Both parts should be in the result.
+	assert.Contains(t, result, "left")
+	assert.Contains(t, result, "right")
+}
+
+// TestStyledName verifies that selected styling is applied when isSelected=true.
+func TestStyledName(t *testing.T) {
+	d := newTestDelegate()
+	normal := d.styledName("Track Name", false, 40)
+	selected := d.styledName("Track Name", true, 40)
+	// Both should contain the name.
+	assert.Contains(t, normal, "Track Name")
+	assert.Contains(t, selected, "Track Name")
+}
+
+// TestRenderDefault verifies non-matching category uses a fallback.
+func TestRenderDefault(t *testing.T) {
+	d := newTestDelegate()
+	item := SearchListItem{
+		Category: "unknown",
+		Name:     "Mystery Item",
+		Subtitle: "some info",
+	}
+	rl := list.New([]list.Item{item}, d, 80, 10)
+	var buf bytes.Buffer
+	d.Render(&buf, rl, 0, item)
+	out := buf.String()
+	assert.Contains(t, out, "Mystery Item")
+}
+
+// nonSearchItem is a list.Item implementation that is NOT a SearchListItem,
+// used to verify that Render is a no-op for unknown item types.
+type nonSearchItem struct{ name string }
+
+func (n nonSearchItem) Title() string       { return n.name }
+func (n nonSearchItem) Description() string { return "" }
+func (n nonSearchItem) FilterValue() string { return n.name }
+
+// TestRenderNonSearchListItem verifies Render is a no-op for non-SearchListItem.
+func TestRenderNonSearchListItem(t *testing.T) {
+	d := newTestDelegate()
+	rl := list.New(nil, d, 80, 10)
+	var buf bytes.Buffer
+	// Pass a non-SearchListItem — should not panic or write anything.
+	d.Render(&buf, rl, 0, nonSearchItem{name: "bad"})
+	assert.Empty(t, buf.String())
+}
+
+// TestStyledBadge verifies badge rendering for each category.
+func TestStyledBadge(t *testing.T) {
+	d := newTestDelegate()
+	categories := []string{"track", "artist", "album", "playlist"}
+	for _, cat := range categories {
+		t.Run(cat, func(t *testing.T) {
+			badge := d.styledBadge(cat)
+			assert.NotEmpty(t, badge)
+		})
+	}
+}
+
+// TestArtistsToListItems_EmptyGenres verifies that when genres is empty,
+// subtitle contains only followers.
+func TestArtistsToListItems_EmptyGenres(t *testing.T) {
+	artists := []domain.SearchArtist{
+		{
+			ID:         "a1",
+			Name:       "New Artist",
+			URI:        "spotify:artist:a1",
+			Genres:     []string{},
+			Followers:  500,
+			Popularity: 20,
+		},
+	}
+	items := artistsToListItems(artists)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "", si.Genres)
+	assert.Equal(t, "500 followers", si.Followers)
+	// Subtitle should be just followers (no "· followers" awkwardly)
+	assert.Equal(t, "500 followers", si.Subtitle)
+}
+
+// TestArtistsToListItems_ZeroFollowers verifies zero followers is displayed.
+func TestArtistsToListItems_ZeroFollowers(t *testing.T) {
+	artists := []domain.SearchArtist{
+		{
+			ID:        "a1",
+			Name:      "New Artist",
+			URI:       "spotify:artist:a1",
+			Genres:    []string{"rock"},
+			Followers: 0,
+		},
+	}
+	items := artistsToListItems(artists)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "0 followers", si.Followers)
+}
+
+// TestTracksToListItems_SingleArtist verifies single artist has no comma.
+func TestTracksToListItems_SingleArtist(t *testing.T) {
+	tracks := []domain.Track{
+		{
+			Name:       "Solo",
+			URI:        "spotify:track:s1",
+			DurationMs: 180000,
+			Explicit:   false,
+			Artists:    []domain.Artist{{Name: "Solo Artist"}},
+			Album:      domain.Album{Name: "Solo Album"},
+		},
+	}
+	items := tracksToListItems(tracks)
+	si := items[0].(SearchListItem)
+	assert.Equal(t, "Solo Artist", si.ArtistNames)
+	assert.False(t, si.Explicit)
+}
+
+// TestPlaylistsToListItems_LongDescription verifies long descriptions are truncated.
+func TestPlaylistsToListItems_LongDescription(t *testing.T) {
+	longDesc := strings.Repeat("a", 80)
+	playlists := []domain.SearchPlaylist{
+		{
+			Name:        "Test",
+			URI:         "spotify:playlist:t1",
+			Owner:       domain.SimplePlaylistOwner{DisplayName: "bob"},
+			TrackCount:  5,
+			Description: longDesc,
+		},
+	}
+	items := playlistsToListItems(playlists)
+	si := items[0].(SearchListItem)
+	assert.True(t, len([]rune(si.PlaylistDesc)) <= 60, "description should be truncated to 60 runes")
+	assert.True(t, strings.HasSuffix(si.PlaylistDesc, "…"), "truncated desc should end with ellipsis")
 }
