@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -320,41 +319,41 @@ func TestPlaylistsToListItems_NoDescription(t *testing.T) {
 	assert.NotContains(t, si.Subtitle, " · \n")
 }
 
-// --- rebuildFromResults uses same converters as rebuildFromStore (rich path) ---
+// --- rebuildFromResults uses converter functions (rich path) ---
 
-// TestRebuildFromResults_DomainTypes verifies that SearchResultData (which now carries
-// domain types) produces the same rich SearchListItems as rebuildFromStore would produce.
-// This guards against regression where the fallback path strips metadata.
+// TestRebuildFromResults_DomainTypes verifies that domain types converted via the
+// exported ToSearchListItems helpers produce rich SearchListItems through the overlay.
+// This guards against regression where the conversion path strips metadata.
 func TestRebuildFromResults_DomainTypes(t *testing.T) {
-	// Build a SearchResultData with rich domain types.
-	results := &SearchResultData{
-		Tracks: []domain.Track{
-			{
-				URI:  "spotify:track:t1",
-				Name: "Track One",
-				Artists: []domain.Artist{
-					{Name: "Artist A"},
-					{Name: "Artist B"},
-				},
-				Album:      domain.Album{Name: "Album X"},
-				DurationMs: 220000, // 3:40
-				Explicit:   true,
+	// Pre-convert domain types to []SearchListItem as commands.go does before delivery.
+	tracks := TracksToSearchListItems([]domain.Track{
+		{
+			URI:  "spotify:track:t1",
+			Name: "Track One",
+			Artists: []domain.Artist{
+				{Name: "Artist A"},
+				{Name: "Artist B"},
 			},
+			Album:      domain.Album{Name: "Album X"},
+			DurationMs: 220000, // 3:40
+			Explicit:   true,
 		},
-		Artists: []domain.SearchArtist{
-			{URI: "spotify:artist:a1", Name: "Artist One", Genres: []string{"rock", "indie"}, Followers: 12400},
-		},
-		Albums: []domain.SearchAlbum{
-			{URI: "spotify:album:al1", Name: "Album One", AlbumType: "album", TotalTracks: 13, ReleaseDate: "2021-03-15"},
-		},
-		Playlists: []domain.SearchPlaylist{
-			{URI: "spotify:playlist:pl1", Name: "Playlist One", Owner: domain.SimplePlaylistOwner{DisplayName: "bob"}, TrackCount: 40},
-		},
-	}
+	})
+	artists := ArtistsToSearchListItems([]domain.SearchArtist{
+		{URI: "spotify:artist:a1", Name: "Artist One", Genres: []string{"rock", "indie"}, Followers: 12400},
+	})
+	albums := AlbumsToSearchListItems([]domain.SearchAlbum{
+		{URI: "spotify:album:al1", Name: "Album One", AlbumType: "album", TotalTracks: 13, ReleaseDate: "2021-03-15"},
+	})
+	playlists := PlaylistsToSearchListItems([]domain.SearchPlaylist{
+		{URI: "spotify:playlist:pl1", Name: "Playlist One", Owner: domain.SimplePlaylistOwner{DisplayName: "bob"}, TrackCount: 40},
+	})
+	results := append(tracks, artists...)
+	results = append(results, albums...)
+	results = append(results, playlists...)
 
-	// Populate a store and feed through SearchPageLoadedMsg so rebuildFromResults is exercised.
-	s := state.New()
-	o := NewSearchOverlay(s, theme.Load("black"))
+	// Feed through SearchPageLoadedMsg so rebuildFromResults is exercised.
+	o := NewSearchOverlay(theme.Load("black"))
 	o.SetSize(80, 40)
 
 	msg := SearchPageLoadedMsg{Results: results}

@@ -114,8 +114,6 @@ func TestApp_SearchPageLoadedMsg_ErrorToastIncludesDetail(t *testing.T) {
 	// SearchPageLoadedMsg with error must trigger a toast cmd; the error detail is
 	// carried in the alert so the user can diagnose the failure.
 	a := newToastTestApp()
-	// Set matching query so staleness check passes.
-	a.Store().SetSearchQuery("jazz")
 	searchErr := errors.New("context deadline exceeded")
 	_, cmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Err: searchErr})
 

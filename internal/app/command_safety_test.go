@@ -180,8 +180,7 @@ func TestNilClientFallback_SearchCmd(t *testing.T) {
 	// will also match. We verify that real errors DO toast (to confirm the guard
 	// is specifically for errNilClient, not all SearchPageLoadedMsg errors).
 
-	// Real error path — must emit toast. Use matching query so staleness check passes.
-	a.Store().SetSearchQuery("jazz")
+	// Real error path — must emit toast.
 	realErr := errors.New("search network error")
 	_, realCmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Err: realErr})
 	require.NotNil(t, realCmd, "real search error must emit a toast cmd")

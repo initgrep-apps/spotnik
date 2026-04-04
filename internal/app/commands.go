@@ -296,25 +296,17 @@ func (a *App) buildSearchBatchCmd(query string, types []string, startOffset int)
 	return a.buildSearchPageCmd(query, types, startOffset)
 }
 
-// searchTypesForActiveType converts a store active-type value ("all" or a single type
-// name) back into the []string types slice expected by buildSearchPageCmd.
-// "all" expands to all four Spotify search types; any other value is returned as-is.
-func searchTypesForActiveType(activeType string) []string {
-	if activeType == "all" || activeType == "" {
-		return []string{"track", "artist", "album", "playlist"}
-	}
-	return []string{activeType}
-}
-
 // buildSearchPageCmd creates a command that fetches a single page of search results
 // at the given offset and delivers pre-converted results via SearchPageLoadedMsg.
 // The query and offset are captured at dispatch time; the closure is Elm-pure
 // (no store reads or writes inside).
+// page is the 1-based page number derived from offset (offset=0 → page=1, offset=10 → page=2, …).
 func (a *App) buildSearchPageCmd(query string, types []string, offset int) tea.Cmd {
 	search := a.search
+	page := offset/SearchPageSize + 1
 	return func() tea.Msg {
 		if search == nil {
-			return panes.SearchPageLoadedMsg{Query: query, Offset: offset, Err: errNilClient}
+			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: errNilClient}
 		}
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
 		results, err := search.Search(
@@ -331,34 +323,40 @@ func (a *App) buildSearchPageCmd(query string, types []string, offset int) tea.C
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.SearchPageLoadedMsg{Query: query, Offset: offset, Err: err}
+			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: err}
 		}
 		return panes.SearchPageLoadedMsg{
 			Query:   query,
-			Offset:  offset,
+			Page:    page,
 			Results: convertSearchResult(results),
+			Total:   searchResultTotal(results),
 		}
 	}
 }
 
-// convertSearchResult converts *api.SearchResult to *panes.SearchResultData.
-// Domain slices are passed through directly — no field-picking — so all rich
-// metadata (artists, duration, explicit, genres, followers, etc.) is preserved.
-// Total fields are populated from the API response to enable HasMore pagination checks.
-func convertSearchResult(r *api.SearchResult) *panes.SearchResultData {
+// convertSearchResult converts *api.SearchResult to []panes.SearchListItem.
+// All result types are combined into a single flat slice, preserving rich metadata
+// (artists, duration, explicit flag, genres, followers, etc.) from domain types.
+// Story 101 will wire type-filtered views; for now all types are included.
+func convertSearchResult(r *api.SearchResult) []panes.SearchListItem {
 	if r == nil {
 		return nil
 	}
-	return &panes.SearchResultData{
-		Tracks:         r.Tracks.Items,
-		TracksTotal:    r.Tracks.Total,
-		Artists:        r.Artists.Items,
-		ArtistsTotal:   r.Artists.Total,
-		Albums:         r.Albums.Items,
-		AlbumsTotal:    r.Albums.Total,
-		Playlists:      r.Playlists.Items,
-		PlaylistsTotal: r.Playlists.Total,
+	var items []panes.SearchListItem
+	items = append(items, panes.TracksToSearchListItems(r.Tracks.Items)...)
+	items = append(items, panes.ArtistsToSearchListItems(r.Artists.Items)...)
+	items = append(items, panes.AlbumsToSearchListItems(r.Albums.Items)...)
+	items = append(items, panes.PlaylistsToSearchListItems(r.Playlists.Items)...)
+	return items
+}
+
+// searchResultTotal returns the sum of totals across all result types.
+// Used to populate SearchPageLoadedMsg.Total for the pagination bar.
+func searchResultTotal(r *api.SearchResult) int {
+	if r == nil {
+		return 0
 	}
+	return r.Tracks.Total + r.Artists.Total + r.Albums.Total + r.Playlists.Total
 }
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices

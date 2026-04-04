@@ -1,7 +1,6 @@
 package panes
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -12,8 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -69,9 +66,11 @@ type SearchClosedMsg struct{}
 // The root app model receives it and dispatches the actual Spotify API call.
 // Types carries the Spotify API type filter derived from the locked prefix (e.g. ["track"]
 // for ":songs"). When empty the app handler defaults to all four types.
+// Page is the 1-based page number to fetch; story 99 wires in intent.page — for now use 1.
 type SearchRequestMsg struct {
 	Query string
 	Types []string
+	Page  int // 1-based page number; defaults to 1 (story 99 wires intent.page)
 }
 
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
@@ -141,7 +140,6 @@ func NewSearchKeyMap() searchKeyMap {
 //   - Panel 2 (Results): tab bar + separator + scrollable results list
 //   - Panel 3 (Keys): bubbles/help keybinding bar
 type SearchOverlay struct {
-	store   *state.Store
 	theme   theme.Theme
 	input   textinput.Model
 	spinner spinner.Model
@@ -155,9 +153,10 @@ type SearchOverlay struct {
 	width  int
 	height int
 
-	// results holds the most recent search results delivered via SearchPageLoadedMsg.
+	// results holds the most recent search result items delivered via SearchPageLoadedMsg.
 	// This avoids reading domain.SearchResult from the store, keeping the ui/api boundary clean.
-	results *SearchResultData
+	// Story 99 will manage multi-page accumulation; for now the overlay holds the latest page.
+	results []SearchListItem
 
 	// activeTab is which category tab (All/Songs/Artists/Albums/Playlists) is selected.
 	activeTab SearchTab
@@ -178,9 +177,9 @@ type SearchOverlay struct {
 	lastSetListH int
 }
 
-// NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
+// NewSearchOverlay constructs a SearchOverlay wired to the given theme.
 // The text input is focused by default.
-func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
+func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti := textinput.New()
 	// Start with the first cycling placeholder — the tick will advance it every 2s.
 	ti.Placeholder = searchPlaceholders[0]
@@ -224,7 +223,6 @@ func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
 	rl.InfiniteScrolling = true
 
 	return &SearchOverlay{
-		store:      store,
 		theme:      t,
 		input:      ti,
 		spinner:    sp,
@@ -284,9 +282,9 @@ func (o *SearchOverlay) Input() textinput.Model {
 	return o.input
 }
 
-// Results returns the current search result data held by the overlay.
+// Results returns the current search result items held by the overlay.
 // Exported for tests.
-func (o *SearchOverlay) Results() *SearchResultData {
+func (o *SearchOverlay) Results() []SearchListItem {
 	return o.results
 }
 
@@ -409,9 +407,9 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// blanked. Toast notifications (handled by app.go) give user feedback.
 			return o, nil
 		}
-		// Save results locally so we never read api types from the store.
+		// Save the pre-converted list items so we never read api types from the store.
 		o.results = m.Results
-		// Rebuild the list from the store (which has been updated by app.go).
+		// Rebuild the list from locally cached items.
 		o.rebuildListItems()
 		return o, nil
 
@@ -447,8 +445,9 @@ func (o *SearchOverlay) handleDebounce(m searchDebounceMsg) (tea.Model, tea.Cmd)
 	types := o.activeAPITypes()
 	query := m.query
 	// Fire a search request — root app model handles it.
+	// Page: 1 is the default; story 99 will wire in o.intent.page once the intent struct exists.
 	return o, func() tea.Msg {
-		return SearchRequestMsg{Query: query, Types: types}
+		return SearchRequestMsg{Query: query, Types: types, Page: 1}
 	}
 }
 
@@ -615,7 +614,7 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 }
 
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
-// It rebuilds the list items for the new tab and emits SearchTabChangedMsg so the
+// It rebuilds the list items for the new tab and emits SearchRequestMsg so the
 // root app re-fires the search with the new type filter.
 // NOTE: Tab cycling is only reachable when prefixState is not PrefixTyping (Tab routing
 // in handleKey sends PrefixTyping → textinput suggestion acceptance instead). When a
@@ -629,13 +628,16 @@ func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.resizeList()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
+	if query == "" {
+		return o, nil
+	}
 	return o, func() tea.Msg {
-		return SearchTabChangedMsg{Types: types, Query: query}
+		return SearchRequestMsg{Query: query, Types: types, Page: 1}
 	}
 }
 
 // cycleTabBackward retreats the active tab, wrapping from TabAll back to the last tab.
-// It rebuilds the list items for the new tab and emits SearchTabChangedMsg so the
+// It rebuilds the list items for the new tab and emits SearchRequestMsg so the
 // root app re-fires the search with the new type filter.
 func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + NumTabs - 1) % NumTabs)
@@ -646,8 +648,11 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.resizeList()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
+	if query == "" {
+		return o, nil
+	}
 	return o, func() tea.Msg {
-		return SearchTabChangedMsg{Types: types, Query: query}
+		return SearchRequestMsg{Query: query, Types: types, Page: 1}
 	}
 }
 
@@ -789,19 +794,8 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	}
 	tabLine := strings.Join(parts, "  ")
 
-	if o.store.SearchLoading() {
-		// Append a compact spinner to the right of the tab labels so the user can
-		// see that a fetch is in flight even when existing results are still shown.
-		spinnerStr := lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render(o.spinner.View())
-		// Right-align: fill the gap between tab labels and spinner with spaces.
-		padding := innerWidth - lipgloss.Width(tabLine) - lipgloss.Width(spinnerStr)
-		if padding < 1 {
-			padding = 1
-		}
-		tabLine = tabLine + strings.Repeat(" ", padding) + spinnerStr
-	}
+	// TODO(19-search-redesign): replaced by o.results in story 99
+	// Loading state previously read from store; spinner display stubbed until story 99.
 
 	// Pad/truncate to exactly innerWidth.
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
@@ -840,102 +834,47 @@ func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 // When results are loaded, delegates to resultList.View() for scrollable rendering.
 // Falls back to hint/loading/no-results text as needed.
 func (o *SearchOverlay) renderResults(_ int) string {
-	query := o.store.SearchQuery()
-	loading := o.store.SearchLoading()
+	// TODO(19-search-redesign): replaced by o.results in story 99
+	// query and loading state were previously read from the store;
+	// return safe hint state until story 99 wires o.results.
 
-	if loading && len(o.resultList.Items()) == 0 {
-		// Only show spinner when there are no items yet (first load).
-		return fmt.Sprintf("%s Searching...\n", o.spinner.View())
-	}
-
-	// NOTE: Search errors are now routed through toast notifications (app.go).
-	// store.SearchError() is preserved for retry logic but no longer read in View().
-
-	if query == "" && len(o.resultList.Items()) == 0 {
+	if len(o.resultList.Items()) == 0 {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Render("Type to search tracks, artists, albums...")
-	}
-
-	if len(o.resultList.Items()) == 0 && o.results != nil {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render(fmt.Sprintf("No results for '%s'", query))
 	}
 
 	// Render the list component — it handles scrolling and selection highlighting.
 	return o.resultList.View()
 }
 
-// rebuildListItems repopulates resultList from the store based on the active tab.
-// If the store's per-type TypePages are empty (e.g. in overlay-standalone tests),
-// it falls back to the locally cached o.results (SearchResultData). This dual-source
-// approach allows the overlay to work correctly both in production (store populated
-// by app.go) and in isolation tests (results delivered via SearchPageLoadedMsg only).
+// rebuildListItems repopulates resultList from o.results.
+// TODO(19-search-redesign): story 99 wires tab-filtered views once o.intent exists.
 func (o *SearchOverlay) rebuildListItems() {
-	// Use store data when available (non-empty TypePages).
-	storeTracks := o.store.SearchTracks().Items
-	storeArtists := o.store.SearchArtists().Items
-	storeAlbums := o.store.SearchAlbums().Items
-	storePlaylists := o.store.SearchPlaylists().Items
-
-	storeHasData := len(storeTracks)+len(storeArtists)+len(storeAlbums)+len(storePlaylists) > 0
-
-	if storeHasData {
-		o.rebuildFromStore(storeTracks, storeArtists, storeAlbums, storePlaylists)
-		return
-	}
-
-	// Fall back to locally cached SearchResultData (overlay-standalone / test path).
 	if o.results != nil {
 		o.rebuildFromResults()
 	}
 }
 
-// rebuildFromStore rebuilds the list from pre-fetched store slices.
-func (o *SearchOverlay) rebuildFromStore(
-	tracks []domain.Track,
-	artists []domain.SearchArtist,
-	albums []domain.SearchAlbum,
-	playlists []domain.SearchPlaylist,
-) {
-	var items []list.Item
-
-	switch o.activeTab {
-	case TabSongs:
-		items = tracksToListItems(tracks)
-	case TabArtists:
-		items = artistsToListItems(artists)
-	case TabAlbums:
-		items = albumsToListItems(albums)
-	case TabPlaylists:
-		items = playlistsToListItems(playlists)
-	default: // TabAll
-		items = append(items, tracksToListItems(tracks)...)
-		items = append(items, artistsToListItems(artists)...)
-		items = append(items, albumsToListItems(albums)...)
-		items = append(items, playlistsToListItems(playlists)...)
-	}
-
-	o.resultList.SetItems(items)
-}
-
-// rebuildFromResults rebuilds the list from the locally cached SearchResultData.
-// Used when the store's TypePages are empty (overlay-standalone / test scenarios).
-// SearchResultData now carries domain types so we reuse the same converters as rebuildFromStore.
+// rebuildFromResults rebuilds the list from the locally cached SearchListItems.
+// Items were pre-converted by commands.go before delivery via SearchPageLoadedMsg,
+// so no further domain conversion is needed here.
 func (o *SearchOverlay) rebuildFromResults() {
 	if o.results == nil {
 		return
 	}
-	// Delegate to rebuildFromStore using domain slices from SearchResultData.
-	// This ensures the same rich rendering path is taken regardless of whether
-	// the data came via the store or directly through SearchPageLoadedMsg.
-	o.rebuildFromStore(o.results.Tracks, o.results.Artists, o.results.Albums, o.results.Playlists)
+	// Convert []SearchListItem to []list.Item for the bubbles/list component.
+	items := make([]list.Item, len(o.results))
+	for i, r := range o.results {
+		items[i] = r
+	}
+	o.resultList.SetItems(items)
 }
 
-// checkPrefetch returns a SearchPrefetchMsg command when the list cursor has
-// scrolled past searchPrefetchThreshold of the loaded items. Returns nil if
-// below threshold, no items, or no more pages are available.
+// checkPrefetch returns a command to fetch the next page when the list cursor has
+// scrolled past searchPrefetchThreshold of the loaded items. Returns nil if below
+// threshold, no items, or no more pages are available.
+// TODO(19-search-redesign): story 99 wires in o.intent.page for proper next-page requests.
 func (o *SearchOverlay) checkPrefetch() tea.Cmd {
 	total := len(o.resultList.Items())
 	if total == 0 {
@@ -949,59 +888,20 @@ func (o *SearchOverlay) checkPrefetch() tea.Cmd {
 		return nil
 	}
 
-	nextOffset := o.nextOffsetForTab()
-	if nextOffset < 0 {
+	// nextOffsetForTab always returns -1 until story 99 wires o.intent.page.
+	if o.nextOffsetForTab() < 0 {
 		return nil
 	}
 
-	types := TabToAPITypes(o.activeTab)
-	query := o.store.SearchQuery()
-	offset := nextOffset
-	return func() tea.Msg {
-		return SearchPrefetchMsg{
-			Query:      query,
-			Types:      types,
-			NextOffset: offset,
-		}
-	}
+	return nil
 }
 
 // nextOffsetForTab returns the next offset to fetch for the active tab.
 // Returns -1 when no more pages are available (offset >= total).
-// For tabAll, uses tracks as the representative type.
+// TODO(19-search-redesign): replaced by o.results in story 99
+// Store TypePage reads removed; always return -1 (no prefetch) until story 99 wires o.results.
 func (o *SearchOverlay) nextOffsetForTab() int {
-	switch o.activeTab {
-	case TabSongs:
-		p := o.store.SearchTracks()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	case TabArtists:
-		p := o.store.SearchArtists()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	case TabAlbums:
-		p := o.store.SearchAlbums()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	case TabPlaylists:
-		p := o.store.SearchPlaylists()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	default: // TabAll — use tracks as representative type
-		p := o.store.SearchTracks()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	}
+	return -1
 }
 
 // overlayWidth returns the effective overlay width: 70% of terminal width, minimum 40.
@@ -1069,11 +969,10 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 
 // --- Test helpers (exported only for test packages) ---
 
-// NewSearchOverlayForTest creates a SearchOverlay with nil store for use in tests
-// that need to inspect configuration without triggering store reads.
-// Uses the provided theme; store-dependent methods must not be called on the result.
+// NewSearchOverlayForTest creates a SearchOverlay for use in tests that need to
+// inspect configuration without wiring additional state.
 func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
-	return NewSearchOverlay(nil, t)
+	return NewSearchOverlay(t)
 }
 
 // ResultsBorderAccentColor returns the AccentColor that renderResultsPanel() uses
@@ -1119,12 +1018,6 @@ func RenderTabBarForTest(o *SearchOverlay, innerWidth int) string {
 func ContainsSpinnerFrame(o *SearchOverlay, s string) bool {
 	frame := o.spinner.View()
 	return frame != "" && strings.Contains(s, frame)
-}
-
-// Store returns the overlay's store reference — exported for tests that need to
-// mutate store state (e.g. SetSearchLoading) after construction.
-func (o *SearchOverlay) Store() *state.Store {
-	return o.store
 }
 
 // CallRebuildListItems calls rebuildListItems on the overlay — exported for tests.

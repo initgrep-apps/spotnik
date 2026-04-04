@@ -370,11 +370,12 @@ func plainLen(s string) int {
 	return lipgloss.Width(s)
 }
 
-// --- Conversion helpers: domain types → SearchListItem ---
+// --- Exported converters: domain types → []SearchListItem (for commands.go) ---
 
-// tracksToListItems converts domain.Track slices to SearchListItem slices.
-func tracksToListItems(tracks []domain.Track) []list.Item {
-	items := make([]list.Item, len(tracks))
+// TracksToSearchListItems converts domain.Track slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func TracksToSearchListItems(tracks []domain.Track) []SearchListItem {
+	items := make([]SearchListItem, len(tracks))
 	for i, t := range tracks {
 		artists := joinArtistNames(t.Artists)
 		dur := formatSearchDuration(t.DurationMs)
@@ -394,9 +395,10 @@ func tracksToListItems(tracks []domain.Track) []list.Item {
 	return items
 }
 
-// artistsToListItems converts domain.SearchArtist slices to SearchListItem slices.
-func artistsToListItems(artists []domain.SearchArtist) []list.Item {
-	items := make([]list.Item, len(artists))
+// ArtistsToSearchListItems converts domain.SearchArtist slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func ArtistsToSearchListItems(artists []domain.SearchArtist) []SearchListItem {
+	items := make([]SearchListItem, len(artists))
 	for i, a := range artists {
 		genres := joinGenres(a.Genres, 3)
 		followers := formatFollowers(a.Followers)
@@ -420,9 +422,10 @@ func artistsToListItems(artists []domain.SearchArtist) []list.Item {
 	return items
 }
 
-// albumsToListItems converts domain.SearchAlbum slices to SearchListItem slices.
-func albumsToListItems(albums []domain.SearchAlbum) []list.Item {
-	items := make([]list.Item, len(albums))
+// AlbumsToSearchListItems converts domain.SearchAlbum slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func AlbumsToSearchListItems(albums []domain.SearchAlbum) []SearchListItem {
+	items := make([]SearchListItem, len(albums))
 	for i, al := range albums {
 		artists := joinArtistNames(al.Artists)
 		year := extractYear(al.ReleaseDate)
@@ -443,9 +446,10 @@ func albumsToListItems(albums []domain.SearchAlbum) []list.Item {
 	return items
 }
 
-// playlistsToListItems converts domain.SearchPlaylist slices to SearchListItem slices.
-func playlistsToListItems(playlists []domain.SearchPlaylist) []list.Item {
-	items := make([]list.Item, len(playlists))
+// PlaylistsToSearchListItems converts domain.SearchPlaylist slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func PlaylistsToSearchListItems(playlists []domain.SearchPlaylist) []SearchListItem {
+	items := make([]SearchListItem, len(playlists))
 	for i, p := range playlists {
 		tc := fmt.Sprintf("%d tracks", p.TrackCount)
 		subtitle := "by " + p.Owner.DisplayName + " · " + tc
@@ -463,6 +467,50 @@ func playlistsToListItems(playlists []domain.SearchPlaylist) []list.Item {
 			PlaylistTracks: tc,
 			PlaylistDesc:   desc,
 		}
+	}
+	return items
+}
+
+// --- Internal helpers: domain types → []list.Item ---
+// These delegate to the exported converters to avoid duplicating conversion logic.
+// The bubbles/list component requires []list.Item; SearchListItem satisfies list.Item.
+
+// tracksToListItems converts domain.Track slices to []list.Item via TracksToSearchListItems.
+func tracksToListItems(tracks []domain.Track) []list.Item {
+	src := TracksToSearchListItems(tracks)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
+	}
+	return items
+}
+
+// artistsToListItems converts domain.SearchArtist slices to []list.Item via ArtistsToSearchListItems.
+func artistsToListItems(artists []domain.SearchArtist) []list.Item {
+	src := ArtistsToSearchListItems(artists)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
+	}
+	return items
+}
+
+// albumsToListItems converts domain.SearchAlbum slices to []list.Item via AlbumsToSearchListItems.
+func albumsToListItems(albums []domain.SearchAlbum) []list.Item {
+	src := AlbumsToSearchListItems(albums)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
+	}
+	return items
+}
+
+// playlistsToListItems converts domain.SearchPlaylist slices to []list.Item via PlaylistsToSearchListItems.
+func playlistsToListItems(playlists []domain.SearchPlaylist) []list.Item {
+	src := PlaylistsToSearchListItems(playlists)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
 	}
 	return items
 }
