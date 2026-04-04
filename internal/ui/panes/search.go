@@ -171,6 +171,10 @@ type SearchOverlay struct {
 	// placeholderIdx cycles through searchPlaceholders (0..3) on a 2-second tick.
 	// The tick stops when the user starts typing and restarts when the input is cleared.
 	placeholderIdx int
+
+	// lastSetListH is the most recent height passed to resultList.SetSize().
+	// Tracked so tests can verify resizeList() was called with the correct value.
+	lastSetListH int
 }
 
 // NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
@@ -287,6 +291,19 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	o.width = width
 	o.height = height
 
+	o.resizeList()
+
+	// Update help model width so it can truncate bindings appropriately.
+	w := o.overlayWidth()
+	o.help.Width = w - 4 // inside help panel border
+}
+
+// resizeList recomputes the list dimensions from the current panelHeights() and
+// applies them via resultList.SetSize(). Must be called after any state change that
+// could affect showHintLine() (typing, backspace, Ctrl+U, tab cycle, SearchClearedMsg).
+// Without this call, the list renders at a stale height whenever the hint line toggles,
+// causing visual artifacts (duplicate lines, misaligned borders).
+func (o *SearchOverlay) resizeList() {
 	w := o.overlayWidth()
 	_, resultsH, _ := o.panelHeights()
 
@@ -300,9 +317,7 @@ func (o *SearchOverlay) SetSize(width, height int) {
 		listH = 1
 	}
 	o.resultList.SetSize(listW, listH)
-
-	// Update help model width so it can truncate bindings appropriately.
-	o.help.Width = w - 4 // inside help panel border
+	o.lastSetListH = listH
 }
 
 // Init starts the cursor blink loop, placeholder ticker, and emits SearchClearedMsg
@@ -339,6 +354,10 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// results panel shows the empty-query hint rather than stale items.
 		o.results = nil
 		o.resultList.SetItems(nil)
+		// Re-apply list dimensions: clearing the input makes showHintLine() return
+		// true (searchH=4), shrinking resultsH by 1. resizeList() keeps the list
+		// height in sync so the panel layout does not overflow.
+		o.resizeList()
 		return o, nil
 
 	case SearchPageLoadedMsg:
@@ -443,6 +462,9 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		o.input.SetValue("")
 		o.lockedPrefix = ""
 		o.prefixState = PrefixNone
+		// Re-apply list dimensions: clearing the input makes showHintLine() return true
+		// (searchH=4), which changes resultsH. resizeList() keeps the list height in sync.
+		o.resizeList()
 		return o, tea.Batch(
 			func() tea.Msg { return SearchClearedMsg{} },
 			searchPlaceholderTick(),
@@ -453,6 +475,9 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// demote the tag back into the input value so the user can edit the prefix.
 		if o.prefixState == PrefixLocked && o.input.Position() == 0 {
 			o.demoteFromPromptTag()
+			// Re-apply list dimensions after demotion: the prefix tag is removed,
+			// which may change showHintLine() (PrefixNone, empty input → hint visible).
+			o.resizeList()
 			return o, nil
 		}
 		// Otherwise let textinput handle backspace normally.
@@ -469,6 +494,9 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if o.prefixState == PrefixLocked && o.input.Prompt == "> " {
 			o.promoteToPromptTag()
 		}
+		// Re-apply list dimensions: backspace may change showHintLine() (e.g. input
+		// cleared → hint reappears → searchH changes from 3 to 4 → resultsH shrinks).
+		o.resizeList()
 		if o.prefixState == PrefixTyping {
 			// Still editing the prefix — don't fire debounce yet.
 			return o, cmd
@@ -491,6 +519,10 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// tag hasn't been applied yet — promote the prefix to the Prompt field.
 			o.promoteToPromptTag()
 		}
+		// Re-apply list dimensions: typing may change showHintLine() (e.g. first
+		// char typed on empty input → hint hides → searchH changes from 4 to 3 →
+		// resultsH gains 1 line). resizeList() keeps the list height in sync.
+		o.resizeList()
 		if o.prefixState == PrefixTyping {
 			// User is still typing the command prefix — don't fire debounce yet.
 			return o, cmd
@@ -549,6 +581,9 @@ func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + 1) % NumTabs)
 	o.syncInputToTab()
 	o.rebuildListItems()
+	// Re-apply list dimensions: tab cycling changes prefixState (and therefore
+	// showHintLine()), which changes searchH and hence resultsH.
+	o.resizeList()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
 	return o, func() tea.Msg {
@@ -563,6 +598,9 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.activeTab = SearchTab((int(o.activeTab) + NumTabs - 1) % NumTabs)
 	o.syncInputToTab()
 	o.rebuildListItems()
+	// Re-apply list dimensions: tab cycling changes prefixState (and therefore
+	// showHintLine()), which changes searchH and hence resultsH.
+	o.resizeList()
 	query := o.cleanQuery()
 	types := TabToAPITypes(o.activeTab)
 	return o, func() tea.Msg {
@@ -1052,6 +1090,24 @@ func (o *SearchOverlay) PlaceholderIdx() int {
 // Placeholder returns the current textinput placeholder string — exported for tests.
 func (o *SearchOverlay) Placeholder() string {
 	return o.input.Placeholder
+}
+
+// ListHeight returns the last height applied to the result list via resultList.SetSize().
+// This is tracked in lastSetListH so tests can directly verify resizeList() was called
+// with the correct value after any state change that affects showHintLine().
+// When resizeList() has not been called yet (before SetSize), this returns 0.
+func (o *SearchOverlay) ListHeight() int {
+	return o.lastSetListH
+}
+
+// ListViewLineCount returns the number of lines the result list renders in its current
+// View() output — exported for tests. This is the actual number of lines the list
+// component will produce, which must match the container's expected height after
+// resizeList() is called. If resizeList() was NOT called after a hint toggle, the
+// list renders at a stale height (one off), causing the mismatch this story fixes.
+func (o *SearchOverlay) ListViewLineCount() int {
+	view := o.resultList.View()
+	return strings.Count(view, "\n") + 1
 }
 
 // InputShowSuggestions returns whether the textinput has ShowSuggestions enabled — exported for tests.

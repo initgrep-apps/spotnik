@@ -1717,6 +1717,154 @@ func TestSearchOverlay_CheckPrefetch_MaxOffsetStops(t *testing.T) {
 	assert.Nil(t, cmd2, "should return nil when all items loaded (offset >= total)")
 }
 
+// --- Story 93: resizeList() keeps list height in sync with showHintLine() ---
+
+// countViewLines counts the number of lines in the rendered view output.
+// This is the key metric to verify: the total view height must remain stable
+// across hint toggles. If resizeList() is NOT called, the list renders at
+// a stale height and the total view line count changes unexpectedly.
+func countViewLines(view string) int {
+	return strings.Count(view, "\n") + 1
+}
+
+// TestResizeList_ViewHeightStableAcrossHintToggle verifies that View() produces the
+// same total line count before and after hint toggling.
+//
+// Without resizeList(), typing causes searchH to drop from 4 to 3, giving the
+// results panel 1 extra line, but the list still renders at the old height (N).
+// The container tries to fit N+1 lines in N+1 space, but the list only gives N,
+// so lipgloss appends a blank line — OR the list overflows its container by 1.
+// Either way, the total view line count shifts, breaking the layout.
+//
+// With resizeList(), the list is always sized to match the current panelHeights(),
+// so the total view height stays constant regardless of hint visibility.
+func TestResizeList_ViewHeightStableAcrossHintToggle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	// Baseline: empty input → hint visible.
+	require.True(t, o.ShowHintLine(), "pre-condition: hint must be visible")
+	baseView := o.View()
+	baseLines := countViewLines(baseView)
+
+	// Type 'j' → hint hides → searchH changes from 4 to 3.
+	// resultsH gains 1 extra line. resizeList() must increase listH by 1 to absorb it.
+	o, _ = sendKey(t, o, "j")
+	require.False(t, o.ShowHintLine(), "hint must be hidden after typing")
+	afterTypingLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterTypingLines,
+		"view line count must be stable after typing (hint toggled off); resizeList() must have been called")
+
+	// Press Ctrl+U → hint reappears → searchH goes back to 4.
+	// resultsH loses 1 line. resizeList() must decrease listH by 1.
+	o, _ = sendKey(t, o, "ctrl+u")
+	require.True(t, o.ShowHintLine(), "hint must reappear after Ctrl+U")
+	afterCtrlULines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterCtrlULines,
+		"view line count must be stable after Ctrl+U (hint toggled on); resizeList() must have been called")
+}
+
+// TestResizeList_ViewHeightStableAfterBackspace verifies view height stability when
+// backspacing the last character (empty input restores hint).
+func TestResizeList_ViewHeightStableAfterBackspace(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	baseView := o.View()
+	baseLines := countViewLines(baseView)
+
+	// Type single char → hint hides.
+	o, _ = sendKey(t, o, "j")
+	require.False(t, o.ShowHintLine(), "hint must hide after typing")
+	afterTypingLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterTypingLines, "line count must be stable after typing")
+
+	// Backspace → empty input → hint visible again.
+	o, _ = sendKey(t, o, "backspace")
+	require.Equal(t, "", o.Query(), "backspace must empty input")
+	require.True(t, o.ShowHintLine(), "hint must reappear after backspace to empty")
+	afterBackspaceLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterBackspaceLines,
+		"view line count must be stable after backspace to empty; resizeList() must have been called")
+}
+
+// TestResizeList_ViewHeightStableAfterTabCycle verifies view height stability when
+// cycling tabs (changes hint visibility via prefix lock/unlock).
+func TestResizeList_ViewHeightStableAfterTabCycle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	baseView := o.View()
+	baseLines := countViewLines(baseView)
+	require.True(t, o.ShowHintLine(), "pre-condition: hint visible on All tab")
+
+	// Tab to Songs → PrefixLocked → hint hides.
+	o, _ = sendKey(t, o, "tab")
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+	require.False(t, o.ShowHintLine(), "hint must hide when Songs tab active")
+	afterTabLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterTabLines,
+		"view line count must be stable after cycling to Songs tab; resizeList() must have been called")
+
+	// Shift+Tab back to All → hint reappears.
+	o, _ = sendKey(t, o, "shift+tab")
+	require.Equal(t, panes.TabAll, o.ActiveTab())
+	require.True(t, o.ShowHintLine(), "hint must reappear on All tab")
+	afterShiftTabLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterShiftTabLines,
+		"view line count must be stable after cycling back to All tab; resizeList() must have been called")
+}
+
+// TestResizeList_SearchClearedMsg verifies that SearchClearedMsg (overlay-open sequence)
+// causes resizeList() to be called, ensuring the list height is correct after clearing.
+func TestResizeList_SearchClearedMsg(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	// Get baseline with hint visible.
+	baseLines := countViewLines(o.View())
+	require.True(t, o.ShowHintLine(), "pre-condition: hint visible on empty overlay")
+
+	// Send SearchClearedMsg directly (as the root app does when opening the overlay).
+	model, _ := o.Update(panes.SearchClearedMsg{})
+	o = model.(*panes.SearchOverlay)
+
+	// View height must remain stable — resizeList() was called.
+	afterClearLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterClearLines,
+		"view line count must be stable after SearchClearedMsg; resizeList() must have been called")
+}
+
+// TestResizeList_ListHeightMatchesPanelFormula verifies that after any hint toggle,
+// ListHeight() (which reports panelHeights()-derived value) equals the expected formula.
+// This confirms resizeList() and panelHeights() stay in sync.
+func TestResizeList_ListHeightMatchesPanelFormula(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+	h := o.OverlayHeight()
+
+	// Hint visible: searchH=4, resultsH = h-4-3, listH = resultsH-4.
+	require.True(t, o.ShowHintLine())
+	wantHintVisible := (h - 4 - 3) - 4
+	if wantHintVisible < 1 {
+		wantHintVisible = 1
+	}
+	assert.Equal(t, wantHintVisible, o.ListHeight(),
+		"list height with hint visible must be overlayH - 4 - 3 - 4 = %d", wantHintVisible)
+
+	// Type 'j' → hint hides: searchH=3, resultsH = h-3-3, listH = resultsH-4.
+	o, _ = sendKey(t, o, "j")
+	require.False(t, o.ShowHintLine())
+	wantHintHidden := (h - 3 - 3) - 4
+	if wantHintHidden < 1 {
+		wantHintHidden = 1
+	}
+	assert.Equal(t, wantHintHidden, o.ListHeight(),
+		"list height with hint hidden must be overlayH - 3 - 3 - 4 = %d", wantHintHidden)
+	assert.Equal(t, wantHintVisible+1, wantHintHidden,
+		"hint-hidden list must be 1 taller than hint-visible list")
+}
+
 // makeLargeTrackList creates n minimal domain.Track items for store population tests.
 func makeLargeTrackList(n int) []domain.Track {
 	tracks := make([]domain.Track, n)
