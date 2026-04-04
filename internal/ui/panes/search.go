@@ -54,9 +54,21 @@ func TabToAPITypes(tab SearchTab) []string {
 // Defined here to avoid a circular dependency between panes and app packages.
 const searchPrefetchThreshold = 0.6
 
-// searchDebounceMsg carries a query snapshot fired 300ms after a keypress.
-// In Update, it is only acted on if msg.query still matches the current input.
-type searchDebounceMsg struct{ query string }
+// searchIntent captures the full desired search state at a point in time.
+// All four triggers (type, Tab, Ctrl+Right, Ctrl+Left) write to this struct
+// and call scheduleDebounce(). The debounce tick carries a snapshot; if the
+// snapshot differs from the current intent at fire time, the tick is stale and discarded.
+type searchIntent struct {
+	query string
+	tab   SearchTab
+	page  int
+}
+
+// searchDebounceMsg is the internal tick fired by scheduleDebounce.
+// It is never routed to app.go — handled entirely within SearchOverlay.Update().
+type searchDebounceMsg struct {
+	intent searchIntent
+}
 
 // SearchClosedMsg is emitted when the user presses Esc, signalling the root
 // app model to close the overlay and restore the previous pane focus.
@@ -158,8 +170,10 @@ type SearchOverlay struct {
 	// Story 99 will manage multi-page accumulation; for now the overlay holds the latest page.
 	results []SearchListItem
 
-	// activeTab is which category tab (All/Songs/Artists/Albums/Playlists) is selected.
-	activeTab SearchTab
+	// intent is the single source of truth for what the user currently wants to search.
+	// All four triggers (type, Tab, Ctrl+Right, Ctrl+Left) write to this struct and call
+	// scheduleDebounce(). The debounce tick carries a snapshot; stale ticks are discarded.
+	intent searchIntent
 
 	// prefixState tracks which stage of command-prefix entry the user is in.
 	// See search_prefix.go for the state machine.
@@ -229,7 +243,7 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 		help:       h,
 		keyMap:     km,
 		resultList: rl,
-		activeTab:  TabAll,
+		intent:     searchIntent{query: "", tab: TabAll, page: 1},
 	}
 }
 
@@ -248,7 +262,7 @@ func (o *SearchOverlay) Query() string {
 // ActiveTab returns the currently active category tab.
 // Exported for tests.
 func (o *SearchOverlay) ActiveTab() SearchTab {
-	return o.activeTab
+	return o.intent.tab
 }
 
 // OverlayWidth returns the computed overlay width (70% of terminal width, min 40).
@@ -299,7 +313,7 @@ func (o *SearchOverlay) Reset() {
 	o.input.Prompt = "> "
 	o.input.Placeholder = searchPlaceholders[0]
 	o.placeholderIdx = 0
-	o.activeTab = TabAll
+	o.intent = searchIntent{query: "", tab: TabAll, page: 1}
 	o.prefixState = PrefixNone
 	o.lockedPrefix = ""
 	o.results = nil
@@ -423,31 +437,23 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return o, cmd
 }
 
-// handleDebounce processes a searchDebounceMsg. Only fires a search request if
-// the snapshot query still matches the current clean query (discards stale ticks).
-// When a prefix is locked, the debounce snapshot is the clean query (prefix stripped).
+// handleDebounce is called when a searchDebounceMsg arrives. It discards stale
+// ticks (intent has changed since the tick was scheduled) and no-ops on empty
+// or prefix-only queries.
 func (o *SearchOverlay) handleDebounce(m searchDebounceMsg) (tea.Model, tea.Cmd) {
-	// Compare the snapshot against the current clean query, not the raw input value.
-	// This ensures debounce ticks are discarded correctly when a prefix is present.
-	currentClean := o.cleanQuery()
-	if m.query != currentClean {
-		// Query changed since this tick was scheduled — discard.
+	// Stale: user has moved on since this tick was scheduled.
+	if m.intent != o.intent {
 		return o, nil
 	}
-	if m.query == "" {
-		// Never fire on empty query.
+	// No-op: nothing to search.
+	query := o.cleanQuery()
+	if query == "" || o.prefixState == PrefixTyping {
 		return o, nil
 	}
-	// Never fire while the user is still typing the command prefix (no space yet).
-	if o.prefixState == PrefixTyping {
-		return o, nil
-	}
-	types := o.activeAPITypes()
-	query := m.query
-	// Fire a search request — root app model handles it.
-	// Page: 1 is the default; story 99 will wire in o.intent.page once the intent struct exists.
+	types := searchTypesForTab(o.intent.tab)
+	page := o.intent.page
 	return o, func() tea.Msg {
-		return SearchRequestMsg{Query: query, Types: types, Page: 1}
+		return SearchRequestMsg{Query: query, Types: types, Page: page}
 	}
 }
 
@@ -539,12 +545,14 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Re-apply list dimensions: backspace may change showHintLine() (e.g. input
 		// cleared → hint reappears → searchH changes from 3 to 4 → resultsH shrinks).
 		o.resizeList()
+		// Update intent.query to reflect the current input value, then update page to 1.
+		o.intent.query = o.input.Value()
+		o.intent.page = 1
 		if o.prefixState == PrefixTyping {
 			// Still editing the prefix — don't fire debounce yet.
 			return o, cmd
 		}
-		q := o.cleanQuery()
-		debounceCmd := debounceSearch(q)
+		debounceCmd := o.scheduleDebounce()
 		// Restart placeholder tick when backspace clears input to empty.
 		if o.input.Value() == "" && o.prefixState == PrefixNone {
 			return o, tea.Batch(cmd, debounceCmd, searchPlaceholderTick())
@@ -565,12 +573,14 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// char typed on empty input → hint hides → searchH changes from 4 to 3 →
 		// resultsH gains 1 line). resizeList() keeps the list height in sync.
 		o.resizeList()
+		// Update intent.query to reflect the current input value, then reset page to 1.
+		o.intent.query = o.input.Value()
+		o.intent.page = 1
 		if o.prefixState == PrefixTyping {
 			// User is still typing the command prefix — don't fire debounce yet.
 			return o, cmd
 		}
-		q := o.cleanQuery()
-		debounceCmd := debounceSearch(q)
+		debounceCmd := o.scheduleDebounce()
 		return o, tea.Batch(cmd, debounceCmd)
 	}
 }
@@ -614,46 +624,34 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 }
 
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
-// It rebuilds the list items for the new tab and emits SearchRequestMsg so the
-// root app re-fires the search with the new type filter.
+// It updates o.intent.tab and resets o.intent.page to 1, then schedules a debounce.
+// handleDebounce fires SearchRequestMsg if the query is non-empty at tick time.
 // NOTE: Tab cycling is only reachable when prefixState is not PrefixTyping (Tab routing
 // in handleKey sends PrefixTyping → textinput suggestion acceptance instead). When a
 // prefix is locked the clean query (prefix stripped) is used so the API never sees raw ":songs kk".
 func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
-	o.activeTab = SearchTab((int(o.activeTab) + 1) % NumTabs)
+	o.intent.tab = SearchTab((int(o.intent.tab) + 1) % NumTabs)
+	o.intent.page = 1
 	o.syncInputToTab()
 	o.rebuildListItems()
 	// Re-apply list dimensions: tab cycling changes prefixState (and therefore
 	// showHintLine()), which changes searchH and hence resultsH.
 	o.resizeList()
-	query := o.cleanQuery()
-	types := TabToAPITypes(o.activeTab)
-	if query == "" {
-		return o, nil
-	}
-	return o, func() tea.Msg {
-		return SearchRequestMsg{Query: query, Types: types, Page: 1}
-	}
+	return o, o.scheduleDebounce()
 }
 
 // cycleTabBackward retreats the active tab, wrapping from TabAll back to the last tab.
-// It rebuilds the list items for the new tab and emits SearchRequestMsg so the
-// root app re-fires the search with the new type filter.
+// It updates o.intent.tab and resets o.intent.page to 1, then schedules a debounce.
+// handleDebounce fires SearchRequestMsg if the query is non-empty at tick time.
 func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
-	o.activeTab = SearchTab((int(o.activeTab) + NumTabs - 1) % NumTabs)
+	o.intent.tab = SearchTab((int(o.intent.tab) + NumTabs - 1) % NumTabs)
+	o.intent.page = 1
 	o.syncInputToTab()
 	o.rebuildListItems()
 	// Re-apply list dimensions: tab cycling changes prefixState (and therefore
 	// showHintLine()), which changes searchH and hence resultsH.
 	o.resizeList()
-	query := o.cleanQuery()
-	types := TabToAPITypes(o.activeTab)
-	if query == "" {
-		return o, nil
-	}
-	return o, func() tea.Msg {
-		return SearchRequestMsg{Query: query, Types: types, Page: 1}
-	}
+	return o, o.scheduleDebounce()
 }
 
 // View renders the search overlay as three separate bordered panels stacked vertically:
@@ -780,7 +778,7 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	for i := 0; i < NumTabs; i++ {
 		tab := SearchTab(i)
 		label := TabLabels[tab]
-		if tab == o.activeTab {
+		if tab == o.intent.tab {
 			// Active tab: brackets + selected colors.
 			style := lipgloss.NewStyle().
 				Foreground(o.theme.SelectedFg()).
@@ -933,12 +931,20 @@ func searchSpinnerTick() tea.Cmd {
 	})
 }
 
-// debounceSearch returns a tea.Cmd that fires a searchDebounceMsg after 300ms.
-// The query snapshot is captured in the closure so stale ticks can be detected.
-func debounceSearch(query string) tea.Cmd {
+// scheduleDebounce snapshots the current intent and returns a 300ms tick.
+// When the tick fires, handleDebounce compares the snapshot to the current
+// intent — if they differ, the tick is discarded (the user has since moved on).
+func (o *SearchOverlay) scheduleDebounce() tea.Cmd {
+	snapshot := o.intent
 	return tea.Tick(300*time.Millisecond, func(_ time.Time) tea.Msg {
-		return searchDebounceMsg{query: query}
+		return searchDebounceMsg{intent: snapshot}
 	})
+}
+
+// searchTypesForTab returns the Spotify API type strings for the given SearchTab.
+// Used by handleDebounce to derive the types filter from o.intent.tab.
+func searchTypesForTab(tab SearchTab) []string {
+	return TabToAPITypes(tab)
 }
 
 // SetTheme updates the theme reference for runtime theme switching.
@@ -988,10 +994,18 @@ func (o *SearchOverlay) KeysPanelTitle() string {
 }
 
 // SearchDebounceMsgForTest creates a searchDebounceMsg for use in tests.
-// This allows the test package (panes_test) to inject debounce messages
-// without exposing the unexported type in the production API.
+// The intent is constructed with the given query, TabAll, and page 1.
+// This allows legacy tests to inject debounce messages without wiring the full
+// overlay intent — for testing stale detection based on query alone.
 func SearchDebounceMsgForTest(query string) tea.Msg {
-	return searchDebounceMsg{query: query}
+	return searchDebounceMsg{intent: searchIntent{query: query, tab: TabAll, page: 1}}
+}
+
+// SearchDebounceMsgWithIntentForTest creates a searchDebounceMsg whose intent is a
+// snapshot of the overlay's current o.intent. Used by tests that need accurate
+// stale-tick detection (e.g. TestScheduleDebounce_MatchingIntentFiresSearchRequest).
+func SearchDebounceMsgWithIntentForTest(o *SearchOverlay) tea.Msg {
+	return searchDebounceMsg{intent: o.intent}
 }
 
 // SearchSpinnerTickCmd exposes the private searchSpinnerTick() function for tests.
@@ -1032,7 +1046,7 @@ func ListItemCount(o *SearchOverlay) int {
 
 // SetActiveTab sets the overlay's active tab — exported for tests.
 func SetActiveTab(o *SearchOverlay, tab SearchTab) {
-	o.activeTab = tab
+	o.intent.tab = tab
 }
 
 // SetListCursor moves the list cursor to the given index — exported for tests.
@@ -1078,6 +1092,16 @@ func NewTestList(d SearchItemDelegate) list.Model {
 // the unexported type in the production API.
 func SearchPlaceholderTickMsgForTest() tea.Msg {
 	return searchPlaceholderTickMsg{}
+}
+
+// IntentTab returns the tab stored in the current search intent — exported for tests.
+func (o *SearchOverlay) IntentTab() SearchTab {
+	return o.intent.tab
+}
+
+// IntentPage returns the page number stored in the current search intent — exported for tests.
+func (o *SearchOverlay) IntentPage() int {
+	return o.intent.page
 }
 
 // PlaceholderIdx returns the current placeholder cycle index — exported for tests.

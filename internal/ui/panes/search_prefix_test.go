@@ -462,10 +462,11 @@ func TestDebounce_UsesCleanQuery(t *testing.T) {
 	}
 
 	require.Equal(t, panes.PrefixLocked, o.PrefixState())
+	require.Equal(t, "kk", o.CleanQuery())
 
-	// The debounce snapshot was taken from cleanQuery() which is "kk".
-	// Fire the debounce with "kk" (the clean query).
-	_, cmd := o.Update(panes.SearchDebounceMsgForTest("kk"))
+	// Capture a snapshot of the current intent (tab=Songs, query="kk", page=1).
+	// Story 99: stale detection uses full intent comparison, not query-only.
+	_, cmd := o.Update(panes.SearchDebounceMsgWithIntentForTest(o))
 	require.NotNil(t, cmd, "debounce should fire for locked prefix with clean query")
 
 	msg := cmd()
@@ -487,7 +488,8 @@ func TestSearchRequestMsg_CarriesTypes(t *testing.T) {
 // TestCycleTabForward_UsesCleanQueryWhenPrefixLocked verifies that cycling tabs while
 // a prefix is locked sends the clean query (no prefix) in SearchRequestMsg.
 // This prevents ":songs kk" from reaching the API as a raw query string.
-// (SearchTabChangedMsg removed in story 98 — tab changes now emit SearchRequestMsg.)
+// Story 99: cycleTab returns scheduleDebounce(); SearchRequestMsg arrives after the
+// tick fires, so we need the two-step flow: debounce cmd → debounce msg → search cmd.
 func TestCycleTabForward_UsesCleanQueryWhenPrefixLocked(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -499,12 +501,17 @@ func TestCycleTabForward_UsesCleanQueryWhenPrefixLocked(t *testing.T) {
 	require.Equal(t, panes.PrefixLocked, o.PrefixState())
 	require.Equal(t, "kk", o.CleanQuery())
 
-	// Press Shift+Tab (cycleTabBackward) to cycle tabs.
-	// This is reachable because Tab during PrefixLocked goes to cycleTabForward.
-	_, cmd := sendKey(t, o, "shift+tab")
+	// Press Shift+Tab (cycleTabBackward) — returns scheduleDebounce() cmd.
+	_, debounceCmd := sendKey(t, o, "shift+tab")
+	require.NotNil(t, debounceCmd, "Shift+Tab should return a debounce command")
 
-	require.NotNil(t, cmd, "Shift+Tab should emit SearchRequestMsg command")
-	msg := cmd()
+	// Execute the debounce cmd to get the searchDebounceMsg.
+	tickMsg := debounceCmd()
+
+	// Feed the searchDebounceMsg into Update to fire the search.
+	_, searchCmd := o.Update(tickMsg)
+	require.NotNil(t, searchCmd, "debounce msg from tab cycle should produce a search command")
+	msg := searchCmd()
 	reqMsg, ok := msg.(panes.SearchRequestMsg)
 	require.True(t, ok, "should emit SearchRequestMsg, got %T", msg)
 	assert.Equal(t, "kk", reqMsg.Query, "tab cycle should use clean query, not raw ':songs kk'")
