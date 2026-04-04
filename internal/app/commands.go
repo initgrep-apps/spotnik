@@ -28,22 +28,9 @@ import (
 // expected startup condition, not a user-facing failure.
 var errNilClient = fmt.Errorf("API client not initialized")
 
-// Search prefetch pagination constants.
-// The Spotify API caps limit at 10 per type per request (Feb 2026).
-// Initial search fires searchPrefetchPages sequential calls to load searchPrefetchItems
-// results upfront. The next batch is triggered when scroll passes searchPrefetchThreshold.
-const (
-	// SearchPageSize is the Spotify API max limit per search request (Feb 2026 cap).
-	SearchPageSize = 10
-	// SearchPrefetchPages is the number of pages fetched per batch.
-	SearchPrefetchPages = 5
-	// SearchPrefetchItems is the total items loaded per batch (SearchPageSize * SearchPrefetchPages).
-	SearchPrefetchItems = SearchPageSize * SearchPrefetchPages
-	// SearchPrefetchThreshold is the scroll fraction (0–1) that triggers the next batch.
-	SearchPrefetchThreshold = 0.6
-	// SearchMaxOffset is the Spotify API hard cap on the offset query parameter.
-	SearchMaxOffset = 1000
-)
+// SearchPageSize is the number of results fetched per page.
+// Matches Spotify's recommended default; named for test clarity.
+const SearchPageSize = 10
 
 // buildPlaybackAPICmd dispatches the Spotify API call for the given playback action.
 // Store values are snapshotted here in Update() context (which is safe) before the
@@ -278,27 +265,32 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	}
 }
 
-// buildSearchPageCmd creates a command that fetches a single page of search results
-// at the given offset and delivers pre-converted results via SearchPageLoadedMsg.
-// The context, client, query, and offset are captured at dispatch time; the closure
-// is Elm-pure (no store reads or writes inside).
-// page is the 1-based page number derived from offset (offset=0 → page=1, offset=10 → page=2, …).
-// ctx is used for the HTTP call — pass a cancellable context from app.go to abort
-// in-flight requests when the user types a new query or closes the overlay.
-func buildSearchPageCmd(ctx context.Context, search api.SearchAPI, query string, types []string, offset int) tea.Cmd {
-	page := offset/SearchPageSize + 1
+// buildSearchPageCmd fetches a single page of search results.
+// ctx is cancelled by App when a new search starts or the overlay closes.
+// Returns nil if ctx is already cancelled — Bubble Tea drops nil messages
+// silently, preventing stale SearchPageLoadedMsg from entering the Update loop.
+// page is 1-based; offset is computed internally as (page-1)*SearchPageSize.
+func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string, types []string, page int) tea.Cmd {
 	return func() tea.Msg {
-		if search == nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		if client == nil {
 			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: errNilClient}
 		}
+		offset := (page - 1) * SearchPageSize
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
-		results, err := search.Search(
+		result, err := client.Search(
 			api.WithPriority(ctx, api.Interactive),
 			query,
 			types,
 			SearchPageSize,
 			offset,
 		)
+		if ctx.Err() != nil {
+			// Request completed but context was cancelled — caller has moved on.
+			return nil
+		}
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -308,38 +300,46 @@ func buildSearchPageCmd(ctx context.Context, search api.SearchAPI, query string,
 			}
 			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: err}
 		}
+		items, total := convertSearchResult(result)
 		return panes.SearchPageLoadedMsg{
 			Query:   query,
 			Page:    page,
-			Results: convertSearchResult(results),
-			Total:   searchResultTotal(results),
+			Results: items,
+			Total:   total,
 		}
 	}
 }
 
-// convertSearchResult converts *api.SearchResult to []panes.SearchListItem.
-// All result types are combined into a single flat slice, preserving rich metadata
-// (artists, duration, explicit flag, genres, followers, etc.) from domain types.
-// Story 101 will wire type-filtered views; for now all types are included.
-func convertSearchResult(r *api.SearchResult) []panes.SearchListItem {
+// BuildSearchPageCmd is an exported wrapper around buildSearchPageCmd for testing.
+// Exported for tests only — production code must use buildSearchPageCmd.
+func BuildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string, types []string, page int) tea.Cmd {
+	return buildSearchPageCmd(ctx, client, query, types, page)
+}
+
+// convertSearchResult converts a Spotify search API response into a flat list
+// of SearchListItems and a total result count.
+//
+// For the All tab the total is the maximum across all returned types — the
+// deepest result set determines how many pages exist. For single-type tabs
+// only one field is non-zero so the max equals that type's total.
+func convertSearchResult(r *api.SearchResult) ([]panes.SearchListItem, int) {
 	if r == nil {
-		return nil
+		return nil, 0
 	}
 	var items []panes.SearchListItem
 	items = append(items, panes.TracksToSearchListItems(r.Tracks.Items)...)
 	items = append(items, panes.ArtistsToSearchListItems(r.Artists.Items)...)
 	items = append(items, panes.AlbumsToSearchListItems(r.Albums.Items)...)
 	items = append(items, panes.PlaylistsToSearchListItems(r.Playlists.Items)...)
-	return items
+
+	total := max(r.Tracks.Total, r.Artists.Total, r.Albums.Total, r.Playlists.Total)
+	return items, total
 }
 
-// searchResultTotal returns the sum of totals across all result types.
-// Used to populate SearchPageLoadedMsg.Total for the pagination bar.
-func searchResultTotal(r *api.SearchResult) int {
-	if r == nil {
-		return 0
-	}
-	return r.Tracks.Total + r.Artists.Total + r.Albums.Total + r.Playlists.Total
+// ConvertSearchResult is an exported wrapper around convertSearchResult for testing.
+// Exported for tests only.
+func ConvertSearchResult(r *api.SearchResult) ([]panes.SearchListItem, int) {
+	return convertSearchResult(r)
 }
 
 // buildFetchDevicesCmd creates a command that fetches the available Spotify Connect devices

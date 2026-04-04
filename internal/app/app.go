@@ -879,17 +879,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Cancel any in-flight HTTP call before starting a new one.
 		a.searchCancel()
 
-		// Offset = (Page-1) * SearchPageSize converts 1-based page to 0-based API offset.
-		offset := 0
-		if m.Page > 1 {
-			offset = (m.Page - 1) * SearchPageSize
-		}
-		// Spotify API caps offset at SearchMaxOffset (1000). If the requested page maps to
-		// an offset that would be rejected by the API, do not dispatch any command.
-		if offset >= SearchMaxOffset {
-			return a, nil
-		}
-
 		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
 		// Fall back to all four types when no prefix filter is active.
 		searchTypes := m.Types
@@ -911,7 +900,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		isFirst := len(a.searchPane.Results()) == 0
 		loadingCmd := func() tea.Msg { return panes.SearchLoadingMsg{IsFirstPage: isFirst} }
 
-		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, offset)
+		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, m.Page)
 
 		return a, tea.Batch(loadingCmd, fetchCmd)
 
