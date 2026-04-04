@@ -921,10 +921,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — route errors through toast, forward success to overlay.
+		//
+		// NOTE: Staleness check runs FIRST, before the error check. A context-cancelled
+		// error from a prior query (e.g. user typed a new query mid-flight) must be
+		// silently discarded — emitting a toast for "context canceled" would disrupt the
+		// new request's loading state and confuse the user.
+		if errors.Is(m.Err, errNilClient) {
+			// errNilClient is a programming error, not a network result — always surface it.
+			return a, nil
+		}
+		// Discard stale results AND stale errors — the user moved on to a different query or page.
+		if m.Query != a.searchQuery || m.Page != a.searchPage {
+			return a, nil
+		}
 		if m.Err != nil {
-			if errors.Is(m.Err, errNilClient) {
-				return a, nil
-			}
 			// Clear app-level loading flag so the overlay's spinner can be dismissed.
 			a.searchLoading = false
 			// Forward the error msg to overlay so it can clear its loading flags
@@ -935,10 +945,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchPane = sp
 			}
 			return a, a.alerts.NewAlertCmd("warning", "Search failed: "+m.Err.Error())
-		}
-		// Discard stale results — the user moved on to a different query or page.
-		if m.Query != a.searchQuery || m.Page != a.searchPage {
-			return a, nil
 		}
 		a.searchLoading = false
 		// Forward to the search pane so it can update its local display state.

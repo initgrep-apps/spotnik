@@ -201,10 +201,16 @@ func TestBuildSearchBatchCmd_PageAtMaxOffset_ReturnsNil(t *testing.T) {
 // --- Task 4: SearchPageLoadedMsg handler ---
 
 // TestSearchPageLoadedMsg_ErrorTriggersToast verifies that an error on a
-// SearchPageLoadedMsg emits a toast notification.
+// SearchPageLoadedMsg emits a toast notification when the message is current
+// (query and page match the app's in-flight staleness keys).
 func TestSearchPageLoadedMsg_ErrorTriggersToast(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+
+	// Simulate an in-flight search for "jazz" page 1. The staleness keys must match
+	// the incoming message — otherwise the staleness check discards the message before
+	// the error branch is reached (correct behavior added in Story 100).
+	a.SetSearchSession("jazz", 1, true)
 
 	_, cmd := a.Update(panes.SearchPageLoadedMsg{
 		Query: "jazz",

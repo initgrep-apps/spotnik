@@ -6,10 +6,12 @@ package app_test
 //   - NewApp() searchCancel is safe to call immediately (no panic)
 //   - SearchRequestMsg handler cancels prior ctx, records staleness keys, sets loading=true
 //   - SearchPageLoadedMsg: staleness check discards mismatched query/page; error branch toasts
+//   - SearchPageLoadedMsg: stale error (including context.Canceled) is silently discarded
 //   - closeSearch() cancels, clears all four fields
 //   - openSearch() resets cancel func, calls Reset()+Init()
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -161,6 +163,33 @@ func TestSearchPageLoadedMsg_StalenessTable(t *testing.T) {
 			wantToast:   true,
 			wantLoading: false, // error clears loading flag
 		},
+		{
+			// Stale error: the user typed a new query while the old request was in-flight.
+			// The old request may return context.Canceled or any network error — it must be
+			// silently discarded rather than showing a spurious toast.
+			name:        "stale error with query mismatch — discard silently, no toast",
+			msgQuery:    "jazz",
+			appQuery:    "rock", // user already moved on to "rock"
+			msgPage:     1,
+			appPage:     1,
+			msgErr:      someErr,
+			wantDiscard: true,
+			wantToast:   false,
+			wantLoading: true, // loading remains true for the current "rock" request
+		},
+		{
+			// Context-cancelled error from a prior query: the most common stale-error
+			// scenario triggered by Story 100's cancellation mechanism. Must NOT toast.
+			name:        "stale context-cancelled error — discard silently, no toast",
+			msgQuery:    "jazz",
+			appQuery:    "rock",
+			msgPage:     1,
+			appPage:     1,
+			msgErr:      context.Canceled,
+			wantDiscard: true,
+			wantToast:   false,
+			wantLoading: true, // loading remains true for the ongoing "rock" request
+		},
 	}
 
 	for _, tt := range tests {
@@ -295,4 +324,41 @@ func TestSearchRequestMsg_ContextIsCancellable(t *testing.T) {
 	default:
 		t.Fatal("context should be done after CallSearchCancel")
 	}
+}
+
+// TestSearchPageLoadedMsg_StaleContextCancelledDoesNotToastOrClearLoading verifies
+// the exact bug described in Story 100 PR #126:
+//
+// When the user types a new query ("rock") while the prior request ("jazz") is
+// still in-flight, the app cancels the "jazz" context. The "jazz" goroutine then
+// delivers a SearchPageLoadedMsg with Err=context.Canceled and Query="jazz".
+//
+// This message is stale (Query "jazz" != app's current searchQuery "rock").
+// The handler must:
+//   - NOT emit a toast ("Search failed: context canceled")
+//   - NOT clear searchLoading (the "rock" request is still in-flight)
+//   - return a nil command
+func TestSearchPageLoadedMsg_StaleContextCancelledDoesNotToastOrClearLoading(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Simulate the user having moved on to "rock" (page 1) as the current query.
+	a.SetSearchSession("rock", 1, true)
+
+	// The old "jazz" request arrives back with context.Canceled.
+	msg := panes.SearchPageLoadedMsg{
+		Query: "jazz",
+		Page:  1,
+		Err:   context.Canceled,
+	}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+
+	// searchLoading must remain true — the "rock" request is still in-flight.
+	assert.True(t, a.SearchLoading(),
+		"searchLoading must remain true when a stale context.Canceled error arrives")
+
+	// No command should be produced — no toast, no overlay update.
+	assert.Nil(t, cmd,
+		"stale context.Canceled error must produce nil cmd (no toast emitted)")
 }

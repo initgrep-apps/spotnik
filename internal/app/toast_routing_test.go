@@ -113,9 +113,12 @@ func TestApp_TransferPlaybackMsg_EmitsInfoToast(t *testing.T) {
 func TestApp_SearchPageLoadedMsg_ErrorToastIncludesDetail(t *testing.T) {
 	// SearchPageLoadedMsg with error must trigger a toast cmd; the error detail is
 	// carried in the alert so the user can diagnose the failure.
+	// Staleness keys must match the incoming message; otherwise the staleness
+	// check discards the message before the error branch is reached (Story 100).
 	a := newToastTestApp()
+	a.SetSearchSession("jazz", 1, true)
 	searchErr := errors.New("context deadline exceeded")
-	_, cmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Err: searchErr})
+	_, cmd := a.Update(panes.SearchPageLoadedMsg{Query: "jazz", Page: 1, Err: searchErr})
 
 	require.NotNil(t, cmd, "SearchPageLoadedMsg with error must return non-nil cmd for toast")
 }
