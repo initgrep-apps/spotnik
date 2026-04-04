@@ -395,8 +395,9 @@ func (o *SearchOverlay) SetSize(width, height int) {
 
 // resizeList recomputes the list dimensions from the current panelHeights() and
 // applies them via resultList.SetSize(). Must be called after any state change that
-// could affect showHintLine() (typing, backspace, Ctrl+U, tab cycle, SearchClearedMsg)
-// or total (which controls whether the pagination bar occupies a line).
+// could affect showHintLine() (typing, backspace, Ctrl+U, tab cycle, SearchClearedMsg),
+// total (which controls whether the pagination bar occupies a line), or loading state
+// (which controls whether the spinner line occupies a line above the list).
 // Without this call, the list renders at a stale height whenever the hint line toggles,
 // causing visual artifacts (duplicate lines, misaligned borders).
 func (o *SearchOverlay) resizeList() {
@@ -409,12 +410,18 @@ func (o *SearchOverlay) resizeList() {
 		paginationLine = 1
 	}
 
-	// Inner list dimensions: subtract results border (2) + tab bar (1) + separator (1) + pagination.
+	// Subtract 1 line for the spinner line when loadingNextPage (spinner above list).
+	spinnerLine := 0
+	if o.loadingNextPage {
+		spinnerLine = 1
+	}
+
+	// Inner list dimensions: subtract results border (2) + tab bar (1) + separator (1) + optional lines.
 	listW := w - 2
 	if listW < 1 {
 		listW = 1
 	}
-	listH := resultsH - 4 - paginationLine
+	listH := resultsH - 4 - paginationLine - spinnerLine
 	if listH < 1 {
 		listH = 1
 	}
@@ -458,7 +465,11 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SearchClearedMsg:
 		// Root app has cleared the store; clear local overlay state too so the
 		// results panel shows the empty-query hint rather than stale items.
+		// Also clear total and loading flags so the pagination bar does not linger.
 		o.results = nil
+		o.total = 0
+		o.loadingFirstPage = false
+		o.loadingNextPage = false
 		o.resultList.SetItems(nil)
 		// Re-apply list dimensions: clearing the input makes showHintLine() return
 		// true (searchH=4), shrinking resultsH by 1. resizeList() keeps the list
@@ -476,6 +487,9 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			o.loadingFirstPage = false
 			o.loadingNextPage = true
 		}
+		// Re-apply list dimensions: loadingNextPage toggles the spinner line, which
+		// affects the available height for the results list.
+		o.resizeList()
 		return o, nil
 
 	case SearchPageLoadedMsg:
