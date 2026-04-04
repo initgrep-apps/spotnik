@@ -332,19 +332,8 @@ func (d SearchItemDelegate) styledDot(selected bool) string {
 	return d.withBg(lipgloss.NewStyle().Foreground(d.theme.TextMuted()), selected).Render(" · ")
 }
 
-// rightAlign composes left and right parts so right is flush to the given width.
-// Uses ANSI-aware lipgloss width measurement to handle styled strings.
-func (d SearchItemDelegate) rightAlign(left, right string, width int) string {
-	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(right)
-	pad := width - leftW - rightW
-	if pad < 1 {
-		pad = 1
-	}
-	return left + strings.Repeat(" ", pad) + right
-}
-
-// rightAlignBg is like rightAlign but fills the gap with background-styled spaces.
+// rightAlignBg composes left and right parts so right is flush to the given width.
+// When selected, fills the gap with background-styled spaces.
 func (d SearchItemDelegate) rightAlignBg(left, right string, width int, selected bool) string {
 	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
@@ -357,16 +346,6 @@ func (d SearchItemDelegate) rightAlignBg(left, right string, width int, selected
 		return left + fill + right
 	}
 	return left + strings.Repeat(" ", pad) + right
-}
-
-// padToInner right-pads content with spaces so its visible width equals innerW.
-// This ensures wrapLine's background/border styling covers the full line width.
-func (d SearchItemDelegate) padToInner(content string, innerW int) string {
-	cw := lipgloss.Width(content)
-	if cw >= innerW {
-		return content
-	}
-	return content + strings.Repeat(" ", innerW-cw)
 }
 
 // badgeColor returns the lipgloss color for the given category badge.

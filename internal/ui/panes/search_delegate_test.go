@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -589,17 +588,13 @@ func TestStyledDot(t *testing.T) {
 	assert.Contains(t, dot, "·")
 }
 
-// TestRightAlign verifies that left and right content appear in the output,
-// and the total width matches the requested width, with right after left.
-func TestRightAlign(t *testing.T) {
+// TestRightAlignBg verifies that left and right content appear in the output.
+func TestRightAlignBg(t *testing.T) {
 	d := newTestDelegate()
-	result := d.rightAlign("left", "right", 20)
-	// Both parts should be in the result.
+	result := d.rightAlignBg("left", "right", 20, false)
 	assert.Contains(t, result, "left")
 	assert.Contains(t, result, "right")
-	// Output width should equal the requested width.
-	assert.Len(t, result, 20, "rightAlign output should have exactly the requested width")
-	// "right" should appear after "left" in the string.
+	assert.Len(t, result, 20, "rightAlignBg output should have exactly the requested width")
 	leftIdx := strings.Index(result, "left")
 	rightIdx := strings.Index(result, "right")
 	assert.Greater(t, rightIdx, leftIdx, "right text should appear after left text")
@@ -999,54 +994,6 @@ func TestRenderDefault_ThreeLines(t *testing.T) {
 }
 
 // --- padToInner tests ---
-
-// TestPadToInner verifies that padToInner right-pads content to the exact innerW.
-func TestPadToInner(t *testing.T) {
-	d := newTestDelegate()
-	tests := []struct {
-		name    string
-		content string
-		innerW  int
-		wantLen int  // expected visible width of result
-		wantGTE bool // true when we only check result >= innerW (content wider)
-	}{
-		{
-			name:    "shorter than innerW gets padded to exact width",
-			content: "hello",
-			innerW:  20,
-			wantLen: 20,
-		},
-		{
-			name:    "equal to innerW returned unchanged",
-			content: "exactly_ten_",
-			innerW:  12,
-			wantLen: 12,
-		},
-		{
-			name:    "wider than innerW returned unchanged (no truncation)",
-			content: strings.Repeat("x", 30),
-			innerW:  20,
-			wantLen: 30,
-		},
-		{
-			name:    "empty string padded to full width",
-			content: "",
-			innerW:  10,
-			wantLen: 10,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := d.padToInner(tt.content, tt.innerW)
-			gotWidth := lipgloss.Width(got)
-			assert.Equal(t, tt.wantLen, gotWidth,
-				"padToInner(%q, %d) visible width = %d, want %d", tt.content, tt.innerW, gotWidth, tt.wantLen)
-			// Original content must be preserved (padToInner never truncates).
-			assert.True(t, strings.HasPrefix(got, tt.content),
-				"padToInner must not alter the content prefix")
-		})
-	}
-}
 
 // --- Selected-state tests for artist, album, playlist, default ---
 
