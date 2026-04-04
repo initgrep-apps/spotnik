@@ -1980,13 +1980,18 @@ func TestSearchSpinnerTick_CmdFiresCorrectType(t *testing.T) {
 	assert.NotNil(t, returnedCmd, "searchSpinnerTickMsg handler must re-arm with a new cmd")
 }
 
-// TestSearchOverlay_Init_NoRawSpinnerTickMsg verifies that Init() does NOT include a command
-// that fires spinner.TickMsg (raw bubbles type). All spinner ticks must be wrapped as
-// searchSpinnerTickMsg to prevent cross-component interference.
+// TestSearchOverlay_Init_NoRawSpinnerTickMsg verifies that Init() includes at least one
+// sub-command that, when executed and passed to Update(), causes the spinner frame to
+// advance — confirming the batch uses searchSpinnerTickMsg (not the raw spinner.TickMsg
+// which falls through to the textinput case without advancing the spinner).
 func TestSearchOverlay_Init_NoRawSpinnerTickMsg(t *testing.T) {
 	s := state.New()
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+
+	// Record the initial spinner frame before running any Init commands.
+	initialFrame := panes.SpinnerView(o)
 
 	initCmd := o.Init()
 	require.NotNil(t, initCmd)
@@ -1995,10 +2000,10 @@ func TestSearchOverlay_Init_NoRawSpinnerTickMsg(t *testing.T) {
 	batchMsg, ok := msg.(tea.BatchMsg)
 	require.True(t, ok, "Init() must return a BatchMsg, got %T", msg)
 
-	// No sub-command in the batch may produce a raw spinner.TickMsg when executed.
-	// At least one must produce a message handled by the searchSpinnerTickMsg case
-	// (validated indirectly: that cmd, when executed and passed to Update, returns non-nil cmd).
-	var gotSpinnerCmd bool
+	// Process every sub-command in the batch and look for one that advances the spinner.
+	// A searchSpinnerTickMsg causes spinner.Update() to advance the frame; a raw
+	// spinner.TickMsg would fall through to textinput.Update and not advance the frame.
+	var spinnerAdvanced bool
 	for _, subCmd := range batchMsg {
 		if subCmd == nil {
 			continue
@@ -2007,15 +2012,14 @@ func TestSearchOverlay_Init_NoRawSpinnerTickMsg(t *testing.T) {
 		if subMsg == nil {
 			continue
 		}
-		// Send to Update — if it is a searchSpinnerTickMsg the handler returns non-nil cmd.
-		_, retCmd := o.Update(subMsg)
-		if retCmd != nil {
-			// Check it's not a raw spinner.TickMsg by verifying the message type name.
-			// We don't import bubbles/spinner here, so we compare via Update re-arm.
-			gotSpinnerCmd = true
+		model, _ := o.Update(subMsg)
+		o = model.(*panes.SearchOverlay)
+		if panes.SpinnerView(o) != initialFrame {
+			spinnerAdvanced = true
+			break
 		}
 	}
-	assert.True(t, gotSpinnerCmd, "Init() batch must include a searchSpinnerTickMsg-producing cmd")
+	assert.True(t, spinnerAdvanced, "Init() batch must include a searchSpinnerTickMsg cmd that advances the spinner frame")
 }
 
 // TestSearchSpinnerTickMsg_ReArmsWithSearchSpinnerTickMsg verifies that sending a
