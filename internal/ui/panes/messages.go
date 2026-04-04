@@ -312,62 +312,29 @@ type PlaylistReorderResultMsg struct {
 // Panes must never write to the store directly — they emit messages instead.
 type SearchClearedMsg struct{}
 
-// SearchTabChangedMsg is emitted by SearchOverlay when the user cycles the active
-// category tab (Tab / Shift+Tab). The root app model re-fires the search with the
-// new type filter so results refresh immediately for the chosen category.
-type SearchTabChangedMsg struct {
-	// Types is the list of Spotify API type strings for the new tab (e.g. ["track"]).
-	Types []string
-	// Query is the current search query string at the time of the tab change.
-	Query string
+// SearchLoadingMsg is sent by app.go to the search overlay immediately before
+// dispatching a new HTTP request. IsFirstPage=true means results are nil (spinner
+// only); IsFirstPage=false means previous results are still visible (spinner line
+// above list + list). Story 100 dispatches this message.
+type SearchLoadingMsg struct {
+	// IsFirstPage is true when this is the first page of a new query (results cleared).
+	IsFirstPage bool
 }
 
-// SearchResultData is the UI-facing representation of one page of search results.
-// It carries domain types directly so that all rich metadata is preserved end-to-end.
-// Total fields report the API-level count for each type, enabling HasMore checks.
-// Using domain types here eliminates the lossy intermediate conversion that previously
-// stripped metadata (artists, duration, explicit flag, genres, followers, etc.).
-type SearchResultData struct {
-	Tracks         []domain.Track
-	TracksTotal    int
-	Artists        []domain.SearchArtist
-	ArtistsTotal   int
-	Albums         []domain.SearchAlbum
-	AlbumsTotal    int
-	Playlists      []domain.SearchPlaylist
-	PlaylistsTotal int
-}
-
-// SearchPrefetchMsg is emitted by the search overlay when the user scrolls past
-// searchPrefetchThreshold of the loaded results. The root app model responds by
-// fetching the next batch of pages starting at NextOffset.
-type SearchPrefetchMsg struct {
-	// Query is the current search query at the time of the scroll event,
-	// used by the root app to discard stale prefetch requests.
-	Query string
-	// Types is the list of Spotify API type strings for the active tab.
-	Types []string
-	// NextOffset is the starting offset for the next batch of pages.
-	NextOffset int
-}
-
-// SearchPageLoadedMsg is sent by the root app model after a search page fetch completes.
-// Query is included so stale results (for a superseded query) can be discarded.
-// Offset is the page offset that was fetched. Results carries the pre-converted UI data.
+// SearchPageLoadedMsg is sent by the root app model after a single page of search
+// results has loaded. Query and Page are staleness keys — app.go discards this message
+// if either does not match the current search session. Results carries the pre-converted
+// list items for this page. Total is the flat count across all types/pages.
 // Err is non-nil if the search failed.
 type SearchPageLoadedMsg struct {
 	// Query is the query string that triggered this search, for staleness detection.
 	Query string
-	// Type was the search type filter hint ("all", "track", etc.).
-	// As of story 83, buildSearchPageCmd no longer populates this field (always "").
-	// The store's per-type Append methods (AppendSearchTracks, etc.) derive the type
-	// from the Results payload directly. This field is retained for struct compatibility
-	// and may be removed once story 84 confirms it is not needed by the search overlay.
-	Type string
-	// Offset is the page offset that was fetched.
-	Offset int
-	// Results carries the pre-converted UI data on success.
-	Results *SearchResultData
+	// Page is the 1-based page number for this result, used as a staleness key.
+	Page int
+	// Results carries the pre-converted list items for this page (max SearchPageSize=10).
+	Results []SearchListItem
+	// Total is the total result count across all types/pages, for the pagination bar.
+	Total int
 	// Err is non-nil if the fetch failed.
 	Err error
 }

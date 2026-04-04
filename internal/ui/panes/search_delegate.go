@@ -370,7 +370,108 @@ func plainLen(s string) int {
 	return lipgloss.Width(s)
 }
 
-// --- Conversion helpers: domain types → SearchListItem ---
+// --- Exported converters: domain types → []SearchListItem (for commands.go) ---
+
+// TracksToSearchListItems converts domain.Track slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func TracksToSearchListItems(tracks []domain.Track) []SearchListItem {
+	items := make([]SearchListItem, len(tracks))
+	for i, t := range tracks {
+		artists := joinArtistNames(t.Artists)
+		dur := formatSearchDuration(t.DurationMs)
+		subtitle := artists + " · " + t.Album.Name + " · " + dur
+		items[i] = SearchListItem{
+			Category:    "track",
+			Name:        t.Name,
+			Subtitle:    subtitle,
+			URI:         t.URI,
+			IsTrack:     true,
+			ArtistNames: artists,
+			AlbumName:   t.Album.Name,
+			Duration:    dur,
+			Explicit:    t.Explicit,
+		}
+	}
+	return items
+}
+
+// ArtistsToSearchListItems converts domain.SearchArtist slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func ArtistsToSearchListItems(artists []domain.SearchArtist) []SearchListItem {
+	items := make([]SearchListItem, len(artists))
+	for i, a := range artists {
+		genres := joinGenres(a.Genres, 3)
+		followers := formatFollowers(a.Followers)
+		subtitle := genres
+		if genres != "" && followers != "" {
+			subtitle += " · " + followers
+		} else if followers != "" {
+			subtitle = followers
+		}
+		items[i] = SearchListItem{
+			Category:   "artist",
+			Name:       a.Name,
+			Subtitle:   subtitle,
+			URI:        a.URI,
+			IsTrack:    false,
+			Genres:     genres,
+			Followers:  followers,
+			Popularity: a.Popularity,
+		}
+	}
+	return items
+}
+
+// AlbumsToSearchListItems converts domain.SearchAlbum slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func AlbumsToSearchListItems(albums []domain.SearchAlbum) []SearchListItem {
+	items := make([]SearchListItem, len(albums))
+	for i, al := range albums {
+		artists := joinArtistNames(al.Artists)
+		year := extractYear(al.ReleaseDate)
+		tc := fmt.Sprintf("%d tracks", al.TotalTracks)
+		subtitle := artists + " · " + year + " · " + tc
+		items[i] = SearchListItem{
+			Category:     "album",
+			Name:         al.Name,
+			Subtitle:     subtitle,
+			URI:          al.URI,
+			IsTrack:      false,
+			AlbumType:    formatAlbumType(al.AlbumType),
+			ReleaseYear:  year,
+			TrackCount:   tc,
+			AlbumArtists: artists,
+		}
+	}
+	return items
+}
+
+// PlaylistsToSearchListItems converts domain.SearchPlaylist slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func PlaylistsToSearchListItems(playlists []domain.SearchPlaylist) []SearchListItem {
+	items := make([]SearchListItem, len(playlists))
+	for i, p := range playlists {
+		tc := fmt.Sprintf("%d tracks", p.TrackCount)
+		subtitle := "by " + p.Owner.DisplayName + " · " + tc
+		desc := truncateString(p.Description, 60)
+		if desc != "" {
+			subtitle += " · " + desc
+		}
+		items[i] = SearchListItem{
+			Category:       "playlist",
+			Name:           p.Name,
+			Subtitle:       subtitle,
+			URI:            p.URI,
+			IsTrack:        false,
+			Owner:          p.Owner.DisplayName,
+			PlaylistTracks: tc,
+			PlaylistDesc:   desc,
+		}
+	}
+	return items
+}
+
+// --- Internal helpers: domain types → []list.Item (for rebuildFromStore) ---
 
 // tracksToListItems converts domain.Track slices to SearchListItem slices.
 func tracksToListItems(tracks []domain.Track) []list.Item {

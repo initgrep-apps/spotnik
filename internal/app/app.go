@@ -799,39 +799,28 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
 		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
 		// Fall back to all four types when no prefix filter is active.
+		// TODO(19-search-redesign): story 101 wires proper per-page context-cancel.
 		searchTypes := m.Types
 		if len(searchTypes) == 0 {
 			searchTypes = []string{"track", "artist", "album", "playlist"}
 		}
-		cmd := a.buildSearchBatchCmd(m.Query, searchTypes, 0)
+		// Offset = (Page-1) * SearchPageSize converts 1-based page to 0-based API offset.
+		offset := 0
+		if m.Page > 1 {
+			offset = (m.Page - 1) * SearchPageSize
+		}
+		cmd := a.buildSearchBatchCmd(m.Query, searchTypes, offset)
 		return a, cmd
 
 	case panes.SearchClearedMsg:
-		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
+		// TODO(19-search-redesign): overlay owns state from story 99.
 		return a, nil
 
-	case panes.SearchTabChangedMsg:
-		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
-		// User switched the category tab in the search overlay.
-		// Only fire if there is a non-empty query — no point searching with empty input.
-		if m.Query == "" {
-			return a, nil
-		}
-		cmd := a.buildSearchBatchCmd(m.Query, m.Types, 0)
-		return a, cmd
-
-	case panes.SearchPrefetchMsg:
-		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
-		// Scroll threshold reached — prefetch the next batch of pages.
-		cmd := a.buildSearchBatchCmd(m.Query, m.Types, m.NextOffset)
-		return a, cmd
-
 	case panes.SearchPageLoadedMsg:
-		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
-		// Search page fetch returned — deliver to overlay, chain next page if batch incomplete.
+		// Search page fetch returned — route errors through toast, forward success to overlay.
+		// TODO(19-search-redesign): story 100 adds staleness check (m.Query / m.Page vs session).
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -844,24 +833,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
 		}
-		// Chain-through-Update: dispatch the next page if the batch is not yet complete.
-		// This replaces tea.Sequence — by chaining through Update, a 429 (RateLimitedMsg)
-		// or 401 (unauthorizedMsg) returned by a page naturally stops the chain because
-		// those messages do not arrive as SearchPageLoadedMsg.
-		// TODO(19-search-redesign): active type derived from store removed; story 101 will
-		// restore proper type routing once App owns the search session key.
-		nextOffset := m.Offset + SearchPageSize
-		batchEnd := ((m.Offset / SearchPrefetchItems) + 1) * SearchPrefetchItems
-		if nextOffset < batchEnd && nextOffset < SearchMaxOffset {
-			// Batch still in progress — dispatch the next page.
-			updated, _ := a.searchPane.Update(m)
-			if sp, ok := updated.(*panes.SearchOverlay); ok {
-				a.searchPane = sp
-			}
-			types := []string{"track", "artist", "album", "playlist"}
-			return a, a.buildSearchPageCmd(m.Query, types, nextOffset)
-		}
-		// Batch complete — forward to the search pane so it can update its local display state.
+		// Forward to the search pane so it can update its local display state.
+		// Chain-through-Update (multi-page batching) is removed; story 101 re-introduces
+		// single-page fetches with context cancellation replacing the batch pattern.
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp
