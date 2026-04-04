@@ -85,8 +85,9 @@ func TestBuildSearchPageCmd_CorrectOffsetAndLimit(t *testing.T) {
 	})
 	require.NotNil(t, cmd, "SearchRequestMsg should return a batch command")
 
-	// Execute the page-fetch command.
-	executeSequenceCmds(cmd, 1)
+	// Execute the batch: index 0 = loadingCmd (SearchLoadingMsg), index 1 = fetchCmd (API call).
+	// Story 100 adds SearchLoadingMsg before the fetch; execute both to trigger the API call.
+	executeSequenceCmds(cmd, 2)
 
 	// The page-fetch should have used offset=30 and limit=10.
 	assert.Equal(t, "30", capturedOffset, "buildSearchPageCmd should use offset derived from Page")
@@ -107,8 +108,9 @@ func TestBuildSearchPageCmd_CarriesQueryAndPage(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "rock", Page: 1})
 	require.NotNil(t, cmd)
 
-	// Execute the batch command — fires the first (and only initial) page at offset=0.
-	msg := executeFirstCmd(cmd)
+	// Execute the batch: index 0 = SearchLoadingMsg, index 1 = fetchCmd (SearchPageLoadedMsg).
+	// Story 100 adds a SearchLoadingMsg before the fetch. executeFetchCmd picks the fetch result.
+	msg := executeFetchCmd(cmd)
 	pageMsg, ok := msg.(panes.SearchPageLoadedMsg)
 	require.True(t, ok, "batch command should return SearchPageLoadedMsg, got %T", msg)
 
@@ -127,8 +129,8 @@ func TestBuildSearchPageCmd_NilClient_ReturnsError(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
 	require.NotNil(t, cmd, "SearchRequestMsg with nil client should still return a command")
 
-	// Execute first command.
-	msg := executeFirstCmd(cmd)
+	// Execute fetch cmd: index 1 in the batch (index 0 = loadingCmd, story 100).
+	msg := executeFetchCmd(cmd)
 	pageMsg, ok := msg.(panes.SearchPageLoadedMsg)
 	require.True(t, ok, "nil client should return SearchPageLoadedMsg with error, got %T", msg)
 	assert.Error(t, pageMsg.Err, "nil client SearchPageLoadedMsg should carry an error")
@@ -163,8 +165,8 @@ func TestBuildSearchBatchCmd_DispatchesFirstPage(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz", Page: 1})
 	require.NotNil(t, cmd)
 
-	// Execute the command — should make exactly 1 API call.
-	executeSequenceCmds(cmd, 1)
+	// Execute the batch: index 0 = loadingCmd, index 1 = fetchCmd (API call). Story 100 change.
+	executeSequenceCmds(cmd, 2)
 
 	assert.Equal(t, 1, callCount, "buildSearchBatchCmd should dispatch exactly 1 page command")
 }
@@ -199,10 +201,16 @@ func TestBuildSearchBatchCmd_PageAtMaxOffset_ReturnsNil(t *testing.T) {
 // --- Task 4: SearchPageLoadedMsg handler ---
 
 // TestSearchPageLoadedMsg_ErrorTriggersToast verifies that an error on a
-// SearchPageLoadedMsg emits a toast notification.
+// SearchPageLoadedMsg emits a toast notification when the message is current
+// (query and page match the app's in-flight staleness keys).
 func TestSearchPageLoadedMsg_ErrorTriggersToast(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+
+	// Simulate an in-flight search for "jazz" page 1. The staleness keys must match
+	// the incoming message — otherwise the staleness check discards the message before
+	// the error branch is reached (correct behavior added in Story 100).
+	a.SetSearchSession("jazz", 1, true)
 
 	_, cmd := a.Update(panes.SearchPageLoadedMsg{
 		Query: "jazz",
@@ -238,8 +246,8 @@ func TestSearchRequestMsg_UsesBatchCommand_DispatchesSinglePage(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz", Page: 1})
 	require.NotNil(t, cmd, "SearchRequestMsg should dispatch a batch command")
 
-	// Execute the command — one page fetch.
-	executeSequenceCmds(cmd, 1)
+	// Execute the batch: index 0 = loadingCmd, index 1 = fetchCmd (API call). Story 100 change.
+	executeSequenceCmds(cmd, 2)
 	assert.Equal(t, 1, callCount, "SearchRequestMsg should dispatch exactly 1 API call")
 }
 
@@ -262,24 +270,18 @@ func TestSearchRequestMsg_UsesTypesForTabCycle(t *testing.T) {
 	// Simulate tab-cycle to Songs: overlay emits SearchRequestMsg with Types=["track"].
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz", Types: []string{"track"}, Page: 1})
 	require.NotNil(t, cmd)
-	executeSequenceCmds(cmd, 1)
+	// Execute the batch: index 0 = loadingCmd, index 1 = fetchCmd (API call). Story 100 change.
+	executeSequenceCmds(cmd, 2)
 
 	assert.Contains(t, capturedType, "track", "tab-cycle request should send the specified type")
 }
 
 // --- Helpers ---
 
-// executeFirstSequenceCmd executes a tea.Cmd and returns the first concrete payload
-// message. Used in error resilience tests that need the message from the first
-// page-fetch command dispatched by buildSearchBatchCmd.
-// This is an alias for executeFirstCmd — named explicitly for clarity in test contexts.
-func executeFirstSequenceCmd(cmd tea.Cmd) tea.Msg {
-	return executeFirstCmd(cmd)
-}
-
-// executeFirstCmd executes a tea.Cmd and returns the first concrete payload message.
-// Handles tea.BatchMsg and the unexported tea.sequenceMsg via reflection.
-func executeFirstCmd(cmd tea.Cmd) tea.Msg {
+// executeFetchCmd executes a tea.Cmd and returns the payload from the fetch (second)
+// command in the batch. Story 100 changed SearchRequestMsg to emit a batch of
+// (loadingCmd, fetchCmd); index 0 = SearchLoadingMsg, index 1 = SearchPageLoadedMsg.
+func executeFetchCmd(cmd tea.Cmd) tea.Msg {
 	if cmd == nil {
 		return nil
 	}
@@ -289,7 +291,11 @@ func executeFirstCmd(cmd tea.Cmd) tea.Msg {
 	}
 	switch m := msg.(type) {
 	case tea.BatchMsg:
-		if len(m) > 0 && m[0] != nil {
+		if len(m) > 1 && m[1] != nil {
+			return m[1]()
+		}
+		// Fallback: if batch has only 1 item, execute it.
+		if len(m) == 1 && m[0] != nil {
 			return m[0]()
 		}
 		return nil

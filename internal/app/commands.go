@@ -278,31 +278,14 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 	}
 }
 
-// buildSearchBatchCmd dispatches only the FIRST page of a prefetch batch.
-// Subsequent pages are chained through Update() via the SearchPageLoadedMsg handler,
-// which dispatches the next page on each successful result. This chain-through-Update
-// pattern ensures that a 429 (RateLimitedMsg) or 401 (unauthorizedMsg) naturally
-// stops the chain — the next page is never dispatched because the handler only
-// runs on SearchPageLoadedMsg success.
-//
-// NOTE: store.SetSearchQuery and store.SetSearchLoading are called by Update()
-// before this command is dispatched — not inside the closure.
-func (a *App) buildSearchBatchCmd(query string, types []string, startOffset int) tea.Cmd {
-	// Spotify API caps offset at SearchMaxOffset (1000). Do not fetch at or beyond this value
-	// since the API would return an error for any offset >= 1000.
-	if startOffset >= SearchMaxOffset {
-		return nil
-	}
-	return a.buildSearchPageCmd(query, types, startOffset)
-}
-
 // buildSearchPageCmd creates a command that fetches a single page of search results
 // at the given offset and delivers pre-converted results via SearchPageLoadedMsg.
-// The query and offset are captured at dispatch time; the closure is Elm-pure
-// (no store reads or writes inside).
+// The context, client, query, and offset are captured at dispatch time; the closure
+// is Elm-pure (no store reads or writes inside).
 // page is the 1-based page number derived from offset (offset=0 → page=1, offset=10 → page=2, …).
-func (a *App) buildSearchPageCmd(query string, types []string, offset int) tea.Cmd {
-	search := a.search
+// ctx is used for the HTTP call — pass a cancellable context from app.go to abort
+// in-flight requests when the user types a new query or closes the overlay.
+func buildSearchPageCmd(ctx context.Context, search api.SearchAPI, query string, types []string, offset int) tea.Cmd {
 	page := offset/SearchPageSize + 1
 	return func() tea.Msg {
 		if search == nil {
@@ -310,7 +293,7 @@ func (a *App) buildSearchPageCmd(query string, types []string, offset int) tea.C
 		}
 		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
 		results, err := search.Search(
-			api.WithPriority(context.Background(), api.Interactive),
+			api.WithPriority(ctx, api.Interactive),
 			query,
 			types,
 			SearchPageSize,
