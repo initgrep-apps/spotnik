@@ -131,8 +131,8 @@ func TestBuildSearchCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "beatles"})
 	require.NotNil(t, cmd)
 
-	// Execute the first page command to get the RateLimitedMsg from the 429 response.
-	msg := executeFirstSequenceCmd(cmd)
+	// Story 100: SearchRequestMsg returns batch(loadingCmd, fetchCmd). Execute fetchCmd (index 1).
+	msg := executeFetchCmd(cmd)
 	rateLimitMsg, ok := msg.(panes.RateLimitedMsg)
 	assert.True(t, ok, "429 from search endpoint should emit RateLimitedMsg, got %T", msg)
 	assert.Equal(t, 12, rateLimitMsg.RetryAfterSecs)
@@ -352,8 +352,8 @@ func TestBuildSearchCmd_401_ShowsSessionExpired(t *testing.T) {
 	a = model.(*app.App)
 	require.NotNil(t, fetchCmd)
 
-	// Execute the first page command to get the unauthorizedMsg from the 401 response.
-	unauthorizedMsgResult := executeFirstSequenceCmd(fetchCmd)
+	// Story 100: SearchRequestMsg returns batch(loadingCmd, fetchCmd). Execute fetchCmd (index 1).
+	unauthorizedMsgResult := executeFetchCmd(fetchCmd)
 
 	model, refreshCmd := a.Update(unauthorizedMsgResult)
 	a = model.(*app.App)

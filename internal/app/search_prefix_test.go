@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -37,15 +38,19 @@ func TestSearchRequestMsg_UsesTypesFromMsg(t *testing.T) {
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
 	// Fire SearchRequestMsg with Types=["track"] (as set by :songs prefix).
-	model, cmd := a.Update(panes.SearchRequestMsg{Query: "kk", Types: []string{"track"}})
-	a = model.(*app.App)
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "kk", Types: []string{"track"}})
 
 	require.NotNil(t, cmd, "SearchRequestMsg with Types should dispatch a search command")
 
-	// Execute the first command from the batch to trigger the API call.
-	msg := cmd()
-	if msg != nil {
-		a.Update(msg) //nolint:errcheck
+	// Story 100: SearchRequestMsg returns a batch of (loadingCmd, fetchCmd).
+	// Execute the batch to trigger the API call.
+	batchMsg := cmd()
+	if batch, ok := batchMsg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c != nil {
+				c() //nolint:errcheck
+			}
+		}
 	}
 
 	// The API should have been called with type=track only.
@@ -70,15 +75,19 @@ func TestSearchRequestMsg_DefaultsToAllTypesWhenEmpty(t *testing.T) {
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
 	// Fire SearchRequestMsg with empty Types (no prefix locked).
-	model, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
-	a = model.(*app.App)
+	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz"})
 
 	require.NotNil(t, cmd, "SearchRequestMsg with empty Types should dispatch a search command")
 
-	// Execute the first command from the batch to trigger the API call.
-	msg := cmd()
-	if msg != nil {
-		a.Update(msg) //nolint:errcheck
+	// Story 100: SearchRequestMsg returns a batch of (loadingCmd, fetchCmd).
+	// Execute the batch to trigger the API call.
+	batchMsg := cmd()
+	if batch, ok := batchMsg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c != nil {
+				c() //nolint:errcheck
+			}
+		}
 	}
 
 	// The API should have been called with all 4 types.
