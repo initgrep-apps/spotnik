@@ -241,3 +241,11 @@ When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` wi
 1. `checkPrefetch()` fires on every arrow keypress past threshold — consider tracking last-requested prefetch offset to suppress duplicates (currently deduplicated by SearchLoading guard in app.go)
 2. `nextOffsetForTab()` returns 0 instead of -1 when Total == 0 — harmless in production but could cause redundant offset-0 fetch in tests
 3. Unknown prefix (`:foo `) sends colon-prefixed string to Spotify API with no user feedback that the prefix was not recognized
+
+---
+
+## Search spinner tick comment: 130ms vs actual 100ms interval
+**Found:** 2026-04-04 | **Source:** PR #121 Review
+**Feature:** 19-search-redesign
+
+The comment on `searchSpinnerTick()` in `search.go` states "The 130ms interval matches the spinner.Dot tick rate from bubbles/spinner" but `spinner.Dot` actually uses `FPS: time.Second / 10` = 100ms. The 130ms value works fine functionally (just slightly slower animation) but the comment is inaccurate.

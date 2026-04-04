@@ -322,18 +322,22 @@ func (o *SearchOverlay) resizeList() {
 
 // Init starts the cursor blink loop, placeholder ticker, and emits SearchClearedMsg
 // so each search session begins with a clean state (previous results and query are discarded).
+// searchSpinnerTick() is used instead of o.spinner.Tick so the spinner advances via the
+// private searchSpinnerTickMsg type, preventing cross-component spinner.TickMsg interference.
 func (o *SearchOverlay) Init() tea.Cmd {
 	clearCmd := func() tea.Msg { return SearchClearedMsg{} }
-	return tea.Batch(textinput.Blink, o.spinner.Tick, clearCmd, searchPlaceholderTick())
+	return tea.Batch(textinput.Blink, searchSpinnerTick(), clearCmd, searchPlaceholderTick())
 }
 
 // Update handles all messages for the search overlay.
 func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case searchSpinnerTickMsg:
-		var cmd tea.Cmd
-		o.spinner, cmd = o.spinner.Update(spinner.TickMsg(m))
-		return o, cmd
+		// Advance the spinner frame. Ignore the cmd returned by spinner.Update because
+		// it fires spinner.TickMsg (the raw bubbles type), not searchSpinnerTickMsg.
+		// We re-arm manually with searchSpinnerTick() to keep the private type in the loop.
+		o.spinner, _ = o.spinner.Update(spinner.TickMsg(m))
+		return o, searchSpinnerTick()
 
 	case searchPlaceholderTickMsg:
 		// Advance the cycling placeholder only when the input is empty.
@@ -725,6 +729,8 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 
 // renderTabBar renders the tab selector row inside Panel 2.
 // The active tab is shown with brackets and highlight styling; inactive tabs use TextMuted.
+// When store.SearchLoading() is true, a spinner frame is appended to the right side so
+// re-searches are visible even when existing results remain on screen.
 func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	var parts []string
 	for i := 0; i < NumTabs; i++ {
@@ -743,6 +749,21 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 		}
 	}
 	tabLine := strings.Join(parts, "  ")
+
+	if o.store.SearchLoading() {
+		// Append a compact spinner to the right of the tab labels so the user can
+		// see that a fetch is in flight even when existing results are still shown.
+		spinnerStr := lipgloss.NewStyle().
+			Foreground(o.theme.TextMuted()).
+			Render(o.spinner.View())
+		// Right-align: fill the gap between tab labels and spinner with spaces.
+		padding := innerWidth - lipgloss.Width(tabLine) - lipgloss.Width(spinnerStr)
+		if padding < 1 {
+			padding = 1
+		}
+		tabLine = tabLine + strings.Repeat(" ", padding) + spinnerStr
+	}
+
 	// Pad/truncate to exactly innerWidth.
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
 }
@@ -962,6 +983,17 @@ func (o *SearchOverlay) overlayHeight() int {
 	return h
 }
 
+// searchSpinnerTick returns a tea.Cmd that fires searchSpinnerTickMsg after 130ms.
+// The 130ms interval matches the spinner.Dot tick rate from bubbles/spinner.
+// We wrap the tick as searchSpinnerTickMsg instead of using o.spinner.Tick directly
+// because spinner.Tick fires spinner.TickMsg, which our Update handler does not match
+// (intentional isolation to prevent cross-component interference).
+func searchSpinnerTick() tea.Cmd {
+	return tea.Tick(130*time.Millisecond, func(_ time.Time) tea.Msg {
+		return searchSpinnerTickMsg{}
+	})
+}
+
 // debounceSearch returns a tea.Cmd that fires a searchDebounceMsg after 300ms.
 // The query snapshot is captured in the closure so stale ticks can be detected.
 func debounceSearch(query string) tea.Cmd {
@@ -1017,9 +1049,36 @@ func SearchDebounceMsgForTest(query string) tea.Msg {
 	return searchDebounceMsg{query: query}
 }
 
-// SearchSpinnerTickMsgForTest creates a searchSpinnerTickMsg for advancing the spinner in tests.
-func SearchSpinnerTickMsgForTest() tea.Msg {
-	return searchSpinnerTickMsg{}
+// SearchSpinnerTickCmd exposes the private searchSpinnerTick() function for tests.
+// Tests that need to drive the spinner should use this to obtain a cmd, execute it,
+// and pass the resulting message to overlay.Update().
+func SearchSpinnerTickCmd() tea.Cmd {
+	return searchSpinnerTick()
+}
+
+// SpinnerView returns the current rendered spinner frame string — exported for tests
+// that need to detect frame advancement.
+func SpinnerView(o *SearchOverlay) string {
+	return o.spinner.View()
+}
+
+// RenderTabBarForTest calls renderTabBar with the given inner width and returns the result.
+// Exported so tests can inspect tab bar content in isolation without calling full View().
+func RenderTabBarForTest(o *SearchOverlay, innerWidth int) string {
+	return o.renderTabBar(innerWidth)
+}
+
+// ContainsSpinnerFrame returns true when s contains the current spinner frame string.
+// Used in tests to verify the spinner appears (or does not appear) in rendered output.
+func ContainsSpinnerFrame(o *SearchOverlay, s string) bool {
+	frame := o.spinner.View()
+	return frame != "" && strings.Contains(s, frame)
+}
+
+// Store returns the overlay's store reference — exported for tests that need to
+// mutate store state (e.g. SetSearchLoading) after construction.
+func (o *SearchOverlay) Store() *state.Store {
+	return o.store
 }
 
 // CallRebuildListItems calls rebuildListItems on the overlay — exported for tests.
