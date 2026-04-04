@@ -1,7 +1,7 @@
 ---
 title: "Search Redesign: App context cancellation and staleness keys"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
