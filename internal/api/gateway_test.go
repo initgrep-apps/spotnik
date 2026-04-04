@@ -359,7 +359,10 @@ func TestGateway_Interactive_BypassesTokenBucket(t *testing.T) {
 	require.NoError(t, gw.bucket.wait(context.Background()))
 
 	// Interactive request should not wait for the bucket.
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	// NOTE: the 100ms gateway debounce hold is added for Interactive requests
+	// (story 103), so the total time is ~100ms debounce + minimal HTTP.
+	// We assert well below the 1000s token-refill time to prove the bucket was bypassed.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	start := time.Now()
 	_, err := gw.Do(ctx, Interactive,
@@ -370,7 +373,7 @@ func TestGateway_Interactive_BypassesTokenBucket(t *testing.T) {
 	elapsed := time.Since(start)
 
 	require.NoError(t, err, "interactive call should bypass empty token bucket")
-	assert.Less(t, elapsed.Milliseconds(), int64(100),
+	assert.Less(t, elapsed.Milliseconds(), int64(250),
 		"interactive call should not have waited for token bucket")
 }
 
@@ -590,7 +593,9 @@ func TestGateway_StateSnapshot_ConcurrentActive(t *testing.T) {
 		})
 	}()
 
-	time.Sleep(30 * time.Millisecond)
+	// Wait longer than the 100ms Interactive debounce hold (story 103) so the
+	// request has reached the semaphore-acquired stage.
+	time.Sleep(150 * time.Millisecond)
 	// The SemaphoreAcquired event should show ConcurrentActive >= 1.
 	events := rec.all()
 	var semAcq *domain.GatewayEvent
@@ -993,7 +998,9 @@ func TestGateway_CaptureSnapshot_ConcurrentActive(t *testing.T) {
 		})
 	}()
 
-	time.Sleep(30 * time.Millisecond)
+	// Wait longer than the 100ms Interactive debounce hold (story 103) so the
+	// request has passed the debounce and acquired the semaphore.
+	time.Sleep(150 * time.Millisecond)
 	snap := gw.captureSnapshot()
 	assert.GreaterOrEqual(t, snap.ConcurrentActive, 1,
 		"captureSnapshot must reflect in-flight semaphore occupancy")
