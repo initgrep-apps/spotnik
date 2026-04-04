@@ -171,6 +171,63 @@ func TestSearchOverlay_Init_ResetsCachedResults(t *testing.T) {
 	assert.NotEmpty(t, view)
 }
 
+// --- Story 96: Reset() tests ---
+
+// TestSearchOverlay_Reset_ClearsAllLocalState verifies that Reset() restores the overlay
+// to its initial empty state regardless of any prior session state.
+func TestSearchOverlay_Reset_ClearsAllLocalState(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(120, 40)
+
+	// Set query to something and lock a prefix (:songs).
+	// Typing ":songs " locks the prefix and syncs the active tab to TabSongs.
+	o, _ = sendKey(t, o, ":")
+	o, _ = sendKey(t, o, "s")
+	o, _ = sendKey(t, o, "o")
+	o, _ = sendKey(t, o, "n")
+	o, _ = sendKey(t, o, "g")
+	o, _ = sendKey(t, o, "s")
+	o, _ = sendKey(t, o, " ")
+	require.Equal(t, panes.PrefixLocked, o.PrefixState(), "prerequisite: prefix should be locked")
+	require.Equal(t, panes.TabSongs, o.ActiveTab(), "prerequisite: active tab should be TabSongs after locking :songs")
+
+	// Load fake results into o.results and o.resultList.
+	msg := panes.SearchPageLoadedMsg{Results: sampleSearchResultData()}
+	model, _ := o.Update(msg)
+	o = model.(*panes.SearchOverlay)
+	require.NotEmpty(t, o.ResultListItems(), "prerequisite: result list should be non-empty")
+
+	// Call Reset() and verify all fields are back to initial state.
+	o.Reset()
+
+	assert.Equal(t, "", o.Query(), "after Reset: input value should be empty")
+	assert.Equal(t, "> ", o.Input().Prompt, "after Reset: input Prompt should be '> '")
+	assert.Equal(t, panes.TabAll, o.ActiveTab(), "after Reset: activeTab should be TabAll")
+	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "after Reset: prefixState should be PrefixNone")
+	assert.Equal(t, "", o.LockedPrefix(), "after Reset: lockedPrefix should be empty")
+	assert.Nil(t, o.Results(), "after Reset: o.results should be nil")
+	assert.Empty(t, o.ResultListItems(), "after Reset: result list items should be empty")
+	assert.Equal(t, 0, o.PlaceholderIdx(), "after Reset: placeholderIdx should be 0")
+}
+
+// TestSearchOverlay_Reset_Idempotent verifies that calling Reset() multiple times
+// in a row produces the same clean state.
+func TestSearchOverlay_Reset_Idempotent(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.Reset()
+	o.Reset()
+	o.Reset()
+
+	assert.Equal(t, "", o.Query(), "after triple Reset: input value should be empty")
+	assert.Equal(t, panes.TabAll, o.ActiveTab(), "after triple Reset: activeTab should be TabAll")
+	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "after triple Reset: prefixState should be PrefixNone")
+	assert.Equal(t, "", o.LockedPrefix(), "after triple Reset: lockedPrefix should be empty")
+	assert.Nil(t, o.Results(), "after triple Reset: o.results should be nil")
+	assert.Empty(t, o.ResultListItems(), "after triple Reset: result list items should be empty")
+}
+
 // --- Task 4.2: Debounce tests ---
 
 // TestDebounce_StaleQueryIgnored verifies that a debounce tick with an old query

@@ -411,6 +411,12 @@ func (a *App) SearchOpen() bool {
 	return a.searchOpen
 }
 
+// SearchPane returns the search overlay pane.
+// Exported for tests that need to inspect overlay state after openSearch().
+func (a *App) SearchPane() *panes.SearchOverlay {
+	return a.searchPane
+}
+
 // DeviceOverlayOpen returns true while the device switcher overlay is visible.
 func (a *App) DeviceOverlayOpen() bool {
 	return a.deviceOverlayOpen
@@ -620,8 +626,11 @@ func (a *App) initialFetchCmds() []tea.Cmd {
 	}
 }
 
-// openSearch opens the search overlay.
+// openSearch opens the search overlay. Reset() is called before Init() so
+// each search session starts with a clean slate — no stale query, prefix,
+// tab, or result list from the previous session.
 func (a *App) openSearch() (*App, tea.Cmd) {
+	a.searchPane.Reset()
 	a.searchOpen = true
 	cmd := a.searchPane.Init()
 	return a, cmd
