@@ -2198,7 +2198,7 @@ func TestSearchOverlay_SetTheme_PropagatesHelpStyles(t *testing.T) {
 	thA := theme.Load("black")
 	o := panes.NewSearchOverlay(s, thA)
 
-	thB := theme.Load("dark")
+	thB := theme.Load("monokai")
 	o.SetTheme(thB)
 
 	shortKey := panes.HelpShortKeyForegroundForTest(o)
