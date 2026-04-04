@@ -203,7 +203,7 @@ func TestSearchOverlay_Reset_ClearsAllLocalState(t *testing.T) {
 	o.Reset()
 
 	assert.Equal(t, "", o.Query(), "after Reset: input value should be empty")
-	assert.Equal(t, "> ", o.Input().Prompt, "after Reset: input Prompt should be '>  '")
+	assert.Equal(t, "> ", o.Input().Prompt, "after Reset: input Prompt should be '> '")
 	assert.Equal(t, panes.TabAll, o.ActiveTab(), "after Reset: activeTab should be TabAll")
 	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "after Reset: prefixState should be PrefixNone")
 	assert.Equal(t, "", o.LockedPrefix(), "after Reset: lockedPrefix should be empty")
