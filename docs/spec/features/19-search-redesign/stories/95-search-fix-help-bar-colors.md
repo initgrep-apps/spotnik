@@ -1,7 +1,7 @@
 ---
 title: "Fix: Help bar key names use muted colors and ctrl+u missing from short view"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
