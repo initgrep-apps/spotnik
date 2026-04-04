@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -583,23 +582,19 @@ func TestRenderTrack_Selected(t *testing.T) {
 // TestStyledDot verifies the dot separator is non-empty.
 func TestStyledDot(t *testing.T) {
 	d := newTestDelegate()
-	dot := d.styledDot()
+	dot := d.styledDot(false)
 	assert.NotEmpty(t, dot)
 	// Should contain the "·" character.
 	assert.Contains(t, dot, "·")
 }
 
-// TestRightAlign verifies that left and right content appear in the output,
-// and the total width matches the requested width, with right after left.
-func TestRightAlign(t *testing.T) {
+// TestRightAlignBg verifies that left and right content appear in the output.
+func TestRightAlignBg(t *testing.T) {
 	d := newTestDelegate()
-	result := d.rightAlign("left", "right", 20)
-	// Both parts should be in the result.
+	result := d.rightAlignBg("left", "right", 20, false)
 	assert.Contains(t, result, "left")
 	assert.Contains(t, result, "right")
-	// Output width should equal the requested width.
-	assert.Len(t, result, 20, "rightAlign output should have exactly the requested width")
-	// "right" should appear after "left" in the string.
+	assert.Len(t, result, 20, "rightAlignBg output should have exactly the requested width")
 	leftIdx := strings.Index(result, "left")
 	rightIdx := strings.Index(result, "right")
 	assert.Greater(t, rightIdx, leftIdx, "right text should appear after left text")
@@ -611,11 +606,10 @@ func TestStyledName(t *testing.T) {
 	d := newTestDelegate()
 	normal := d.styledName("Track Name", false, 40)
 	selected := d.styledName("Track Name", true, 40)
-	// Both should contain the name.
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
-	// Selection no longer affects styledName — wrapLine handles the selection highlight.
-	assert.Equal(t, normal, selected, "styledName should produce same output regardless of selected param")
+	// Selected should differ from normal (background applied).
+	assert.NotEqual(t, normal, selected, "styledName should differ when selected")
 }
 
 // TestRenderDefault verifies non-matching category uses a fallback.
@@ -657,7 +651,7 @@ func TestStyledBadge(t *testing.T) {
 	categories := []string{"track", "artist", "album", "playlist"}
 	for _, cat := range categories {
 		t.Run(cat, func(t *testing.T) {
-			badge := d.styledBadge(cat)
+			badge := d.styledBadge(cat, false)
 			assert.NotEmpty(t, badge)
 		})
 	}
@@ -747,7 +741,7 @@ func TestHeight(t *testing.T) {
 // TestWrapLine_Selected verifies that a selected line contains the left border │ character.
 func TestWrapLine_Selected(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", true)
+	out := d.wrapLine("hello", 40, true)
 	assert.Contains(t, out, "│", "selected wrapLine should contain left border │")
 	assert.Contains(t, out, "hello", "selected wrapLine should contain content")
 }
@@ -755,7 +749,7 @@ func TestWrapLine_Selected(t *testing.T) {
 // TestWrapLine_Normal verifies that an unselected line has at least 2-space left indent (no border).
 func TestWrapLine_Normal(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", false)
+	out := d.wrapLine("hello", 40, false)
 	assert.Contains(t, out, "hello", "normal wrapLine should contain content")
 	// Normal items use Padding(0,0,0,2) — output should start with spaces, not a border char.
 	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
@@ -766,27 +760,28 @@ func TestWrapLine_Normal(t *testing.T) {
 // TestStyledName_AlwaysBold verifies styledName always applies bold regardless of selected.
 func TestStyledName_AlwaysBold(t *testing.T) {
 	d := newTestDelegate()
-	// Bold(true) produces \x1b[...1m or \x1b[1m in ANSI output.
 	normal := d.styledName("Track Name", false, 40)
 	selected := d.styledName("Track Name", true, 40)
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
-	// Both should contain an ANSI bold sequence (1m).
-	assert.Contains(t, normal, "\x1b[", "styledName should contain ANSI escape")
-	// The ANSI sequence should contain bold code "1" somewhere in the styling.
-	assert.True(t, strings.Contains(normal, "1m") || strings.Contains(normal, ";1;") ||
-		strings.Contains(normal, ";1m") || strings.Contains(normal, "1;"),
-		"styledName normal should contain bold ANSI code")
+	// Both should contain bold ANSI code.
+	for _, out := range []string{normal, selected} {
+		assert.True(t, strings.Contains(out, "1m") || strings.Contains(out, ";1;") ||
+			strings.Contains(out, ";1m") || strings.Contains(out, "1;"),
+			"styledName should contain bold ANSI code")
+	}
 }
 
-// TestStyledName_NoBackground verifies styledName no longer applies background color.
-// Previously selected=true applied SelectedBg; now selection is handled at line level.
-func TestStyledName_NoBackground(t *testing.T) {
+// TestStyledName_SelectedBackground verifies styledName applies background when selected.
+func TestStyledName_SelectedBackground(t *testing.T) {
 	d := newTestDelegate()
 	normalOut := d.styledName("Name", false, 40)
 	selectedOut := d.styledName("Name", true, 40)
-	// Both should produce identical output — selection no longer affects styledName.
-	assert.Equal(t, normalOut, selectedOut, "styledName should produce same output regardless of selected param")
+	// Selected output should differ (has SelectedBg background).
+	assert.NotEqual(t, normalOut, selectedOut, "styledName should differ when selected (background added)")
+	// Both should contain the name text.
+	assert.Contains(t, normalOut, "Name")
+	assert.Contains(t, selectedOut, "Name")
 }
 
 // --- Task 21: renderTrack 3-line layout ---
@@ -999,54 +994,6 @@ func TestRenderDefault_ThreeLines(t *testing.T) {
 }
 
 // --- padToInner tests ---
-
-// TestPadToInner verifies that padToInner right-pads content to the exact innerW.
-func TestPadToInner(t *testing.T) {
-	d := newTestDelegate()
-	tests := []struct {
-		name    string
-		content string
-		innerW  int
-		wantLen int  // expected visible width of result
-		wantGTE bool // true when we only check result >= innerW (content wider)
-	}{
-		{
-			name:    "shorter than innerW gets padded to exact width",
-			content: "hello",
-			innerW:  20,
-			wantLen: 20,
-		},
-		{
-			name:    "equal to innerW returned unchanged",
-			content: "exactly_ten_",
-			innerW:  12,
-			wantLen: 12,
-		},
-		{
-			name:    "wider than innerW returned unchanged (no truncation)",
-			content: strings.Repeat("x", 30),
-			innerW:  20,
-			wantLen: 30,
-		},
-		{
-			name:    "empty string padded to full width",
-			content: "",
-			innerW:  10,
-			wantLen: 10,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := d.padToInner(tt.content, tt.innerW)
-			gotWidth := lipgloss.Width(got)
-			assert.Equal(t, tt.wantLen, gotWidth,
-				"padToInner(%q, %d) visible width = %d, want %d", tt.content, tt.innerW, gotWidth, tt.wantLen)
-			// Original content must be preserved (padToInner never truncates).
-			assert.True(t, strings.HasPrefix(got, tt.content),
-				"padToInner must not alter the content prefix")
-		})
-	}
-}
 
 // --- Selected-state tests for artist, album, playlist, default ---
 
