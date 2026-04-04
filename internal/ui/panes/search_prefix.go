@@ -105,8 +105,8 @@ func (o *SearchOverlay) parsePrefix() {
 	if tab, ok := prefixToTabMap[candidate]; ok {
 		o.prefixState = PrefixLocked
 		o.lockedPrefix = candidate
-		// Sync the active tab to match the locked prefix.
-		o.activeTab = tab
+		// Sync the intent tab to match the locked prefix.
+		o.intent.tab = tab
 	} else {
 		// Unknown prefix — treat as normal search.
 		o.prefixState = PrefixNone
@@ -126,14 +126,14 @@ func (o *SearchOverlay) cleanQuery() string {
 }
 
 // activeAPITypes returns the Spotify API type strings to use for the current search.
-// When a prefix is locked it uses the prefix's mapped tab; otherwise it uses activeTab.
+// When a prefix is locked it uses the prefix's mapped tab; otherwise it uses intent.tab.
 func (o *SearchOverlay) activeAPITypes() []string {
 	if o.prefixState == PrefixLocked {
 		if tab, ok := prefixToTabMap[o.lockedPrefix]; ok {
 			return TabToAPITypes(tab)
 		}
 	}
-	return TabToAPITypes(o.activeTab)
+	return TabToAPITypes(o.intent.tab)
 }
 
 // showHintLine reports whether the prefix hint row should be rendered inside the
@@ -283,13 +283,13 @@ func (o *SearchOverlay) demoteFromPromptTag() {
 }
 
 // syncInputToTab updates the Prompt tag and prefix state to match the newly-selected tab.
-// Called from cycleTabForward() and cycleTabBackward() after advancing o.activeTab.
+// Called from cycleTabForward() and cycleTabBackward() after advancing o.intent.tab.
 // Preserves the clean query across tab switches.
 func (o *SearchOverlay) syncInputToTab() {
 	// Get the clean query so we can preserve it across the tab switch.
 	query := o.cleanQuery()
 
-	if o.activeTab == TabAll {
+	if o.intent.tab == TabAll {
 		// Strip the prefix tag — restore default prompt and cycling placeholder.
 		o.input.Prompt = "> "
 		o.input.SetValue(query)
@@ -297,7 +297,7 @@ func (o *SearchOverlay) syncInputToTab() {
 		o.prefixState = PrefixNone
 		// Restore cycling placeholder — we're back to normal input mode.
 		o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
-	} else if prefix, ok := tabToPrefixMap[o.activeTab]; ok {
+	} else if prefix, ok := tabToPrefixMap[o.intent.tab]; ok {
 		// Set the prefix tag in the Prompt.
 		o.lockedPrefix = prefix
 		o.prefixState = PrefixLocked

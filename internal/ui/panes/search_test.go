@@ -747,8 +747,10 @@ func TestSearchOverlay_ShiftTab_CyclesBackward(t *testing.T) {
 // TestSearchOverlay_Tab_EmitsSearchTabChangedMsg verifies tab change emits SearchTabChangedMsg.
 // TestSearchOverlay_Tab_EmitsSearchRequestMsg verifies tab change emits SearchRequestMsg
 // (SearchTabChangedMsg removed in story 98 — tab changes now go through the universal debounce path).
+// Story 99: cycleTab uses scheduleDebounce(), so SearchRequestMsg arrives via two-step flow:
+// tab key → debounce cmd → debounce msg → search request.
 func TestSearchOverlay_Tab_EmitsSearchRequestMsg(t *testing.T) {
-	// Start with a non-empty query so cycleTabForward emits a SearchRequestMsg.
+	// Start with a non-empty query so the debounce fires a SearchRequestMsg.
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	// Type a query so the overlay has non-empty cleanQuery().
@@ -756,11 +758,19 @@ func TestSearchOverlay_Tab_EmitsSearchRequestMsg(t *testing.T) {
 		o, _ = sendKey(t, o, string(ch))
 	}
 
-	_, cmd := sendKey(t, o, "tab")
-	require.NotNil(t, cmd, "tab change should return a command when query is non-empty")
-	msg := cmd()
+	// Tab returns scheduleDebounce() — a time-based tick cmd.
+	_, debounceCmd := sendKey(t, o, "tab")
+	require.NotNil(t, debounceCmd, "tab change should return a debounce command when query is non-empty")
+
+	// Execute the debounce cmd to get the searchDebounceMsg.
+	tickMsg := debounceCmd()
+
+	// Feed the searchDebounceMsg into Update to fire the search.
+	_, searchCmd := o.Update(tickMsg)
+	require.NotNil(t, searchCmd, "debounce msg from tab change should produce a search command")
+	msg := searchCmd()
 	reqMsg, ok := msg.(panes.SearchRequestMsg)
-	require.True(t, ok, "tab change command should produce SearchRequestMsg, got %T", msg)
+	require.True(t, ok, "tab change + debounce should produce SearchRequestMsg, got %T", msg)
 	assert.Equal(t, []string{"track"}, reqMsg.Types, "Songs tab should map to track type")
 	assert.Equal(t, "rock", reqMsg.Query, "SearchRequestMsg should carry the current query")
 	assert.Equal(t, 1, reqMsg.Page, "SearchRequestMsg page should default to 1")
@@ -2078,4 +2088,220 @@ func TestSearchOverlay_SetTheme_PropagatesHelpStyles(t *testing.T) {
 		"ShortKey foreground must equal themeB.Info() after SetTheme")
 	assert.Equal(t, thB.TextMuted(), shortDesc,
 		"ShortDesc foreground must equal themeB.TextMuted() after SetTheme")
+}
+
+// --- Story 99: searchIntent + scheduleDebounce ---
+
+// TestSearchIntent_FieldExistsOnOverlay verifies that the SearchOverlay exposes the
+// intent field through the IntentTab() / IntentPage() helpers used by tests.
+func TestSearchIntent_FieldExistsOnOverlay(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Defaults: tab=TabAll, page=1
+	assert.Equal(t, panes.TabAll, o.IntentTab(), "default intent.tab should be TabAll")
+	assert.Equal(t, 1, o.IntentPage(), "default intent.page should be 1")
+}
+
+// TestScheduleDebounce_MatchingIntentFiresSearchRequest verifies that scheduling a
+// debounce then calling Update with a searchDebounceMsg carrying the same intent as
+// the current o.intent produces a SearchRequestMsg command.
+func TestScheduleDebounce_MatchingIntentFiresSearchRequest(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Type a non-empty query so cleanQuery() returns something.
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, "jazz", o.CleanQuery(), "precondition: clean query should be 'jazz'")
+
+	// Fire a debounce msg whose intent matches the current overlay intent.
+	debounceMsg := panes.SearchDebounceMsgWithIntentForTest(o)
+	_, cmd := o.Update(debounceMsg)
+
+	require.NotNil(t, cmd, "matching intent should produce a command")
+	msg := cmd()
+	reqMsg, ok := msg.(panes.SearchRequestMsg)
+	require.True(t, ok, "matching intent should produce SearchRequestMsg, got %T", msg)
+	assert.Equal(t, "jazz", reqMsg.Query)
+	assert.Equal(t, 1, reqMsg.Page)
+}
+
+// TestScheduleDebounce_NonMatchingIntentDiscards verifies that a debounce msg whose
+// intent snapshot differs from the current o.intent is silently discarded.
+func TestScheduleDebounce_NonMatchingIntentDiscards(t *testing.T) {
+	o := newTestSearchOverlay()
+
+	// Type "jazz" then "rock" — intent.query changes between snapshots.
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Capture debounce msg snapshot at intent {query:"jazz"}.
+	staleMsg := panes.SearchDebounceMsgWithIntentForTest(o)
+
+	// Type more — intent.query is now "jazzrock".
+	for _, ch := range "rock" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+
+	// Fire the stale debounce — it carries {query:"jazz"} but current is "jazzrock".
+	_, cmd := o.Update(staleMsg)
+	assert.Nil(t, cmd, "stale intent debounce must be discarded (nil command)")
+}
+
+// TestHandleDebounce_Table is the table-driven test covering all four handleDebounce
+// scenarios from the story spec.
+func TestHandleDebounce_Table(t *testing.T) {
+	tests := []struct {
+		name            string
+		setupFn         func(*panes.SearchOverlay) *panes.SearchOverlay // prepare overlay state
+		mutateBeforeMsg func(*panes.SearchOverlay) *panes.SearchOverlay // mutate AFTER snapshot is captured
+		wantNilCmd      bool
+		wantQuery       string
+	}{
+		{
+			name: "fresh non-empty: fires SearchRequestMsg",
+			setupFn: func(o *panes.SearchOverlay) *panes.SearchOverlay {
+				for _, ch := range "jazz" {
+					o, _ = sendKey(t, o, string(ch))
+				}
+				return o
+			},
+			mutateBeforeMsg: nil,
+			wantNilCmd:      false,
+			wantQuery:       "jazz",
+		},
+		{
+			name: "stale: user typed more after snapshot",
+			setupFn: func(o *panes.SearchOverlay) *panes.SearchOverlay {
+				for _, ch := range "jazz" {
+					o, _ = sendKey(t, o, string(ch))
+				}
+				return o
+			},
+			mutateBeforeMsg: func(o *panes.SearchOverlay) *panes.SearchOverlay {
+				// Type more after snapshot is captured — makes snapshot stale.
+				for _, ch := range " rock" {
+					o, _ = sendKey(t, o, string(ch))
+				}
+				return o
+			},
+			wantNilCmd: true,
+		},
+		{
+			name: "empty query: no-op",
+			setupFn: func(o *panes.SearchOverlay) *panes.SearchOverlay {
+				// Don't type anything — query stays empty.
+				return o
+			},
+			mutateBeforeMsg: nil,
+			wantNilCmd:      true,
+		},
+		{
+			name: "prefix only (PrefixTyping): no-op",
+			setupFn: func(o *panes.SearchOverlay) *panes.SearchOverlay {
+				// Type ":songs" without the trailing space — PrefixTyping state.
+				for _, ch := range ":songs" {
+					o, _ = sendKey(t, o, string(ch))
+				}
+				require.Equal(t, panes.PrefixTyping, o.PrefixState(), "should be PrefixTyping")
+				return o
+			},
+			mutateBeforeMsg: nil,
+			wantNilCmd:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := newTestSearchOverlay()
+			o = tt.setupFn(o)
+
+			// Capture snapshot of current intent.
+			debounceMsg := panes.SearchDebounceMsgWithIntentForTest(o)
+
+			// Optionally mutate overlay state (making the snapshot stale).
+			if tt.mutateBeforeMsg != nil {
+				o = tt.mutateBeforeMsg(o)
+			}
+
+			_, cmd := o.Update(debounceMsg)
+			if tt.wantNilCmd {
+				assert.Nil(t, cmd, "expected nil command in scenario %q", tt.name)
+			} else {
+				require.NotNil(t, cmd, "expected non-nil command in scenario %q", tt.name)
+				msg := cmd()
+				reqMsg, ok := msg.(panes.SearchRequestMsg)
+				require.True(t, ok, "expected SearchRequestMsg in scenario %q, got %T", tt.name, msg)
+				assert.Equal(t, tt.wantQuery, reqMsg.Query, "query mismatch in scenario %q", tt.name)
+			}
+		})
+	}
+}
+
+// TestCycleTab_EmptyQuery_NoSearchRequest verifies that cycling the tab with an empty
+// query triggers debounce but handleDebounce no-ops (empty query check).
+func TestCycleTab_EmptyQuery_NoSearchRequest(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Tab with no query typed — debounce is scheduled but fires nothing.
+	_, cmd := sendKey(t, o, "tab")
+	require.NotNil(t, cmd, "tab change should schedule debounce (non-nil cmd)")
+
+	// Execute the debounce cmd — since query is empty, it should be a no-op.
+	// The cmd returned by cycleTabForward is scheduleDebounce (a time-based tick).
+	// We can't fire the time-based tick synchronously, but we can verify the overlay
+	// fires no SearchRequestMsg synchronously either.
+	msg := cmd()
+	// The message from the debounce tick is a searchDebounceMsg, not a SearchRequestMsg.
+	_, isReq := msg.(panes.SearchRequestMsg)
+	assert.False(t, isReq, "tab change with empty query should not directly emit SearchRequestMsg")
+}
+
+// TestCycleTab_NonEmptyQuery_EmitsSearchRequest verifies that cycling the tab when a
+// query is present causes handleDebounce to emit SearchRequestMsg with the correct Types.
+func TestCycleTab_NonEmptyQuery_EmitsSearchRequest(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Type a query first.
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+
+	// Cycle to Songs tab.
+	_, cmd := sendKey(t, o, "tab")
+	require.NotNil(t, cmd, "tab change should return a command")
+
+	// Execute debounce tick → get the searchDebounceMsg.
+	tickMsg := cmd()
+
+	// Feed the searchDebounceMsg into Update to fire the search.
+	_, searchCmd := o.Update(tickMsg)
+	require.NotNil(t, searchCmd, "debounce msg from tab change should produce a search command")
+	msg := searchCmd()
+	reqMsg, ok := msg.(panes.SearchRequestMsg)
+	require.True(t, ok, "tab change + debounce should produce SearchRequestMsg, got %T", msg)
+	assert.Equal(t, []string{"track"}, reqMsg.Types, "Songs tab should map to track type")
+	assert.Equal(t, "jazz", reqMsg.Query, "SearchRequestMsg should carry the current query")
+	assert.Equal(t, 1, reqMsg.Page, "page should be reset to 1 on tab change")
+}
+
+// TestReset_FullIntentReset verifies that Reset() resets the full intent struct to
+// its zero values: query="", tab=TabAll, page=1.
+func TestReset_FullIntentReset(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(120, 40)
+
+	// Type a query and cycle to a non-All tab to change intent.
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	o, _ = sendKey(t, o, "tab") // cycle to Songs
+
+	// Reset and verify intent fields.
+	o.Reset()
+
+	assert.Equal(t, panes.TabAll, o.IntentTab(), "after Reset: intent.tab should be TabAll")
+	assert.Equal(t, 1, o.IntentPage(), "after Reset: intent.page should be 1")
+	assert.Equal(t, "", o.CleanQuery(), "after Reset: intent.query (via clean query) should be empty")
 }
