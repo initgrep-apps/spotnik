@@ -485,8 +485,9 @@ func TestSearchRequestMsg_CarriesTypes(t *testing.T) {
 }
 
 // TestCycleTabForward_UsesCleanQueryWhenPrefixLocked verifies that cycling tabs while
-// a prefix is locked sends the clean query (no prefix) in SearchTabChangedMsg.
+// a prefix is locked sends the clean query (no prefix) in SearchRequestMsg.
 // This prevents ":songs kk" from reaching the API as a raw query string.
+// (SearchTabChangedMsg removed in story 98 — tab changes now emit SearchRequestMsg.)
 func TestCycleTabForward_UsesCleanQueryWhenPrefixLocked(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -502,11 +503,11 @@ func TestCycleTabForward_UsesCleanQueryWhenPrefixLocked(t *testing.T) {
 	// This is reachable because Tab during PrefixLocked goes to cycleTabForward.
 	_, cmd := sendKey(t, o, "shift+tab")
 
-	require.NotNil(t, cmd, "Shift+Tab should emit SearchTabChangedMsg command")
+	require.NotNil(t, cmd, "Shift+Tab should emit SearchRequestMsg command")
 	msg := cmd()
-	stcm, ok := msg.(panes.SearchTabChangedMsg)
-	require.True(t, ok, "should emit SearchTabChangedMsg, got %T", msg)
-	assert.Equal(t, "kk", stcm.Query, "tab cycle should use clean query, not raw ':songs kk'")
+	reqMsg, ok := msg.(panes.SearchRequestMsg)
+	require.True(t, ok, "should emit SearchRequestMsg, got %T", msg)
+	assert.Equal(t, "kk", reqMsg.Query, "tab cycle should use clean query, not raw ':songs kk'")
 }
 
 // ============================================================================

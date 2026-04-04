@@ -39,23 +39,27 @@ func newTestSearchOverlay() *panes.SearchOverlay {
 	return panes.NewSearchOverlay(t)
 }
 
-// sampleSearchResultData returns a SearchResultData with one item per section.
-func sampleSearchResultData() *panes.SearchResultData {
-	return &panes.SearchResultData{
-		Tracks: []domain.Track{
-			{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
-			{URI: "spotify:track:t2", Name: "Save Your Tears", Artists: []domain.Artist{{Name: "The Weeknd"}}},
-		},
-		Artists: []domain.SearchArtist{
-			{URI: "spotify:artist:a1", Name: "The Weeknd"},
-		},
-		Albums: []domain.SearchAlbum{
-			{URI: "spotify:album:al1", Name: "After Hours", Artists: []domain.Artist{{Name: "The Weeknd"}}},
-		},
-		Playlists: []domain.SearchPlaylist{
-			{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: domain.SimplePlaylistOwner{DisplayName: "User"}},
-		},
-	}
+// sampleSearchListItems returns a flat []SearchListItem with 2 tracks, 1 artist,
+// 1 album, and 1 playlist for use in tests. Mirrors the pre-converted format that
+// commands.go produces before delivery via SearchPageLoadedMsg.
+func sampleSearchListItems() []panes.SearchListItem {
+	tracks := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+		{URI: "spotify:track:t2", Name: "Save Your Tears", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+	})
+	artists := panes.ArtistsToSearchListItems([]domain.SearchArtist{
+		{URI: "spotify:artist:a1", Name: "The Weeknd"},
+	})
+	albums := panes.AlbumsToSearchListItems([]domain.SearchAlbum{
+		{URI: "spotify:album:al1", Name: "After Hours", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+	})
+	playlists := panes.PlaylistsToSearchListItems([]domain.SearchPlaylist{
+		{URI: "spotify:playlist:pl1", Name: "Blinding Pop Hits", Owner: domain.SimplePlaylistOwner{DisplayName: "User"}},
+	})
+	result := append(tracks, artists...)
+	result = append(result, albums...)
+	result = append(result, playlists...)
+	return result
 }
 
 // newTestSearchOverlayWithResults creates a SearchOverlay with pre-populated search
@@ -65,7 +69,7 @@ func newTestSearchOverlayWithResults() *panes.SearchOverlay {
 	overlay := panes.NewSearchOverlay(t)
 
 	// Deliver results the same way the root app model does: via SearchPageLoadedMsg.
-	msg := panes.SearchPageLoadedMsg{Results: sampleSearchResultData()}
+	msg := panes.SearchPageLoadedMsg{Results: sampleSearchListItems()}
 	model, _ := overlay.Update(msg)
 	overlay = model.(*panes.SearchOverlay)
 
@@ -159,7 +163,7 @@ func TestSearchOverlay_Reset_ClearsAllLocalState(t *testing.T) {
 	require.Equal(t, panes.TabSongs, o.ActiveTab(), "prerequisite: active tab should be TabSongs after locking :songs")
 
 	// Load fake results into o.results and o.resultList.
-	msg := panes.SearchPageLoadedMsg{Results: sampleSearchResultData()}
+	msg := panes.SearchPageLoadedMsg{Results: sampleSearchListItems()}
 	model, _ := o.Update(msg)
 	o = model.(*panes.SearchOverlay)
 	require.NotEmpty(t, o.ResultListItems(), "prerequisite: result list should be non-empty")
@@ -419,11 +423,9 @@ func TestSearchOverlay_View_Truncation(t *testing.T) {
 
 	// Very long track name
 	longName := strings.Repeat("A", 120)
-	results := &panes.SearchResultData{
-		Tracks: []domain.Track{
-			{URI: "spotify:track:t1", Name: longName, Artists: []domain.Artist{{Name: "Artist"}}},
-		},
-	}
+	results := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: longName, Artists: []domain.Artist{{Name: "Artist"}}},
+	})
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(40, 20) // narrow overlay
@@ -449,9 +451,8 @@ func TestSearchOverlay_View_EmptyQuery(t *testing.T) {
 func TestSearchOverlay_View_NoResults(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
-	// Deliver empty results via message
-	emptyResults := &panes.SearchResultData{} // all slices nil → zero items
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: emptyResults})
+	// Deliver empty results via message (nil slice = zero items)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: nil})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 40)
 
@@ -504,8 +505,8 @@ func TestSearchOverlay_View_ShowsNoResults(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 
-	// Deliver empty results via SearchPageLoadedMsg (the new way)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{}})
+	// Deliver empty results via SearchPageLoadedMsg (nil slice = zero items)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: nil})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 30)
 
@@ -519,11 +520,9 @@ func TestSearchOverlay_View_ShowsResults(t *testing.T) {
 	o := panes.NewSearchOverlay(th)
 
 	// Deliver results via SearchPageLoadedMsg
-	results := &panes.SearchResultData{
-		Tracks: []domain.Track{
-			{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
-		},
-	}
+	results := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+	})
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 	o.SetSize(80, 30)
@@ -606,22 +605,20 @@ func TestSearchOverlay_CtrlU_ClearsLocalInput(t *testing.T) {
 	assert.Equal(t, "", o.Query(), "Ctrl+U should clear the local input field")
 }
 
-// TestConvertSearchResult_RoundTrip verifies that convertSearchResult (indirectly via
-// SearchPageLoadedMsg) correctly maps api fields to SearchResultData fields.
-// We test the data visible in the overlay after receiving a SearchPageLoadedMsg.
+// TestSearchOverlay_SearchPageLoadedMsg_StoresResults verifies that SearchPageLoadedMsg
+// results are stored in the overlay and visible in View().
 func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 
-	results := &panes.SearchResultData{
-		Tracks: []domain.Track{
-			{URI: "spotify:track:abc", Name: "Track One", Artists: []domain.Artist{{Name: "Artist One"}}},
-		},
-		Artists: []domain.SearchArtist{
-			{URI: "spotify:artist:xyz", Name: "Artist One"},
-		},
-	}
+	tracks := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:abc", Name: "Track One", Artists: []domain.Artist{{Name: "Artist One"}}},
+	})
+	artists := panes.ArtistsToSearchListItems([]domain.SearchArtist{
+		{URI: "spotify:artist:xyz", Name: "Artist One"},
+	})
+	results := append(tracks, artists...)
 
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
@@ -633,8 +630,8 @@ func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
 	assert.Contains(t, view, "Artist One", "view should show artist from SearchPageLoadedMsg")
 }
 
-// TestSearchOverlay_View_Truncation_NoApiImport verifies the import boundary:
-// search.go must not import api/. This test uses panes.SearchResultData directly.
+// TestSearchOverlay_NoAPIImportBoundary verifies the import boundary:
+// search.go must not import api/. This test uses only panes types.
 func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 	// This test verifies the architectural boundary at the type level.
 	// If search.go imported api/, the panes package would fail to build without api/.
@@ -642,11 +639,11 @@ func TestSearchOverlay_NoAPIImportBoundary(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 
-	results := &panes.SearchResultData{
-		Tracks:    []domain.Track{{URI: "u1", Name: "T1"}},
-		Artists:   []domain.SearchArtist{{URI: "u2", Name: "A2"}},
-		Albums:    []domain.SearchAlbum{{URI: "u3", Name: "Al1"}},
-		Playlists: []domain.SearchPlaylist{{URI: "u4", Name: "PL1"}},
+	results := []panes.SearchListItem{
+		{Category: "track", Name: "T1", URI: "u1", IsTrack: true},
+		{Category: "artist", Name: "A2", URI: "u2"},
+		{Category: "album", Name: "Al1", URI: "u3"},
+		{Category: "playlist", Name: "PL1", URI: "u4"},
 	}
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
@@ -748,16 +745,25 @@ func TestSearchOverlay_ShiftTab_CyclesBackward(t *testing.T) {
 }
 
 // TestSearchOverlay_Tab_EmitsSearchTabChangedMsg verifies tab change emits SearchTabChangedMsg.
-func TestSearchOverlay_Tab_EmitsSearchTabChangedMsg(t *testing.T) {
-	o := newTestSearchOverlayWithResults()
+// TestSearchOverlay_Tab_EmitsSearchRequestMsg verifies tab change emits SearchRequestMsg
+// (SearchTabChangedMsg removed in story 98 — tab changes now go through the universal debounce path).
+func TestSearchOverlay_Tab_EmitsSearchRequestMsg(t *testing.T) {
+	// Start with a non-empty query so cycleTabForward emits a SearchRequestMsg.
+	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
+	// Type a query so the overlay has non-empty cleanQuery().
+	for _, ch := range "rock" {
+		o, _ = sendKey(t, o, string(ch))
+	}
 
 	_, cmd := sendKey(t, o, "tab")
-	require.NotNil(t, cmd, "tab change should return a command")
+	require.NotNil(t, cmd, "tab change should return a command when query is non-empty")
 	msg := cmd()
-	tcMsg, ok := msg.(panes.SearchTabChangedMsg)
-	require.True(t, ok, "tab change command should produce SearchTabChangedMsg, got %T", msg)
-	assert.Equal(t, []string{"track"}, tcMsg.Types, "Songs tab should map to track type")
+	reqMsg, ok := msg.(panes.SearchRequestMsg)
+	require.True(t, ok, "tab change command should produce SearchRequestMsg, got %T", msg)
+	assert.Equal(t, []string{"track"}, reqMsg.Types, "Songs tab should map to track type")
+	assert.Equal(t, "rock", reqMsg.Query, "SearchRequestMsg should carry the current query")
+	assert.Equal(t, 1, reqMsg.Page, "SearchRequestMsg page should default to 1")
 }
 
 // TestSearchOverlay_View_ThreePanels verifies View() contains three ╭ border starts.
@@ -884,13 +890,10 @@ func TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults(t *testing.T) {
 	o.SetSize(80, 40)
 
 	// First deliver a successful page so the overlay has results to display.
-	initialResults := &panes.SearchResultData{
-		Tracks: []domain.Track{
-			{URI: "spotify:track:t1", Name: "Jazz Track", Artists: []domain.Artist{{Name: "Miles Davis"}}},
-		},
-		TracksTotal: 1,
-	}
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: initialResults})
+	initialResults := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: "Jazz Track", Artists: []domain.Artist{{Name: "Miles Davis"}}},
+	})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: initialResults, Total: 1})
 	o = model.(*panes.SearchOverlay)
 
 	// Verify results are visible before the error arrives.
@@ -1002,36 +1005,38 @@ func TestSearchItemDelegate_Render_Subtitle(t *testing.T) {
 	assert.Contains(t, output, "Album Name", "render should include album name on line 2")
 }
 
-// TestSearchOverlay_RebuildListItems_AllTab verifies tabAll includes all 4 types.
+// TestSearchOverlay_RebuildListItems_AllTab verifies all delivered items appear in the list.
+// Story 98: items are pre-converted SearchListItems; tab filtering wired in story 99.
 func TestSearchOverlay_RebuildListItems_AllTab(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 
-	// Deliver results via SearchPageLoadedMsg (overlay now owns results, not store).
-	results := &panes.SearchResultData{
-		Tracks:    []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Artist A"}}}},
-		Artists:   []domain.SearchArtist{{ID: "a1", Name: "Artist B", URI: "spotify:artist:a1"}},
-		Albums:    []domain.SearchAlbum{{ID: "al1", Name: "Album C", URI: "spotify:album:al1", Artists: []domain.Artist{{Name: "Artist C"}}}},
-		Playlists: []domain.SearchPlaylist{{ID: "pl1", Name: "Playlist D", URI: "spotify:playlist:pl1"}},
+	// Deliver pre-converted SearchListItems via SearchPageLoadedMsg.
+	results := []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1"},
+		{Category: "artist", Name: "Artist B", URI: "spotify:artist:a1"},
+		{Category: "album", Name: "Album C", URI: "spotify:album:al1"},
+		{Category: "playlist", Name: "Playlist D", URI: "spotify:playlist:pl1"},
 	}
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
 
-	// After SearchPageLoadedMsg, the list should have 4 items (one per type).
-	assert.Equal(t, 4, panes.ListItemCount(o), "tabAll should include all 4 items")
+	// After SearchPageLoadedMsg, the list should have 4 items.
+	assert.Equal(t, 4, panes.ListItemCount(o), "all delivered items should appear in the list")
 }
 
-// TestSearchOverlay_RebuildListItems_SongsTab verifies tabSongs includes only tracks.
+// TestSearchOverlay_RebuildListItems_SongsTab verifies rebuildListItems after SetActiveTab.
+// Story 99 wires per-tab filtering; for story 98 all delivered items are shown.
 func TestSearchOverlay_RebuildListItems_SongsTab(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 
-	// Deliver results via SearchPageLoadedMsg (overlay now owns results, not store).
-	results := &panes.SearchResultData{
-		Tracks:  []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}, {ID: "t2", Name: "Track Two", URI: "spotify:track:t2"}},
-		Artists: []domain.SearchArtist{{ID: "a1", Name: "Artist B", URI: "spotify:artist:a1"}},
+	// Deliver pre-converted track items only (as would happen with a :songs-filtered request).
+	results := []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1"},
+		{Category: "track", Name: "Track Two", URI: "spotify:track:t2"},
 	}
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
 	o = model.(*panes.SearchOverlay)
@@ -1039,7 +1044,7 @@ func TestSearchOverlay_RebuildListItems_SongsTab(t *testing.T) {
 	panes.SetActiveTab(o, panes.TabSongs)
 	panes.CallRebuildListItems(o)
 
-	assert.Equal(t, 2, panes.ListItemCount(o), "tabSongs should include only tracks")
+	assert.Equal(t, 2, panes.ListItemCount(o), "track-only delivery should show 2 items")
 }
 
 // TestSearchOverlay_RebuildListItems_EmptyResults verifies nil o.results produces empty list.
@@ -1057,13 +1062,13 @@ func TestSearchOverlay_RebuildListItems_EmptyResults(t *testing.T) {
 func TestCheckPrefetch_BelowThreshold(t *testing.T) {
 	th := theme.Load("black")
 	// Deliver 10 tracks via SearchPageLoadedMsg.
-	tracks := make([]domain.Track, 10)
-	for i := range tracks {
-		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
+	domTracks := make([]domain.Track, 10)
+	for i := range domTracks {
+		domTracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
 	}
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{Tracks: tracks, TracksTotal: 100}})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: panes.TracksToSearchListItems(domTracks), Total: 100})
 	o = model.(*panes.SearchOverlay)
 
 	// Cursor at 0 (default) — 0/10 = 0%, well below 60%.
@@ -1076,13 +1081,13 @@ func TestCheckPrefetch_BelowThreshold(t *testing.T) {
 // offset tracking. Prefetch at threshold will be restored in story 99.
 func TestCheckPrefetch_AtThreshold(t *testing.T) {
 	th := theme.Load("black")
-	tracks := make([]domain.Track, 10)
-	for i := range tracks {
-		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
+	domTracks := make([]domain.Track, 10)
+	for i := range domTracks {
+		domTracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
 	}
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{Tracks: tracks, TracksTotal: 100}})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: panes.TracksToSearchListItems(domTracks), Total: 100})
 	o = model.(*panes.SearchOverlay)
 
 	// Move cursor to index 6 (60% of 10).
@@ -1096,13 +1101,13 @@ func TestCheckPrefetch_AtThreshold(t *testing.T) {
 // TestCheckPrefetch_NoMoreData verifies nil returned when no more data available.
 func TestCheckPrefetch_NoMoreData(t *testing.T) {
 	th := theme.Load("black")
-	tracks := make([]domain.Track, 10)
-	for i := range tracks {
-		tracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
+	domTracks := make([]domain.Track, 10)
+	for i := range domTracks {
+		domTracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
 	}
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{Tracks: tracks, TracksTotal: 10}})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: panes.TracksToSearchListItems(domTracks), Total: 10})
 	o = model.(*panes.SearchOverlay)
 
 	// Cursor at 6 (60%) but no more data (offset tracking not yet wired).
@@ -1117,8 +1122,9 @@ func TestSearchOverlay_DownKey_MovesCursor(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks: []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}, {ID: "t2", Name: "Track Two", URI: "spotify:track:t2"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+		{Category: "track", Name: "Track Two", URI: "spotify:track:t2", IsTrack: true},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1132,8 +1138,8 @@ func TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks: []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1151,8 +1157,8 @@ func TestSearchOverlay_Enter_TrackDoesNotCloseOverlay(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks: []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1170,8 +1176,8 @@ func TestSearchOverlay_Enter_AlbumEmitsPlayContextMsg(t *testing.T) {
 	o.SetSize(80, 40)
 	// Switch to Albums tab so albums show up first.
 	panes.SetActiveTab(o, panes.TabAlbums)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Albums: []domain.SearchAlbum{{ID: "al1", Name: "Album One", URI: "spotify:album:al1"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "album", Name: "Album One", URI: "spotify:album:al1"},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1189,8 +1195,8 @@ func TestSearchOverlay_CtrlA_ListDelegate_EmitsAddToQueueMsg(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks: []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1207,9 +1213,9 @@ func TestSearchOverlay_View_ListDelegate_ContainsBadgeSymbol(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks:  []domain.Track{{URI: "spotify:track:t1", Name: "My Track", Artists: []domain.Artist{{Name: "Ar"}}}},
-		Artists: []domain.SearchArtist{{URI: "spotify:artist:a1", Name: "My Artist"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "My Track", URI: "spotify:track:t1", IsTrack: true},
+		{Category: "artist", Name: "My Artist", URI: "spotify:artist:a1"},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1224,8 +1230,8 @@ func TestSearchOverlay_View_NoSectionHeaders(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: &panes.SearchResultData{
-		Tracks: []domain.Track{{URI: "u1", Name: "T1"}},
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "T1", URI: "u1"},
 	}})
 	o = model.(*panes.SearchOverlay)
 
@@ -1242,10 +1248,9 @@ func TestSearchOverlay_SetTheme_PropagatesToDelegate(t *testing.T) {
 	o2.SetSize(80, 40)
 
 	// Populate with a track via SearchPageLoadedMsg so the delegate renders something.
-	results := &panes.SearchResultData{
-		Tracks: []domain.Track{{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}},
-	}
-	model, _ := o2.Update(panes.SearchPageLoadedMsg{Results: results})
+	model, _ := o2.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+	}})
 	o2 = model.(*panes.SearchOverlay)
 	panes.CallRebuildListItems(o2)
 
@@ -1969,7 +1974,7 @@ func TestRenderTabBar_ShowsSpinnerWhenLoading(t *testing.T) {
 	o.SetSize(80, 40)
 
 	// Deliver results so list is non-empty.
-	msg := panes.SearchPageLoadedMsg{Results: sampleSearchResultData()}
+	msg := panes.SearchPageLoadedMsg{Results: sampleSearchListItems()}
 	model, _ := o.Update(msg)
 	o = model.(*panes.SearchOverlay)
 
@@ -1986,7 +1991,7 @@ func TestRenderTabBar_NoSpinnerWhenNotLoading(t *testing.T) {
 	o.SetSize(80, 40)
 
 	// Deliver results so list is non-empty.
-	msg := panes.SearchPageLoadedMsg{Results: sampleSearchResultData()}
+	msg := panes.SearchPageLoadedMsg{Results: sampleSearchListItems()}
 	model, _ := o.Update(msg)
 	o = model.(*panes.SearchOverlay)
 

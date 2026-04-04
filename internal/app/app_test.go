@@ -2462,13 +2462,10 @@ func TestApp_OpenSearch_ResetsOverlayState(t *testing.T) {
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	a = m.(*app.App)
 
-	// Deliver fake search results via SearchPageLoadedMsg.
-	results := &panes.SearchResultData{
-		Tracks: []domain.Track{
-			{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
-		},
-	}
-	m, _ = a.Update(panes.SearchPageLoadedMsg{Results: results})
+	// Deliver fake search results via SearchPageLoadedMsg (pre-converted SearchListItems).
+	m, _ = a.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Blinding Lights", URI: "spotify:track:t1", IsTrack: true},
+	}})
 	a = m.(*app.App)
 
 	// Close the overlay via SearchClosedMsg.
