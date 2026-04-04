@@ -10,13 +10,70 @@ The BubbleTea 300ms debounce (story 99) is the primary guard. However, it operat
 the Elm Update loop and can be bypassed by rapid page flips that each fire exactly one tick
 300ms apart. The Gateway needs an independent transport-layer backstop.
 
-The requirement is: **all `api.Interactive` requests for the same API path are debounced
-at the gateway — only the last request within a 100ms window proceeds.** This applies to
+The requirement: **all `api.Interactive` requests for the same API path are debounced at
+the gateway — only the last request within a 100ms window proceeds.** This applies to
 search, device switching, playback controls — any user-triggered call. `Background`
 requests (polling, prefetch) are unaffected.
 
 The gateway already has in-flight dedup (`inflight map[RequestKey]*inflightEntry`). The
 new debounce phase is separate and comes before dedup in the `Do()` pipeline.
+
+## Architecture Context
+
+### Layer: Gateway — transport backstop (independent of BubbleTea layer)
+
+The two debounce layers are independent. They do not coordinate. Each enforces last-wins
+on its own:
+
+```
+User action → scheduleDebounce (300ms, BubbleTea) → SearchRequestMsg
+  │
+  ▼
+app.go → buildSearchPageCmd(ctx, ...) → Gateway.Do(ctx, Interactive, path, fn)
+                                          │
+                                          ▼
+                              interactiveDebounce(ctx, path)    ← THIS STORY
+                                │
+                                ├── hold 100ms
+                                │   new Interactive request for same path?
+                                │   → cancel this hold, return error
+                                │
+                                └── 100ms elapsed → proceed to HTTP
+                                          │
+                                          ▼
+                                    in-flight dedup (existing)
+                                          │
+                                          ▼
+                                    Spotify API
+```
+
+### Why two independent layers?
+
+| Scenario | BubbleTea layer handles | Gateway layer handles |
+|---|---|---|
+| Normal typing | ✓ 300ms debounce | backup, usually no-op |
+| Rapid page flips (one per 300ms) | ✗ each fires | ✓ gateway cancels all but last |
+| Test environments (fast ticks) | may be bypassed | ✓ always enforced |
+| Direct API calls (no Update loop) | ✗ not applicable | ✓ enforced |
+
+### Scope and keying
+
+- **Applies to:** all requests with `key.Priority == Interactive`
+- **Key:** `key.Path` only — query parameters are ignored. All `/v1/search` requests
+  (regardless of `q=jazz` vs `q=rock`) share one debounce slot.
+- **`Background` requests:** pass through `Do()` without touching `debounceEntries`
+
+### `wrappedCtx` design note
+
+`interactiveDebounce` creates a `wrappedCtx` from the incoming `ctx`. This is used solely
+to make the 100ms hold cancellable by a competing request (via `prev.cancel()`). The
+`wrappedCtx` is **not** threaded into the HTTP call — after the hold completes, `Do()`
+uses the original caller `ctx` for the actual HTTP request. This is correct because:
+1. The caller's `ctx` already propagates cancellation from `app.go` (story 100)
+2. Threading `wrappedCtx` into the HTTP call would not add cancellation coverage that
+   `ctx` doesn't already provide
+3. Keeping the gate as a separate function (`interactiveDebounce`) makes it easy to test
+   in isolation
 
 ## Design
 
@@ -64,7 +121,8 @@ if key.Priority == Interactive {
 // path arrives within 100ms, the older one is cancelled and returns an error.
 // Only the last request in any burst window proceeds.
 func (g *Gateway) interactiveDebounce(ctx context.Context, path string) error {
-    // Create a wrapped context so we can cancel just this debounce hold.
+    // wrappedCtx allows a competing request to cancel this hold without
+    // cancelling the caller's ctx (which would affect the HTTP call too).
     wrappedCtx, wrappedCancel := context.WithCancel(ctx)
 
     g.debounceMu.Lock()
@@ -96,33 +154,20 @@ func (g *Gateway) interactiveDebounce(ctx context.Context, path string) error {
     // Hold for 100ms. The first request to survive the full hold proceeds.
     select {
     case <-time.After(100 * time.Millisecond):
-        return nil // proceed
+        return nil // proceed to HTTP
     case <-wrappedCtx.Done():
-        return wrappedCtx.Err() // cancelled by newer request
+        return wrappedCtx.Err() // cancelled by newer request for same path
     case <-ctx.Done():
-        return ctx.Err() // cancelled by caller (Esc, new query)
+        return ctx.Err() // cancelled by caller (Esc, new query from app.go)
     }
 }
 ```
 
-### Scope and keying
-
-- **Applies to:** all requests with `key.Priority == Interactive` — search, devices, volume, seek, any user-triggered call
-- **Key:** `key.Path` only — query parameters ignored. All `/v1/search` requests (regardless of `q=`) share one debounce slot.
-- **`Background` requests:** pass through `Do()` without touching `debounceEntries` at all
-
 ### Interaction with existing in-flight dedup
 
-The debounce phase runs before in-flight dedup. If two identical Interactive requests
-survive the debounce (impossible in practice since the second cancels the first), the
-existing dedup handles them. The two mechanisms are independent.
-
-### No coordination with BubbleTea layer
-
-The 300ms BubbleTea debounce and the 100ms Gateway debounce do not coordinate. They are
-independent last-wins mechanisms operating at different layers. In the normal case, only
-one request reaches the Gateway after BubbleTea settles. The Gateway debounce is a backstop
-for edge cases (test environments, slow Update loops, direct API calls).
+The debounce phase runs **before** in-flight dedup. After the 100ms hold, the request
+enters the existing dedup logic unchanged. The two mechanisms are independent and do not
+coordinate.
 
 ## Acceptance Criteria
 
@@ -133,6 +178,7 @@ for edge cases (test environments, slow Update loops, direct API calls).
 - [ ] After 100ms with no replacement, request proceeds normally
 - [ ] `Background` requests bypass the debounce phase entirely
 - [ ] Caller-cancelled context (`ctx.Done()`) returns immediately without blocking
+- [ ] No goroutine leaks: entry removed from map after exit; ready channel closed
 - [ ] `make ci` passes; no data races under `-race`
 
 ## Tasks
@@ -146,10 +192,10 @@ for edge cases (test environments, slow Update loops, direct API calls).
       - test: two requests same path within 100ms → first returns error; second proceeds after 100ms
       - test: two requests different paths → both proceed independently (no interference)
       - test: caller ctx cancelled during hold → returns immediately with ctx error
-      - test: no goroutine leak (entry removed from map after exit; ready channel closed)
+      - test: no goroutine leak — entry removed from map after exit; ready channel closed
 
 - [ ] Integrate `interactiveDebounce` into `Gateway.Do()` — Interactive only, before in-flight dedup
-      - test: Background priority request passes through without debounce delay (< 10ms)
+      - test: Background priority request passes through without debounce delay (< 10ms overhead)
       - test: Interactive request experiences ~100ms hold before HTTP call
 
 - [ ] Verify no data races: run `go test -race ./internal/api/...`
