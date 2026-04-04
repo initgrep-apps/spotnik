@@ -149,7 +149,7 @@ func TestApp_SearchPageLoadedMsg_ErrorPreservesResults(t *testing.T) {
 //  3. SearchLoadingMsg on overlay → loadingFirstPage=true
 //  4. SearchPageLoadedMsg{page=1, results=[10 items], total=50} → delivered to overlay
 //  5. Ctrl+Right simulation → intent.page=2 → SearchRequestMsg{Page:2}
-//  6. SearchPageLoadedMsg{page=2, IsFirstPage:false} → loadingNextPage via SearchLoadingMsg
+//  6. SearchLoadingMsg{IsFirstPage:false} → loadingNextPage=true; page-1 results still visible
 //  7. closeSearch → cancel called; all fields reset
 func TestApp_SearchFlow_OpenTypeResultsPaginateClose(t *testing.T) {
 	// Set up an HTTP server that returns canned responses.
