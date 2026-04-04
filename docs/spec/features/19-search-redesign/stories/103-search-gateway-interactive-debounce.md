@@ -1,7 +1,7 @@
 ---
 title: "Search Redesign: Gateway Interactive debounce (100ms path-keyed)"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

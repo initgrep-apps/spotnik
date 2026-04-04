@@ -1,7 +1,7 @@
 ---
 title: "Search Redesign: Per-page fetch command and batch engine removal"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

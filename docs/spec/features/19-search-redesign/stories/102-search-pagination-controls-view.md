@@ -1,7 +1,7 @@
 ---
 title: "Search Redesign: Pagination controls, loading states, and Panel 2 view"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

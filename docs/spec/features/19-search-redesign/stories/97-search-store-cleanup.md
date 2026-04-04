@@ -1,7 +1,7 @@
 ---
 title: "Search Redesign: Remove all search state from Store"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

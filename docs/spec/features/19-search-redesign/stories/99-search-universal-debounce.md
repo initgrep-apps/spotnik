@@ -1,7 +1,7 @@
 ---
 title: "Search Redesign: Universal debounce primitive (searchIntent)"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background

@@ -2748,3 +2748,188 @@ func TestSearchOverlay_Reset_ZerosAllStory102FieldsExplicit(t *testing.T) {
 	assert.False(t, o.LoadingFirstPage(), "Reset: loadingFirstPage false")
 	assert.False(t, o.LoadingNextPage(), "Reset: loadingNextPage false")
 }
+
+// --- Story 104: Integration and coverage gap tests ---
+
+// TestSearchOverlay_RapidPageFlip_SingleRequest verifies that rapid Ctrl+Right presses
+// (5×) result in only one SearchRequestMsg, for the final page (page 6), when the
+// debounce fires. All prior debounce snapshots are stale because intent.page has moved on.
+//
+// Implementation detail: each Ctrl+Right press updates intent.page and calls
+// scheduleDebounce() which snapshots the current intent. When the debounce ticks fire,
+// handleDebounce discards any tick whose snapshot differs from the current intent.
+// Only the last snapshot (page=6) matches the current intent at fire time.
+func TestSearchOverlay_RapidPageFlip_SingleRequest(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Set up overlay with query="jazz", page=1, total=60 (6 pages available).
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   60, // 6 pages
+	})
+	o = m.(*panes.SearchOverlay)
+	require.Equal(t, 1, o.IntentPage(), "pre-condition: should be on page 1")
+	require.True(t, panes.HasNextPage(o), "pre-condition: should have next page")
+
+	// Rapidly press Ctrl+Right 5 times. Each press captures a stale snapshot of
+	// intent.page (1,2,3,4) except the last press (page=5→6 which sets page=6).
+	var debounceSnapshots []tea.Msg
+	for i := 0; i < 5; i++ {
+		// Each sendKey calls handleKey(KeyCtrlRight) which:
+		//   1. Increments intent.page
+		//   2. Returns scheduleDebounce() — a tea.Tick cmd
+		// We immediately execute the tick to get the searchDebounceMsg.
+		var debounceCmd tea.Cmd
+		o, debounceCmd = sendKey(t, o, "ctrl+right")
+		require.NotNil(t, debounceCmd, "ctrl+right should return a debounce cmd (press %d)", i+1)
+		// Execute the tick to get the debounce message.
+		debounceMsg := debounceCmd()
+		debounceSnapshots = append(debounceSnapshots, debounceMsg)
+	}
+
+	// After 5 presses: intent.page should be 6.
+	require.Equal(t, 6, o.IntentPage(), "after 5 ctrl+right presses, intent.page should be 6")
+
+	// Now fire all 5 debounce messages. Only the last one (snapshot page=6) should
+	// match the current intent. The first 4 (pages 2,3,4,5) are stale.
+	var searchRequestCmds []tea.Cmd
+	for _, debMsg := range debounceSnapshots {
+		_, cmd := o.Update(debMsg)
+		if cmd != nil {
+			// Execute the cmd to get the SearchRequestMsg.
+			if msg := cmd(); msg != nil {
+				if req, ok := msg.(panes.SearchRequestMsg); ok {
+					searchRequestCmds = append(searchRequestCmds, func() tea.Msg { return req })
+				}
+			}
+		}
+	}
+
+	// Exactly one SearchRequestMsg should have been produced, with Page=6.
+	require.Len(t, searchRequestCmds, 1,
+		"rapid page flip (5×ctrl+right) should produce exactly 1 SearchRequestMsg")
+	finalMsg := searchRequestCmds[0]()
+	reqMsg, ok := finalMsg.(panes.SearchRequestMsg)
+	require.True(t, ok, "produced msg should be SearchRequestMsg, got %T", finalMsg)
+	assert.Equal(t, 6, reqMsg.Page, "SearchRequestMsg should carry page=6 (the final page)")
+	assert.Equal(t, "jazz", reqMsg.Query, "SearchRequestMsg should carry query='jazz'")
+}
+
+// TestSearchOverlay_NoQuery_PaginationNoOp verifies that Ctrl+Right with an empty
+// query is a silent no-op — no page increment, no SearchRequestMsg.
+// This is an alias for TestCtrlRight_NoQuery_NoOp from story 102, restated
+// explicitly for story 104 acceptance criteria traceability.
+func TestSearchOverlay_NoQuery_PaginationNoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// No typing — intent.query is "".
+	require.Empty(t, o.IntentQuery(), "pre-condition: intent.query should be empty")
+	page := o.IntentPage()
+
+	// Ctrl+Right with no query should be a no-op.
+	o, cmd := sendKey(t, o, "ctrl+right")
+	assert.Equal(t, page, o.IntentPage(), "ctrl+right with no query must not change page")
+	assert.Nil(t, cmd, "ctrl+right with no query must return nil cmd (no SearchRequestMsg)")
+
+	// Ctrl+Left with no query should also be a no-op.
+	o, cmd = sendKey(t, o, "ctrl+left")
+	assert.Equal(t, page, o.IntentPage(), "ctrl+left with no query must not change page")
+	assert.Nil(t, cmd, "ctrl+left with no query must return nil cmd (no SearchRequestMsg)")
+}
+
+// TestSearchOverlay_AllTab_HasNextPage verifies that for the All tab:
+//   - total=100, page=1 → hasNextPage = true (page 1 of 10)
+//   - total=100, page=10 → hasNextPage = false (last page)
+//   - total=10, page=1 → hasNextPage = false (exactly one page)
+func TestSearchOverlay_AllTab_HasNextPage(t *testing.T) {
+	tests := []struct {
+		name     string
+		total    int
+		page     int
+		wantNext bool
+	}{
+		{"total=100 page=1 → true", 100, 1, true},
+		{"total=100 page=10 → false", 100, 10, false},
+		{"total=10 page=1 exactly one page → false", 10, 1, false},
+		{"total=0 page=1 → false", 0, 1, false},
+		{"total=11 page=1 → true (two pages)", 11, 1, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := newTestSearchOverlay()
+			o.SetSize(80, 40)
+
+			// Deliver results with the given total so total is set on the overlay.
+			m, _ := o.Update(panes.SearchPageLoadedMsg{
+				Results: panes.TracksToSearchListItems([]domain.Track{
+					{URI: "u1", Name: "Track"},
+				}),
+				Total: tt.total,
+			})
+			o = m.(*panes.SearchOverlay)
+
+			// Set the page directly for test isolation.
+			panes.SetIntentPage(o, tt.page)
+
+			assert.Equal(t, tt.wantNext, panes.HasNextPage(o),
+				"hasNextPage(total=%d, page=%d) should be %v", tt.total, tt.page, tt.wantNext)
+		})
+	}
+}
+
+// TestCtrlRight_LoadingNextPage_NoOp verifies that Ctrl+Right while loadingNextPage is a no-op.
+// This covers the guard condition: !loadingFirstPage && !loadingNextPage.
+func TestCtrlRight_LoadingNextPage_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Deliver results with total=21 (3 pages).
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   21,
+	})
+	o = m.(*panes.SearchOverlay)
+	// Set loadingNextPage=true.
+	m, _ = o.Update(panes.SearchLoadingMsg{IsFirstPage: false})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingNextPage(), "pre-condition: loadingNextPage should be true")
+
+	pageBefore := o.IntentPage()
+	o, cmd := sendKey(t, o, "ctrl+right")
+	assert.Equal(t, pageBefore, o.IntentPage(), "ctrl+right while loadingNextPage must not change page")
+	assert.Nil(t, cmd, "ctrl+right while loadingNextPage must return nil cmd")
+}
+
+// TestCtrlLeft_LoadingNextPage_NoOp verifies that Ctrl+Left while loadingNextPage is a no-op.
+func TestCtrlLeft_LoadingNextPage_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Deliver results with total=21, advance to page 2.
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   21,
+	})
+	o = m.(*panes.SearchOverlay)
+	o, _ = sendKey(t, o, "ctrl+right") // page → 2
+	require.Equal(t, 2, o.IntentPage())
+
+	// Set loadingNextPage.
+	m, _ = o.Update(panes.SearchLoadingMsg{IsFirstPage: false})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingNextPage(), "pre-condition: loadingNextPage should be true")
+
+	o, cmd := sendKey(t, o, "ctrl+left")
+	assert.Equal(t, 2, o.IntentPage(), "ctrl+left while loadingNextPage must not change page")
+	assert.Nil(t, cmd, "ctrl+left while loadingNextPage must return nil cmd")
+}

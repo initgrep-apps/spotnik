@@ -200,6 +200,191 @@ func TestGateway_Do_InteractiveExperiencesDebounceHold(t *testing.T) {
 
 // --- Task 4: data race check ---
 
+// --- Story 104: Gateway Integration Tests ---
+
+// TestGateway_InteractiveDebounce_LastWins verifies that when two Interactive Do()
+// calls for the same path arrive within 10ms, only the second (last) request reaches
+// the HTTP server. The debounce ensures earlier duplicate requests are cancelled.
+func TestGateway_InteractiveDebounce_LastWins(t *testing.T) {
+	var mu sync.Mutex
+	var requestCount int
+	var lastBody string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestCount++
+		lastBody = r.URL.Query().Get("q")
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	key := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
+
+	// Launch two goroutines that call Interactive Do() for the same path in rapid succession.
+	var wg sync.WaitGroup
+	var errs [2]error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, errs[0] = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+			return http.Get(srv.URL + "?q=first") //nolint:noctx
+		})
+	}()
+
+	// Small delay so the first goroutine enters interactiveDebounce first.
+	time.Sleep(5 * time.Millisecond)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, errs[1] = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+			return http.Get(srv.URL + "?q=second") //nolint:noctx
+		})
+	}()
+
+	wg.Wait()
+
+	// The second request should succeed; the first may be cancelled.
+	assert.NoError(t, errs[1], "second Interactive request for same path should succeed")
+
+	// Exactly 1 request should reach the server (the second one wins).
+	mu.Lock()
+	count := requestCount
+	mu.Unlock()
+	assert.Equal(t, 1, count, "exactly 1 HTTP request should reach the server (last-wins debounce)")
+	assert.Equal(t, "second", lastBody, "the winning request should be the second one")
+}
+
+// TestGateway_InteractiveDebounce_DifferentPathsIndependent verifies that Interactive
+// Do() calls for different paths are independent — both requests reach the server
+// without interfering with each other.
+func TestGateway_InteractiveDebounce_DifferentPathsIndependent(t *testing.T) {
+	var mu sync.Mutex
+	var requestPaths []string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestPaths = append(requestPaths, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	searchKey := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
+	devicesKey := RequestKey{Method: http.MethodGet, Path: "/v1/me/player/devices"}
+
+	var wg sync.WaitGroup
+	var errs [2]error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, errs[0] = gw.Do(context.Background(), Interactive, searchKey, func() (*http.Response, error) {
+			return http.Get(srv.URL + "/v1/search") //nolint:noctx
+		})
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, errs[1] = gw.Do(context.Background(), Interactive, devicesKey, func() (*http.Response, error) {
+			return http.Get(srv.URL + "/v1/me/player/devices") //nolint:noctx
+		})
+	}()
+
+	wg.Wait()
+
+	// Both requests should succeed — different paths don't debounce each other.
+	assert.NoError(t, errs[0], "/v1/search Interactive request should succeed")
+	assert.NoError(t, errs[1], "/v1/me/player/devices Interactive request should succeed")
+
+	// Both HTTP requests should reach the server.
+	mu.Lock()
+	count := len(requestPaths)
+	mu.Unlock()
+	assert.Equal(t, 2, count,
+		"both requests for different paths should reach the server (independent debounce per path)")
+}
+
+// TestGateway_Background_NoDebounce verifies that Background Do() calls bypass the
+// 100ms interactive debounce. Unlike Interactive requests, Background requests for the
+// same path proceed immediately without any hold delay.
+//
+// NOTE: Background requests still share the GET in-flight deduplication layer,
+// so two perfectly simultaneous Background GETs for the same key may merge. To test
+// debounce bypass without dedup interference, we use sequential Background calls
+// (each after the prior one completes) and verify the total elapsed time is far below
+// the 100ms interactive hold threshold.
+func TestGateway_Background_NoDebounce(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	key := RequestKey{Method: http.MethodGet, Path: "/v1/me/player"}
+
+	// Two sequential Background requests: measure total time.
+	// If debounce were applied (100ms per request) the total would be ≥200ms.
+	// Background bypasses debounce, so both complete in well under 50ms.
+	start := time.Now()
+
+	_, err0 := gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+		return http.Get(srv.URL) //nolint:noctx
+	})
+	_, err1 := gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
+		return http.Get(srv.URL) //nolint:noctx
+	})
+
+	elapsed := time.Since(start)
+
+	assert.NoError(t, err0, "first Background request should succeed")
+	assert.NoError(t, err1, "second Background request should succeed")
+	// Background requests must complete in well under 50ms each (no 100ms debounce hold).
+	assert.Less(t, elapsed.Milliseconds(), int64(100),
+		"two sequential Background requests must complete in <100ms total (no debounce hold); got %v", elapsed)
+}
+
+// TestGateway_Background_vs_Interactive_TimingComparison verifies the timing difference
+// between Background and Interactive requests. An Interactive request experiences the
+// ~100ms debounce hold; a Background request bypasses it and completes immediately.
+func TestGateway_Background_vs_Interactive_TimingComparison(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	gw := NewGateway()
+	bgKey := RequestKey{Method: http.MethodGet, Path: "/v1/me/player"}
+	interactiveKey := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
+
+	// Background: should complete without any debounce hold.
+	bgStart := time.Now()
+	_, err := gw.Do(context.Background(), Background, bgKey, func() (*http.Response, error) {
+		return http.Get(srv.URL) //nolint:noctx
+	})
+	bgElapsed := time.Since(bgStart)
+
+	require.NoError(t, err)
+	assert.Less(t, bgElapsed.Milliseconds(), int64(50),
+		"Background request must complete in <50ms (no debounce); got %v", bgElapsed)
+
+	// Interactive: should experience ≥80ms debounce hold.
+	intStart := time.Now()
+	_, err = gw.Do(context.Background(), Interactive, interactiveKey, func() (*http.Response, error) {
+		return http.Get(srv.URL) //nolint:noctx
+	})
+	intElapsed := time.Since(intStart)
+
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, intElapsed.Milliseconds(), int64(80),
+		"Interactive request must wait ≥80ms for debounce; got %v", intElapsed)
+}
+
 // TestInteractiveDebounce_RapidConcurrent verifies that rapid concurrent
 // Interactive requests for the same path produce no data races.
 // Run with -race flag: go test -race ./internal/api/...
