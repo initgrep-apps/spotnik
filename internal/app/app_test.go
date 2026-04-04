@@ -2728,6 +2728,52 @@ func TestApp_SearchRequestMsg_ClearsError(t *testing.T) {
 	assert.NotNil(t, cmd, "SearchRequestMsg should still dispatch a search command")
 }
 
+// TestApp_OpenSearch_ResetsOverlayState verifies that reopening the search overlay
+// (via '/') after a previous session yields a clean overlay — empty input, TabAll,
+// and no leftover results. This is the regression test for story 96.
+func TestApp_OpenSearch_ResetsOverlayState(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Open search for the first session.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = m.(*app.App)
+	require.True(t, a.SearchOpen(), "prerequisite: search should be open")
+
+	// Simulate user typing a query — send keys to the overlay.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	a = m.(*app.App)
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	a = m.(*app.App)
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	a = m.(*app.App)
+
+	// Deliver fake search results via SearchPageLoadedMsg.
+	results := &panes.SearchResultData{
+		Tracks: []domain.Track{
+			{URI: "spotify:track:t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+		},
+	}
+	m, _ = a.Update(panes.SearchPageLoadedMsg{Results: results})
+	a = m.(*app.App)
+
+	// Close the overlay via SearchClosedMsg.
+	m, _ = a.Update(panes.SearchClosedMsg{})
+	a = m.(*app.App)
+	require.False(t, a.SearchOpen(), "prerequisite: search should be closed")
+
+	// Reopen the search overlay — this triggers openSearch() which must call Reset().
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = m.(*app.App)
+	require.True(t, a.SearchOpen(), "search should be open again")
+
+	// Verify the overlay has been reset to a clean state.
+	sp := a.SearchPane()
+	assert.Equal(t, "", sp.Query(), "after reopen: input should be empty")
+	assert.Equal(t, panes.TabAll, sp.ActiveTab(), "after reopen: active tab should be TabAll")
+	assert.Empty(t, sp.ResultListItems(), "after reopen: result list should be empty")
+}
+
 // TestApp_SearchClosedMsg_ClearsInFlightState verifies that closing the search overlay
 // clears any in-flight search state from the store. This prevents stale in-flight
 // batches from leaking their results into a subsequent search session.
