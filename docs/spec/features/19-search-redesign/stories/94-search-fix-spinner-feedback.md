@@ -1,7 +1,7 @@
 ---
 title: "Fix: Spinner never animates and no loading feedback on re-search"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
