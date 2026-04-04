@@ -793,7 +793,9 @@ func (a *App) clearAllFetchingSentinels() {
 	for _, r := range []string{"short_term", "medium_term", "long_term"} {
 		a.store.SetStatsFetching(r, false)
 	}
-	// TODO(19-search-redesign): search loading state moved to overlay in story 99
+	// Clear app-level search loading flag: when a 429 or 401 short-circuits the search command,
+	// the SearchPageLoadedMsg handler never fires, so loading must be cleared here.
+	a.searchLoading = false
 }
 
 // Update handles all messages routed through the root model.
