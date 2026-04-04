@@ -278,6 +278,36 @@ func (o *SearchOverlay) ResultListItems() []list.Item {
 	return o.resultList.Items()
 }
 
+// Input returns the underlying textinput model.
+// Exported for tests that need to inspect Prompt or other input fields after Reset().
+func (o *SearchOverlay) Input() textinput.Model {
+	return o.input
+}
+
+// Results returns the current search result data held by the overlay.
+// Exported for tests.
+func (o *SearchOverlay) Results() *SearchResultData {
+	return o.results
+}
+
+// Reset restores the overlay to its initial empty state, as if it had just been
+// constructed. Called by the root app when the overlay is opened (openSearch) to
+// guarantee a fresh start every session, regardless of the previous session's state.
+// Reset does not call resizeList() because the terminal size may not be set at the
+// moment of Reset (overlay not yet rendered); the first SetSize() call will size the
+// list correctly.
+func (o *SearchOverlay) Reset() {
+	o.input.SetValue("")
+	o.input.Prompt = "> "
+	o.input.Placeholder = searchPlaceholders[0]
+	o.placeholderIdx = 0
+	o.activeTab = TabAll
+	o.prefixState = PrefixNone
+	o.lockedPrefix = ""
+	o.results = nil
+	o.resultList.SetItems(nil)
+}
+
 // panelHeights returns the computed heights for the three overlay panels:
 // searchH (3 or 4 depending on hint line), resultsH (fills remaining), helpH (always 3).
 func (o *SearchOverlay) panelHeights() (searchH, resultsH, helpH int) {
