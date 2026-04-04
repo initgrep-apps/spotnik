@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -27,6 +28,12 @@ const (
 	TabPlaylists                  // 4: playlists only
 	// NumTabs is the total number of category tabs. Exported for tests.
 	NumTabs = 5
+
+	// SearchPageSize is the number of results fetched per search page.
+	// Must equal app.SearchPageSize (both reference the same Spotify API limit).
+	// Defined here so the panes package can compute hasNextPage() without
+	// importing the app package (which would create a circular dependency).
+	SearchPageSize = 10
 )
 
 // TabLabels holds the display label for each tab.
@@ -73,11 +80,11 @@ type SearchClosedMsg struct{}
 // The root app model receives it and dispatches the actual Spotify API call.
 // Types carries the Spotify API type filter derived from the locked prefix (e.g. ["track"]
 // for ":songs"). When empty the app handler defaults to all four types.
-// Page is the 1-based page number to fetch; story 99 wires in intent.page — for now use 1.
+// Page is the 1-based page number to fetch; incremented/decremented by Ctrl+Right/Left.
 type SearchRequestMsg struct {
 	Query string
 	Types []string
-	Page  int // 1-based page number; defaults to 1 (story 99 wires intent.page)
+	Page  int // 1-based page number; reflects intent.page at debounce fire time
 }
 
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
@@ -86,23 +93,26 @@ type searchSpinnerTickMsg spinner.TickMsg
 // searchKeyMap defines all keybindings shown in the help bar (Panel 3).
 // It implements the bubbles/help KeyMap interface.
 type searchKeyMap struct {
-	Play    key.Binding
-	Queue   key.Binding
-	TabNext key.Binding
-	TabPrev key.Binding
-	Close   key.Binding
-	Clear   key.Binding
+	Play     key.Binding
+	Queue    key.Binding
+	TabNext  key.Binding
+	TabPrev  key.Binding
+	Close    key.Binding
+	Clear    key.Binding
+	nextPage key.Binding
+	prevPage key.Binding
 }
 
-// ShortHelp returns 6 bindings for the compact help bar view.
+// ShortHelp returns 8 bindings for the compact help bar view.
 // Clear (ctrl+u) is included so users can discover the clear-search shortcut.
+// nextPage and prevPage are included so users can discover pagination keys.
 func (k searchKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Clear, k.Close}
+	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Clear, k.Close, k.nextPage, k.prevPage}
 }
 
-// FullHelp returns all 6 bindings grouped in a single column.
+// FullHelp returns all 8 bindings grouped in a single column.
 func (k searchKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear}}
+	return [][]key.Binding{{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear, k.nextPage, k.prevPage}}
 }
 
 // NewSearchKeyMap creates the default keybindings for the search overlay.
@@ -133,11 +143,19 @@ func NewSearchKeyMap() searchKeyMap {
 			key.WithKeys("ctrl+u"),
 			key.WithHelp("ctrl+u", "clear"),
 		),
+		nextPage: key.NewBinding(
+			key.WithKeys("ctrl+right"),
+			key.WithHelp("ctrl+→", "next page"),
+		),
+		prevPage: key.NewBinding(
+			key.WithKeys("ctrl+left"),
+			key.WithHelp("ctrl+←", "prev page"),
+		),
 	}
 }
 
-// NOTE: SearchPageLoadedMsg is defined in messages.go alongside all other shared
-// message types. SearchResultData is also in messages.go.
+// NOTE: SearchPageLoadedMsg and SearchLoadingMsg are defined in messages.go alongside
+// all other shared message types used between the app layer and the overlay.
 
 // SearchOverlay is the floating search UI model. It is layered above the
 // three-pane view while open — it does not replace any pane.
@@ -160,10 +178,22 @@ type SearchOverlay struct {
 	width  int
 	height int
 
-	// results holds the most recent search result items delivered via SearchPageLoadedMsg.
+	// results holds the current page of search result items delivered via SearchPageLoadedMsg.
 	// This avoids reading domain.SearchResult from the store, keeping the ui/api boundary clean.
-	// Story 99 will manage multi-page accumulation; for now the overlay holds the latest page.
+	// nil until the first successful search response arrives.
 	results []SearchListItem
+
+	// total is the total result count across all types/pages, as reported by the API.
+	// Used by hasNextPage() and renderPaginationBar(). Zero until results arrive.
+	total int
+
+	// loadingFirstPage is true while the first page of a new query is in flight.
+	// When true, results==nil and we show a centered spinner only.
+	loadingFirstPage bool
+
+	// loadingNextPage is true while a subsequent page fetch is in flight.
+	// When true, results!=nil and we show a spinner line above the existing list.
+	loadingNextPage bool
 
 	// intent is the single source of truth for what the user currently wants to search.
 	// All four triggers (type, Tab, Ctrl+Right, Ctrl+Left) write to this struct and call
@@ -291,10 +321,26 @@ func (o *SearchOverlay) Input() textinput.Model {
 	return o.input
 }
 
-// Results returns the current search result items held by the overlay.
+// Results returns the current page of search results.
+// Returns nil until the first successful search response arrives.
+func (o *SearchOverlay) Results() []SearchListItem { return o.results }
+
+// Total returns the total result count across all pages as reported by the API.
 // Exported for tests.
-func (o *SearchOverlay) Results() []SearchListItem {
-	return o.results
+func (o *SearchOverlay) Total() int { return o.total }
+
+// LoadingFirstPage returns true while the first page of a new query is in flight.
+// Exported for tests.
+func (o *SearchOverlay) LoadingFirstPage() bool { return o.loadingFirstPage }
+
+// LoadingNextPage returns true while a subsequent page fetch is in flight.
+// Exported for tests.
+func (o *SearchOverlay) LoadingNextPage() bool { return o.loadingNextPage }
+
+// hasNextPage returns true when there are more pages to fetch.
+// The condition is: total > 0 AND current page * page size < total.
+func (o *SearchOverlay) hasNextPage() bool {
+	return o.total > 0 && o.intent.page*SearchPageSize < o.total
 }
 
 // Reset restores the overlay to its initial empty state, as if it had just been
@@ -312,6 +358,9 @@ func (o *SearchOverlay) Reset() {
 	o.prefixState = PrefixNone
 	o.lockedPrefix = ""
 	o.results = nil
+	o.total = 0
+	o.loadingFirstPage = false
+	o.loadingNextPage = false
 	o.resultList.SetItems(nil)
 }
 
@@ -346,19 +395,33 @@ func (o *SearchOverlay) SetSize(width, height int) {
 
 // resizeList recomputes the list dimensions from the current panelHeights() and
 // applies them via resultList.SetSize(). Must be called after any state change that
-// could affect showHintLine() (typing, backspace, Ctrl+U, tab cycle, SearchClearedMsg).
+// could affect showHintLine() (typing, backspace, Ctrl+U, tab cycle, SearchClearedMsg),
+// total (which controls whether the pagination bar occupies a line), or loading state
+// (which controls whether the spinner line occupies a line above the list).
 // Without this call, the list renders at a stale height whenever the hint line toggles,
 // causing visual artifacts (duplicate lines, misaligned borders).
 func (o *SearchOverlay) resizeList() {
 	w := o.overlayWidth()
 	_, resultsH, _ := o.panelHeights()
 
-	// Inner list dimensions: subtract results border (2) + tab bar (1) + separator (1).
+	// Subtract 1 line for the pagination bar when total > 0.
+	paginationLine := 0
+	if o.total > 0 {
+		paginationLine = 1
+	}
+
+	// Subtract 1 line for the spinner line when loadingNextPage (spinner above list).
+	spinnerLine := 0
+	if o.loadingNextPage {
+		spinnerLine = 1
+	}
+
+	// Inner list dimensions: subtract results border (2) + tab bar (1) + separator (1) + optional lines.
 	listW := w - 2
 	if listW < 1 {
 		listW = 1
 	}
-	listH := resultsH - 4
+	listH := resultsH - 4 - paginationLine - spinnerLine
 	if listH < 1 {
 		listH = 1
 	}
@@ -402,7 +465,11 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SearchClearedMsg:
 		// Root app has cleared the store; clear local overlay state too so the
 		// results panel shows the empty-query hint rather than stale items.
+		// Also clear total and loading flags so the pagination bar does not linger.
 		o.results = nil
+		o.total = 0
+		o.loadingFirstPage = false
+		o.loadingNextPage = false
 		o.resultList.SetItems(nil)
 		// Re-apply list dimensions: clearing the input makes showHintLine() return
 		// true (searchH=4), shrinking resultsH by 1. resizeList() keeps the list
@@ -410,16 +477,40 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		o.resizeList()
 		return o, nil
 
+	case SearchLoadingMsg:
+		// Set the correct loading flag based on whether this is the first page.
+		// Clears the other flag so the two states are mutually exclusive.
+		if m.IsFirstPage {
+			o.loadingFirstPage = true
+			o.loadingNextPage = false
+		} else {
+			o.loadingFirstPage = false
+			o.loadingNextPage = true
+		}
+		// Re-apply list dimensions: loadingNextPage toggles the spinner line, which
+		// affects the available height for the results list.
+		o.resizeList()
+		return o, nil
+
 	case SearchPageLoadedMsg:
+		// Always clear loading flags — the spinner must not stay visible after
+		// any response (success or error). App.go handles the error toast.
+		o.loadingFirstPage = false
+		o.loadingNextPage = false
 		if m.Err != nil {
-			// Error response — preserve existing results so the screen is not
-			// blanked. Toast notifications (handled by app.go) give user feedback.
+			// Keep existing results visible (previous page preserved on page-change error).
+			// loading flags were cleared above — recalculate list height so the spinner
+			// line is removed from the layout.
+			o.resizeList()
 			return o, nil
 		}
 		// Save the pre-converted list items so we never read api types from the store.
 		o.results = m.Results
+		o.total = m.Total
 		// Rebuild the list from locally cached items.
 		o.rebuildListItems()
+		// Re-apply list dimensions: total may have changed, affecting pagination line.
+		o.resizeList()
 		return o, nil
 
 	case tea.KeyMsg:
@@ -493,16 +584,36 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlA:
 		return o.handleAddToQueue()
 
+	case tea.KeyCtrlRight:
+		// Next page — only when there is a query, not loading any page, and there is a next page.
+		if o.intent.query == "" || o.loadingFirstPage || o.loadingNextPage || !o.hasNextPage() {
+			return o, nil
+		}
+		o.intent.page++
+		return o, o.scheduleDebounce()
+
+	case tea.KeyCtrlLeft:
+		// Prev page — only when there is a query, not loading any page, and not on page 1.
+		if o.intent.query == "" || o.loadingFirstPage || o.loadingNextPage || o.intent.page <= 1 {
+			return o, nil
+		}
+		o.intent.page--
+		return o, o.scheduleDebounce()
+
 	case tea.KeyCtrlU:
 		// Clear local input — visual reset happens immediately.
 		// Reset the Prompt to the default and force-clear prefix state so that
 		// a subsequent cleanQuery() call does not index into a stale lockedPrefix.
+		// Also reset intent.page and intent.query — clearing the search must not
+		// fire a search for the empty string (no scheduleDebounce).
 		// Restart the placeholder ticker so the animated cycling resumes.
 		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
 		o.input.Prompt = "> "
 		o.input.SetValue("")
 		o.lockedPrefix = ""
 		o.prefixState = PrefixNone
+		o.intent.page = 1
+		o.intent.query = ""
 		// Re-apply list dimensions: clearing the input makes showHintLine() return true
 		// (searchH=4), which changes resultsH. resizeList() keeps the list height in sync.
 		o.resizeList()
@@ -708,7 +819,16 @@ func (o *SearchOverlay) renderSearchPanel(w, h int) string {
 	return layout.RenderPaneBorder(inner, cfg)
 }
 
-// renderResultsPanel builds Panel 2: the tab bar, separator, and results area.
+// renderResultsPanel builds Panel 2: the tab bar, separator, optional spinner line,
+// scrollable results list, and optional pagination bar.
+//
+// Panel 2 layout (top to bottom):
+//
+//	tab bar        (1 line)
+//	separator      (1 line)
+//	spinner line   (0 or 1 line, loadingNextPage only)
+//	list           (fills remaining height)
+//	pagination bar (1 line, only when total > 0)
 func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 	innerWidth := w - 2
 	if innerWidth < 1 {
@@ -727,19 +847,61 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		Foreground(o.theme.TextMuted()).
 		Render(strings.Repeat("─", innerWidth))
 
+	// Spinner line (1 line) — only visible while loadingNextPage.
+	// When loadingFirstPage, the entire results area shows only the spinner.
+	var spinnerLine string
+	if o.loadingNextPage {
+		spinnerLine = lipgloss.NewStyle().
+			Foreground(o.theme.TextMuted()).
+			Render(o.spinner.View() + " Loading…")
+	}
+
+	// Calculate extra lines consumed by optional elements.
+	fixedLines := 2 // tab bar + separator
+	if o.loadingNextPage {
+		fixedLines++
+	}
+	paginationLine := 0
+	if o.total > 0 {
+		paginationLine = 1
+	}
+
 	// Results area fills the remaining lines.
-	resultsAreaH := innerHeight - 2 // subtract tab bar + separator
+	resultsAreaH := innerHeight - fixedLines - paginationLine
 	if resultsAreaH < 1 {
 		resultsAreaH = 1
 	}
-	resultsArea := o.renderResults(innerWidth)
-	resultsArea = lipgloss.NewStyle().
-		Width(innerWidth).MaxWidth(innerWidth).
-		Height(resultsAreaH).MaxHeight(resultsAreaH).
-		Render(resultsArea)
 
-	// Combine inner content lines.
-	inner := strings.Join([]string{tabBar, separator, resultsArea}, "\n")
+	var resultsArea string
+	if o.loadingFirstPage {
+		// First-page loading: centered spinner only, no list.
+		centered := lipgloss.NewStyle().
+			Foreground(o.theme.TextMuted()).
+			Width(innerWidth).Align(lipgloss.Center).
+			Render(o.spinner.View() + " Searching…")
+		resultsArea = lipgloss.NewStyle().
+			Width(innerWidth).MaxWidth(innerWidth).
+			Height(resultsAreaH).MaxHeight(resultsAreaH).
+			Render(centered)
+	} else {
+		resultsContent := o.renderResults(innerWidth)
+		resultsArea = lipgloss.NewStyle().
+			Width(innerWidth).MaxWidth(innerWidth).
+			Height(resultsAreaH).MaxHeight(resultsAreaH).
+			Render(resultsContent)
+	}
+
+	// Assemble inner content lines.
+	lines := []string{tabBar, separator}
+	if o.loadingNextPage {
+		lines = append(lines, spinnerLine)
+	}
+	lines = append(lines, resultsArea)
+	if o.total > 0 {
+		lines = append(lines, o.renderPaginationBar(innerWidth))
+	}
+
+	inner := strings.Join(lines, "\n")
 	inner = lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
 		Height(innerHeight).MaxHeight(innerHeight).
@@ -785,8 +947,8 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	}
 	tabLine := strings.Join(parts, "  ")
 
-	// TODO(19-search-redesign): replaced by o.results in story 99
-	// Loading state previously read from store; spinner display stubbed until story 99.
+	// NOTE: spinner display during loading is rendered in renderResultsPanel via the
+	// loadingNextPage spinner line and loadingFirstPage full-panel spinner.
 
 	// Pad/truncate to exactly innerWidth.
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
@@ -821,14 +983,37 @@ func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 	return layout.RenderPaneBorder(inner, cfg)
 }
 
+// renderPaginationBar renders the [ ←  page N of M  → ] line.
+// Arrows are dimmed (TextMuted) when navigation in that direction is not possible.
+// The bar is centered within the given width w.
+func (o *SearchOverlay) renderPaginationBar(w int) string {
+	totalPages := (o.total + SearchPageSize - 1) / SearchPageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	center := fmt.Sprintf("  page %d of %d  ", o.intent.page, totalPages)
+
+	prevStyle := o.theme.TextPrimary()
+	nextStyle := o.theme.TextPrimary()
+	if o.intent.page <= 1 {
+		prevStyle = o.theme.TextMuted()
+	}
+	if !o.hasNextPage() {
+		nextStyle = o.theme.TextMuted()
+	}
+
+	left := lipgloss.NewStyle().Foreground(prevStyle).Render("[ ←")
+	right := lipgloss.NewStyle().Foreground(nextStyle).Render("→ ]")
+	bar := lipgloss.JoinHorizontal(lipgloss.Center, left, center, right)
+	return lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(bar)
+}
+
 // renderResults builds the results area content inside Panel 2.
 // When results are loaded, delegates to resultList.View() for scrollable rendering.
-// Falls back to hint/loading/no-results text as needed.
+// Falls back to hint text when no results are present.
+// NOTE: Loading states (loadingFirstPage / loadingNextPage) are handled by the
+// caller renderResultsPanel, which renders the appropriate spinner before calling here.
 func (o *SearchOverlay) renderResults(_ int) string {
-	// TODO(19-search-redesign): replaced by o.results in story 99
-	// query and loading state were previously read from the store;
-	// return safe hint state until story 99 wires o.results.
-
 	if len(o.resultList.Items()) == 0 {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
@@ -840,7 +1025,8 @@ func (o *SearchOverlay) renderResults(_ int) string {
 }
 
 // rebuildListItems repopulates resultList from o.results.
-// TODO(19-search-redesign): story 99 wires tab-filtered views once o.intent exists.
+// The full results slice is shown directly — tab-filtered views from the prefix
+// state machine narrow the API request types upstream via SearchRequestMsg.Types.
 func (o *SearchOverlay) rebuildListItems() {
 	if o.results != nil {
 		o.rebuildFromResults()
@@ -1129,3 +1315,23 @@ func HelpShortKeyForegroundForTest(o *SearchOverlay) lipgloss.TerminalColor {
 func HelpShortDescForegroundForTest(o *SearchOverlay) lipgloss.TerminalColor {
 	return o.help.Styles.ShortDesc.GetForeground()
 }
+
+// HasNextPage exposes the private hasNextPage() method for tests.
+func HasNextPage(o *SearchOverlay) bool { return o.hasNextPage() }
+
+// SetIntentPage sets the overlay's intent.page — exported for tests that need to
+// simulate a specific page without triggering key handlers.
+func SetIntentPage(o *SearchOverlay, page int) { o.intent.page = page }
+
+// IntentQuery returns the query string stored in the current search intent — exported for tests.
+func (o *SearchOverlay) IntentQuery() string { return o.intent.query }
+
+// RenderPaginationBarForTest exposes renderPaginationBar for tests.
+func RenderPaginationBarForTest(o *SearchOverlay, w int) string {
+	return o.renderPaginationBar(w)
+}
+
+// SearchDebounceMsgForTestType is a type alias for searchDebounceMsg, exported solely
+// so tests can use type assertions against the debounce message type.
+// It is only used in type-switch assertions; never construct it directly.
+type SearchDebounceMsgForTestType = searchDebounceMsg

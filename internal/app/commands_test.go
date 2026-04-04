@@ -295,3 +295,12 @@ func TestConvertSearchResult_Nil(t *testing.T) {
 	assert.Nil(t, items)
 	assert.Equal(t, 0, total)
 }
+
+// TestSearchPageSize_MatchesPanesPackage asserts that panes.SearchPageSize and
+// app.SearchPageSize are identical. The two constants are duplicated due to a
+// circular import constraint; this test catches any future divergence before it
+// silently breaks hasNextPage() pagination logic.
+func TestSearchPageSize_MatchesPanesPackage(t *testing.T) {
+	assert.Equal(t, panes.SearchPageSize, app.SearchPageSize,
+		"panes.SearchPageSize and app.SearchPageSize must be identical; hasNextPage() depends on this")
+}
