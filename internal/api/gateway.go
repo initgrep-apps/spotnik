@@ -679,8 +679,12 @@ func (g *Gateway) interactiveDebounce(ctx context.Context, path string) error {
 	}()
 
 	// Hold for 100ms. The first request to survive the full hold proceeds.
+	// Use time.NewTimer instead of time.After to prevent timer leaks when
+	// ctx is cancelled before the 100ms window expires.
+	timer := time.NewTimer(100 * time.Millisecond)
+	defer timer.Stop()
 	select {
-	case <-time.After(100 * time.Millisecond):
+	case <-timer.C:
 		return nil // proceed to HTTP
 	case <-wrappedCtx.Done():
 		return wrappedCtx.Err() // cancelled by newer request for same path
