@@ -296,16 +296,6 @@ func (a *App) buildSearchBatchCmd(query string, types []string, startOffset int)
 	return a.buildSearchPageCmd(query, types, startOffset)
 }
 
-// searchTypesForActiveType converts a store active-type value ("all" or a single type
-// name) back into the []string types slice expected by buildSearchPageCmd.
-// "all" expands to all four Spotify search types; any other value is returned as-is.
-func searchTypesForActiveType(activeType string) []string {
-	if activeType == "all" || activeType == "" {
-		return []string{"track", "artist", "album", "playlist"}
-	}
-	return []string{activeType}
-}
-
 // buildSearchPageCmd creates a command that fetches a single page of search results
 // at the given offset and delivers pre-converted results via SearchPageLoadedMsg.
 // The query and offset are captured at dispatch time; the closure is Elm-pure
