@@ -160,9 +160,8 @@ func TestRequestFlowPane_SetTheme(t *testing.T) {
 // TestSearchOverlay_SetTheme verifies that SetTheme on SearchOverlay
 // updates the theme reference without panicking.
 func TestSearchOverlay_SetTheme(t *testing.T) {
-	s := state.New()
 	th1 := theme.Load("black")
-	overlay := NewSearchOverlay(s, th1)
+	overlay := NewSearchOverlay(th1)
 
 	th2 := theme.Load("dracula")
 	overlay.SetTheme(th2)

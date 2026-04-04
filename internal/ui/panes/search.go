@@ -1,7 +1,6 @@
 package panes
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -141,7 +139,6 @@ func NewSearchKeyMap() searchKeyMap {
 //   - Panel 2 (Results): tab bar + separator + scrollable results list
 //   - Panel 3 (Keys): bubbles/help keybinding bar
 type SearchOverlay struct {
-	store   *state.Store
 	theme   theme.Theme
 	input   textinput.Model
 	spinner spinner.Model
@@ -178,9 +175,9 @@ type SearchOverlay struct {
 	lastSetListH int
 }
 
-// NewSearchOverlay constructs a SearchOverlay wired to the given store and theme.
+// NewSearchOverlay constructs a SearchOverlay wired to the given theme.
 // The text input is focused by default.
-func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
+func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti := textinput.New()
 	// Start with the first cycling placeholder — the tick will advance it every 2s.
 	ti.Placeholder = searchPlaceholders[0]
@@ -224,7 +221,6 @@ func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
 	rl.InfiniteScrolling = true
 
 	return &SearchOverlay{
-		store:      store,
 		theme:      t,
 		input:      ti,
 		spinner:    sp,
@@ -789,19 +785,8 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	}
 	tabLine := strings.Join(parts, "  ")
 
-	if o.store.SearchLoading() {
-		// Append a compact spinner to the right of the tab labels so the user can
-		// see that a fetch is in flight even when existing results are still shown.
-		spinnerStr := lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render(o.spinner.View())
-		// Right-align: fill the gap between tab labels and spinner with spaces.
-		padding := innerWidth - lipgloss.Width(tabLine) - lipgloss.Width(spinnerStr)
-		if padding < 1 {
-			padding = 1
-		}
-		tabLine = tabLine + strings.Repeat(" ", padding) + spinnerStr
-	}
+	// TODO(19-search-redesign): replaced by o.results in story 99
+	// Loading state previously read from store; spinner display stubbed until story 99.
 
 	// Pad/truncate to exactly innerWidth.
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
@@ -840,53 +825,24 @@ func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 // When results are loaded, delegates to resultList.View() for scrollable rendering.
 // Falls back to hint/loading/no-results text as needed.
 func (o *SearchOverlay) renderResults(_ int) string {
-	query := o.store.SearchQuery()
-	loading := o.store.SearchLoading()
+	// TODO(19-search-redesign): replaced by o.results in story 99
+	// query and loading state were previously read from the store;
+	// return safe hint state until story 99 wires o.results.
 
-	if loading && len(o.resultList.Items()) == 0 {
-		// Only show spinner when there are no items yet (first load).
-		return fmt.Sprintf("%s Searching...\n", o.spinner.View())
-	}
-
-	// NOTE: Search errors are now routed through toast notifications (app.go).
-	// store.SearchError() is preserved for retry logic but no longer read in View().
-
-	if query == "" && len(o.resultList.Items()) == 0 {
+	if len(o.resultList.Items()) == 0 {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Render("Type to search tracks, artists, albums...")
-	}
-
-	if len(o.resultList.Items()) == 0 && o.results != nil {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render(fmt.Sprintf("No results for '%s'", query))
 	}
 
 	// Render the list component — it handles scrolling and selection highlighting.
 	return o.resultList.View()
 }
 
-// rebuildListItems repopulates resultList from the store based on the active tab.
-// If the store's per-type TypePages are empty (e.g. in overlay-standalone tests),
-// it falls back to the locally cached o.results (SearchResultData). This dual-source
-// approach allows the overlay to work correctly both in production (store populated
-// by app.go) and in isolation tests (results delivered via SearchPageLoadedMsg only).
+// rebuildListItems repopulates resultList from o.results.
+// TODO(19-search-redesign): replaced by o.results in story 99
+// Store-based TypePage reads removed; now uses only the locally cached SearchResultData.
 func (o *SearchOverlay) rebuildListItems() {
-	// Use store data when available (non-empty TypePages).
-	storeTracks := o.store.SearchTracks().Items
-	storeArtists := o.store.SearchArtists().Items
-	storeAlbums := o.store.SearchAlbums().Items
-	storePlaylists := o.store.SearchPlaylists().Items
-
-	storeHasData := len(storeTracks)+len(storeArtists)+len(storeAlbums)+len(storePlaylists) > 0
-
-	if storeHasData {
-		o.rebuildFromStore(storeTracks, storeArtists, storeAlbums, storePlaylists)
-		return
-	}
-
-	// Fall back to locally cached SearchResultData (overlay-standalone / test path).
 	if o.results != nil {
 		o.rebuildFromResults()
 	}
@@ -955,7 +911,9 @@ func (o *SearchOverlay) checkPrefetch() tea.Cmd {
 	}
 
 	types := TabToAPITypes(o.activeTab)
-	query := o.store.SearchQuery()
+	// TODO(19-search-redesign): replaced by o.results in story 99
+	// query was previously read from the store; use the input value as a safe fallback.
+	query := o.input.Value()
 	offset := nextOffset
 	return func() tea.Msg {
 		return SearchPrefetchMsg{
@@ -968,40 +926,10 @@ func (o *SearchOverlay) checkPrefetch() tea.Cmd {
 
 // nextOffsetForTab returns the next offset to fetch for the active tab.
 // Returns -1 when no more pages are available (offset >= total).
-// For tabAll, uses tracks as the representative type.
+// TODO(19-search-redesign): replaced by o.results in story 99
+// Store TypePage reads removed; always return -1 (no prefetch) until story 99 wires o.results.
 func (o *SearchOverlay) nextOffsetForTab() int {
-	switch o.activeTab {
-	case TabSongs:
-		p := o.store.SearchTracks()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	case TabArtists:
-		p := o.store.SearchArtists()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	case TabAlbums:
-		p := o.store.SearchAlbums()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	case TabPlaylists:
-		p := o.store.SearchPlaylists()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	default: // TabAll — use tracks as representative type
-		p := o.store.SearchTracks()
-		if p.Offset >= p.Total && p.Total > 0 {
-			return -1
-		}
-		return p.Offset
-	}
+	return -1
 }
 
 // overlayWidth returns the effective overlay width: 70% of terminal width, minimum 40.
@@ -1069,11 +997,10 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 
 // --- Test helpers (exported only for test packages) ---
 
-// NewSearchOverlayForTest creates a SearchOverlay with nil store for use in tests
-// that need to inspect configuration without triggering store reads.
-// Uses the provided theme; store-dependent methods must not be called on the result.
+// NewSearchOverlayForTest creates a SearchOverlay for use in tests that need to
+// inspect configuration without wiring additional state.
 func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
-	return NewSearchOverlay(nil, t)
+	return NewSearchOverlay(t)
 }
 
 // ResultsBorderAccentColor returns the AccentColor that renderResultsPanel() uses
@@ -1119,12 +1046,6 @@ func RenderTabBarForTest(o *SearchOverlay, innerWidth int) string {
 func ContainsSpinnerFrame(o *SearchOverlay, s string) bool {
 	frame := o.spinner.View()
 	return frame != "" && strings.Contains(s, frame)
-}
-
-// Store returns the overlay's store reference — exported for tests that need to
-// mutate store state (e.g. SetSearchLoading) after construction.
-func (o *SearchOverlay) Store() *state.Store {
-	return o.store
 }
 
 // CallRebuildListItems calls rebuildListItems on the overlay — exported for tests.

@@ -6,22 +6,104 @@ status: open
 
 ## Background
 
-After the debounce, cancellation, and commands stories (99–101), the overlay needs the
-user-facing parts of the new architecture:
+After the debounce (story 99), cancellation (story 100), and commands (story 101) stories,
+the overlay needs the user-facing parts of the new architecture:
 
-1. **`Ctrl+Right` / `Ctrl+Left` keybindings** — intercept at overlay Update before textinput
-2. **`hasNextPage()` / page guard** — enforce pagination bounds silently
-3. **Two loading states** — `loadingFirstPage` (spinner only) vs `loadingNextPage`
-   (spinner line + existing results + pagination bar)
-4. **Pagination bar** — `[ ←  page N of M  → ]` fixed at bottom of Panel 2
-5. **`resizeList()` adjustment** — subtract 1 line for pagination bar when total > 0
+1. **Overlay-owned result fields** — `results []SearchListItem`, `total int`,
+   `loadingFirstPage bool`, `loadingNextPage bool` (replacing store-backed state)
+2. **`Ctrl+Right` / `Ctrl+Left` keybindings** — intercept before textinput
+3. **`hasNextPage()` / page guards** — enforce pagination bounds silently
+4. **Two loading states** — `loadingFirstPage` (spinner only) vs `loadingNextPage`
+   (spinner line + existing results)
+5. **Pagination bar** — `[ ←  page N of M  → ]` fixed at bottom of Panel 2
+6. **`resizeList()` adjustment** — subtract 1 line for pagination bar when `total > 0`
 
 All edge cases from the approved spec must be handled: no-query no-op, last-page no-op,
-first-page prev no-op, rapid paging settled by debounce, Ctrl+U reset.
+first-page prev no-op, rapid paging settled by debounce, Ctrl+U reset, error preserving
+previous results.
+
+## Architecture Context
+
+### Layer: SearchOverlay — display state and View rendering
+
+This story is the final "output" half of the overlay. Stories 99–101 built the input
+side (intent → request → HTTP). This story wires the response back into the overlay's
+own state and drives the View.
+
+```
+SearchLoadingMsg{IsFirstPage}              ← dispatched by app.go (story 100)
+  │
+  ▼
+SearchOverlay.Update(SearchLoadingMsg)     ← THIS STORY handles this
+  │
+  └──► loadingFirstPage = true / loadingNextPage = true
+
+                        ...HTTP in flight...
+
+SearchPageLoadedMsg{Query, Page, Results, Total, Err}
+  │
+  ▼
+app.go: staleness check (story 100)
+  │  success → forward to overlay
+  │  error   → forward to overlay + send toast
+  ▼
+SearchOverlay.Update(SearchPageLoadedMsg)  ← THIS STORY handles both success and error
+  │
+  ├── always: loadingFirstPage=false, loadingNextPage=false   (clear spinners)
+  │
+  ├── Err != nil  → keep existing results; return (loading flags cleared, error toast in app.go)
+  │
+  └── Err == nil  → o.results = m.Results; o.total = m.Total; rebuildListItems()
+```
+
+### State machine — complete overlay states
+
+```
+                  Ctrl+Right / Ctrl+Left (story 99 mechanism, wired here)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │                                                                  │
+   Empty ──── keypress ────► Typing                                     │
+     ▲                           │                                      │
+     │            debounce fires │                                      │
+     │            (query == "")  ▼                                      │
+     │                 no-op ──► Empty                                  │
+     │                           │                                      │
+     │            debounce fires │                                      │
+     │            (query != "")  ▼                                      │
+     │                     LoadingFirst  ◄──── SearchLoadingMsg(first)  │
+     │                     (spinner)           loadingFirstPage=true    │
+     │                           │                                      │
+     │               results arrive (success)                           │
+     │                           ▼                                      │
+     │                       Results ◄─────────────────────────────────-┘
+     │                      (list + bar)
+     │                           │
+     │          Ctrl+Right/Left  │
+     │                           ▼
+     │                     LoadingNext  ◄─── SearchLoadingMsg(next)
+     │                  (spinner + list)      loadingNextPage=true
+     │                           │
+     │               results arrive (success)
+     │                           └──────────► Results
+     │
+     │               results arrive (error)  → clear loading flags, keep prior results
+     │
+     └──── Ctrl+U (clear) ──────────────────────────────────────────── Empty
+     └──── Esc ─────────────────────────────────────────────────────── Closed
+```
+
+### Removing `results *SearchResultData`
+
+This story removes the old `results *SearchResultData` field that has been left as a
+stub since story 97, and replaces it with the direct `results []SearchListItem` field.
+All `o.results.Tracks` / `o.results.Artists` etc. accesses in `View()` are replaced by
+reading `o.results` (flat slice) and `o.total` directly.
 
 ## Design
 
 ### New fields on `SearchOverlay`
+
+Remove `results *SearchResultData`. Add:
 
 ```go
 results          []SearchListItem // current page; nil = no results yet
@@ -30,11 +112,11 @@ loadingFirstPage bool             // results==nil, fetch in-flight → spinner o
 loadingNextPage  bool             // results!=nil, fetch in-flight → list + spinner
 ```
 
-Remove the old `results *SearchResultData` field (store-backed). These fields are owned
-by the overlay directly.
+### `Results()` accessor — complete the stub from story 100
 
-Add `Results() []SearchListItem` accessor:
 ```go
+// Results returns the current page of search results.
+// Returns nil until the first successful search response arrives.
 func (o *SearchOverlay) Results() []SearchListItem { return o.results }
 ```
 
@@ -54,19 +136,25 @@ case SearchLoadingMsg:
 
 ### `SearchPageLoadedMsg` handler on overlay
 
+The overlay always clears loading flags first, regardless of error. When an error
+occurred, app.go already sent a toast — the overlay only needs to stop showing the spinner
+and preserve whatever results were visible before.
+
 ```go
 case SearchPageLoadedMsg:
-    // Err is handled by app.go (toast); overlay only sees success msgs forwarded by app.
+    // Always clear loading flags — the spinner must not stay visible after
+    // any response (success or error). App.go handles the error toast.
     o.loadingFirstPage = false
     o.loadingNextPage = false
+    if m.Err != nil {
+        // Keep existing results visible (previous page preserved on page-change error).
+        return *o, nil
+    }
     o.results = m.Results
     o.total = m.Total
     o.rebuildListItems()
     return *o, nil
 ```
-
-`rebuildListItems()` calls `o.resultList.SetItems(...)` with the new results converted to
-`list.Item` values.
 
 ### `hasNextPage()` method
 
@@ -96,7 +184,7 @@ prevPage: key.NewBinding(
 ),
 ```
 
-**Guard conditions (silent no-op for all):**
+**Guard conditions (all produce silent no-op):**
 
 | Key | Guard | Action |
 |---|---|---|
@@ -115,7 +203,7 @@ Intercept these keys in `Update()` **before** forwarding the key message to `o.i
 
 ```go
 // renderPaginationBar renders the [ ←  page N of M  → ] line.
-// prev/next arrows are dimmed (TextMuted) when navigation is not possible.
+// Arrows are dimmed (TextMuted) when navigation in that direction is not possible.
 func (o *SearchOverlay) renderPaginationBar(w int) string {
     totalPages := (o.total + SearchPageSize - 1) / SearchPageSize
     if totalPages == 0 {
@@ -123,8 +211,8 @@ func (o *SearchOverlay) renderPaginationBar(w int) string {
     }
     center := fmt.Sprintf("  page %d of %d  ", o.intent.page, totalPages)
 
-    prevStyle := o.theme.Text()      // active
-    nextStyle := o.theme.Text()      // active
+    prevStyle := o.theme.Text()
+    nextStyle := o.theme.Text()
     if o.intent.page <= 1 {
         prevStyle = o.theme.TextMuted()
     }
@@ -149,7 +237,8 @@ list           (fills remaining height)
 pagination bar (1 line, only when total > 0)
 ```
 
-`resizeList()` must subtract 1 extra line from list height when `total > 0`:
+### `resizeList()` adjustment
+
 ```go
 paginationLine := 0
 if o.total > 0 {
@@ -166,56 +255,78 @@ listH := availableH - tabBarH - separatorH - spinnerLineH - paginationLine
 | First fetch in-flight | true | false | Centered spinner: `"◉ Searching…"` |
 | Results stable | false | false | List + pagination bar |
 | Page change in-flight | false | true | Spinner line above list + list + pagination bar |
-| Error (handled by app.go) | false | false | Previous results visible if any; otherwise hint text |
+| Error | false | false | Previous results visible if any; otherwise hint text |
 
 ### `Ctrl+U` (clear input) — reset page
 
 When `Ctrl+U` clears the input, also reset `o.intent.page = 1` and `o.intent.query = ""`.
-No scheduleDebounce — clearing the input should not fire a search for empty string.
+No `scheduleDebounce` — clearing the input must not fire a search for the empty string.
+
+### `Reset()` — zero all new fields
+
+```go
+func (o *SearchOverlay) Reset() {
+    o.intent = searchIntent{query: "", tab: TabAll, page: 1}
+    o.results = nil
+    o.total = 0
+    o.loadingFirstPage = false
+    o.loadingNextPage = false
+    // ... rest of existing reset logic
+}
+```
 
 ## Acceptance Criteria
 
-- [ ] `loadingFirstPage` and `loadingNextPage` fields exist on `SearchOverlay`
-- [ ] `Results() []SearchListItem` accessor exists
-- [ ] `SearchLoadingMsg` handler sets the correct loading flag
-- [ ] `SearchPageLoadedMsg` handler clears both loading flags, sets `results` and `total`, calls `rebuildListItems()`
-- [ ] `hasNextPage()` correctly handles: total=0, total=10 page=1, total=11 page=1, total=10 page=2
+- [ ] `results *SearchResultData` is removed; `results []SearchListItem`, `total int`,
+      `loadingFirstPage bool`, `loadingNextPage bool` are added
+- [ ] `Results() []SearchListItem` accessor returns `o.results` (completes the story 100 stub)
+- [ ] `SearchLoadingMsg` handler sets the correct loading flag; clears the other
+- [ ] `SearchPageLoadedMsg` handler: always clears both loading flags first; on error, keeps existing results; on success, updates results + total + rebuildListItems
+- [ ] `hasNextPage()` correctly handles: total=0, total=10/page=1, total=11/page=1, total=100/page=10
 - [ ] `Ctrl+Right` / `Ctrl+Left` keybindings added to `searchKeyMap` and visible in `ShortHelp()`
 - [ ] All guard conditions for `Ctrl+Right` / `Ctrl+Left` produce silent no-ops
-- [ ] Pagination bar renders with dimmed `[←` on page 1 and dimmed `→]` on last page
+- [ ] Pagination bar renders with dimmed `[ ←` on page 1 and dimmed `→ ]` on last page
 - [ ] `resizeList()` subtracts 1 line for pagination bar when `total > 0`
 - [ ] `Ctrl+U` resets `intent.page = 1` and `intent.query = ""`
+- [ ] `Reset()` zeros `results`, `total`, `loadingFirstPage`, `loadingNextPage`
 - [ ] `make ci` passes
 
 ## Tasks
 
-- [ ] Add `results []SearchListItem`, `total int`, `loadingFirstPage bool`, `loadingNextPage bool`
-      to `SearchOverlay`; add `Results()` accessor; remove old `results *SearchResultData`
-      - test: fields zero-valued on construction; Results() returns nil initially
+- [ ] Remove `results *SearchResultData`; add `results []SearchListItem`, `total int`,
+      `loadingFirstPage bool`, `loadingNextPage bool`; complete `Results()` accessor
+      - test: fields zero-valued on construction; `Results()` returns nil initially;
+        after `Reset()`, all fields zero/nil/false
 
-- [ ] Handle `SearchLoadingMsg` and `SearchPageLoadedMsg` in overlay Update()
-      - test (SearchLoadingMsg): IsFirstPage=true → loadingFirstPage=true, loadingNextPage=false;
-        IsFirstPage=false → loadingFirstPage=false, loadingNextPage=true
-      - test (SearchPageLoadedMsg): both loading flags false; results == m.Results; total == m.Total
+- [ ] Handle `SearchLoadingMsg` in overlay `Update()`
+      - test: `IsFirstPage=true` → `loadingFirstPage=true`, `loadingNextPage=false`;
+        `IsFirstPage=false` → `loadingFirstPage=false`, `loadingNextPage=true`
+
+- [ ] Handle `SearchPageLoadedMsg` in overlay `Update()` — success and error branches
+      - test (success): both loading flags false; `results == m.Results`; `total == m.Total`
+      - test (error): both loading flags false; existing results preserved; `total` unchanged
 
 - [ ] Implement `hasNextPage() bool`
-      - test table: {total:0,page:1}→false; {total:10,page:1}→false; {total:11,page:1}→true;
-        {total:100,page:10}→false; {total:100,page:9}→true
+      - test table: `{total:0,page:1}`→false; `{total:10,page:1}`→false (exactly one page);
+        `{total:11,page:1}`→true; `{total:100,page:10}`→false; `{total:100,page:9}`→true
 
-- [ ] Add `nextPage`/`prevPage` bindings to `searchKeyMap`; handle in `Update()` with all guard conditions
-      - test: no query + Ctrl+Right → no SearchRequestMsg; on last page + Ctrl+Right → no SearchRequestMsg;
-        on page 1 + Ctrl+Left → no SearchRequestMsg; loadingFirstPage + Ctrl+Right → no SearchRequestMsg;
-        valid next → intent.page++, scheduleDebounce cmd returned;
-        valid prev → intent.page--, scheduleDebounce cmd returned
+- [ ] Add `nextPage`/`prevPage` bindings to `searchKeyMap`; handle in `Update()` with all guard
+      conditions; intercept before forwarding to `o.input`
+      - test: no query + `Ctrl+Right` → no `SearchRequestMsg`; on last page + `Ctrl+Right` → no-op;
+        on page 1 + `Ctrl+Left` → no-op; `loadingFirstPage` + `Ctrl+Right` → no-op;
+        valid next → `intent.page++`, `scheduleDebounce` cmd returned;
+        valid prev → `intent.page--`, `scheduleDebounce` cmd returned
 
-- [ ] Implement `renderPaginationBar(w int) string`; integrate into Panel 2 View; update `resizeList()`
-      - test: page=1 → prev arrow uses TextMuted style; last page → next arrow uses TextMuted style;
-        mid page → both arrows use Text style; total=0 → bar not rendered
+- [ ] Implement `renderPaginationBar(w int) string`; integrate into Panel 2 View;
+      update `resizeList()`
+      - test: page=1 → prev arrow uses `TextMuted` style; last page → next arrow uses `TextMuted`;
+        mid page → both arrows use `Text` style; `total=0` → bar not rendered
 
 - [ ] Update `Ctrl+U` handler to reset `intent.page = 1` and `intent.query = ""`
-      - test: on page 5 with query "jazz", press Ctrl+U → `o.intent == {query:"", tab:current, page:1}`
+      - test: on page 5 with query "jazz", press `Ctrl+U` →
+        `o.intent == {query:"", tab:current, page:1}`
 
 - [ ] Update `Reset()` to zero `results`, `total`, `loadingFirstPage`, `loadingNextPage`
-      - test: set all fields to non-zero values, call Reset(), assert all zero/nil/false
+      - test: set all fields to non-zero values, call `Reset()`, assert all zero/nil/false
 
 - [ ] `make ci` passes

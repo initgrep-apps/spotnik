@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -352,9 +351,8 @@ func TestRebuildFromResults_DomainTypes(t *testing.T) {
 		},
 	}
 
-	// Populate a store and feed through SearchPageLoadedMsg so rebuildFromResults is exercised.
-	s := state.New()
-	o := NewSearchOverlay(s, theme.Load("black"))
+	// Feed through SearchPageLoadedMsg so rebuildFromResults is exercised.
+	o := NewSearchOverlay(theme.Load("black"))
 	o.SetSize(80, 40)
 
 	msg := SearchPageLoadedMsg{Results: results}

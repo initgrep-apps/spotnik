@@ -228,7 +228,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		layout.PaneNetworkLog:     networkLogPane,
 	}
 
-	searchPane := panes.NewSearchOverlay(s, t)
+	searchPane := panes.NewSearchOverlay(t)
 	devicePane := panes.NewDeviceOverlay(s, t)
 
 	mgr := layout.NewManager()
@@ -637,15 +637,10 @@ func (a *App) openSearch() (*App, tea.Cmd) {
 }
 
 // closeSearch closes the search overlay and clears any in-flight search state from
-// the store. Without this, in-flight search batches may continue executing and append
-// results to the store after the overlay is dismissed, which would pollute the next
-// search session. The staleness guard in driveSearchBatch handles most races, but
-// clearing state on close is the authoritative reset.
+// In-flight search batches may continue executing after the overlay is dismissed.
+// TODO(19-search-redesign): cancellation key moved to App in story 101.
 func (a *App) closeSearch() (*App, tea.Cmd) {
 	a.searchOpen = false
-	a.store.SetSearchQuery("")
-	a.store.SetSearchLoading(false)
-	a.store.ClearSearchError()
 	return a, nil
 }
 
@@ -723,9 +718,7 @@ func (a *App) clearAllFetchingSentinels() {
 	for _, r := range []string{"short_term", "medium_term", "long_term"} {
 		a.store.SetStatsFetching(r, false)
 	}
-	// Clear search loading so a 429 or 401 interrupting a search batch does not
-	// leave the overlay stuck in a loading state.
-	a.store.SetSearchLoading(false)
+	// TODO(19-search-redesign): search loading state moved to overlay in story 99
 }
 
 // Update handles all messages routed through the root model.
@@ -806,16 +799,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// Debounce fired — set store state here (in Update) before dispatching.
-		// Store writes belong in Update, not inside command builders.
-		// Clear previous query's results before appending new ones so that
-		// back-to-back searches (e.g. "jazz" then "rock") never mix result sets.
-		// Also clear any prior error so the overlay never shows a stale error
-		// from the previous query while the new fetch is in-flight.
-		a.store.ClearSearchResults()
-		a.store.ClearSearchError()
-		a.store.SetSearchQuery(m.Query)
-		a.store.SetSearchLoading(true)
+		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
 		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
 		// Fall back to all four types when no prefix filter is active.
 		searchTypes := m.Types
@@ -823,99 +807,35 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			searchTypes = []string{"track", "artist", "album", "playlist"}
 		}
 		cmd := a.buildSearchBatchCmd(m.Query, searchTypes, 0)
-		if cmd == nil {
-			a.store.SetSearchLoading(false)
-			return a, nil
-		}
 		return a, cmd
 
 	case panes.SearchClearedMsg:
-		// SearchOverlay emits this in two cases: when the user presses Ctrl+U to
-		// clear the input, and when Init() fires on overlay open (clear-on-open).
-		// Clear search state in store — store writes belong in Update, not in panes.
-		// Also clear loading and error so an in-flight search does not leave the
-		// store in a permanently-loading or errored state after the user clears input.
-		a.store.ClearSearchResults()
-		a.store.SetSearchQuery("")
-		a.store.SetSearchLoading(false)
-		a.store.ClearSearchError()
+		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
 		return a, nil
 
 	case panes.SearchTabChangedMsg:
+		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
 		// User switched the category tab in the search overlay.
-		// Update the active type filter and re-fire the search with a fresh 5-page batch
-		// so results always reflect the new tab completely.
 		// Only fire if there is a non-empty query — no point searching with empty input.
 		if m.Query == "" {
 			return a, nil
 		}
-		// Derive active type: "all" when multiple types are present (All tab), otherwise
-		// use the single type name.
-		activeType := "all"
-		if len(m.Types) == 1 {
-			activeType = m.Types[0]
-		}
-		a.store.SetSearchActiveType(activeType)
-		// Clear any prior error so the overlay does not show a stale error from the
-		// previous query while the new fetch is in-flight.
-		a.store.ClearSearchError()
-		a.store.ClearSearchResults()
-		a.store.SetSearchLoading(true)
 		cmd := a.buildSearchBatchCmd(m.Query, m.Types, 0)
-		if cmd == nil {
-			a.store.SetSearchLoading(false)
-			return a, nil
-		}
 		return a, cmd
 
 	case panes.SearchPrefetchMsg:
+		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
 		// Scroll threshold reached — prefetch the next batch of pages.
-		// Guard against concurrent prefetch batches: if a batch is already in-flight,
-		// ignore this scroll event to avoid duplicate page fetches.
-		if a.store.SearchLoading() {
-			return a, nil
-		}
-		// Discard if the query has changed since the scroll event was emitted.
-		if m.Query != a.store.SearchQuery() {
-			return a, nil
-		}
-		// Determine the relevant type name for SearchHasMore.
-		// For single-type tabs, use that type; for All tab, use "all".
-		prefetchType := "all"
-		if len(m.Types) == 1 {
-			prefetchType = m.Types[0]
-		}
-		if !a.store.SearchHasMore(prefetchType) {
-			return a, nil
-		}
-		a.store.SetSearchLoading(true)
 		cmd := a.buildSearchBatchCmd(m.Query, m.Types, m.NextOffset)
-		if cmd == nil {
-			a.store.SetSearchLoading(false)
-			return a, nil
-		}
 		return a, cmd
 
 	case panes.SearchPageLoadedMsg:
-		// Search page fetch returned — check for staleness, append to store, deliver to overlay.
+		// TODO(19-search-redesign): store search state removed; overlay owns state from story 99.
+		// Search page fetch returned — deliver to overlay, chain next page if batch incomplete.
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
-				// Client not yet initialised (pre-auth startup) — clear the loading
-				// flag so the overlay does not get stuck in a loading state.
-				a.store.SetSearchLoading(false)
 				return a, nil
 			}
-		}
-		// Discard stale results: if the query changed since this fetch was dispatched, ignore.
-		// Still clear the loading flag so the overlay does not stay stuck in a loading state
-		// when the user types a second query before the first response arrives.
-		if m.Query != a.store.SearchQuery() {
-			a.store.SetSearchLoading(false)
-			return a, nil
-		}
-		if m.Err != nil {
-			a.store.SetSearchLoading(false)
-			a.store.SetSearchError(m.Err)
 			// Route search error through toast; the overlay preserves its existing results
 			// (it returns early on Err != nil in Update) so the screen is not blanked.
 			updated, _ := a.searchPane.Update(m)
@@ -924,38 +844,24 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
 		}
-		a.store.ClearSearchError()
-		// Append each type's items to the per-type TypePage in the Store.
-		// SearchResultData now carries domain types directly — no conversion needed.
-		if r := m.Results; r != nil {
-			a.store.AppendSearchTracks(r.Tracks, r.TracksTotal)
-			a.store.AppendSearchArtists(r.Artists, r.ArtistsTotal)
-			a.store.AppendSearchAlbums(r.Albums, r.AlbumsTotal)
-			a.store.AppendSearchPlaylists(r.Playlists, r.PlaylistsTotal)
-		}
 		// Chain-through-Update: dispatch the next page if the batch is not yet complete.
 		// This replaces tea.Sequence — by chaining through Update, a 429 (RateLimitedMsg)
 		// or 401 (unauthorizedMsg) returned by a page naturally stops the chain because
 		// those messages do not arrive as SearchPageLoadedMsg.
-		// Normalize activeType: an empty string (no tab selected yet) behaves as "all".
-		activeType := a.store.SearchActiveType()
-		if activeType == "" {
-			activeType = "all"
-		}
-		types := searchTypesForActiveType(activeType)
+		// TODO(19-search-redesign): active type derived from store removed; story 101 will
+		// restore proper type routing once App owns the search session key.
 		nextOffset := m.Offset + SearchPageSize
 		batchEnd := ((m.Offset / SearchPrefetchItems) + 1) * SearchPrefetchItems
-		if nextOffset < batchEnd && a.store.SearchHasMore(activeType) && nextOffset < SearchMaxOffset {
-			// Batch still in progress — dispatch the next page, keep loading flag true.
+		if nextOffset < batchEnd && nextOffset < SearchMaxOffset {
+			// Batch still in progress — dispatch the next page.
 			updated, _ := a.searchPane.Update(m)
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp
 			}
+			types := []string{"track", "artist", "album", "playlist"}
 			return a, a.buildSearchPageCmd(m.Query, types, nextOffset)
 		}
-		// Batch complete — clear loading flag.
-		a.store.SetSearchLoading(false)
-		// Forward to the search pane so it can update its local display state.
+		// Batch complete — forward to the search pane so it can update its local display state.
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp
