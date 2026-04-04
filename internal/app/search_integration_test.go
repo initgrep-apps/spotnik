@@ -152,10 +152,8 @@ func TestApp_SearchPageLoadedMsg_ErrorPreservesResults(t *testing.T) {
 //  6. SearchPageLoadedMsg{page=2, IsFirstPage:false} → loadingNextPage via SearchLoadingMsg
 //  7. closeSearch → cancel called; all fields reset
 func TestApp_SearchFlow_OpenTypeResultsPaginateClose(t *testing.T) {
-	// Set up an HTTP server that records requests and returns canned responses.
-	var requestCount int
+	// Set up an HTTP server that returns canned responses.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
