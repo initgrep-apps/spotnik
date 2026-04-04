@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
@@ -872,10 +873,12 @@ func TestSearchOverlay_SetSize_PropagatesList(t *testing.T) {
 	assert.NotEmpty(t, view, "view should not be empty after SetSize")
 }
 
-// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 5 bindings.
+// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 6 bindings (Play, Queue, TabNext,
+// TabPrev, Clear, Close). The Clear binding (ctrl+u) was added in story 95 so users can
+// discover the clear-search shortcut from the compact help bar.
 func TestSearchKeyMap_ShortHelp(t *testing.T) {
 	km := panes.NewSearchKeyMap()
-	assert.Len(t, km.ShortHelp(), 5, "ShortHelp should return 5 bindings")
+	assert.Len(t, km.ShortHelp(), 6, "ShortHelp should return 6 bindings")
 }
 
 // TestSearchKeyMap_FullHelp verifies FullHelp returns 6 bindings.
@@ -2143,4 +2146,66 @@ func TestRenderTabBar_ShowsSpinnerWhenLoadingWithZeroItems(t *testing.T) {
 	assert.True(t,
 		strings.ContainsAny(tabBar, "⣾⣽⣻⢿⡿⣟⣯⣷•") || panes.ContainsSpinnerFrame(o, tabBar),
 		"tab bar must contain spinner frame when loading=true with zero items; got: %q", tabBar)
+}
+
+// --- Story 95: Help bar colors and ctrl+u in ShortHelp ---
+
+// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() returns 6 bindings,
+// that one of them has key "ctrl+u" with help text "clear", and that k.Close is also present.
+func TestSearchKeyMap_ShortHelp_ContainsCtrlU(t *testing.T) {
+	km := panes.NewSearchKeyMap()
+	bindings := km.ShortHelp()
+
+	require.Equal(t, 6, len(bindings), "ShortHelp() must return 6 bindings")
+
+	var foundClear, foundClose bool
+	for _, b := range bindings {
+		keys := b.Keys()
+		help := b.Help()
+		if len(keys) > 0 && keys[0] == "ctrl+u" && help.Desc == "clear" {
+			foundClear = true
+		}
+		if len(keys) > 0 && keys[0] == "esc" {
+			foundClose = true
+		}
+	}
+	assert.True(t, foundClear, "ShortHelp() must include a binding with key ctrl+u and desc clear")
+	assert.True(t, foundClose, "ShortHelp() must still include k.Close (esc)")
+}
+
+// TestNewSearchOverlay_HelpStylesUsesThemeColors verifies that NewSearchOverlay sets
+// all six help.Styles fields to theme token colors rather than the default muted grays.
+// It calls the exported RenderHelpForTest() helper and verifies the ANSI sequence for
+// theme.Info() wraps key name text in the rendered output.
+func TestNewSearchOverlay_HelpStylesUsesThemeColors(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(s, th)
+	o.SetSize(80, 40)
+
+	// Reference: what the key name "enter" should look like when styled with Info().
+	want := lipgloss.NewStyle().Foreground(th.Info()).Render("enter")
+
+	rendered := panes.RenderHelpForTest(o)
+	assert.True(t, strings.Contains(rendered, want),
+		"rendered help must contain Info()-styled key name; want %q in %q", want, rendered)
+}
+
+// TestSearchOverlay_SetTheme_PropagatesHelpStyles verifies that SetTheme() updates all
+// six o.help.Styles fields to match the new theme's color tokens.
+func TestSearchOverlay_SetTheme_PropagatesHelpStyles(t *testing.T) {
+	s := state.New()
+	thA := theme.Load("black")
+	o := panes.NewSearchOverlay(s, thA)
+
+	thB := theme.Load("dark")
+	o.SetTheme(thB)
+
+	shortKey := panes.HelpShortKeyForegroundForTest(o)
+	shortDesc := panes.HelpShortDescForegroundForTest(o)
+
+	assert.Equal(t, thB.Info(), shortKey,
+		"ShortKey foreground must equal themeB.Info() after SetTheme")
+	assert.Equal(t, thB.TextMuted(), shortDesc,
+		"ShortDesc foreground must equal themeB.TextMuted() after SetTheme")
 }

@@ -88,9 +88,10 @@ type searchKeyMap struct {
 	Clear   key.Binding
 }
 
-// ShortHelp returns 5 bindings for the compact help bar view.
+// ShortHelp returns 6 bindings for the compact help bar view.
+// Clear (ctrl+u) is included so users can discover the clear-search shortcut.
 func (k searchKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close}
+	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Clear, k.Close}
 }
 
 // FullHelp returns all 6 bindings grouped in a single column.
@@ -200,6 +201,14 @@ func NewSearchOverlay(store *state.Store, t theme.Theme) *SearchOverlay {
 	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
 
 	h := help.New()
+	// Override default muted-gray help styles with theme tokens so key names and
+	// descriptions match the overlay's visual language and update when the theme changes.
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Info())
+	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
+	h.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
+	h.Styles.FullKey = lipgloss.NewStyle().Foreground(t.Info())
+	h.Styles.FullDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
+	h.Styles.FullSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
 	km := NewSearchKeyMap()
 
 	// Initialize the list.Model with the custom SearchItemDelegate.
@@ -1015,6 +1024,13 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
 	o.input.CompletionStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
+	// Propagate to help styles so key names and descriptions use the new theme colors.
+	o.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(th.Info())
+	o.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(th.TextMuted())
+	o.help.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(th.TextMuted())
+	o.help.Styles.FullKey = lipgloss.NewStyle().Foreground(th.Info())
+	o.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(th.TextMuted())
+	o.help.Styles.FullSeparator = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Re-render the Prompt tag if a prefix is locked, applying the new theme colors.
 	if o.prefixState == PrefixLocked {
 		o.promoteToPromptTag()
@@ -1192,4 +1208,22 @@ func (o *SearchOverlay) PromoteToPromptTag() {
 // DemoteFromPromptTag is the exported wrapper for demoteFromPromptTag — used in tests.
 func (o *SearchOverlay) DemoteFromPromptTag() {
 	o.demoteFromPromptTag()
+}
+
+// RenderHelpForTest calls o.help.View(o.keyMap) and returns the raw rendered string.
+// Exported for tests that need to inspect help bar ANSI output.
+func RenderHelpForTest(o *SearchOverlay) string {
+	return o.help.View(o.keyMap)
+}
+
+// HelpShortKeyForegroundForTest returns the foreground color set on o.help.Styles.ShortKey.
+// Exported for tests that verify SetTheme() propagates help colors correctly.
+func HelpShortKeyForegroundForTest(o *SearchOverlay) lipgloss.TerminalColor {
+	return o.help.Styles.ShortKey.GetForeground()
+}
+
+// HelpShortDescForegroundForTest returns the foreground color set on o.help.Styles.ShortDesc.
+// Exported for tests that verify SetTheme() propagates help colors correctly.
+func HelpShortDescForegroundForTest(o *SearchOverlay) lipgloss.TerminalColor {
+	return o.help.Styles.ShortDesc.GetForeground()
 }
