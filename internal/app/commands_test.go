@@ -304,3 +304,49 @@ func TestSearchPageSize_MatchesPanesPackage(t *testing.T) {
 	assert.Equal(t, panes.SearchPageSize, app.SearchPageSize,
 		"panes.SearchPageSize and app.SearchPageSize must be identical; hasNextPage() depends on this")
 }
+
+// --- Story 104: TestConvertSearchResult_AllTab_TotalIsMax ---
+
+// TestConvertSearchResult_AllTab_TotalIsMax verifies that for the All tab the total
+// returned by convertSearchResult is the maximum across all type totals. This ensures
+// the pagination engine knows the correct number of pages when multiple types are mixed.
+func TestConvertSearchResult_AllTab_TotalIsMax(t *testing.T) {
+	tests := []struct {
+		name          string
+		tracks        int
+		artists       int
+		albums        int
+		playlists     int
+		expectedTotal int
+	}{
+		{
+			name:   "tracks highest (100)",
+			tracks: 100, artists: 50, albums: 30, playlists: 20,
+			expectedTotal: 100,
+		},
+		{
+			name:   "all zeros",
+			tracks: 0, artists: 0, albums: 0, playlists: 0,
+			expectedTotal: 0,
+		},
+		{
+			name:   "songs tab only (tracks total=7, others zero)",
+			tracks: 7, artists: 0, albums: 0, playlists: 0,
+			expectedTotal: 7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &domain.SearchResult{
+				Tracks:    domain.SearchTracksResult{Total: tt.tracks},
+				Artists:   domain.SearchArtistsResult{Total: tt.artists},
+				Albums:    domain.SearchAlbumsResult{Total: tt.albums},
+				Playlists: domain.SearchPlaylistsResult{Total: tt.playlists},
+			}
+			_, total := app.ConvertSearchResult(r)
+			assert.Equal(t, tt.expectedTotal, total,
+				"total should be max across all types for %q", tt.name)
+		})
+	}
+}
