@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -93,6 +94,26 @@ type App struct {
 
 	// searchOpen is true while the search overlay is visible.
 	searchOpen bool
+
+	// searchQuery is the staleness key for the current in-flight search.
+	// Reset to "" when closeSearch() is called.
+	searchQuery string
+
+	// searchPage is the staleness key for the current in-flight page.
+	// Reset to 0 when closeSearch() is called.
+	searchPage int
+
+	// searchLoading is true while a search HTTP call is in-flight.
+	// Reset to false on close, error, or successful result delivery.
+	searchLoading bool
+
+	// searchCancel cancels the in-flight search HTTP request context.
+	// Initialized to func(){} in New() so it is always safe to call.
+	searchCancel context.CancelFunc
+
+	// searchCtx is the context for the current in-flight search request.
+	// Exposed via SearchCancelCtx() for tests. Nil when no search is in-flight.
+	searchCtx context.Context
 
 	// deviceOverlayOpen is true while the device switcher overlay is visible.
 	deviceOverlayOpen bool
@@ -251,6 +272,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		lastInteraction: time.Now(),
 		idleThreshold:   idleThresholdSecs * time.Second,
 		prefs:           prefs.New(config.DefaultConfigPath()),
+		// searchCancel must never be nil; initialize to a no-op so it is always safe to call.
+		searchCancel: func() {},
 	}
 
 	// Apply saved layout preset (Page A only).
@@ -409,6 +432,46 @@ func (a *App) pollIntervals() (playbackInterval, queueInterval int) {
 // SearchOpen returns true while the search overlay is visible.
 func (a *App) SearchOpen() bool {
 	return a.searchOpen
+}
+
+// SearchLoading returns true while a search HTTP call is in-flight.
+// Exported for tests.
+func (a *App) SearchLoading() bool {
+	return a.searchLoading
+}
+
+// SearchQuery returns the current search staleness key query.
+// Exported for tests.
+func (a *App) SearchQuery() string {
+	return a.searchQuery
+}
+
+// SearchPage returns the current search staleness key page.
+// Exported for tests.
+func (a *App) SearchPage() int {
+	return a.searchPage
+}
+
+// CallSearchCancel calls the current searchCancel function.
+// Exported for tests to verify cancellation without exposing context.CancelFunc directly.
+func (a *App) CallSearchCancel() {
+	a.searchCancel()
+}
+
+// SearchCancelCtx returns the context associated with the current in-flight search.
+// Returns nil when no search is in-flight (searchCancel is the no-op sentinel).
+// Exported for tests to observe context cancellation.
+func (a *App) SearchCancelCtx() context.Context {
+	return a.searchCtx
+}
+
+// SetSearchSession sets the search staleness keys and loading flag for testing.
+// This bypasses the normal SearchRequestMsg pathway so tests can set up state directly.
+// Exported for tests only.
+func (a *App) SetSearchSession(query string, page int, loading bool) {
+	a.searchQuery = query
+	a.searchPage = page
+	a.searchLoading = loading
 }
 
 // SearchPane returns the search overlay pane.
@@ -629,17 +692,29 @@ func (a *App) initialFetchCmds() []tea.Cmd {
 // openSearch opens the search overlay. Reset() is called before Init() so
 // each search session starts with a clean slate — no stale query, prefix,
 // tab, or result list from the previous session.
+// searchCancel is reset to a no-op here (the prior cancel was already called
+// by the previous closeSearch call, so there is no in-flight HTTP to abort).
 func (a *App) openSearch() (*App, tea.Cmd) {
+	// Reset the cancel func to a fresh no-op; prior cancel was already called.
+	a.searchCancel = func() {}
+	a.searchCtx = nil
 	a.searchPane.Reset()
 	a.searchOpen = true
 	cmd := a.searchPane.Init()
 	return a, cmd
 }
 
-// closeSearch closes the search overlay.
-// In-flight search batches may continue executing after the overlay is dismissed.
-// TODO(19-search-redesign): cancellation key moved to App in story 101.
+// closeSearch closes the search overlay and aborts any in-flight search HTTP call.
 func (a *App) closeSearch() (*App, tea.Cmd) {
+	// Cancel any in-flight HTTP call immediately.
+	a.searchCancel()
+	// Reset the cancel func to a no-op so subsequent calls are safe.
+	a.searchCancel = func() {}
+	a.searchCtx = nil
+	// Clear all search session state.
+	a.searchQuery = ""
+	a.searchPage = 0
+	a.searchLoading = false
 	a.searchOpen = false
 	return a, nil
 }
@@ -799,43 +874,72 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
-		// Fall back to all four types when no prefix filter is active.
-		// TODO(19-search-redesign): story 101 wires proper per-page context-cancel.
-		searchTypes := m.Types
-		if len(searchTypes) == 0 {
-			searchTypes = []string{"track", "artist", "album", "playlist"}
-		}
+		// Cancel any in-flight HTTP call before starting a new one.
+		a.searchCancel()
+
 		// Offset = (Page-1) * SearchPageSize converts 1-based page to 0-based API offset.
 		offset := 0
 		if m.Page > 1 {
 			offset = (m.Page - 1) * SearchPageSize
 		}
-		cmd := a.buildSearchBatchCmd(m.Query, searchTypes, offset)
-		return a, cmd
+		// Spotify API caps offset at SearchMaxOffset (1000). If the requested page maps to
+		// an offset that would be rejected by the API, do not dispatch any command.
+		if offset >= SearchMaxOffset {
+			return a, nil
+		}
+
+		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
+		// Fall back to all four types when no prefix filter is active.
+		searchTypes := m.Types
+		if len(searchTypes) == 0 {
+			searchTypes = []string{"track", "artist", "album", "playlist"}
+		}
+
+		// Record staleness keys for the incoming request.
+		a.searchQuery = m.Query
+		a.searchPage = m.Page
+		a.searchLoading = true
+
+		// Create a cancellable context for this request.
+		ctx, cancel := context.WithCancel(context.Background())
+		a.searchCancel = cancel
+		a.searchCtx = ctx
+
+		// Tell the overlay we are loading before the HTTP call goes out.
+		isFirst := len(a.searchPane.Results()) == 0
+		loadingCmd := func() tea.Msg { return panes.SearchLoadingMsg{IsFirstPage: isFirst} }
+
+		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, offset)
+
+		return a, tea.Batch(loadingCmd, fetchCmd)
 
 	case panes.SearchClearedMsg:
-		// TODO(19-search-redesign): overlay owns state from story 99.
+		// Overlay owns cleared state (story 99) — nothing to do at app level.
 		return a, nil
 
 	case panes.SearchPageLoadedMsg:
 		// Search page fetch returned — route errors through toast, forward success to overlay.
-		// TODO(19-search-redesign): story 100 adds staleness check (m.Query / m.Page vs session).
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
-			// Route search error through toast; the overlay preserves its existing results
-			// (it returns early on Err != nil in Update) so the screen is not blanked.
+			// Clear app-level loading flag so the overlay's spinner can be dismissed.
+			a.searchLoading = false
+			// Forward the error msg to overlay so it can clear its loading flags
+			// (loadingFirstPage / loadingNextPage). The overlay keeps its existing
+			// results visible — it only clears spinners.
 			updated, _ := a.searchPane.Update(m)
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp
 			}
-			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Search failed: %s", m.Err.Error()))
+			return a, a.alerts.NewAlertCmd("warning", "Search failed: "+m.Err.Error())
 		}
+		// Discard stale results — the user moved on to a different query or page.
+		if m.Query != a.searchQuery || m.Page != a.searchPage {
+			return a, nil
+		}
+		a.searchLoading = false
 		// Forward to the search pane so it can update its local display state.
-		// Chain-through-Update (multi-page batching) is removed; story 101 re-introduces
-		// single-page fetches with context cancellation replacing the batch pattern.
 		updated, cmd := a.searchPane.Update(m)
 		if sp, ok := updated.(*panes.SearchOverlay); ok {
 			a.searchPane = sp
