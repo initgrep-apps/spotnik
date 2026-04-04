@@ -30,7 +30,76 @@ The current search implementation (Feature 19 stories 81–96) has accumulated s
 
 ## Architecture
 
-### Data Flow
+### High-Level Design
+
+**Component ownership:**
+
+```
+SearchOverlay
+├── intent{query, tab, page}   — single source of truth for what the user wants
+├── results[]                  — current page items (nil = no results yet)
+├── total int                  — drives hasNextPage() and pagination bar
+├── loadingFirstPage bool      — true on first fetch: show spinner only
+└── loadingNextPage  bool      — true on page change: show spinner + existing results
+
+App (staleness keys + cancellation only)
+├── searchQuery string         — staleness check key
+├── searchPage  int            — staleness check key
+├── searchLoading bool         — true while HTTP call in-flight
+└── searchCancel CancelFunc    — kills in-flight HTTP; init to func(){}
+
+Gateway (transport-layer backstop)
+└── debounceEntries map[path]*entry  — 100ms hold window for Interactive requests
+```
+
+**Overlay state machine:**
+
+```
+                    type / Tab / Ctrl+Right / Ctrl+Left
+         ┌────────────────────────────────────────────────┐
+         │                                                │
+       Empty ──── keypress ────► Typing                  │
+         ▲                          │                     │
+         │           debounce fires │                     │
+         │         (query == "")    ▼                     │
+         │              no-op ──► Empty                   │
+         │                          │                     │
+         │         debounce fires   │                     │
+         │         (query != "")    ▼                     │
+         │                    LoadingFirst                │
+         │                          │                     │
+         │                  results arrive                │
+         │                          ▼                     │
+         │                      Results ◄────────────────-┘
+         │                          │
+         │           Ctrl+Right /   │
+         │           Ctrl+Left      ▼
+         │                    LoadingNext
+         │                          │
+         │                  results arrive
+         │                          │
+         │                          └──────► Results
+         │
+         └──── Ctrl+U (clear) ──────────────────────────► Empty
+         └──── Esc ─────────────────────────────────────► Closed
+                    (searchCancel kills in-flight HTTP)
+```
+
+**Data flow summary:**
+
+```
+User action (type / Tab / Ctrl+Right / Ctrl+Left)
+  → intent updated → scheduleDebounce() → tea.Tick(300ms)
+    → stale? discard | fresh? SearchRequestMsg
+      → app: cancel prior + new ctx → SearchLoadingMsg to overlay
+        → buildSearchPageCmd(ctx) → Gateway.Do(Interactive, path, ...)
+          → 100ms path-debounce → Spotify API (limit=10, offset=(page-1)*10)
+            → SearchPageLoadedMsg
+              → app: stale? discard | fresh? forward to overlay
+                → overlay: results[], total, loading=false, rebuildListItems()
+```
+
+### Data Flow (Detailed)
 
 ```
 User action (type / Tab / ] / [)
@@ -293,13 +362,15 @@ pagination bar (1 line, when total > 0)
 
 ---
 
-### Pagination — `[` and `]` keybindings
+### Pagination — `Ctrl+Right` / `Ctrl+Left` keybindings
 
-- `]`: `if hasNextPage() { o.intent.page++; return o, o.scheduleDebounce() }`
-- `[`: `if o.intent.page > 1 { o.intent.page--; return o, o.scheduleDebounce() }`
+`[` and `]` are valid search characters and would be swallowed by the textinput. `Ctrl+Right` / `Ctrl+Left` are intercepted at the overlay `Update` level before forwarding to the input.
+
+- `Ctrl+Right`: `if hasNextPage() { o.intent.page++; return o, o.scheduleDebounce() }`
+- `Ctrl+Left`: `if o.intent.page > 1 { o.intent.page--; return o, o.scheduleDebounce() }`
 - Both debounced — rapid pressing settles on final page number after 300ms idle
 - Pagination bar updates immediately (intent.page changes for display); list updates when response arrives
-- Added to `searchKeyMap` and shown in `ShortHelp()`
+- Added to `searchKeyMap` and shown in `ShortHelp()` as `ctrl+→ next • ctrl+← prev`
 
 ---
 
@@ -338,6 +409,35 @@ When `intent.tab == TabAll`:
 - All existing keybindings (Enter=play, Ctrl+A=queue, Esc=close, Ctrl+U=clear) — unchanged
 
 ---
+
+## Edge Cases
+
+All of these must be handled correctly and tested:
+
+| Scenario | Trigger | Query | Page | Expected behaviour |
+|---|---|---|---|---|
+| No query — press Next | `Ctrl+Right` | `""` | 1 | Silent no-op. No API call. |
+| No query — press Prev | `Ctrl+Left` | `""` | 1 | Silent no-op. No API call. |
+| No query — Tab switch | Tab | `""` | 1 | Update `intent.tab` only. No API call. |
+| Prefix only (`:songs` without search term) — debounce fires | tick | `""` after `cleanQuery` | 1 | No-op — treated as empty query. |
+| Already on last page — press Next | `Ctrl+Right` | `"foo"` | N | `!hasNextPage()` → no-op. `→` dims in bar. |
+| Already on first page — press Prev | `Ctrl+Left` | `"foo"` | 1 | `page <= 1` → no-op. `←` dims in bar. |
+| Rapid page flipping (5× `Ctrl+Right` quickly) | 5 presses | `"foo"` | 1 | Debounce settles on page 5 after 300ms idle. One API call. |
+| New query typed while on page 5 | keypress | new text | 5 | `intent.page` resets to 1. Prior in-flight cancelled. One new API call. |
+| Tab switch while on page 3 | Tab | `"foo"` | 3 | `intent.page` resets to 1. Prior in-flight cancelled. One new API call. |
+| Esc while loading first page | Esc | `"foo"` | 1 | `searchCancel()` kills HTTP. Overlay closes. No stale result appears. |
+| API returns 0 results | response | `"foo"` | 1 | `total=0`. List shows "No results". Pagination bar hidden. Both nav keys no-op. |
+| API returns 0 items on page N (type exhausted) | response | `"foo"` | N | Show empty list for this type. `hasNextPage()=false`. Prev still works. |
+| API error on first page | error | `"foo"` | 1 | Toast alert. `loadingFirstPage=false`. results=nil. Hint text shown. |
+| API error on subsequent page | error | `"foo"` | N>1 | Toast alert. `loadingNextPage=false`. Previous page results stay visible. |
+| API 429 | error | `"foo"` | any | Toast "Rate limited". Retry-After respected. Previous results preserved. |
+| Context cancelled (new query arrives before response) | new keypress | new | any | `buildSearchPageCmd` returns nil. Bubble Tea drops nil silently. No state change. |
+| `Ctrl+U` (clear) while on page 5 | Ctrl+U | any | 5 | `intent = {query:"", tab:current, page:1}`. No API call. Return to empty state. |
+| Enter (play) on selected item | Enter | `"foo"` | N | Play item. Overlay stays open. No new search API call. |
+| Ctrl+A (queue) on selected item | Ctrl+A | `"foo"` | N | Add to queue. Overlay stays open. No new search API call. |
+| Overlay closed and reopened | open | `""` | 1 | Fresh state: results=nil, page=1, both loading flags false. Hint text shown. |
+| Stale result arrives after Esc | timing race | old | old | `searchQuery == ""` after close → staleness check discards. No state corruption. |
+| BubbleTea 300ms + Gateway 100ms both fire for same intent | concurrent | same | same | Both layers enforce last-wins independently. Exactly one HTTP call proceeds. |
 
 ## Testing Strategy
 
