@@ -27,7 +27,7 @@
 | 15 | CI/CD | `features/15-cicd/` | open | 57 | GitHub Actions, GoReleaser, multi-platform distribution |
 | 16 | Vivid Theme System | `features/16-vivid-themes/` | in-progress | 70, 71, 72, 73, 74, 75, 77, 78, 79 | Config-driven TOML themes, colorful borders, per-column colors, 6 new themes, runtime switcher overlay |
 | 17 | Bootstrap | `features/17-bootstrap/` | done | 76, 79, 80 | First-launch config bootstrap, embedded client ID, preference persistence engine |
-| 19 | Search Redesign | `features/19-search-redesign/` | done | 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92 | Full-screen search overlay with tabs, prefetch pagination, bubbles/list delegate, prefix autocomplete, rich metadata, UX polish, prefix UX overhaul, panel layout, post-impl fixes, list focus styling |
+| 19 | Search Redesign | `features/19-search-redesign/` | in-progress | 81–96 (done), 97–104 (open) | Full-screen search overlay with tabs, bubbles/list delegate, prefix autocomplete, rich metadata, UX polish; redesign (97–104): universal debounce, per-page fetch, context cancellation, gateway Interactive debounce, pagination controls, store cleanup |
 
 ---
 
@@ -37,4 +37,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-03*
+*Last updated: 2026-04-04*
