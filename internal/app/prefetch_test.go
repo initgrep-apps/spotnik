@@ -1,19 +1,18 @@
 package app_test
 
-// prefetch_test.go — Tests for Story 83: Search Prefetch Pagination Engine
+// prefetch_test.go — Tests for search pagination commands.
 //
 // Updated in Story 98 (search message types refactor):
 //   - SearchPrefetchMsg and SearchTabChangedMsg removed; their tests are deleted.
 //   - SearchPageLoadedMsg.Offset replaced by SearchPageLoadedMsg.Page (1-based).
 //   - Chain-through-Update engine removed from SearchPageLoadedMsg handler.
 //
-// Remaining tasks:
-// Task 1: Prefetch constants match spec values.
-// Task 2: buildSearchPageCmd fires a single API call with correct offset/limit.
-// Task 3: buildSearchBatchCmd dispatches the first page (chain removed in story 98).
-// Task 4: SearchPageLoadedMsg handler: error toast on failure.
-// Task 6: SearchRequestMsg handler uses batch command (offset 0).
-// Task 8: Elm purity — buildSearchPageCmd closure does not write to store.
+// Updated in Story 101 (per-page fetch command):
+//   - buildSearchBatchCmd deleted; Task 3 tests removed.
+//   - SearchPrefetchPages, SearchPrefetchItems, SearchPrefetchThreshold, SearchMaxOffset
+//     constants deleted; Task 1 prefetch-constant tests removed.
+//   - buildSearchPageCmd now has signature (ctx, client, query, types, page);
+//     Task 2 tests updated to use the new indirect pathway via SearchRequestMsg.
 
 import (
 	"errors"
@@ -31,19 +30,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- Task 1: Prefetch constants ---
+// --- SearchPageSize constant ---
 
-// TestPrefetchConstants_MatchSpec verifies that the exported prefetch constants
-// match the values in the story spec.
-func TestPrefetchConstants_MatchSpec(t *testing.T) {
-	assert.Equal(t, 10, app.SearchPageSize, "searchPageSize should be 10 (API max per request)")
-	assert.Equal(t, 5, app.SearchPrefetchPages, "searchPrefetchPages should be 5 pages per batch")
-	assert.Equal(t, 50, app.SearchPrefetchItems, "searchPrefetchItems should be 50 (pageSize * prefetchPages)")
-	assert.InDelta(t, 0.6, app.SearchPrefetchThreshold, 0.001, "searchPrefetchThreshold should be 0.6")
-	assert.Equal(t, 1000, app.SearchMaxOffset, "searchMaxOffset should be 1000 (Spotify API hard cap)")
+// TestSearchPageSizeConstant verifies the SearchPageSize constant value.
+func TestSearchPageSizeConstant(t *testing.T) {
+	assert.Equal(t, 10, app.SearchPageSize, "SearchPageSize should be 10 (API max per request)")
 }
 
-// --- Task 2: buildSearchPageCmd ---
+// --- Task 2: buildSearchPageCmd (tested via SearchRequestMsg) ---
 
 // searchPageServer returns a test server that captures the query parameters.
 // The handler function receives the request so the test can assert on parameters.
@@ -137,67 +131,6 @@ func TestBuildSearchPageCmd_NilClient_ReturnsError(t *testing.T) {
 	assert.Equal(t, "jazz", pageMsg.Query, "error msg should carry the query for staleness detection")
 }
 
-// --- Task 3: buildSearchBatchCmd ---
-
-// TestBuildSearchBatchCmd_DispatchesFirstPage verifies that buildSearchBatchCmd
-// dispatches exactly one page fetch command (chain-through-Update removed in story 98;
-// story 101 re-introduces single-page fetches with context cancellation).
-func TestBuildSearchBatchCmd_DispatchesFirstPage(t *testing.T) {
-	callCount := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{
-			"tracks":{"items":[],"total":500},
-			"artists":{"items":[],"total":0},
-			"albums":{"items":[],"total":0},
-			"playlists":{"items":[],"total":0}
-		}`))
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
-
-	// A search request triggers buildSearchBatchCmd (dispatches first page only).
-	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz", Page: 1})
-	require.NotNil(t, cmd)
-
-	// Execute the batch: index 0 = loadingCmd, index 1 = fetchCmd (API call). Story 100 change.
-	executeSequenceCmds(cmd, 2)
-
-	assert.Equal(t, 1, callCount, "buildSearchBatchCmd should dispatch exactly 1 page command")
-}
-
-// TestBuildSearchBatchCmd_PageAtMaxOffset_ReturnsNil verifies that when Page maps to
-// an offset >= SearchMaxOffset, no command is created (>= guard).
-// Page 101 maps to offset=(101-1)*10=1000 which equals SearchMaxOffset.
-func TestBuildSearchBatchCmd_PageAtMaxOffset_ReturnsNil(t *testing.T) {
-	callCount := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":2000},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
-
-	// Page 101 → offset=(101-1)*10=1000 == SearchMaxOffset → guard fires, no cmd created.
-	_, cmd := a.Update(panes.SearchRequestMsg{
-		Query: "jazz",
-		Types: []string{"track"},
-		Page:  101,
-	})
-	assert.Nil(t, cmd, "page 101 (offset=1000) should return nil (Spotify API hard cap)")
-	assert.Equal(t, 0, callCount, "no API calls should be made when offset >= searchMaxOffset")
-}
-
 // --- Task 4: SearchPageLoadedMsg handler ---
 
 // TestSearchPageLoadedMsg_ErrorTriggersToast verifies that an error on a
@@ -225,10 +158,10 @@ func TestSearchPageLoadedMsg_ErrorTriggersToast(t *testing.T) {
 	assert.Contains(t, a.View(), "Search failed", "error toast should mention search failure")
 }
 
-// --- Task 6: SearchRequestMsg uses batch command ---
+// --- Task 6: SearchRequestMsg dispatches single page ---
 
 // TestSearchRequestMsg_UsesBatchCommand_DispatchesSinglePage verifies that
-// SearchRequestMsg dispatches buildSearchBatchCmd (one page fetch; chain removed in story 98).
+// SearchRequestMsg dispatches a single page fetch (chain removed in story 98).
 func TestSearchRequestMsg_UsesBatchCommand_DispatchesSinglePage(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -244,7 +177,7 @@ func TestSearchRequestMsg_UsesBatchCommand_DispatchesSinglePage(t *testing.T) {
 	a.SetSearch(api.NewSearchClient(srv.URL, "test-token"))
 
 	_, cmd := a.Update(panes.SearchRequestMsg{Query: "jazz", Page: 1})
-	require.NotNil(t, cmd, "SearchRequestMsg should dispatch a batch command")
+	require.NotNil(t, cmd, "SearchRequestMsg should dispatch a command")
 
 	// Execute the batch: index 0 = loadingCmd, index 1 = fetchCmd (API call). Story 100 change.
 	executeSequenceCmds(cmd, 2)
