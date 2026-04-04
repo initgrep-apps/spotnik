@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -601,7 +602,7 @@ func TestRightAlignBg(t *testing.T) {
 }
 
 // TestStyledName verifies that styledName always produces bold output with the item name,
-// and that selected/normal produce identical output (selection is handled by wrapLine).
+// and that selected applies a background color making it differ from normal.
 func TestStyledName(t *testing.T) {
 	d := newTestDelegate()
 	normal := d.styledName("Track Name", false, 40)
@@ -755,7 +756,7 @@ func TestWrapLine_Normal(t *testing.T) {
 	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
 }
 
-// --- Task 20: styledName() always bold, no background ---
+// --- Task 20: styledName() always bold, with background on selected ---
 
 // TestStyledName_AlwaysBold verifies styledName always applies bold regardless of selected.
 func TestStyledName_AlwaysBold(t *testing.T) {
@@ -993,7 +994,48 @@ func TestRenderDefault_ThreeLines(t *testing.T) {
 	assert.Contains(t, out, "Mystery Item")
 }
 
-// --- padToInner tests ---
+// --- withBg / selected helper tests ---
+
+// TestWithBg verifies withBg conditionally applies background.
+func TestWithBg(t *testing.T) {
+	d := newTestDelegate()
+	base := lipgloss.NewStyle().Foreground(d.theme.TextPrimary())
+	normal := d.withBg(base, false).Render("test")
+	selected := d.withBg(base, true).Render("test")
+	assert.NotEqual(t, normal, selected, "withBg(true) should add background, making output differ")
+	assert.Contains(t, normal, "test")
+	assert.Contains(t, selected, "test")
+}
+
+// TestStyledBadge_Selected verifies styledBadge differs when selected.
+func TestStyledBadge_Selected(t *testing.T) {
+	d := newTestDelegate()
+	for _, cat := range []string{"track", "artist", "album", "playlist"} {
+		t.Run(cat, func(t *testing.T) {
+			normal := d.styledBadge(cat, false)
+			selected := d.styledBadge(cat, true)
+			assert.NotEqual(t, normal, selected, "selected badge should differ (background)")
+		})
+	}
+}
+
+// TestStyledDot_Selected verifies styledDot differs when selected.
+func TestStyledDot_Selected(t *testing.T) {
+	d := newTestDelegate()
+	normal := d.styledDot(false)
+	selected := d.styledDot(true)
+	assert.NotEqual(t, normal, selected, "selected dot should differ (background)")
+}
+
+// TestRightAlignBg_Selected verifies gap fill differs when selected.
+func TestRightAlignBg_Selected(t *testing.T) {
+	d := newTestDelegate()
+	normal := d.rightAlignBg("left", "right", 20, false)
+	selected := d.rightAlignBg("left", "right", 20, true)
+	assert.Contains(t, selected, "left")
+	assert.Contains(t, selected, "right")
+	assert.NotEqual(t, normal, selected, "selected rightAlignBg should differ (background-styled gap)")
+}
 
 // --- Selected-state tests for artist, album, playlist, default ---
 
