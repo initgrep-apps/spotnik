@@ -1865,6 +1865,65 @@ func TestResizeList_ListHeightMatchesPanelFormula(t *testing.T) {
 		"hint-hidden list must be 1 taller than hint-visible list")
 }
 
+// TestResizeList_ViewHeightStableAfterDemote verifies that list height is correct
+// after demotion via backspace at cursor position 0 with PrefixLocked.
+func TestResizeList_ViewHeightStableAfterDemote(t *testing.T) {
+	// After locking :songs prefix and then pressing Backspace at cursor 0 to
+	// demote the tag, the prefix is restored into input.Value() as ":songs ".
+	// showHintLine() remains false (input is non-empty), but resizeList() must
+	// still be called so the list height stays at the correct hint-hidden formula.
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	// Lock the prefix tag by typing ":songs " character by character.
+	for _, ch := range ":songs " {
+		updated, _ := o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		o = updated.(*panes.SearchOverlay)
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState(), "prefix should be locked after ':songs '")
+	// Capture baseline at the hint-hidden state so we can compare post-demotion.
+	linesAfterLocking := countViewLines(o.View())
+
+	// Move cursor to position 0 so backspace triggers demotion.
+	updated, _ := o.Update(tea.KeyMsg{Type: tea.KeyHome})
+	o = updated.(*panes.SearchOverlay)
+
+	// Backspace at position 0 with PrefixLocked → demoteFromPromptTag.
+	// The prefix ":songs " is restored into input.Value() so hint stays hidden.
+	updated, _ = o.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	o = updated.(*panes.SearchOverlay)
+	require.Equal(t, panes.PrefixNone, o.PrefixState(), "prefix should be demoted after backspace at pos 0")
+	require.False(t, o.ShowHintLine(), "hint stays hidden: restored ':songs ' is non-empty")
+
+	assert.Equal(t, linesAfterLocking, countViewLines(o.View()),
+		"view line count must be stable after prefix demotion; resizeList() on demote path must fire")
+}
+
+// TestResizeList_SearchClearedMsg_WithNonEmptyInput verifies that SearchClearedMsg
+// keeps the correct list height when the input still has content after clearing.
+func TestResizeList_SearchClearedMsg_WithNonEmptyInput(t *testing.T) {
+	// SearchClearedMsg clears results but does NOT clear the input value.
+	// After the message, showHintLine() is still false (input still has content).
+	// resizeList() must be called so height stays at the hint-hidden formula.
+	o := newTestSearchOverlay()
+	o.SetSize(100, 40)
+
+	// Type a character so hint is hidden.
+	updated, _ := o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	o = updated.(*panes.SearchOverlay)
+	require.False(t, o.ShowHintLine(), "hint should be hidden after typing")
+	linesAfterTyping := countViewLines(o.View())
+
+	// Send SearchClearedMsg while input still has a value.
+	model, _ := o.Update(panes.SearchClearedMsg{})
+	o = model.(*panes.SearchOverlay)
+
+	// Input was NOT cleared — hint stays hidden.
+	require.False(t, o.ShowHintLine(), "hint should still be hidden — SearchClearedMsg does not clear input")
+	assert.Equal(t, linesAfterTyping, countViewLines(o.View()),
+		"view line count must be stable after SearchClearedMsg when input is non-empty")
+}
+
 // makeLargeTrackList creates n minimal domain.Track items for store population tests.
 func makeLargeTrackList(n int) []domain.Track {
 	tracks := make([]domain.Track, n)
