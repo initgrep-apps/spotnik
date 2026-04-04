@@ -499,6 +499,9 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		o.loadingNextPage = false
 		if m.Err != nil {
 			// Keep existing results visible (previous page preserved on page-change error).
+			// loading flags were cleared above — recalculate list height so the spinner
+			// line is removed from the layout.
+			o.resizeList()
 			return o, nil
 		}
 		// Save the pre-converted list items so we never read api types from the store.
@@ -582,16 +585,16 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o.handleAddToQueue()
 
 	case tea.KeyCtrlRight:
-		// Next page — only when there is a query, not loading first page, and there is a next page.
-		if o.intent.query == "" || o.loadingFirstPage || !o.hasNextPage() {
+		// Next page — only when there is a query, not loading any page, and there is a next page.
+		if o.intent.query == "" || o.loadingFirstPage || o.loadingNextPage || !o.hasNextPage() {
 			return o, nil
 		}
 		o.intent.page++
 		return o, o.scheduleDebounce()
 
 	case tea.KeyCtrlLeft:
-		// Prev page — only when there is a query, not loading first page, and not on page 1.
-		if o.intent.query == "" || o.loadingFirstPage || o.intent.page <= 1 {
+		// Prev page — only when there is a query, not loading any page, and not on page 1.
+		if o.intent.query == "" || o.loadingFirstPage || o.loadingNextPage || o.intent.page <= 1 {
 			return o, nil
 		}
 		o.intent.page--
