@@ -99,6 +99,10 @@ func sendKey(t *testing.T, o *panes.SearchOverlay, key string) (*panes.SearchOve
 		msg = tea.KeyMsg{Type: tea.KeyCtrlU}
 	case "ctrl+a":
 		msg = tea.KeyMsg{Type: tea.KeyCtrlA}
+	case "ctrl+right":
+		msg = tea.KeyMsg{Type: tea.KeyCtrlRight}
+	case "ctrl+left":
+		msg = tea.KeyMsg{Type: tea.KeyCtrlLeft}
 	case "home":
 		msg = tea.KeyMsg{Type: tea.KeyHome}
 	default:
@@ -870,15 +874,15 @@ func TestSearchOverlay_SetSize_PropagatesList(t *testing.T) {
 	assert.NotEmpty(t, view, "view should not be empty after SetSize")
 }
 
-// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 6 bindings (Play, Queue, TabNext,
-// TabPrev, Clear, Close). The Clear binding (ctrl+u) was added in story 95 so users can
-// discover the clear-search shortcut from the compact help bar.
+// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 8 bindings (Play, Queue, TabNext,
+// TabPrev, Clear, Close, nextPage, prevPage). Story 102 added nextPage/prevPage pagination
+// bindings so users can discover ctrl+right/left from the compact help bar.
 func TestSearchKeyMap_ShortHelp(t *testing.T) {
 	km := panes.NewSearchKeyMap()
-	assert.Len(t, km.ShortHelp(), 6, "ShortHelp should return 6 bindings")
+	assert.Len(t, km.ShortHelp(), 8, "ShortHelp should return 8 bindings")
 }
 
-// TestSearchKeyMap_FullHelp verifies FullHelp returns 6 bindings.
+// TestSearchKeyMap_FullHelp verifies FullHelp returns 8 bindings.
 func TestSearchKeyMap_FullHelp(t *testing.T) {
 	km := panes.NewSearchKeyMap()
 	allBindings := km.FullHelp()
@@ -887,7 +891,7 @@ func TestSearchKeyMap_FullHelp(t *testing.T) {
 	for _, group := range allBindings {
 		total += len(group)
 	}
-	assert.Equal(t, 6, total, "FullHelp should return 6 bindings total")
+	assert.Equal(t, 8, total, "FullHelp should return 8 bindings total")
 }
 
 // TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults verifies that when a
@@ -1955,13 +1959,13 @@ func TestRenderTabBar_ShowsSpinnerWhenLoadingWithZeroItems(t *testing.T) {
 
 // --- Story 95: Help bar colors and ctrl+u in ShortHelp ---
 
-// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() returns 6 bindings,
+// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() returns 8 bindings,
 // that one of them has key "ctrl+u" with help text "clear", and that k.Close is also present.
 func TestSearchKeyMap_ShortHelp_ContainsCtrlU(t *testing.T) {
 	km := panes.NewSearchKeyMap()
 	bindings := km.ShortHelp()
 
-	require.Equal(t, 6, len(bindings), "ShortHelp() must return 6 bindings")
+	require.Equal(t, 8, len(bindings), "ShortHelp() must return 8 bindings")
 
 	var foundClear, foundClose bool
 	for _, b := range bindings {
@@ -2227,4 +2231,520 @@ func TestReset_FullIntentReset(t *testing.T) {
 	assert.Equal(t, panes.TabAll, o.IntentTab(), "after Reset: intent.tab should be TabAll")
 	assert.Equal(t, 1, o.IntentPage(), "after Reset: intent.page should be 1")
 	assert.Equal(t, "", o.CleanQuery(), "after Reset: intent.query (via clean query) should be empty")
+}
+
+// =====================================================================
+// Story 102: Pagination controls, loading states, and Panel 2 view
+// =====================================================================
+
+// --- Task 1: new fields + Results() accessor ---
+
+// TestSearchOverlay_NewFields_ZeroValued verifies that all new story-102 fields start
+// at their zero values when NewSearchOverlay is called.
+func TestSearchOverlay_NewFields_ZeroValued(t *testing.T) {
+	o := newTestSearchOverlay()
+	assert.Nil(t, o.Results(), "results should be nil initially")
+	assert.Equal(t, 0, o.Total(), "total should be 0 initially")
+	assert.False(t, o.LoadingFirstPage(), "loadingFirstPage should be false initially")
+	assert.False(t, o.LoadingNextPage(), "loadingNextPage should be false initially")
+}
+
+// TestSearchOverlay_ResultsAccessor_ReturnsNilInitially verifies that Results() is nil
+// before any SearchPageLoadedMsg is received.
+func TestSearchOverlay_ResultsAccessor_ReturnsNilInitially(t *testing.T) {
+	o := newTestSearchOverlay()
+	assert.Nil(t, o.Results(), "Results() should return nil before any results arrive")
+}
+
+// TestSearchOverlay_Reset_ZerosStory102Fields verifies that Reset() zeros all new fields.
+func TestSearchOverlay_Reset_ZerosStory102Fields(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(120, 40)
+
+	// Set all new fields to non-zero values via messages.
+	_, _ = o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = func() *panes.SearchOverlay {
+		m, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: false})
+		return m.(*panes.SearchOverlay)
+	}()
+	// Deliver a successful page to set results and total.
+	results := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: "Reset Test Track"},
+	})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 42})
+	o = m.(*panes.SearchOverlay)
+	require.NotNil(t, o.Results(), "pre-condition: results should be set before Reset")
+	require.Equal(t, 42, o.Total(), "pre-condition: total should be 42 before Reset")
+
+	o.Reset()
+
+	assert.Nil(t, o.Results(), "after Reset: results should be nil")
+	assert.Equal(t, 0, o.Total(), "after Reset: total should be 0")
+	assert.False(t, o.LoadingFirstPage(), "after Reset: loadingFirstPage should be false")
+	assert.False(t, o.LoadingNextPage(), "after Reset: loadingNextPage should be false")
+}
+
+// --- Task 2: SearchLoadingMsg handler ---
+
+// TestSearchOverlay_SearchLoadingMsg_FirstPage verifies that IsFirstPage=true sets
+// loadingFirstPage=true and loadingNextPage=false.
+func TestSearchOverlay_SearchLoadingMsg_FirstPage(t *testing.T) {
+	o := newTestSearchOverlay()
+	m, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = m.(*panes.SearchOverlay)
+	assert.True(t, o.LoadingFirstPage(), "IsFirstPage=true must set loadingFirstPage=true")
+	assert.False(t, o.LoadingNextPage(), "IsFirstPage=true must set loadingNextPage=false")
+}
+
+// TestSearchOverlay_SearchLoadingMsg_NextPage verifies that IsFirstPage=false sets
+// loadingFirstPage=false and loadingNextPage=true.
+func TestSearchOverlay_SearchLoadingMsg_NextPage(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Pre-set loadingFirstPage=true so we can verify it is cleared.
+	m, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingFirstPage())
+
+	m, _ = o.Update(panes.SearchLoadingMsg{IsFirstPage: false})
+	o = m.(*panes.SearchOverlay)
+	assert.False(t, o.LoadingFirstPage(), "IsFirstPage=false must set loadingFirstPage=false")
+	assert.True(t, o.LoadingNextPage(), "IsFirstPage=false must set loadingNextPage=true")
+}
+
+// --- Task 3: SearchPageLoadedMsg handler (success + error) ---
+
+// TestSearchOverlay_SearchPageLoadedMsg_Success_ClearsFlagsAndSetsResults verifies the
+// success branch: both loading flags cleared, results and total set.
+func TestSearchOverlay_SearchPageLoadedMsg_Success_ClearsFlagsAndSetsResults(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Set loading flags first.
+	m, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingFirstPage())
+
+	results := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: "Success Track"},
+	})
+	m, _ = o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 25})
+	o = m.(*panes.SearchOverlay)
+
+	assert.False(t, o.LoadingFirstPage(), "loadingFirstPage must be cleared on success")
+	assert.False(t, o.LoadingNextPage(), "loadingNextPage must be cleared on success")
+	assert.Equal(t, results, o.Results(), "results must match m.Results on success")
+	assert.Equal(t, 25, o.Total(), "total must match m.Total on success")
+}
+
+// TestSearchOverlay_SearchPageLoadedMsg_Error_ClearsFlagsPreservesResults verifies the
+// error branch: both loading flags cleared, existing results and total preserved.
+func TestSearchOverlay_SearchPageLoadedMsg_Error_ClearsFlagsPreservesResults(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Deliver initial results.
+	initial := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "spotify:track:t1", Name: "Original Track"},
+	})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: initial, Total: 50})
+	o = m.(*panes.SearchOverlay)
+
+	// Now set loadingNextPage=true then deliver an error.
+	m, _ = o.Update(panes.SearchLoadingMsg{IsFirstPage: false})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingNextPage())
+
+	m, _ = o.Update(panes.SearchPageLoadedMsg{Err: fmt.Errorf("network error")})
+	o = m.(*panes.SearchOverlay)
+
+	assert.False(t, o.LoadingFirstPage(), "loadingFirstPage must be cleared on error")
+	assert.False(t, o.LoadingNextPage(), "loadingNextPage must be cleared on error")
+	assert.Equal(t, initial, o.Results(), "existing results must be preserved on error")
+	assert.Equal(t, 50, o.Total(), "total must be preserved on error")
+}
+
+// --- Task 4: hasNextPage() ---
+
+// TestHasNextPage_Table covers all boundary conditions from the story spec.
+func TestHasNextPage_Table(t *testing.T) {
+	tests := []struct {
+		name  string
+		total int
+		page  int
+		want  bool
+	}{
+		{"total=0 page=1 → false", 0, 1, false},
+		{"total=10 page=1 exactly one page → false", 10, 1, false},
+		{"total=11 page=1 → true", 11, 1, true},
+		{"total=100 page=10 last page → false", 100, 10, false},
+		{"total=100 page=9 not last → true", 100, 9, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := newTestSearchOverlay()
+			o.SetSize(80, 40)
+			// Deliver results with the given total.
+			m, _ := o.Update(panes.SearchPageLoadedMsg{
+				Results: panes.TracksToSearchListItems([]domain.Track{
+					{URI: "spotify:track:t1", Name: "test"},
+				}),
+				Total: tt.total,
+			})
+			o = m.(*panes.SearchOverlay)
+			// Set the page.
+			panes.SetIntentPage(o, tt.page)
+			assert.Equal(t, tt.want, panes.HasNextPage(o),
+				"hasNextPage() for total=%d page=%d should be %v", tt.total, tt.page, tt.want)
+		})
+	}
+}
+
+// --- Task 5: Ctrl+Right / Ctrl+Left keybindings ---
+
+// TestCtrlRight_NoQuery_NoOp verifies that Ctrl+Right with no query is a no-op.
+func TestCtrlRight_NoQuery_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	page := o.IntentPage()
+	o, cmd := sendKey(t, o, "ctrl+right")
+	assert.Equal(t, page, o.IntentPage(), "ctrl+right with no query must not change page")
+	assert.Nil(t, cmd, "ctrl+right with no query must return nil cmd")
+}
+
+// TestCtrlRight_LoadingFirstPage_NoOp verifies that Ctrl+Right while loading first page is a no-op.
+func TestCtrlRight_LoadingFirstPage_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	// Type a query.
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Set loadingFirstPage.
+	m, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingFirstPage())
+
+	pageBefore := o.IntentPage()
+	o, cmd := sendKey(t, o, "ctrl+right")
+	assert.Equal(t, pageBefore, o.IntentPage(), "ctrl+right while loadingFirstPage must not change page")
+	assert.Nil(t, cmd, "ctrl+right while loadingFirstPage must return nil cmd")
+}
+
+// TestCtrlRight_LastPage_NoOp verifies that Ctrl+Right on the last page is a no-op.
+func TestCtrlRight_LastPage_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	// Type a query and deliver one page of results with total=10 (exactly one page).
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   10,
+	})
+	o = m.(*panes.SearchOverlay)
+	// total=10, page=1 → hasNextPage=false
+	require.False(t, panes.HasNextPage(o), "pre-condition: should be on last page")
+
+	pageBefore := o.IntentPage()
+	o, cmd := sendKey(t, o, "ctrl+right")
+	assert.Equal(t, pageBefore, o.IntentPage(), "ctrl+right on last page must not change page")
+	assert.Nil(t, cmd, "ctrl+right on last page must return nil cmd")
+}
+
+// TestCtrlRight_Valid_IncreasesPageAndSchedulesDebounce verifies that Ctrl+Right with
+// a query, not on the last page, increments intent.page and returns a debounce command.
+func TestCtrlRight_Valid_IncreasesPageAndSchedulesDebounce(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Deliver results with total=11 → hasNextPage true at page 1.
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   11,
+	})
+	o = m.(*panes.SearchOverlay)
+	require.Equal(t, 1, o.IntentPage())
+	require.True(t, panes.HasNextPage(o))
+
+	o, cmd := sendKey(t, o, "ctrl+right")
+	assert.Equal(t, 2, o.IntentPage(), "ctrl+right should increment intent.page to 2")
+	require.NotNil(t, cmd, "ctrl+right should return debounce cmd")
+	// The cmd is a scheduleDebounce tick; execute it to get the debounce msg.
+	// The tick fires a searchDebounceMsg after 300ms — it is not a SearchRequestMsg.
+	tickMsg := cmd()
+	require.NotNil(t, tickMsg, "debounce tick must produce a non-nil message")
+	_, isReq := tickMsg.(panes.SearchRequestMsg)
+	assert.False(t, isReq, "ctrl+right cmd must not immediately emit SearchRequestMsg")
+}
+
+// TestCtrlLeft_NoQuery_NoOp verifies that Ctrl+Left with no query is a no-op.
+func TestCtrlLeft_NoQuery_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	page := o.IntentPage()
+	o, cmd := sendKey(t, o, "ctrl+left")
+	assert.Equal(t, page, o.IntentPage(), "ctrl+left with no query must not change page")
+	assert.Nil(t, cmd, "ctrl+left with no query must return nil cmd")
+}
+
+// TestCtrlLeft_Page1_NoOp verifies that Ctrl+Left on page 1 is a no-op.
+func TestCtrlLeft_Page1_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, 1, o.IntentPage(), "pre-condition: should be on page 1")
+
+	o, cmd := sendKey(t, o, "ctrl+left")
+	assert.Equal(t, 1, o.IntentPage(), "ctrl+left on page 1 must not change page")
+	assert.Nil(t, cmd, "ctrl+left on page 1 must return nil cmd")
+}
+
+// TestCtrlLeft_LoadingFirstPage_NoOp verifies that Ctrl+Left while loadingFirstPage is a no-op.
+func TestCtrlLeft_LoadingFirstPage_NoOp(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Advance to page 2 first.
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   11,
+	})
+	o = m.(*panes.SearchOverlay)
+	o, _ = sendKey(t, o, "ctrl+right") // page → 2
+	require.Equal(t, 2, o.IntentPage())
+
+	// Now set loadingFirstPage.
+	m, _ = o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, o.LoadingFirstPage())
+
+	o, cmd := sendKey(t, o, "ctrl+left")
+	assert.Equal(t, 2, o.IntentPage(), "ctrl+left while loadingFirstPage must not change page")
+	assert.Nil(t, cmd, "ctrl+left while loadingFirstPage must return nil cmd")
+}
+
+// TestCtrlLeft_Valid_DecreasesPageAndSchedulesDebounce verifies that Ctrl+Left on a
+// page > 1 with a query decrements intent.page and returns a debounce command.
+func TestCtrlLeft_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	// Deliver results with total=11 and advance to page 2.
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   11,
+	})
+	o = m.(*panes.SearchOverlay)
+	o, _ = sendKey(t, o, "ctrl+right") // page → 2
+	require.Equal(t, 2, o.IntentPage())
+
+	o, cmd := sendKey(t, o, "ctrl+left")
+	assert.Equal(t, 1, o.IntentPage(), "ctrl+left should decrement intent.page to 1")
+	require.NotNil(t, cmd, "ctrl+left should return debounce cmd")
+	tickMsg := cmd()
+	_, isReq := tickMsg.(panes.SearchRequestMsg)
+	assert.False(t, isReq, "ctrl+left cmd must not immediately emit SearchRequestMsg")
+}
+
+// TestSearchKeyMap_ShortHelp_ContainsPaginationKeys verifies that ShortHelp includes
+// ctrl+right and ctrl+left pagination bindings.
+func TestSearchKeyMap_ShortHelp_ContainsPaginationKeys(t *testing.T) {
+	km := panes.NewSearchKeyMap()
+	bindings := km.ShortHelp()
+
+	var foundNext, foundPrev bool
+	for _, b := range bindings {
+		keys := b.Keys()
+		if len(keys) > 0 && keys[0] == "ctrl+right" {
+			foundNext = true
+		}
+		if len(keys) > 0 && keys[0] == "ctrl+left" {
+			foundPrev = true
+		}
+	}
+	assert.True(t, foundNext, "ShortHelp() must include ctrl+right binding")
+	assert.True(t, foundPrev, "ShortHelp() must include ctrl+left binding")
+}
+
+// --- Task 6: renderPaginationBar + Panel 2 layout + resizeList ---
+
+// TestRenderPaginationBar_FirstPage_PrevArrowDimmed verifies that on page 1,
+// the prev arrow uses TextMuted style (dimmed).
+func TestRenderPaginationBar_FirstPage_PrevArrowDimmed(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	// Deliver results with total=11 (2 pages), start on page 1.
+	results := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "u1", Name: "Jazz"},
+	})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 11})
+	o = m.(*panes.SearchOverlay)
+	require.Equal(t, 1, o.IntentPage())
+
+	bar := panes.RenderPaginationBarForTest(o, 60)
+
+	// TextMuted styles the "[ ←" with the muted color. We verify the bar
+	// contains ANSI sequence for TextMuted on the left arrow.
+	dimmedLeft := lipgloss.NewStyle().Foreground(th.TextMuted()).Render("[ ←")
+	normalRight := lipgloss.NewStyle().Foreground(th.TextPrimary()).Render("→ ]")
+	assert.True(t, strings.Contains(bar, dimmedLeft),
+		"prev arrow must use TextMuted on page 1; bar=%q", bar)
+	assert.True(t, strings.Contains(bar, normalRight),
+		"next arrow must use Text (not muted) on page 1; bar=%q", bar)
+}
+
+// TestRenderPaginationBar_LastPage_NextArrowDimmed verifies that on the last page,
+// the next arrow uses TextMuted style.
+func TestRenderPaginationBar_LastPage_NextArrowDimmed(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	results := panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 11})
+	o = m.(*panes.SearchOverlay)
+	// Advance to page 2 (last page for total=11, pageSize=10) via SetIntentPage.
+	// This directly sets the intent page so the rendering test is independent of key guards.
+	panes.SetIntentPage(o, 2)
+	require.Equal(t, 2, o.IntentPage())
+	require.False(t, panes.HasNextPage(o), "pre-condition: should be on last page")
+
+	bar := panes.RenderPaginationBarForTest(o, 60)
+	normalLeft := lipgloss.NewStyle().Foreground(th.TextPrimary()).Render("[ ←")
+	dimmedRight := lipgloss.NewStyle().Foreground(th.TextMuted()).Render("→ ]")
+	assert.True(t, strings.Contains(bar, normalLeft),
+		"prev arrow must use Text on page 2; bar=%q", bar)
+	assert.True(t, strings.Contains(bar, dimmedRight),
+		"next arrow must use TextMuted on last page; bar=%q", bar)
+}
+
+// TestRenderPaginationBar_MidPage_BothArrowsNormal verifies mid-page shows both arrows normal.
+func TestRenderPaginationBar_MidPage_BothArrowsNormal(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	// total=21 → 3 pages; advance to page 2 via SetIntentPage so the rendering
+	// test is independent of key handler guard conditions.
+	results := panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 21})
+	o = m.(*panes.SearchOverlay)
+	panes.SetIntentPage(o, 2)
+	require.Equal(t, 2, o.IntentPage())
+
+	bar := panes.RenderPaginationBarForTest(o, 60)
+	normalLeft := lipgloss.NewStyle().Foreground(th.TextPrimary()).Render("[ ←")
+	normalRight := lipgloss.NewStyle().Foreground(th.TextPrimary()).Render("→ ]")
+	assert.True(t, strings.Contains(bar, normalLeft),
+		"prev arrow must use Text on mid page; bar=%q", bar)
+	assert.True(t, strings.Contains(bar, normalRight),
+		"next arrow must use Text on mid page; bar=%q", bar)
+}
+
+// TestRenderPaginationBar_ContainsPageNumbers verifies the bar shows "page N of M" text.
+func TestRenderPaginationBar_ContainsPageNumbers(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	results := panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 21})
+	o = m.(*panes.SearchOverlay)
+	// page 1 of 3
+	bar := panes.RenderPaginationBarForTest(o, 60)
+	assert.True(t, strings.Contains(bar, "page 1 of 3"),
+		"pagination bar must show 'page 1 of 3' for total=21; bar=%q", bar)
+}
+
+// TestResizeList_SubtractsPaginationLine verifies that resizeList() subtracts 1 extra
+// line for the pagination bar when total > 0.
+func TestResizeList_SubtractsPaginationLine(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Record baseline list height with no results (total=0).
+	heightNoResults := o.ListHeight()
+
+	// Deliver results with total > 0.
+	results := panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}})
+	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 11})
+	o = m.(*panes.SearchOverlay)
+
+	heightWithPagination := o.ListHeight()
+	assert.Equal(t, heightNoResults-1, heightWithPagination,
+		"list height must be 1 less when total>0 (pagination bar occupies 1 line)")
+}
+
+// TestPaginationBar_NotRenderedWhenTotal0 verifies that the pagination bar is NOT
+// included in the view when total == 0.
+func TestPaginationBar_NotRenderedWhenTotal0(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	// No results delivered — total stays 0.
+	view := o.View()
+	assert.False(t, strings.Contains(view, "page"), // pagination bar uses "page N of M"
+		"pagination bar must not appear when total=0; view=%q", view)
+}
+
+// --- Task 7: Ctrl+U resets intent.page and intent.query ---
+
+// TestCtrlU_ResetIntentPageAndQuery verifies that Ctrl+U resets page to 1 and query to "".
+func TestCtrlU_ResetIntentPageAndQuery(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	// Type a query and advance pages.
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   51,
+	})
+	o = m.(*panes.SearchOverlay)
+	// Advance to page 5 by sending ctrl+right four times.
+	for i := 0; i < 4; i++ {
+		o, _ = sendKey(t, o, "ctrl+right")
+	}
+	require.Equal(t, 5, o.IntentPage(), "pre-condition: should be on page 5")
+
+	// Press Ctrl+U.
+	o, _ = sendKey(t, o, "ctrl+u")
+
+	assert.Equal(t, 1, o.IntentPage(), "ctrl+u must reset intent.page to 1")
+	assert.Equal(t, "", o.IntentQuery(), "ctrl+u must reset intent.query to empty")
+	assert.Equal(t, o.IntentTab(), o.ActiveTab(), "tab should be unchanged after ctrl+u")
+}
+
+// --- Task 8: Reset() zeros all story-102 fields ---
+// (Covered by TestSearchOverlay_Reset_ZerosStory102Fields above.)
+// Duplicate test with a simpler setup to verify all four fields explicitly.
+
+func TestSearchOverlay_Reset_ZerosAllStory102FieldsExplicit(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	// Drive loadingNextPage=true.
+	m, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: false})
+	o = m.(*panes.SearchOverlay)
+	// Drive results and total.
+	res := panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "t"}})
+	m, _ = o.Update(panes.SearchPageLoadedMsg{Results: res, Total: 7})
+	o = m.(*panes.SearchOverlay)
+	require.NotNil(t, o.Results())
+	require.Equal(t, 7, o.Total())
+
+	o.Reset()
+	assert.Nil(t, o.Results(), "Reset: results nil")
+	assert.Equal(t, 0, o.Total(), "Reset: total 0")
+	assert.False(t, o.LoadingFirstPage(), "Reset: loadingFirstPage false")
+	assert.False(t, o.LoadingNextPage(), "Reset: loadingNextPage false")
 }
