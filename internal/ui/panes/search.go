@@ -1100,16 +1100,6 @@ func (o *SearchOverlay) ListHeight() int {
 	return o.lastSetListH
 }
 
-// ListViewLineCount returns the number of lines the result list renders in its current
-// View() output — exported for tests. This is the actual number of lines the list
-// component will produce, which must match the container's expected height after
-// resizeList() is called. If resizeList() was NOT called after a hint toggle, the
-// list renders at a stale height (one off), causing the mismatch this story fixes.
-func (o *SearchOverlay) ListViewLineCount() int {
-	view := o.resultList.View()
-	return strings.Count(view, "\n") + 1
-}
-
 // InputShowSuggestions returns whether the textinput has ShowSuggestions enabled — exported for tests.
 func (o *SearchOverlay) InputShowSuggestions() bool {
 	return o.input.ShowSuggestions
