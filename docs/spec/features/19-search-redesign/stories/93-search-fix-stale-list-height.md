@@ -1,7 +1,7 @@
 ---
 title: "Fix: Stale list height causes UI disintegration on typing/scrolling"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
