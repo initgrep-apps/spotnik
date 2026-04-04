@@ -1,7 +1,7 @@
 ---
 title: "Fix: Overlay shows stale query, tab, and results when reopened after Esc"
 feature: 19-search-redesign
-status: open
+status: done
 ---
 
 ## Background
