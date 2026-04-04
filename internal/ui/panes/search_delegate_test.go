@@ -583,7 +583,7 @@ func TestRenderTrack_Selected(t *testing.T) {
 // TestStyledDot verifies the dot separator is non-empty.
 func TestStyledDot(t *testing.T) {
 	d := newTestDelegate()
-	dot := d.styledDot()
+	dot := d.styledDot(false)
 	assert.NotEmpty(t, dot)
 	// Should contain the "·" character.
 	assert.Contains(t, dot, "·")
@@ -611,11 +611,10 @@ func TestStyledName(t *testing.T) {
 	d := newTestDelegate()
 	normal := d.styledName("Track Name", false, 40)
 	selected := d.styledName("Track Name", true, 40)
-	// Both should contain the name.
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
-	// Selection no longer affects styledName — wrapLine handles the selection highlight.
-	assert.Equal(t, normal, selected, "styledName should produce same output regardless of selected param")
+	// Selected should differ from normal (background applied).
+	assert.NotEqual(t, normal, selected, "styledName should differ when selected")
 }
 
 // TestRenderDefault verifies non-matching category uses a fallback.
@@ -657,7 +656,7 @@ func TestStyledBadge(t *testing.T) {
 	categories := []string{"track", "artist", "album", "playlist"}
 	for _, cat := range categories {
 		t.Run(cat, func(t *testing.T) {
-			badge := d.styledBadge(cat)
+			badge := d.styledBadge(cat, false)
 			assert.NotEmpty(t, badge)
 		})
 	}
@@ -747,7 +746,7 @@ func TestHeight(t *testing.T) {
 // TestWrapLine_Selected verifies that a selected line contains the left border │ character.
 func TestWrapLine_Selected(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", true)
+	out := d.wrapLine("hello", 40, true)
 	assert.Contains(t, out, "│", "selected wrapLine should contain left border │")
 	assert.Contains(t, out, "hello", "selected wrapLine should contain content")
 }
@@ -755,7 +754,7 @@ func TestWrapLine_Selected(t *testing.T) {
 // TestWrapLine_Normal verifies that an unselected line has at least 2-space left indent (no border).
 func TestWrapLine_Normal(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", false)
+	out := d.wrapLine("hello", 40, false)
 	assert.Contains(t, out, "hello", "normal wrapLine should contain content")
 	// Normal items use Padding(0,0,0,2) — output should start with spaces, not a border char.
 	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
@@ -766,27 +765,28 @@ func TestWrapLine_Normal(t *testing.T) {
 // TestStyledName_AlwaysBold verifies styledName always applies bold regardless of selected.
 func TestStyledName_AlwaysBold(t *testing.T) {
 	d := newTestDelegate()
-	// Bold(true) produces \x1b[...1m or \x1b[1m in ANSI output.
 	normal := d.styledName("Track Name", false, 40)
 	selected := d.styledName("Track Name", true, 40)
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
-	// Both should contain an ANSI bold sequence (1m).
-	assert.Contains(t, normal, "\x1b[", "styledName should contain ANSI escape")
-	// The ANSI sequence should contain bold code "1" somewhere in the styling.
-	assert.True(t, strings.Contains(normal, "1m") || strings.Contains(normal, ";1;") ||
-		strings.Contains(normal, ";1m") || strings.Contains(normal, "1;"),
-		"styledName normal should contain bold ANSI code")
+	// Both should contain bold ANSI code.
+	for _, out := range []string{normal, selected} {
+		assert.True(t, strings.Contains(out, "1m") || strings.Contains(out, ";1;") ||
+			strings.Contains(out, ";1m") || strings.Contains(out, "1;"),
+			"styledName should contain bold ANSI code")
+	}
 }
 
-// TestStyledName_NoBackground verifies styledName no longer applies background color.
-// Previously selected=true applied SelectedBg; now selection is handled at line level.
-func TestStyledName_NoBackground(t *testing.T) {
+// TestStyledName_SelectedBackground verifies styledName applies background when selected.
+func TestStyledName_SelectedBackground(t *testing.T) {
 	d := newTestDelegate()
 	normalOut := d.styledName("Name", false, 40)
 	selectedOut := d.styledName("Name", true, 40)
-	// Both should produce identical output — selection no longer affects styledName.
-	assert.Equal(t, normalOut, selectedOut, "styledName should produce same output regardless of selected param")
+	// Selected output should differ (has SelectedBg background).
+	assert.NotEqual(t, normalOut, selectedOut, "styledName should differ when selected (background added)")
+	// Both should contain the name text.
+	assert.Contains(t, normalOut, "Name")
+	assert.Contains(t, selectedOut, "Name")
 }
 
 // --- Task 21: renderTrack 3-line layout ---
