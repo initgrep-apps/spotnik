@@ -1068,65 +1068,6 @@ func TestSearchOverlay_RebuildListItems_EmptyResults(t *testing.T) {
 	assert.Equal(t, 0, panes.ListItemCount(o), "nil results should produce empty list")
 }
 
-// TestCheckPrefetch_BelowThreshold verifies no prefetch cmd at 30% scroll.
-func TestCheckPrefetch_BelowThreshold(t *testing.T) {
-	th := theme.Load("black")
-	// Deliver 10 tracks via SearchPageLoadedMsg.
-	domTracks := make([]domain.Track, 10)
-	for i := range domTracks {
-		domTracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
-	}
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: panes.TracksToSearchListItems(domTracks), Total: 100})
-	o = model.(*panes.SearchOverlay)
-
-	// Cursor at 0 (default) — 0/10 = 0%, well below 60%.
-	cmd := panes.CallCheckPrefetch(o)
-	assert.Nil(t, cmd, "cursor at 0%% should not trigger prefetch")
-}
-
-// TestCheckPrefetch_AtThreshold verifies prefetch returns nil until story 99 wires offset.
-// TODO(19-search-redesign): nextOffsetForTab returns -1 until story 99 wires o.results
-// offset tracking. Prefetch at threshold will be restored in story 99.
-func TestCheckPrefetch_AtThreshold(t *testing.T) {
-	th := theme.Load("black")
-	domTracks := make([]domain.Track, 10)
-	for i := range domTracks {
-		domTracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
-	}
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: panes.TracksToSearchListItems(domTracks), Total: 100})
-	o = model.(*panes.SearchOverlay)
-
-	// Move cursor to index 6 (60% of 10).
-	panes.SetListCursor(o, 6)
-
-	// nextOffsetForTab returns -1 (no store) → checkPrefetch returns nil until story 99.
-	cmd := panes.CallCheckPrefetch(o)
-	assert.Nil(t, cmd, "cursor at 60%% returns nil until story 99 wires offset tracking")
-}
-
-// TestCheckPrefetch_NoMoreData verifies nil returned when no more data available.
-func TestCheckPrefetch_NoMoreData(t *testing.T) {
-	th := theme.Load("black")
-	domTracks := make([]domain.Track, 10)
-	for i := range domTracks {
-		domTracks[i] = domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i), URI: fmt.Sprintf("spotify:track:t%d", i)}
-	}
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 40)
-	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: panes.TracksToSearchListItems(domTracks), Total: 10})
-	o = model.(*panes.SearchOverlay)
-
-	// Cursor at 6 (60%) but no more data (offset tracking not yet wired).
-	panes.SetListCursor(o, 6)
-
-	cmd := panes.CallCheckPrefetch(o)
-	assert.Nil(t, cmd, "should return nil when no more data available")
-}
-
 // TestSearchOverlay_DownKey_MovesCursor verifies down key advances list cursor.
 func TestSearchOverlay_DownKey_MovesCursor(t *testing.T) {
 	th := theme.Load("black")
@@ -1616,24 +1557,6 @@ func TestSearchOverlay_Resize_PropagatesListAndHelp(t *testing.T) {
 	o.SetSize(10, 10)
 	view4 := o.View()
 	assert.NotEmpty(t, view4, "View() should render even at minimum dimensions")
-}
-
-// TestSearchOverlay_CheckPrefetch_MaxOffsetStops verifies that checkPrefetch returns
-// nil when the overlay has no store-backed pagination data.
-// TODO(19-search-redesign): story 99 will restore offset-based prefetch logic;
-// until then nextOffsetForTab() always returns -1, so checkPrefetch is always nil.
-func TestSearchOverlay_CheckPrefetch_MaxOffsetStops(t *testing.T) {
-	th := theme.Load("black")
-
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 40)
-	panes.SetActiveTab(o, panes.TabSongs)
-	panes.CallRebuildListItems(o)
-
-	panes.SetListCursor(o, 31)
-	cmd := panes.CallCheckPrefetch(o)
-	// nextOffsetForTab always returns -1 until story 99 restores offset tracking.
-	assert.Nil(t, cmd, "checkPrefetch should return nil (nextOffsetForTab returns -1)")
 }
 
 // --- Story 93: resizeList() keeps list height in sync with showHintLine() ---

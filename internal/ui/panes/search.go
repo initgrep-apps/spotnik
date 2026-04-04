@@ -49,11 +49,6 @@ func TabToAPITypes(tab SearchTab) []string {
 	}
 }
 
-// searchPrefetchThreshold is the fraction of loaded items at which the next
-// prefetch batch is triggered. Kept in sync with app.SearchPrefetchThreshold (0.6).
-// Defined here to avoid a circular dependency between panes and app packages.
-const searchPrefetchThreshold = 0.6
-
 // searchIntent captures the full desired search state at a point in time.
 // All four triggers (type, Tab, Ctrl+Right, Ctrl+Left) write to this struct
 // and call scheduleDebounce(). The debounce tick carries a snapshot; if the
@@ -488,14 +483,12 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyUp:
 		var cmd tea.Cmd
 		o.resultList, cmd = o.resultList.Update(m)
-		prefetchCmd := o.checkPrefetch()
-		return o, tea.Batch(cmd, prefetchCmd)
+		return o, cmd
 
 	case tea.KeyDown:
 		var cmd tea.Cmd
 		o.resultList, cmd = o.resultList.Update(m)
-		prefetchCmd := o.checkPrefetch()
-		return o, tea.Batch(cmd, prefetchCmd)
+		return o, cmd
 
 	case tea.KeyCtrlA:
 		return o.handleAddToQueue()
@@ -869,39 +862,6 @@ func (o *SearchOverlay) rebuildFromResults() {
 	o.resultList.SetItems(items)
 }
 
-// checkPrefetch returns a command to fetch the next page when the list cursor has
-// scrolled past searchPrefetchThreshold of the loaded items. Returns nil if below
-// threshold, no items, or no more pages are available.
-// TODO(19-search-redesign): story 99 wires in o.intent.page for proper next-page requests.
-func (o *SearchOverlay) checkPrefetch() tea.Cmd {
-	total := len(o.resultList.Items())
-	if total == 0 {
-		return nil
-	}
-
-	cursor := o.resultList.Index()
-	threshold := int(float64(total) * searchPrefetchThreshold)
-
-	if cursor < threshold {
-		return nil
-	}
-
-	// nextOffsetForTab always returns -1 until story 99 wires o.intent.page.
-	if o.nextOffsetForTab() < 0 {
-		return nil
-	}
-
-	return nil
-}
-
-// nextOffsetForTab returns the next offset to fetch for the active tab.
-// Returns -1 when no more pages are available (offset >= total).
-// TODO(19-search-redesign): replaced by o.results in story 99
-// Store TypePage reads removed; always return -1 (no prefetch) until story 99 wires o.results.
-func (o *SearchOverlay) nextOffsetForTab() int {
-	return -1
-}
-
 // overlayWidth returns the effective overlay width: 70% of terminal width, minimum 40.
 func (o *SearchOverlay) overlayWidth() int {
 	w := o.width * 70 / 100
@@ -1066,11 +1026,6 @@ func SetListCursor(o *SearchOverlay, index int) {
 // ListCursorIndex returns the current list cursor index — exported for tests.
 func ListCursorIndex(o *SearchOverlay) int {
 	return o.resultList.Index()
-}
-
-// CallCheckPrefetch calls checkPrefetch on the overlay — exported for tests.
-func CallCheckPrefetch(o *SearchOverlay) tea.Cmd {
-	return o.checkPrefetch()
 }
 
 // NewTestList creates a minimal list.Model for delegate rendering tests.

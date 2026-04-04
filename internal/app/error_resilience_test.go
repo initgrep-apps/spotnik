@@ -117,8 +117,8 @@ func TestBuildFetchRecentlyPlayedCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 }
 
 // TestBuildSearchCmd_429_EmitsRateLimitedMsg verifies that a 429 from
-// the search endpoint causes buildSearchBatchCmd to emit RateLimitedMsg.
-// buildSearchBatchCmd dispatches a single page command; executing it returns
+// the search endpoint causes buildSearchPageCmd to emit RateLimitedMsg.
+// buildSearchPageCmd fetches a single page; executing it returns
 // RateLimitedMsg when the server responds 429.
 func TestBuildSearchCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	srv := rateLimitServer("12")
@@ -336,7 +336,7 @@ func TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired(t *testing.T) {
 }
 
 // TestBuildSearchCmd_401_ShowsSessionExpired verifies the same pattern for search.
-// buildSearchBatchCmd dispatches a single page command; the first page-fetch hits 401
+// buildSearchPageCmd fetches a single page; the page-fetch hits 401
 // and emits unauthorizedMsg, triggering the token refresh flow.
 func TestBuildSearchCmd_401_ShowsSessionExpired(t *testing.T) {
 	srv := unauthorizedServer()
