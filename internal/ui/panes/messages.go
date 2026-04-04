@@ -308,7 +308,7 @@ type PlaylistReorderResultMsg struct {
 }
 
 // SearchClearedMsg is emitted by SearchOverlay when the user presses Ctrl+U.
-// The root app model handles this by clearing search results and query in the store.
+// Story 99 will wire the root app to clear overlay-local search state in response.
 // Panes must never write to the store directly — they emit messages instead.
 type SearchClearedMsg struct{}
 

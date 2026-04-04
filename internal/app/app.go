@@ -636,7 +636,7 @@ func (a *App) openSearch() (*App, tea.Cmd) {
 	return a, cmd
 }
 
-// closeSearch closes the search overlay and clears any in-flight search state from
+// closeSearch closes the search overlay.
 // In-flight search batches may continue executing after the overlay is dismissed.
 // TODO(19-search-redesign): cancellation key moved to App in story 101.
 func (a *App) closeSearch() (*App, tea.Cmd) {

@@ -471,99 +471,46 @@ func PlaylistsToSearchListItems(playlists []domain.SearchPlaylist) []SearchListI
 	return items
 }
 
-// --- Internal helpers: domain types → []list.Item (for rebuildFromStore) ---
+// --- Internal helpers: domain types → []list.Item ---
+// These delegate to the exported converters to avoid duplicating conversion logic.
+// The bubbles/list component requires []list.Item; SearchListItem satisfies list.Item.
 
-// tracksToListItems converts domain.Track slices to SearchListItem slices.
+// tracksToListItems converts domain.Track slices to []list.Item via TracksToSearchListItems.
 func tracksToListItems(tracks []domain.Track) []list.Item {
-	items := make([]list.Item, len(tracks))
-	for i, t := range tracks {
-		artists := joinArtistNames(t.Artists)
-		dur := formatSearchDuration(t.DurationMs)
-		subtitle := artists + " · " + t.Album.Name + " · " + dur
-		items[i] = SearchListItem{
-			Category:    "track",
-			Name:        t.Name,
-			Subtitle:    subtitle,
-			URI:         t.URI,
-			IsTrack:     true,
-			ArtistNames: artists,
-			AlbumName:   t.Album.Name,
-			Duration:    dur,
-			Explicit:    t.Explicit,
-		}
+	src := TracksToSearchListItems(tracks)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
 	}
 	return items
 }
 
-// artistsToListItems converts domain.SearchArtist slices to SearchListItem slices.
+// artistsToListItems converts domain.SearchArtist slices to []list.Item via ArtistsToSearchListItems.
 func artistsToListItems(artists []domain.SearchArtist) []list.Item {
-	items := make([]list.Item, len(artists))
-	for i, a := range artists {
-		genres := joinGenres(a.Genres, 3)
-		followers := formatFollowers(a.Followers)
-		subtitle := genres
-		if genres != "" && followers != "" {
-			subtitle += " · " + followers
-		} else if followers != "" {
-			subtitle = followers
-		}
-		items[i] = SearchListItem{
-			Category:   "artist",
-			Name:       a.Name,
-			Subtitle:   subtitle,
-			URI:        a.URI,
-			IsTrack:    false,
-			Genres:     genres,
-			Followers:  followers,
-			Popularity: a.Popularity,
-		}
+	src := ArtistsToSearchListItems(artists)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
 	}
 	return items
 }
 
-// albumsToListItems converts domain.SearchAlbum slices to SearchListItem slices.
+// albumsToListItems converts domain.SearchAlbum slices to []list.Item via AlbumsToSearchListItems.
 func albumsToListItems(albums []domain.SearchAlbum) []list.Item {
-	items := make([]list.Item, len(albums))
-	for i, al := range albums {
-		artists := joinArtistNames(al.Artists)
-		year := extractYear(al.ReleaseDate)
-		tc := fmt.Sprintf("%d tracks", al.TotalTracks)
-		subtitle := artists + " · " + year + " · " + tc
-		items[i] = SearchListItem{
-			Category:     "album",
-			Name:         al.Name,
-			Subtitle:     subtitle,
-			URI:          al.URI,
-			IsTrack:      false,
-			AlbumType:    formatAlbumType(al.AlbumType),
-			ReleaseYear:  year,
-			TrackCount:   tc,
-			AlbumArtists: artists,
-		}
+	src := AlbumsToSearchListItems(albums)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
 	}
 	return items
 }
 
-// playlistsToListItems converts domain.SearchPlaylist slices to SearchListItem slices.
+// playlistsToListItems converts domain.SearchPlaylist slices to []list.Item via PlaylistsToSearchListItems.
 func playlistsToListItems(playlists []domain.SearchPlaylist) []list.Item {
-	items := make([]list.Item, len(playlists))
-	for i, p := range playlists {
-		tc := fmt.Sprintf("%d tracks", p.TrackCount)
-		subtitle := "by " + p.Owner.DisplayName + " · " + tc
-		desc := truncateString(p.Description, 60)
-		if desc != "" {
-			subtitle += " · " + desc
-		}
-		items[i] = SearchListItem{
-			Category:       "playlist",
-			Name:           p.Name,
-			Subtitle:       subtitle,
-			URI:            p.URI,
-			IsTrack:        false,
-			Owner:          p.Owner.DisplayName,
-			PlaylistTracks: tc,
-			PlaylistDesc:   desc,
-		}
+	src := PlaylistsToSearchListItems(playlists)
+	items := make([]list.Item, len(src))
+	for i, s := range src {
+		items[i] = s
 	}
 	return items
 }
