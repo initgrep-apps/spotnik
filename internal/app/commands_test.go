@@ -126,6 +126,47 @@ func TestBuildSearchPageCmd_PageOne_UsesOffset0(t *testing.T) {
 	assert.Equal(t, "0", capturedOffset, "page 1 should use offset=0")
 }
 
+// TestBuildSearchPageCmd_OffsetAtCap_ReturnsNil verifies that page=101 (offset=1000)
+// returns nil because Spotify rejects offset >= 1000.
+func TestBuildSearchPageCmd_OffsetAtCap_ReturnsNil(t *testing.T) {
+	hit := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	client := api.NewSearchClient(srv.URL, "test-token")
+	// page=101 → offset=(101-1)*10=1000 → guard fires → nil
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 101)
+	require.NotNil(t, cmd, "BuildSearchPageCmd should return a non-nil tea.Cmd")
+
+	msg := cmd()
+	assert.Nil(t, msg, "cmd should return nil when offset reaches the Spotify cap of 1000")
+	assert.False(t, hit, "HTTP server should NOT be hit when offset guard fires")
+}
+
+// TestBuildSearchPageCmd_OffsetJustUnderCap_DoesNotReturnNil verifies that page=100
+// (offset=990) proceeds normally — the guard must not fire before 1000.
+func TestBuildSearchPageCmd_OffsetJustUnderCap_DoesNotReturnNil(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"tracks":{"items":[],"total":0},"artists":{"items":[],"total":0},"albums":{"items":[],"total":0},"playlists":{"items":[],"total":0}}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	client := api.NewSearchClient(srv.URL, "test-token")
+	// page=100 → offset=(100-1)*10=990 → just under cap → should proceed
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 100)
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	assert.NotNil(t, msg, "cmd should return a message when offset is just under the cap (990 < 1000)")
+}
+
 // --- convertSearchResult: total = max ---
 
 // TestConvertSearchResult_MaxTotal_Table verifies the table of total calculations.
