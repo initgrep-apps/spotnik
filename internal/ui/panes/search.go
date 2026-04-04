@@ -80,11 +80,11 @@ type SearchClosedMsg struct{}
 // The root app model receives it and dispatches the actual Spotify API call.
 // Types carries the Spotify API type filter derived from the locked prefix (e.g. ["track"]
 // for ":songs"). When empty the app handler defaults to all four types.
-// Page is the 1-based page number to fetch; story 99 wires in intent.page — for now use 1.
+// Page is the 1-based page number to fetch; incremented/decremented by Ctrl+Right/Left.
 type SearchRequestMsg struct {
 	Query string
 	Types []string
-	Page  int // 1-based page number; defaults to 1 (story 99 wires intent.page)
+	Page  int // 1-based page number; reflects intent.page at debounce fire time
 }
 
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
@@ -154,8 +154,8 @@ func NewSearchKeyMap() searchKeyMap {
 	}
 }
 
-// NOTE: SearchPageLoadedMsg is defined in messages.go alongside all other shared
-// message types. SearchResultData is also in messages.go.
+// NOTE: SearchPageLoadedMsg and SearchLoadingMsg are defined in messages.go alongside
+// all other shared message types used between the app layer and the overlay.
 
 // SearchOverlay is the floating search UI model. It is layered above the
 // three-pane view while open — it does not replace any pane.
@@ -944,8 +944,8 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	}
 	tabLine := strings.Join(parts, "  ")
 
-	// TODO(19-search-redesign): replaced by o.results in story 99
-	// Loading state previously read from store; spinner display stubbed until story 99.
+	// NOTE: spinner display during loading is rendered in renderResultsPanel via the
+	// loadingNextPage spinner line and loadingFirstPage full-panel spinner.
 
 	// Pad/truncate to exactly innerWidth.
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
@@ -1007,12 +1007,10 @@ func (o *SearchOverlay) renderPaginationBar(w int) string {
 
 // renderResults builds the results area content inside Panel 2.
 // When results are loaded, delegates to resultList.View() for scrollable rendering.
-// Falls back to hint/loading/no-results text as needed.
+// Falls back to hint text when no results are present.
+// NOTE: Loading states (loadingFirstPage / loadingNextPage) are handled by the
+// caller renderResultsPanel, which renders the appropriate spinner before calling here.
 func (o *SearchOverlay) renderResults(_ int) string {
-	// TODO(19-search-redesign): replaced by o.results in story 99
-	// query and loading state were previously read from the store;
-	// return safe hint state until story 99 wires o.results.
-
 	if len(o.resultList.Items()) == 0 {
 		return lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
@@ -1024,7 +1022,8 @@ func (o *SearchOverlay) renderResults(_ int) string {
 }
 
 // rebuildListItems repopulates resultList from o.results.
-// TODO(19-search-redesign): story 99 wires tab-filtered views once o.intent exists.
+// The full results slice is shown directly — tab-filtered views from the prefix
+// state machine narrow the API request types upstream via SearchRequestMsg.Types.
 func (o *SearchOverlay) rebuildListItems() {
 	if o.results != nil {
 		o.rebuildFromResults()
