@@ -144,6 +144,9 @@ func (a *App) buildPlayContextCmd(contextURI, offsetURI string) tea.Cmd {
 // Used by panes without a Spotify collection context (Top Tracks, Recently Played,
 // Search). Spotify plays URIs[0] and queues the rest.
 func (a *App) buildPlayTrackListCmd(uris []string) tea.Cmd {
+	if len(uris) == 0 {
+		return nil
+	}
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
