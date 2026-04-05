@@ -110,6 +110,9 @@ type MockLibrary struct {
 	PlaylistTracksTotal   int
 	PlaylistTracksHasNext bool
 	PlaylistTracksErr     error
+	AlbumTracksResult     []api.Track
+	AlbumTracksHasNext    bool
+	AlbumTracksErr        error
 	SavedAlbumsResult     []api.SavedAlbum
 	SavedAlbumsErr        error
 	LikedTracksResult     []api.SavedTrack
@@ -134,6 +137,11 @@ func (m *MockLibrary) Playlists(_ context.Context, _, _ int) ([]api.SimplePlayli
 // PlaylistTracks returns the configured result, total, hasNext, and error.
 func (m *MockLibrary) PlaylistTracks(_ context.Context, _ string, _, _ int) ([]api.Track, int, bool, error) {
 	return m.PlaylistTracksResult, m.PlaylistTracksTotal, m.PlaylistTracksHasNext, m.PlaylistTracksErr
+}
+
+// AlbumTracks returns the configured result, hasNext, and error.
+func (m *MockLibrary) AlbumTracks(_ context.Context, _ string, _, _ int) ([]api.Track, bool, error) {
+	return m.AlbumTracksResult, m.AlbumTracksHasNext, m.AlbumTracksErr
 }
 
 // SavedAlbums returns the configured result and error.
