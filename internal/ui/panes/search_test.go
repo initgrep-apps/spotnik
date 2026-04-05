@@ -103,6 +103,10 @@ func sendKey(t *testing.T, o *panes.SearchOverlay, key string) (*panes.SearchOve
 		msg = tea.KeyMsg{Type: tea.KeyCtrlRight}
 	case "ctrl+left":
 		msg = tea.KeyMsg{Type: tea.KeyCtrlLeft}
+	case "pgdown":
+		msg = tea.KeyMsg{Type: tea.KeyPgDown}
+	case "pgup":
+		msg = tea.KeyMsg{Type: tea.KeyPgUp}
 	case "home":
 		msg = tea.KeyMsg{Type: tea.KeyHome}
 	default:
@@ -874,9 +878,9 @@ func TestSearchOverlay_SetSize_PropagatesList(t *testing.T) {
 	assert.NotEmpty(t, view, "view should not be empty after SetSize")
 }
 
-// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 8 bindings (Play, Queue, TabNext,
-// TabPrev, Clear, Close, nextPage, prevPage). Story 102 added nextPage/prevPage pagination
-// bindings so users can discover ctrl+right/left from the compact help bar.
+// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 8 bindings (all bindings).
+// ShortHelp is kept complete so it can be used programmatically; the help panel
+// uses ShowAll=true which bypasses ShortHelp and always renders the FullHelp 4×2 layout.
 func TestSearchKeyMap_ShortHelp(t *testing.T) {
 	km := panes.NewSearchKeyMap()
 	assert.Len(t, km.ShortHelp(), 8, "ShortHelp should return 8 bindings")
@@ -1689,24 +1693,24 @@ func TestResizeList_ListHeightMatchesPanelFormula(t *testing.T) {
 	o.SetSize(100, 40)
 	h := o.OverlayHeight()
 
-	// Hint visible: searchH=4, resultsH = h-4-3, listH = resultsH-4.
+	// Hint visible: searchH=4, helpH=4, resultsH = h-4-4, listH = resultsH-4.
 	require.True(t, o.ShowHintLine())
-	wantHintVisible := (h - 4 - 3) - 4
+	wantHintVisible := (h - 4 - 4) - 4
 	if wantHintVisible < 1 {
 		wantHintVisible = 1
 	}
 	assert.Equal(t, wantHintVisible, o.ListHeight(),
-		"list height with hint visible must be overlayH - 4 - 3 - 4 = %d", wantHintVisible)
+		"list height with hint visible must be overlayH - 4 - 4 - 4 = %d", wantHintVisible)
 
-	// Type 'j' → hint hides: searchH=3, resultsH = h-3-3, listH = resultsH-4.
+	// Type 'j' → hint hides: searchH=3, helpH=4, resultsH = h-3-4, listH = resultsH-4.
 	o, _ = sendKey(t, o, "j")
 	require.False(t, o.ShowHintLine())
-	wantHintHidden := (h - 3 - 3) - 4
+	wantHintHidden := (h - 3 - 4) - 4
 	if wantHintHidden < 1 {
 		wantHintHidden = 1
 	}
 	assert.Equal(t, wantHintHidden, o.ListHeight(),
-		"list height with hint hidden must be overlayH - 3 - 3 - 4 = %d", wantHintHidden)
+		"list height with hint hidden must be overlayH - 3 - 4 - 4 = %d", wantHintHidden)
 	assert.Equal(t, wantHintVisible+1, wantHintHidden,
 		"hint-hidden list must be 1 taller than hint-visible list")
 }
@@ -1959,8 +1963,9 @@ func TestRenderTabBar_ShowsSpinnerWhenLoadingWithZeroItems(t *testing.T) {
 
 // --- Story 95: Help bar colors and ctrl+u in ShortHelp ---
 
-// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() returns 8 bindings,
-// that one of them has key "ctrl+u" with help text "clear", and that k.Close is also present.
+// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() includes k.Clear (ctrl+u)
+// with help text "clear" and k.Close (esc). Both are present because ShortHelp is restored
+// to all 8 bindings (the help panel uses ShowAll=true so FullHelp is always displayed in the UI).
 func TestSearchKeyMap_ShortHelp_ContainsCtrlU(t *testing.T) {
 	km := panes.NewSearchKeyMap()
 	bindings := km.ShortHelp()
@@ -2402,16 +2407,16 @@ func TestHasNextPage_Table(t *testing.T) {
 // --- Task 5: Ctrl+Right / Ctrl+Left keybindings ---
 
 // TestCtrlRight_NoQuery_NoOp verifies that Ctrl+Right with no query is a no-op.
-func TestCtrlRight_NoQuery_NoOp(t *testing.T) {
+func TestPgDown_NoQuery_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	page := o.IntentPage()
-	o, cmd := sendKey(t, o, "ctrl+right")
+	o, cmd := sendKey(t, o, "pgdown")
 	assert.Equal(t, page, o.IntentPage(), "ctrl+right with no query must not change page")
 	assert.Nil(t, cmd, "ctrl+right with no query must return nil cmd")
 }
 
 // TestCtrlRight_LoadingFirstPage_NoOp verifies that Ctrl+Right while loading first page is a no-op.
-func TestCtrlRight_LoadingFirstPage_NoOp(t *testing.T) {
+func TestPgDown_LoadingFirstPage_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	// Type a query.
 	for _, ch := range "jazz" {
@@ -2423,13 +2428,13 @@ func TestCtrlRight_LoadingFirstPage_NoOp(t *testing.T) {
 	require.True(t, o.LoadingFirstPage())
 
 	pageBefore := o.IntentPage()
-	o, cmd := sendKey(t, o, "ctrl+right")
+	o, cmd := sendKey(t, o, "pgdown")
 	assert.Equal(t, pageBefore, o.IntentPage(), "ctrl+right while loadingFirstPage must not change page")
 	assert.Nil(t, cmd, "ctrl+right while loadingFirstPage must return nil cmd")
 }
 
 // TestCtrlRight_LastPage_NoOp verifies that Ctrl+Right on the last page is a no-op.
-func TestCtrlRight_LastPage_NoOp(t *testing.T) {
+func TestPgDown_LastPage_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	// Type a query and deliver one page of results with total=10 (exactly one page).
@@ -2445,14 +2450,14 @@ func TestCtrlRight_LastPage_NoOp(t *testing.T) {
 	require.False(t, panes.HasNextPage(o), "pre-condition: should be on last page")
 
 	pageBefore := o.IntentPage()
-	o, cmd := sendKey(t, o, "ctrl+right")
+	o, cmd := sendKey(t, o, "pgdown")
 	assert.Equal(t, pageBefore, o.IntentPage(), "ctrl+right on last page must not change page")
 	assert.Nil(t, cmd, "ctrl+right on last page must return nil cmd")
 }
 
 // TestCtrlRight_Valid_IncreasesPageAndSchedulesDebounce verifies that Ctrl+Right with
 // a query, not on the last page, increments intent.page and returns a debounce command.
-func TestCtrlRight_Valid_IncreasesPageAndSchedulesDebounce(t *testing.T) {
+func TestPgDown_Valid_IncreasesPageAndSchedulesDebounce(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	for _, ch := range "jazz" {
@@ -2467,7 +2472,7 @@ func TestCtrlRight_Valid_IncreasesPageAndSchedulesDebounce(t *testing.T) {
 	require.Equal(t, 1, o.IntentPage())
 	require.True(t, panes.HasNextPage(o))
 
-	o, cmd := sendKey(t, o, "ctrl+right")
+	o, cmd := sendKey(t, o, "pgdown")
 	assert.Equal(t, 2, o.IntentPage(), "ctrl+right should increment intent.page to 2")
 	require.NotNil(t, cmd, "ctrl+right should return debounce cmd")
 	// The cmd is a scheduleDebounce tick; execute it to get the debounce msg.
@@ -2479,16 +2484,16 @@ func TestCtrlRight_Valid_IncreasesPageAndSchedulesDebounce(t *testing.T) {
 }
 
 // TestCtrlLeft_NoQuery_NoOp verifies that Ctrl+Left with no query is a no-op.
-func TestCtrlLeft_NoQuery_NoOp(t *testing.T) {
+func TestPgUp_NoQuery_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	page := o.IntentPage()
-	o, cmd := sendKey(t, o, "ctrl+left")
+	o, cmd := sendKey(t, o, "pgup")
 	assert.Equal(t, page, o.IntentPage(), "ctrl+left with no query must not change page")
 	assert.Nil(t, cmd, "ctrl+left with no query must return nil cmd")
 }
 
 // TestCtrlLeft_Page1_NoOp verifies that Ctrl+Left on page 1 is a no-op.
-func TestCtrlLeft_Page1_NoOp(t *testing.T) {
+func TestPgUp_Page1_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	for _, ch := range "jazz" {
@@ -2496,13 +2501,13 @@ func TestCtrlLeft_Page1_NoOp(t *testing.T) {
 	}
 	require.Equal(t, 1, o.IntentPage(), "pre-condition: should be on page 1")
 
-	o, cmd := sendKey(t, o, "ctrl+left")
+	o, cmd := sendKey(t, o, "pgup")
 	assert.Equal(t, 1, o.IntentPage(), "ctrl+left on page 1 must not change page")
 	assert.Nil(t, cmd, "ctrl+left on page 1 must return nil cmd")
 }
 
 // TestCtrlLeft_LoadingFirstPage_NoOp verifies that Ctrl+Left while loadingFirstPage is a no-op.
-func TestCtrlLeft_LoadingFirstPage_NoOp(t *testing.T) {
+func TestPgUp_LoadingFirstPage_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	for _, ch := range "jazz" {
@@ -2514,7 +2519,7 @@ func TestCtrlLeft_LoadingFirstPage_NoOp(t *testing.T) {
 		Total:   11,
 	})
 	o = m.(*panes.SearchOverlay)
-	o, _ = sendKey(t, o, "ctrl+right") // page → 2
+	o, _ = sendKey(t, o, "pgdown") // page → 2
 	require.Equal(t, 2, o.IntentPage())
 
 	// Now set loadingFirstPage.
@@ -2522,14 +2527,14 @@ func TestCtrlLeft_LoadingFirstPage_NoOp(t *testing.T) {
 	o = m.(*panes.SearchOverlay)
 	require.True(t, o.LoadingFirstPage())
 
-	o, cmd := sendKey(t, o, "ctrl+left")
+	o, cmd := sendKey(t, o, "pgup")
 	assert.Equal(t, 2, o.IntentPage(), "ctrl+left while loadingFirstPage must not change page")
 	assert.Nil(t, cmd, "ctrl+left while loadingFirstPage must return nil cmd")
 }
 
 // TestCtrlLeft_Valid_DecreasesPageAndSchedulesDebounce verifies that Ctrl+Left on a
 // page > 1 with a query decrements intent.page and returns a debounce command.
-func TestCtrlLeft_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
+func TestPgUp_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	for _, ch := range "jazz" {
@@ -2541,10 +2546,10 @@ func TestCtrlLeft_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
 		Total:   11,
 	})
 	o = m.(*panes.SearchOverlay)
-	o, _ = sendKey(t, o, "ctrl+right") // page → 2
+	o, _ = sendKey(t, o, "pgdown") // page → 2
 	require.Equal(t, 2, o.IntentPage())
 
-	o, cmd := sendKey(t, o, "ctrl+left")
+	o, cmd := sendKey(t, o, "pgup")
 	assert.Equal(t, 1, o.IntentPage(), "ctrl+left should decrement intent.page to 1")
 	require.NotNil(t, cmd, "ctrl+left should return debounce cmd")
 	tickMsg := cmd()
@@ -2552,24 +2557,28 @@ func TestCtrlLeft_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
 	assert.False(t, isReq, "ctrl+left cmd must not immediately emit SearchRequestMsg")
 }
 
-// TestSearchKeyMap_ShortHelp_ContainsPaginationKeys verifies that ShortHelp includes
-// ctrl+right and ctrl+left pagination bindings.
+// TestSearchKeyMap_ShortHelp_ContainsPaginationKeys verifies that both pagination bindings
+// use pgdown/pgup as the sole keys (macOS-safe — Ctrl+Right/Left removed entirely).
+// nextPage and prevPage appear in both ShortHelp (all 8 bindings) and FullHelp.
 func TestSearchKeyMap_ShortHelp_ContainsPaginationKeys(t *testing.T) {
 	km := panes.NewSearchKeyMap()
-	bindings := km.ShortHelp()
+	shortBindings := km.ShortHelp()
 
 	var foundNext, foundPrev bool
-	for _, b := range bindings {
+	for _, b := range shortBindings {
 		keys := b.Keys()
-		if len(keys) > 0 && keys[0] == "ctrl+right" {
+		if len(keys) > 0 && keys[0] == "pgdown" {
+			// pgdown must be the ONLY key — ctrl+right must not be present
+			assert.Len(t, keys, 1, "nextPage must have exactly 1 key (pgdown only, ctrl+right removed)")
 			foundNext = true
 		}
-		if len(keys) > 0 && keys[0] == "ctrl+left" {
+		if len(keys) > 0 && keys[0] == "pgup" {
+			assert.Len(t, keys, 1, "prevPage must have exactly 1 key (pgup only, ctrl+left removed)")
 			foundPrev = true
 		}
 	}
-	assert.True(t, foundNext, "ShortHelp() must include ctrl+right binding")
-	assert.True(t, foundPrev, "ShortHelp() must include ctrl+left binding")
+	assert.True(t, foundNext, "ShortHelp() must include nextPage binding with pgdown as sole key")
+	assert.True(t, foundPrev, "ShortHelp() must include prevPage binding with pgup as sole key")
 }
 
 // --- Task 6: renderPaginationBar + Panel 2 layout + resizeList ---
@@ -2649,8 +2658,10 @@ func TestRenderPaginationBar_MidPage_BothArrowsNormal(t *testing.T) {
 		"next arrow must use Text on mid page; bar=%q", bar)
 }
 
-// TestRenderPaginationBar_ContainsPageNumbers verifies the bar shows "page N of M" text.
-func TestRenderPaginationBar_ContainsPageNumbers(t *testing.T) {
+// TestRenderPaginationBar_ContainsPageNumber verifies the bar shows "page N" without "of M".
+// Showing "of M" is misleading: the Spotify API total can be huge (e.g. 10,000+) and the
+// total pages can change between requests. The simpler "page N" with arrow dimming is clearer.
+func TestRenderPaginationBar_ContainsPageNumber(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
@@ -2658,10 +2669,13 @@ func TestRenderPaginationBar_ContainsPageNumbers(t *testing.T) {
 	results := panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}})
 	m, _ := o.Update(panes.SearchPageLoadedMsg{Results: results, Total: 21})
 	o = m.(*panes.SearchOverlay)
-	// page 1 of 3
 	bar := panes.RenderPaginationBarForTest(o, 60)
-	assert.True(t, strings.Contains(bar, "page 1 of 3"),
-		"pagination bar must show 'page 1 of 3' for total=21; bar=%q", bar)
+
+	// Must contain "page 1" but must NOT contain "of" — total page count is hidden.
+	assert.True(t, strings.Contains(bar, "page 1"),
+		"pagination bar must show 'page 1'; bar=%q", bar)
+	assert.False(t, strings.Contains(bar, " of "),
+		"pagination bar must NOT show 'of M' total; bar=%q", bar)
 }
 
 // TestResizeList_SubtractsPaginationLine verifies that resizeList() subtracts 1 extra
@@ -2690,7 +2704,7 @@ func TestPaginationBar_NotRenderedWhenTotal0(t *testing.T) {
 	o.SetSize(80, 40)
 	// No results delivered — total stays 0.
 	view := o.View()
-	assert.False(t, strings.Contains(view, "page"), // pagination bar uses "page N of M"
+	assert.False(t, strings.Contains(view, "page"), // pagination bar uses "page N"
 		"pagination bar must not appear when total=0; view=%q", view)
 }
 
@@ -2711,7 +2725,7 @@ func TestCtrlU_ResetIntentPageAndQuery(t *testing.T) {
 	o = m.(*panes.SearchOverlay)
 	// Advance to page 5 by sending ctrl+right four times.
 	for i := 0; i < 4; i++ {
-		o, _ = sendKey(t, o, "ctrl+right")
+		o, _ = sendKey(t, o, "pgdown")
 	}
 	require.Equal(t, 5, o.IntentPage(), "pre-condition: should be on page 5")
 
@@ -2784,7 +2798,7 @@ func TestSearchOverlay_RapidPageFlip_SingleRequest(t *testing.T) {
 		//   2. Returns scheduleDebounce() — a tea.Tick cmd
 		// We immediately execute the tick to get the searchDebounceMsg.
 		var debounceCmd tea.Cmd
-		o, debounceCmd = sendKey(t, o, "ctrl+right")
+		o, debounceCmd = sendKey(t, o, "pgdown")
 		require.NotNil(t, debounceCmd, "ctrl+right should return a debounce cmd (press %d)", i+1)
 		// Execute the tick to get the debounce message.
 		debounceMsg := debounceCmd()
@@ -2832,12 +2846,12 @@ func TestSearchOverlay_NoQuery_PaginationNoOp(t *testing.T) {
 	page := o.IntentPage()
 
 	// Ctrl+Right with no query should be a no-op.
-	o, cmd := sendKey(t, o, "ctrl+right")
+	o, cmd := sendKey(t, o, "pgdown")
 	assert.Equal(t, page, o.IntentPage(), "ctrl+right with no query must not change page")
 	assert.Nil(t, cmd, "ctrl+right with no query must return nil cmd (no SearchRequestMsg)")
 
 	// Ctrl+Left with no query should also be a no-op.
-	o, cmd = sendKey(t, o, "ctrl+left")
+	o, cmd = sendKey(t, o, "pgup")
 	assert.Equal(t, page, o.IntentPage(), "ctrl+left with no query must not change page")
 	assert.Nil(t, cmd, "ctrl+left with no query must return nil cmd (no SearchRequestMsg)")
 }
@@ -2885,7 +2899,7 @@ func TestSearchOverlay_AllTab_HasNextPage(t *testing.T) {
 
 // TestCtrlRight_LoadingNextPage_NoOp verifies that Ctrl+Right while loadingNextPage is a no-op.
 // This covers the guard condition: !loadingFirstPage && !loadingNextPage.
-func TestCtrlRight_LoadingNextPage_NoOp(t *testing.T) {
+func TestPgDown_LoadingNextPage_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	for _, ch := range "jazz" {
@@ -2903,13 +2917,13 @@ func TestCtrlRight_LoadingNextPage_NoOp(t *testing.T) {
 	require.True(t, o.LoadingNextPage(), "pre-condition: loadingNextPage should be true")
 
 	pageBefore := o.IntentPage()
-	o, cmd := sendKey(t, o, "ctrl+right")
+	o, cmd := sendKey(t, o, "pgdown")
 	assert.Equal(t, pageBefore, o.IntentPage(), "ctrl+right while loadingNextPage must not change page")
 	assert.Nil(t, cmd, "ctrl+right while loadingNextPage must return nil cmd")
 }
 
 // TestCtrlLeft_LoadingNextPage_NoOp verifies that Ctrl+Left while loadingNextPage is a no-op.
-func TestCtrlLeft_LoadingNextPage_NoOp(t *testing.T) {
+func TestPgUp_LoadingNextPage_NoOp(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 	for _, ch := range "jazz" {
@@ -2921,7 +2935,7 @@ func TestCtrlLeft_LoadingNextPage_NoOp(t *testing.T) {
 		Total:   21,
 	})
 	o = m.(*panes.SearchOverlay)
-	o, _ = sendKey(t, o, "ctrl+right") // page → 2
+	o, _ = sendKey(t, o, "pgdown") // page → 2
 	require.Equal(t, 2, o.IntentPage())
 
 	// Set loadingNextPage.
@@ -2929,7 +2943,174 @@ func TestCtrlLeft_LoadingNextPage_NoOp(t *testing.T) {
 	o = m.(*panes.SearchOverlay)
 	require.True(t, o.LoadingNextPage(), "pre-condition: loadingNextPage should be true")
 
-	o, cmd := sendKey(t, o, "ctrl+left")
+	o, cmd := sendKey(t, o, "pgup")
 	assert.Equal(t, 2, o.IntentPage(), "ctrl+left while loadingNextPage must not change page")
 	assert.Nil(t, cmd, "ctrl+left while loadingNextPage must return nil cmd")
+}
+
+// --- Bug fix tests: C1, M1, M2, M3 ---
+
+// TestSearchOverlay_CtrlU_ClearsResults (C1) verifies that Ctrl+U clears not only the
+// input but also the displayed results and resets loading flags.
+// Previously the KeyCtrlU handler cleared input/prefix/intent but left o.results,
+// o.total, and the resultList intact — stale results would remain on screen.
+func TestSearchOverlay_CtrlU_ClearsResults(t *testing.T) {
+	o := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+	require.NotEmpty(t, o.Results(), "prerequisite: results should be non-empty before Ctrl+U")
+	require.NotEmpty(t, o.ResultListItems(), "prerequisite: result list should be non-empty before Ctrl+U")
+
+	o, _ = sendKey(t, o, "ctrl+u")
+
+	assert.Nil(t, o.Results(), "Ctrl+U must clear o.results so stale results are not shown")
+	assert.Empty(t, o.ResultListItems(), "Ctrl+U must clear resultList items")
+}
+
+// TestSearchOverlay_AddToQueue_CarriesTrackName (M1) verifies that Ctrl+A on a track
+// populates AddToQueueMsg.TrackName so the queue toast shows the track title.
+func TestSearchOverlay_AddToQueue_CarriesTrackName(t *testing.T) {
+	o := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+
+	_, cmd := sendKey(t, o, "ctrl+a")
+	require.NotNil(t, cmd, "Ctrl+A on a track must return a command")
+	msg := cmd()
+	qMsg, ok := msg.(panes.AddToQueueMsg)
+	require.True(t, ok, "Ctrl+A must produce AddToQueueMsg, got %T", msg)
+	assert.Equal(t, "Blinding Lights", qMsg.TrackName,
+		"AddToQueueMsg.TrackName must be populated from si.Name so the queue toast is not blank")
+}
+
+// TestSearchOverlay_Backspace_DemoteResetsIntentTab (M2) verifies that pressing Backspace
+// at cursor position 0 while a prefix is locked resets intent.tab to TabAll.
+// Previously demoteFromPromptTag() cleared prefixState/lockedPrefix but left intent.tab
+// at the old value (e.g. TabSongs), causing the next search to fire with a stale type filter.
+func TestSearchOverlay_Backspace_DemoteResetsIntentTab(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+
+	// Type ":songs " to lock the prefix — intent.tab becomes TabSongs.
+	for _, ch := range ":songs " {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	require.Equal(t, panes.PrefixLocked, o.PrefixState(), "prerequisite: prefix must be locked")
+	require.Equal(t, panes.TabSongs, o.IntentTab(), "prerequisite: intent.tab must be TabSongs after lock")
+
+	// Move cursor to position 0 so Backspace triggers demotion, not normal delete.
+	o, _ = sendKey(t, o, "home")
+	o, _ = sendKey(t, o, "backspace")
+
+	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "after demotion: prefixState must be PrefixNone")
+	assert.Equal(t, panes.TabAll, o.IntentTab(),
+		"after demotion: intent.tab must reset to TabAll so the next search is not filtered to Songs")
+}
+
+// TestSearchOverlay_ListNavigation_NoClampsAtLastItem (M3) verifies that pressing Down
+// at the last list item does NOT wrap to the first item (InfiniteScrolling must be false).
+// With InfiniteScrolling=true the list wraps within a page, which is unexpected for a
+// paged result set and makes it impossible to tell when you've reached the end.
+func TestSearchOverlay_ListNavigation_NoWrapAtLastItem(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	// Load exactly 2 items so the boundary is reachable.
+	results := panes.TracksToSearchListItems([]domain.Track{
+		{URI: "u1", Name: "Track A", Artists: []domain.Artist{{Name: "Artist"}}},
+		{URI: "u2", Name: "Track B", Artists: []domain.Artist{{Name: "Artist"}}},
+	})
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: results})
+	o = model.(*panes.SearchOverlay)
+
+	// Navigate to the last item (index 1).
+	o, _ = sendKey(t, o, "down")
+	require.Equal(t, 1, o.CursorPos(), "prerequisite: cursor must be at last item (index 1)")
+
+	// Press Down again — must NOT wrap back to index 0.
+	o, _ = sendKey(t, o, "down")
+	assert.Equal(t, 1, o.CursorPos(),
+		"Down at last item must clamp (stay at 1), not wrap to 0 — InfiniteScrolling must be false")
+}
+
+// --- Pagination UX fixes: pgdown/pgup keybindings, pagination bar format, ShortHelp count ---
+
+// TestPgDown_AdvancesPage verifies that PageDown advances intent.page when hasNextPage()
+// is true and a query is set. This is the macOS-safe replacement for Ctrl+Right.
+func TestPgDown_AdvancesPage(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   21,
+	})
+	o = m.(*panes.SearchOverlay)
+	require.True(t, panes.HasNextPage(o), "pre-condition: hasNextPage must be true")
+
+	o, cmd := sendKey(t, o, "pgdown")
+	assert.Equal(t, 2, o.IntentPage(), "pgdown should advance intent.page to 2")
+	require.NotNil(t, cmd, "pgdown should return a debounce cmd")
+	msg := cmd()
+	_, isReq := msg.(panes.SearchRequestMsg)
+	assert.False(t, isReq, "pgdown cmd must not immediately emit SearchRequestMsg (debounced)")
+}
+
+// TestPgUp_PrevPage verifies that PageUp decrements intent.page when page > 1.
+// This is the macOS-safe replacement for Ctrl+Left.
+func TestPgUp_PrevPage(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	for _, ch := range "jazz" {
+		o, _ = sendKey(t, o, string(ch))
+	}
+	m, _ := o.Update(panes.SearchPageLoadedMsg{
+		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
+		Total:   21,
+	})
+	o = m.(*panes.SearchOverlay)
+	o, _ = sendKey(t, o, "pgdown") // page → 2
+	require.Equal(t, 2, o.IntentPage(), "pre-condition: must be on page 2")
+
+	o, cmd := sendKey(t, o, "pgup")
+	assert.Equal(t, 1, o.IntentPage(), "pgup should decrement intent.page to 1")
+	require.NotNil(t, cmd, "pgup should return a debounce cmd")
+	msg := cmd()
+	_, isReq := msg.(panes.SearchRequestMsg)
+	assert.False(t, isReq, "pgup cmd must not immediately emit SearchRequestMsg (debounced)")
+}
+
+// --- ShowAll help bar (2-row FullHelp layout) ---
+
+// TestSearchKeyMap_FullHelp_FourGroupsOfTwo verifies that FullHelp() returns exactly 4 groups
+// of 2 bindings each. This structure drives the 4-column × 2-row layout rendered by
+// bubbles/help when ShowAll=true — each group becomes a column, each binding a row.
+func TestSearchKeyMap_FullHelp_FourGroupsOfTwo(t *testing.T) {
+	km := panes.NewSearchKeyMap()
+	groups := km.FullHelp()
+	assert.Len(t, groups, 4, "FullHelp must have 4 groups for 4-column layout")
+	for i, g := range groups {
+		assert.Len(t, g, 2, "each FullHelp group must have 2 bindings (column %d)", i)
+	}
+}
+
+// TestHelpPanel_ShowsAllBindings verifies that the help panel renders ALL 8 bindings
+// (pgdn, pgup, esc, ctrl+u, enter, ctrl+a, tab, shift+tab) because ShowAll=true is set
+// on the help model, causing help.View() to use FullHelp instead of ShortHelp.
+func TestHelpPanel_ShowsAllBindings(t *testing.T) {
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(200, 50) // wide terminal so no truncation
+
+	rendered := panes.RenderHelpForTest(o)
+
+	// Strip ANSI escapes for plain-text assertion.
+	plain := lipgloss.NewStyle().Render(rendered)
+
+	// All 8 key names must appear in the rendered help output.
+	for _, wantKey := range []string{"enter", "ctrl+a", "tab", "shift+tab", "esc", "ctrl+u", "pgdn", "pgup"} {
+		assert.True(t, strings.Contains(plain, wantKey),
+			"help panel must render key %q (ShowAll=true shows all 8 bindings); rendered=%q", wantKey, plain)
+	}
 }

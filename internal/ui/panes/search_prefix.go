@@ -270,9 +270,12 @@ func (o *SearchOverlay) demoteFromPromptTag() {
 	o.input.SetValue(o.lockedPrefix + " " + query)
 	o.input.CursorEnd()
 
-	// Reset prefix state — user is now editing the full input freely.
+	// Reset prefix state and intent tab — user is now editing freely.
+	// intent.tab must also reset to TabAll so the next search is not filtered
+	// by the stale locked-prefix tab value (e.g. TabSongs from a prior :songs lock).
 	o.lockedPrefix = ""
 	o.prefixState = PrefixNone
+	o.intent.tab = TabAll
 	// NOTE: We intentionally do NOT call parsePrefix() here. The restored value
 	// contains ":prefix query" which would re-lock immediately. Instead we let the
 	// next keypress (typically another Backspace to remove the space) drive parsePrefix.
