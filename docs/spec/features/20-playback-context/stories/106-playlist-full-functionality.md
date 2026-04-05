@@ -1,13 +1,13 @@
 ---
-title: "Playlist full functionality — track sub-view, lazy pagination, playback, management"
+title: "Playlist full functionality — track sub-view, lazy pagination, playback"
 feature: 20-playback-context
 status: open
 ---
 
 ## Background
 
-The `PlaylistsPane` has the complete UI skeleton — list view, track sub-view,
-management keys — but is almost entirely non-functional:
+The `PlaylistsPane` has the complete UI skeleton — list view, track sub-view — but
+the drill-down functionality is entirely non-functional:
 
 1. **Track sub-view never loads** — `FetchPlaylistTracksRequestMsg` has no handler
    in `app.go`. The message is emitted, silently dropped, and the track table stays
@@ -16,20 +16,19 @@ management keys — but is almost entirely non-functional:
 2. **Playing a track is missing** — `handleTrackViewKey` has no Enter handler.
    Even if tracks loaded, pressing Enter does nothing.
 
-3. **All management operations are dead** — `PlaylistCreateRequestMsg`,
-   `PlaylistRenameRequestMsg`, `PlaylistRemoveRequestMsg`,
-   `PlaylistReorderRequestMsg` all have corresponding command functions in
-   `commands.go` but zero handlers in `app.go`. Every key (r, x, Shift+↑/↓)
-   silently does nothing.
-
-4. **Interactive data is stored globally** — the current `buildFetchPlaylistTracksCmd`
+3. **Interactive data is stored globally** — the current `buildFetchPlaylistTracksCmd`
    writes to the global store via `SetPlaylistTracks`. Playlist track data is
    ephemeral and user-session-scoped: it exists only while the user is viewing that
    sub-view. When the user presses Esc it is no longer needed. The correct pattern —
    already used by search — is pane-owned data, not store-owned.
 
-This story fixes all of the above and introduces the correct interactive data-loading
+This story fixes the drill-down and introduces the correct interactive data-loading
 pattern for the playlist track sub-view, modelled after `SearchOverlay`.
+
+**Out of scope:** Playlist management operations (rename `r`, remove track `x`,
+reorder `Shift+↑/↓`, create `n`) are explicitly excluded from this story. The
+existing pane keys for these actions will remain non-functional. Management
+operations will be addressed in a dedicated story.
 
 ---
 
@@ -371,13 +370,6 @@ func (p *PlaylistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         p.refreshTrackRows()  // reads from p.loadedTracks, NOT store
         return p, nil
 
-    case PlaylistCreatedMsg:
-        if m.Err == nil { p.refreshPlaylistRows() }
-        return p, nil
-
-    case PlaylistRenamedMsg:
-        if m.Err == nil { p.refreshPlaylistRows() }
-        return p, nil
     }
 
     if !p.focused {
@@ -451,35 +443,6 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
         }
         return p, nil
 
-    case key.Type == tea.KeyRunes && string(key.Runes) == "x":
-        if idx := p.trackTable.SelectedIndex(); idx >= 0 && idx < len(p.loadedTracks) {
-            track := p.loadedTracks[idx]  // NEW: read from loadedTracks
-            playlistID := p.selectedID
-            return p, func() tea.Msg {
-                return PlaylistRemoveRequestMsg{PlaylistID: playlistID, TrackURI: track.URI}
-            }
-        }
-        return p, nil
-
-    case key.Type == tea.KeyShiftUp:
-        if idx := p.trackTable.SelectedIndex(); idx > 0 && idx < len(p.loadedTracks) {
-            return p, func() tea.Msg {
-                return PlaylistReorderRequestMsg{
-                    PlaylistID: p.selectedID, RangeStart: idx, InsertBefore: idx - 1, RangeLength: 1,
-                }
-            }
-        }
-        return p, nil
-
-    case key.Type == tea.KeyShiftDown:
-        if idx := p.trackTable.SelectedIndex(); idx >= 0 && idx < len(p.loadedTracks)-1 {
-            return p, func() tea.Msg {
-                return PlaylistReorderRequestMsg{
-                    PlaylistID: p.selectedID, RangeStart: idx, InsertBefore: idx + 2, RangeLength: 1,
-                }
-            }
-        }
-        return p, nil
     }
 
     // Forward j/k and other navigation to the track table.
@@ -624,48 +587,6 @@ case panes.PlaylistTrackViewClosedMsg:
     a.playlistTracksCancel()
     a.playlistTracksCancel = func() {}
     a.playlistTracksID = ""
-    return a, nil
-
-case panes.PlaylistRenameRequestMsg:
-    return a, a.buildRenamePlaylistCmd(m.PlaylistID, m.NewName)
-
-case panes.PlaylistRenamedMsg:
-    if m.Err != nil {
-        return a, a.alerts.NewAlertCmd("error", "Failed to rename playlist")
-    }
-    // Re-fetch playlists to reflect updated name in the list.
-    return a, a.buildFetchPlaylistsCmd(0)
-
-case panes.PlaylistRemoveRequestMsg:
-    return a, a.buildRemovePlaylistTrackCmd(m.PlaylistID, m.TrackURI)
-
-case panes.PlaylistRemoveResultMsg:
-    if m.Err != nil {
-        return a, a.alerts.NewAlertCmd("error", "Failed to remove track from playlist")
-    }
-    // Re-fetch the current playlist tracks to reflect the removal.
-    if m.PlaylistID == a.playlistTracksID {
-        ctx, cancel := context.WithCancel(context.Background())
-        a.playlistTracksCancel = cancel
-        return a, a.buildFetchPlaylistTracksCmd(ctx, m.PlaylistID, 0)
-    }
-    return a, nil
-
-case panes.PlaylistReorderRequestMsg:
-    return a, a.buildReorderPlaylistTracksCmd(
-        m.PlaylistID, m.RangeStart, m.InsertBefore, m.RangeLength,
-    )
-
-case panes.PlaylistReorderResultMsg:
-    if m.Err != nil {
-        return a, a.alerts.NewAlertCmd("error", "Failed to reorder playlist tracks")
-    }
-    // Re-fetch to get confirmed order from Spotify (no optimistic update).
-    if a.playlistTracksID != "" {
-        ctx, cancel := context.WithCancel(context.Background())
-        a.playlistTracksCancel = cancel
-        return a, a.buildFetchPlaylistTracksCmd(ctx, a.playlistTracksID, 0)
-    }
     return a, nil
 ```
 
@@ -901,48 +822,7 @@ Track sub-view is visible, fetch is in-flight:
 
 ---
 
-### Flow E — Track removal (x key)
-
-```
-User is in track sub-view, cursor on track 5:
-  presses x
-    → emit PlaylistRemoveRequestMsg{PlaylistID:"MORNING", TrackURI:"spotify:track:T5"}
-
-  app.go PlaylistRemoveRequestMsg:
-    → buildRemovePlaylistTrackCmd("MORNING", "spotify:track:T5")
-    → DELETE /playlists/MORNING/tracks  {tracks:[{uri:"spotify:track:T5"}]}
-
-  PlaylistRemoveResultMsg{Err:nil}:
-    → no error
-    → m.PlaylistID == a.playlistTracksID → re-fetch from offset 0
-    → cancel old context, new context, buildFetchPlaylistTracksCmd(ctx, "MORNING", 0)
-    → fresh track list returned → pane replaces loadedTracks
-
-  PlaylistRemoveResultMsg{Err:someError}:
-    → toast "Failed to remove track from playlist" ✓
-```
-
----
-
-### Flow F — Reorder tracks (Shift+↑/↓)
-
-```
-User in track sub-view, cursor on track 5, presses Shift+↓:
-  → emit PlaylistReorderRequestMsg{ID:"MORNING", RangeStart:4, InsertBefore:6, RangeLength:1}
-  app.go: buildReorderPlaylistTracksCmd(...)
-  → PUT /playlists/MORNING/tracks {range_start:4, insert_before:6, range_length:1}
-
-  PlaylistReorderResultMsg{Err:nil}:
-    → re-fetch from offset 0 (confirmed order from Spotify) ✓
-
-  PlaylistReorderResultMsg{Err:someError}:
-    → toast "Failed to reorder playlist tracks"
-    → loadedTracks stays as-is (no optimistic update was made) ✓
-```
-
----
-
-### Flow G — Network error fetching tracks
+### Flow E — Network error fetching tracks
 
 ```
   FetchPlaylistTracksRequestMsg fires → HTTP request fails (404 / 403 / 5xx)
@@ -959,7 +839,7 @@ User in track sub-view, cursor on track 5, presses Shift+↓:
 
 ---
 
-### Flow H — Empty playlist (0 tracks)
+### Flow F — Empty playlist (0 tracks)
 
 ```
   FetchPlaylistTracksRequestMsg fires for empty playlist
@@ -970,25 +850,6 @@ User in track sub-view, cursor on track 5, presses Shift+↓:
   → refreshTrackRows() → table shows 0 rows
   → Title: "Playlists ── My Empty Playlist (0 tracks)"
   → Enter in track sub-view: idx check fails → nothing played ✓
-```
-
----
-
-### Flow I — Rename playlist (r key)
-
-```
-User in list view, cursor on "Morning Drive", presses r:
-  → emit PlaylistRenameRequestMsg{PlaylistID:"MORNING", NewName:"Morning Drive"} 
-    NOTE: NewName = pl.Name (current name) — known limitation (see issues.md).
-          User cannot type new name yet (textinput integration is a separate story).
-  app.go: buildRenamePlaylistCmd("MORNING", "Morning Drive")
-  → PUT /playlists/MORNING {name:"Morning Drive", description:""}
-
-  PlaylistRenamedMsg{Err:nil}:
-    → buildFetchPlaylistsCmd(0) → re-fetch full playlist list ✓
-
-  PlaylistRenamedMsg{Err:err}:
-    → toast "Failed to rename playlist" ✓
 ```
 
 ---
@@ -1006,13 +867,10 @@ User in list view, cursor on "Morning Drive", presses r:
 | Enter → Esc → Enter (same playlist) | `tracksFetching` guard in debounce handler prevents duplicate request ✓ |
 | Enter → Esc → Enter (different playlist) | Debounce stale check discards old tick; only new playlist fetches ✓ |
 | Esc while loading | `PlaylistTrackViewClosedMsg` cancels context; stale Msg discarded ✓ |
-| Remove track while paginating | Re-fetch from offset 0; fresh list replaces loadedTracks ✓ |
-| Reorder fails | Toast; no optimistic update was made; display unchanged ✓ |
 | 403 on tracks fetch | Toast; sub-view stays with empty table; user can Esc ✓ |
 | 404 on tracks fetch | Toast; sub-view stays with empty table; user can Esc ✓ |
 | API client nil (pre-auth) | `errNilClient` returned; handler silently discards (`errNilClient` case) ✓ |
-| Rename textinput | Out of scope — known limitation in issues.md, not changed in this story |
-| "n" (create playlist) | Out of scope — skipped in this story |
+| Management keys (r, x, Shift+↑/↓, n) | **Out of scope** — keys remain non-functional in this story |
 
 ---
 
@@ -1025,7 +883,7 @@ User in list view, cursor on "Morning Drive", presses r:
 | `internal/api/apitest/mock.go` | Update `MockLibrary.PlaylistTracks` to match new signature |
 | `internal/ui/panes/messages.go` | Update `FetchPlaylistTracksRequestMsg` (add `Offset`), update `PlaylistTracksLoadedMsg` (add `Total`, `HasNext`, `Offset`), add `PlaylistTrackViewClosedMsg` |
 | `internal/ui/panes/playlists_pane.go` | New fields, debounce types, `schedulePlaylistDebounce`, `handlePlaylistDebounce`, `checkPrefetch`, updated `handleListViewKey` Enter, updated `handleTrackViewKey` (Enter + Esc), updated `refreshTrackRows` (reads `loadedTracks`) |
-| `internal/app/app.go` | New `playlistTracksCancel`/`playlistTracksID` fields; 7 new message handlers; `forwardToPlaylistsPane` helper |
+| `internal/app/app.go` | New `playlistTracksCancel`/`playlistTracksID` fields; 3 new message handlers (`FetchPlaylistTracksRequestMsg`, `PlaylistTracksLoadedMsg`, `PlaylistTrackViewClosedMsg`); `forwardToPlaylistsPane` helper |
 | `internal/app/commands.go` | Update `buildFetchPlaylistTracksCmd`: add `ctx context.Context` param, `offset int`, new return signature call, `api.Interactive` priority |
 
 ---
@@ -1042,9 +900,6 @@ User in list view, cursor on "Morning Drive", presses r:
 - [ ] Spotify plays the selected track with the playlist as context; queue fills with subsequent tracks
 - [ ] Pressing Esc returns to playlist list and cancels any in-flight fetch
 - [ ] Rapid playlist switching: only the last selected playlist's tracks load
-- [ ] `x` removes a track and re-fetches from offset 0
-- [ ] `Shift+↑/↓` reorders a track and re-fetches from offset 0 on success
-- [ ] `r` sends rename request; on success re-fetches playlist list
 - [ ] All errors (403, 404, 5xx) show a toast; sub-view stays navigable
 - [ ] Empty playlists show empty track table with correct track count (0)
 - [ ] Local files and null tracks are filtered out and never shown
@@ -1077,9 +932,8 @@ User in list view, cursor on "Morning Drive", presses r:
       - test: Enter emits no immediate request (only a debounce cmd); after debounce resolves,
         FetchPlaylistTracksRequestMsg is emitted with Offset:0
 
-- [ ] Update `handleTrackViewKey`: add Enter (play), update Esc (emit `PlaylistTrackViewClosedMsg`),
-      update x/Shift±/Shift↓ to read from `loadedTracks` instead of store.
-      Implement `checkPrefetch`.
+- [ ] Update `handleTrackViewKey`: add Enter (play), update Esc (emit `PlaylistTrackViewClosedMsg`).
+      Implement `checkPrefetch`. Management keys (x, Shift+↑/↓) are out of scope.
       - test: Enter on row N emits PlayContextMsg{ContextURI:selectedURI, OffsetURI:tracks[N].URI};
         Esc emits PlaylistTrackViewClosedMsg; checkPrefetch fires when cursor >= len-10 and
         hasMoreTracks and not fetching; checkPrefetch does NOT fire when tracksFetching=true
@@ -1098,12 +952,10 @@ User in list view, cursor on "Morning Drive", presses r:
       - test: cancelled context before HTTP → nil returned; cancelled context after HTTP → nil;
         success → PlaylistTracksLoadedMsg with correct fields; 429 → RateLimitedMsg
 
-- [ ] Add `playlistTracksCancel`/`playlistTracksID` to App; add 7 app.go message handlers
-      (`FetchPlaylistTracksRequestMsg`, `PlaylistTracksLoadedMsg`, `PlaylistTrackViewClosedMsg`,
-      `PlaylistRenameRequestMsg`, `PlaylistRenamedMsg`, `PlaylistRemoveRequestMsg`,
-      `PlaylistRemoveResultMsg`, `PlaylistReorderRequestMsg`, `PlaylistReorderResultMsg`);
-      add `forwardToPlaylistsPane` helper.
+- [ ] Add `playlistTracksCancel`/`playlistTracksID` to App; add 3 app.go message handlers
+      (`FetchPlaylistTracksRequestMsg`, `PlaylistTracksLoadedMsg`, `PlaylistTrackViewClosedMsg`);
+      add `forwardToPlaylistsPane` helper. Management handlers are out of scope.
       - test: FetchPlaylistTracksRequestMsg cancels prior context and sets new ID; stale
         PlaylistTracksLoadedMsg is discarded; PlaylistTrackViewClosedMsg clears ID and
-        calls cancel; remove result triggers re-fetch; reorder success triggers re-fetch;
+        calls cancel;
         errors trigger toasts
