@@ -630,25 +630,31 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 func (a *App) buildFetchAlbumTracksCmd(ctx context.Context, albumID string, offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
-		if library == nil {
-			return panes.AlbumTracksLoadedMsg{Err: errNilClient, AlbumID: albumID}
-		}
+		// Check for cancellation before making the HTTP call.
 		if ctx.Err() != nil {
 			return nil
+		}
+		if library == nil {
+			return panes.AlbumTracksLoadedMsg{Err: errNilClient, AlbumID: albumID}
 		}
 		tracks, hasNext, err := library.AlbumTracks(
 			api.WithPriority(ctx, api.Interactive),
 			albumID, 50, offset,
 		)
-		if ctx.Err() != nil {
-			return nil
-		}
 		if err != nil {
+			// Check cancellation again — context.Canceled is expected on album switch.
+			if ctx.Err() != nil {
+				return nil // silently discard; not an error worth toasting
+			}
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(err, &forbiddenErr) {
+				return panes.AlbumTracksLoadedMsg{AlbumID: albumID, Offset: offset, Err: forbiddenErr}
 			}
 			return panes.AlbumTracksLoadedMsg{AlbumID: albumID, Offset: offset, Err: err}
 		}

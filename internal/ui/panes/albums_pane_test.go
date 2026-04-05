@@ -437,6 +437,28 @@ func TestAlbumsPane_AlbumTracksLoadedMsg_HasNextFalse_StopsPrefetch(t *testing.T
 	assert.False(t, updated.tracksFetching, "tracksFetching must be cleared")
 }
 
+// TestAlbumsPane_AlbumTracksLoadedMsg_ErrorPath_ClearsFetchingState verifies that when
+// AlbumTracksLoadedMsg carries an error, tracksFetching is cleared and loadedTracks is unchanged.
+func TestAlbumsPane_AlbumTracksLoadedMsg_ErrorPath_ClearsFetchingState(t *testing.T) {
+	a := newTestAlbumsPaneWithData(true)
+	a.SetSize(100, 20)
+
+	// Open track view so selectedID matches.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+
+	// Manually set tracksFetching=true to simulate an in-flight request.
+	a.tracksFetching = true
+
+	// Send an AlbumTracksLoadedMsg with an error.
+	someErr := fmt.Errorf("failed to fetch album tracks")
+	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Err: someErr})
+	updated := model2.(*AlbumsPane)
+
+	assert.False(t, updated.tracksFetching, "tracksFetching must be cleared on error")
+	assert.Nil(t, updated.loadedTracks, "loadedTracks must remain unchanged on error")
+}
+
 // TestAlbumsPane_Esc_EmitsAlbumTrackViewClosedMsg verifies that Esc in track sub-view
 // emits AlbumTrackViewClosedMsg and clears loadedTracks.
 func TestAlbumsPane_Esc_EmitsAlbumTrackViewClosedMsg(t *testing.T) {
@@ -534,7 +556,8 @@ func TestAlbumsPane_EnterOnEmptyTrackList_DoesNothing(t *testing.T) {
 }
 
 // TestAlbumsPane_CheckPrefetch_CursorNearEnd_EmitsRequest verifies that checkPrefetch
-// returns a cmd when cursor is within 5 rows of the end and hasMoreTracks=true.
+// returns a cmd when cursor is within 5 rows of the end and hasMoreTracks=true,
+// and returns nil when the cursor is far from the end.
 func TestAlbumsPane_CheckPrefetch_CursorNearEnd_EmitsRequest(t *testing.T) {
 	a := newTestAlbumsPaneWithData(true)
 	a.SetSize(100, 30)
@@ -551,17 +574,27 @@ func TestAlbumsPane_CheckPrefetch_CursorNearEnd_EmitsRequest(t *testing.T) {
 	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks, HasNext: true})
 	a = model2.(*AlbumsPane)
 
-	// Direct check: cursor at row 45 (0-based) triggers prefetch.
-	a.trackTable.SetRows(func() []map[string]string {
-		rows := make([]map[string]string, 50)
-		for i := range rows {
-			rows[i] = map[string]string{"index": fmt.Sprintf("%d", i+1), "name": fmt.Sprintf("Track %d", i+1), "artist": "Artist", "duration": "3:00"}
-		}
-		return rows
-	}())
-
-	// Verify checkPrefetch returns nil when not near end (tracksFetching=false, hasMore=true, cursor at 0).
+	// Negative case: cursor at 0 (far from end) → no prefetch.
 	prefetchCmd := a.checkPrefetch()
 	// cursor is 0, len=50, threshold=5, so 0 >= 50-5=45 is false → no prefetch.
 	assert.Nil(t, prefetchCmd, "cursor at 0 of 50 should not trigger prefetch")
+
+	// Positive case: move cursor to the last row (index 49, which is >= 50-5=45) → emits request.
+	// Send enough down-arrow presses to reach the end of the track table.
+	for i := 0; i < 49; i++ {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyDown})
+		a = m.(*AlbumsPane)
+	}
+	// Reset tracksFetching in case it was set by intermediate down presses.
+	a.tracksFetching = false
+
+	prefetchCmd = a.checkPrefetch()
+	require.NotNil(t, prefetchCmd, "cursor near end with hasMoreTracks=true should emit a prefetch cmd")
+
+	// Execute the cmd to confirm it's a FetchAlbumTracksRequestMsg.
+	msg := prefetchCmd()
+	fetchReq, ok := msg.(FetchAlbumTracksRequestMsg)
+	require.True(t, ok, "prefetch cmd should emit FetchAlbumTracksRequestMsg, got %T", msg)
+	assert.Equal(t, "al1", fetchReq.AlbumID)
+	assert.Equal(t, 50, fetchReq.Offset, "offset should equal the number of already loaded tracks")
 }

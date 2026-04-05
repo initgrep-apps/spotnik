@@ -365,7 +365,7 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case panes.AlbumTracksLoadedMsg:
 		// Staleness gate: discard if the user has already switched to a different album.
-		if m.AlbumID != a.albumTracksID {
+		if m.AlbumID == "" || m.AlbumID != a.albumTracksID {
 			return a, nil, true
 		}
 		if m.Err != nil {
@@ -373,9 +373,16 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				// Forward to pane so it clears tracksFetching — even though we won't toast.
 				return a, a.forwardToPane(layout.PaneAlbums, m), true
 			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				return a, tea.Batch(
+					a.forwardToPane(layout.PaneAlbums, m),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+				), true
+			}
 			return a, tea.Batch(
 				a.forwardToPane(layout.PaneAlbums, m),
-				a.alerts.NewAlertCmd("warning", "Failed to load album tracks"),
+				a.alerts.NewAlertCmd("error", "Failed to load album tracks. Press Enter to retry"),
 			), true
 		}
 		// Forward to pane — pane owns the data, not the store.
