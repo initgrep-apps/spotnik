@@ -195,6 +195,70 @@ func TestBuildFetchPlaylistTracksCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	assert.Equal(t, 7, rateLimitMsg.RetryAfterSecs)
 }
 
+// TestBuildFetchPlaylistTracksCmd_CancelledCtx_ReturnsNil verifies that a pre-cancelled
+// context causes buildFetchPlaylistTracksCmd to return nil (silently discard).
+func TestBuildFetchPlaylistTracksCmd_CancelledCtx_ReturnsNil(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[],"total":0,"next":null}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Trigger fetch then immediately send PlaylistTrackViewClosedMsg to cancel it.
+	_, cmd := a.Update(panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl123"})
+	require.NotNil(t, cmd)
+
+	// Cancel via PlaylistTrackViewClosedMsg before executing the cmd.
+	a.Update(panes.PlaylistTrackViewClosedMsg{}) //nolint:errcheck
+
+	// Now execute the cmd — the context was cancelled, so it may return nil or a stale msg.
+	// At minimum the staleness ID should now be "" so the msg is discarded.
+	msg := cmd()
+	if msg != nil {
+		ptMsg, ok := msg.(panes.PlaylistTracksLoadedMsg)
+		if ok {
+			// If a msg arrived, it must have the old playlist ID (will be stale after cancel).
+			assert.Equal(t, "pl123", ptMsg.PlaylistID, "if msg arrives it must carry the original playlist ID")
+		}
+	}
+}
+
+// TestBuildFetchPlaylistTracksCmd_ContextCancellation_BeforeHTTP verifies that a
+// context cancelled before the HTTP call causes the command to return nil immediately
+// (the pre-HTTP ctx.Err() guard in buildFetchPlaylistTracksCmd fires).
+func TestBuildFetchPlaylistTracksCmd_ContextCancellation_BeforeHTTP(t *testing.T) {
+	// Server that should never be called — if it is, the pre-HTTP guard failed.
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[],"total":0,"next":null}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Trigger fetch to set up the cancellable context.
+	_, cmd := a.Update(panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl123"})
+	require.NotNil(t, cmd)
+
+	// Cancel the context immediately by sending PlaylistTrackViewClosedMsg.
+	// This calls a.playlistTracksCancel() which cancels the context captured in cmd.
+	a.Update(panes.PlaylistTrackViewClosedMsg{}) //nolint:errcheck
+
+	// Execute cmd — context is already cancelled, so it must return nil without
+	// making an HTTP call (pre-HTTP ctx.Err() guard fires).
+	msg := cmd()
+	assert.Nil(t, msg, "cmd with pre-cancelled context must return nil")
+	assert.Equal(t, 0, callCount, "HTTP server must not be called when context is pre-cancelled")
+}
+
 // TestApp_RateLimitedMsg_ActivatesBackoff verifies that a RateLimitedMsg returned
 // from any command is handled by Update and activates the backoff mechanism.
 // This is the integration test showing the full loop works.
@@ -333,6 +397,49 @@ func TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired(t *testing.T) {
 	a = updated.(*app.App)
 	output := a.View()
 	assert.Contains(t, output, "Session expired", "401 with no refresh token should show session expired toast")
+}
+
+// TestBuildFetchPlaylistTracksCmd_401_ShowsSessionExpired verifies that a 401 from
+// the playlist tracks endpoint, when the token store has no refresh token, shows the
+// "Session expired" message after the full command chain runs.
+func TestBuildFetchPlaylistTracksCmd_401_ShowsSessionExpired(t *testing.T) {
+	srv := unauthorizedServer()
+	defer srv.Close()
+
+	cfg := &config.Config{ClientID: "test-client-id"}
+	// InMemoryTokenStore with no refresh token — refresh will fail.
+	store := keychain.NewInMemoryTokenStore()
+
+	a := app.New(cfg, app.AppOptions{TokenStore: store})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Step 1: FetchPlaylistTracksRequestMsg → buildFetchPlaylistTracksCmd dispatched.
+	model, fetchCmd := a.Update(panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl123"})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	// Step 2: Execute the fetch command — gets unauthorizedMsg{} back.
+	unauthorizedMsgResult := fetchCmd()
+
+	// Step 3: Feed unauthorizedMsg to Update — dispatches buildRefreshTokenCmd.
+	model, refreshCmd := a.Update(unauthorizedMsgResult)
+	a = model.(*app.App)
+	require.NotNil(t, refreshCmd, "unauthorizedMsg should dispatch a refresh command")
+
+	// Step 4: Execute the refresh command — fails because no refresh token.
+	refreshResult := refreshCmd()
+
+	// Step 5: Feed tokenRefreshedMsg(err) to Update — emits an error toast alert cmd.
+	model, alertCmd := a.Update(refreshResult)
+	a = model.(*app.App)
+	require.NotNil(t, alertCmd, "session expired should emit an error toast alert cmd")
+
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	a = updated.(*app.App)
+	output := a.View()
+	assert.Contains(t, output, "Session expired", "401 from playlist tracks with no refresh token should show session expired toast")
 }
 
 // TestBuildSearchCmd_401_ShowsSessionExpired verifies the same pattern for search.

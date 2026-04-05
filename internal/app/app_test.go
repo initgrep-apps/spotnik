@@ -1541,30 +1541,55 @@ func TestApp_PlaylistReorderResultMsg_Error(t *testing.T) {
 	_ = a
 }
 
-// TestApp_PlaylistTracksLoadedMsg verifies PlaylistTracksLoadedMsg is forwarded to playlist pane.
-func TestApp_PlaylistTracksLoadedMsg(t *testing.T) {
+// TestApp_PlaylistTracksLoadedMsg_Forwarded verifies PlaylistTracksLoadedMsg is forwarded
+// to the PlaylistsPane when the staleness key matches.
+func TestApp_PlaylistTracksLoadedMsg_Forwarded(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
-	a.Store().SetPlaylistTracks("pl-1", []api.Track{
-		{ID: "t1", Name: "Track A", URI: "spotify:track:t1", DurationMs: 180000, Artists: []api.Artist{{Name: "Artist A"}}},
-	})
+	a.SetPlaylistTracksID("pl-1")
 
-	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl-1"}
+	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl-1", Tracks: []domain.Track{{ID: "t1", Name: "Track A", URI: "spotify:track:t1"}}, Total: 1, Offset: 0}
 	model, _ := a.Update(msg)
 	a = model.(*app.App)
-	_ = a
+	// Data should NOT be in store (pane owns it)
+	assert.Empty(t, a.Store().PlaylistTracks("pl-1"), "tracks must not be written to store")
 }
 
-// TestApp_PlaylistTracksLoadedMsg_NilPane verifies PlaylistTracksLoadedMsg without
-// a playlist pane is handled gracefully.
-func TestApp_PlaylistTracksLoadedMsg_NilPane(t *testing.T) {
+// TestApp_PlaylistTracksLoadedMsg_StaleMsgDiscarded verifies stale PlaylistTracksLoadedMsg is discarded.
+func TestApp_PlaylistTracksLoadedMsg_StaleMsgDiscarded(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetPlaylistTracksID("current-pl")
+
+	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "stale-pl", Tracks: []domain.Track{{ID: "t1"}}, Total: 1}
+	_, cmd := a.Update(msg)
+	assert.Nil(t, cmd, "stale PlaylistTracksLoadedMsg must be discarded")
+}
+
+// TestApp_FetchPlaylistTracksRequestMsg_SetsID verifies that FetchPlaylistTracksRequestMsg
+// sets the staleness key and cancels any prior fetch.
+func TestApp_FetchPlaylistTracksRequestMsg_SetsID(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl-1"}
-	model, _ := a.Update(msg)
+	msg := panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl-1", Offset: 0}
+	model, cmd := a.Update(msg)
 	a = model.(*app.App)
-	_ = a
+	require.NotNil(t, cmd, "FetchPlaylistTracksRequestMsg should return a fetch cmd")
+	assert.Equal(t, "pl-1", a.PlaylistTracksID(), "staleness ID must be set to playlist ID")
+}
+
+// TestApp_PlaylistTrackViewClosedMsg_ClearsID verifies that PlaylistTrackViewClosedMsg
+// clears the staleness key and cancels any in-flight fetch.
+func TestApp_PlaylistTrackViewClosedMsg_ClearsID(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetPlaylistTracksID("pl-1")
+
+	model, cmd := a.Update(panes.PlaylistTrackViewClosedMsg{})
+	a = model.(*app.App)
+	assert.Nil(t, cmd, "PlaylistTrackViewClosedMsg must not emit a cmd")
+	assert.Equal(t, "", a.PlaylistTracksID(), "PlaylistTrackViewClosedMsg must clear the staleness ID")
 }
 
 // TestApp_SetPlaylistsAPI verifies SetPlaylistsAPI stores the client.

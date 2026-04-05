@@ -104,18 +104,20 @@ func (m *MockPlayer) Queue(_ context.Context) (*api.QueueResponse, error) {
 
 // MockLibrary is a test double for LibraryAPI.
 type MockLibrary struct {
-	PlaylistsResult      []api.SimplePlaylist
-	PlaylistsErr         error
-	PlaylistTracksResult []api.Track
-	PlaylistTracksErr    error
-	SavedAlbumsResult    []api.SavedAlbum
-	SavedAlbumsErr       error
-	LikedTracksResult    []api.SavedTrack
-	LikedTracksErr       error
-	RecentlyPlayedResult []api.PlayHistory
-	RecentlyPlayedErr    error
-	LikeErr              error
-	UnlikeErr            error
+	PlaylistsResult       []api.SimplePlaylist
+	PlaylistsErr          error
+	PlaylistTracksResult  []api.Track
+	PlaylistTracksTotal   int
+	PlaylistTracksHasNext bool
+	PlaylistTracksErr     error
+	SavedAlbumsResult     []api.SavedAlbum
+	SavedAlbumsErr        error
+	LikedTracksResult     []api.SavedTrack
+	LikedTracksErr        error
+	RecentlyPlayedResult  []api.PlayHistory
+	RecentlyPlayedErr     error
+	LikeErr               error
+	UnlikeErr             error
 
 	LikeTrackCalled   bool
 	UnlikeTrackCalled bool
@@ -129,9 +131,9 @@ func (m *MockLibrary) Playlists(_ context.Context, _, _ int) ([]api.SimplePlayli
 	return m.PlaylistsResult, m.PlaylistsErr
 }
 
-// PlaylistTracks returns the configured result and error.
-func (m *MockLibrary) PlaylistTracks(_ context.Context, _ string, _, _ int) ([]api.Track, error) {
-	return m.PlaylistTracksResult, m.PlaylistTracksErr
+// PlaylistTracks returns the configured result, total, hasNext, and error.
+func (m *MockLibrary) PlaylistTracks(_ context.Context, _ string, _, _ int) ([]api.Track, int, bool, error) {
+	return m.PlaylistTracksResult, m.PlaylistTracksTotal, m.PlaylistTracksHasNext, m.PlaylistTracksErr
 }
 
 // SavedAlbums returns the configured result and error.

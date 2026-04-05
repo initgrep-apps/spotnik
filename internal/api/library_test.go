@@ -61,7 +61,7 @@ func TestGetPlaylists_Empty(t *testing.T) {
 	assert.Empty(t, playlists)
 }
 
-// TestGetPlaylistTracks_Success verifies GetPlaylistTracks returns tracks for a playlist ID.
+// TestGetPlaylistTracks_Success verifies GetPlaylistTracks returns tracks, total, and hasNext.
 func TestGetPlaylistTracks_Success(t *testing.T) {
 	fixture, err := os.ReadFile("../../testdata/fixtures/playlist_tracks_response.json")
 	require.NoError(t, err)
@@ -78,13 +78,88 @@ func TestGetPlaylistTracks_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestLibrary(srv.URL, "test-token")
-	tracks, err := client.PlaylistTracks(context.Background(), "playlist-abc123", 50, 0)
+	tracks, total, hasNext, err := client.PlaylistTracks(context.Background(), "playlist-abc123", 50, 0)
 
 	require.NoError(t, err)
 	assert.Equal(t, "/v1/playlists/playlist-abc123/tracks", capturedPath)
 	require.Len(t, tracks, 2)
 	assert.Equal(t, "track-xyz789", tracks[0].ID)
 	assert.Equal(t, "Blinding Lights", tracks[0].Name)
+	assert.Equal(t, 2, total)
+	assert.False(t, hasNext, "next is null in fixture → hasNext should be false")
+}
+
+// TestGetPlaylistTracks_HasNextPage verifies that a non-null next field sets hasNext=true.
+func TestGetPlaylistTracks_HasNextPage(t *testing.T) {
+	body := `{
+		"items": [{"is_local":false,"track":{"id":"t1","name":"Track 1","uri":"spotify:track:t1","duration_ms":180000,"artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}],
+		"total": 200,
+		"next": "https://api.spotify.com/v1/playlists/pl1/tracks?offset=100&limit=100"
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, total, hasNext, err := client.PlaylistTracks(context.Background(), "pl1", 100, 0)
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1)
+	assert.Equal(t, 200, total)
+	assert.True(t, hasNext, "non-null next → hasNext should be true")
+}
+
+// TestGetPlaylistTracks_NullTrackSkipped verifies that null track entries are skipped.
+func TestGetPlaylistTracks_NullTrackSkipped(t *testing.T) {
+	body := `{
+		"items": [
+			{"is_local":false,"track":null},
+			{"is_local":false,"track":{"id":"t2","name":"Good Track","uri":"spotify:track:t2","duration_ms":200000,"artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}
+		],
+		"total": 1,
+		"next": null
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, _, _, err := client.PlaylistTracks(context.Background(), "pl1", 100, 0)
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1, "null track entry must be skipped")
+	assert.Equal(t, "t2", tracks[0].ID)
+}
+
+// TestGetPlaylistTracks_LocalTrackSkipped verifies that is_local=true items are skipped.
+func TestGetPlaylistTracks_LocalTrackSkipped(t *testing.T) {
+	body := `{
+		"items": [
+			{"is_local":true,"track":{"id":"local1","name":"Local File","uri":"","duration_ms":200000,"artists":[],"album":{"id":"","name":"","uri":"","release_date":""}}},
+			{"is_local":false,"track":{"id":"t2","name":"Streaming Track","uri":"spotify:track:t2","duration_ms":200000,"artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}
+		],
+		"total": 1,
+		"next": null
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, _, _, err := client.PlaylistTracks(context.Background(), "pl1", 100, 0)
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1, "is_local=true entry must be skipped")
+	assert.Equal(t, "t2", tracks[0].ID)
 }
 
 // TestGetSavedAlbums_Success verifies GetSavedAlbums returns parsed albums.

@@ -84,22 +84,16 @@ func TestPlaylistsPane_Actions_FilterActive(t *testing.T) {
 	assert.Equal(t, "Esc", actions[0].Key)
 }
 
-// TestPlaylistsPane_Actions_TrackView returns back and reorder actions in track view.
+// TestPlaylistsPane_Actions_TrackView returns only Esc back action in track view (story 106).
 func TestPlaylistsPane_Actions_TrackView(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
-	// Open track sub-view by pressing Enter
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	require.NotNil(t, cmd, "Enter should return a command for FetchPlaylistTracksRequestMsg")
 	// Manually set inTrackView=true to test actions
 	pane.inTrackView = true
 	actions := pane.Actions()
-	keys := make([]string, len(actions))
-	for i, a := range actions {
-		keys[i] = a.Key
-	}
-	assert.Contains(t, keys, "Esc", "track view should have Esc action")
-	assert.Contains(t, keys, "Shift+↕", "track view should have reorder action")
+	require.Len(t, actions, 1, "track view should have exactly one action")
+	assert.Equal(t, "Esc", actions[0].Key, "track view should show Esc action")
+	assert.Equal(t, "back", actions[0].Label, "track view Esc action should be labeled 'back'")
 }
 
 // TestPlaylistsPane_View_EmptyPlaylists verifies clean render on empty data.
@@ -119,22 +113,35 @@ func TestPlaylistsPane_View_ShowsPlaylists(t *testing.T) {
 	assert.Contains(t, output, "Soul", "third playlist should appear")
 }
 
-// TestPlaylistsPane_Enter_EmitsTracksFetchRequest verifies Enter on a playlist emits FetchPlaylistTracksRequestMsg.
+// TestPlaylistsPane_Enter_EmitsTracksFetchRequest verifies Enter on a playlist
+// eventually leads to FetchPlaylistTracksRequestMsg after the debounce resolves.
+// The immediate cmd is a debounce tick; FetchPlaylistTracksRequestMsg fires after.
 func TestPlaylistsPane_Enter_EmitsTracksFetchRequest(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
 
 	// Cursor is at row 0 (first playlist: pl1)
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	require.NotNil(t, cmd, "Enter should return a command")
+	_, debounceCmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, debounceCmd, "Enter should return a debounce cmd")
 
-	msg := cmd()
-	req, ok := msg.(FetchPlaylistTracksRequestMsg)
-	require.True(t, ok, "command should produce FetchPlaylistTracksRequestMsg")
+	// Execute debounce cmd → get playlistDebounceMsg
+	debounceMsg := debounceCmd()
+	dm, ok := debounceMsg.(playlistDebounceMsg)
+	require.True(t, ok, "debounce cmd should produce playlistDebounceMsg, got %T", debounceMsg)
+
+	// Feed playlistDebounceMsg back → should emit FetchPlaylistTracksRequestMsg
+	_, fetchCmd := pane.Update(dm)
+	require.NotNil(t, fetchCmd, "debounce resolution should emit FetchPlaylistTracksRequestMsg cmd")
+
+	fetchMsg := fetchCmd()
+	req, ok := fetchMsg.(FetchPlaylistTracksRequestMsg)
+	require.True(t, ok, "debounce resolution should produce FetchPlaylistTracksRequestMsg, got %T", fetchMsg)
 	assert.Equal(t, "pl1", req.PlaylistID)
+	assert.Equal(t, 0, req.Offset)
 }
 
-// TestPlaylistsPane_Esc_ReturnsToListView verifies Esc exits track sub-view.
+// TestPlaylistsPane_Esc_ReturnsToListView verifies Esc exits track sub-view
+// and emits PlaylistTrackViewClosedMsg.
 func TestPlaylistsPane_Esc_ReturnsToListView(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
@@ -148,7 +155,10 @@ func TestPlaylistsPane_Esc_ReturnsToListView(t *testing.T) {
 	pp, ok := updated.(*PlaylistsPane)
 	require.True(t, ok)
 	assert.False(t, pp.inTrackView, "Esc should close track sub-view")
-	assert.Nil(t, cmd, "Esc back to list should not produce a command")
+	require.NotNil(t, cmd, "Esc should emit PlaylistTrackViewClosedMsg")
+	msg := cmd()
+	_, isClosed := msg.(PlaylistTrackViewClosedMsg)
+	assert.True(t, isClosed, "Esc should produce PlaylistTrackViewClosedMsg, got %T", msg)
 }
 
 // TestPlaylistsPane_N_EmitsCreateRequest verifies 'n' emits PlaylistCreateRequestMsg.
@@ -178,37 +188,28 @@ func TestPlaylistsPane_R_EmitsRenameRequest(t *testing.T) {
 	assert.Equal(t, "pl1", req.PlaylistID)
 }
 
-// TestPlaylistsPane_X_EmitsRemoveRequest verifies 'x' in track view emits PlaylistRemoveRequestMsg.
-func TestPlaylistsPane_X_EmitsRemoveRequest(t *testing.T) {
-	s := state.New()
-	s.SetPlaylists([]domain.SimplePlaylist{
-		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 1},
-	})
-	tracks := []domain.Track{
-		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Sia"}}},
-	}
-	s.SetPlaylistTracks("pl1", tracks)
-	th := theme.Load("black")
-	pane := NewPlaylistsPane(s, th, true)
+// TestPlaylistsPane_X_IsNoOpInStory106 verifies 'x' in track view is a no-op
+// in story 106 (management operations are out of scope and remain non-functional).
+func TestPlaylistsPane_X_IsNoOpInStory106(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
 
-	// Switch to track sub-view
+	// Switch to track sub-view with loaded tracks
 	pane.inTrackView = true
 	pane.selectedID = "pl1"
 	pane.selectedName = "LoFi"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Sia"}}},
+	}
 	pane.refreshTrackRows()
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
-	require.NotNil(t, cmd, "'x' should return a command in track view")
-
-	msg := cmd()
-	req, ok := msg.(PlaylistRemoveRequestMsg)
-	assert.True(t, ok, "command should produce PlaylistRemoveRequestMsg")
-	assert.Equal(t, "pl1", req.PlaylistID)
+	assert.Nil(t, cmd, "'x' is a no-op in story 106 (management operations out of scope)")
 }
 
-// TestPlaylistsPane_ShiftUp_EmitsReorderRequest verifies Shift+Up reorders tracks.
-func TestPlaylistsPane_ShiftUp_EmitsReorderRequest(t *testing.T) {
+// TestPlaylistsPane_ShiftUp_ReorderRequest verifies Shift+Up in track view
+// with loadedTracks set emits PlaylistReorderRequestMsg. Bounds read from p.loadedTracks.
+func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
 		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 2},
@@ -217,15 +218,15 @@ func TestPlaylistsPane_ShiftUp_EmitsReorderRequest(t *testing.T) {
 		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1"},
 		{ID: "t2", Name: "Coffee", URI: "spotify:track:t2"},
 	}
-	s.SetPlaylistTracks("pl1", tracks)
 	th := theme.Load("black")
 	pane := NewPlaylistsPane(s, th, true)
 	pane.SetSize(80, 20)
 
-	// Switch to track sub-view
+	// Switch to track sub-view with loadedTracks set (for cursor navigation)
 	pane.inTrackView = true
 	pane.selectedID = "pl1"
 	pane.selectedName = "LoFi"
+	pane.loadedTracks = tracks
 	pane.refreshTrackRows()
 	pane.trackTable.SetFocused(true)
 
@@ -242,8 +243,9 @@ func TestPlaylistsPane_ShiftUp_EmitsReorderRequest(t *testing.T) {
 	assert.Equal(t, 0, req.InsertBefore)
 }
 
-// TestPlaylistsPane_ShiftDown_EmitsReorderRequest verifies Shift+Down reorders tracks.
-func TestPlaylistsPane_ShiftDown_EmitsReorderRequest(t *testing.T) {
+// TestPlaylistsPane_ShiftDown_ReorderRequest verifies Shift+Down in track view
+// with loadedTracks set emits PlaylistReorderRequestMsg. Bounds read from p.loadedTracks.
+func TestPlaylistsPane_ShiftDown_ReorderRequest(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
 		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 2},
@@ -252,7 +254,6 @@ func TestPlaylistsPane_ShiftDown_EmitsReorderRequest(t *testing.T) {
 		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1"},
 		{ID: "t2", Name: "Coffee", URI: "spotify:track:t2"},
 	}
-	s.SetPlaylistTracks("pl1", tracks)
 	th := theme.Load("black")
 	pane := NewPlaylistsPane(s, th, true)
 	pane.SetSize(80, 20)
@@ -260,6 +261,7 @@ func TestPlaylistsPane_ShiftDown_EmitsReorderRequest(t *testing.T) {
 	pane.inTrackView = true
 	pane.selectedID = "pl1"
 	pane.selectedName = "LoFi"
+	pane.loadedTracks = tracks
 	pane.refreshTrackRows()
 
 	// Cursor at 0, press Shift+Down
@@ -359,7 +361,8 @@ func TestPlaylistsPane_PlaylistCreatedMsg_RefreshesList(t *testing.T) {
 	assert.Contains(t, output, "NewList", "pane should show new playlist after PlaylistCreatedMsg")
 }
 
-// TestPlaylistsPane_PlaylistTracksLoadedMsg_ShowsTracks verifies track sub-view refresh.
+// TestPlaylistsPane_PlaylistTracksLoadedMsg_ShowsTracks verifies track sub-view refresh
+// with pane-owned data (story 106 architecture: no store write).
 func TestPlaylistsPane_PlaylistTracksLoadedMsg_ShowsTracks(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
@@ -374,12 +377,11 @@ func TestPlaylistsPane_PlaylistTracksLoadedMsg_ShowsTracks(t *testing.T) {
 	pane.resizeTable() // ensure track table is sized correctly
 	pane.trackTable.SetFocused(true)
 
-	// Simulate store update by app.Update, then send msg
+	// Deliver PlaylistTracksLoadedMsg — pane owns the data (not written to store)
 	tracks := []domain.Track{
 		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Sia"}}},
 	}
-	s.SetPlaylistTracks("pl1", tracks)
-	pane.Update(PlaylistTracksLoadedMsg{PlaylistID: "pl1", Tracks: tracks}) //nolint:errcheck
+	pane.Update(PlaylistTracksLoadedMsg{PlaylistID: "pl1", Tracks: tracks, Total: 1, Offset: 0}) //nolint:errcheck
 
 	output := pane.View()
 	assert.Contains(t, output, "Snowman", "track sub-view should show loaded track")
@@ -421,6 +423,360 @@ func TestPlaylistsPane_RefreshRows_UpdatesTable(t *testing.T) {
 
 	output := pane.View()
 	assert.Contains(t, output, "RefreshedPlaylist", "RefreshRows should update the view")
+}
+
+// ── Story 106: Playlist full functionality ────────────────────────────────────
+
+// TestPlaylistsPane_Enter_EmitsDebounceNotDirectRequest verifies that Enter emits
+// a debounce cmd (not FetchPlaylistTracksRequestMsg directly).
+func TestPlaylistsPane_Enter_EmitsDebounceNotDirectRequest(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd, "Enter should return a command")
+
+	// The command should be a debounce tick, not FetchPlaylistTracksRequestMsg directly.
+	// Execute it — it returns a playlistDebounceMsg (internal) not a FetchPlaylistTracksRequestMsg.
+	msg := cmd()
+	_, isFetchRequest := msg.(FetchPlaylistTracksRequestMsg)
+	assert.False(t, isFetchRequest, "Enter should not directly emit FetchPlaylistTracksRequestMsg — it goes through a debounce")
+}
+
+// TestPlaylistsPane_DebounceResolution_EmitsFetchRequest verifies that after the
+// debounce tick fires with matching intent, FetchPlaylistTracksRequestMsg is emitted.
+func TestPlaylistsPane_DebounceResolution_EmitsFetchRequest(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	// Press Enter → get debounce cmd
+	_, debounceCmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, debounceCmd)
+
+	// Fire the debounce tick
+	debounceMsg := debounceCmd()
+	dm, ok := debounceMsg.(playlistDebounceMsg)
+	require.True(t, ok, "debounce cmd should produce playlistDebounceMsg, got %T", debounceMsg)
+
+	// Feed debounce msg to pane → should emit FetchPlaylistTracksRequestMsg
+	_, fetchCmd := pane.Update(dm)
+	require.NotNil(t, fetchCmd, "debounce resolution should emit FetchPlaylistTracksRequestMsg cmd")
+
+	fetchMsg := fetchCmd()
+	req, ok := fetchMsg.(FetchPlaylistTracksRequestMsg)
+	require.True(t, ok, "debounce resolution should produce FetchPlaylistTracksRequestMsg, got %T", fetchMsg)
+	assert.Equal(t, "pl1", req.PlaylistID)
+	assert.Equal(t, 0, req.Offset, "initial fetch must use offset=0")
+}
+
+// TestPlaylistsPane_StaleDebounce_Discarded verifies that a stale debounce tick is
+// discarded when the user has switched to a different playlist.
+func TestPlaylistsPane_StaleDebounce_Discarded(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	// Press Enter on pl1 → get stale debounce snapshot for pl1
+	_, debounceCmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, debounceCmd)
+
+	// Before tick fires, simulate user escaping and re-entering a different playlist
+	// by manually overriding the playlistIntent to match pl2.
+	pane.playlistIntent = playlistDebounceIntent{playlistID: "pl2"}
+
+	// Now fire the original tick (for pl1) — it should be discarded
+	debounceMsg := debounceCmd()
+	dm, ok := debounceMsg.(playlistDebounceMsg)
+	require.True(t, ok)
+
+	_, fetchCmd := pane.Update(dm)
+	assert.Nil(t, fetchCmd, "stale debounce tick (pl1) should be discarded when intent is pl2")
+}
+
+// TestPlaylistsPane_DebounceGuard_TracksFetchingTrue verifies that a debounce tick
+// is discarded when a fetch is already in-flight.
+func TestPlaylistsPane_DebounceGuard_TracksFetchingTrue(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, debounceCmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, debounceCmd)
+
+	// Simulate a fetch already in-flight
+	pane.tracksFetching = true
+
+	debounceMsg := debounceCmd()
+	dm, ok := debounceMsg.(playlistDebounceMsg)
+	require.True(t, ok)
+
+	_, fetchCmd := pane.Update(dm)
+	assert.Nil(t, fetchCmd, "debounce tick must be discarded when tracksFetching=true")
+}
+
+// TestPlaylistsPane_Enter_SetsSelectedURI verifies that selectedURI is set on Enter.
+func TestPlaylistsPane_Enter_SetsSelectedURI(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	assert.Equal(t, "spotify:playlist:pl1", pane.selectedURI, "selectedURI must be set to playlist URI on Enter")
+}
+
+// TestPlaylistsPane_Enter_ResetsSubViewState verifies that entering a playlist resets
+// loadedTracks, trackOffset, trackTotal, hasMoreTracks, tracksFetching.
+func TestPlaylistsPane_Enter_ResetsSubViewState(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	// Pre-populate state from a prior playlist
+	pane.loadedTracks = []domain.Track{{ID: "old"}}
+	pane.trackOffset = 5
+	pane.trackTotal = 10
+	pane.hasMoreTracks = true
+	pane.tracksFetching = true
+
+	_, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	assert.Nil(t, pane.loadedTracks, "loadedTracks must be reset on Enter")
+	assert.Equal(t, 0, pane.trackOffset, "trackOffset must be reset on Enter")
+	assert.Equal(t, 0, pane.trackTotal, "trackTotal must be reset on Enter")
+	assert.False(t, pane.hasMoreTracks, "hasMoreTracks must be reset on Enter")
+	assert.False(t, pane.tracksFetching, "tracksFetching must be reset on Enter")
+}
+
+// TestPlaylistsPane_TracksLoadedMsg_InitialPage verifies Offset=0 replaces loadedTracks.
+func TestPlaylistsPane_TracksLoadedMsg_InitialPage(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.resizeTable()
+	pane.trackTable.SetFocused(true)
+
+	tracks := []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2", Artists: []domain.Artist{{Name: "B"}}},
+	}
+	msg := PlaylistTracksLoadedMsg{PlaylistID: "pl1", Tracks: tracks, Total: 5, HasNext: true, Offset: 0}
+	pane.Update(msg) //nolint:errcheck
+
+	assert.Equal(t, 2, len(pane.loadedTracks), "initial page must replace loadedTracks")
+	assert.Equal(t, 2, pane.trackOffset)
+	assert.Equal(t, 5, pane.trackTotal)
+	assert.True(t, pane.hasMoreTracks)
+	assert.False(t, pane.tracksFetching)
+}
+
+// TestPlaylistsPane_TracksLoadedMsg_NextPage verifies Offset>0 appends to loadedTracks.
+func TestPlaylistsPane_TracksLoadedMsg_NextPage(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.trackOffset = 1
+
+	tracks := []domain.Track{
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2", Artists: []domain.Artist{{Name: "B"}}},
+	}
+	msg := PlaylistTracksLoadedMsg{PlaylistID: "pl1", Tracks: tracks, Total: 2, HasNext: false, Offset: 1}
+	pane.Update(msg) //nolint:errcheck
+
+	assert.Equal(t, 2, len(pane.loadedTracks), "next page must be appended to loadedTracks")
+	assert.Equal(t, 2, pane.trackOffset)
+	assert.False(t, pane.hasMoreTracks, "HasNext=false must set hasMoreTracks=false")
+}
+
+// TestPlaylistsPane_TracksLoadedMsg_WrongPlaylistID verifies stale msg is ignored.
+func TestPlaylistsPane_TracksLoadedMsg_WrongPlaylistID(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+
+	msg := PlaylistTracksLoadedMsg{PlaylistID: "other-pl", Tracks: []domain.Track{{ID: "t1"}}, Total: 1, Offset: 0}
+	pane.Update(msg) //nolint:errcheck
+
+	assert.Nil(t, pane.loadedTracks, "wrong PlaylistID must be ignored (pane stays at nil loadedTracks)")
+}
+
+// TestPlaylistsPane_TracksLoadedMsg_ErrorPath_ClearsTracksFetching verifies that
+// a PlaylistTracksLoadedMsg with a non-nil Err clears tracksFetching so the pane
+// is not permanently stuck in a loading state.
+func TestPlaylistsPane_TracksLoadedMsg_ErrorPath_ClearsTracksFetching(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.tracksFetching = true // simulate an in-flight fetch
+
+	msg := PlaylistTracksLoadedMsg{PlaylistID: "pl1", Err: fmt.Errorf("network error")}
+	pane.Update(msg) //nolint:errcheck
+
+	assert.False(t, pane.tracksFetching, "error response must clear tracksFetching so the pane is not stuck")
+}
+
+// TestPlaylistsPane_Enter_TrackView_EmitsPlayContextMsg verifies Enter on a track emits
+// PlayContextMsg with correct ContextURI and OffsetURI.
+func TestPlaylistsPane_Enter_TrackView_EmitsPlayContextMsg(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedURI = "spotify:playlist:pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2", Artists: []domain.Artist{{Name: "B"}}},
+	}
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd, "Enter on track should return a command")
+
+	msg := cmd()
+	pcMsg, ok := msg.(PlayContextMsg)
+	require.True(t, ok, "Enter on track should emit PlayContextMsg, got %T", msg)
+	assert.Equal(t, "spotify:playlist:pl1", pcMsg.ContextURI)
+	assert.Equal(t, "spotify:track:t1", pcMsg.OffsetURI)
+}
+
+// TestPlaylistsPane_Enter_TrackView_EmptyLoadedTracks_NoOp verifies no crash when
+// Enter is pressed in track view with no tracks loaded.
+func TestPlaylistsPane_Enter_TrackView_EmptyLoadedTracks_NoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedURI = "spotify:playlist:pl1"
+	pane.loadedTracks = nil
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.Nil(t, cmd, "Enter with empty loadedTracks must be a no-op")
+}
+
+// TestPlaylistsPane_Esc_TrackView_EmitsClosedMsg verifies Esc emits PlaylistTrackViewClosedMsg.
+func TestPlaylistsPane_Esc_TrackView_EmitsClosedMsg(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedName = "LoFi"
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	require.NotNil(t, cmd, "Esc should emit PlaylistTrackViewClosedMsg")
+
+	msg := cmd()
+	_, ok := msg.(PlaylistTrackViewClosedMsg)
+	assert.True(t, ok, "Esc should produce PlaylistTrackViewClosedMsg, got %T", msg)
+}
+
+// TestPlaylistsPane_CheckPrefetch_FiresWhenNear verifies prefetch fires when cursor
+// is within 10 rows of the end.
+func TestPlaylistsPane_CheckPrefetch_FiresWhenNear(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 30)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedURI = "spotify:playlist:pl1"
+	pane.hasMoreTracks = true
+	pane.tracksFetching = false
+	pane.trackOffset = 15
+
+	// 15 loaded tracks, cursor at index 5 (which is >= 15-10=5) → prefetch fires
+	tracks := make([]domain.Track, 15)
+	for i := range tracks {
+		tracks[i] = domain.Track{
+			ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i),
+			URI: fmt.Sprintf("spotify:track:t%d", i), Artists: []domain.Artist{{Name: "A"}},
+		}
+	}
+	pane.loadedTracks = tracks
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	// Navigate to index 5 (within 10 of end)
+	for i := 0; i < 5; i++ {
+		pane.trackTable.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}) //nolint:errcheck
+	}
+
+	// Now a navigation key should trigger prefetch
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// cmd could be a batch; check it's non-nil since prefetch should fire
+	assert.NotNil(t, cmd, "navigating near end of loaded tracks should trigger prefetch cmd")
+	assert.True(t, pane.tracksFetching, "tracksFetching should be true after prefetch fires")
+}
+
+// TestPlaylistsPane_CheckPrefetch_DoesNotFireWhenFetching verifies prefetch is
+// blocked when tracksFetching=true.
+func TestPlaylistsPane_CheckPrefetch_DoesNotFireWhenFetching(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 30)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.hasMoreTracks = true
+	pane.tracksFetching = true // already fetching
+	pane.trackOffset = 15
+
+	tracks := make([]domain.Track, 15)
+	for i := range tracks {
+		tracks[i] = domain.Track{
+			ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i),
+			URI: fmt.Sprintf("spotify:track:t%d", i), Artists: []domain.Artist{{Name: "A"}},
+		}
+	}
+	pane.loadedTracks = tracks
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	cmd := pane.checkPrefetch()
+	assert.Nil(t, cmd, "checkPrefetch must return nil when tracksFetching=true")
+}
+
+// TestPlaylistsPane_RefreshTrackRows_ReadsLoadedTracks verifies refreshTrackRows
+// reads from pane.loadedTracks not from the store.
+func TestPlaylistsPane_RefreshTrackRows_ReadsLoadedTracks(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+
+	tracks := []domain.Track{
+		{ID: "t1", Name: "Test Track", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Artist"}}, DurationMs: 180000},
+	}
+	pane.loadedTracks = tracks
+	pane.refreshTrackRows()
+
+	output := pane.View()
+	assert.Contains(t, output, "Test Track", "refreshTrackRows must read from loadedTracks")
+}
+
+// TestPlaylistsPane_Title_InTrackView_ShowsTrackTotal verifies that Title() shows
+// p.trackTotal, not store data.
+func TestPlaylistsPane_Title_InTrackView_ShowsTrackTotal(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedName = "LoFi"
+	pane.trackTotal = 42
+
+	title := pane.Title()
+	assert.Equal(t, "Playlists ── LoFi (42 tracks)", title)
+}
+
+// TestPlaylistsPane_SetFocused_TrackView_PaneFocused verifies that SetFocused(true)
+// propagates focused=true to the pane when in track view.
+func TestPlaylistsPane_SetFocused_TrackView_PaneFocused(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(false)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+
+	pane.SetFocused(true)
+	assert.True(t, pane.IsFocused(), "pane must be focused after SetFocused(true)")
+
+	pane.SetFocused(false)
+	assert.False(t, pane.IsFocused(), "pane must be unfocused after SetFocused(false)")
 }
 
 // ── Story 71 Task 4: column color tokens ─────────────────────────────────────
