@@ -1,6 +1,8 @@
 // Package panes — RecentlyPlayedPane displays recently played tracks in a dense
 // bubble-table with in-pane filtering and a "Played" column showing relative time.
-// Selecting a track emits PlayTrackMsg. Implements layout.Pane (toggle key 6).
+// Selecting a track emits PlayTrackListMsg with URIs from the selected index onward
+// so the queue fills with remaining recent tracks.
+// Implements layout.Pane (toggle key 6).
 package panes
 
 import (
@@ -147,10 +149,11 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		items := r.filteredItems()
 		idx := r.table.SelectedIndex()
 		if idx >= 0 && idx < len(items) {
-			uri := items[idx].Track.URI
-			return r, func() tea.Msg {
-				return PlayTrackMsg{TrackURI: uri}
+			uris := make([]string, 0, len(items)-idx)
+			for _, item := range items[idx:] {
+				uris = append(uris, item.Track.URI)
 			}
+			return r, func() tea.Msg { return PlayTrackListMsg{URIs: uris} }
 		}
 		return r, nil
 	}

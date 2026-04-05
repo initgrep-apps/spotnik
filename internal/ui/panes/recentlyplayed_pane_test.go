@@ -92,16 +92,23 @@ func TestRecentlyPlayedPane_RendersRelativeTime(t *testing.T) {
 	assert.Contains(t, view, "days ago")
 }
 
-func TestRecentlyPlayedPane_EnterEmitsPlayTrackMsg(t *testing.T) {
+// TestRecentlyPlayedPane_Enter_EmitsPlayTrackListMsg verifies Enter on row N emits
+// PlayTrackListMsg with URIs from the selected index onward (Story 105).
+func TestRecentlyPlayedPane_Enter_EmitsPlayTrackListMsg(t *testing.T) {
 	pane, _ := newTestRecentlyPlayedPane()
 	pane.SetFocused(true)
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	require.NotNil(t, cmd)
+	require.NotNil(t, cmd, "Enter should return a command")
+
 	msg := cmd()
-	playMsg, ok := msg.(PlayTrackMsg)
-	require.True(t, ok)
-	assert.Equal(t, "spotify:track:t1", playMsg.TrackURI)
+	playMsg, ok := msg.(PlayTrackListMsg)
+	require.True(t, ok, "command should produce PlayTrackListMsg, got %T", msg)
+	// Row 0 selected (t1) → 3 URIs: t1, t2, t3
+	require.Len(t, playMsg.URIs, 3, "should include URIs from selected track to end")
+	assert.Equal(t, "spotify:track:t1", playMsg.URIs[0])
+	assert.Equal(t, "spotify:track:t2", playMsg.URIs[1])
+	assert.Equal(t, "spotify:track:t3", playMsg.URIs[2])
 }
 
 func TestRecentlyPlayedPane_FilterByTrackName(t *testing.T) {

@@ -1,5 +1,7 @@
 // Package panes — TopTracksPane displays the user's top tracks in a dense
 // bubble-table with in-pane filtering and time range cycling via the t key.
+// Selecting a track emits PlayTrackListMsg with URIs from the selected index
+// onward so the queue fills with remaining top tracks.
 // Implements layout.Pane (toggle key 7).
 package panes
 
@@ -175,10 +177,11 @@ func (p *TopTracksPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tracks := p.filteredTracks()
 		idx := p.table.SelectedIndex()
 		if idx >= 0 && idx < len(tracks) {
-			uri := tracks[idx].URI
-			return p, func() tea.Msg {
-				return PlayTrackMsg{TrackURI: uri}
+			uris := make([]string, 0, len(tracks)-idx)
+			for _, tr := range tracks[idx:] {
+				uris = append(uris, tr.URI)
 			}
+			return p, func() tea.Msg { return PlayTrackListMsg{URIs: uris} }
 		}
 		return p, nil
 	}

@@ -135,13 +135,15 @@ func TestStatsSplit_RecentlyPlayedLoadThenScroll(t *testing.T) {
 	// Press j to move cursor down
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}) //nolint:errcheck
 
-	// Enter on second item
+	// Enter on second item — emits PlayTrackListMsg with URIs from selected index onward.
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	require.NotNil(t, cmd)
 	msg := cmd()
-	playMsg, ok := msg.(PlayTrackMsg)
-	require.True(t, ok)
-	assert.Equal(t, "spotify:track:r2", playMsg.TrackURI)
+	playMsg, ok := msg.(PlayTrackListMsg)
+	require.True(t, ok, "expected PlayTrackListMsg, got %T", msg)
+	// r2 is the last item, so only one URI.
+	require.Len(t, playMsg.URIs, 1)
+	assert.Equal(t, "spotify:track:r2", playMsg.URIs[0])
 }
 
 func TestStatsSplit_TopTracksFilterThenCycleRange(t *testing.T) {

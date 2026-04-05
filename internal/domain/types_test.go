@@ -210,3 +210,52 @@ func TestPlayOptions_JSON(t *testing.T) {
 	assert.Contains(t, string(data2), "uris")
 	assert.NotContains(t, string(data2), "context_uri")
 }
+
+// TestPlayOptions_WithOffset_MarshalJSON verifies that PlayOptions with an Offset
+// field marshals to the expected JSON and that zero Offset is omitted.
+func TestPlayOptions_WithOffset_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name       string
+		opts       PlayOptions
+		wantJSON   string
+		notWantKey string
+	}{
+		{
+			name: "context_uri with offset uri",
+			opts: PlayOptions{
+				ContextURI: "spotify:collection:tracks",
+				Offset:     &PlayOffset{URI: "spotify:track:abc"},
+			},
+			wantJSON: `{"context_uri":"spotify:collection:tracks","offset":{"uri":"spotify:track:abc"}}`,
+		},
+		{
+			name: "context_uri without offset omits offset field",
+			opts: PlayOptions{
+				ContextURI: "spotify:playlist:pl1",
+			},
+			wantJSON:   `{"context_uri":"spotify:playlist:pl1"}`,
+			notWantKey: "offset",
+		},
+		{
+			name: "uris list without offset omits offset field",
+			opts: PlayOptions{
+				URIs: []string{"spotify:track:t1", "spotify:track:t2"},
+			},
+			notWantKey: "offset",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.opts)
+			require.NoError(t, err)
+			if tt.wantJSON != "" {
+				assert.JSONEq(t, tt.wantJSON, string(data))
+			}
+			if tt.notWantKey != "" {
+				assert.NotContains(t, string(data), tt.notWantKey,
+					"JSON should not contain %q when Offset is nil", tt.notWantKey)
+			}
+		})
+	}
+}

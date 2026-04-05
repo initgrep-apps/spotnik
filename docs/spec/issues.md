@@ -249,3 +249,19 @@ When a prefs flush fails, `handlePrefsMsg` retries via `schedulePrefsFlush()` wi
 **Feature:** 19-search-redesign
 
 The comment on `searchSpinnerTick()` in `search.go` states "The 130ms interval matches the spinner.Dot tick rate from bubbles/spinner" but `spinner.Dot` actually uses `FPS: time.Second / 10` = 100ms. The 130ms value works fine functionally (just slightly slower animation) but the comment is inaccurate.
+
+---
+
+## Story 105: buildPlayContextCmd nil-check pattern deviation
+**Found:** 2026-04-05 | **Source:** PR #132 Review
+**Feature:** 20-playback-context
+
+`buildPlayContextCmd` and `buildPlayTrackListCmd` in `internal/app/commands.go` capture `a.player` into a local variable and check for nil inside the closure, whereas the established `buildPlaybackAPICmd` pattern checks nil before creating the closure. Functionally equivalent today but deviates from the project pattern.
+
+---
+
+## Story 105: 403 ForbiddenError toast message for context playback
+**Found:** 2026-04-05 | **Source:** PR #132 Review
+**Feature:** 20-playback-context
+
+The `PlaybackCmdSentMsg` handler shows "Playback control not available on this device" for 403 errors, which is accurate for device-control actions but misleading when context/list playback fails due to account tier. A more specific message for context play 403s ("Spotify Premium required") would improve UX.

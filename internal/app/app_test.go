@@ -330,16 +330,16 @@ func TestApp_PlayContextMsg_DispatchesPlayCmd(t *testing.T) {
 	assert.NotNil(t, cmd, "PlayContextMsg should produce a play command")
 }
 
-// TestApp_PlayTrackMsg_DispatchesPlayCmd verifies that a PlayTrackMsg
-// from the library pane produces a play command.
-func TestApp_PlayTrackMsg_DispatchesPlayCmd(t *testing.T) {
+// TestApp_PlayTrackListMsg_DispatchesPlayCmd verifies that a PlayTrackListMsg
+// produces a play command (replaces the old PlayTrackMsg test).
+func TestApp_PlayTrackListMsg_DispatchesPlayCmd(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	playMsg := panes.PlayTrackMsg{TrackURI: "spotify:track:t1"}
+	playMsg := panes.PlayTrackListMsg{URIs: []string{"spotify:track:t1"}}
 	_, cmd := a.Update(playMsg)
 
-	assert.NotNil(t, cmd, "PlayTrackMsg should produce a play command")
+	assert.NotNil(t, cmd, "PlayTrackListMsg should produce a play command")
 }
 
 // TestApp_FetchAlbumsRequest_ForwardedToApp verifies that FetchAlbumsRequestMsg
@@ -691,10 +691,10 @@ func TestApp_SearchPlay_OverlayStaysOpen(t *testing.T) {
 	a = model.(*app.App)
 	require.True(t, a.SearchOpen())
 
-	// PlayTrackMsg should NOT close the overlay.
-	model, _ = a.Update(panes.PlayTrackMsg{TrackURI: "spotify:track:t1"})
+	// PlayTrackListMsg should NOT close the overlay.
+	model, _ = a.Update(panes.PlayTrackListMsg{URIs: []string{"spotify:track:t1"}})
 	a = model.(*app.App)
-	assert.True(t, a.SearchOpen(), "PlayTrackMsg should not close the search overlay")
+	assert.True(t, a.SearchOpen(), "PlayTrackListMsg should not close the search overlay")
 
 	// PlayContextMsg should also NOT close the overlay.
 	model, _ = a.Update(panes.PlayContextMsg{ContextURI: "spotify:playlist:pl1"})

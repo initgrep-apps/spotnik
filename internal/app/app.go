@@ -1304,11 +1304,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.PlayContextMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
-		return a, a.buildPlayContextCmd(m.ContextURI)
+		return a, a.buildPlayContextCmd(m.ContextURI, m.OffsetURI)
+
+	case panes.PlayTrackListMsg:
+		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
+		return a, a.buildPlayTrackListCmd(m.URIs)
 
 	case panes.PlayTrackMsg:
-		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
-		return a, a.buildPlayTrackCmd(m.TrackURI)
+		// QueuePane skip-to: play a single track URI directly.
+		// Single-URI list is functionally equivalent to the old buildPlayTrackCmd.
+		return a, a.buildPlayTrackListCmd([]string{m.TrackURI})
 
 	case panes.AddToQueueMsg:
 		return a, a.buildAddToQueueCmd(m.TrackURI, m.TrackName)

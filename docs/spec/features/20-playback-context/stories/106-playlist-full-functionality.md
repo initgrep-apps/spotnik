@@ -4,6 +4,9 @@ feature: 20-playback-context
 status: open
 ---
 
+> **Depends on Story 105.** This story uses `PlayContextMsg.OffsetURI` which is
+> added in Story 105. Implement Story 105 first.
+
 ## Background
 
 The `PlaylistsPane` has the complete UI skeleton — list view, track sub-view — but
@@ -11,7 +14,8 @@ the drill-down functionality is entirely non-functional:
 
 1. **Track sub-view never loads** — `FetchPlaylistTracksRequestMsg` has no handler
    in `app.go`. The message is emitted, silently dropped, and the track table stays
-   empty forever.
+   empty forever. As a result, `Title()` reads from `store.PlaylistTracks(selectedID)`
+   which is always empty → the sub-view header always shows "0 tracks".
 
 2. **Playing a track is missing** — `handleTrackViewKey` has no Enter handler.
    Even if tracks loaded, pressing Enter does nothing.
@@ -22,8 +26,33 @@ the drill-down functionality is entirely non-functional:
    sub-view. When the user presses Esc it is no longer needed. The correct pattern —
    already used by search — is pane-owned data, not store-owned.
 
-This story fixes the drill-down and introduces the correct interactive data-loading
-pattern for the playlist track sub-view, modelled after `SearchOverlay`.
+4. **No pagination or debounce** — `FetchPlaylistTracksRequestMsg` has no `Offset`
+   field; `buildFetchPlaylistTracksCmd` always fetches offset=0 with no cancellable
+   context.
+
+**Note on main-list track counts:** The main playlist list correctly shows track
+counts from `SimplePlaylist.TrackCount` (populated via custom `UnmarshalJSON` from
+`tracks.total` in the Spotify playlists response). This is working correctly and is
+not touched by this story.
+
+**What the current code looks like** (confirmed from codebase):
+- `FetchPlaylistTracksRequestMsg` has only `PlaylistID string` — no `Offset`
+- `PlaylistTracksLoadedMsg` has only `PlaylistID`, `Tracks`, `Err` — no `Total/HasNext/Offset`
+- `buildFetchPlaylistTracksCmd` takes only `playlistID string` — no context, no offset
+- `PlaylistsPane` has `inTrackView`, `selectedID`, `selectedName`, `trackTable` but
+  NOT `selectedURI`, `loadedTracks`, `trackTotal`, `trackOffset`, `hasMoreTracks`,
+  `tracksFetching`, `playlistIntent`
+- `refreshTrackRows` reads from `store.PlaylistTracks(p.selectedID)` — must be changed
+  to read from `p.loadedTracks`
+
+**Existing methods that need targeted updates** (not rewrites — they exist):
+- `Title()` — reads from store; must read from `p.trackTotal` instead
+- `Actions()` — must add Esc hint when `inTrackView`
+- `View()` — already renders `trackTable` when `inTrackView`; unchanged
+- `SetFocused()` — must route focus to correct table based on `inTrackView`
+- `SetTheme()` — must rebuild `trackTable` alongside `table`
+- `SetSize()` — must propagate size to `trackTable`
+- `resizeTable()` — already exists; verify it handles two-table scenario correctly
 
 **Out of scope:** Playlist management operations (rename `r`, remove track `x`,
 reorder `Shift+↑/↓`, create `n`) are explicitly excluded from this story. The
@@ -493,7 +522,94 @@ func (p *PlaylistsPane) refreshTrackRows() {
 }
 ```
 
-### 10. Updated `buildFetchPlaylistTracksCmd` with context + new signature
+### 10. Updated UI methods in `playlists_pane.go`
+
+These methods already exist in the pane — they need targeted updates, not rewrites.
+
+#### `Title()` — read from `p.trackTotal` instead of store
+
+```go
+func (p *PlaylistsPane) Title() string {
+    if p.inTrackView {
+        // p.trackTotal comes from the API response (PlaylistTracksLoadedMsg.Total).
+        // It shows the real playlist total, not just how many tracks are loaded.
+        return fmt.Sprintf("Playlists ── %s (%d tracks)", p.selectedName, p.trackTotal)
+    }
+    return "Playlists"
+}
+```
+
+**Before (current):** reads `len(store.PlaylistTracks(p.selectedID))` which is 0 because
+no handler exists. **After:** reads `p.trackTotal` set from the API response.
+
+#### `Actions()` — add Esc hint in track sub-view
+
+```go
+func (p *PlaylistsPane) Actions() []layout.Action {
+    if p.inTrackView {
+        return []layout.Action{{Key: "Esc", Label: "back"}}
+    }
+    if p.filter.IsActive() {
+        return []layout.Action{{Key: "Esc", Label: "close filter"}}
+    }
+    return []layout.Action{{Key: "f", Label: "filter"}}
+}
+```
+
+#### `SetFocused()` — route focus to correct table
+
+```go
+func (p *PlaylistsPane) SetFocused(focused bool) {
+    p.focused = focused
+    if p.inTrackView {
+        p.trackTable.SetFocused(focused)
+        p.table.SetFocused(false)
+    } else {
+        p.table.SetFocused(focused && !p.filter.IsActive())
+        p.trackTable.SetFocused(false)
+    }
+}
+```
+
+#### `SetSize()` — propagate to both tables
+
+```go
+func (p *PlaylistsPane) SetSize(width, height int) {
+    p.width = width
+    p.height = height
+    p.filter.SetWidth(width)
+    p.trackTable.SetSize(width, height)
+    p.resizeTable()
+}
+```
+
+#### `SetTheme()` — rebuild `trackTable` with new column tokens
+
+Add after rebuilding the main `table`:
+```go
+// Rebuild track table with new column colors.
+trackCols := []components.ColumnDef{
+    {Key: "index",    Header: "#",        FlexFactor: 1,  Color: th.ColumnIndex()},
+    {Key: "track",    Header: "Track",    FlexFactor: 10, Color: th.ColumnPrimary()},
+    {Key: "artist",   Header: "Artist",   FlexFactor: 6,  Color: th.ColumnSecondary()},
+    {Key: "duration", Header: "Duration", FlexFactor: 3,  Color: th.ColumnTertiary()},
+}
+p.trackTable = components.NewTable(components.TableConfig{
+    Columns:      trackCols,
+    Theme:        th,
+    PlayingIndex: -1,
+    ShowHeader:   true,
+})
+p.trackTable.SetSize(p.width, p.height)
+if p.inTrackView {
+    p.trackTable.SetFocused(p.focused)
+    p.refreshTrackRows()
+}
+```
+
+---
+
+### 11. Updated `buildFetchPlaylistTracksCmd` with context + new signature
 
 **`internal/app/commands.go`**:
 
@@ -575,12 +691,12 @@ case panes.PlaylistTracksLoadedMsg:
     }
     if m.Err != nil {
         return a, tea.Batch(
-            a.forwardToPlaylistsPane(m),
+            a.forwardToPane(layout.PanePlaylists, m),
             a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load playlist tracks: %s", m.Err.Error())),
         )
     }
     // Forward to pane — pane owns the data, not the store.
-    return a, a.forwardToPlaylistsPane(m)
+    return a, a.forwardToPane(layout.PanePlaylists, m)
 
 case panes.PlaylistTrackViewClosedMsg:
     // User pressed Esc — cancel any in-flight fetch.
@@ -590,20 +706,28 @@ case panes.PlaylistTrackViewClosedMsg:
     return a, nil
 ```
 
-**Helper** — add to `app.go`:
+**Helper** — add a generic `forwardToPane` to `app.go`. This replaces the idea of a
+pane-specific helper and is reusable by Story 107 (and future stories) without
+modification:
+
 ```go
-// forwardToPlaylistsPane forwards a message to PlaylistsPane and returns any cmd.
-func (a *App) forwardToPlaylistsPane(msg tea.Msg) tea.Cmd {
-    pp := a.playlistsPane()
-    if pp == nil {
+// forwardToPane forwards a message to the pane at the given key, updates the
+// pane slot, and returns any command. Returns nil if no pane is registered at key.
+func (a *App) forwardToPane(key layout.PaneKey, msg tea.Msg) tea.Cmd {
+    p, ok := a.panes[key]
+    if !ok || p == nil {
         return nil
     }
-    updated, cmd := pp.Update(msg)
-    if p, ok := updated.(*panes.PlaylistsPane); ok {
-        a.panes[layout.PanePlaylists] = p
-    }
+    updated, cmd := p.Update(msg)
+    a.panes[key] = updated
     return cmd
 }
+```
+
+Use it in the handlers:
+```go
+// forward to PlaylistsPane:
+a.forwardToPane(layout.PanePlaylists, m)
 ```
 
 ---
@@ -882,8 +1006,8 @@ Track sub-view is visible, fetch is in-flight:
 | `internal/api/library.go` | Update `PlaylistTracks` implementation: capture `total`, `next`, null track guard |
 | `internal/api/apitest/mock.go` | Update `MockLibrary.PlaylistTracks` to match new signature |
 | `internal/ui/panes/messages.go` | Update `FetchPlaylistTracksRequestMsg` (add `Offset`), update `PlaylistTracksLoadedMsg` (add `Total`, `HasNext`, `Offset`), add `PlaylistTrackViewClosedMsg` |
-| `internal/ui/panes/playlists_pane.go` | New fields, debounce types, `schedulePlaylistDebounce`, `handlePlaylistDebounce`, `checkPrefetch`, updated `handleListViewKey` Enter, updated `handleTrackViewKey` (Enter + Esc), updated `refreshTrackRows` (reads `loadedTracks`) |
-| `internal/app/app.go` | New `playlistTracksCancel`/`playlistTracksID` fields; 3 new message handlers (`FetchPlaylistTracksRequestMsg`, `PlaylistTracksLoadedMsg`, `PlaylistTrackViewClosedMsg`); `forwardToPlaylistsPane` helper |
+| `internal/ui/panes/playlists_pane.go` | New fields (`selectedURI`, `loadedTracks`, `trackTotal`, `trackOffset`, `hasMoreTracks`, `tracksFetching`, `playlistIntent`); debounce types; `schedulePlaylistDebounce`; `handlePlaylistDebounce`; `checkPrefetch`; updated `handleListViewKey` Enter; updated `handleTrackViewKey` (Enter + Esc); updated `refreshTrackRows` (reads `loadedTracks`); update `Title()`, `Actions()`, `SetFocused()`, `SetSize()`, `SetTheme()` |
+| `internal/app/app.go` | New `playlistTracksCancel`/`playlistTracksID` fields; 3 new message handlers (`FetchPlaylistTracksRequestMsg`, `PlaylistTracksLoadedMsg`, `PlaylistTrackViewClosedMsg`); add generic `forwardToPane` helper |
 | `internal/app/commands.go` | Update `buildFetchPlaylistTracksCmd`: add `ctx context.Context` param, `offset int`, new return signature call, `api.Interactive` priority |
 
 ---
@@ -954,8 +1078,17 @@ Track sub-view is visible, fetch is in-flight:
 
 - [ ] Add `playlistTracksCancel`/`playlistTracksID` to App; add 3 app.go message handlers
       (`FetchPlaylistTracksRequestMsg`, `PlaylistTracksLoadedMsg`, `PlaylistTrackViewClosedMsg`);
-      add `forwardToPlaylistsPane` helper. Management handlers are out of scope.
+      add generic `forwardToPane(key layout.PaneKey, msg tea.Msg) tea.Cmd` helper (reused by
+      Story 107). Management handlers are out of scope.
       - test: FetchPlaylistTracksRequestMsg cancels prior context and sets new ID; stale
         PlaylistTracksLoadedMsg is discarded; PlaylistTrackViewClosedMsg clears ID and
-        calls cancel;
-        errors trigger toasts
+        calls cancel; errors trigger toasts
+
+- [ ] Update `Title()` to read from `p.trackTotal` (not `store.PlaylistTracks`);
+      update `Actions()` to return Esc hint when `inTrackView`;
+      update `SetFocused()` to route focus based on `inTrackView`;
+      update `SetSize()` to propagate to `trackTable`;
+      update `SetTheme()` to rebuild `trackTable` with new column tokens.
+      - test: `Title()` with `inTrackView=true` returns `"Playlists ── X (N tracks)"` where N = `trackTotal`
+      - test: `Actions()` with `inTrackView=true` returns `[{Key:"Esc", Label:"back"}]`
+      - test: `SetFocused(true)` with `inTrackView=true` focuses trackTable, unfocuses main table
