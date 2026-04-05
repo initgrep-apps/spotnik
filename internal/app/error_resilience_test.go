@@ -399,6 +399,49 @@ func TestBuildFetchPlaylistsCmd_401_ShowsSessionExpired(t *testing.T) {
 	assert.Contains(t, output, "Session expired", "401 with no refresh token should show session expired toast")
 }
 
+// TestBuildFetchPlaylistTracksCmd_401_ShowsSessionExpired verifies that a 401 from
+// the playlist tracks endpoint, when the token store has no refresh token, shows the
+// "Session expired" message after the full command chain runs.
+func TestBuildFetchPlaylistTracksCmd_401_ShowsSessionExpired(t *testing.T) {
+	srv := unauthorizedServer()
+	defer srv.Close()
+
+	cfg := &config.Config{ClientID: "test-client-id"}
+	// InMemoryTokenStore with no refresh token — refresh will fail.
+	store := keychain.NewInMemoryTokenStore()
+
+	a := app.New(cfg, app.AppOptions{TokenStore: store})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Step 1: FetchPlaylistTracksRequestMsg → buildFetchPlaylistTracksCmd dispatched.
+	model, fetchCmd := a.Update(panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl123"})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	// Step 2: Execute the fetch command — gets unauthorizedMsg{} back.
+	unauthorizedMsgResult := fetchCmd()
+
+	// Step 3: Feed unauthorizedMsg to Update — dispatches buildRefreshTokenCmd.
+	model, refreshCmd := a.Update(unauthorizedMsgResult)
+	a = model.(*app.App)
+	require.NotNil(t, refreshCmd, "unauthorizedMsg should dispatch a refresh command")
+
+	// Step 4: Execute the refresh command — fails because no refresh token.
+	refreshResult := refreshCmd()
+
+	// Step 5: Feed tokenRefreshedMsg(err) to Update — emits an error toast alert cmd.
+	model, alertCmd := a.Update(refreshResult)
+	a = model.(*app.App)
+	require.NotNil(t, alertCmd, "session expired should emit an error toast alert cmd")
+
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	a = updated.(*app.App)
+	output := a.View()
+	assert.Contains(t, output, "Session expired", "401 from playlist tracks with no refresh token should show session expired toast")
+}
+
 // TestBuildSearchCmd_401_ShowsSessionExpired verifies the same pattern for search.
 // buildSearchPageCmd fetches a single page; the page-fetch hits 401
 // and emits unauthorizedMsg, triggering the token refresh flow.

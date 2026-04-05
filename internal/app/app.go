@@ -595,6 +595,10 @@ func (a *App) forwardToPane(key layout.PaneID, msg tea.Msg) tea.Cmd {
 	updated, cmd := p.Update(msg)
 	if lp, ok := updated.(layout.Pane); ok {
 		a.panes[key] = lp
+	} else {
+		// Programming invariant: every pane in a.panes must implement layout.Pane.
+		// If this fires, the pane returned a concrete type from Update that dropped the interface.
+		fmt.Fprintf(os.Stderr, "spotnik: forwardToPane: pane at key %d returned %T from Update, which does not implement layout.Pane\n", key, updated)
 	}
 	return cmd
 }

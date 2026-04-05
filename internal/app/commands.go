@@ -607,6 +607,10 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(err, &forbiddenErr) {
+				return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Offset: offset, Err: forbiddenErr}
+			}
 			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Offset: offset, Err: err}
 		}
 		return panes.PlaylistTracksLoadedMsg{

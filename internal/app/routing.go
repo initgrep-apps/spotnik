@@ -7,9 +7,9 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
@@ -252,12 +252,19 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
-				// API client not set up — silently discard, consistent with other handlers.
-				return a, nil, true
+				// Forward to pane so it clears tracksFetching — even though we won't toast.
+				return a, a.forwardToPane(layout.PanePlaylists, m), true
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				return a, tea.Batch(
+					a.forwardToPane(layout.PanePlaylists, m),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+				), true
 			}
 			return a, tea.Batch(
 				a.forwardToPane(layout.PanePlaylists, m),
-				a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load playlist tracks: %s", m.Err.Error())),
+				a.alerts.NewAlertCmd("error", "Failed to load playlist tracks. Press Enter to retry"),
 			), true
 		}
 		// Forward to pane — pane owns the data, not the store.

@@ -447,6 +447,9 @@ func (p *PlaylistsPane) checkPrefetch() tea.Cmd {
 	if !p.hasMoreTracks || p.tracksFetching {
 		return nil
 	}
+	if len(p.loadedTracks) == 0 {
+		return nil
+	}
 	cursor := p.trackTable.SelectedIndex()
 	if cursor < len(p.loadedTracks)-10 {
 		return nil

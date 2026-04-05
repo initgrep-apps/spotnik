@@ -602,6 +602,22 @@ func TestPlaylistsPane_TracksLoadedMsg_WrongPlaylistID(t *testing.T) {
 	assert.Nil(t, pane.loadedTracks, "wrong PlaylistID must be ignored (pane stays at nil loadedTracks)")
 }
 
+// TestPlaylistsPane_TracksLoadedMsg_ErrorPath_ClearsTracksFetching verifies that
+// a PlaylistTracksLoadedMsg with a non-nil Err clears tracksFetching so the pane
+// is not permanently stuck in a loading state.
+func TestPlaylistsPane_TracksLoadedMsg_ErrorPath_ClearsTracksFetching(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.tracksFetching = true // simulate an in-flight fetch
+
+	msg := PlaylistTracksLoadedMsg{PlaylistID: "pl1", Err: fmt.Errorf("network error")}
+	pane.Update(msg) //nolint:errcheck
+
+	assert.False(t, pane.tracksFetching, "error response must clear tracksFetching so the pane is not stuck")
+}
+
 // TestPlaylistsPane_Enter_TrackView_EmitsPlayContextMsg verifies Enter on a track emits
 // PlayContextMsg with correct ContextURI and OffsetURI.
 func TestPlaylistsPane_Enter_TrackView_EmitsPlayContextMsg(t *testing.T) {
