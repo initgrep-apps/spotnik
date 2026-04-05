@@ -1,7 +1,7 @@
 ---
 title: "Context-aware playback for song-list panes"
 feature: 20-playback-context
-status: open
+status: done
 ---
 
 > **Prerequisite for the feature**: This story must be implemented before Stories 106

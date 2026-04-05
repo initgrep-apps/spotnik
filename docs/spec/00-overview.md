@@ -28,7 +28,7 @@
 | 16 | Vivid Theme System | `features/16-vivid-themes/` | in-progress | 70, 71, 72, 73, 74, 75, 77, 78, 79 | Config-driven TOML themes, colorful borders, per-column colors, 6 new themes, runtime switcher overlay |
 | 17 | Bootstrap | `features/17-bootstrap/` | done | 76, 79, 80 | First-launch config bootstrap, embedded client ID, preference persistence engine |
 | 19 | Search Redesign | `features/19-search-redesign/` | done | 81–104 (done) | Full-screen search overlay with tabs, bubbles/list delegate, prefix autocomplete, rich metadata, UX polish; redesign (97–104): universal debounce, per-page fetch, context cancellation, gateway Interactive debounce, pagination controls, store cleanup |
-| 20 | Playback Context & Navigation | `features/20-playback-context/` | open | 105, 106, 107 | Context-aware playback for all song-list panes, full playlist functionality, album drill-down |
+| 20 | Playback Context & Navigation | `features/20-playback-context/` | open | 105 (done), 106, 107 | Context-aware playback for all song-list panes, full playlist functionality, album drill-down |
 
 ---
 
