@@ -4,11 +4,18 @@ feature: 20-playback-context
 status: open
 ---
 
+> **Prerequisite for the feature**: This story must be implemented before Stories 106
+> and 107. It introduces `PlayContextMsg.OffsetURI` and the new `PlayTrackListMsg`
+> type that those stories depend on. It also removes the now-obsolete `PlayTrackMsg`
+> and `buildPlayTrackCmd`.
+
 ## Background
 
-Every pane that plays a single track currently sends only one URI to Spotify:
+Every pane that plays a single track currently emits `PlayTrackMsg{TrackURI: uri}`,
+which causes `app.go` to call `buildPlayTrackCmd(uri)`:
 
 ```go
+// Current (wrong) call in buildPlayTrackCmd:
 player.Play(ctx, domain.PlayOptions{URIs: []string{trackURI}})
 ```
 
@@ -21,10 +28,13 @@ This is Spotify's autoqueue behaviour when there is nothing else to play.
 
 | Pane | Root cause | Correct approach |
 |---|---|---|
-| Liked Songs (`likedsongs_pane.go:153`) | `PlayTrackMsg` with no context | `context_uri: "spotify:collection:tracks"` + `offset: {uri}` |
-| Top Tracks (`toptracks_pane.go:180`) | `PlayTrackMsg` with no context | `uris: allTopTracks[selectedIdx:]` |
-| Recently Played (`recentlyplayed_pane.go:152`) | `PlayTrackMsg` with no context | `uris: allRecentTracks[selectedIdx:]` |
-| Search tracks (`search.go:729`) | `PlayTrackMsg` with no context | `uris: allSearchResultURIs[selectedIdx:]` |
+| Liked Songs (Enter handler in `likedsongs_pane.go`) | `PlayTrackMsg` with no context | `context_uri: "spotify:collection:tracks"` + `offset: {uri}` |
+| Top Tracks (Enter handler in `toptracks_pane.go`) | `PlayTrackMsg` with no context | `uris: allTopTracks[selectedIdx:]` |
+| Recently Played (Enter handler in `recentlyplayed_pane.go`) | `PlayTrackMsg` with no context | `uris: allRecentTracks[selectedIdx:]` |
+| Search tracks (track-result Enter handler in `search.go`) | `PlayTrackMsg` with no context | `uris: allSearchResultURIs[selectedIdx:]` |
+
+**Note on line number references:** Do not use line numbers — they are stale after any
+edit. Locate the Enter handlers by searching for `PlayTrackMsg` in each pane file.
 
 **Liked Songs** uses `spotify:collection:tracks` because Spotify owns that
 collection and can fill the queue with your actual upcoming liked songs.
@@ -36,7 +46,44 @@ all track URIs starting from the selected one so Spotify queues the rest.
 The **Queue pane** is excluded — playing a queued track is a skip-to operation,
 not a context play, and its existing behaviour is correct.
 
+**Queue self-correction:** After the context fix is in place, the queue pane will
+automatically display the correct upcoming tracks within ~1000ms via its existing
+tick-based polling. No additional work is required for the queue pane.
+
 ## Design
+
+### 0. Remove obsolete `PlayTrackMsg` and `buildPlayTrackCmd`
+
+`PlayTrackMsg` and `buildPlayTrackCmd` are the old single-URI play mechanism. After
+this story, every pane that previously emitted `PlayTrackMsg` will emit either
+`PlayContextMsg` (with `OffsetURI`) or `PlayTrackListMsg`. The old types become dead
+code and must be deleted to keep the codebase clean.
+
+**Delete from `internal/ui/panes/messages.go`:**
+```go
+// DELETE this entire type:
+type PlayTrackMsg struct {
+    TrackURI string
+}
+```
+
+**Delete from `internal/app/commands.go`:**
+```go
+// DELETE this entire function:
+func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd { ... }
+```
+
+**Delete from `internal/app/app.go`:**
+```go
+// DELETE this case from the Update() switch:
+case panes.PlayTrackMsg:
+    return a, a.buildPlayTrackCmd(m.TrackURI)
+```
+
+After deletion, the compiler will immediately flag any remaining `PlayTrackMsg`
+usages (there should be none once all four panes are updated in this story).
+
+---
 
 ### 1. Extend `domain.PlayOptions` with offset support
 
@@ -207,14 +254,16 @@ return o, func() tea.Msg { return PlayTrackListMsg{URIs: uris} }
 
 ### Files
 
-- `internal/domain/types.go` — add `PlayOffset`, extend `PlayOptions`
-- `internal/ui/panes/messages.go` — add `OffsetURI` to `PlayContextMsg`, add `PlayTrackListMsg`
-- `internal/app/app.go` — update `PlayContextMsg` handler, add `PlayTrackListMsg` handler
-- `internal/app/commands.go` — update `buildPlayContextCmd` signature, add `buildPlayTrackListCmd`
-- `internal/ui/panes/likedsongs_pane.go` — emit `PlayContextMsg` with collection context
-- `internal/ui/panes/toptracks_pane.go` — emit `PlayTrackListMsg` with URI slice
-- `internal/ui/panes/recentlyplayed_pane.go` — emit `PlayTrackListMsg` with URI slice
-- `internal/ui/panes/search.go` — emit `PlayTrackListMsg` for track results
+| File | Change |
+|------|--------|
+| `internal/domain/types.go` | Add `PlayOffset` struct; add `Offset *PlayOffset` to `PlayOptions` |
+| `internal/ui/panes/messages.go` | **Delete** `PlayTrackMsg`; add `OffsetURI` to `PlayContextMsg`; add `PlayTrackListMsg` |
+| `internal/app/app.go` | **Delete** `PlayTrackMsg` handler; update `PlayContextMsg` handler to pass `m.OffsetURI`; add `PlayTrackListMsg` handler |
+| `internal/app/commands.go` | **Delete** `buildPlayTrackCmd`; update `buildPlayContextCmd` signature; add `buildPlayTrackListCmd` |
+| `internal/ui/panes/likedsongs_pane.go` | Replace `PlayTrackMsg` with `PlayContextMsg` (collection context + offset) |
+| `internal/ui/panes/toptracks_pane.go` | Replace `PlayTrackMsg` with `PlayTrackListMsg` (URIs from selected index) |
+| `internal/ui/panes/recentlyplayed_pane.go` | Replace `PlayTrackMsg` with `PlayTrackListMsg` (URIs from selected index) |
+| `internal/ui/panes/search.go` | Replace `PlayTrackMsg` with `PlayTrackListMsg` for track results |
 
 ## Acceptance Criteria
 
@@ -226,8 +275,18 @@ return o, func() tea.Msg { return PlayTrackListMsg{URIs: uris} }
 - [ ] `PlayOptions` with `Offset` marshals correctly: `{"context_uri":"...","offset":{"uri":"..."}}`
 - [ ] `PlayOptions` without `Offset` omits the field (no regression in JSON output)
 - [ ] Queue pane playback behaviour is unchanged
+- [ ] `PlayTrackMsg` and `buildPlayTrackCmd` are fully removed — no dead code remains
+- [ ] Queue pane reflects correct upcoming tracks within ~1000ms after any play call
+
+> **Stories 106 and 107 depend on this story.** `PlayContextMsg.OffsetURI` and
+> `PlayTrackListMsg` must exist before those stories can be implemented.
 
 ## Tasks
+
+- [ ] **Delete** `PlayTrackMsg` from `messages.go`, `buildPlayTrackCmd` from `commands.go`,
+      and the `PlayTrackMsg` case from `app.go` Update switch. Do this first so the
+      compiler immediately surfaces any remaining usages as you update the panes.
+      - test: compilation succeeds after all panes are updated (no remaining references)
 
 - [ ] Add `PlayOffset` struct and `Offset *PlayOffset` field to `domain.PlayOptions`
       - test: `PlayOptions{ContextURI:"x", Offset:&PlayOffset{URI:"y"}}` marshals to
@@ -244,17 +303,23 @@ return o, func() tea.Msg { return PlayTrackListMsg{URIs: uris} }
       - test: handler calls `buildPlayTrackListCmd` with correct URIs slice
 
 - [ ] Update `likedsongs_pane.go` Enter handler to emit `PlayContextMsg` with
-      `ContextURI: "spotify:collection:tracks"` and `OffsetURI: uri`
+      `ContextURI: "spotify:collection:tracks"` and `OffsetURI: uri`.
+      **Preserve the existing idx bounds guard** (`if idx >= 0 && idx < len(tracks)`).
       - test: Enter on row N emits `PlayContextMsg{ContextURI:"spotify:collection:tracks", OffsetURI: tracks[N].URI}`
+      - test: Enter when list is empty (idx == -1) emits no command
 
 - [ ] Update `toptracks_pane.go` Enter handler to emit `PlayTrackListMsg` with
-      URIs from selected index to end of `store.TopTracks(timeRange)` slice
+      URIs from selected index to end of `store.TopTracks(timeRange)` slice.
+      **Preserve the existing idx bounds guard**.
       - test: Enter on row N emits `PlayTrackListMsg{URIs: topTrackURIs[N:]}`
+      - test: Enter on last row emits `PlayTrackListMsg{URIs: [lastTrackURI]}`
 
 - [ ] Update `recentlyplayed_pane.go` Enter handler to emit `PlayTrackListMsg`
-      with URIs from selected index to end of `store.RecentlyPlayed()` slice
+      with URIs from selected index to end of `store.RecentlyPlayed()` slice.
+      **Preserve the existing idx bounds guard**.
       - test: Enter on row N emits `PlayTrackListMsg{URIs: recentTrackURIs[N:]}`
 
 - [ ] Update `search.go` track-result Enter handler to emit `PlayTrackListMsg`
-      with URIs from selected index to end of current track results page
+      with URIs from selected index to end of current track results page.
+      **Preserve the existing idx bounds guard**.
       - test: Enter on track row N emits `PlayTrackListMsg{URIs: searchTrackURIs[N:]}`

@@ -93,14 +93,26 @@ type LikeTrackRequestMsg struct {
 	Unlike bool
 }
 
-// PlayContextMsg is sent when the user selects a playlist or album to play.
-// The root app model receives this and dispatches a play command to the API.
+// PlayContextMsg is sent when the user selects a playlist, album, or collection
+// to play. OffsetURI is optional — when set, playback starts at that track URI
+// within the context rather than from the beginning.
 type PlayContextMsg struct {
 	ContextURI string
+	// OffsetURI is optional: start at this track URI within the context.
+	OffsetURI string
 }
 
-// PlayTrackMsg is sent when the user selects a specific track to play.
-// The root app model receives this and dispatches a play command to the API.
+// PlayTrackListMsg is sent when the user plays a track from a pane that has no
+// Spotify collection context (Top Tracks, Recently Played, Search results).
+// URIs is the ordered list of track URIs starting from the selected track —
+// Spotify will play URIs[0] and queue the rest.
+type PlayTrackListMsg struct {
+	URIs []string
+}
+
+// PlayTrackMsg is sent by QueuePane when the user selects a queued track to play.
+// This is a skip-to operation — the queue pane selects by URI, not by context.
+// Other panes use PlayContextMsg or PlayTrackListMsg instead.
 type PlayTrackMsg struct {
 	TrackURI string
 }

@@ -1,5 +1,6 @@
 // Package panes — LikedSongsPane displays the user's liked tracks in a dense table
-// with in-pane filtering and like/unlike toggle. Selecting a track emits PlayTrackMsg.
+// with in-pane filtering and like/unlike toggle. Selecting a track emits PlayContextMsg
+// with the liked songs collection context so the queue fills with subsequent liked songs.
 package panes
 
 import (
@@ -150,7 +151,10 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if idx >= 0 && idx < len(tracks) {
 			uri := tracks[idx].Track.URI
 			return l, func() tea.Msg {
-				return PlayTrackMsg{TrackURI: uri}
+				return PlayContextMsg{
+					ContextURI: "spotify:collection:tracks",
+					OffsetURI:  uri,
+				}
 			}
 		}
 		return l, nil

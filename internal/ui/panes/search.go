@@ -725,8 +725,16 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 		return o, nil
 	}
 	if si.IsTrack {
-		uri := si.URI
-		return o, func() tea.Msg { return PlayTrackMsg{TrackURI: uri} }
+		// Build the URI list from the selected result onward, collecting only tracks.
+		// This gives Spotify the full remaining track context so the queue fills correctly.
+		idx := o.resultList.Index()
+		uris := make([]string, 0)
+		for _, item := range o.results[idx:] {
+			if item.IsTrack && item.URI != "" {
+				uris = append(uris, item.URI)
+			}
+		}
+		return o, func() tea.Msg { return PlayTrackListMsg{URIs: uris} }
 	}
 	uri := si.URI
 	return o, func() tea.Msg { return PlayContextMsg{ContextURI: uri} }

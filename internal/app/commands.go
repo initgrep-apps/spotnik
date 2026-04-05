@@ -114,14 +114,20 @@ func nextRepeatMode(current string) string {
 	}
 }
 
-// buildPlayContextCmd dispatches a play command for a playlist or album context URI.
-func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
+// buildPlayContextCmd dispatches a play command for a playlist, album, or collection
+// context URI. When offsetURI is non-empty, playback starts at that track URI within
+// the context (e.g. liked songs starting at a selected track).
+func (a *App) buildPlayContextCmd(contextURI, offsetURI string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{Err: errNilClient}
 		}
-		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{ContextURI: contextURI})
+		opts := domain.PlayOptions{ContextURI: contextURI}
+		if offsetURI != "" {
+			opts.Offset = &domain.PlayOffset{URI: offsetURI}
+		}
+		err := player.Play(api.WithPriority(context.Background(), api.Interactive), opts)
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -134,14 +140,17 @@ func (a *App) buildPlayContextCmd(contextURI string) tea.Cmd {
 	}
 }
 
-// buildPlayTrackCmd dispatches a play command for a specific track URI.
-func (a *App) buildPlayTrackCmd(trackURI string) tea.Cmd {
+// buildPlayTrackListCmd dispatches a play command for an ordered list of track URIs.
+// Used by panes without a Spotify collection context (Top Tracks, Recently Played,
+// Search). Spotify plays URIs[0] and queues the rest.
+func (a *App) buildPlayTrackListCmd(uris []string) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
 			return panes.PlaybackCmdSentMsg{Err: errNilClient}
 		}
-		err := player.Play(api.WithPriority(context.Background(), api.Interactive), domain.PlayOptions{URIs: []string{trackURI}})
+		err := player.Play(api.WithPriority(context.Background(), api.Interactive),
+			domain.PlayOptions{URIs: uris})
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}

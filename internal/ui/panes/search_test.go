@@ -1092,23 +1092,29 @@ func TestSearchOverlay_DownKey_MovesCursor(t *testing.T) {
 	assert.Equal(t, initialIdx+1, panes.ListCursorIndex(o), "down key should advance list cursor")
 }
 
-// TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg verifies Enter on a track emits PlayTrackMsg only (no close).
-func TestSearchOverlay_Enter_TrackEmitsPlayTrackMsg(t *testing.T) {
+// TestSearchOverlay_Enter_TrackEmitsPlayTrackListMsg verifies Enter on a track emits
+// PlayTrackListMsg with URIs from the selected track to end (Story 105).
+func TestSearchOverlay_Enter_TrackEmitsPlayTrackListMsg(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
 		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+		{Category: "track", Name: "Track Two", URI: "spotify:track:t2", IsTrack: true},
+		{Category: "track", Name: "Track Three", URI: "spotify:track:t3", IsTrack: true},
 	}})
 	o = model.(*panes.SearchOverlay)
 
 	_, cmd := sendKey(t, o, "enter")
 	require.NotNil(t, cmd)
-	// handleEnter should return only the play command — no SearchClosedMsg.
+	// handleEnter should return PlayTrackListMsg with all track URIs from position 0.
 	msg := cmd()
-	ptMsg, ok := msg.(panes.PlayTrackMsg)
-	require.True(t, ok, "Enter on track should return PlayTrackMsg directly, got %T", msg)
-	assert.Equal(t, "spotify:track:t1", ptMsg.TrackURI)
+	ptMsg, ok := msg.(panes.PlayTrackListMsg)
+	require.True(t, ok, "Enter on track should return PlayTrackListMsg, got %T", msg)
+	require.Len(t, ptMsg.URIs, 3, "should include URIs from selected track to end")
+	assert.Equal(t, "spotify:track:t1", ptMsg.URIs[0])
+	assert.Equal(t, "spotify:track:t2", ptMsg.URIs[1])
+	assert.Equal(t, "spotify:track:t3", ptMsg.URIs[2])
 }
 
 // TestSearchOverlay_Enter_TrackDoesNotCloseOverlay verifies Enter does NOT emit SearchClosedMsg.

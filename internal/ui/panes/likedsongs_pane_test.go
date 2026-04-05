@@ -130,8 +130,10 @@ func TestLikedSongsPane_View_ShowsDuration(t *testing.T) {
 	assert.Contains(t, output, "3:22", "duration should be formatted as M:SS")
 }
 
-// TestLikedSongsPane_Enter_EmitsPlayTrackMsg verifies Enter emits PlayTrackMsg.
-func TestLikedSongsPane_Enter_EmitsPlayTrackMsg(t *testing.T) {
+// TestLikedSongsPane_Enter_EmitsPlayContextMsg verifies Enter on row N emits
+// PlayContextMsg with the liked songs collection context and the selected track's URI
+// as OffsetURI (Story 105: context-aware playback).
+func TestLikedSongsPane_Enter_EmitsPlayContextMsg(t *testing.T) {
 	pane := newTestLikedSongsPaneWithData(true)
 	pane.SetSize(80, 20)
 
@@ -139,9 +141,22 @@ func TestLikedSongsPane_Enter_EmitsPlayTrackMsg(t *testing.T) {
 	require.NotNil(t, cmd, "Enter should return a command")
 
 	msg := cmd()
-	playMsg, ok := msg.(PlayTrackMsg)
-	require.True(t, ok, "command should produce PlayTrackMsg")
-	assert.Equal(t, "spotify:track:t1", playMsg.TrackURI, "should use first track URI")
+	playMsg, ok := msg.(PlayContextMsg)
+	require.True(t, ok, "command should produce PlayContextMsg, got %T", msg)
+	assert.Equal(t, "spotify:collection:tracks", playMsg.ContextURI,
+		"ContextURI should be the liked songs collection")
+	assert.Equal(t, "spotify:track:t1", playMsg.OffsetURI,
+		"OffsetURI should be the selected track URI")
+}
+
+// TestLikedSongsPane_Enter_EmptyList_EmitsNoCommand verifies Enter on an empty list
+// emits no command (idx == -1 bounds guard preserved).
+func TestLikedSongsPane_Enter_EmptyList_EmitsNoCommand(t *testing.T) {
+	pane := newTestLikedSongsPane(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.Nil(t, cmd, "Enter on empty list should not emit a command")
 }
 
 // TestLikedSongsPane_I_EmitsLikeTrackRequest verifies 'i' emits LikeTrackRequestMsg.

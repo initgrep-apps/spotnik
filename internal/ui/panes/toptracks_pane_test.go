@@ -151,16 +151,44 @@ func TestTopTracksPane_ActionsLabelReflectsRange(t *testing.T) {
 	assert.Equal(t, "all", tAction.Label)
 }
 
-func TestTopTracksPane_EnterEmitsPlayTrackMsg(t *testing.T) {
+// TestTopTracksPane_Enter_EmitsPlayTrackListMsg verifies Enter on row N emits
+// PlayTrackListMsg with URIs from the selected index onward (Story 105).
+func TestTopTracksPane_Enter_EmitsPlayTrackListMsg(t *testing.T) {
 	pane, _ := newTestTopTracksPane()
 	pane.SetFocused(true)
 
+	// Table starts at row 0 (first track: tt1).
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	require.NotNil(t, cmd)
+	require.NotNil(t, cmd, "Enter should produce a command")
+
 	msg := cmd()
-	playMsg, ok := msg.(PlayTrackMsg)
-	require.True(t, ok)
-	assert.Equal(t, "spotify:track:tt1", playMsg.TrackURI)
+	playMsg, ok := msg.(PlayTrackListMsg)
+	require.True(t, ok, "command should produce PlayTrackListMsg, got %T", msg)
+	// From index 0 → all 3 URIs.
+	require.Len(t, playMsg.URIs, 3, "should include URIs from selected track to end")
+	assert.Equal(t, "spotify:track:tt1", playMsg.URIs[0], "first URI should be selected track")
+	assert.Equal(t, "spotify:track:tt2", playMsg.URIs[1])
+	assert.Equal(t, "spotify:track:tt3", playMsg.URIs[2])
+}
+
+// TestTopTracksPane_Enter_LastRow_EmitsSingleURI verifies Enter on the last row
+// emits PlayTrackListMsg with only the last track URI.
+func TestTopTracksPane_Enter_LastRow_EmitsSingleURI(t *testing.T) {
+	pane, _ := newTestTopTracksPane()
+	pane.SetFocused(true)
+
+	// Navigate to last row (3 tracks → 2 down presses).
+	pane.Update(tea.KeyMsg{Type: tea.KeyDown}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyDown}) //nolint:errcheck
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd, "Enter on last row should produce a command")
+
+	msg := cmd()
+	playMsg, ok := msg.(PlayTrackListMsg)
+	require.True(t, ok, "command should produce PlayTrackListMsg, got %T", msg)
+	require.Len(t, playMsg.URIs, 1, "last row should emit single URI")
+	assert.Equal(t, "spotify:track:tt3", playMsg.URIs[0])
 }
 
 func TestTopTracksPane_FilterByTrackName(t *testing.T) {

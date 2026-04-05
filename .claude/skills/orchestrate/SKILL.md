@@ -75,6 +75,7 @@ surface the escalation message to the user and **STOP**.
 ---
 
 ## STEP 3 — EXTERNAL REVIEW LOOP (up to 3 rounds)
+*Important: Do not skip this step*
 
 The feature-implementer already self-reviews (its Phase 6). This external
 review is an independent second opinion.
@@ -184,6 +185,8 @@ Report to the user:
 ```
 
 ---
+## STEP 6 — Compact
+- To avoid overflowing the context, your must run /compact to compact the conversation after each story is done
 
 ## CONSTRAINTS
 

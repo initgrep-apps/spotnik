@@ -217,14 +217,25 @@ type Device struct {
 	VolumePercent int `json:"volume_percent"`
 }
 
-// PlayOptions specifies what to play. Provide ContextURI for albums/playlists,
-// or URIs for specific tracks.
+// PlayOffset specifies where within a context to start playback.
+type PlayOffset struct {
+	// URI is the Spotify track URI to start from within the context.
+	URI string `json:"uri,omitempty"`
+}
+
+// PlayOptions specifies what to play.
+// Provide ContextURI + Offset for collections (albums, playlists, liked songs).
+// Provide URIs for an explicit ordered track list with no collection context.
 type PlayOptions struct {
 	// ContextURI is a Spotify URI for an album, playlist, or artist context.
 	ContextURI string `json:"context_uri,omitempty"`
 
 	// URIs is a list of Spotify track URIs to play directly.
 	URIs []string `json:"uris,omitempty"`
+
+	// Offset specifies where within the context to start playback.
+	// When non-nil, playback starts at the given track URI within the context.
+	Offset *PlayOffset `json:"offset,omitempty"`
 }
 
 // FullArtist represents a Spotify artist with full details, as returned by

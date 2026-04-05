@@ -4,6 +4,10 @@ feature: 20-playback-context
 status: open
 ---
 
+> **Depends on Stories 105 and 106.** Story 105 introduces `PlayContextMsg.OffsetURI`.
+> Story 106 introduces the generic `forwardToPane` helper used in this story's app.go
+> handlers. Implement in order: 105 → 106 → 107.
+
 ## Background
 
 The `AlbumsPane` currently plays an album immediately when the user presses Enter:
@@ -592,8 +596,20 @@ type albumDebounceMsg struct {
 // GET /albums/{id}/tracks. Returns the tracks, a hasNext bool (true when the
 // API's "next" field is non-empty, indicating more pages), and any error.
 // The caller controls pagination via limit and offset.
+//
+// NOTE: Uses the same doJSON calling convention as the rest of LibraryClient:
+// build a *http.Request via l.newRequest, set query params, then call l.doJSON(req, &resp).
 func (l *LibraryClient) AlbumTracks(ctx context.Context, albumID string, limit, offset int) ([]domain.Track, bool, error) {
-    path := fmt.Sprintf("/albums/%s/tracks?limit=%d&offset=%d", albumID, limit, offset)
+    path := fmt.Sprintf("/albums/%s/tracks", albumID)
+    req, err := l.newRequest(ctx, http.MethodGet, path, nil)
+    if err != nil {
+        return nil, false, fmt.Errorf("creating get album tracks request: %w", err)
+    }
+    q := req.URL.Query()
+    q.Set("limit", strconv.Itoa(limit))
+    q.Set("offset", strconv.Itoa(offset))
+    req.URL.RawQuery = q.Encode()
+
     var resp struct {
         Items []struct {
             ID         string          `json:"id"`
@@ -605,7 +621,7 @@ func (l *LibraryClient) AlbumTracks(ctx context.Context, albumID string, limit, 
         } `json:"items"`
         Next string `json:"next"`
     }
-    if err := l.base.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
+    if err := l.doJSON(req, &resp); err != nil {
         return nil, false, fmt.Errorf("fetching album tracks: %w", err)
     }
     tracks := make([]domain.Track, len(resp.Items))
@@ -691,12 +707,14 @@ albumTracksCancel context.CancelFunc
 albumTracksID     string
 ```
 
-**Initialize in NewApp (alongside searchCancel):**
+**Initialize in NewApp (alongside searchCancel and playlistTracksCancel from Story 106):**
 ```go
 albumTracksCancel: func() {},
 ```
 
-**Add three new cases in the Update switch:**
+**Add three new cases in the Update switch.**
+
+> `forwardToPane` is the generic helper defined in Story 106 — reuse it here.
 
 ```go
 case panes.FetchAlbumTracksRequestMsg:
@@ -787,6 +805,15 @@ func (a *AlbumsPane) Title() string {
     return "Albums"
 }
 ```
+
+**Design note:** `AlbumsPane` uses `len(a.loadedTracks)` (not a `trackTotal` field) because
+`GET /albums/{id}/tracks` does not return a top-level `total` field that maps cleanly to a
+display count — only the `next` field is used for pagination. Using loaded count means the
+title shows `(5 tracks)` while loading and `(50 tracks)` once all pages are fetched. This is
+intentional and consistent with the incremental loading UX. Contrast with `PlaylistsPane`
+which stores `trackTotal` from the playlist tracks response (which includes a reliable `total`
+field). If a future improvement is needed, `total` from the response can be stored in a new
+`albumTrackTotal` field.
 
 #### `Update()` changes
 
@@ -892,35 +919,14 @@ func (a *AlbumsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 #### `checkPrefetch` (new method)
 
-Trigger threshold: 5 rows from end (proportional to page size of 50).
+Trigger threshold: 5 rows from end (proportional to page size of 50). Pagination
+requests bypass the 150ms debounce — they are cursor-triggered discrete events, not
+user typing.
 
 ```go
 // checkPrefetch fires a lazy pagination request when the cursor is within 5 rows
 // of the end of loaded tracks, there are more pages, and no fetch is in-flight.
-func (a *AlbumsPane) checkPrefetch() {
-    if !a.hasMoreTracks || a.tracksFetching {
-        return
-    }
-    cursor := a.trackTable.SelectedIndex()
-    if cursor < len(a.loadedTracks)-5 {
-        return
-    }
-    a.tracksFetching = true
-    intent := albumDebounceIntent{albumID: a.selectedID, offset: a.trackOffset}
-    // Pagination skips the 150ms debounce — it is a cursor-triggered event, not user
-    // typing. Fire immediately.
-    _ = FetchAlbumTracksRequestMsg{AlbumID: a.selectedID, Offset: a.trackOffset}
-    // Emit via command so app.go handles it through the normal message path.
-    a.albumIntent = intent // keep intent in sync so debounce ticks are not accidentally stale
-}
-```
-
-Wait — pagination requests should be emitted as commands, not debounced. The debounce
-is only for the initial Enter on a new album. Pagination from cursor proximity is a
-single discrete event — no debounce needed.
-
-Correct `checkPrefetch`:
-```go
+// Returns nil when no prefetch is needed.
 func (a *AlbumsPane) checkPrefetch() tea.Cmd {
     if !a.hasMoreTracks || a.tracksFetching {
         return nil
@@ -938,7 +944,7 @@ func (a *AlbumsPane) checkPrefetch() tea.Cmd {
 }
 ```
 
-And in `handleTrackViewKey`, collect both commands:
+In `handleTrackViewKey`, collect both commands:
 ```go
 cmd := a.trackTable.Update(key)
 prefetchCmd := a.checkPrefetch()
@@ -1050,12 +1056,13 @@ if a.inTrackView {
 
 | File | Change |
 |------|--------|
-| `internal/api/library.go` | Add `AlbumTracks` method (GET /albums/{id}/tracks) |
+| `internal/api/library.go` | Add `AlbumTracks` method (GET /albums/{id}/tracks) using `l.newRequest` + `l.doJSON(req, &resp)` pattern |
 | `internal/api/library_interfaces.go` | Add `AlbumTracks` to `LibraryClient` interface |
+| `internal/api/apitest/mock.go` | Add `MockLibrary.AlbumTracks` to match new interface method |
 | `internal/ui/panes/messages.go` | Add `FetchAlbumTracksRequestMsg`, `AlbumTracksLoadedMsg`, `AlbumTrackViewClosedMsg` |
-| `internal/app/app.go` | Add `albumTracksCancel`, `albumTracksID` fields; 3 new message handlers |
+| `internal/app/app.go` | Add `albumTracksCancel`, `albumTracksID` fields; 3 new message handlers; reuse `forwardToPane` from Story 106 |
 | `internal/app/commands.go` | Add `buildFetchAlbumTracksCmd` |
-| `internal/ui/panes/albums_pane.go` | Refactor: add track sub-view, debounce, lazy pagination, `handleTrackViewKey`, `checkPrefetch`, `refreshTrackRows` |
+| `internal/ui/panes/albums_pane.go` | Refactor: add track sub-view, debounce, lazy pagination, `handleTrackViewKey`, `checkPrefetch`, `refreshTrackRows`, update `Title()`, `Actions()`, `View()`, `SetFocused()`, `SetSize()`, `SetTheme()` |
 
 ---
 
@@ -1096,6 +1103,9 @@ if a.inTrackView {
       - test: HTTP 404 → error returned, not panic
 
 - [ ] Add `AlbumTracks` to `LibraryClient` interface in `internal/api/library_interfaces.go`
+
+- [ ] Add `MockLibrary.AlbumTracks` to `internal/api/apitest/mock.go` to satisfy the
+      updated interface. Follow the same pattern as `MockLibrary.PlaylistTracks`.
 
 - [ ] Add `FetchAlbumTracksRequestMsg`, `AlbumTracksLoadedMsg`, `AlbumTrackViewClosedMsg`
       to `internal/ui/panes/messages.go`
