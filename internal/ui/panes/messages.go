@@ -244,20 +244,30 @@ type DeviceTransferredMsg struct {
 }
 
 // FetchPlaylistTracksRequestMsg is emitted by PlaylistsPane when it needs to
-// load tracks for a specific playlist from the API.
+// load (or page) playlist tracks. Offset 0 = initial load; Offset > 0 = next page.
 type FetchPlaylistTracksRequestMsg struct {
 	PlaylistID string
+	Offset     int // 0 for first page, len(loadedTracks) for subsequent pages
 }
 
 // PlaylistTracksLoadedMsg is returned by the playlist tracks fetch command.
 // PlaylistID identifies which playlist's tracks were fetched.
-// Tracks carries the fetched tracks on success; Err is non-nil on failure.
-// Update() writes Tracks to the store; PlaylistsPane reads from store.
+// Tracks contains the page of tracks. Total is the playlist's total track count.
+// HasNext is true when more pages are available (API next != "").
+// Offset mirrors the request offset so the pane can detect stale responses.
 type PlaylistTracksLoadedMsg struct {
 	PlaylistID string
 	Tracks     []domain.Track
+	Total      int  // total tracks in playlist (from API response)
+	HasNext    bool // true when next page exists
+	Offset     int  // mirrors request offset for stale-response detection
 	Err        error
 }
+
+// PlaylistTrackViewClosedMsg is emitted by PlaylistsPane when the user presses
+// Esc to return to the playlist list. App.go uses it to cancel any in-flight
+// playlist track fetch and clear the staleness key.
+type PlaylistTrackViewClosedMsg struct{}
 
 // PlaylistCreateRequestMsg is emitted by PlaylistsPane when the user submits
 // a new playlist name. The root app creates the playlist via the API.

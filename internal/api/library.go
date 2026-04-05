@@ -52,13 +52,15 @@ func (l *LibraryClient) Playlists(ctx context.Context, limit, offset int) ([]Sim
 	return response.Items, nil
 }
 
-// PlaylistTracks fetches tracks for a specific playlist via GET /playlists/{id}/tracks.
-// Returns a slice of Track. Errors are wrapped with context.
-func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, error) {
+// PlaylistTracks fetches one page of playlist tracks via GET /playlists/{id}/tracks.
+// Returns tracks, the total track count for the playlist, whether a next page exists, and any error.
+// Local files (is_local=true) and unavailable tracks (null track object) are skipped.
+// Errors are wrapped with context.
+func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, int, bool, error) {
 	path := fmt.Sprintf("/v1/playlists/%s/tracks", playlistID)
 	req, err := l.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating get playlist tracks request: %w", err)
+		return nil, 0, false, fmt.Errorf("creating get playlist tracks request: %w", err)
 	}
 
 	q := req.URL.Query()
@@ -68,18 +70,25 @@ func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, l
 
 	var response struct {
 		Items []struct {
-			Track Track `json:"track"`
+			IsLocal bool   `json:"is_local"`
+			Track   *Track `json:"track"` // pointer: null for unavailable tracks
 		} `json:"items"`
+		Total int    `json:"total"`
+		Next  string `json:"next"` // empty string when null in JSON
 	}
 	if err := l.doJSON(req, &response); err != nil {
-		return nil, fmt.Errorf("getting playlist tracks: %w", err)
+		return nil, 0, false, fmt.Errorf("getting playlist tracks: %w", err)
 	}
 
 	tracks := make([]Track, 0, len(response.Items))
 	for _, item := range response.Items {
-		tracks = append(tracks, item.Track)
+		// Skip local files (no Spotify URI) and unavailable tracks (null track object).
+		if item.IsLocal || item.Track == nil || item.Track.URI == "" {
+			continue
+		}
+		tracks = append(tracks, *item.Track)
 	}
-	return tracks, nil
+	return tracks, response.Total, response.Next != "", nil
 }
 
 // SavedAlbums fetches the user's saved albums via GET /me/albums.
