@@ -12,7 +12,7 @@ const appVersion = "v1.1.0"
 // renderSplashView builds the splash screen using go-figure ASCII art.
 // It is a standalone function so it can be tested without an App instance.
 func renderSplashView(t theme.Theme, width, height int) string {
-	fig := figure.NewFigure("SPOTNIK", "doom", false)
+	fig := figure.NewFigure("SPOTNIK", "serifcap", false)
 	banner := fig.String()
 
 	bannerStyle := lipgloss.NewStyle().

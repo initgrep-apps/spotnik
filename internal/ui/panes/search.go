@@ -103,16 +103,26 @@ type searchKeyMap struct {
 	prevPage key.Binding
 }
 
-// ShortHelp returns 8 bindings for the compact help bar view.
-// Clear (ctrl+u) is included so users can discover the clear-search shortcut.
-// nextPage and prevPage are included so users can discover pagination keys.
+// ShortHelp returns all 8 bindings. ShortHelp is bypassed at runtime (ShowAll=true on the help
+// model always renders FullHelp), but kept complete so callers inspecting the KeyMap programmatically
+// see the full set.
 func (k searchKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Clear, k.Close, k.nextPage, k.prevPage}
+	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear, k.nextPage, k.prevPage}
 }
 
-// FullHelp returns all 8 bindings grouped in a single column.
+// FullHelp returns 4 groups of 2 bindings for the 4-column × 2-row layout rendered by
+// bubbles/help when ShowAll=true. Each inner slice is one column; the two bindings in
+// each column are rendered vertically, and the four columns are joined horizontally:
+//
+//	enter  play    tab     filter    esc    close    pgdn  next
+//	ctrl+a queue   shift↹  prev      ctrl+u clear    pgup  prev
 func (k searchKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear, k.nextPage, k.prevPage}}
+	return [][]key.Binding{
+		{k.Play, k.Queue},
+		{k.TabNext, k.TabPrev},
+		{k.Close, k.Clear},
+		{k.nextPage, k.prevPage},
+	}
 }
 
 // NewSearchKeyMap creates the default keybindings for the search overlay.
@@ -144,12 +154,14 @@ func NewSearchKeyMap() searchKeyMap {
 			key.WithHelp("ctrl+u", "clear"),
 		),
 		nextPage: key.NewBinding(
-			key.WithKeys("ctrl+right"),
-			key.WithHelp("ctrl+→", "next page"),
+			// pgdown is the sole pagination key. ctrl+right was removed because macOS
+			// intercepts it at the OS level for Spaces/Desktop navigation.
+			key.WithKeys("pgdown"),
+			key.WithHelp("pgdn", "next"),
 		),
 		prevPage: key.NewBinding(
-			key.WithKeys("ctrl+left"),
-			key.WithHelp("ctrl+←", "prev page"),
+			key.WithKeys("pgup"),
+			key.WithHelp("pgup", "prev"),
 		),
 	}
 }
@@ -239,6 +251,7 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
 
 	h := help.New()
+	h.ShowAll = true // always render FullHelp (4×2 layout) so all 8 bindings are visible
 	// Override default muted-gray help styles with theme tokens so key names and
 	// descriptions match the overlay's visual language and update when the theme changes.
 	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Info())
@@ -259,7 +272,10 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	rl.SetShowStatusBar(false)
 	rl.SetShowHelp(false)
 	rl.SetShowPagination(false)
-	rl.InfiniteScrolling = true
+	// InfiniteScrolling must be false: the list should clamp at the last item rather
+	// than wrapping to the first. Wrapping within a page makes it impossible for the
+	// user to tell they've reached the end; Ctrl+Right/Left handles cross-page navigation.
+	rl.InfiniteScrolling = false
 
 	return &SearchOverlay{
 		theme:      t,
@@ -371,7 +387,7 @@ func (o *SearchOverlay) panelHeights() (searchH, resultsH, helpH int) {
 	if o.showHintLine() {
 		searchH = 4
 	}
-	helpH = 3
+	helpH = 4 // 2 content rows for 4×2 FullHelp layout + top/bottom border
 	totalH := o.overlayHeight()
 	resultsH = totalH - searchH - helpH
 	if resultsH < 5 {
@@ -584,7 +600,7 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlA:
 		return o.handleAddToQueue()
 
-	case tea.KeyCtrlRight:
+	case tea.KeyPgDown:
 		// Next page — only when there is a query, not loading any page, and there is a next page.
 		if o.intent.query == "" || o.loadingFirstPage || o.loadingNextPage || !o.hasNextPage() {
 			return o, nil
@@ -592,7 +608,7 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		o.intent.page++
 		return o, o.scheduleDebounce()
 
-	case tea.KeyCtrlLeft:
+	case tea.KeyPgUp:
 		// Prev page — only when there is a query, not loading any page, and not on page 1.
 		if o.intent.query == "" || o.loadingFirstPage || o.loadingNextPage || o.intent.page <= 1 {
 			return o, nil
@@ -601,19 +617,25 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o, o.scheduleDebounce()
 
 	case tea.KeyCtrlU:
-		// Clear local input — visual reset happens immediately.
+		// Clear local input and all result state immediately.
 		// Reset the Prompt to the default and force-clear prefix state so that
 		// a subsequent cleanQuery() call does not index into a stale lockedPrefix.
-		// Also reset intent.page and intent.query — clearing the search must not
-		// fire a search for the empty string (no scheduleDebounce).
-		// Restart the placeholder ticker so the animated cycling resumes.
-		// Store writes are deferred: emit SearchClearedMsg for the root app to handle.
+		// Also reset intent — clearing must not fire a search for the empty string.
+		// Clear results inline because SearchClearedMsg is intercepted by app.go
+		// (which returns early), so the overlay's own SearchClearedMsg handler is
+		// never reached. Inlining the clear is the correct fix.
 		o.input.Prompt = "> "
 		o.input.SetValue("")
 		o.lockedPrefix = ""
 		o.prefixState = PrefixNone
+		o.intent.tab = TabAll
 		o.intent.page = 1
 		o.intent.query = ""
+		o.results = nil
+		o.total = 0
+		o.loadingFirstPage = false
+		o.loadingNextPage = false
+		o.resultList.SetItems(nil)
 		// Re-apply list dimensions: clearing the input makes showHintLine() return true
 		// (searchH=4), which changes resultsH. resizeList() keeps the list height in sync.
 		o.resizeList()
@@ -724,7 +746,8 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 		return o, nil
 	}
 	uri := si.URI
-	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: uri} }
+	name := si.Name
+	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: uri, TrackName: name} }
 }
 
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
@@ -987,11 +1010,12 @@ func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 // Arrows are dimmed (TextMuted) when navigation in that direction is not possible.
 // The bar is centered within the given width w.
 func (o *SearchOverlay) renderPaginationBar(w int) string {
-	totalPages := (o.total + SearchPageSize - 1) / SearchPageSize
-	if totalPages == 0 {
-		totalPages = 1
-	}
-	center := fmt.Sprintf("  page %d of %d  ", o.intent.page, totalPages)
+	// Show only the current page number — not "of M".
+	// The Spotify API total can be very large (e.g. 10,000+ results) and showing
+	// "page 1 of 1000" is misleading when we only ever fetch 10 items per page.
+	// The → arrow dims when hasNextPage() is false, giving the same directional signal
+	// without the confusing denominator.
+	center := fmt.Sprintf("  page %d  ", o.intent.page)
 
 	prevStyle := o.theme.TextPrimary()
 	nextStyle := o.theme.TextPrimary()
