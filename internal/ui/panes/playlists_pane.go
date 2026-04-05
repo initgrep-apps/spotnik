@@ -90,12 +90,12 @@ func NewPlaylistsPane(store *state.Store, th theme.Theme, focused bool) *Playlis
 		ShowHeader:   true,
 	})
 
-	// Track sub-view columns: # 5% | Track 45% | Artist 35% | Duration 15%
-	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
+	// Track sub-view columns: # 5% | Track 50% | Artist 30% | Duration 15%
+	// Flex factors: 1 : 10 : 6 : 3 ≈ 5% / 50% / 30% / 15%
 	trackColumns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
+		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	tt := components.NewTable(components.TableConfig{
