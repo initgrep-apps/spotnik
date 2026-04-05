@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -72,6 +73,11 @@ type App struct {
 
 	// layout manages the grid, focus, preset, and page system.
 	layout *layout.Manager
+
+	// statusHelp renders the bottom keybinding bar using bubbles/help (ShowAll=true).
+	// statusKeyMap holds the bindings; activePage is set per render call.
+	statusHelp   help.Model
+	statusKeyMap appKeyMap
 
 	// panes holds all 8 Page A panes (Page B panes added in Feature 51).
 	panes map[layout.PaneID]layout.Pane
@@ -263,6 +269,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		panes:           panesMap,
 		searchPane:      searchPane,
 		devicePane:      devicePane,
+		statusHelp:      newStatusHelp(t),
+		statusKeyMap:    newAppKeyMap(),
 		currentView:     viewSplash,
 		volumeStep:      5,
 		needsAuth:       opts.NeedsAuth,
@@ -1535,6 +1543,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetTheme(newTheme)
 		}
+		// Re-style the status bar help component with the new theme colors.
+		a.statusHelp = newStatusHelp(newTheme)
 		// Close the overlay.
 		a.showThemeSwitcher = false
 		a.themeOverlay = nil

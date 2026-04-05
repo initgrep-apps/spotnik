@@ -61,8 +61,8 @@ func TestResize_TilesContentArea(t *testing.T) {
 	const W, H = 120, 30
 	m.Resize(W, H)
 
-	// Content area: full width, height minus header (1) and status (1)
-	contentH := H - 2
+	// Content area: full width, height minus header (1) and status (3)
+	contentH := H - 4
 
 	visible := m.VisiblePanes()
 
@@ -77,20 +77,20 @@ func TestResize_TilesContentArea(t *testing.T) {
 }
 
 func TestResize_HeightWeightDistribution(t *testing.T) {
-	// Dashboard: weights 2:3:3 over 28 content rows
-	// 2/8 * 28 = 7, 3/8 * 28 = 10, 3/8 * 28 = 11 (last absorbs remainder)
+	// Dashboard: weights 2:3:3 over 26 content rows (30 - 1 header - 3 status)
+	// 2/8 * 26 = 6, 3/8 * 26 = 9, last row absorbs remainder = 26-6-9 = 11
 	m := layout.NewManager()
-	m.Resize(120, 30) // content height = 28
+	m.Resize(120, 30) // content height = 26
 
-	// NowPlaying is in row 1 (weight 2) — expect height ~7
+	// NowPlaying is in row 1 (weight 2) — expect height 6
 	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 7, nowPlayingRect.Height)
+	assert.Equal(t, 6, nowPlayingRect.Height)
 
-	// Playlists is in row 2 (weight 3) — expect height ~10
+	// Playlists is in row 2 (weight 3) — expect height 9
 	playlistsRect := m.PaneRect(layout.PanePlaylists)
-	assert.Equal(t, 10, playlistsRect.Height)
+	assert.Equal(t, 9, playlistsRect.Height)
 
-	// Queue is in row 3 (weight 3, last row absorbs remainder) — expect 28-7-10=11
+	// Queue is in row 3 (weight 3, last row absorbs remainder) — expect 26-6-9=11
 	queueRect := m.PaneRect(layout.PaneQueue)
 	assert.Equal(t, 11, queueRect.Height)
 }
@@ -571,14 +571,14 @@ func TestRowCollapseHeightRedistributed(t *testing.T) {
 	const W, H = 120, 30
 	m.Resize(W, H)
 
-	contentH := H - 2 // 28
+	contentH := H - 4 // 26 (1 header + 3 status bar)
 
 	m.TogglePane(layout.PanePlaylists)
 	m.TogglePane(layout.PaneAlbums)
 	m.TogglePane(layout.PaneLikedSongs)
 
 	// Active rows: weight 2 and weight 3 → totalWeight 5
-	// Row 1: 2/5 * 28 = 11, Row 3: 3/5 * 28 = 17 (last absorbs 28 - 11 = 17)
+	// Row 1: 2/5 * 26 = 10, Row 3: 3/5 * 26 = 16 (last absorbs 26 - 10 = 16)
 	nowH := m.PaneRect(layout.PaneNowPlaying).Height
 	queueH := m.PaneRect(layout.PaneQueue).Height
 

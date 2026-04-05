@@ -118,7 +118,14 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	// the last notch's ╭ provides visual separation from ╮.
 	//
 	// We use lipgloss.Width() for accurate terminal-column counting.
-	leftPrefix := "─ "
+	// Use "─ " prefix (dash + space) only when there is a visible title/toggle key.
+	// When leftInner is empty the space would create a visible gap in the border line.
+	var leftPrefix string
+	if lipgloss.Width(leftInner) == 0 {
+		leftPrefix = "─" // no gap: ╭──────╮
+	} else {
+		leftPrefix = "─ " // space before title: ╭─ Title ──╮
+	}
 
 	// Total non-dash columns in the top border:
 	// 1 (╭) + len(leftPrefix) + w(leftInner) + w(dashes) + w(rightSegment) + 1 (╮) = Width

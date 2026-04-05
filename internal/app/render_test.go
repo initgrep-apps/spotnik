@@ -7,9 +7,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
-	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -372,21 +372,6 @@ func TestRenderStatusBar_PageB_OmitsPresetAndToggle(t *testing.T) {
 	assert.NotContains(t, result, "toggle", "Page B status bar must NOT include 'toggle' hint")
 }
 
-// TestRenderStatusBar_TighterSpacing verifies the separator between hints is 2 spaces
-// (not the old 3-space separator).
-func TestRenderStatusBar_TighterSpacing(t *testing.T) {
-	a := newRenderTestApp()
-	result := a.renderStatusBar()
-
-	// The rendered bar should NOT contain 3 consecutive spaces as a separator.
-	// "   " (3 spaces) was the old separator; "  " (2 spaces) is the new one.
-	// Note: this checks the raw output including ANSI — use a plain-text check
-	// on what the user would see. Since lipgloss.Render wraps each item, the
-	// raw string between hint groups should not contain 3+ raw spaces as separator.
-	// We check that at least 2-space separation renders and the old 3-space does not.
-	assert.NotContains(t, result, "   ", "status bar separator must be 2 spaces, not 3")
-}
-
 // --- Story 75 Task 2: status bar theme hint ---
 
 // TestRenderStatusBar_ContainsThemeHint verifies that the status bar includes
@@ -399,86 +384,54 @@ func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
 	assert.Contains(t, result, "theme", "status bar should contain 'theme' shortcut label")
 }
 
-// --- Story 77 Task 5: key style has consistent background ---
+// --- bubbles/help component tests ---
 
-// TestRenderStatusBar_KeyStyleHasConsistentBackground verifies that key characters
-// in the status bar carry Background(StatusBarBg()) — same as the label background —
-// so there are no visible "pill" gaps between key and label.
-//
-// The test works by:
-//  1. Building a keyStyle WITHOUT background (old incorrect style).
-//  2. Building a keyStyle WITH background (new correct style).
-//  3. Rendering the status bar and asserting its output matches the with-background variant
-//     and does NOT match the no-background variant for a key character.
-func TestRenderStatusBar_KeyStyleHasConsistentBackground(t *testing.T) {
-	// Force TrueColor so lipgloss emits ANSI RGB escapes even without a TTY.
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
-
-	a := newRenderTestApp()
-
-	// Old (incorrect) keyStyle: Foreground + Bold only — no Background.
-	keyStyleNoBg := lipgloss.NewStyle().
-		Foreground(a.theme.KeyHint()).
-		Bold(true)
-
-	// New (correct) keyStyle: Foreground + Background + Bold.
-	keyStyleWithBg := lipgloss.NewStyle().
-		Foreground(a.theme.KeyHint()).
-		Background(a.theme.StatusBarBg()).
-		Bold(true)
-
-	// Render a sample key character with both styles.
-	renderedNoBg := keyStyleNoBg.Render("q")
-	renderedWithBg := keyStyleWithBg.Render("q")
-
-	// Sanity: the two renders must differ (proves the test is meaningful).
-	require.NotEqual(t, renderedNoBg, renderedWithBg,
-		"keyStyle with and without Background must produce different renders (sanity check)")
-
-	result := a.renderStatusBar()
-
-	// The status bar must contain the WITH-background key render.
-	assert.Contains(t, result, renderedWithBg,
-		"status bar must render key characters WITH Background(StatusBarBg())")
-
-	// The status bar must NOT contain the NO-background key render. If it does, it
-	// means keyStyle still lacks Background and the pill fix has not been applied.
-	assert.NotContains(t, result, renderedNoBg,
-		"status bar must NOT render key characters WITHOUT background (pill fix not applied)")
-
-	// bgStyle as used in renderStatusBar.
-	bgStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.StatusBarFg())
-	bgRendered := bgStyle.Render("label")
-	bgBgSeq := extractBgANSISeq(bgRendered)
-	keyBgSeq := extractBgANSISeq(renderedWithBg)
-
-	require.NotEmpty(t, bgBgSeq, "bgStyle render must contain a 48;2; background sequence")
-	require.NotEmpty(t, keyBgSeq, "keyStyle-with-bg render must contain a 48;2; background sequence")
-
-	// Both background sequences must match — same StatusBarBg() on key and label.
-	assert.Equal(t, keyBgSeq, bgBgSeq,
-		"keyStyle and bgStyle must carry the same background ANSI sequence (same StatusBarBg)")
-
-	// Regression: status bar should still render all expected key hints.
-	assert.Contains(t, result, "search")
-	assert.Contains(t, result, "quit")
-	assert.Contains(t, result, "theme")
+// TestAppKeyMap_PageA_FullHelp_FiveGroups verifies that the Page A appKeyMap produces
+// 5 FullHelp groups (one per column) each with at most 2 bindings (2-row layout).
+func TestAppKeyMap_PageA_FullHelp_FiveGroups(t *testing.T) {
+	km := newAppKeyMap()
+	km.activePage = layout.PageA
+	groups := km.FullHelp()
+	assert.Len(t, groups, 5, "Page A FullHelp must have 5 groups (5 columns)")
+	for i, g := range groups {
+		assert.LessOrEqual(t, len(g), 2, "group %d must have at most 2 bindings (2-row layout)", i)
+	}
 }
 
-// extractBgANSISeq extracts the "48;2;R;G;B" ANSI background sequence from a string.
-func extractBgANSISeq(s string) string {
-	const bgPrefix = "48;2;"
-	idx := strings.Index(s, bgPrefix)
-	if idx < 0 {
-		return ""
+// TestAppKeyMap_PageB_FullHelp_FourGroups verifies that the Page B appKeyMap produces
+// 4 FullHelp groups and does not include "preset" or "toggle" bindings.
+func TestAppKeyMap_PageB_FullHelp_FourGroups(t *testing.T) {
+	km := newAppKeyMap()
+	km.activePage = layout.PageB
+	groups := km.FullHelp()
+	assert.Len(t, groups, 4, "Page B FullHelp must have 4 groups")
+	for _, g := range groups {
+		for _, b := range g {
+			h := b.Help()
+			assert.NotEqual(t, "preset", h.Desc, "Page B must not include preset binding")
+			assert.NotEqual(t, "toggle", h.Desc, "Page B must not include toggle binding")
+		}
 	}
-	end := strings.Index(s[idx:], "m")
-	if end < 0 {
-		return ""
+}
+
+// TestRenderStatusBar_HeightIsThreeLines verifies the help-component status bar renders
+// exactly 3 lines: border top + 1 content row + border bottom.
+func TestRenderStatusBar_HeightIsThreeLines(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	result := a.renderStatusBar()
+	lines := strings.Split(strings.TrimRight(result, "\n"), "\n")
+	assert.Len(t, lines, 3, "status bar must be exactly 3 lines tall (1 content row + top/bottom border)")
+}
+
+// TestRenderStatusBar_ShowsAllPageABindings verifies that all 9 Page A key descriptions
+// appear in the rendered status bar output.
+func TestRenderStatusBar_ShowsAllPageABindings(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 200 // wide terminal so nothing is truncated
+	// Default page is Page A.
+	result := a.renderStatusBar()
+	for _, want := range []string{"search", "page", "preset", "toggle", "pane", "devices", "theme", "help", "quit"} {
+		assert.Contains(t, result, want, "Page A status bar must show %q", want)
 	}
-	return s[idx : idx+end]
 }

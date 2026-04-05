@@ -14,7 +14,7 @@ type Manager struct {
 	width        int
 	height       int
 	headerHeight int // 1 line
-	statusHeight int // 1 line
+	statusHeight int // 3 lines (bubbles/help bar: border + 1 content row + border)
 }
 
 // NewManager creates a Manager with default presets and Page A active.
@@ -32,7 +32,7 @@ func NewManager() *Manager {
 		hidden:       make(map[PaneID]bool),
 		rects:        make(map[PaneID]Rect),
 		headerHeight: 1,
-		statusHeight: 1,
+		statusHeight: 3, // 1 content row for help bar + top/bottom border
 	}
 	return m
 }

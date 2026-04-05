@@ -7,11 +7,91 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 	btoverlay "github.com/rmhubbert/bubbletea-overlay"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
+
+// appKeyMap implements help.KeyMap for the app-level status bar.
+// activePage is set via a copy per render call so renderStatusBar() stays pure.
+//
+// Page A (9 bindings, 5 columns × 2 rows):
+//
+//	/ search   p preset   Tab pane    t theme    q quit
+//	0 page     1-8 toggle  d devices   ? help
+//
+// Page B (7 bindings, 4 columns × 2 rows):
+//
+//	/ search   Tab pane    t theme    q quit
+//	0 page     d devices   ? help
+type appKeyMap struct {
+	activePage                                                     layout.PageID
+	Search, Page, Preset, Toggle, Pane, Devices, Theme, Help, Quit key.Binding
+}
+
+// ShortHelp returns all applicable bindings for the active page.
+// Bypassed at runtime because the help model uses ShowAll=true, but kept
+// complete so callers inspecting the KeyMap programmatically see the full set.
+func (k appKeyMap) ShortHelp() []key.Binding {
+	if k.activePage == layout.PageA {
+		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Theme, k.Help, k.Quit}
+	}
+	return []key.Binding{k.Search, k.Page, k.Pane, k.Devices, k.Theme, k.Help, k.Quit}
+}
+
+// FullHelp returns groups of bindings for the 2-row column layout.
+// Each inner slice is one column rendered vertically; columns are joined horizontally.
+func (k appKeyMap) FullHelp() [][]key.Binding {
+	if k.activePage == layout.PageA {
+		return [][]key.Binding{
+			{k.Search, k.Page},
+			{k.Preset, k.Toggle},
+			{k.Pane, k.Devices},
+			{k.Theme, k.Help},
+			{k.Quit},
+		}
+	}
+	return [][]key.Binding{
+		{k.Search, k.Page},
+		{k.Pane, k.Devices},
+		{k.Theme, k.Help},
+		{k.Quit},
+	}
+}
+
+// newAppKeyMap creates the default keybindings for the app-level status bar.
+func newAppKeyMap() appKeyMap {
+	return appKeyMap{
+		Search:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+		Page:    key.NewBinding(key.WithKeys("0"), key.WithHelp("0", "page")),
+		Preset:  key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "preset")),
+		Toggle:  key.NewBinding(key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8"), key.WithHelp("1-8", "toggle")),
+		Pane:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane")),
+		Devices: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "devices")),
+		Theme:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "theme")),
+		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+}
+
+// newStatusHelp creates and styles a help.Model for the app status bar.
+// Uses ShortHelp (single-row) mode — ShowAll stays false so all bindings render
+// on one line, matching the flat single-row status bar aesthetic.
+// Keys use Info() color; descriptions and separators use TextMuted().
+func newStatusHelp(t theme.Theme) help.Model {
+	h := help.New()
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Info())
+	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
+	h.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
+	h.Styles.FullKey = lipgloss.NewStyle().Foreground(t.Info())
+	h.Styles.FullDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
+	h.Styles.FullSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
+	return h
+}
 
 // View renders the full terminal UI.
 // IMPORTANT: The final step calls a.alerts.Render(view) to overlay any active
@@ -310,62 +390,42 @@ func (a *App) renderHeader() string {
 	return left + "  " + right
 }
 
-// renderStatusBar renders the global-only bottom status bar with page-aware keybinding hints.
-// Pane-specific hints (filter, add, etc.) now live in pane borders — never here.
-// Toast notifications are shown as overlays via alerts.Render() — not in the status bar.
+// renderStatusBar renders the global bottom status bar as a bubbles/help panel.
+// Uses the same component and visual style as the search overlay's keybinding bar:
+// keys in Info() color, descriptions in TextMuted(), wrapped in RenderPaneBorder.
 //
-// Page A includes all hints including "p preset" and "1-8 toggle" (Page A has multiple
-// presets and toggleable panes). Page B omits those two since it has a single fixed layout.
+// The panel is always 3 lines tall (border + 1 content row + border).
+// Page A shows all 9 bindings in a single row; Page B omits preset/toggle.
 func (a *App) renderStatusBar() string {
-	bgStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.StatusBarFg())
+	const statusH = 3 // 1 content row + top/bottom border
+	// Use a minimum rendering width of 160 so all bindings are visible on one row
+	// even when no terminal size has been set (e.g. in unit tests that call
+	// renderStatusBar directly without first sending a tea.WindowSizeMsg).
+	w := a.width
+	if w < 160 {
+		w = 160
+	}
+	innerW := w - 2
 
-	// keyStyle uses Foreground + Background + Bold. The explicit Background(StatusBarBg())
-	// matches bgStyle's background so every character has consistent background.
-	keyStyle := lipgloss.NewStyle().
-		Foreground(a.theme.KeyHint()).
-		Background(a.theme.StatusBarBg()).
-		Bold(true)
+	// Copy the keymap so we can set activePage without mutating App state.
+	// renderStatusBar() must remain a pure render function.
+	km := a.statusKeyMap
+	km.activePage = a.layout.ActivePage()
 
-	// Common hints present on both pages.
-	common := []struct{ Key, Label string }{
-		{"/", "search"},
-		{"0", "page"},
-	}
-	// Page-A-only hints: multiple presets and toggleable panes.
-	pageAOnly := []struct{ Key, Label string }{
-		{"p", "preset"},
-		{"1-8", "toggle"},
-	}
-	// Shared tail hints.
-	tail := []struct{ Key, Label string }{
-		{"Tab", "pane"},
-		{"d", "devices"},
-		{"t", "theme"},
-		{"?", "help"},
-		{"q", "quit"},
-	}
+	helpContent := a.statusHelp.View(km)
+	inner := lipgloss.NewStyle().
+		Width(innerW).MaxWidth(innerW).
+		Height(statusH - 2).MaxHeight(statusH - 2).
+		Render(helpContent)
 
-	hints := common
-	if a.layout.ActivePage() == layout.PageA {
-		hints = append(hints, pageAOnly...)
+	cfg := layout.BorderConfig{
+		Width:       w,
+		Height:      statusH,
+		Title:       "",
+		Actions:     []layout.Action{},
+		AccentColor: a.theme.TextMuted(),
+		Focused:     false,
+		Theme:       a.theme,
 	}
-	hints = append(hints, tail...)
-
-	var parts []string
-	for _, h := range hints {
-		parts = append(parts, keyStyle.Render(h.Key)+bgStyle.Render(" "+h.Label))
-	}
-
-	// Flat assembly: every piece (prefix, separator, padding) is explicitly styled
-	// with bgStyle so no character falls back to terminal default background.
-	// This avoids ANSI nesting issues that cause visible "pill" backgrounds on keys.
-	sep := bgStyle.Render("  ")
-	bar := bgStyle.Render("  ") + strings.Join(parts, sep)
-	// Pad to terminal width so background covers the full row.
-	if barW := lipgloss.Width(bar); a.width > barW {
-		bar += bgStyle.Render(strings.Repeat(" ", a.width-barW))
-	}
-	return bar
+	return layout.RenderPaneBorder(inner, cfg)
 }
