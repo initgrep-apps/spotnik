@@ -1,7 +1,7 @@
 ---
 title: "Playlist full functionality — track sub-view, lazy pagination, playback"
 feature: 20-playback-context
-status: open
+status: done
 ---
 
 > **Depends on Story 105.** This story uses `PlayContextMsg.OffsetURI` which is

@@ -265,3 +265,19 @@ The comment on `searchSpinnerTick()` in `search.go` states "The 130ms interval m
 **Feature:** 20-playback-context
 
 The `PlaybackCmdSentMsg` handler shows "Playback control not available on this device" for 403 errors, which is accurate for device-control actions but misleading when context/list playback fails due to account tier. A more specific message for context play 403s ("Spotify Premium required") would improve UX.
+
+---
+
+## Story 106: `checkPrefetch` integer underflow latent risk
+**Found:** 2026-04-05 | **Source:** PR #133 Review
+**Feature:** 20-playback-context
+
+`checkPrefetch` in `playlists_pane.go` computed `len(p.loadedTracks)-10` before checking for an empty slice. With `len=0` this evaluates to `-10`, and any cursor position ≥ -10 would pass the guard. Fixed in the PR by adding an empty-slice early return, but worth noting as a pattern to watch in similar paginated panes.
+
+---
+
+## Story 106: `TestBuildFetchPlaylistTracksCmd_CancelledCtx_ReturnsNil` assertion weakness
+**Found:** 2026-04-05 | **Source:** PR #133 Review
+**Feature:** 20-playback-context
+
+The cancelled-context test wraps its inner assertion in `if msg != nil`, which means the test cannot fail if the cancellation guard is broken and a non-nil msg is returned with incorrect content. Consider hardening to an unconditional `assert.Nil` in a future pass.
