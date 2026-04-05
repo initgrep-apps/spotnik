@@ -329,6 +329,34 @@ type PlaylistReorderResultMsg struct {
 	Err error
 }
 
+// FetchAlbumTracksRequestMsg is emitted by AlbumsPane when the user opens an album's
+// track sub-view. Offset > 0 is used for lazy pagination (triggered by cursor proximity).
+type FetchAlbumTracksRequestMsg struct {
+	// AlbumID is the Spotify album ID whose tracks are being requested.
+	AlbumID string
+	// Offset is the 0-based index to start fetching from. 0 = first page.
+	Offset int
+}
+
+// AlbumTracksLoadedMsg is returned by buildFetchAlbumTracksCmd after the API call.
+// AlbumsPane owns the tracks — they are NOT written to the Store.
+type AlbumTracksLoadedMsg struct {
+	// AlbumID identifies which album's tracks arrived (used for staleness check).
+	AlbumID string
+	// Offset is the page offset this response corresponds to.
+	Offset int
+	// Tracks is the loaded slice; nil on error.
+	Tracks []domain.Track
+	// HasNext is true when the API response had a non-empty "next" URL — more pages exist.
+	HasNext bool
+	// Err is non-nil if the API call failed.
+	Err error
+}
+
+// AlbumTrackViewClosedMsg is emitted by AlbumsPane when the user presses Esc to close
+// the track sub-view. app.go cancels the in-flight context and clears the staleness key.
+type AlbumTrackViewClosedMsg struct{}
+
 // SearchClearedMsg is emitted by SearchOverlay when the user presses Ctrl+U.
 // Story 99 will wire the root app to clear overlay-local search state in response.
 // Panes must never write to the store directly — they emit messages instead.

@@ -2509,3 +2509,54 @@ func TestApp_OpenSearch_ResetsOverlayState(t *testing.T) {
 	assert.Equal(t, panes.TabAll, sp.ActiveTab(), "after reopen: active tab should be TabAll")
 	assert.Empty(t, sp.ResultListItems(), "after reopen: result list should be empty")
 }
+
+// TestApp_FetchAlbumTracksRequestMsg_SetsID verifies that FetchAlbumTracksRequestMsg
+// sets the albumTracksID staleness key and returns a fetch cmd.
+func TestApp_FetchAlbumTracksRequestMsg_SetsID(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	msg := panes.FetchAlbumTracksRequestMsg{AlbumID: "alb-1", Offset: 0}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "FetchAlbumTracksRequestMsg should return a fetch cmd")
+	assert.Equal(t, "alb-1", a.AlbumTracksID(), "staleness ID must be set to album ID")
+}
+
+// TestApp_AlbumTracksLoadedMsg_StaleMsg_Discarded verifies that a stale
+// AlbumTracksLoadedMsg (mismatched AlbumID) is silently discarded.
+func TestApp_AlbumTracksLoadedMsg_StaleMsg_Discarded(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	// albumTracksID is "" by default, so any non-empty AlbumID is stale.
+
+	msg := panes.AlbumTracksLoadedMsg{AlbumID: "old-album", Tracks: []domain.Track{{ID: "t1"}}}
+	_, cmd := a.Update(msg)
+	assert.Nil(t, cmd, "stale AlbumTracksLoadedMsg must be silently discarded")
+}
+
+// TestApp_AlbumTracksLoadedMsg_WithErr_EmitsToast verifies that an error in
+// AlbumTracksLoadedMsg triggers a toast notification.
+func TestApp_AlbumTracksLoadedMsg_WithErr_EmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetAlbumTracksID("alb-1")
+
+	albErr := fmt.Errorf("connection refused")
+	msg := panes.AlbumTracksLoadedMsg{AlbumID: "alb-1", Err: albErr}
+	_, cmd := a.Update(msg)
+	assert.NotNil(t, cmd, "error in AlbumTracksLoadedMsg must emit a toast cmd")
+}
+
+// TestApp_AlbumTrackViewClosedMsg_ClearsID verifies that AlbumTrackViewClosedMsg
+// clears the albumTracksID staleness key.
+func TestApp_AlbumTrackViewClosedMsg_ClearsID(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetAlbumTracksID("alb-1")
+
+	model, cmd := a.Update(panes.AlbumTrackViewClosedMsg{})
+	a = model.(*app.App)
+	assert.Nil(t, cmd, "AlbumTrackViewClosedMsg must not emit a cmd")
+	assert.Equal(t, "", a.AlbumTracksID(), "AlbumTrackViewClosedMsg must clear the staleness ID")
+}

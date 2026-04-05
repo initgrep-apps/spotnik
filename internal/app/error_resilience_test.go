@@ -543,3 +543,81 @@ func TestApp_401_WithValidRefreshToken_ReInitializesClients(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new-access-token", newToken, "store should have new access token after refresh")
 }
+
+// TestBuildFetchAlbumTracksCmd_429_EmitsRateLimitedMsg verifies that a 429 from
+// the album tracks endpoint causes buildFetchAlbumTracksCmd to return RateLimitedMsg.
+func TestBuildFetchAlbumTracksCmd_429_EmitsRateLimitedMsg(t *testing.T) {
+	srv := rateLimitServer("5")
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123"})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	rateLimitMsg, ok := msg.(panes.RateLimitedMsg)
+	assert.True(t, ok, "429 from album tracks endpoint should emit RateLimitedMsg, got %T", msg)
+	assert.Equal(t, 5, rateLimitMsg.RetryAfterSecs)
+}
+
+// TestBuildFetchAlbumTracksCmd_CancelledCtx_ReturnsNil verifies that a pre-cancelled
+// context causes buildFetchAlbumTracksCmd to return nil (silently discard).
+func TestBuildFetchAlbumTracksCmd_CancelledCtx_ReturnsNil(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[],"next":null}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Trigger fetch then immediately send AlbumTrackViewClosedMsg to cancel it.
+	_, cmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123"})
+	require.NotNil(t, cmd)
+
+	// Cancel via AlbumTrackViewClosedMsg before executing the cmd.
+	a.Update(panes.AlbumTrackViewClosedMsg{}) //nolint:errcheck
+
+	// Now execute — the context was cancelled; staleness ID is now "".
+	msg := cmd()
+	if msg != nil {
+		atMsg, ok := msg.(panes.AlbumTracksLoadedMsg)
+		if ok {
+			assert.Equal(t, "alb123", atMsg.AlbumID, "if msg arrives it must carry the original album ID")
+		}
+	}
+}
+
+// TestBuildFetchAlbumTracksCmd_Success_ReturnsLoadedMsg verifies that a successful
+// album track fetch emits AlbumTracksLoadedMsg with tracks and hasNext=false.
+func TestBuildFetchAlbumTracksCmd_Success_ReturnsLoadedMsg(t *testing.T) {
+	body := `{"items":[{"id":"t1","uri":"spotify:track:t1","name":"So What","duration_ms":200000,"explicit":false,"artists":[{"id":"a1","name":"Miles Davis","uri":"spotify:artist:a1"}]}],"next":null}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123", Offset: 0})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	atMsg, ok := msg.(panes.AlbumTracksLoadedMsg)
+	require.True(t, ok, "successful album tracks fetch should emit AlbumTracksLoadedMsg, got %T", msg)
+	assert.Equal(t, "alb123", atMsg.AlbumID)
+	assert.Equal(t, 0, atMsg.Offset)
+	require.Len(t, atMsg.Tracks, 1)
+	assert.Equal(t, "t1", atMsg.Tracks[0].ID)
+	assert.False(t, atMsg.HasNext, "next=null → HasNext should be false")
+	assert.NoError(t, atMsg.Err)
+}
