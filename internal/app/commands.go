@@ -623,6 +623,50 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 	}
 }
 
+// buildFetchAlbumTracksCmd fetches a page of tracks for the given album ID.
+// Offset 0 = first page (replace); Offset > 0 = subsequent page (append).
+// The context is passed in from the caller to support cancellation when the user
+// switches albums or presses Esc. api.Interactive priority bypasses the token bucket.
+func (a *App) buildFetchAlbumTracksCmd(ctx context.Context, albumID string, offset int) tea.Cmd {
+	library := a.library
+	return func() tea.Msg {
+		// Check for cancellation before making the HTTP call.
+		if ctx.Err() != nil {
+			return nil
+		}
+		if library == nil {
+			return panes.AlbumTracksLoadedMsg{Err: errNilClient, AlbumID: albumID}
+		}
+		tracks, hasNext, err := library.AlbumTracks(
+			api.WithPriority(ctx, api.Interactive),
+			albumID, 50, offset,
+		)
+		if err != nil {
+			// Check cancellation again — context.Canceled is expected on album switch.
+			if ctx.Err() != nil {
+				return nil // silently discard; not an error worth toasting
+			}
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(err, &forbiddenErr) {
+				return panes.AlbumTracksLoadedMsg{AlbumID: albumID, Offset: offset, Err: forbiddenErr}
+			}
+			return panes.AlbumTracksLoadedMsg{AlbumID: albumID, Offset: offset, Err: err}
+		}
+		return panes.AlbumTracksLoadedMsg{
+			AlbumID: albumID,
+			Offset:  offset,
+			Tracks:  tracks,
+			HasNext: hasNext,
+		}
+	}
+}
+
 // buildCreatePlaylistCmd creates a command that calls CreatePlaylist on the playlists API
 // and returns a PlaylistCreatedMsg with the result.
 func (a *App) buildCreatePlaylistCmd(name, description string) tea.Cmd {

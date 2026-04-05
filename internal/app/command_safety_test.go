@@ -630,3 +630,22 @@ func TestErrNilClientGuard_PlaylistReorderResultMsg(t *testing.T) {
 	_, cmd := a.Update(reMsg)
 	assert.Nil(t, cmd, "errNilClient in PlaylistReorderResultMsg must not emit a toast")
 }
+
+// TestErrNilClientGuard_AlbumTracksLoadedMsg verifies AlbumTracksLoadedMsg
+// with errNilClient does not emit a toast (avoids alerting user about a setup error).
+func TestErrNilClientGuard_AlbumTracksLoadedMsg(t *testing.T) {
+	a := newSafetyTestApp()
+
+	// Trigger an album track fetch — nil library client returns errNilClient.
+	_, fetchCmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb1"})
+	require.NotNil(t, fetchCmd)
+
+	resultMsg := fetchCmd()
+	atMsg, ok := resultMsg.(panes.AlbumTracksLoadedMsg)
+	require.True(t, ok, "expected AlbumTracksLoadedMsg, got %T", resultMsg)
+	require.Error(t, atMsg.Err, "nil library client must set Err on AlbumTracksLoadedMsg")
+
+	// Feed errNilClient message back — must be silent (no toast).
+	_, cmd := a.Update(atMsg)
+	assert.Nil(t, cmd, "errNilClient in AlbumTracksLoadedMsg must not emit a toast")
+}

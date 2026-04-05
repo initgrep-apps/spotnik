@@ -1,7 +1,7 @@
 ---
 title: "Album drill-down + track play"
 feature: 20-playback-context
-status: open
+status: done
 ---
 
 > **Depends on Stories 105 and 106.** Story 105 introduces `PlayContextMsg.OffsetURI`.

@@ -91,6 +91,54 @@ func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, l
 	return tracks, response.Total, response.Next != "", nil
 }
 
+// AlbumTracks fetches a page of tracks for the given album ID via
+// GET /v1/albums/{id}/tracks. Returns the tracks, a hasNext bool (true when the
+// API's "next" field is non-empty, indicating more pages), and any error.
+// The caller controls pagination via limit and offset.
+//
+// NOTE: Album tracks are SimplifiedTrackObject — no "album" field in the response.
+// The Album field on each returned domain.Track is intentionally empty; the caller
+// already knows the album from context.
+func (l *LibraryClient) AlbumTracks(ctx context.Context, albumID string, limit, offset int) ([]Track, bool, error) {
+	path := fmt.Sprintf("/v1/albums/%s/tracks", albumID)
+	req, err := l.newRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("creating get album tracks request: %w", err)
+	}
+	q := req.URL.Query()
+	q.Set("limit", strconv.Itoa(limit))
+	q.Set("offset", strconv.Itoa(offset))
+	req.URL.RawQuery = q.Encode()
+
+	var resp struct {
+		Items []struct {
+			ID         string   `json:"id"`
+			URI        string   `json:"uri"`
+			Name       string   `json:"name"`
+			DurationMs int      `json:"duration_ms"`
+			Explicit   bool     `json:"explicit"`
+			Artists    []Artist `json:"artists"`
+		} `json:"items"`
+		Next string `json:"next"` // empty string when null in JSON
+	}
+	if err := l.doJSON(req, &resp); err != nil {
+		return nil, false, fmt.Errorf("fetching album tracks: %w", err)
+	}
+	tracks := make([]Track, len(resp.Items))
+	for i, item := range resp.Items {
+		tracks[i] = Track{
+			ID:         item.ID,
+			URI:        item.URI,
+			Name:       item.Name,
+			DurationMs: item.DurationMs,
+			Explicit:   item.Explicit,
+			Artists:    item.Artists,
+			// Album field intentionally empty — caller knows the album from context.
+		}
+	}
+	return tracks, resp.Next != "", nil
+}
+
 // SavedAlbums fetches the user's saved albums via GET /me/albums.
 // Returns a slice of SavedAlbum. Errors are wrapped with context.
 func (l *LibraryClient) SavedAlbums(ctx context.Context, limit, offset int) ([]SavedAlbum, error) {

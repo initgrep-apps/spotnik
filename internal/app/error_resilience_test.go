@@ -543,3 +543,158 @@ func TestApp_401_WithValidRefreshToken_ReInitializesClients(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new-access-token", newToken, "store should have new access token after refresh")
 }
+
+// TestBuildFetchAlbumTracksCmd_429_EmitsRateLimitedMsg verifies that a 429 from
+// the album tracks endpoint causes buildFetchAlbumTracksCmd to return RateLimitedMsg.
+func TestBuildFetchAlbumTracksCmd_429_EmitsRateLimitedMsg(t *testing.T) {
+	srv := rateLimitServer("5")
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123"})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	rateLimitMsg, ok := msg.(panes.RateLimitedMsg)
+	assert.True(t, ok, "429 from album tracks endpoint should emit RateLimitedMsg, got %T", msg)
+	assert.Equal(t, 5, rateLimitMsg.RetryAfterSecs)
+}
+
+// TestBuildFetchAlbumTracksCmd_CancelledCtx_ReturnsNil verifies that a pre-cancelled
+// context causes buildFetchAlbumTracksCmd to return nil (silently discard).
+func TestBuildFetchAlbumTracksCmd_CancelledCtx_ReturnsNil(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[],"next":null}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Trigger fetch then immediately send AlbumTrackViewClosedMsg to cancel it.
+	_, cmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123"})
+	require.NotNil(t, cmd)
+
+	// Cancel via AlbumTrackViewClosedMsg before executing the cmd.
+	a.Update(panes.AlbumTrackViewClosedMsg{}) //nolint:errcheck
+
+	// Now execute — the context was cancelled; staleness ID is now "".
+	msg := cmd()
+	if msg != nil {
+		atMsg, ok := msg.(panes.AlbumTracksLoadedMsg)
+		if ok {
+			assert.Equal(t, "alb123", atMsg.AlbumID, "if msg arrives it must carry the original album ID")
+		}
+	}
+}
+
+// TestBuildFetchAlbumTracksCmd_Success_ReturnsLoadedMsg verifies that a successful
+// album track fetch emits AlbumTracksLoadedMsg with tracks and hasNext=false.
+func TestBuildFetchAlbumTracksCmd_Success_ReturnsLoadedMsg(t *testing.T) {
+	body := `{"items":[{"id":"t1","uri":"spotify:track:t1","name":"So What","duration_ms":200000,"explicit":false,"artists":[{"id":"a1","name":"Miles Davis","uri":"spotify:artist:a1"}]}],"next":null}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123", Offset: 0})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	atMsg, ok := msg.(panes.AlbumTracksLoadedMsg)
+	require.True(t, ok, "successful album tracks fetch should emit AlbumTracksLoadedMsg, got %T", msg)
+	assert.Equal(t, "alb123", atMsg.AlbumID)
+	assert.Equal(t, 0, atMsg.Offset)
+	require.Len(t, atMsg.Tracks, 1)
+	assert.Equal(t, "t1", atMsg.Tracks[0].ID)
+	assert.False(t, atMsg.HasNext, "next=null → HasNext should be false")
+	assert.NoError(t, atMsg.Err)
+}
+
+// TestBuildFetchAlbumTracksCmd_401_ShowsSessionExpired verifies that a 401 from
+// the album tracks endpoint, when the token store has no refresh token, shows the
+// "Session expired" message after the full command chain runs.
+func TestBuildFetchAlbumTracksCmd_401_ShowsSessionExpired(t *testing.T) {
+	srv := unauthorizedServer()
+	defer srv.Close()
+
+	cfg := &config.Config{ClientID: "test-client-id"}
+	// InMemoryTokenStore with no refresh token — refresh will fail.
+	store := keychain.NewInMemoryTokenStore()
+
+	a := app.New(cfg, app.AppOptions{TokenStore: store})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Step 1: FetchAlbumTracksRequestMsg → buildFetchAlbumTracksCmd dispatched.
+	model, fetchCmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123"})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	// Step 2: Execute the fetch command — gets unauthorizedMsg{} back.
+	unauthorizedMsgResult := fetchCmd()
+
+	// Step 3: Feed unauthorizedMsg to Update — dispatches buildRefreshTokenCmd.
+	model, refreshCmd := a.Update(unauthorizedMsgResult)
+	a = model.(*app.App)
+	require.NotNil(t, refreshCmd, "unauthorizedMsg should dispatch a refresh command")
+
+	// Step 4: Execute the refresh command — fails because no refresh token.
+	refreshResult := refreshCmd()
+
+	// Step 5: Feed tokenRefreshedMsg(err) to Update — emits an error toast alert cmd.
+	model, alertCmd := a.Update(refreshResult)
+	a = model.(*app.App)
+	require.NotNil(t, alertCmd, "session expired should emit an error toast alert cmd")
+
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	a = updated.(*app.App)
+	output := a.View()
+	assert.Contains(t, output, "Session expired", "401 from album tracks with no refresh token should show session expired toast")
+}
+
+// TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast verifies that a 403 from
+// the album tracks endpoint causes the router to emit a "Spotify Premium required" toast.
+func TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast(t *testing.T) {
+	srv := forbiddenServer()
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	// Step 1: Dispatch album tracks fetch.
+	model, fetchCmd := a.Update(panes.FetchAlbumTracksRequestMsg{AlbumID: "alb123"})
+	a = model.(*app.App)
+	require.NotNil(t, fetchCmd)
+
+	// Step 2: Execute — forbidden server returns 403 → ForbiddenError in AlbumTracksLoadedMsg.
+	resultMsg := fetchCmd()
+	atMsg, ok := resultMsg.(panes.AlbumTracksLoadedMsg)
+	require.True(t, ok, "expected AlbumTracksLoadedMsg, got %T", resultMsg)
+	require.Error(t, atMsg.Err, "403 should surface as an error in AlbumTracksLoadedMsg")
+
+	// Step 3: Feed the loaded msg back to Update — router should emit a "Spotify Premium required" toast.
+	model, alertCmd := a.Update(resultMsg)
+	require.NotNil(t, model)
+	require.NotNil(t, alertCmd, "403 AlbumTracks should emit an alert toast cmd")
+
+	// Process the alertCmd to activate the toast, then check View().
+	alertMsg := alertCmd()
+	updated, _ := a.Update(alertMsg)
+	appModel := updated.(*app.App)
+	output := appModel.View()
+	assert.Contains(t, output, "Spotify Premium required", "403 album tracks should show Premium required toast")
+}

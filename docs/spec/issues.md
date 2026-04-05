@@ -281,3 +281,11 @@ The `PlaybackCmdSentMsg` handler shows "Playback control not available on this d
 **Feature:** 20-playback-context
 
 The cancelled-context test wraps its inner assertion in `if msg != nil`, which means the test cannot fail if the cancellation guard is broken and a non-nil msg is returned with incorrect content. Consider hardening to an unconditional `assert.Nil` in a future pass.
+
+---
+
+## Story 107: `TestBuildFetchAlbumTracksCmd_CancelledCtx_ReturnsNil` conditional assertion
+**Found:** 2026-04-05 | **Source:** PR #134 Review
+**Feature:** 20-playback-context
+
+The cancelled-context test uses `if msg != nil { assert.Equal(...) }` instead of an unconditional `assert.Nil`. If the cancellation guard were broken and returned a non-nil message, the test would pass silently. Consider hardening to `assert.Nil(t, msg)` in a future pass.

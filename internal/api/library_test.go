@@ -162,6 +162,109 @@ func TestGetPlaylistTracks_LocalTrackSkipped(t *testing.T) {
 	assert.Equal(t, "t2", tracks[0].ID)
 }
 
+// TestAlbumTracks_Success verifies that AlbumTracks returns parsed tracks with hasNext=false
+// when the API response has next=null.
+func TestAlbumTracks_Success(t *testing.T) {
+	body := `{
+		"items": [
+			{
+				"id": "track1",
+				"uri": "spotify:track:track1",
+				"name": "So What",
+				"duration_ms": 562000,
+				"explicit": false,
+				"artists": [{"id": "artist1", "name": "Miles Davis", "uri": "spotify:artist:artist1"}]
+			},
+			{
+				"id": "track2",
+				"uri": "spotify:track:track2",
+				"name": "Freddie Freeloader",
+				"duration_ms": 586000,
+				"explicit": false,
+				"artists": [{"id": "artist1", "name": "Miles Davis", "uri": "spotify:artist:artist1"}]
+			}
+		],
+		"limit": 50,
+		"next": null,
+		"offset": 0,
+		"total": 2
+	}`
+
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		assert.Equal(t, "50", r.URL.Query().Get("limit"))
+		assert.Equal(t, "0", r.URL.Query().Get("offset"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, hasNext, err := client.AlbumTracks(context.Background(), "album-kind-of-blue", 50, 0)
+
+	require.NoError(t, err)
+	assert.Equal(t, "/v1/albums/album-kind-of-blue/tracks", capturedPath)
+	require.Len(t, tracks, 2)
+	assert.Equal(t, "track1", tracks[0].ID)
+	assert.Equal(t, "So What", tracks[0].Name)
+	assert.Equal(t, 562000, tracks[0].DurationMs)
+	assert.Equal(t, "Miles Davis", tracks[0].Artists[0].Name)
+	assert.False(t, hasNext, "next=null → hasNext should be false")
+}
+
+// TestAlbumTracks_HasNextPage verifies that a non-null next field returns hasNext=true.
+func TestAlbumTracks_HasNextPage(t *testing.T) {
+	body := `{
+		"items": [
+			{
+				"id": "t1",
+				"uri": "spotify:track:t1",
+				"name": "Track 1",
+				"duration_ms": 200000,
+				"explicit": false,
+				"artists": []
+			}
+		],
+		"limit": 50,
+		"next": "https://api.spotify.com/v1/albums/alb1/tracks?offset=50&limit=50",
+		"offset": 0,
+		"total": 62
+	}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, hasNext, err := client.AlbumTracks(context.Background(), "alb1", 50, 0)
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1)
+	assert.True(t, hasNext, "non-null next → hasNext should be true")
+}
+
+// TestAlbumTracks_404_ReturnsError verifies that a 404 response returns an error without panicking.
+func TestAlbumTracks_404_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"status":404,"message":"Not found"}}`))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, hasNext, err := client.AlbumTracks(context.Background(), "nonexistent", 50, 0)
+
+	require.Error(t, err, "404 response must return an error")
+	assert.Nil(t, tracks)
+	assert.False(t, hasNext)
+}
+
 // TestGetSavedAlbums_Success verifies GetSavedAlbums returns parsed albums.
 func TestGetSavedAlbums_Success(t *testing.T) {
 	fixture, err := os.ReadFile("../../testdata/fixtures/saved_albums_response.json")

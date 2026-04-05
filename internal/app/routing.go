@@ -350,3 +350,51 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	return nil, nil, false
 }
+
+// routeAlbumMsg handles album track sub-view messages that may arrive regardless of
+// which view is currently active. Returns (model, cmd, true) when handled, (nil, nil, false) otherwise.
+func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	switch m := msg.(type) {
+	case panes.FetchAlbumTracksRequestMsg:
+		// Cancel any prior in-flight fetch (user switched albums or re-entered same one).
+		a.albumTracksCancel()
+		ctx, cancel := context.WithCancel(context.Background())
+		a.albumTracksCancel = cancel
+		a.albumTracksID = m.AlbumID
+		return a, a.buildFetchAlbumTracksCmd(ctx, m.AlbumID, m.Offset), true
+
+	case panes.AlbumTracksLoadedMsg:
+		// Staleness gate: discard if the user has already switched to a different album.
+		if m.AlbumID == "" || m.AlbumID != a.albumTracksID {
+			return a, nil, true
+		}
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				// Forward to pane so it clears tracksFetching — even though we won't toast.
+				return a, a.forwardToPane(layout.PaneAlbums, m), true
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				return a, tea.Batch(
+					a.forwardToPane(layout.PaneAlbums, m),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+				), true
+			}
+			return a, tea.Batch(
+				a.forwardToPane(layout.PaneAlbums, m),
+				a.alerts.NewAlertCmd("error", "Failed to load album tracks. Press Enter to retry"),
+			), true
+		}
+		// Forward to pane — pane owns the data, not the store.
+		return a, a.forwardToPane(layout.PaneAlbums, m), true
+
+	case panes.AlbumTrackViewClosedMsg:
+		// User pressed Esc — cancel any in-flight fetch.
+		a.albumTracksCancel()
+		a.albumTracksCancel = func() {}
+		a.albumTracksID = ""
+		return a, nil, true
+	}
+
+	return nil, nil, false
+}

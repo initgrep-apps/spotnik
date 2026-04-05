@@ -98,6 +98,12 @@ type App struct {
 	playlistTracksCancel context.CancelFunc
 	playlistTracksID     string
 
+	// Album track sub-view: interactive fetch state (mirrors playlistTracksCancel pattern).
+	// albumTracksCancel cancels the active album tracks fetch; always safe to call.
+	// albumTracksID is the staleness key: ID of the album currently being fetched.
+	albumTracksCancel context.CancelFunc
+	albumTracksID     string
+
 	// currentView tracks which top-level view is displayed.
 	currentView viewMode
 
@@ -290,6 +296,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		searchCancel: func() {},
 		// playlistTracksCancel must never be nil; initialize to a no-op.
 		playlistTracksCancel: func() {},
+		// albumTracksCancel must never be nil; initialize to a no-op.
+		albumTracksCancel: func() {},
 	}
 
 	// Apply saved layout preset (Page A only).
@@ -491,6 +499,18 @@ func (a *App) PlaylistTracksID() string {
 // Exported for tests only.
 func (a *App) SetPlaylistTracksID(id string) {
 	a.playlistTracksID = id
+}
+
+// AlbumTracksID returns the current album tracks staleness key (album ID).
+// Exported for tests.
+func (a *App) AlbumTracksID() string {
+	return a.albumTracksID
+}
+
+// SetAlbumTracksID sets the album tracks staleness key for testing.
+// Exported for tests only.
+func (a *App) SetAlbumTracksID(id string) {
+	a.albumTracksID = id
 }
 
 // SetSearchSession sets the search staleness keys and loading flag for testing.
@@ -1727,6 +1747,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Playlist message routing — handled regardless of current view.
 	if model, cmd, handled := a.routePlaylistMsg(msg); handled {
+		return model, cmd
+	}
+
+	// Album track sub-view routing — handled regardless of current view.
+	if model, cmd, handled := a.routeAlbumMsg(msg); handled {
 		return model, cmd
 	}
 
