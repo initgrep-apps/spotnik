@@ -1755,7 +1755,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	return a, nil
+	// Forward any remaining unhandled messages to the playlist and album panes.
+	// This ensures pane-internal debounce ticks (playlistDebounceMsg, albumDebounceMsg)
+	// reach their panes — those types are unexported so the switch above cannot match them.
+	// Both panes' Update methods safely return (p, nil) for messages they don't recognise.
+	return a, tea.Batch(
+		a.forwardToPane(layout.PanePlaylists, msg),
+		a.forwardToPane(layout.PaneAlbums, msg),
+	)
 }
 
 // handlePrefsMsg routes preference-related messages. Called from handleMsg switch
