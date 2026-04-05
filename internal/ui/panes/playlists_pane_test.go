@@ -208,7 +208,7 @@ func TestPlaylistsPane_X_IsNoOpInStory106(t *testing.T) {
 }
 
 // TestPlaylistsPane_ShiftUp_ReorderRequest verifies Shift+Up in track view
-// with loadedTracks set still emits PlaylistReorderRequestMsg via store (management path).
+// with loadedTracks set emits PlaylistReorderRequestMsg. Bounds read from p.loadedTracks.
 func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
@@ -218,7 +218,6 @@ func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
 		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1"},
 		{ID: "t2", Name: "Coffee", URI: "spotify:track:t2"},
 	}
-	s.SetPlaylistTracks("pl1", tracks) // management ops still read from store
 	th := theme.Load("black")
 	pane := NewPlaylistsPane(s, th, true)
 	pane.SetSize(80, 20)
@@ -245,7 +244,7 @@ func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
 }
 
 // TestPlaylistsPane_ShiftDown_ReorderRequest verifies Shift+Down in track view
-// with loadedTracks set still emits PlaylistReorderRequestMsg via store (management path).
+// with loadedTracks set emits PlaylistReorderRequestMsg. Bounds read from p.loadedTracks.
 func TestPlaylistsPane_ShiftDown_ReorderRequest(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
@@ -255,7 +254,6 @@ func TestPlaylistsPane_ShiftDown_ReorderRequest(t *testing.T) {
 		{ID: "t1", Name: "Snowman", URI: "spotify:track:t1"},
 		{ID: "t2", Name: "Coffee", URI: "spotify:track:t2"},
 	}
-	s.SetPlaylistTracks("pl1", tracks) // management ops still read from store
 	th := theme.Load("black")
 	pane := NewPlaylistsPane(s, th, true)
 	pane.SetSize(80, 20)

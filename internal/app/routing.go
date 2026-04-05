@@ -252,7 +252,8 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
-				return a, a.forwardToPane(layout.PanePlaylists, m), true
+				// API client not set up — silently discard, consistent with other handlers.
+				return a, nil, true
 			}
 			return a, tea.Batch(
 				a.forwardToPane(layout.PanePlaylists, m),

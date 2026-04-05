@@ -7,7 +7,6 @@ package app_test
 // Task 3: AddToQueueResultMsg handler checks ForbiddenError
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -229,11 +228,15 @@ func TestBuildFetchPlaylistTracksCmd_CancelledCtx_ReturnsNil(t *testing.T) {
 }
 
 // TestBuildFetchPlaylistTracksCmd_ContextCancellation_BeforeHTTP verifies that a
-// context cancelled before the HTTP call causes the command to return nil immediately.
+// context cancelled before the HTTP call causes the command to return nil immediately
+// (the pre-HTTP ctx.Err() guard in buildFetchPlaylistTracksCmd fires).
 func TestBuildFetchPlaylistTracksCmd_ContextCancellation_BeforeHTTP(t *testing.T) {
-	// Server that blocks indefinitely — should never be called.
+	// Server that should never be called — if it is, the pre-HTTP guard failed.
+	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("HTTP server should not be called with cancelled context")
+		callCount++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[],"total":0,"next":null}`))
 	}))
 	defer srv.Close()
 
@@ -246,15 +249,14 @@ func TestBuildFetchPlaylistTracksCmd_ContextCancellation_BeforeHTTP(t *testing.T
 	require.NotNil(t, cmd)
 
 	// Cancel the context immediately by sending PlaylistTrackViewClosedMsg.
-	// This calls a.playlistTracksCancel() which cancels the context already captured.
+	// This calls a.playlistTracksCancel() which cancels the context captured in cmd.
 	a.Update(panes.PlaylistTrackViewClosedMsg{}) //nolint:errcheck
 
-	// The cmd closure checks ctx.Err() before the HTTP call. Since the context is
-	// already cancelled, it should return nil without calling the server.
-	// NOTE: there is a small race window here; we validate by checking the context.
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel before use
-	assert.NotNil(t, ctx.Err(), "control check: cancelled context has non-nil Err")
+	// Execute cmd — context is already cancelled, so it must return nil without
+	// making an HTTP call (pre-HTTP ctx.Err() guard fires).
+	msg := cmd()
+	assert.Nil(t, msg, "cmd with pre-cancelled context must return nil")
+	assert.Equal(t, 0, callCount, "HTTP server must not be called when context is pre-cancelled")
 }
 
 // TestApp_RateLimitedMsg_ActivatesBackoff verifies that a RateLimitedMsg returned

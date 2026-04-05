@@ -357,10 +357,10 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return p, nil
 
 	case key.Type == tea.KeyShiftUp:
-		// NOTE: management operations (x, Shift+↑/↓) remain non-functional in story 106.
-		tracks := p.store.PlaylistTracks(p.selectedID)
+		// NOTE: management operations (x, Shift+↑/↓) are out of scope for story 106.
+		// They use p.loadedTracks (pane-owned) for bounds — story 107 will implement the API call.
 		idx := p.trackTable.SelectedIndex()
-		if idx > 0 && idx < len(tracks) {
+		if idx > 0 && idx < len(p.loadedTracks) {
 			playlistID := p.selectedID
 			from := idx
 			to := idx - 1
@@ -376,10 +376,10 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return p, nil
 
 	case key.Type == tea.KeyShiftDown:
-		// NOTE: management operations (x, Shift+↑/↓) remain non-functional in story 106.
-		tracks := p.store.PlaylistTracks(p.selectedID)
+		// NOTE: management operations (x, Shift+↑/↓) are out of scope for story 106.
+		// They use p.loadedTracks (pane-owned) for bounds — story 107 will implement the API call.
 		idx := p.trackTable.SelectedIndex()
-		if idx >= 0 && idx < len(tracks)-1 {
+		if idx >= 0 && idx < len(p.loadedTracks)-1 {
 			playlistID := p.selectedID
 			from := idx
 			to := idx + 2
