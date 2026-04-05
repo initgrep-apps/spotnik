@@ -287,6 +287,8 @@ func (a *AlbumsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.trackOffset = 0
 		a.hasMoreTracks = false
 		a.tracksFetching = false
+		// Clear albumIntent so any in-flight debounce tick is discarded as stale.
+		a.albumIntent = albumDebounceIntent{}
 		a.trackTable.SetFocused(false)
 		a.table.SetFocused(true)
 		return a, func() tea.Msg { return AlbumTrackViewClosedMsg{} }

@@ -455,11 +455,36 @@ func TestAlbumsPane_Esc_EmitsAlbumTrackViewClosedMsg(t *testing.T) {
 
 	assert.False(t, updated.inTrackView, "inTrackView must be false after Esc")
 	assert.Nil(t, updated.loadedTracks, "loadedTracks must be cleared on Esc")
+	// albumIntent must be cleared so any in-flight debounce tick is discarded.
+	assert.Equal(t, albumDebounceIntent{}, updated.albumIntent, "albumIntent must be zeroed on Esc")
 	require.NotNil(t, cmd, "Esc must emit a cmd")
 
 	msg := cmd()
 	_, ok := msg.(AlbumTrackViewClosedMsg)
 	assert.True(t, ok, "Esc must emit AlbumTrackViewClosedMsg, got %T", msg)
+}
+
+// TestAlbumsPane_Esc_DiscardsPendingDebounceTick verifies that pressing Esc before the
+// 150ms debounce tick fires causes the tick to be discarded (because albumIntent is cleared).
+func TestAlbumsPane_Esc_DiscardsPendingDebounceTick(t *testing.T) {
+	a := newTestAlbumsPaneWithData(true)
+	a.SetSize(100, 20)
+
+	// Open track view for album al1 — starts 150ms debounce.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+	require.True(t, a.inTrackView)
+
+	// Press Esc before the debounce fires — clears albumIntent.
+	model2, _ := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	a = model2.(*AlbumsPane)
+	require.False(t, a.inTrackView)
+
+	// Now simulate the debounce tick arriving (intent for al1, which is now stale).
+	staleDebounce := albumDebounceMsg{intent: albumDebounceIntent{albumID: "al1", offset: 0}}
+	_, cmd := a.Update(staleDebounce)
+
+	assert.Nil(t, cmd, "debounce tick after Esc must be discarded because albumIntent is cleared")
 }
 
 // TestAlbumsPane_EnterOnTrack_EmitsPlayContextMsg verifies that pressing Enter on a
