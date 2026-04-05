@@ -92,6 +92,12 @@ type App struct {
 	// playlistsAPI is the Spotify playlists mutation client.
 	playlistsAPI api.PlaylistsAPI
 
+	// Playlist track sub-view: interactive fetch state (mirrors searchCancel/searchQuery).
+	// playlistTracksCancel cancels the active playlist tracks fetch; always safe to call.
+	// playlistTracksID is the staleness key: ID of the playlist currently being fetched.
+	playlistTracksCancel context.CancelFunc
+	playlistTracksID     string
+
 	// currentView tracks which top-level view is displayed.
 	currentView viewMode
 
@@ -282,6 +288,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		prefs:           prefs.New(config.DefaultConfigPath()),
 		// searchCancel must never be nil; initialize to a no-op so it is always safe to call.
 		searchCancel: func() {},
+		// playlistTracksCancel must never be nil; initialize to a no-op.
+		playlistTracksCancel: func() {},
 	}
 
 	// Apply saved layout preset (Page A only).
@@ -473,6 +481,18 @@ func (a *App) SearchCancelCtx() context.Context {
 	return a.searchCtx
 }
 
+// PlaylistTracksID returns the current playlist tracks staleness key (playlist ID).
+// Exported for tests.
+func (a *App) PlaylistTracksID() string {
+	return a.playlistTracksID
+}
+
+// SetPlaylistTracksID sets the playlist tracks staleness key for testing.
+// Exported for tests only.
+func (a *App) SetPlaylistTracksID(id string) {
+	a.playlistTracksID = id
+}
+
 // SetSearchSession sets the search staleness keys and loading flag for testing.
 // This bypasses the normal SearchRequestMsg pathway so tests can set up state directly.
 // Exported for tests only.
@@ -561,6 +581,22 @@ func (a *App) playlistsPane() *panes.PlaylistsPane {
 		return pp
 	}
 	return nil
+}
+
+// forwardToPane forwards a message to the pane at the given key, updates the
+// pane slot, and returns any command. Returns nil if no pane is registered at key.
+// Used for interactive sub-views (playlist tracks, album tracks) where the pane
+// owns the data rather than the global store.
+func (a *App) forwardToPane(key layout.PaneID, msg tea.Msg) tea.Cmd {
+	p, ok := a.panes[key]
+	if !ok || p == nil {
+		return nil
+	}
+	updated, cmd := p.Update(msg)
+	if lp, ok := updated.(layout.Pane); ok {
+		a.panes[key] = lp
+	}
+	return cmd
 }
 
 // albumsPane returns the AlbumsPane from the panes map (convenience accessor).

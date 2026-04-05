@@ -578,25 +578,44 @@ func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL stri
 	}
 }
 
-// buildFetchPlaylistTracksCmd creates a command that fetches tracks for a playlist
-// and returns them in PlaylistTracksLoadedMsg. No Store writes occur — Update() writes.
-func (a *App) buildFetchPlaylistTracksCmd(playlistID string) tea.Cmd {
+// buildFetchPlaylistTracksCmd creates a command that fetches one page of playlist
+// tracks using Interactive priority. The context is cancellable — app.go cancels
+// it when the user switches to a different playlist or presses Esc.
+// No Store writes — data is returned in PlaylistTracksLoadedMsg for the pane.
+func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string, offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
-		if library == nil {
-			return panes.PlaylistTracksLoadedMsg{Err: errNilClient, PlaylistID: playlistID}
+		// Check for cancellation before making the HTTP call.
+		if ctx.Err() != nil {
+			return nil
 		}
-		tracks, err := library.PlaylistTracks(context.Background(), playlistID, 100, 0)
+		if library == nil {
+			return panes.PlaylistTracksLoadedMsg{Err: errNilClient, PlaylistID: playlistID, Offset: offset}
+		}
+		tracks, total, hasNext, err := library.PlaylistTracks(
+			api.WithPriority(ctx, api.Interactive),
+			playlistID, 100, offset,
+		)
 		if err != nil {
+			// Check cancellation again — context.Canceled is expected on playlist switch.
+			if ctx.Err() != nil {
+				return nil // silently discard; not an error worth toasting
+			}
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Err: err}
+			return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Offset: offset, Err: err}
 		}
-		return panes.PlaylistTracksLoadedMsg{PlaylistID: playlistID, Tracks: tracks}
+		return panes.PlaylistTracksLoadedMsg{
+			PlaylistID: playlistID,
+			Tracks:     tracks,
+			Total:      total,
+			HasNext:    hasNext,
+			Offset:     offset,
+		}
 	}
 }
 

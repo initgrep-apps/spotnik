@@ -380,8 +380,10 @@ func TestUpdate_StatsLoadedMsg_WithErr_WritesStatsError(t *testing.T) {
 	assert.Equal(t, statsErr, a.Store().StatsError())
 }
 
-// TestUpdate_PlaylistTracksLoadedMsg_WritesTracks verifies PlaylistTracksLoadedMsg.
-func TestUpdate_PlaylistTracksLoadedMsg_WritesTracks(t *testing.T) {
+// TestUpdate_PlaylistTracksLoadedMsg_ForwardsToPaneAndNotStore verifies that
+// PlaylistTracksLoadedMsg is forwarded to the PlaylistsPane (pane-owned data)
+// and NOT written to the global store (new architecture from story 106).
+func TestUpdate_PlaylistTracksLoadedMsg_ForwardsToPaneAndNotStore(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -390,24 +392,46 @@ func TestUpdate_PlaylistTracksLoadedMsg_WritesTracks(t *testing.T) {
 		{ID: "t2", Name: "Track Two"},
 	}
 
-	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl1", Tracks: tracks}
+	// Set the staleness key so the message is not discarded.
+	a.SetPlaylistTracksID("pl1")
+
+	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl1", Tracks: tracks, Total: 2, Offset: 0}
 	_, _ = a.Update(msg)
 
+	// Data must NOT be written to the global store (pane owns it now).
 	got := a.Store().PlaylistTracks("pl1")
-	require.Len(t, got, 2)
-	assert.Equal(t, "t1", got[0].ID)
+	assert.Empty(t, got, "playlist tracks must no longer be written to the store")
 }
 
-// TestUpdate_PlaylistTracksLoadedMsg_WithErr_WritesError verifies error handling.
-func TestUpdate_PlaylistTracksLoadedMsg_WithErr_WritesError(t *testing.T) {
+// TestUpdate_PlaylistTracksLoadedMsg_StaleMsg_Discarded verifies that a stale
+// PlaylistTracksLoadedMsg (mismatched PlaylistID) is silently discarded.
+func TestUpdate_PlaylistTracksLoadedMsg_StaleMsg_Discarded(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
+	a.SetPlaylistTracksID("current-playlist")
+
+	// Deliver a message for a different playlist.
+	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "old-playlist", Tracks: []domain.Track{{ID: "t1"}}}
+	_, cmd := a.Update(msg)
+	assert.Nil(t, cmd, "stale PlaylistTracksLoadedMsg must be silently discarded")
+}
+
+// TestUpdate_PlaylistTracksLoadedMsg_WithErr_EmitsToast verifies that an error in
+// PlaylistTracksLoadedMsg triggers a toast notification (not a store write).
+func TestUpdate_PlaylistTracksLoadedMsg_WithErr_EmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	a.SetPlaylistTracksID("pl1")
+
 	plErr := errors.New("playlist tracks error")
 	msg := panes.PlaylistTracksLoadedMsg{PlaylistID: "pl1", Err: plErr}
-	_, _ = a.Update(msg)
+	_, cmd := a.Update(msg)
 
-	assert.Equal(t, plErr, a.Store().PlaylistsError())
+	// Must emit a toast command, not write to store.
+	assert.NotNil(t, cmd, "error in PlaylistTracksLoadedMsg must emit a toast cmd")
+	assert.Equal(t, nil, a.Store().PlaylistsError(), "error must NOT be written to the store")
 }
 
 // --- Task 4: Store param removed from package-level functions ---

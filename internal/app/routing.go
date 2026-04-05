@@ -5,7 +5,9 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -236,33 +238,35 @@ func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
 func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch m := msg.(type) {
 	case panes.FetchPlaylistTracksRequestMsg:
-		return a, a.buildFetchPlaylistTracksCmd(m.PlaylistID), true
+		// Cancel any prior in-flight fetch (user switched playlists or re-entered same one).
+		a.playlistTracksCancel()
+		ctx, cancel := context.WithCancel(context.Background())
+		a.playlistTracksCancel = cancel
+		a.playlistTracksID = m.PlaylistID
+		return a, a.buildFetchPlaylistTracksCmd(ctx, m.PlaylistID, m.Offset), true
 
 	case panes.PlaylistTracksLoadedMsg:
-		// Write playlist tracks to store from Msg payload (Elm Architecture: only Update writes store).
+		// Staleness gate: discard if the user has already switched to a different playlist.
+		if m.PlaylistID != a.playlistTracksID {
+			return a, nil, true
+		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
-				return a, nil, true
+				return a, a.forwardToPane(layout.PanePlaylists, m), true
 			}
-			a.store.SetPlaylistsError(m.Err)
-			if pp := a.playlistsPane(); pp != nil {
-				updated, _ := pp.Update(m)
-				if ppu, ok := updated.(*panes.PlaylistsPane); ok {
-					a.panes[layout.PanePlaylists] = ppu
-				}
-			}
-			return a, a.alerts.NewAlertCmd("error", "Failed to load playlist tracks. Press Enter to retry"), true
+			return a, tea.Batch(
+				a.forwardToPane(layout.PanePlaylists, m),
+				a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load playlist tracks: %s", m.Err.Error())),
+			), true
 		}
-		a.store.ClearPlaylistsError()
-		a.store.SetPlaylistTracks(m.PlaylistID, m.Tracks)
-		// Forward to PlaylistsPane so it can refresh from store.
-		if pp := a.playlistsPane(); pp != nil {
-			updated, cmd := pp.Update(m)
-			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
-				a.panes[layout.PanePlaylists] = ppu
-			}
-			return a, cmd, true
-		}
+		// Forward to pane — pane owns the data, not the store.
+		return a, a.forwardToPane(layout.PanePlaylists, m), true
+
+	case panes.PlaylistTrackViewClosedMsg:
+		// User pressed Esc — cancel any in-flight fetch.
+		a.playlistTracksCancel()
+		a.playlistTracksCancel = func() {}
+		a.playlistTracksID = ""
 		return a, nil, true
 
 	case panes.PlaylistCreateRequestMsg:
