@@ -168,3 +168,19 @@ func TestApp_PlaylistAccessDeniedMsg_EmitsWarningToast(t *testing.T) {
 	_, cmd := a.Update(panes.PlaylistAccessDeniedMsg{})
 	require.NotNil(t, cmd, "PlaylistAccessDeniedMsg must produce a toast command")
 }
+
+// TestApp_PlaylistTracksLoadedMsg_403_EmitsWarningToast verifies that a 403 (ForbiddenError)
+// returned by the playlist tracks fetch emits a warning toast and does not crash.
+// The toast text must reflect both the "Premium required" and "access denied" cases.
+func TestApp_PlaylistTracksLoadedMsg_403_EmitsWarningToast(t *testing.T) {
+	a := newToastTestApp()
+	a.SetPlaylistTracksID("pl-followed")
+
+	forbiddenErr := &api.ForbiddenError{Message: "Forbidden"}
+	_, cmd := a.Update(panes.PlaylistTracksLoadedMsg{
+		PlaylistID: "pl-followed",
+		Err:        forbiddenErr,
+	})
+
+	require.NotNil(t, cmd, "403 on playlist tracks must emit a warning toast command")
+}

@@ -154,8 +154,6 @@ func (s *Store) PlaybackState() *domain.PlaybackState {
 	return s.playbackState
 }
 
-// SetPlaybackState updates the playback state. Pass nil to clear (204 response).
-// Also updates the active device from the state's Device field.
 // UserID returns the Spotify user ID of the authenticated user.
 // Returns "" if the profile has not yet been fetched.
 func (s *Store) UserID() string {
@@ -172,6 +170,8 @@ func (s *Store) SetUserID(id string) {
 	s.userID = id
 }
 
+// SetPlaybackState updates the playback state. Pass nil to clear (204 response).
+// Also updates the active device from the state's Device field.
 func (s *Store) SetPlaybackState(state *domain.PlaybackState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -278,9 +278,19 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return a, nil, true
 
 	case userProfileLoadedMsg:
-		// Store the user's Spotify ID so the playlist pane can detect ownership.
-		if m.err == nil && m.userID != "" {
+		if m.err != nil {
+			if errors.Is(m.err, errNilClient) {
+				// Programming error — userAPI was nil at startup; no toast.
+				return a, nil, true
+			}
+			// Surface the failure so the user knows ownership detection is degraded.
+			return a, a.alerts.NewAlertCmd("warning",
+				"Could not load your Spotify profile. Playlist ownership markers may be incorrect."), true
+		}
+		if m.userID != "" {
 			a.store.SetUserID(m.userID)
+			// Refresh playlist rows so the ~ prefix appears immediately.
+			return a, a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{}), true
 		}
 		return a, nil, true
 

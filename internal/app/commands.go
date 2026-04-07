@@ -644,6 +644,12 @@ func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 		}
 		profile, err := userAPI.Profile(context.Background())
 		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
 			return userProfileLoadedMsg{err: err}
 		}
 		return userProfileLoadedMsg{userID: profile.ID}
