@@ -174,7 +174,7 @@ func TestGetTopArtists_ErrorWrapped(t *testing.T) {
 	assert.Contains(t, err.Error(), "getting top artists")
 }
 
-// TestUserClient_Profile_Success verifies that Profile returns the user's ID and display name.
+// TestUserClient_Profile_Success verifies that Profile returns the user's Spotify ID.
 func TestUserClient_Profile_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me", r.URL.Path)
@@ -189,7 +189,6 @@ func TestUserClient_Profile_Success(t *testing.T) {
 	profile, err := client.Profile(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "user123", profile.ID)
-	assert.Equal(t, "Test User", profile.DisplayName)
 }
 
 // TestUserClient_Profile_ErrorWrapped verifies that API errors are wrapped with context.

@@ -2,10 +2,12 @@ package api
 
 import "context"
 
-// UserAPI defines all Spotify user statistics operations.
+// UserAPI defines operations on the authenticated Spotify user:
+// identity (Profile) and listening statistics (TopTracks, TopArtists, RecentlyPlayed).
 // Concrete implementation: *UserClient.
 type UserAPI interface {
 	// Profile fetches the authenticated user's Spotify profile (GET /v1/me).
+	// Used to determine playlist ownership.
 	Profile(ctx context.Context) (UserProfile, error)
 	TopTracks(ctx context.Context, timeRange string, limit int) ([]Track, error)
 	TopArtists(ctx context.Context, timeRange string, limit int) ([]FullArtist, error)

@@ -18,9 +18,6 @@ func unmarshalJSON(data []byte, v interface{}) error {
 type UserProfile struct {
 	// ID is the Spotify user ID.
 	ID string `json:"id"`
-
-	// DisplayName is the human-readable name of the user.
-	DisplayName string `json:"display_name"`
 }
 
 // PlaybackState represents the full playback state returned by GET /me/player.
