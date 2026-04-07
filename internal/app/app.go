@@ -359,7 +359,7 @@ func (a *App) SetDevices(devices api.DevicesAPI) {
 	a.devices = devices
 }
 
-// SetUserAPI injects the Spotify user stats API client into the app.
+// SetUserAPI injects the Spotify user identity and statistics API client into the app.
 func (a *App) SetUserAPI(userAPI api.UserAPI) {
 	a.userAPI = userAPI
 }
