@@ -109,7 +109,7 @@ func TestAddTracksToPlaylist_Success(t *testing.T) {
 	err := client.AddTracksToPlaylist(context.Background(), "playlist-123", []string{"spotify:track:abc", "spotify:track:def"})
 
 	require.NoError(t, err)
-	assert.Equal(t, "/v1/playlists/playlist-123/tracks", capturedPath)
+	assert.Equal(t, "/v1/playlists/playlist-123/items", capturedPath)
 	uris, ok := capturedBody["uris"].([]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "spotify:track:abc", uris[0])
@@ -136,7 +136,7 @@ func TestRemoveTracksFromPlaylist_Success(t *testing.T) {
 	err := client.RemoveTracksFromPlaylist(context.Background(), "playlist-123", []string{"spotify:track:abc"})
 
 	require.NoError(t, err)
-	assert.Equal(t, "/v1/playlists/playlist-123/tracks", capturedPath)
+	assert.Equal(t, "/v1/playlists/playlist-123/items", capturedPath)
 	tracks, ok := capturedBody["tracks"].([]interface{})
 	require.True(t, ok)
 	require.Len(t, tracks, 1)
@@ -165,7 +165,7 @@ func TestReorderPlaylistTracks_Success(t *testing.T) {
 	err := client.ReorderPlaylistTracks(context.Background(), "playlist-123", 2, 0, 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, "/v1/playlists/playlist-123/tracks", capturedPath)
+	assert.Equal(t, "/v1/playlists/playlist-123/items", capturedPath)
 	assert.Equal(t, float64(2), capturedBody["range_start"])
 	assert.Equal(t, float64(0), capturedBody["insert_before"])
 	assert.Equal(t, float64(1), capturedBody["range_length"])

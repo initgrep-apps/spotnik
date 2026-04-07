@@ -6,8 +6,11 @@ import "context"
 // Concrete implementation: *LibraryClient.
 type LibraryAPI interface {
 	Playlists(ctx context.Context, limit, offset int) ([]SimplePlaylist, error)
-	// PlaylistTracks fetches a page of playlist tracks. Returns tracks, total count,
-	// and whether a next page exists.
+	// GetPlaylist fetches a playlist's metadata and first page of items via GET /playlists/{id}.
+	// Use this for the initial drill-down (offset=0); use PlaylistTracks for subsequent pages.
+	GetPlaylist(ctx context.Context, playlistID string) ([]Track, int, bool, error)
+	// PlaylistTracks fetches a page of playlist items via GET /playlists/{id}/items. Returns tracks,
+	// total count, and whether a next page exists. Use for pagination (offset > 0).
 	PlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, int, bool, error)
 	// AlbumTracks fetches a page of tracks for the given album.
 	// Returns the tracks slice, a hasNext bool (true if more pages exist), and any error.

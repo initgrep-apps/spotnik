@@ -173,3 +173,34 @@ func TestGetTopArtists_ErrorWrapped(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting top artists")
 }
+
+// TestUserClient_Profile_Success verifies that Profile returns the user's Spotify ID.
+func TestUserClient_Profile_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/me", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"user123","display_name":"Test User"}`))
+	}))
+	defer srv.Close()
+
+	client := newUserClient(srv.URL)
+	profile, err := client.Profile(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "user123", profile.ID)
+}
+
+// TestUserClient_Profile_ErrorWrapped verifies that API errors are wrapped with context.
+func TestUserClient_Profile_ErrorWrapped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"server error"}`))
+	}))
+	defer srv.Close()
+
+	client := newUserClient(srv.URL)
+	_, err := client.Profile(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fetching profile")
+}

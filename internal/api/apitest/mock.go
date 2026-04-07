@@ -134,6 +134,12 @@ func (m *MockLibrary) Playlists(_ context.Context, _, _ int) ([]api.SimplePlayli
 	return m.PlaylistsResult, m.PlaylistsErr
 }
 
+// GetPlaylist returns the configured result, total, hasNext, and error.
+// Delegates to the same PlaylistTracks fields for simplicity in tests.
+func (m *MockLibrary) GetPlaylist(_ context.Context, _ string) ([]api.Track, int, bool, error) {
+	return m.PlaylistTracksResult, m.PlaylistTracksTotal, m.PlaylistTracksHasNext, m.PlaylistTracksErr
+}
+
 // PlaylistTracks returns the configured result, total, hasNext, and error.
 func (m *MockLibrary) PlaylistTracks(_ context.Context, _ string, _, _ int) ([]api.Track, int, bool, error) {
 	return m.PlaylistTracksResult, m.PlaylistTracksTotal, m.PlaylistTracksHasNext, m.PlaylistTracksErr
@@ -209,6 +215,8 @@ func (m *MockDevices) TransferPlayback(_ context.Context, _ string, _ bool) erro
 
 // MockUser is a test double for UserAPI.
 type MockUser struct {
+	ProfileResult        api.UserProfile
+	ProfileErr           error
 	TopTracksResult      []api.Track
 	TopTracksErr         error
 	TopArtistsResult     []api.FullArtist
@@ -219,6 +227,11 @@ type MockUser struct {
 
 // Compile-time assertion: *MockUser must implement UserAPI.
 var _ api.UserAPI = (*MockUser)(nil)
+
+// Profile returns the configured UserProfile and error.
+func (m *MockUser) Profile(_ context.Context) (api.UserProfile, error) {
+	return m.ProfileResult, m.ProfileErr
+}
 
 // TopTracks returns the configured result and error.
 func (m *MockUser) TopTracks(_ context.Context, _ string, _ int) ([]api.Track, error) {

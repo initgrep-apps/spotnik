@@ -159,3 +159,28 @@ func TestApp_NoStatusMsgField(t *testing.T) {
 	// Hints should be present (status bar always shows hints now).
 	assert.NotEmpty(t, view)
 }
+
+// TestApp_PlaylistAccessDeniedMsg_EmitsWarningToast verifies that when the playlist pane
+// emits PlaylistAccessDeniedMsg (user pressed Enter on a non-owned playlist), the root app
+// routes it to a warning toast instead of making any API call.
+func TestApp_PlaylistAccessDeniedMsg_EmitsWarningToast(t *testing.T) {
+	a := newToastTestApp()
+	_, cmd := a.Update(panes.PlaylistAccessDeniedMsg{})
+	require.NotNil(t, cmd, "PlaylistAccessDeniedMsg must produce a toast command")
+}
+
+// TestApp_PlaylistTracksLoadedMsg_403_EmitsWarningToast verifies that a 403 (ForbiddenError)
+// returned by the playlist tracks fetch emits a warning toast and does not crash.
+// The toast text must reflect both the "Premium required" and "access denied" cases.
+func TestApp_PlaylistTracksLoadedMsg_403_EmitsWarningToast(t *testing.T) {
+	a := newToastTestApp()
+	a.SetPlaylistTracksID("pl-followed")
+
+	forbiddenErr := &api.ForbiddenError{Message: "Forbidden"}
+	_, cmd := a.Update(panes.PlaylistTracksLoadedMsg{
+		PlaylistID: "pl-followed",
+		Err:        forbiddenErr,
+	})
+
+	require.NotNil(t, cmd, "403 on playlist tracks must emit a warning toast command")
+}

@@ -84,7 +84,7 @@ func (p *PlaylistsClient) AddTracksToPlaylist(ctx context.Context, playlistID st
 		return fmt.Errorf("marshaling add tracks body: %w", err)
 	}
 
-	path := fmt.Sprintf("/v1/playlists/%s/tracks", playlistID)
+	path := fmt.Sprintf("/v1/playlists/%s/items", playlistID)
 	req, err := p.newRequest(ctx, http.MethodPost, path, bytes.NewReader(encoded))
 	if err != nil {
 		return fmt.Errorf("creating add tracks request: %w", err)
@@ -120,7 +120,7 @@ func (p *PlaylistsClient) RemoveTracksFromPlaylist(ctx context.Context, playlist
 		return fmt.Errorf("marshaling remove tracks body: %w", err)
 	}
 
-	path := fmt.Sprintf("/v1/playlists/%s/tracks", playlistID)
+	path := fmt.Sprintf("/v1/playlists/%s/items", playlistID)
 	req, err := p.newRequest(ctx, http.MethodDelete, path, bytes.NewReader(encoded))
 	if err != nil {
 		return fmt.Errorf("creating remove tracks request: %w", err)
@@ -151,7 +151,7 @@ func (p *PlaylistsClient) ReorderPlaylistTracks(ctx context.Context, id string, 
 		return fmt.Errorf("marshaling reorder tracks body: %w", err)
 	}
 
-	path := fmt.Sprintf("/v1/playlists/%s/tracks", id)
+	path := fmt.Sprintf("/v1/playlists/%s/items", id)
 	req, err := p.newRequest(ctx, http.MethodPut, path, bytes.NewReader(encoded))
 	if err != nil {
 		return fmt.Errorf("creating reorder tracks request: %w", err)

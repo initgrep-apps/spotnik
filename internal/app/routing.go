@@ -259,7 +259,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					a.forwardToPane(layout.PanePlaylists, m),
-					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required or playlist access denied"),
 				), true
 			}
 			return a, tea.Batch(
@@ -276,6 +276,26 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		a.playlistTracksCancel = func() {}
 		a.playlistTracksID = ""
 		return a, nil, true
+
+	case userProfileLoadedMsg:
+		if m.err != nil {
+			if errors.Is(m.err, errNilClient) {
+				// Programming error — userAPI was nil at startup; no toast.
+				return a, nil, true
+			}
+			// Surface the failure so the user knows ownership detection is degraded.
+			return a, a.alerts.NewAlertCmd("warning",
+				"Could not load your Spotify profile. Playlist ownership markers may be incorrect."), true
+		}
+		if m.userID != "" {
+			a.store.SetUserID(m.userID)
+			// Refresh playlist rows so the ~ prefix appears immediately.
+			return a, a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{}), true
+		}
+		return a, nil, true
+
+	case panes.PlaylistAccessDeniedMsg:
+		return a, a.alerts.NewAlertCmd("warning", "Track access limited to playlists you own or collaborate on"), true
 
 	case panes.PlaylistCreateRequestMsg:
 		return a, a.buildCreatePlaylistCmd(m.Name, m.Description), true

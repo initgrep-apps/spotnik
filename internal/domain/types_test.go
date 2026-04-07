@@ -28,7 +28,7 @@ func TestSimplePlaylist_UnmarshalJSON(t *testing.T) {
 				"name": "Chill Vibes",
 				"uri": "spotify:playlist:pl1",
 				"owner": {"id": "user1", "display_name": "Alice"},
-				"tracks": {"total": 42}
+				"items": {"total": 42}
 			}`,
 			wantID:         "pl1",
 			wantName:       "Chill Vibes",
@@ -43,7 +43,7 @@ func TestSimplePlaylist_UnmarshalJSON(t *testing.T) {
 				"name": "Empty",
 				"uri": "spotify:playlist:pl2",
 				"owner": {"id": "user2", "display_name": "Bob"},
-				"tracks": {"total": 0}
+				"items": {"total": 0}
 			}`,
 			wantID:         "pl2",
 			wantName:       "Empty",

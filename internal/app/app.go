@@ -214,6 +214,13 @@ type splashDismissMsg struct{}
 // The app handles it by attempting a token refresh.
 type unauthorizedMsg struct{}
 
+// userProfileLoadedMsg is sent when the initial GET /v1/me fetch completes.
+// userID is the authenticated user's Spotify ID; err is non-nil on failure.
+type userProfileLoadedMsg struct {
+	userID string
+	err    error
+}
+
 // tokenRefreshedMsg is sent when a token refresh attempt completes.
 // newToken is non-empty on success; err is non-nil on failure.
 type tokenRefreshedMsg struct {
@@ -352,7 +359,7 @@ func (a *App) SetDevices(devices api.DevicesAPI) {
 	a.devices = devices
 }
 
-// SetUserAPI injects the Spotify user stats API client into the app.
+// SetUserAPI injects the Spotify user identity and statistics API client into the app.
 func (a *App) SetUserAPI(userAPI api.UserAPI) {
 	a.userAPI = userAPI
 }
@@ -749,6 +756,7 @@ func (a *App) Init() tea.Cmd {
 // through the existing staleness/dedup guards in handleMsg.
 func (a *App) initialFetchCmds() []tea.Cmd {
 	return []tea.Cmd{
+		a.buildFetchCurrentUserCmd(), // fetch user ID for playlist ownership checks
 		func() tea.Msg { return panes.FetchPlaylistsRequestMsg{Offset: 0} },
 		func() tea.Msg { return panes.FetchAlbumsRequestMsg{Offset: 0} },
 		func() tea.Msg { return panes.FetchLikedTracksRequestMsg{Offset: 0} },
@@ -1755,7 +1763,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	return a, nil
+	// Forward any remaining unhandled messages to the playlist and album panes.
+	// This ensures pane-internal debounce ticks (playlistDebounceMsg, albumDebounceMsg)
+	// reach their panes — those types are unexported so the switch above cannot match them.
+	// Both panes' Update methods safely return (p, nil) for messages they don't recognise.
+	return a, tea.Batch(
+		a.forwardToPane(layout.PanePlaylists, msg),
+		a.forwardToPane(layout.PaneAlbums, msg),
+	)
 }
 
 // handlePrefsMsg routes preference-related messages. Called from handleMsg switch
