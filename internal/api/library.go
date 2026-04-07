@@ -52,12 +52,59 @@ func (l *LibraryClient) Playlists(ctx context.Context, limit, offset int) ([]Sim
 	return response.Items, nil
 }
 
-// PlaylistTracks fetches one page of playlist tracks via GET /playlists/{id}/tracks.
-// Returns tracks, the total track count for the playlist, whether a next page exists, and any error.
-// Local files (is_local=true) and unavailable tracks (null track object) are skipped.
-// Errors are wrapped with context.
+// GetPlaylist fetches a playlist's first page of items via GET /playlists/{id}.
+// NOTE: Spotify only embeds the items container in this response for playlists owned
+// by the authenticated user. For non-owned (followed) playlists the response contains
+// only metadata and no items. Use PlaylistTracks (GET /playlists/{id}/items) when
+// ownership is unknown or the playlist is not owned by the user.
+// Local files, null track objects, and podcast episodes are skipped.
+// Returns tracks, total track count, whether a next page exists, and any error.
+func (l *LibraryClient) GetPlaylist(ctx context.Context, playlistID string) ([]Track, int, bool, error) {
+	path := fmt.Sprintf("/v1/playlists/%s", playlistID)
+	req, err := l.newRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("creating get playlist request: %w", err)
+	}
+
+	// NOTE: Spotify renamed "tracks" → "items" and "track" → "item" in February 2026.
+	// The container field and per-item track field both changed.
+	var response struct {
+		Items struct {
+			Items []struct {
+				IsLocal bool `json:"is_local"`
+				Item    *struct {
+					Track           // embeds domain.Track; all fields promoted
+					ItemType string `json:"type"` // "track" | "episode" — not on domain.Track
+				} `json:"item"`
+			} `json:"items"`
+			Total int    `json:"total"`
+			Next  string `json:"next"` // empty string when null in JSON
+		} `json:"items"`
+	}
+	if err := l.doJSON(req, &response); err != nil {
+		return nil, 0, false, fmt.Errorf("getting playlist: %w", err)
+	}
+
+	tracks := make([]Track, 0, len(response.Items.Items))
+	for _, item := range response.Items.Items {
+		// Skip local files, unavailable tracks, and podcast episodes.
+		if item.IsLocal || item.Item == nil || item.Item.URI == "" {
+			continue
+		}
+		if item.Item.ItemType != "" && item.Item.ItemType != "track" {
+			continue
+		}
+		tracks = append(tracks, item.Item.Track)
+	}
+	return tracks, response.Items.Total, response.Items.Next != "", nil
+}
+
+// PlaylistTracks fetches one page of playlist items via GET /playlists/{id}/items.
+// Use this for pagination (offset > 0) after the initial GetPlaylist call.
+// Local files (is_local=true), unavailable tracks (null track object), and podcast
+// episodes (type != "track") are skipped. Errors are wrapped with context.
 func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, limit, offset int) ([]Track, int, bool, error) {
-	path := fmt.Sprintf("/v1/playlists/%s/tracks", playlistID)
+	path := fmt.Sprintf("/v1/playlists/%s/items", playlistID)
 	req, err := l.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, 0, false, fmt.Errorf("creating get playlist tracks request: %w", err)
@@ -68,10 +115,14 @@ func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, l
 	q.Set("offset", strconv.Itoa(offset))
 	req.URL.RawQuery = q.Encode()
 
+	// NOTE: Spotify renamed "track" → "item" per-item in February 2026.
 	var response struct {
 		Items []struct {
-			IsLocal bool   `json:"is_local"`
-			Track   *Track `json:"track"` // pointer: null for unavailable tracks
+			IsLocal bool `json:"is_local"`
+			Item    *struct {
+				Track           // embeds domain.Track; all fields promoted
+				ItemType string `json:"type"` // "track" | "episode" — not on domain.Track
+			} `json:"item"`
 		} `json:"items"`
 		Total int    `json:"total"`
 		Next  string `json:"next"` // empty string when null in JSON
@@ -82,11 +133,14 @@ func (l *LibraryClient) PlaylistTracks(ctx context.Context, playlistID string, l
 
 	tracks := make([]Track, 0, len(response.Items))
 	for _, item := range response.Items {
-		// Skip local files (no Spotify URI) and unavailable tracks (null track object).
-		if item.IsLocal || item.Track == nil || item.Track.URI == "" {
+		// Skip local files, unavailable tracks, and podcast episodes.
+		if item.IsLocal || item.Item == nil || item.Item.URI == "" {
 			continue
 		}
-		tracks = append(tracks, *item.Track)
+		if item.Item.ItemType != "" && item.Item.ItemType != "track" {
+			continue
+		}
+		tracks = append(tracks, item.Item.Track)
 	}
 	return tracks, response.Total, response.Next != "", nil
 }

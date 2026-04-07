@@ -159,3 +159,12 @@ func TestApp_NoStatusMsgField(t *testing.T) {
 	// Hints should be present (status bar always shows hints now).
 	assert.NotEmpty(t, view)
 }
+
+// TestApp_PlaylistAccessDeniedMsg_EmitsWarningToast verifies that when the playlist pane
+// emits PlaylistAccessDeniedMsg (user pressed Enter on a non-owned playlist), the root app
+// routes it to a warning toast instead of making any API call.
+func TestApp_PlaylistAccessDeniedMsg_EmitsWarningToast(t *testing.T) {
+	a := newToastTestApp()
+	_, cmd := a.Update(panes.PlaylistAccessDeniedMsg{})
+	require.NotNil(t, cmd, "PlaylistAccessDeniedMsg must produce a toast command")
+}

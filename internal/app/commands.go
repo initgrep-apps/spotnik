@@ -581,6 +581,12 @@ func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL stri
 // buildFetchPlaylistTracksCmd creates a command that fetches one page of playlist
 // tracks using Interactive priority. The context is cancellable — app.go cancels
 // it when the user switches to a different playlist or presses Esc.
+//
+// Always uses GET /playlists/{id}/items regardless of offset. GET /playlists/{id}
+// only embeds items for playlists owned by the authenticated user; non-owned
+// (followed) playlists omit the items container entirely from that response.
+// Using /items consistently works for all playlists.
+//
 // No Store writes — data is returned in PlaylistTracksLoadedMsg for the pane.
 func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string, offset int) tea.Cmd {
 	library := a.library
@@ -592,10 +598,13 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 		if library == nil {
 			return panes.PlaylistTracksLoadedMsg{Err: errNilClient, PlaylistID: playlistID, Offset: offset}
 		}
+
+		// GET /playlists/{id}/items works for all playlists (owned and non-owned).
 		tracks, total, hasNext, err := library.PlaylistTracks(
 			api.WithPriority(ctx, api.Interactive),
 			playlistID, 100, offset,
 		)
+
 		if err != nil {
 			// Check cancellation again — context.Canceled is expected on playlist switch.
 			if ctx.Err() != nil {
@@ -620,6 +629,24 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 			HasNext:    hasNext,
 			Offset:     offset,
 		}
+	}
+}
+
+// buildFetchCurrentUserCmd fetches the authenticated user's Spotify profile via
+// GET /v1/me. The returned userProfileLoadedMsg carries the user's Spotify ID,
+// which the routing layer stores so the playlist pane can distinguish owned from
+// followed playlists.
+func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
+	userAPI := a.userAPI
+	return func() tea.Msg {
+		if userAPI == nil {
+			return userProfileLoadedMsg{err: errNilClient}
+		}
+		profile, err := userAPI.Profile(context.Background())
+		if err != nil {
+			return userProfileLoadedMsg{err: err}
+		}
+		return userProfileLoadedMsg{userID: profile.ID}
 	}
 }
 

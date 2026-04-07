@@ -698,3 +698,76 @@ func TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast(t *testing.T) {
 	output := appModel.View()
 	assert.Contains(t, output, "Spotify Premium required", "403 album tracks should show Premium required toast")
 }
+
+// ---------------------------------------------------------------------------
+// buildFetchPlaylistTracksCmd — offset branching tests
+// ---------------------------------------------------------------------------
+
+// TestBuildFetchPlaylistTracksCmd_Offset0_CallsItemsEndpointForAllPlaylists verifies
+// that offset=0 calls GET /playlists/{id}/items (not GET /playlists/{id}).
+// GET /playlists/{id} only embeds items for owned playlists; non-owned playlists
+// omit the items container, returning 0 tracks with no error. Using /items works
+// for all playlists regardless of ownership.
+func TestBuildFetchPlaylistTracksCmd_Offset0_CallsItemsEndpointForAllPlaylists(t *testing.T) {
+	var capturedPath string
+	body := `{
+		"items":[{"is_local":false,"item":{"id":"t1","name":"T1","uri":"spotify:track:t1","duration_ms":200000,"type":"track","artists":[],"album":{"id":"al1","name":"A1","uri":"spotify:album:al1","release_date":"2021-01-01"}}}],
+		"total":1,"next":null
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl123", Offset: 0})
+	require.NotNil(t, cmd)
+	msg := cmd()
+
+	ptMsg, ok := msg.(panes.PlaylistTracksLoadedMsg)
+	require.True(t, ok, "offset=0 playlist fetch must return PlaylistTracksLoadedMsg, got %T", msg)
+	require.NoError(t, ptMsg.Err)
+	assert.Equal(t, "/v1/playlists/pl123/items", capturedPath,
+		"offset=0 must call GET /playlists/{id}/items (works for owned and non-owned playlists)")
+	require.Len(t, ptMsg.Tracks, 1)
+	assert.Equal(t, "t1", ptMsg.Tracks[0].ID)
+}
+
+// TestBuildFetchPlaylistTracksCmd_OffsetNonZero_CallsItemsEndpoint verifies that
+// when offset>0, buildFetchPlaylistTracksCmd calls GET /playlists/{id}/items
+// (the pagination endpoint), not GET /playlists/{id}.
+func TestBuildFetchPlaylistTracksCmd_OffsetNonZero_CallsItemsEndpoint(t *testing.T) {
+	var capturedPath string
+	body := `{
+		"items":[{"is_local":false,"item":{"id":"t2","name":"T2","uri":"spotify:track:t2","duration_ms":180000,"type":"track","artists":[],"album":{"id":"al1","name":"A1","uri":"spotify:album:al1","release_date":"2021-01-01"}}}],
+		"total":101,"next":null
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.FetchPlaylistTracksRequestMsg{PlaylistID: "pl123", Offset: 100})
+	require.NotNil(t, cmd)
+	msg := cmd()
+
+	ptMsg, ok := msg.(panes.PlaylistTracksLoadedMsg)
+	require.True(t, ok, "offset>0 playlist fetch must return PlaylistTracksLoadedMsg, got %T", msg)
+	require.NoError(t, ptMsg.Err)
+	assert.Equal(t, "/v1/playlists/pl123/items", capturedPath,
+		"offset>0 must call GET /playlists/{id}/items for pagination")
+	assert.Equal(t, 100, ptMsg.Offset)
+}

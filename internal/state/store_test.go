@@ -244,6 +244,17 @@ func TestStore_SetGetPlayingPlaylistID(t *testing.T) {
 	assert.Equal(t, "pl-abc", s.PlayingPlaylistID())
 }
 
+func TestStore_UserID_Default(t *testing.T) {
+	s := New()
+	assert.Equal(t, "", s.UserID(), "initial user ID should be empty")
+}
+
+func TestStore_SetGetUserID(t *testing.T) {
+	s := New()
+	s.SetUserID("spotify-user-123")
+	assert.Equal(t, "spotify-user-123", s.UserID())
+}
+
 func TestStore_ErrorState(t *testing.T) {
 	testErr := fmt.Errorf("api error")
 

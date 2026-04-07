@@ -81,7 +81,7 @@ func TestGetPlaylistTracks_Success(t *testing.T) {
 	tracks, total, hasNext, err := client.PlaylistTracks(context.Background(), "playlist-abc123", 50, 0)
 
 	require.NoError(t, err)
-	assert.Equal(t, "/v1/playlists/playlist-abc123/tracks", capturedPath)
+	assert.Equal(t, "/v1/playlists/playlist-abc123/items", capturedPath)
 	require.Len(t, tracks, 2)
 	assert.Equal(t, "track-xyz789", tracks[0].ID)
 	assert.Equal(t, "Blinding Lights", tracks[0].Name)
@@ -92,9 +92,9 @@ func TestGetPlaylistTracks_Success(t *testing.T) {
 // TestGetPlaylistTracks_HasNextPage verifies that a non-null next field sets hasNext=true.
 func TestGetPlaylistTracks_HasNextPage(t *testing.T) {
 	body := `{
-		"items": [{"is_local":false,"track":{"id":"t1","name":"Track 1","uri":"spotify:track:t1","duration_ms":180000,"artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}],
+		"items": [{"is_local":false,"item":{"id":"t1","name":"Track 1","uri":"spotify:track:t1","duration_ms":180000,"type":"track","artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}],
 		"total": 200,
-		"next": "https://api.spotify.com/v1/playlists/pl1/tracks?offset=100&limit=100"
+		"next": "https://api.spotify.com/v1/playlists/pl1/items?offset=100&limit=100"
 	}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -116,8 +116,8 @@ func TestGetPlaylistTracks_HasNextPage(t *testing.T) {
 func TestGetPlaylistTracks_NullTrackSkipped(t *testing.T) {
 	body := `{
 		"items": [
-			{"is_local":false,"track":null},
-			{"is_local":false,"track":{"id":"t2","name":"Good Track","uri":"spotify:track:t2","duration_ms":200000,"artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}
+			{"is_local":false,"item":null},
+			{"is_local":false,"item":{"id":"t2","name":"Good Track","uri":"spotify:track:t2","duration_ms":200000,"type":"track","artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}
 		],
 		"total": 1,
 		"next": null
@@ -141,8 +141,8 @@ func TestGetPlaylistTracks_NullTrackSkipped(t *testing.T) {
 func TestGetPlaylistTracks_LocalTrackSkipped(t *testing.T) {
 	body := `{
 		"items": [
-			{"is_local":true,"track":{"id":"local1","name":"Local File","uri":"","duration_ms":200000,"artists":[],"album":{"id":"","name":"","uri":"","release_date":""}}},
-			{"is_local":false,"track":{"id":"t2","name":"Streaming Track","uri":"spotify:track:t2","duration_ms":200000,"artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}
+			{"is_local":true,"item":{"id":"local1","name":"Local File","uri":"","duration_ms":200000,"type":"track","artists":[],"album":{"id":"","name":"","uri":"","release_date":""}}},
+			{"is_local":false,"item":{"id":"t2","name":"Streaming Track","uri":"spotify:track:t2","duration_ms":200000,"type":"track","artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2020-01-01"}}}
 		],
 		"total": 1,
 		"next": null
@@ -432,4 +432,235 @@ func TestNewLibraryClient_DefaultBaseURL(t *testing.T) {
 	client := NewLibraryClient("", "test-token")
 	assert.NotNil(t, client)
 	// The client was created — we can't easily test the URL but no panic occurred.
+}
+
+// ---------------------------------------------------------------------------
+// GetPlaylist tests
+// ---------------------------------------------------------------------------
+
+// TestGetPlaylist_UsesItemsEndpoint verifies GetPlaylist calls GET /v1/playlists/{id}
+// (not the deprecated /tracks endpoint) and returns metadata + first-page tracks.
+func TestGetPlaylist_UsesItemsEndpoint(t *testing.T) {
+	body := `{
+		"id": "pl-abc",
+		"name": "My Playlist",
+		"uri": "spotify:playlist:pl-abc",
+		"items": {
+			"items": [
+				{"is_local":false,"item":{"id":"t1","name":"Track 1","uri":"spotify:track:t1","duration_ms":200000,"type":"track","artists":[{"id":"a1","name":"Artist 1","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album 1","uri":"spotify:album:al1","release_date":"2021-01-01"}}},
+				{"is_local":false,"item":{"id":"t2","name":"Track 2","uri":"spotify:track:t2","duration_ms":180000,"type":"track","artists":[{"id":"a1","name":"Artist 1","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album 1","uri":"spotify:album:al1","release_date":"2021-01-01"}}}
+			],
+			"total": 2,
+			"next": null
+		}
+	}`
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, total, hasNext, err := client.GetPlaylist(context.Background(), "pl-abc")
+
+	require.NoError(t, err)
+	assert.Equal(t, "/v1/playlists/pl-abc", capturedPath, "must call GET /playlists/{id}, not deprecated /tracks")
+	require.Len(t, tracks, 2)
+	assert.Equal(t, "t1", tracks[0].ID)
+	assert.Equal(t, "Track 1", tracks[0].Name)
+	assert.Equal(t, 200000, tracks[0].DurationMs)
+	assert.Equal(t, 2, total)
+	assert.False(t, hasNext, "next=null → hasNext false")
+}
+
+// TestGetPlaylist_HasNextPage verifies hasNext=true when next is non-empty.
+func TestGetPlaylist_HasNextPage(t *testing.T) {
+	body := `{
+		"id": "pl-big",
+		"name": "Big Playlist",
+		"uri": "spotify:playlist:pl-big",
+		"items": {
+			"items": [
+				{"is_local":false,"item":{"id":"t1","name":"T1","uri":"spotify:track:t1","duration_ms":180000,"type":"track","artists":[],"album":{"id":"al1","name":"A1","uri":"spotify:album:al1","release_date":"2021-01-01"}}}
+			],
+			"total": 500,
+			"next": "https://api.spotify.com/v1/playlists/pl-big/items?offset=100&limit=100"
+		}
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, total, hasNext, err := client.GetPlaylist(context.Background(), "pl-big")
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1)
+	assert.Equal(t, 500, total)
+	assert.True(t, hasNext, "non-null next → hasNext true")
+}
+
+// TestGetPlaylist_EpisodeItemSkipped verifies that podcast episode items are skipped.
+// Playlists can contain episodes (type="episode"); only type="track" items must be returned.
+func TestGetPlaylist_EpisodeItemSkipped(t *testing.T) {
+	body := `{
+		"id": "pl-mixed",
+		"name": "Mixed",
+		"uri": "spotify:playlist:pl-mixed",
+		"items": {
+			"items": [
+				{"is_local":false,"item":{"id":"ep1","name":"Episode 1","uri":"spotify:episode:ep1","duration_ms":3600000,"type":"episode","artists":[],"album":{"id":"","name":"","uri":"","release_date":""}}},
+				{"is_local":false,"item":{"id":"t1","name":"Track 1","uri":"spotify:track:t1","duration_ms":200000,"type":"track","artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2021-01-01"}}}
+			],
+			"total": 1,
+			"next": null
+		}
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, _, _, err := client.GetPlaylist(context.Background(), "pl-mixed")
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1, "episode item must be skipped; only track items returned")
+	assert.Equal(t, "t1", tracks[0].ID)
+}
+
+// TestGetPlaylist_NullTrackSkipped verifies null track entries are skipped.
+func TestGetPlaylist_NullTrackSkipped(t *testing.T) {
+	body := `{
+		"id": "pl-nulls",
+		"name": "Nulls",
+		"uri": "spotify:playlist:pl-nulls",
+		"items": {
+			"items": [
+				{"is_local":false,"item":null},
+				{"is_local":false,"item":{"id":"t1","name":"Good","uri":"spotify:track:t1","duration_ms":200000,"type":"track","artists":[],"album":{"id":"al1","name":"A","uri":"spotify:album:al1","release_date":"2021-01-01"}}}
+			],
+			"total": 1,
+			"next": null
+		}
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, _, _, err := client.GetPlaylist(context.Background(), "pl-nulls")
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1, "null track must be skipped")
+	assert.Equal(t, "t1", tracks[0].ID)
+}
+
+// TestGetPlaylist_LocalItemSkipped verifies is_local=true items are skipped.
+func TestGetPlaylist_LocalItemSkipped(t *testing.T) {
+	body := `{
+		"id": "pl-local",
+		"name": "Local",
+		"uri": "spotify:playlist:pl-local",
+		"items": {
+			"items": [
+				{"is_local":true,"item":{"id":"local1","name":"Local File","uri":"","duration_ms":200000,"type":"track","artists":[],"album":{"id":"","name":"","uri":"","release_date":""}}},
+				{"is_local":false,"item":{"id":"t1","name":"Real Track","uri":"spotify:track:t1","duration_ms":200000,"type":"track","artists":[],"album":{"id":"al1","name":"A","uri":"spotify:album:al1","release_date":"2021-01-01"}}}
+			],
+			"total": 1,
+			"next": null
+		}
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, _, _, err := client.GetPlaylist(context.Background(), "pl-local")
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1, "is_local=true item must be skipped")
+	assert.Equal(t, "t1", tracks[0].ID)
+}
+
+// TestGetPlaylist_ServerError verifies GetPlaylist wraps non-2xx errors.
+func TestGetPlaylist_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"status":500,"message":"internal"}}`))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, total, hasNext, err := client.GetPlaylist(context.Background(), "pl-bad")
+
+	require.Error(t, err)
+	assert.Nil(t, tracks)
+	assert.Zero(t, total)
+	assert.False(t, hasNext)
+}
+
+// ---------------------------------------------------------------------------
+// PlaylistTracks /items URL fix tests
+// ---------------------------------------------------------------------------
+
+// TestGetPlaylistTracks_UsesItemsPath verifies PlaylistTracks now calls /items not /tracks.
+func TestGetPlaylistTracks_UsesItemsPath(t *testing.T) {
+	body := `{"items":[],"total":0,"next":null}`
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	_, _, _, err := client.PlaylistTracks(context.Background(), "pl-abc", 100, 0)
+
+	require.NoError(t, err)
+	assert.Equal(t, "/v1/playlists/pl-abc/items", capturedPath,
+		"PlaylistTracks must use /items (not deprecated /tracks)")
+}
+
+// TestGetPlaylistTracks_EpisodeItemSkipped verifies that episode items in /items responses are filtered.
+func TestGetPlaylistTracks_EpisodeItemSkipped(t *testing.T) {
+	body := `{
+		"items": [
+			{"is_local":false,"item":{"id":"ep1","name":"Episode","uri":"spotify:episode:ep1","duration_ms":3600000,"type":"episode","artists":[],"album":{"id":"","name":"","uri":"","release_date":""}}},
+			{"is_local":false,"item":{"id":"t1","name":"Real Track","uri":"spotify:track:t1","duration_ms":200000,"type":"track","artists":[{"id":"a1","name":"Artist","uri":"spotify:artist:a1"}],"album":{"id":"al1","name":"Album","uri":"spotify:album:al1","release_date":"2021-01-01"}}}
+		],
+		"total": 1,
+		"next": null
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := newTestLibrary(srv.URL, "test-token")
+	tracks, _, _, err := client.PlaylistTracks(context.Background(), "pl-mixed", 100, 0)
+
+	require.NoError(t, err)
+	require.Len(t, tracks, 1, "episode must be filtered out")
+	assert.Equal(t, "t1", tracks[0].ID)
 }

@@ -25,6 +25,21 @@ func (u *UserClient) SetHTTPClient(c *http.Client) {
 	u.setHTTPClient(c)
 }
 
+// Profile fetches the authenticated user's Spotify profile via GET /v1/me.
+// Returns a UserProfile with the user's ID and display name.
+// Errors are wrapped with context.
+func (u *UserClient) Profile(ctx context.Context) (UserProfile, error) {
+	req, err := u.newRequest(ctx, http.MethodGet, "/v1/me", nil)
+	if err != nil {
+		return UserProfile{}, fmt.Errorf("creating profile request: %w", err)
+	}
+	var p UserProfile
+	if err := u.doJSON(req, &p); err != nil {
+		return UserProfile{}, fmt.Errorf("fetching profile: %w", err)
+	}
+	return p, nil
+}
+
 // TopTracks fetches the user's top tracks via GET /me/top/tracks.
 // timeRange must be "short_term", "medium_term", or "long_term".
 // Returns a slice of Track. Errors are wrapped with context.

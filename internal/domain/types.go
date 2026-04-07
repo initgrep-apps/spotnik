@@ -13,6 +13,16 @@ func unmarshalJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
+// UserProfile represents the authenticated user's Spotify profile,
+// as returned by GET /v1/me. Used to determine playlist ownership.
+type UserProfile struct {
+	// ID is the Spotify user ID.
+	ID string `json:"id"`
+
+	// DisplayName is the human-readable name of the user.
+	DisplayName string `json:"display_name"`
+}
+
 // PlaybackState represents the full playback state returned by GET /me/player.
 // When Spotify returns 204 (nothing playing), this struct is nil in the store.
 type PlaybackState struct {
@@ -113,13 +123,14 @@ type SimplePlaylist struct {
 func (p *SimplePlaylist) UnmarshalJSON(data []byte) error {
 	// Use a raw struct (not alias) to capture both flat fields and nested tracks.
 	raw := &struct {
-		ID     string              `json:"id"`
-		Name   string              `json:"name"`
-		URI    string              `json:"uri"`
-		Owner  SimplePlaylistOwner `json:"owner"`
-		Tracks struct {
+		ID    string              `json:"id"`
+		Name  string              `json:"name"`
+		URI   string              `json:"uri"`
+		Owner SimplePlaylistOwner `json:"owner"`
+		// Spotify renamed the "tracks" container to "items" in February 2026.
+		Items struct {
 			Total int `json:"total"`
-		} `json:"tracks"`
+		} `json:"items"`
 	}{}
 	if err := unmarshalJSON(data, raw); err != nil {
 		return err
@@ -128,7 +139,7 @@ func (p *SimplePlaylist) UnmarshalJSON(data []byte) error {
 	p.Name = raw.Name
 	p.URI = raw.URI
 	p.Owner = raw.Owner
-	p.TrackCount = raw.Tracks.Total
+	p.TrackCount = raw.Items.Total
 	return nil
 }
 

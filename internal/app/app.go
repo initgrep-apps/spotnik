@@ -214,6 +214,13 @@ type splashDismissMsg struct{}
 // The app handles it by attempting a token refresh.
 type unauthorizedMsg struct{}
 
+// userProfileLoadedMsg is sent when the initial GET /v1/me fetch completes.
+// userID is the authenticated user's Spotify ID; err is non-nil on failure.
+type userProfileLoadedMsg struct {
+	userID string
+	err    error
+}
+
 // tokenRefreshedMsg is sent when a token refresh attempt completes.
 // newToken is non-empty on success; err is non-nil on failure.
 type tokenRefreshedMsg struct {
@@ -749,6 +756,7 @@ func (a *App) Init() tea.Cmd {
 // through the existing staleness/dedup guards in handleMsg.
 func (a *App) initialFetchCmds() []tea.Cmd {
 	return []tea.Cmd{
+		a.buildFetchCurrentUserCmd(), // fetch user ID for playlist ownership checks
 		func() tea.Msg { return panes.FetchPlaylistsRequestMsg{Offset: 0} },
 		func() tea.Msg { return panes.FetchAlbumsRequestMsg{Offset: 0} },
 		func() tea.Msg { return panes.FetchLikedTracksRequestMsg{Offset: 0} },

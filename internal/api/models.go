@@ -77,3 +77,6 @@ type SearchPlaylistsResult = domain.SearchPlaylistsResult
 // SearchResult re-exports domain.SearchResult for backward compatibility.
 // state/ should import domain.SearchResult directly rather than api.SearchResult.
 type SearchResult = domain.SearchResult
+
+// UserProfile re-exports domain.UserProfile for backward compatibility.
+type UserProfile = domain.UserProfile

@@ -259,7 +259,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					a.forwardToPane(layout.PanePlaylists, m),
-					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required or playlist access denied"),
 				), true
 			}
 			return a, tea.Batch(
@@ -276,6 +276,16 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		a.playlistTracksCancel = func() {}
 		a.playlistTracksID = ""
 		return a, nil, true
+
+	case userProfileLoadedMsg:
+		// Store the user's Spotify ID so the playlist pane can detect ownership.
+		if m.err == nil && m.userID != "" {
+			a.store.SetUserID(m.userID)
+		}
+		return a, nil, true
+
+	case panes.PlaylistAccessDeniedMsg:
+		return a, a.alerts.NewAlertCmd("warning", "Track access limited to playlists you own or collaborate on"), true
 
 	case panes.PlaylistCreateRequestMsg:
 		return a, a.buildCreatePlaylistCmd(m.Name, m.Description), true

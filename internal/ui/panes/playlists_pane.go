@@ -279,6 +279,12 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if idx >= 0 && idx < len(playlist) {
 			pl := playlist[idx]
 
+			// Spotify API restricts GET /playlists/{id}/items to playlists owned or
+			// collaborated on by the user. Block drill-down for followed playlists.
+			if !p.isOwnedByCurrentUser(pl) {
+				return p, func() tea.Msg { return PlaylistAccessDeniedMsg{} }
+			}
+
 			// Update identity
 			p.selectedID = pl.ID
 			p.selectedName = pl.Name
@@ -490,17 +496,33 @@ func (p *PlaylistsPane) RefreshRows() {
 }
 
 // refreshPlaylistRows re-reads the store and applies filtered playlist rows.
+// Non-owned (followed) playlists are prefixed with "~ " to signal that
+// track drill-down is unavailable (Spotify API restriction).
 func (p *PlaylistsPane) refreshPlaylistRows() {
 	playlists := p.filteredPlaylist()
 	rows := make([]map[string]string, len(playlists))
 	for i, pl := range playlists {
+		name := pl.Name
+		if !p.isOwnedByCurrentUser(pl) {
+			name = "~ " + name
+		}
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
-			"name":   pl.Name,
+			"name":   name,
 			"tracks": fmt.Sprintf("%d", pl.TrackCount),
 		}
 	}
 	p.table.SetRows(rows)
+}
+
+// isOwnedByCurrentUser returns true if the playlist is owned by the current user.
+// Returns true when the user ID is not yet known (benefit of the doubt — let the API decide).
+func (p *PlaylistsPane) isOwnedByCurrentUser(pl domain.SimplePlaylist) bool {
+	userID := p.store.UserID()
+	if userID == "" {
+		return true // user ID not yet loaded; don't block prematurely
+	}
+	return pl.Owner.ID == userID
 }
 
 // refreshTrackRows rebuilds track rows from p.loadedTracks (pane-owned data).

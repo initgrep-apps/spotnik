@@ -269,6 +269,12 @@ type PlaylistTracksLoadedMsg struct {
 // playlist track fetch and clear the staleness key.
 type PlaylistTrackViewClosedMsg struct{}
 
+// PlaylistAccessDeniedMsg is emitted by PlaylistsPane when the user presses Enter
+// on a followed playlist they don't own. The Spotify API restricts
+// GET /playlists/{id}/items to playlists owned or collaborated on by the user.
+// The app routing layer converts this into a warning toast.
+type PlaylistAccessDeniedMsg struct{}
+
 // PlaylistCreateRequestMsg is emitted by PlaylistsPane when the user submits
 // a new playlist name. The root app creates the playlist via the API.
 type PlaylistCreateRequestMsg struct {

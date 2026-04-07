@@ -104,6 +104,10 @@ type Store struct {
 	// Playlist Manager data: tracks for each playlist keyed by playlist ID.
 	playlistTracks map[string][]domain.Track
 
+	// userID is the Spotify user ID of the authenticated user.
+	// Set at startup via GET /v1/me. Used to distinguish owned vs followed playlists.
+	userID string
+
 	// playingPlaylistID is the Spotify playlist ID that is currently playing.
 	// Used by PlaylistsPane to render the ▶ indicator next to the active playlist.
 	playingPlaylistID string
@@ -152,6 +156,22 @@ func (s *Store) PlaybackState() *domain.PlaybackState {
 
 // SetPlaybackState updates the playback state. Pass nil to clear (204 response).
 // Also updates the active device from the state's Device field.
+// UserID returns the Spotify user ID of the authenticated user.
+// Returns "" if the profile has not yet been fetched.
+func (s *Store) UserID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.userID
+}
+
+// SetUserID stores the authenticated user's Spotify ID.
+// Called once at startup after fetching GET /v1/me.
+func (s *Store) SetUserID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.userID = id
+}
+
 func (s *Store) SetPlaybackState(state *domain.PlaybackState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
