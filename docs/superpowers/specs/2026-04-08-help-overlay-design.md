@@ -22,6 +22,7 @@ Implement the `?` keybinding to open a centered help overlay showing all app key
 | Layout | Two-column side-by-side | Maximum density, most scannable |
 | Position | Centered (`btoverlay.Center, Center`) | Appropriate for a full-attention reference modal |
 | Dismiss | `Esc` only | Consistent with all other overlays; avoids `?`-toggle quirk |
+| Keybinding doc | `docs/keybinding.md` created and kept in sync | Single source of truth for keybindings outside the codebase; enforced via CLAUDE.md rule |
 
 ---
 
@@ -154,8 +155,8 @@ Fixed overlay width: **78 columns** (each content column: 35 cols, divider: 1 co
 │  Shift+Tab  prev pane            │  A          add to queue                │
 │  j / k      scroll               │  i          like / unlike               │
 │  Esc        close overlay        │  x          remove track                │
-│                                  │  Shift+↑/↓  reorder (playlists)        │
-╰─ Esc close ────────────────────────────────────────────────────────────────╯
+│                                  │  Shift+↑/↓  reorder (playlists)         │
+╰────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### Color tokens (no hardcoded hex)
@@ -308,4 +309,99 @@ to:
 
 ```
 | `?` | Open help overlay | Global |
+```
+
+---
+
+## docs/keybinding.md — New File
+
+Create `docs/keybinding.md` as a human-readable, always-current reference of every keybinding in the app. This file is the canonical external-facing keybinding reference. It mirrors the `helpContent` static data in `help_overlay.go` and DESIGN.md §17, but in a standalone doc that is easy to link to and share.
+
+### Structure
+
+```markdown
+# Spotnik Keybindings
+
+## Global
+| Key | Action |
+|-----|--------|
+| `/` | Open search overlay |
+| `d` | Open device switcher |
+| `t` | Open theme switcher |
+| `?` | Open help overlay |
+| `q` | Quit |
+| `0` | Toggle Page A / Page B |
+| `1`–`8` | Toggle pane visibility (Page A) |
+| `p` | Cycle preset |
+
+## Playback
+| Key | Action |
+|-----|--------|
+| `Space` | Play / pause |
+| `n` | Next track |
+| `←` / `→` | Previous / next track |
+| `+` / `-` | Volume up / down |
+| `s` | Toggle shuffle |
+| `r` | Cycle repeat mode |
+| `v` | Cycle visualizer pattern |
+
+## Navigation
+| Key | Action |
+|-----|--------|
+| `Tab` | Next pane focus |
+| `Shift+Tab` | Previous pane focus |
+| `j` / `k` | Scroll down / up |
+| `Esc` | Close overlay or filter |
+
+## Pane Actions
+| Key | Action | Context |
+|-----|--------|---------|
+| `Enter` | Select / play item | Focused pane |
+| `f` | Toggle filter | List panes |
+| `A` | Add to queue | Search, list panes |
+| `i` | Like / unlike track | LikedSongs pane |
+| `x` | Remove track | Playlists track sub-view |
+| `Shift+↑` / `Shift+↓` | Reorder track | Playlists track sub-view |
+
+## Search Overlay
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Cycle search category |
+| `Enter` | Play selected result |
+| `Ctrl+A` | Add result to queue |
+| `Ctrl+U` | Clear search input |
+| `PgDn` / `PgUp` | Next / previous result page |
+| `Esc` | Close search |
+```
+
+### Maintenance rule (added to CLAUDE.md)
+
+Any time a keybinding is **added, changed, or removed** — anywhere in the codebase — the implementer must update all three of these in the same commit:
+
+1. `docs/keybinding.md` — the human-readable reference
+2. `docs/DESIGN.md §17` — the spec table
+3. The static `helpContent` var in `internal/ui/panes/help_overlay.go` — the in-app display
+
+---
+
+## CLAUDE.md Update
+
+Add the following rule to the **"What Agents Must NEVER Do"** list:
+
+```
+15. Add, change, or remove a keybinding without updating all three: docs/keybinding.md,
+    docs/DESIGN.md §17, and the helpContent var in internal/ui/panes/help_overlay.go.
+```
+
+And add a new section near the "Design Rules" block:
+
+```markdown
+## Keybinding Maintenance
+
+All keybindings are documented in three places that must stay in sync:
+- `docs/keybinding.md` — human-readable reference (canonical for external readers)
+- `docs/DESIGN.md §17` — spec-level keybinding table
+- `internal/ui/panes/help_overlay.go` `helpContent` — in-app help overlay display
+
+When adding, changing, or removing any keybinding, update all three in the same commit.
 ```
