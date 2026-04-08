@@ -550,6 +550,11 @@ func (a *App) ThemeSwitcherOpen() bool {
 	return a.showThemeSwitcher
 }
 
+// HelpOpen returns true while the help keybinding overlay is visible.
+func (a *App) HelpOpen() bool {
+	return a.helpOpen
+}
+
 // allPanes returns all pane values from the panes map.
 // Used by the ThemeSwitchMsg handler to propagate theme changes to every pane.
 func (a *App) allPanes() []layout.Pane {

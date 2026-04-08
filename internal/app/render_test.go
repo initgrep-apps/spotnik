@@ -285,6 +285,25 @@ func TestRender_ThemeOverlay_Composited(t *testing.T) {
 	assert.Contains(t, result, "Themes", "theme overlay should appear when showThemeSwitcher is true")
 }
 
+// TestRender_HelpOverlay_Composited verifies that when helpOpen is true,
+// the help overlay appears in the rendered output.
+func TestRender_HelpOverlay_Composited(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.currentView = viewGrid
+
+	// Open the help overlay by setting state directly (internal test).
+	a.helpOpen = true
+	a.helpOverlay = panes.NewHelpOverlay(a.theme)
+	a.helpOverlay.SetSize(a.width, a.height)
+
+	result := a.buildView()
+	// "Pane Actions" is a section header rendered inside the help overlay right column.
+	// Checking for it confirms the overlay content is composited into the view.
+	assert.Contains(t, result, "Pane Actions", "help overlay should appear when helpOpen is true")
+}
+
 // TestBuildView_DynamicResize_ShrinkThenGrow verifies that shrinking below minimum
 // shows the error, then growing back shows the grid.
 func TestBuildView_DynamicResize_ShrinkThenGrow(t *testing.T) {
