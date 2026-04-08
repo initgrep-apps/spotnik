@@ -148,6 +148,10 @@ func (a *App) buildView() string {
 		return a.renderWithSearchOverlay(body)
 	}
 
+	if a.helpOpen && a.helpOverlay != nil {
+		return a.renderWithHelpOverlay(body)
+	}
+
 	return body
 }
 
@@ -267,6 +271,17 @@ func (a *App) renderWithSearchOverlay(background string) string {
 	}
 
 	// Center the search overlay using bubbletea-overlay string-level compositing.
+	return btoverlay.Composite(fg, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
+}
+
+// renderWithHelpOverlay renders the grid dimmed and places the help overlay
+// centered on screen using bubbletea-overlay Composite().
+func (a *App) renderWithHelpOverlay(background string) string {
+	fg := a.helpOverlay.View()
+	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
+	if a.width <= 0 || a.height <= 0 {
+		return dimmed + "\n" + fg
+	}
 	return btoverlay.Composite(fg, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
 }
 

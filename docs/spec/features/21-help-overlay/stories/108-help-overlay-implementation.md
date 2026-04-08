@@ -1,7 +1,7 @@
 ---
 title: "Help overlay implementation and keybinding documentation"
 feature: 21-help-overlay
-status: open
+status: done
 ---
 
 ## Background

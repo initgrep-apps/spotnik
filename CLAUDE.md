@@ -221,6 +221,20 @@ Follow this sequence exactly for every feature — no shortcuts.
 12. Work directly on `main` — always use a feature branch
 13. Merge a PR — unless you are the orchestrator agent after external review passes
 14. Render inline error boxes in pane `View()` methods — all API errors go through toast notifications via `a.alerts.NewAlertCmd`
+15. Add, change, or remove a keybinding without updating all three locations in the
+    same commit: `docs/keybinding.md`, `docs/DESIGN.md §17`, and the `helpContent` var in
+    `internal/ui/panes/help_overlay.go`.
+
+---
+
+## Keybinding Maintenance
+
+All keybindings are documented in three places that must stay in sync:
+- `docs/keybinding.md` — human-readable reference (canonical for external readers)
+- `docs/DESIGN.md §17` — spec-level keybinding table
+- `internal/ui/panes/help_overlay.go` `helpContent` var — in-app help overlay display
+
+When adding, changing, or removing any keybinding, update all three in the same commit.
 
 ---
 

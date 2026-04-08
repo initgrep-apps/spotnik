@@ -1,6 +1,6 @@
 ---
 title: "Help Overlay"
-status: open
+status: done
 ---
 
 ## Overview

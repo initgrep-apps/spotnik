@@ -50,6 +50,15 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// When help overlay is open, route all keys to it.
+	if a.helpOpen && a.helpOverlay != nil {
+		updated, cmd := a.helpOverlay.Update(m)
+		if ho, ok := updated.(*panes.HelpOverlay); ok {
+			a.helpOverlay = ho
+		}
+		return a, cmd
+	}
+
 	// When device overlay is open, route all keys to the device pane.
 	if a.deviceOverlayOpen {
 		updated, cmd := a.devicePane.Update(m)
@@ -107,6 +116,14 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.Type == tea.KeyRunes && string(m.Runes) == "t" {
 		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher {
 			return a.openThemeSwitcher()
+		}
+		return a, nil
+	}
+
+	// '?' opens the help overlay — but only if no other overlay is already open.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "?" {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen {
+			return a.openHelp()
 		}
 		return a, nil
 	}
@@ -190,11 +207,11 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Only mouse wheel scroll events are handled — clicks and motion are ignored.
 // Scroll events are converted to j/k key messages and routed to the pane under
 // the cursor via PaneAt(), WITHOUT changing keyboard focus (btop behavior).
-// Mouse scroll is ignored when an overlay (search or device) is open.
+// Mouse scroll is ignored when any overlay is open.
 func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
 	// Ignore mouse events when any overlay is open.
 	// Overlays handle their own input; scroll behind them is unintuitive.
-	if a.deviceOverlayOpen || a.searchOpen {
+	if a.deviceOverlayOpen || a.searchOpen || a.helpOpen {
 		return nil
 	}
 
