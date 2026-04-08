@@ -26,8 +26,8 @@ type helpSection struct {
 }
 
 // keyColWidth is the fixed width of the key sub-column in each binding row.
-// Wide enough for "Shift+Tab" and "Shift+↑/↓" (9 visible chars + padding).
-const keyColWidth = 12
+// Wide enough for "Shift+Tab" and "Shift+↑/↓" with comfortable gap before the label.
+const keyColWidth = 16
 
 // helpContent is the static two-column keybinding reference.
 // [0] = left column (Global, Navigation), [1] = right column (Playback, Pane Actions).
@@ -96,10 +96,10 @@ func (o *HelpOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return o, nil
 }
 
-// overlayWidth returns the fixed overlay width (78), capped to the terminal width
-// when the terminal is narrower than 78 columns.
+// overlayWidth returns the fixed overlay width (100), capped to the terminal width
+// when the terminal is narrower than 100 columns.
 func (o *HelpOverlay) overlayWidth() int {
-	const fixedWidth = 78
+	const fixedWidth = 100
 	if o.width > 0 && fixedWidth > o.width {
 		return o.width
 	}
@@ -174,10 +174,14 @@ func (o *HelpOverlay) renderColumn(sections []helpSection, width int) string {
 		labelW = 1
 	}
 
+	// Top padding — one blank line before the first section.
 	var lines []string
+	lines = append(lines, strings.Repeat(" ", width))
+
 	for i, sec := range sections {
-		// Blank separator between sections (not before the first one).
+		// Two blank separator lines between sections for visual breathing room.
 		if i > 0 {
+			lines = append(lines, strings.Repeat(" ", width))
 			lines = append(lines, strings.Repeat(" ", width))
 		}
 		header := lipgloss.NewStyle().Width(width).MaxWidth(width).
@@ -196,6 +200,9 @@ func (o *HelpOverlay) renderColumn(sections []helpSection, width int) string {
 			lines = append(lines, row)
 		}
 	}
+
+	// Bottom padding — one blank line after the last section.
+	lines = append(lines, strings.Repeat(" ", width))
 
 	return strings.Join(lines, "\n")
 }
