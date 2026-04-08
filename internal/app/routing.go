@@ -50,6 +50,15 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// When help overlay is open, route all keys to it.
+	if a.helpOpen && a.helpOverlay != nil {
+		updated, cmd := a.helpOverlay.Update(m)
+		if ho, ok := updated.(*panes.HelpOverlay); ok {
+			a.helpOverlay = ho
+		}
+		return a, cmd
+	}
+
 	// When device overlay is open, route all keys to the device pane.
 	if a.deviceOverlayOpen {
 		updated, cmd := a.devicePane.Update(m)
@@ -107,6 +116,14 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.Type == tea.KeyRunes && string(m.Runes) == "t" {
 		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher {
 			return a.openThemeSwitcher()
+		}
+		return a, nil
+	}
+
+	// '?' opens the help overlay — but only if no other overlay is already open.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "?" {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen {
+			return a.openHelp()
 		}
 		return a, nil
 	}
@@ -194,7 +211,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
 	// Ignore mouse events when any overlay is open.
 	// Overlays handle their own input; scroll behind them is unintuitive.
-	if a.deviceOverlayOpen || a.searchOpen {
+	if a.deviceOverlayOpen || a.searchOpen || a.helpOpen {
 		return nil
 	}
 
