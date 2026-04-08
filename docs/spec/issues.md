@@ -289,3 +289,16 @@ The cancelled-context test wraps its inner assertion in `if msg != nil`, which m
 **Feature:** 20-playback-context
 
 The cancelled-context test uses `if msg != nil { assert.Equal(...) }` instead of an unconditional `assert.Nil`. If the cancellation guard were broken and returned a non-nil message, the test would pass silently. Consider hardening to `assert.Nil(t, msg)` in a future pass.
+
+---
+
+## Help overlay: minor test coverage gaps
+**Found:** 2026-04-09 | **Source:** PR #136 Review
+**Feature:** 21-help-overlay
+
+Four minor test gaps identified during review. None are blocking but would increase robustness:
+
+1. `TestHelpOverlay_View_NoSetSize_DoesNotPanic` — `View()` called without `SetSize` exercises the `overlayWidth()` zero-value fallback path, not currently covered.
+2. `TestApp_HelpOverlay_MouseEventsBlocked` — verifies mouse events return nil cmd when `helpOpen=true`; guards against regression in `handleMouseMsg`.
+3. `TestApp_HelpOverlay_EscKey_ClosesEndToEnd` — end-to-end Esc round-trip feeding `HelpOverlayClosedMsg` back into `Update()` and asserting `HelpOpen()==false`.
+4. `TestHelpOverlay_View_ContainsNavigationKeys` — spot-checks Navigation section key strings (`Tab`, `Shift+Tab`, `j / k`, `Esc`) to match the existing pattern for Global/Playback/Pane Action sections.

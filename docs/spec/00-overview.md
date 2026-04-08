@@ -29,7 +29,7 @@
 | 17 | Bootstrap | `features/17-bootstrap/` | done | 76, 79, 80 | First-launch config bootstrap, embedded client ID, preference persistence engine |
 | 19 | Search Redesign | `features/19-search-redesign/` | done | 81–104 (done) | Full-screen search overlay with tabs, bubbles/list delegate, prefix autocomplete, rich metadata, UX polish; redesign (97–104): universal debounce, per-page fetch, context cancellation, gateway Interactive debounce, pagination controls, store cleanup |
 | 20 | Playback Context & Navigation | `features/20-playback-context/` | done | 105 (done), 106 (done), 107 (done) | Context-aware playback for all song-list panes, full playlist functionality, album drill-down |
-| 21 | Help Overlay | `features/21-help-overlay/` | open | 108 | `?` key opens centered keybinding reference overlay; introduces docs/keybinding.md and CLAUDE.md maintenance rule |
+| 21 | Help Overlay | `features/21-help-overlay/` | done | 108 (done) | `?` key opens centered keybinding reference overlay; introduces docs/keybinding.md and CLAUDE.md maintenance rule |
 
 ---
 
