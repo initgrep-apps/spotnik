@@ -139,6 +139,11 @@ type App struct {
 	// showThemeSwitcher is true while the theme switcher overlay is visible.
 	showThemeSwitcher bool
 
+	// helpOpen is true while the help keybinding overlay is visible.
+	helpOpen bool
+	// helpOverlay is the floating help overlay. Populated when open.
+	helpOverlay *panes.HelpOverlay
+
 	// tickCount increments every 1s tick. Used to throttle API polling:
 	// intervals are computed dynamically by pollIntervals() based on idle state and playback.
 	tickCount int
@@ -826,6 +831,21 @@ func (a *App) closeThemeSwitcher() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// openHelp opens the help keybinding overlay.
+func (a *App) openHelp() (*App, tea.Cmd) {
+	a.helpOpen = true
+	a.helpOverlay = panes.NewHelpOverlay(a.theme)
+	a.helpOverlay.SetSize(a.width, a.height)
+	return a, nil
+}
+
+// closeHelp closes the help keybinding overlay.
+func (a *App) closeHelp() (*App, tea.Cmd) {
+	a.helpOpen = false
+	a.helpOverlay = nil
+	return a, nil
+}
+
 // schedulePrefsFlush marks preferences dirty and starts a 500ms debounce timer.
 // Returns the tea.Cmd for the timer. Call this after every prefs.Set().
 // The generation counter ensures only the latest change triggers a disk write.
@@ -1047,6 +1067,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.devicePane.SetSize(m.Width, m.Height)
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetSize(m.Width, m.Height)
+		}
+		if a.helpOverlay != nil {
+			a.helpOverlay.SetSize(m.Width, m.Height)
 		}
 		if toastCmd != nil {
 			return a, toastCmd
@@ -1616,6 +1639,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetTheme(newTheme)
 		}
+		if a.helpOverlay != nil {
+			a.helpOverlay.SetTheme(newTheme)
+		}
 		// Re-style the status bar help component with the new theme colors.
 		a.statusHelp = newStatusHelp(newTheme)
 		// Close the overlay.
@@ -1635,6 +1661,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name()),
 			a.schedulePrefsFlush(),
 		)
+
+	case panes.HelpOverlayClosedMsg:
+		// Help overlay closed via Esc — close overlay without any state change.
+		return a.closeHelp()
 
 	case panes.ThemeOverlayClosedMsg:
 		// Theme overlay closed via Esc — close overlay without changing theme.
