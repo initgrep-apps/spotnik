@@ -207,7 +207,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Only mouse wheel scroll events are handled — clicks and motion are ignored.
 // Scroll events are converted to j/k key messages and routed to the pane under
 // the cursor via PaneAt(), WITHOUT changing keyboard focus (btop behavior).
-// Mouse scroll is ignored when an overlay (search or device) is open.
+// Mouse scroll is ignored when any overlay is open.
 func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
 	// Ignore mouse events when any overlay is open.
 	// Overlays handle their own input; scroll behind them is unintuitive.
