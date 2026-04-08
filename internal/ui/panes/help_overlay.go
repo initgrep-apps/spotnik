@@ -29,6 +29,10 @@ type helpSection struct {
 // Wide enough for "Shift+Tab" and "Shift+↑/↓" with comfortable gap before the label.
 const keyColWidth = 16
 
+// colPadLeft is the left-indent applied inside each column so content doesn't
+// sit flush against the outer border or the centre divider.
+const colPadLeft = 2
+
 // helpContent is the static two-column keybinding reference.
 // [0] = left column (Global, Navigation), [1] = right column (Playback, Pane Actions).
 // NOTE: When changing any keybinding, also update docs/keybinding.md and docs/DESIGN.md §17.
@@ -111,10 +115,7 @@ func (o *HelpOverlay) overlayWidth() int {
 func (o *HelpOverlay) View() string {
 	totalW := o.overlayWidth()
 	// innerW excludes the two border columns (│ on each side).
-	innerW := totalW - 2
-	if innerW < 2 {
-		innerW = 2
-	}
+	innerW := max(totalW-2, 2)
 
 	// Split inner width: divider takes 1 col, left and right share the rest.
 	// leftW = floor((innerW-1)/2), rightW = innerW-1-leftW.
@@ -162,17 +163,20 @@ func (o *HelpOverlay) View() string {
 // renderColumn renders one side of the two-column layout.
 // Each section title is rendered with Info()+bold; each binding row uses a fixed
 // keyColWidth sub-column for the key name and the remainder for the label.
+// colPadLeft spaces of left indent keep content away from the border/divider.
 func (o *HelpOverlay) renderColumn(sections []helpSection, width int) string {
 	headerStyle := lipgloss.NewStyle().
 		Foreground(o.theme.Info()).
 		Bold(true)
-	keyStyle := lipgloss.NewStyle().Foreground(o.theme.TextPrimary())
+	// Keys use KeyHint — the same token as status-bar key labels — so they stand
+	// out from the muted label descriptions while remaining on-theme.
+	keyStyle := lipgloss.NewStyle().Foreground(o.theme.KeyHint())
 	labelStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 
-	labelW := width - keyColWidth
-	if labelW < 1 {
-		labelW = 1
-	}
+	pad := strings.Repeat(" ", colPadLeft)
+	// contentW is the usable width after left padding; labelW fills what keyCol doesn't use.
+	contentW := max(width-colPadLeft, 1)
+	labelW := max(contentW-keyColWidth, 1)
 
 	// Top padding — one blank line before the first section.
 	var lines []string
@@ -185,7 +189,7 @@ func (o *HelpOverlay) renderColumn(sections []helpSection, width int) string {
 			lines = append(lines, strings.Repeat(" ", width))
 		}
 		header := lipgloss.NewStyle().Width(width).MaxWidth(width).
-			Render(headerStyle.Render(sec.title))
+			Render(pad + headerStyle.Render(sec.title))
 		lines = append(lines, header)
 
 		for _, b := range sec.bindings {
@@ -196,7 +200,7 @@ func (o *HelpOverlay) renderColumn(sections []helpSection, width int) string {
 				Width(labelW).MaxWidth(labelW).
 				Render(labelStyle.Render(b.label))
 			row := lipgloss.NewStyle().Width(width).MaxWidth(width).
-				Render(keyPart + labelPart)
+				Render(pad + keyPart + labelPart)
 			lines = append(lines, row)
 		}
 	}
