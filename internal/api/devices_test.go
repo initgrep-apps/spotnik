@@ -6,17 +6,16 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetDevices_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/devices_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "devices_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/player/devices", r.URL.Path)
@@ -51,8 +50,7 @@ func TestGetDevices_Success(t *testing.T) {
 }
 
 func TestGetDevices_Empty(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/devices_empty.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "devices_empty.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

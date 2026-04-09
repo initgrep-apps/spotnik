@@ -24,7 +24,7 @@ PLATFORMS = \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: all build run test test-coverage lint fmt clean install release help
+.PHONY: all build run test test-integration test-coverage lint fmt clean install release help
 
 ## Default target
 all: lint test build
@@ -47,13 +47,19 @@ run: build
 ## Run all tests
 test:
 	@echo "→ Running tests..."
-	$(GO) test ./... -race -count=1
+	GOFLAGS="" $(GO) test ./... -race -count=1
 	@echo "✓ All tests passed"
+
+## Run integration tests (requires build tag)
+test-integration:
+	@echo "→ Running integration tests..."
+	GOFLAGS="" $(GO) test -tags integration ./... -race -count=1
+	@echo "✓ Integration tests passed"
 
 ## Run tests with coverage report
 test-coverage:
 	@echo "→ Running tests with coverage..."
-	$(GO) test ./... -race -count=1 \
+	GOFLAGS="" $(GO) test ./... -race -count=1 \
 		-coverprofile=coverage.out \
 		-covermode=atomic
 	$(GO) tool cover -func=coverage.out | tail -1

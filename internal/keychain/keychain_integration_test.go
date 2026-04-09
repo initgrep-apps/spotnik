@@ -55,7 +55,7 @@ func TestKeychainTokenStore_Delete(t *testing.T) {
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "1234567890"))
 
 	// Delete should clear all three.
-	err := store.Delete()
+	err = store.Delete()
 	require.NoError(t, err)
 }
 

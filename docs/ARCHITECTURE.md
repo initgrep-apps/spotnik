@@ -79,17 +79,50 @@ PANES (10 total):
 
 Panes import `domain/` types, not `api/` types. API clients return `domain/` types. This is how the import boundary is enforced — `ui/` and `api/` never import each other.
 
+### Pane Interface
+
+Every pane in `internal/ui/panes/` implements the `layout.Pane` interface:
+
+```go
+type Pane interface {
+    tea.Model                          // Init, Update, View
+    SetSize(width, height int)         // Content area dimensions (inside border)
+    SetFocused(focused bool)           // Keyboard focus state
+    IsFocused() bool                   // Query focus state
+    ID() PaneID                        // Slot identifier
+    Title() string                     // Display title for border
+    ToggleKey() int                    // Toggle key number (1-8), 0 if not toggleable
+    Actions() []Action                 // Pane-specific shortcuts for border
+    SetTheme(th theme.Theme)           // Updates the pane's theme for runtime switching
+}
+```
+
+`SetTheme` is called by the root model whenever the user changes the theme via the theme
+switcher overlay. Table-based panes must rebuild their tables with new column colors when
+`SetTheme` is called — lipgloss column styles are baked into the table at creation time
+and must be refreshed explicitly.
+
 ---
 
-## View States
+## View Lifecycle
 
-The app has three view modes, managed by the `currentView` field:
+The app has three view modes managed by the `currentView` field in `internal/app/app.go`:
 
 1. **`viewSplash`** — 5-second startup screen with ASCII banner (rendered by `splash.go`)
 2. **`viewAuth`** — OAuth panel when authentication is needed (rendered by `auth.go`)
 3. **`viewGrid`** — Normal operation with pane grid, header, and status bar
 
-Transitions: `viewSplash` → `viewAuth` (if unauthenticated) → `viewGrid`, or `viewSplash` → `viewGrid` (if already authenticated). The splash timer fires `splashDismissMsg` after 5 seconds.
+**Transitions:**
+
+```
+viewSplash
+  ├── unauthenticated → viewAuth → viewGrid  (after PKCE flow completes)
+  └── already authenticated → viewGrid       (splashDismissMsg fires after 5s)
+```
+
+The splash timer fires `splashDismissMsg` after 5 seconds. `viewAuth` transitions to
+`viewGrid` once `authCompleteMsg` is received (PKCE callback handled in `cmd/root.go`).
+No view can transition backwards — the lifecycle is strictly one-directional.
 
 ---
 
@@ -108,7 +141,7 @@ View()
               └── viewGrid:
                     ├── renderHeader()      (1 line: app name, page, shortcuts, device)
                     ├── renderGrid()        (pane grid with borders)
-                    ├── renderStatusBar()   (1 line: global keybinding hints)
+                    ├── renderStatusBar()   (3 lines: border + keybinding hints + border)
                     └── Overlay compositing:
                           ├── deviceOverlayOpen? → btoverlay.Composite(device, dimmed, Right, Top)
                           └── searchOpen?        → btoverlay.Composite(search, dimmed, Center, Center)
@@ -122,6 +155,42 @@ View()
 
 ---
 
+## Page / Preset / Toggle System
+
+The grid layout has two pages and a preset system for switching between curated layouts.
+
+### Pages
+
+- **Page A (Music)** — 8 panes: NowPlaying, Queue, Playlists, Albums, LikedSongs,
+  RecentlyPlayed, TopTracks, TopArtists
+- **Page B (Nerd Status)** — 2 panes: RequestFlow, NetworkLog
+
+`TogglePage()` switches between pages. The current page is stored as `currentPage` in `App`.
+Key: `0`.
+
+### Preset Cycling
+
+`CyclePreset()` advances to the next preset within the current page and wraps around.
+Key: `p`.
+
+- **Page A** has 4 presets (Full Dashboard, Listening, Library, Stats)
+- **Page B** has 1 preset
+
+Each preset is a `[]Row` grid definition. Switching a preset resets all manual pane toggles.
+Preset index is persisted via `PreferenceStore` so it survives restarts.
+
+### Pane Toggling
+
+`TogglePane(id layout.PaneID)` hides or shows an individual pane on Page A.
+Keys: `1`–`8` (one per Page A pane).
+
+- When a pane hides, its siblings in the same row expand to fill the space
+- When all panes in a row hide, the row collapses and other rows expand
+- Toggle state is independent of presets — switching preset resets manual toggles
+- Page B panes are not individually toggleable
+
+---
+
 ## Message Flow
 
 ```
@@ -130,10 +199,12 @@ User Keypress / Mouse Wheel
      ▼
 routing.go: handleKeyMsg / handleMouseMsg
      │
-     ├── Guard 1: Device overlay open → all keys to DeviceOverlay
-     ├── Guard 2: Search overlay open → all keys to SearchOverlay
-     ├── Guard 3: Auth view → only quit keys
-     ├── Guard 4: Pane has active filter → all keys to pane
+     ├── Guard 1: Theme overlay open → all keys to ThemeOverlay
+     ├── Guard 2: Help overlay open → all keys to HelpOverlay
+     ├── Guard 3: Device overlay open → all keys to DeviceOverlay
+     ├── Guard 4: Search overlay open → all keys to SearchOverlay
+     ├── Guard 5: Auth view → only quit keys
+     ├── Guard 6: Pane has active filter → all keys to pane
      ├── Global keys (q, /, d, 0, p, 1-8, Tab, Shift+Tab)
      ├── Playback keys (Space, n, +, -, s, r, v, ←, →) → always NowPlayingPane
      └── All other keys → focused pane
@@ -156,6 +227,27 @@ routing.go: handleKeyMsg / handleMouseMsg
                        ├── Emit toast notification if error
                        └── Forward to pane, re-render
 ```
+
+### Overlay Routing Precedence
+
+Key events are checked against guards in strict priority order. Earlier guards intercept
+all input and prevent lower-priority handlers from running:
+
+| Priority | Guard | Action |
+|----------|-------|--------|
+| 1 | Theme overlay open | All keys → ThemeOverlay |
+| 2 | Help overlay open | All keys → HelpOverlay |
+| 3 | Device overlay open | All keys → DeviceOverlay |
+| 4 | Search overlay open | All keys → SearchOverlay |
+| 5 | Auth view active | Only quit keys (`q`, `ctrl+c`) pass; all others dropped |
+| 6 | Pane has active filter | All keys → focused pane (filter captures input) |
+| 7 | Global shortcuts | `q`, `/`, `d`, `t`, `0`, `p`, `1`–`8`, `Tab`, `Shift+Tab` |
+| 8 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
+| 8 | Default | All other keys → focused pane |
+
+This means: if the device overlay is open, `q` goes to the overlay (not quit). Theme
+overlay has the highest priority because it is opened by `t` after the global keys
+check — once open, it must fully capture input.
 
 ### Mouse Support
 
@@ -297,6 +389,43 @@ All message types are defined in `internal/ui/panes/messages.go`. Convention: `<
 
 ---
 
+## PreferenceStore
+
+`internal/prefs/prefs.go` provides a coalescing preference writer that batches in-memory
+changes and flushes them to disk in a single debounced write.
+
+### Design
+
+`PreferenceStore` holds a `pending map[string]any` of dirty preferences protected by a
+`sync.Mutex`. `Set(key, value)` adds to the `pending` map under the mutex without writing
+to disk. `FlushCmd()` returns a `tea.Cmd` that snapshots and clears `pending` (under the
+mutex), then reads the existing TOML config, applies the snapshot to the `[preferences]`
+section, and writes it back. On write failure the snapshot entries are re-queued for any
+keys not superseded by a newer `Set()` call.
+
+### Supported Preferences
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `theme` | `string` | Active theme ID (e.g., `"black"`, `"dracula"`) |
+| `preset` | `int` | Active preset index within the current page |
+| `visualizer` | `int` | Active visualizer animation pattern index |
+
+### Disk Path
+
+Preferences are read from and written to the same TOML config file as the main config
+(default: `~/.config/spotnik/config.toml`). The `[preferences]` section is updated
+in-place; all other sections are preserved.
+
+### Wiring
+
+`App` holds a `*prefs.PreferenceStore`. When the user changes a preference (theme switch,
+preset cycle, visualizer toggle), `Update()` calls `prefs.Set(key, value)` and returns
+`prefs.FlushCmd()` as a command. The resulting `prefs.FlushedMsg` is handled in `handleMsg`
+— errors are surfaced as toast notifications.
+
+---
+
 ## API Client Design
 
 **Interfaces:** All Spotify operations are defined as interfaces (`PlayerAPI`, `LibraryAPI`, `DevicesAPI`, `UserAPI`, `SearchAPI`, `PlaylistsAPI`) in `internal/api/`. Panes depend on these interfaces for mockability. See `internal/api/player_interfaces.go`, `internal/api/library_interfaces.go`, `internal/api/devices_interfaces.go`, `internal/api/user_interfaces.go`, `internal/api/search_interfaces.go`, and `internal/api/playlists_interfaces.go`.
@@ -310,6 +439,11 @@ All message types are defined in `internal/ui/panes/messages.go`. Convention: `<
 - `internal/api/token.go` — Token refresh and validation helpers
 - `internal/api/models.go` — Spotify API response model definitions
 - `internal/api/browser.go` — Opens default browser for OAuth callback
+
+**Known issue:** `postTokenRequest` in `internal/api/auth.go` uses `http.DefaultClient`
+for the PKCE token exchange rather than the injected `*http.Client`. This bypasses the
+gateway and makes the function difficult to test with `httptest.NewServer`. Story 111
+will fix this by injecting the HTTP client and adding a corresponding test.
 
 ---
 
@@ -401,7 +535,7 @@ state updates across panes, and end-to-end user workflows with mocked HTTP.
 **Running tests:**
 - `make test` — runs unit tests only (fast, default)
 - `make test-integration` — runs integration tests only
-- `make ci` — runs both unit and integration tests
+- `make ci` — runs unit tests only (fmt-check → tidy-check → lint → test-coverage → build); run `make test-integration` separately for integration tests
 
 **What qualifies as an integration test:**
 - Tests that exercise message routing through the root `app.Model`

@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,8 +18,7 @@ func newTestSearch(baseURL, token string) *SearchClient {
 
 // TestSearch_Success verifies that Search returns a fully parsed SearchResult.
 func TestSearch_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/search_result.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "search_result.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/search", r.URL.Path)

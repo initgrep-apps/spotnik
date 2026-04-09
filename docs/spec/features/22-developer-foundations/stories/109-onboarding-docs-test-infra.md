@@ -1,7 +1,7 @@
 ---
 title: "Onboarding Docs, Test Infrastructure & Doc Corrections"
 feature: 22-developer-foundations
-status: open
+status: done
 ---
 
 ## Background

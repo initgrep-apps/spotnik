@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,8 +18,7 @@ func newTestLibrary(baseURL, token string) *LibraryClient {
 
 // TestGetPlaylists_Success verifies that GetPlaylists returns parsed playlists.
 func TestGetPlaylists_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/playlists_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "playlists_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/playlists", r.URL.Path)
@@ -63,8 +62,7 @@ func TestGetPlaylists_Empty(t *testing.T) {
 
 // TestGetPlaylistTracks_Success verifies GetPlaylistTracks returns tracks, total, and hasNext.
 func TestGetPlaylistTracks_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/playlist_tracks_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "playlist_tracks_response.json")
 
 	var capturedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -267,8 +265,7 @@ func TestAlbumTracks_404_ReturnsError(t *testing.T) {
 
 // TestGetSavedAlbums_Success verifies GetSavedAlbums returns parsed albums.
 func TestGetSavedAlbums_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/saved_albums_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "saved_albums_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/albums", r.URL.Path)
@@ -291,8 +288,7 @@ func TestGetSavedAlbums_Success(t *testing.T) {
 
 // TestGetLikedTracks_Success verifies GetLikedTracks returns parsed saved tracks.
 func TestGetLikedTracks_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/liked_tracks_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "liked_tracks_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/tracks", r.URL.Path)
@@ -315,8 +311,7 @@ func TestGetLikedTracks_Success(t *testing.T) {
 
 // TestGetRecentlyPlayed_Success verifies GetRecentlyPlayed returns play history items.
 func TestGetRecentlyPlayed_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/recently_played_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "recently_played_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/player/recently-played", r.URL.Path)

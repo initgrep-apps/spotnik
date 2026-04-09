@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,8 +19,7 @@ func newTestPlayer(baseURL, token string) *Player {
 }
 
 func TestGetPlaybackState_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/playback_state.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "playback_state.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/player", r.URL.Path)
@@ -335,8 +334,7 @@ func TestAddToQueue_ServerError(t *testing.T) {
 
 // TestGetQueue_Success verifies GetQueue parses the queue JSON correctly.
 func TestGetQueue_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/queue_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "queue_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
@@ -378,11 +376,10 @@ func TestGetQueue_ServerError(t *testing.T) {
 // TestQueueResponse_Parse verifies that the QueueResponse struct correctly
 // deserialises both currently_playing and queue fields from the fixture.
 func TestQueueResponse_Parse(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/queue_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "queue_response.json")
 
 	var qr QueueResponse
-	err = json.Unmarshal(fixture, &qr)
+	err := json.Unmarshal(fixture, &qr)
 	require.NoError(t, err)
 
 	assert.Equal(t, "Blinding Lights", qr.CurrentlyPlaying.Name)
