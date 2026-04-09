@@ -166,7 +166,7 @@ func StartCallbackServer() (*callbackServer, <-chan CallbackResult, error) {
 func ExchangeCode(
 	ctx context.Context,
 	httpClient *http.Client, // HTTP client used for the token request
-	tokenBaseURL string,     // base URL for the token endpoint; production uses spotifyTokenURL
+	tokenBaseURL string, // base URL for the token endpoint; production uses spotifyTokenURL
 	code, verifier, redirectURI, clientID string,
 	store keychain.TokenStore,
 ) (TokenPair, error) {
@@ -204,7 +204,7 @@ func ExchangeCode(
 func Refresh(
 	ctx context.Context,
 	httpClient *http.Client, // HTTP client used for the token request
-	tokenBaseURL string,     // base URL for the token endpoint; production uses spotifyTokenURL
+	tokenBaseURL string, // base URL for the token endpoint; production uses spotifyTokenURL
 	refreshToken, clientID string,
 	store keychain.TokenStore,
 ) error {
