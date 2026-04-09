@@ -1,0 +1,7 @@
+{
+  "id": "new-playlist-id",
+  "name": "My New Playlist",
+  "uri": "spotify:playlist:new-playlist-id",
+  "tracks": {"total": 0},
+  "owner": {"id": "user-1", "display_name": "Test User"}
+}
