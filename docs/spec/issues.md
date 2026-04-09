@@ -41,14 +41,6 @@
 
 ---
 
-## Story 109: DESIGN.md §26 accessibility bullet implies ? overlay is live
-**Found:** 2026-04-09 | **Source:** PR #144 Review
-**Feature:** 22-developer-foundations
-
-`docs/DESIGN.md` line 1424 in the Accessibility section reads `` - `?` help always available ``. This implies the help overlay is operational, inconsistent with the §17 `*(PLANNED — not yet implemented)*` annotation added in PR #144. When the help overlay is implemented (story 108), the implementer should update this line and apply the three-location sync rule (§17, `docs/keybinding.md`, `help_overlay.go`).
-
----
-
 ## Story 111: postTokenRequest nil-client produces undescriptive panic
 **Found:** 2026-04-09 | **Source:** PR #142 Review
 **Feature:** 22-developer-foundations
