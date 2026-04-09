@@ -25,12 +25,7 @@ import (
 // The right panel contains: top viz rows, seek bar, bottom viz rows.
 // When height < 8, Title() embeds compact track info in the pane title bar instead.
 type NowPlayingPane struct {
-	store state.StateReader
-	theme theme.Theme
-
-	focused bool
-	width   int
-	height  int
+	BasePane
 
 	// localProgressMs is pane-local state (not in Store). It increments by 1000ms
 	// on each tick when playing, for smooth seek bar updates between polls.
@@ -57,9 +52,7 @@ var _ layout.Pane = &NowPlayingPane{}
 // constructing a pane after setting state shows the correct position immediately.
 func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPlayingPane {
 	p := &NowPlayingPane{
-		store:     s,
-		theme:     t,
-		focused:   focused,
+		BasePane:  BasePane{store: s, theme: t, focused: focused},
 		infoBox:   components.NewInfoBox(t),
 		engine:    viz.NewEngine(t),
 		seekBar:   components.NewGradientSeekBar(t),
@@ -123,8 +116,7 @@ func (p *NowPlayingPane) Actions() []layout.Action {
 // viz engine (~2/3 width) on the right.
 // The right panel shows: top viz rows, seek bar (1 row), bottom viz rows.
 func (p *NowPlayingPane) SetSize(width, height int) {
-	p.width = width
-	p.height = height
+	p.BasePane.SetSize(width, height)
 
 	contentWidth := paneMax(width-4, 10)
 
@@ -150,12 +142,7 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 
 // SetFocused updates the focused state.
 func (p *NowPlayingPane) SetFocused(focused bool) {
-	p.focused = focused
-}
-
-// IsFocused returns whether the pane currently has focus.
-func (p *NowPlayingPane) IsFocused() bool {
-	return p.focused
+	p.BasePane.SetFocused(focused)
 }
 
 // Init starts the viz engine animation tick loop.

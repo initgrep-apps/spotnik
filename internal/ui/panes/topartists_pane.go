@@ -34,12 +34,7 @@ var topArtistsRangeLabels = map[string]string{
 // name, and genre (first genre from each artist's genre list). It supports in-pane
 // filtering by artist name and genre, and per-pane time range cycling via the t key.
 type TopArtistsPane struct {
-	store   state.StateReader
-	theme   theme.Theme
-	focused bool
-
-	width  int
-	height int
+	BasePane
 
 	// timeRange is the currently active Spotify time range for top artists.
 	timeRange string
@@ -69,9 +64,7 @@ func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *T
 	})
 
 	a := &TopArtistsPane{
-		store:     store,
-		theme:     th,
-		focused:   focused,
+		BasePane:  BasePane{store: store, theme: th, focused: focused},
 		timeRange: "short_term",
 		table:     t,
 		filter:    components.NewFilter(th),
@@ -110,22 +103,18 @@ func (a *TopArtistsPane) Actions() []layout.Action {
 // Init satisfies tea.Model. TopArtistsPane has no startup command.
 func (a *TopArtistsPane) Init() tea.Cmd { return nil }
 
-// IsFocused returns true when the pane has keyboard focus.
-func (a *TopArtistsPane) IsFocused() bool { return a.focused }
-
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (a *TopArtistsPane) HasActiveFilter() bool { return a.filter.IsActive() }
 
-// SetFocused updates the keyboard focus state.
+// SetFocused updates the keyboard focus state and propagates it to the table.
 func (a *TopArtistsPane) SetFocused(focused bool) {
-	a.focused = focused
+	a.BasePane.SetFocused(focused)
 	a.table.SetFocused(focused && !a.filter.IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (a *TopArtistsPane) SetSize(width, height int) {
-	a.width = width
-	a.height = height
+	a.BasePane.SetSize(width, height)
 	a.filter.SetWidth(width)
 	a.resizeTable()
 }
@@ -259,19 +248,12 @@ func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 // Called when the user switches themes at runtime.
 func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 	a.theme = th
-	a.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.ColumnPrimary()},
 		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.ColumnSecondary()},
 	}
-	a.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	a.table.SetFocused(a.focused)
+	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused)
 	a.resizeTable()
 	a.refreshRows()
 }

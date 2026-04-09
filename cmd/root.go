@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -201,7 +202,7 @@ func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBas
 		}
 
 		// Refresh using the configured token endpoint.
-		if err := api.Refresh(context.Background(), tokenBaseURL, refreshToken, cfg.ClientID, store); err != nil {
+		if err := api.Refresh(context.Background(), http.DefaultClient, tokenBaseURL, refreshToken, cfg.ClientID, store); err != nil {
 			if errors.Is(err, api.ErrInvalidGrant) {
 				// Refresh token rejected — delete tokens and force re-auth.
 				fmt.Fprintln(os.Stderr, "Session expired. Please re-authenticate.")
@@ -262,6 +263,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 		// Exchange code for tokens using the configured endpoint.
 		_, err := api.ExchangeCode(
 			context.Background(),
+			http.DefaultClient,
 			tokenBaseURL,
 			result.Code,
 			verifier,
@@ -301,7 +303,7 @@ func CheckAuthState(cfg *config.Config, store keychain.TokenStore) bool {
 		if err != nil || refreshToken == "" {
 			return true
 		}
-		if err := api.Refresh(context.Background(), "", refreshToken, cfg.ClientID, store); err != nil {
+		if err := api.Refresh(context.Background(), http.DefaultClient, "", refreshToken, cfg.ClientID, store); err != nil {
 			_ = store.Delete()
 			return true
 		}

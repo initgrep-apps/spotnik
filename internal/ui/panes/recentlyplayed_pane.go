@@ -26,12 +26,7 @@ var _ layout.Pane = &RecentlyPlayedPane{}
 // track name, artist, and relative play time. It supports in-pane filtering by track
 // name and artist name.
 type RecentlyPlayedPane struct {
-	store   state.StateReader
-	theme   theme.Theme
-	focused bool
-
-	width  int
-	height int
+	BasePane
 
 	// table renders the recently played track list.
 	table *components.Table
@@ -58,11 +53,9 @@ func NewRecentlyPlayedPane(store state.StateReader, th theme.Theme, focused bool
 	})
 
 	r := &RecentlyPlayedPane{
-		store:   store,
-		theme:   th,
-		focused: focused,
-		table:   t,
-		filter:  components.NewFilter(th),
+		BasePane: BasePane{store: store, theme: th, focused: focused},
+		table:    t,
+		filter:   components.NewFilter(th),
 	}
 	t.SetFocused(focused)
 	r.refreshRows()
@@ -89,22 +82,18 @@ func (r *RecentlyPlayedPane) Actions() []layout.Action {
 // Init satisfies tea.Model. RecentlyPlayedPane has no startup command.
 func (r *RecentlyPlayedPane) Init() tea.Cmd { return nil }
 
-// IsFocused returns true when the pane has keyboard focus.
-func (r *RecentlyPlayedPane) IsFocused() bool { return r.focused }
-
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (r *RecentlyPlayedPane) HasActiveFilter() bool { return r.filter.IsActive() }
 
-// SetFocused updates the keyboard focus state.
+// SetFocused updates the keyboard focus state and propagates it to the table.
 func (r *RecentlyPlayedPane) SetFocused(focused bool) {
-	r.focused = focused
+	r.BasePane.SetFocused(focused)
 	r.table.SetFocused(focused && !r.filter.IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (r *RecentlyPlayedPane) SetSize(width, height int) {
-	r.width = width
-	r.height = height
+	r.BasePane.SetSize(width, height)
 	r.filter.SetWidth(width)
 	r.resizeTable()
 }
@@ -225,20 +214,13 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 // Called when the user switches themes at runtime.
 func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 	r.theme = th
-	r.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	r.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	r.table.SetFocused(r.focused)
+	r.table, r.filter = components.RebuildTableTheme(th, cols, r.table.Rows(), r.focused)
 	r.resizeTable()
 	r.refreshRows()
 }

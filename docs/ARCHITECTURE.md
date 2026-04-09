@@ -440,11 +440,6 @@ preset cycle, visualizer toggle), `Update()` calls `prefs.Set(key, value)` and r
 - `internal/api/models.go` — Spotify API response model definitions
 - `internal/api/browser.go` — Opens default browser for OAuth callback
 
-**Known issue:** `postTokenRequest` in `internal/api/auth.go` uses `http.DefaultClient`
-for the PKCE token exchange rather than the injected `*http.Client`. This bypasses the
-gateway and makes the function difficult to test with `httptest.NewServer`. Story 111
-will fix this by injecting the HTTP client and adding a corresponding test.
-
 ---
 
 ## Auth Flow

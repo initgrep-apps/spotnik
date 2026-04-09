@@ -41,12 +41,7 @@ type playlistDebounceMsg struct {
 // background data. Tracks are stored in pane fields (loadedTracks), not in the
 // global store. This mirrors the search pane pattern.
 type PlaylistsPane struct {
-	store   state.StateReader
-	theme   theme.Theme
-	focused bool
-
-	width  int
-	height int
+	BasePane
 
 	// table renders the playlist list.
 	table *components.Table
@@ -106,9 +101,7 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 	})
 
 	p := &PlaylistsPane{
-		store:      store,
-		theme:      th,
-		focused:    focused,
+		BasePane:   BasePane{store: store, theme: th, focused: focused},
 		table:      t,
 		filter:     components.NewFilter(th),
 		trackTable: tt,
@@ -151,16 +144,13 @@ func (p *PlaylistsPane) Actions() []layout.Action {
 // Init satisfies tea.Model. PlaylistsPane has no startup command.
 func (p *PlaylistsPane) Init() tea.Cmd { return nil }
 
-// IsFocused returns true when the pane has keyboard focus.
-func (p *PlaylistsPane) IsFocused() bool { return p.focused }
-
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (p *PlaylistsPane) HasActiveFilter() bool { return p.filter.IsActive() }
 
 // SetFocused updates the keyboard focus state, routing focus to the correct table
 // based on whether the track sub-view is active.
 func (p *PlaylistsPane) SetFocused(focused bool) {
-	p.focused = focused
+	p.BasePane.SetFocused(focused)
 	if p.inTrackView {
 		p.trackTable.SetFocused(focused)
 		p.table.SetFocused(false)
@@ -172,8 +162,7 @@ func (p *PlaylistsPane) SetFocused(focused bool) {
 
 // SetSize updates the render dimensions and propagates them to both tables and filter.
 func (p *PlaylistsPane) SetSize(width, height int) {
-	p.width = width
-	p.height = height
+	p.BasePane.SetSize(width, height)
 	p.filter.SetWidth(width)
 	p.trackTable.SetSize(width, height)
 	p.resizeTable()
@@ -569,20 +558,12 @@ func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 // Called when the user switches themes at runtime.
 func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	p.theme = th
-	p.filter = components.NewFilter(th)
-
-	listColumns := []components.ColumnDef{
+	listCols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
-	p.table = components.NewTable(components.TableConfig{
-		Columns:      listColumns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	p.table.SetFocused(p.focused && !p.inTrackView)
+	p.table, p.filter = components.RebuildTableTheme(th, listCols, p.table.Rows(), p.focused && !p.inTrackView)
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{

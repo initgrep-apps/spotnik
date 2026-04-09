@@ -362,6 +362,7 @@ func TestFullAuthFlow_ConfigToToken(t *testing.T) {
 
 	pair, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient,
 		mockSrv.URL,
 		"test-auth-code",
 		"test-verifier",
