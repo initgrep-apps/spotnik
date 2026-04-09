@@ -260,8 +260,7 @@ func (d SearchItemDelegate) renderPlaylist(w io.Writer, si SearchListItem, selec
 	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render("by " + si.Owner)
 
 	desc := truncateString(si.PlaylistDesc, innerW)
-	// line3Style adds Italic when selected; for non-selected we add it explicitly.
-	line3Content := d.line3Style(selected, d.theme.TextMuted()).Italic(!selected).Render(desc)
+	line3Content := d.line3Style(selected, d.theme.TextMuted()).Italic(true).Render(desc)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
 		d.wrapLine(line1Content, selected),

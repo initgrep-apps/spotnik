@@ -754,7 +754,7 @@ func TestWrapLine_Normal(t *testing.T) {
 	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
 }
 
-// --- Task 20: styledName() always bold, with background on selected ---
+// --- styledName(): always bold, with SelectedFg accent on selected ---
 
 // TestStyledName_AlwaysBold verifies styledName always applies bold regardless of selected.
 func TestStyledName_AlwaysBold(t *testing.T) {
@@ -771,13 +771,13 @@ func TestStyledName_AlwaysBold(t *testing.T) {
 	}
 }
 
-// TestStyledName_SelectedBackground verifies styledName applies background when selected.
-func TestStyledName_SelectedBackground(t *testing.T) {
+// TestStyledName_SelectedAccentFg verifies styledName applies SelectedFg accent when selected.
+func TestStyledName_SelectedAccentFg(t *testing.T) {
 	d := newTestDelegate()
 	normalOut := d.styledName("Name", false, 40)
 	selectedOut := d.styledName("Name", true, 40)
-	// Selected output should differ (has SelectedBg background).
-	assert.NotEqual(t, normalOut, selectedOut, "styledName should differ when selected (background added)")
+	// Selected output should differ (SelectedFg foreground accent applied).
+	assert.NotEqual(t, normalOut, selectedOut, "styledName should differ when selected (SelectedFg accent applied)")
 	// Both should contain the name text.
 	assert.Contains(t, normalOut, "Name")
 	assert.Contains(t, selectedOut, "Name")
