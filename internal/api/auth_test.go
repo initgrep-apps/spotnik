@@ -153,7 +153,7 @@ func TestExchangeCode_Success(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	pair, err := api.ExchangeCode(
 		context.Background(),
-		http.DefaultClient
+		http.DefaultClient,
 		srv.URL,
 		"mycode",
 		"myverifier",
@@ -185,7 +185,7 @@ func TestExchangeCode_ServerError(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
-		http.DefaultClient
+		http.DefaultClient,
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -206,7 +206,7 @@ func TestExchangeCode_InvalidJSON(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
-		http.DefaultClient
+		http.DefaultClient,
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -227,7 +227,7 @@ func TestExchangeCode_MissingFields(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
-		http.DefaultClient
+		http.DefaultClient,
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -298,7 +298,7 @@ func TestExchangeCode_NetworkError(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
-		http.DefaultClient
+		http.DefaultClient,
 		"http://localhost:1",
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -362,7 +362,7 @@ func TestExchangeCode_ZeroExpiresIn(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	pair, err := api.ExchangeCode(
 		context.Background(),
-		http.DefaultClient
+		http.DefaultClient,
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
