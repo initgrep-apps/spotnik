@@ -187,6 +187,12 @@ func (t *Table) SetRows(rows []map[string]string) {
 	t.applyRows()
 }
 
+// Rows returns the current table data as a slice of row maps. Used by
+// RebuildTableTheme to copy existing data into a freshly themed table.
+func (t *Table) Rows() []map[string]string {
+	return t.rows
+}
+
 // SetPlayingIndex marks which row index shows the ▶ indicator.
 // Pass -1 to clear the indicator. The rows are re-applied immediately.
 func (t *Table) SetPlayingIndex(index int) {
