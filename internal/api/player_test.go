@@ -18,58 +18,73 @@ func newTestPlayer(baseURL, token string) *Player {
 	return NewPlayer(baseURL, token)
 }
 
-func TestGetPlaybackState_Success(t *testing.T) {
+func TestGetPlaybackState(t *testing.T) {
 	fixture := testhelpers.LoadFixture(t, "playback_state.json")
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/me/player", r.URL.Path)
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(fixture)
-	}))
-	defer srv.Close()
+	tests := []struct {
+		name       string
+		handler    http.HandlerFunc
+		wantErr    bool
+		wantNil    bool
+		checkState func(t *testing.T, state *PlaybackState, err error)
+	}{
+		{
+			name: "success parses state",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/me/player", r.URL.Path)
+				assert.Equal(t, http.MethodGet, r.Method)
+				assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(fixture)
+			},
+			checkState: func(t *testing.T, state *PlaybackState, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.NotNil(t, state)
+				assert.True(t, state.IsPlaying)
+				assert.Equal(t, "Blinding Lights", state.Item.Name)
+				assert.Equal(t, 65, state.Device.VolumePercent)
+			},
+		},
+		{
+			name: "204 returns nil state no error",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/me/player", r.URL.Path)
+				w.WriteHeader(http.StatusNoContent)
+			},
+			checkState: func(t *testing.T, state *PlaybackState, err error) {
+				t.Helper()
+				require.NoError(t, err, "204 should return nil state, not error")
+				assert.Nil(t, state, "nil state expected for 204 response")
+			},
+		},
+		{
+			name: "429 returns RateLimitError",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Retry-After", "5")
+				w.WriteHeader(http.StatusTooManyRequests)
+			},
+			checkState: func(t *testing.T, state *PlaybackState, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.Nil(t, state)
+				var rateLimitErr *RateLimitError
+				require.ErrorAs(t, err, &rateLimitErr)
+				assert.Equal(t, 5, rateLimitErr.RetryAfter)
+			},
+		},
+	}
 
-	player := newTestPlayer(srv.URL, "test-token")
-	state, err := player.PlaybackState(context.Background())
-
-	require.NoError(t, err)
-	require.NotNil(t, state)
-	assert.True(t, state.IsPlaying)
-	assert.Equal(t, "Blinding Lights", state.Item.Name)
-	assert.Equal(t, 65, state.Device.VolumePercent)
-}
-
-func TestGetPlaybackState_204(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/me/player", r.URL.Path)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
-
-	player := newTestPlayer(srv.URL, "test-token")
-	state, err := player.PlaybackState(context.Background())
-
-	require.NoError(t, err, "204 should return nil state, not error")
-	assert.Nil(t, state, "nil state expected for 204 response")
-}
-
-func TestGetPlaybackState_429(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Retry-After", "5")
-		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	defer srv.Close()
-
-	player := newTestPlayer(srv.URL, "test-token")
-	state, err := player.PlaybackState(context.Background())
-
-	require.Error(t, err)
-	assert.Nil(t, state)
-	var rateLimitErr *RateLimitError
-	require.ErrorAs(t, err, &rateLimitErr)
-	assert.Equal(t, 5, rateLimitErr.RetryAfter)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(tt.handler)
+			defer srv.Close()
+			player := newTestPlayer(srv.URL, "test-token")
+			state, err := player.PlaybackState(context.Background())
+			tt.checkState(t, state, err)
+		})
+	}
 }
 
 func TestPlay_SendsCorrectBody(t *testing.T) {
@@ -298,79 +313,123 @@ func TestPlayer_BaseURL(t *testing.T) {
 	assert.Equal(t, "/v1/me/player/next", capturedPath)
 }
 
-// TestAddToQueue_Success verifies AddToQueue sends the correct URI param.
-func TestAddToQueue_Success(t *testing.T) {
-	var capturedURI string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
-		assert.Equal(t, http.MethodPost, r.Method)
-		capturedURI = r.URL.Query().Get("uri")
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+// TestAddToQueue verifies AddToQueue sends the correct URI param and handles errors.
+func TestAddToQueue(t *testing.T) {
+	tests := []struct {
+		name       string
+		trackURI   string
+		statusCode int
+		body       string
+		wantErr    bool
+		checkErr   func(t *testing.T, err error)
+		checkReq   func(t *testing.T, r *http.Request)
+	}{
+		{
+			name:       "success sends uri param",
+			trackURI:   "spotify:track:abc123",
+			statusCode: http.StatusNoContent,
+			checkReq: func(t *testing.T, r *http.Request) {
+				t.Helper()
+				assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
+				assert.Equal(t, http.MethodPost, r.Method)
+				assert.Equal(t, "spotify:track:abc123", r.URL.Query().Get("uri"), "URI query param should match the track URI")
+			},
+		},
+		{
+			name:       "403 returns ForbiddenError",
+			trackURI:   "spotify:track:abc123",
+			statusCode: http.StatusForbidden,
+			body:       `{"error": "Premium required"}`,
+			wantErr:    true,
+			checkErr: func(t *testing.T, err error) {
+				t.Helper()
+				var forbiddenErr *ForbiddenError
+				assert.ErrorAs(t, err, &forbiddenErr, "error should be ForbiddenError")
+			},
+		},
+	}
 
-	player := newTestPlayer(srv.URL, "test-token")
-	err := player.AddToQueue(context.Background(), "spotify:track:abc123")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.checkReq != nil {
+					tt.checkReq(t, r)
+				}
+				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
+			}))
+			defer srv.Close()
 
-	require.NoError(t, err)
-	assert.Equal(t, "spotify:track:abc123", capturedURI, "URI query param should match the track URI")
+			player := newTestPlayer(srv.URL, "test-token")
+			err := player.AddToQueue(context.Background(), tt.trackURI)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.checkErr != nil {
+					tt.checkErr(t, err)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
-// TestAddToQueue_ServerError verifies AddToQueue returns a descriptive error on failure.
-func TestAddToQueue_ServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"error": "Premium required"}`))
-	}))
-	defer srv.Close()
-
-	player := newTestPlayer(srv.URL, "test-token")
-	err := player.AddToQueue(context.Background(), "spotify:track:abc123")
-
-	require.Error(t, err)
-	var forbiddenErr *ForbiddenError
-	assert.ErrorAs(t, err, &forbiddenErr, "error should be ForbiddenError")
-}
-
-// TestGetQueue_Success verifies GetQueue parses the queue JSON correctly.
-func TestGetQueue_Success(t *testing.T) {
+// TestGetQueue verifies GetQueue parses the queue JSON correctly and handles errors.
+func TestGetQueue(t *testing.T) {
 	fixture := testhelpers.LoadFixture(t, "queue_response.json")
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(fixture)
-	}))
-	defer srv.Close()
+	tests := []struct {
+		name       string
+		handler    http.HandlerFunc
+		checkResp  func(t *testing.T, resp *QueueResponse, err error)
+	}{
+		{
+			name: "success parses queue",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
+				assert.Equal(t, http.MethodGet, r.Method)
+				assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(fixture)
+			},
+			checkResp: func(t *testing.T, resp *QueueResponse, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, "Blinding Lights", resp.CurrentlyPlaying.Name, "currently_playing track name should match")
+				require.Len(t, resp.Queue, 2, "queue should have 2 tracks")
+				assert.Equal(t, "Save Your Tears", resp.Queue[0].Name)
+				assert.Equal(t, "Starboy", resp.Queue[1].Name)
+			},
+		},
+		{
+			name: "500 returns error",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error": "server error"}`))
+			},
+			checkResp: func(t *testing.T, resp *QueueResponse, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.Nil(t, resp)
+				assert.Contains(t, err.Error(), "500")
+			},
+		},
+	}
 
-	player := newTestPlayer(srv.URL, "test-token")
-	queueResp, err := player.Queue(context.Background())
-
-	require.NoError(t, err)
-	require.NotNil(t, queueResp)
-	assert.Equal(t, "Blinding Lights", queueResp.CurrentlyPlaying.Name, "currently_playing track name should match")
-	require.Len(t, queueResp.Queue, 2, "queue should have 2 tracks")
-	assert.Equal(t, "Save Your Tears", queueResp.Queue[0].Name)
-	assert.Equal(t, "Starboy", queueResp.Queue[1].Name)
-}
-
-// TestGetQueue_ServerError verifies Queue returns an error on non-2xx.
-func TestGetQueue_ServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error": "server error"}`))
-	}))
-	defer srv.Close()
-
-	player := newTestPlayer(srv.URL, "test-token")
-	queueResp, err := player.Queue(context.Background())
-
-	require.Error(t, err)
-	assert.Nil(t, queueResp)
-	assert.Contains(t, err.Error(), "500")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(tt.handler)
+			defer srv.Close()
+			player := newTestPlayer(srv.URL, "test-token")
+			resp, err := player.Queue(context.Background())
+			tt.checkResp(t, resp, err)
+		})
+	}
 }
 
 // TestQueueResponse_Parse verifies that the QueueResponse struct correctly
