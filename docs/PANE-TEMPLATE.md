@@ -139,6 +139,10 @@ func (p *ListenCountPane) Actions() []layout.Action { return nil }
 // SetTheme updates the pane's theme for runtime switching.
 // Table-based panes must rebuild their tables here with new column colors.
 func (p *ListenCountPane) SetTheme(th theme.Theme) { p.theme = th }
+
+// CountForTest exposes the internal count field for white-box unit tests.
+// Only add helpers like this when testing internal state directly; prefer View() checks otherwise.
+func (p *ListenCountPane) CountForTest() int { return p.count }
 ```
 
 **Verification:** `go build ./internal/ui/panes/...` — must compile.
@@ -211,7 +215,7 @@ func buildFetchListenCountCmd(client UserAPI) tea.Cmd {
 
 ```go
 case panes.FetchListenCountRequestMsg:
-    return a, buildFetchListenCountCmd(a.userClient)
+    return a, buildFetchListenCountCmd(a.userAPI)
 
 case panes.ListenCountLoadedMsg:
     if m.Err != nil {
@@ -235,9 +239,15 @@ case panes.ListenCountLoadedMsg:
 Add your pane to the appropriate preset row(s):
 
 ```go
-// PageAPreset0 — Full Dashboard
-var PageAPreset0 = Preset{
-    Rows: []Row{
+// PresetDashboard — Full Dashboard
+var PresetDashboard = Preset{
+    Name: "Full Dashboard",
+    Visible: map[PaneID]bool{
+        PaneNowPlaying: true, PaneQueue: true, PanePlaylists: true,
+        PaneAlbums: true, PaneLikedSongs: true, PaneRecentlyPlayed: true,
+        PaneTopTracks: true, PaneTopArtists: true,
+    },
+    Grid: []Row{
         // Row 1: NowPlaying (full width)
         {HeightWeight: 2, Cells: []Cell{{PaneNowPlaying, 1}}},
         // Row 2: Library panes

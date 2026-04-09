@@ -535,7 +535,7 @@ state updates across panes, and end-to-end user workflows with mocked HTTP.
 **Running tests:**
 - `make test` — runs unit tests only (fast, default)
 - `make test-integration` — runs integration tests only
-- `make ci` — runs both unit and integration tests
+- `make ci` — runs unit tests only (fmt-check → tidy-check → lint → test-coverage → build); run `make test-integration` separately for integration tests
 
 **What qualifies as an integration test:**
 - Tests that exercise message routing through the root `app.Model`
