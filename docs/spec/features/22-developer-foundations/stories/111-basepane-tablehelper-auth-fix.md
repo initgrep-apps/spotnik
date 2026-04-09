@@ -1,7 +1,7 @@
 ---
 title: "BasePane Embedding, RebuildTableTheme & Auth Client Fix"
 feature: 22-developer-foundations
-status: open
+status: done
 ---
 
 ## Background

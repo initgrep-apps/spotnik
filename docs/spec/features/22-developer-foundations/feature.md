@@ -1,6 +1,6 @@
 ---
 title: "Developer Foundations"
-status: open
+status: done
 ---
 
 ## Description

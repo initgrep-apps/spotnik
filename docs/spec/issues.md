@@ -30,3 +30,19 @@
 **Feature:** 22-developer-foundations
 
 `PlaylistsStale`, `AlbumsStale`, `LikedTracksStale`, `RecentlyPlayedStale`, and `DevicesStale` are included in `StateReader` (as spec-required) but are only called by `handlers.go` via the concrete `*Store`, not through the interface. Only `StatsStale` is called through `StateReader` by panes. A future cleanup could remove the unused five from the interface to keep it minimal and self-documenting.
+
+---
+
+## Story 111: BasePane.HasActiveFilter() default never exercised through interface routing
+**Found:** 2026-04-09 | **Source:** PR #142 Review
+**Feature:** 22-developer-foundations
+
+`BasePane.HasActiveFilter()` returns `false` by default but is never called through the interface — every pane that embeds `BasePane` overrides it. The method has 0% coverage in production routing. A `base_pane_test.go` test asserting `var b BasePane; b.HasActiveFilter() == false` would document the intentional default and prevent regressions if a pane forgets to override.
+
+---
+
+## Story 111: postTokenRequest nil-client produces undescriptive panic
+**Found:** 2026-04-09 | **Source:** PR #142 Review
+**Feature:** 22-developer-foundations
+
+`postTokenRequest` now accepts `*http.Client` but has no nil guard. A nil client panics at `httpClient.Do(req)` with no attribution. All current callers pass `http.DefaultClient` so this is not a current bug, but the injection pattern makes nil a realistic future mistake. A simple guard (`if httpClient == nil { return TokenPair{}, errors.New(...) }`) would give a clear error message.
