@@ -214,7 +214,7 @@ func TestNowPlayingPane_Update_PlaybackFetched(t *testing.T) {
 		},
 		Device: &api.Device{VolumePercent: 70},
 	}
-	pane.store.SetPlaybackState(newState)
+	pane.store.(*state.Store).SetPlaybackState(newState)
 
 	fetchedMsg := PlaybackStateFetchedMsg{}
 	updatedModel, _ := pane.Update(fetchedMsg)
@@ -231,7 +231,7 @@ func TestNowPlayingPane_Update_PlaybackFetched_NilState(t *testing.T) {
 	pane.localProgressMs = 60000
 
 	// Nil state (nothing playing) — store is cleared, then notification sent.
-	pane.store.SetPlaybackState(nil)
+	pane.store.(*state.Store).SetPlaybackState(nil)
 
 	fetchedMsg := PlaybackStateFetchedMsg{}
 	updatedModel, _ := pane.Update(fetchedMsg)
@@ -444,7 +444,7 @@ func TestNowPlayingPane_PlaybackFetched_SetsEnginePlaying(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	// Update store to playing=true, then send PlaybackStateFetchedMsg.
-	pane.store.SetPlaybackState(&api.PlaybackState{
+	pane.store.(*state.Store).SetPlaybackState(&api.PlaybackState{
 		IsPlaying:  true,
 		ProgressMs: 5000,
 		Item: &api.Track{
@@ -467,7 +467,7 @@ func TestNowPlayingPane_PlaybackFetched_PausesEngine(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	// Update store to paused, send PlaybackStateFetchedMsg.
-	pane.store.SetPlaybackState(&api.PlaybackState{
+	pane.store.(*state.Store).SetPlaybackState(&api.PlaybackState{
 		IsPlaying:  false,
 		ProgressMs: 5000,
 		Item: &api.Track{

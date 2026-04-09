@@ -17,7 +17,7 @@ import (
 // It renders a navigable list of Spotify Connect devices and dispatches
 // a TransferPlaybackMsg when the user selects a non-active device.
 type DeviceOverlay struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	devices []DeviceInfo
 	cursor  int
@@ -29,7 +29,7 @@ type DeviceOverlay struct {
 }
 
 // NewDeviceOverlay constructs a DeviceOverlay wired to the given store and theme.
-func NewDeviceOverlay(store *state.Store, t theme.Theme) *DeviceOverlay {
+func NewDeviceOverlay(store state.StateReader, t theme.Theme) *DeviceOverlay {
 	return &DeviceOverlay{
 		store: store,
 		theme: t,

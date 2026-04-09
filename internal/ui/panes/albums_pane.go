@@ -42,7 +42,7 @@ type albumDebounceMsg struct {
 // sub-view. Album tracks are interactive (user-session) data — they are stored
 // in pane fields (loadedTracks), not in the global store.
 type AlbumsPane struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	focused bool
 
@@ -75,7 +75,7 @@ type AlbumsPane struct {
 }
 
 // NewAlbumsPane creates an AlbumsPane with the given store, theme, and focus state.
-func NewAlbumsPane(store *state.Store, th theme.Theme, focused bool) *AlbumsPane {
+func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *AlbumsPane {
 	// Album columns: # 5% | Name 50% | Artist 30% | Year 15%
 	// Flex factors: 1 : 10 : 6 : 3 ≈ 5% / 50% / 30% / 15%
 	columns := []components.ColumnDef{

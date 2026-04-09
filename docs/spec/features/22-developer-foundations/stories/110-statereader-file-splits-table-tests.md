@@ -1,7 +1,7 @@
 ---
 title: "StateReader Interface, File Splits & Table-Driven Tests"
 feature: 22-developer-foundations
-status: open
+status: done
 ---
 
 ## Background

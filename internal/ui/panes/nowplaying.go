@@ -25,7 +25,7 @@ import (
 // The right panel contains: top viz rows, seek bar, bottom viz rows.
 // When height < 8, Title() embeds compact track info in the pane title bar instead.
 type NowPlayingPane struct {
-	store *state.Store
+	store state.StateReader
 	theme theme.Theme
 
 	focused bool
@@ -55,7 +55,7 @@ var _ layout.Pane = &NowPlayingPane{}
 // NewNowPlayingPane creates a NowPlayingPane with the given store and theme.
 // localProgressMs is initialized from the store's current playback state so that
 // constructing a pane after setting state shows the correct position immediately.
-func NewNowPlayingPane(s *state.Store, t theme.Theme, focused bool) *NowPlayingPane {
+func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPlayingPane {
 	p := &NowPlayingPane{
 		store:     s,
 		theme:     t,
@@ -466,7 +466,7 @@ func paneMax(a, b int) int {
 
 // DeviceName returns the currently active device name from the store.
 // Used by the root app's header bar.
-func DeviceName(store *state.Store) string {
+func DeviceName(store state.StateReader) string {
 	device := store.ActiveDevice()
 	if device == nil {
 		return ""

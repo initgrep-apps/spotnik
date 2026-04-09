@@ -26,7 +26,7 @@ var _ layout.Pane = &RecentlyPlayedPane{}
 // track name, artist, and relative play time. It supports in-pane filtering by track
 // name and artist name.
 type RecentlyPlayedPane struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	focused bool
 
@@ -40,7 +40,7 @@ type RecentlyPlayedPane struct {
 }
 
 // NewRecentlyPlayedPane creates a RecentlyPlayedPane with the given store, theme, and focus state.
-func NewRecentlyPlayedPane(store *state.Store, th theme.Theme, focused bool) *RecentlyPlayedPane {
+func NewRecentlyPlayedPane(store state.StateReader, th theme.Theme, focused bool) *RecentlyPlayedPane {
 	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Played 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{

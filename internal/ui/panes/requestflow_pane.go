@@ -31,7 +31,7 @@ type PollingSnapshotMsg struct {
 // It does NOT make any Spotify API calls — all data is internal infrastructure state.
 type RequestFlowPane struct {
 	theme   theme.Theme
-	store   *state.Store
+	store   state.StateReader
 	focused bool
 	width   int
 	height  int
@@ -56,7 +56,7 @@ var _ layout.Pane = &RequestFlowPane{}
 // NewRequestFlowPane creates a RequestFlowPane that reads gateway events from
 // the store's event log. The pane does not hold a gateway reference — it only
 // reads from the store, preserving the ui/ → state/ dependency direction.
-func NewRequestFlowPane(s *state.Store, t theme.Theme) *RequestFlowPane {
+func NewRequestFlowPane(s state.StateReader, t theme.Theme) *RequestFlowPane {
 	return &RequestFlowPane{
 		theme: t,
 		store: s,

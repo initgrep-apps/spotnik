@@ -16,54 +16,74 @@ func newTestPlaylists(baseURL, token string) *PlaylistsClient {
 	return NewPlaylistsClient(baseURL, token)
 }
 
-// TestCreatePlaylist_Success verifies CreatePlaylist returns the created playlist.
-func TestCreatePlaylist_Success(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/me/playlists", r.URL.Path)
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+// TestCreatePlaylist covers success and server-error variants for CreatePlaylist.
+func TestCreatePlaylist(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantErr    bool
+		wantErrMsg string
+		checkResp  func(t *testing.T, pl *SimplePlaylist)
+	}{
+		{
+			name:   "success",
+			status: http.StatusCreated,
+			body: `{
+				"id": "new-playlist-id",
+				"name": "My New Playlist",
+				"uri": "spotify:playlist:new-playlist-id",
+				"tracks": {"total": 0},
+				"owner": {"id": "user-1", "display_name": "Test User"}
+			}`,
+			checkResp: func(t *testing.T, pl *SimplePlaylist) {
+				require.NotNil(t, pl)
+				assert.Equal(t, "new-playlist-id", pl.ID)
+				assert.Equal(t, "My New Playlist", pl.Name)
+			},
+		},
+		{
+			name:       "server error",
+			status:     http.StatusInternalServerError,
+			body:       `{"error": "server error"}`,
+			wantErr:    true,
+			wantErrMsg: "creating playlist",
+		},
+	}
 
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "My New Playlist", body["name"])
-		assert.Equal(t, "A cool playlist", body["description"])
-		assert.Equal(t, false, body["public"])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/me/playlists", r.URL.Path)
+				assert.Equal(t, http.MethodPost, r.Method)
+				assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+				if tt.status == http.StatusCreated {
+					var body map[string]interface{}
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+					assert.Equal(t, "My New Playlist", body["name"])
+					assert.Equal(t, "A cool playlist", body["description"])
+					assert.Equal(t, false, body["public"])
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{
-			"id": "new-playlist-id",
-			"name": "My New Playlist",
-			"uri": "spotify:playlist:new-playlist-id",
-			"tracks": {"total": 0},
-			"owner": {"id": "user-1", "display_name": "Test User"}
-		}`))
-	}))
-	defer srv.Close()
-
-	client := newTestPlaylists(srv.URL, "test-token")
-	playlist, err := client.CreatePlaylist(context.Background(), "My New Playlist", "A cool playlist", false)
-
-	require.NoError(t, err)
-	require.NotNil(t, playlist)
-	assert.Equal(t, "new-playlist-id", playlist.ID)
-	assert.Equal(t, "My New Playlist", playlist.Name)
-}
-
-// TestCreatePlaylist_ServerError verifies CreatePlaylist returns a descriptive error on failure.
-func TestCreatePlaylist_ServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error": "server error"}`))
-	}))
-	defer srv.Close()
-
-	client := newTestPlaylists(srv.URL, "test-token")
-	playlist, err := client.CreatePlaylist(context.Background(), "Fail Playlist", "", false)
-
-	require.Error(t, err)
-	assert.Nil(t, playlist)
-	assert.Contains(t, err.Error(), "creating playlist")
+			client := newTestPlaylists(srv.URL, "test-token")
+			playlist, err := client.CreatePlaylist(context.Background(), "My New Playlist", "A cool playlist", false)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, playlist)
+				assert.Contains(t, err.Error(), tt.wantErrMsg)
+			} else {
+				require.NoError(t, err)
+				if tt.checkResp != nil {
+					tt.checkResp(t, playlist)
+				}
+			}
+		})
+	}
 }
 
 // TestUpdatePlaylist_Success verifies UpdatePlaylist sends the correct PUT body.
@@ -145,43 +165,62 @@ func TestRemoveTracksFromPlaylist_Success(t *testing.T) {
 	assert.Equal(t, "spotify:track:abc", track["uri"])
 }
 
-// TestReorderPlaylistTracks_Success verifies ReorderPlaylistTracks sends the correct PUT body with range params.
-func TestReorderPlaylistTracks_Success(t *testing.T) {
-	var capturedPath string
-	var capturedBody map[string]interface{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedPath = r.URL.Path
-		assert.Equal(t, http.MethodPut, r.Method)
-		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+// TestReorderPlaylistTracks covers success and error variants for ReorderPlaylistTracks.
+func TestReorderPlaylistTracks(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       int
+		body         string
+		rangeStart   int
+		insertBefore int
+		rangeLength  int
+		wantErr      bool
+		wantErrMsg   string
+	}{
+		{
+			name:         "success",
+			status:       http.StatusOK,
+			body:         `{"snapshot_id": "snap-ghi789"}`,
+			rangeStart:   2,
+			insertBefore: 0,
+			rangeLength:  1,
+		},
+		{
+			name:       "server error",
+			status:     http.StatusForbidden,
+			body:       `{"error": "forbidden"}`,
+			wantErr:    true,
+			wantErrMsg: "reordering playlist tracks",
+		},
+	}
 
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"snapshot_id": "snap-ghi789"}`))
-	}))
-	defer srv.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedPath string
+			var capturedBody map[string]interface{}
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedPath = r.URL.Path
+				assert.Equal(t, http.MethodPut, r.Method)
+				assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
 
-	client := newTestPlaylists(srv.URL, "test-token")
-	err := client.ReorderPlaylistTracks(context.Background(), "playlist-123", 2, 0, 1)
-
-	require.NoError(t, err)
-	assert.Equal(t, "/v1/playlists/playlist-123/items", capturedPath)
-	assert.Equal(t, float64(2), capturedBody["range_start"])
-	assert.Equal(t, float64(0), capturedBody["insert_before"])
-	assert.Equal(t, float64(1), capturedBody["range_length"])
-}
-
-// TestReorderPlaylistTracks_Error verifies ReorderPlaylistTracks returns an error with context.
-func TestReorderPlaylistTracks_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"error": "forbidden"}`))
-	}))
-	defer srv.Close()
-
-	client := newTestPlaylists(srv.URL, "test-token")
-	err := client.ReorderPlaylistTracks(context.Background(), "playlist-123", 0, 1, 1)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "reordering playlist tracks")
+			client := newTestPlaylists(srv.URL, "test-token")
+			err := client.ReorderPlaylistTracks(context.Background(), "playlist-123", tt.rangeStart, tt.insertBefore, tt.rangeLength)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErrMsg)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "/v1/playlists/playlist-123/items", capturedPath)
+				assert.Equal(t, float64(tt.rangeStart), capturedBody["range_start"])
+				assert.Equal(t, float64(tt.insertBefore), capturedBody["insert_before"])
+				assert.Equal(t, float64(tt.rangeLength), capturedBody["range_length"])
+			}
+		})
+	}
 }
