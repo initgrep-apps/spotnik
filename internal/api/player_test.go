@@ -382,9 +382,9 @@ func TestGetQueue(t *testing.T) {
 	fixture := testhelpers.LoadFixture(t, "queue_response.json")
 
 	tests := []struct {
-		name       string
-		handler    http.HandlerFunc
-		checkResp  func(t *testing.T, resp *QueueResponse, err error)
+		name      string
+		handler   http.HandlerFunc
+		checkResp func(t *testing.T, resp *QueueResponse, err error)
 	}{
 		{
 			name: "success parses queue",

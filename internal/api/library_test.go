@@ -21,9 +21,9 @@ func TestGetPlaylists(t *testing.T) {
 	fixture := testhelpers.LoadFixture(t, "playlists_response.json")
 
 	tests := []struct {
-		name       string
-		handler    http.HandlerFunc
-		checkResp  func(t *testing.T, playlists []SimplePlaylist, err error)
+		name      string
+		handler   http.HandlerFunc
+		checkResp func(t *testing.T, playlists []SimplePlaylist, err error)
 	}{
 		{
 			name: "success parses playlists",

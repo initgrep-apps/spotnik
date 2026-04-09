@@ -862,4 +862,3 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return model, tea.Batch(mainCmd, alertCmd)
 }
-

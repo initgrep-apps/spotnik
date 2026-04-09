@@ -168,14 +168,14 @@ func TestRemoveTracksFromPlaylist_Success(t *testing.T) {
 // TestReorderPlaylistTracks covers success and error variants for ReorderPlaylistTracks.
 func TestReorderPlaylistTracks(t *testing.T) {
 	tests := []struct {
-		name        string
-		status      int
-		body        string
-		rangeStart  int
+		name         string
+		status       int
+		body         string
+		rangeStart   int
 		insertBefore int
-		rangeLength int
-		wantErr     bool
-		wantErrMsg  string
+		rangeLength  int
+		wantErr      bool
+		wantErrMsg   string
 	}{
 		{
 			name:         "success",
@@ -186,11 +186,11 @@ func TestReorderPlaylistTracks(t *testing.T) {
 			rangeLength:  1,
 		},
 		{
-			name:        "server error",
-			status:      http.StatusForbidden,
-			body:        `{"error": "forbidden"}`,
-			wantErr:     true,
-			wantErrMsg:  "reordering playlist tracks",
+			name:       "server error",
+			status:     http.StatusForbidden,
+			body:       `{"error": "forbidden"}`,
+			wantErr:    true,
+			wantErrMsg: "reordering playlist tracks",
 		},
 	}
 
