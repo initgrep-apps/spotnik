@@ -253,7 +253,7 @@ func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.ColumnPrimary()},
 		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.ColumnSecondary()},
 	}
-	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused && !a.filter.IsActive())
+	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused)
 	a.resizeTable()
 	a.refreshRows()
 }

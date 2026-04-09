@@ -269,7 +269,7 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "pop", Header: "Pop", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	p.table, p.filter = components.RebuildTableTheme(th, cols, p.table.Rows(), p.focused && !p.filter.IsActive())
+	p.table, p.filter = components.RebuildTableTheme(th, cols, p.table.Rows(), p.focused)
 	p.resizeTable()
 	p.refreshRows()
 }

@@ -3,6 +3,7 @@ package panes
 import (
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -155,6 +156,28 @@ func TestRequestFlowPane_SetTheme(t *testing.T) {
 
 	assert.Equal(t, th2, pane.theme)
 	assert.NotEmpty(t, pane.View())
+}
+
+// TestQueuePane_SetTheme_PreservesRows verifies that switching theme does not
+// clear the table rows — RebuildTableTheme must copy existing rows to the new table.
+func TestQueuePane_SetTheme_PreservesRows(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.Track{
+		{ID: "t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+		{ID: "t2", Name: "Starboy", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+	})
+	pane := NewQueuePane(s, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+
+	view := pane.View()
+	assert.Contains(t, view, "Blinding Lights", "rows must be present before theme switch")
+
+	pane.SetTheme(theme.Load("dracula"))
+	pane.SetSize(80, 20)
+
+	view = pane.View()
+	assert.Contains(t, view, "Blinding Lights", "rows must survive theme switch")
+	assert.Contains(t, view, "Starboy", "all rows must survive theme switch")
 }
 
 // TestSearchOverlay_SetTheme verifies that SetTheme on SearchOverlay

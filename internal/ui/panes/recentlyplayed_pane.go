@@ -220,7 +220,7 @@ func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	r.table, r.filter = components.RebuildTableTheme(th, cols, r.table.Rows(), r.focused && !r.filter.IsActive())
+	r.table, r.filter = components.RebuildTableTheme(th, cols, r.table.Rows(), r.focused)
 	r.resizeTable()
 	r.refreshRows()
 }

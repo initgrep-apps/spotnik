@@ -231,7 +231,7 @@ func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	l.table, l.filter = components.RebuildTableTheme(th, cols, l.table.Rows(), l.focused && !l.filter.IsActive())
+	l.table, l.filter = components.RebuildTableTheme(th, cols, l.table.Rows(), l.focused)
 	l.resizeTable()
 	l.refreshRows()
 }

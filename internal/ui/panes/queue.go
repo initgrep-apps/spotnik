@@ -235,7 +235,7 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	q.table, q.filter = components.RebuildTableTheme(th, cols, q.table.Rows(), q.focused && !q.filter.IsActive())
+	q.table, q.filter = components.RebuildTableTheme(th, cols, q.table.Rows(), q.focused)
 	q.resizeTable()
 	q.refreshRows()
 }
