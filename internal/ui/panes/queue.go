@@ -22,7 +22,7 @@ var _ layout.Pane = &QueuePane{}
 // as a dense bubble-table with optional in-pane filtering. It reads all data from
 // the central Store — it never imports api/ directly.
 type QueuePane struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	focused bool
 
@@ -37,7 +37,7 @@ type QueuePane struct {
 }
 
 // NewQueuePane creates a new QueuePane with the given store, theme, and focus state.
-func NewQueuePane(store *state.Store, th theme.Theme, focused bool) *QueuePane {
+func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueuePane {
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},

@@ -34,7 +34,7 @@ var topArtistsRangeLabels = map[string]string{
 // name, and genre (first genre from each artist's genre list). It supports in-pane
 // filtering by artist name and genre, and per-pane time range cycling via the t key.
 type TopArtistsPane struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	focused bool
 
@@ -52,7 +52,7 @@ type TopArtistsPane struct {
 
 // NewTopArtistsPane creates a TopArtistsPane with the given store, theme, and focus state.
 // Default time range is short_term (4 weeks).
-func NewTopArtistsPane(store *state.Store, th theme.Theme, focused bool) *TopArtistsPane {
+func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *TopArtistsPane {
 	// Column widths per DESIGN.md §9: # 5% | Name 70% | Genre 25%
 	// Flex factors: 1 : 14 : 5 ≈ 5% / 70% / 25%
 	columns := []components.ColumnDef{

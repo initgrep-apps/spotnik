@@ -33,7 +33,7 @@ type networkLogRow struct {
 // all API requests read from the GatewayEventLog via cursor-based reads.
 // It does NOT import api/.
 type NetworkLogPane struct {
-	store             *state.Store
+	store             state.StateReader
 	theme             theme.Theme
 	table             *components.Table
 	filter            *components.Filter
@@ -48,7 +48,7 @@ type NetworkLogPane struct {
 var _ layout.Pane = &NetworkLogPane{}
 
 // NewNetworkLogPane creates a NetworkLogPane with the given store and theme.
-func NewNetworkLogPane(s *state.Store, th theme.Theme) *NetworkLogPane {
+func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	columns := []components.ColumnDef{
 		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.ColumnIndex()},
 		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.ColumnSecondary()},

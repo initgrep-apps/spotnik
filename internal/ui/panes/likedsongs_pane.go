@@ -23,7 +23,7 @@ var _ layout.Pane = &LikedSongsPane{}
 // track name, artist, and duration. It supports in-pane filtering by track name and
 // artist, and the 'i' key toggles like/unlike for the selected track.
 type LikedSongsPane struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	focused bool
 
@@ -37,7 +37,7 @@ type LikedSongsPane struct {
 }
 
 // NewLikedSongsPane creates a LikedSongsPane with the given store, theme, and focus state.
-func NewLikedSongsPane(store *state.Store, th theme.Theme, focused bool) *LikedSongsPane {
+func NewLikedSongsPane(store state.StateReader, th theme.Theme, focused bool) *LikedSongsPane {
 	// Liked songs columns: # 5% | Track 45% | Artist 35% | Duration 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{

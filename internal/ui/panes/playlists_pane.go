@@ -41,7 +41,7 @@ type playlistDebounceMsg struct {
 // background data. Tracks are stored in pane fields (loadedTracks), not in the
 // global store. This mirrors the search pane pattern.
 type PlaylistsPane struct {
-	store   *state.Store
+	store   state.StateReader
 	theme   theme.Theme
 	focused bool
 
@@ -75,7 +75,7 @@ type PlaylistsPane struct {
 }
 
 // NewPlaylistsPane creates a PlaylistsPane with the given store, theme, and focus state.
-func NewPlaylistsPane(store *state.Store, th theme.Theme, focused bool) *PlaylistsPane {
+func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *PlaylistsPane {
 	// Playlist list columns: # 5% | Name 70% | Tracks 25%
 	// Using flex factors: 1 : 14 : 5 ≈ 5% / 70% / 25%
 	listColumns := []components.ColumnDef{
