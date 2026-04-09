@@ -42,12 +42,7 @@ type albumDebounceMsg struct {
 // sub-view. Album tracks are interactive (user-session) data — they are stored
 // in pane fields (loadedTracks), not in the global store.
 type AlbumsPane struct {
-	store   state.StateReader
-	theme   theme.Theme
-	focused bool
-
-	width  int
-	height int
+	BasePane
 
 	// table renders the album list.
 	table *components.Table
@@ -108,9 +103,7 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	})
 
 	a := &AlbumsPane{
-		store:      store,
-		theme:      th,
-		focused:    focused,
+		BasePane:   BasePane{store: store, theme: th, focused: focused},
 		table:      t,
 		trackTable: tt,
 		filter:     components.NewFilter(th),
@@ -149,16 +142,13 @@ func (a *AlbumsPane) Actions() []layout.Action {
 // Init satisfies tea.Model. AlbumsPane has no startup command.
 func (a *AlbumsPane) Init() tea.Cmd { return nil }
 
-// IsFocused returns true when the pane has keyboard focus.
-func (a *AlbumsPane) IsFocused() bool { return a.focused }
-
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (a *AlbumsPane) HasActiveFilter() bool { return a.filter.IsActive() }
 
 // SetFocused updates the keyboard focus state. Routes focus to the correct table
 // based on whether the track sub-view is active.
 func (a *AlbumsPane) SetFocused(focused bool) {
-	a.focused = focused
+	a.BasePane.SetFocused(focused)
 	if a.inTrackView {
 		a.trackTable.SetFocused(focused)
 		a.table.SetFocused(false)
@@ -170,8 +160,7 @@ func (a *AlbumsPane) SetFocused(focused bool) {
 
 // SetSize updates the render dimensions and propagates them to both tables and the filter.
 func (a *AlbumsPane) SetSize(width, height int) {
-	a.width = width
-	a.height = height
+	a.BasePane.SetSize(width, height)
 	a.filter.SetWidth(width)
 	a.trackTable.SetSize(width, height)
 	a.resizeTable()

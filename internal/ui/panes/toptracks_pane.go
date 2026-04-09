@@ -35,12 +35,7 @@ var topTracksRangeLabels = map[string]string{
 // track name, artist, and popularity. It supports in-pane filtering and per-pane
 // time range cycling via the t key (short_term → medium_term → long_term → short_term).
 type TopTracksPane struct {
-	store   state.StateReader
-	theme   theme.Theme
-	focused bool
-
-	width  int
-	height int
+	BasePane
 
 	// timeRange is the currently active Spotify time range for top tracks.
 	timeRange string
@@ -71,9 +66,7 @@ func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *To
 	})
 
 	p := &TopTracksPane{
-		store:     store,
-		theme:     th,
-		focused:   focused,
+		BasePane:  BasePane{store: store, theme: th, focused: focused},
 		timeRange: "short_term",
 		table:     t,
 		filter:    components.NewFilter(th),
@@ -112,22 +105,18 @@ func (p *TopTracksPane) Actions() []layout.Action {
 // Init satisfies tea.Model. TopTracksPane has no startup command.
 func (p *TopTracksPane) Init() tea.Cmd { return nil }
 
-// IsFocused returns true when the pane has keyboard focus.
-func (p *TopTracksPane) IsFocused() bool { return p.focused }
-
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (p *TopTracksPane) HasActiveFilter() bool { return p.filter.IsActive() }
 
-// SetFocused updates the keyboard focus state.
+// SetFocused updates the keyboard focus state and propagates it to the table.
 func (p *TopTracksPane) SetFocused(focused bool) {
-	p.focused = focused
+	p.BasePane.SetFocused(focused)
 	p.table.SetFocused(focused && !p.filter.IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (p *TopTracksPane) SetSize(width, height int) {
-	p.width = width
-	p.height = height
+	p.BasePane.SetSize(width, height)
 	p.filter.SetWidth(width)
 	p.resizeTable()
 }

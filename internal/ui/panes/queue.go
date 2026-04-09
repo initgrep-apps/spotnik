@@ -22,12 +22,7 @@ var _ layout.Pane = &QueuePane{}
 // as a dense bubble-table with optional in-pane filtering. It reads all data from
 // the central Store — it never imports api/ directly.
 type QueuePane struct {
-	store   state.StateReader
-	theme   theme.Theme
-	focused bool
-
-	width  int
-	height int
+	BasePane
 
 	// table is the bubble-table wrapper for dense queue rendering.
 	table *components.Table
@@ -53,11 +48,9 @@ func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueueP
 	})
 
 	q := &QueuePane{
-		store:   store,
-		theme:   th,
-		focused: focused,
-		table:   t,
-		filter:  components.NewFilter(th),
+		BasePane: BasePane{store: store, theme: th, focused: focused},
+		table:    t,
+		filter:   components.NewFilter(th),
 	}
 	// Sync table focus state with initial focused parameter.
 	t.SetFocused(focused)
@@ -92,26 +85,20 @@ func (q *QueuePane) Init() tea.Cmd {
 	return nil
 }
 
-// IsFocused returns true when the queue pane has keyboard focus.
-func (q *QueuePane) IsFocused() bool {
-	return q.focused
-}
-
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (q *QueuePane) HasActiveFilter() bool {
 	return q.filter.IsActive()
 }
 
-// SetFocused sets the keyboard focus state.
+// SetFocused sets the keyboard focus state and propagates it to the table.
 func (q *QueuePane) SetFocused(focused bool) {
-	q.focused = focused
+	q.BasePane.SetFocused(focused)
 	q.table.SetFocused(focused && !q.filter.IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (q *QueuePane) SetSize(width, height int) {
-	q.width = width
-	q.height = height
+	q.BasePane.SetSize(width, height)
 	q.filter.SetWidth(width)
 	q.resizeTable()
 }
