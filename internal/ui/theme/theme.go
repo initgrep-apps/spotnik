@@ -33,8 +33,11 @@ type Theme interface {
 	TextMuted() lipgloss.Color     // Dim — timestamps, counts, hints
 
 	// Selection
-	SelectedBg() lipgloss.Color // Selected list item background
-	SelectedFg() lipgloss.Color // Selected list item foreground
+	SelectedBg() lipgloss.Color // Selected list item background (retained for backward compat)
+	// SelectedFg is the selection accent applied to item text (name + subtitle lines)
+	// when a list item is focused. Used WITHOUT a background fill — must be visually
+	// distinct from ColumnSecondary, ColumnTertiary, and TextPrimary in every theme.
+	SelectedFg() lipgloss.Color
 
 	// Semantic colours
 	SectionHeader() lipgloss.Color    // Section labels: LIBRARY, QUEUE, NOW PLAYING

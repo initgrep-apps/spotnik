@@ -30,6 +30,7 @@
 | 19 | Search Redesign | `features/19-search-redesign/` | done | 81–104 (done) | Full-screen search overlay with tabs, bubbles/list delegate, prefix autocomplete, rich metadata, UX polish; redesign (97–104): universal debounce, per-page fetch, context cancellation, gateway Interactive debounce, pagination controls, store cleanup |
 | 20 | Playback Context & Navigation | `features/20-playback-context/` | done | 105 (done), 106 (done), 107 (done) | Context-aware playback for all song-list panes, full playlist functionality, album drill-down |
 | 21 | Help Overlay | `features/21-help-overlay/` | done | 108 (done) | `?` key opens centered keybinding reference overlay; introduces docs/keybinding.md and CLAUDE.md maintenance rule |
+| 22 | Developer Foundations | `features/22-developer-foundations/` | open | 109, 110, 111 | Onboarding docs, test infra, StateReader interface, file splits, BasePane pattern, RebuildTableTheme helper, auth client fix |
 
 ---
 
@@ -39,4 +40,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-08*
+*Last updated: 2026-04-09*

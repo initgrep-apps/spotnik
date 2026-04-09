@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -582,33 +581,33 @@ func TestRenderTrack_Selected(t *testing.T) {
 // TestStyledDot verifies the dot separator is non-empty.
 func TestStyledDot(t *testing.T) {
 	d := newTestDelegate()
-	dot := d.styledDot(false)
+	dot := d.styledDot()
 	assert.NotEmpty(t, dot)
 	// Should contain the "·" character.
 	assert.Contains(t, dot, "·")
 }
 
-// TestRightAlignBg verifies that left and right content appear in the output.
-func TestRightAlignBg(t *testing.T) {
+// TestRightAlign verifies that left and right content appear in the output.
+func TestRightAlign(t *testing.T) {
 	d := newTestDelegate()
-	result := d.rightAlignBg("left", "right", 20, false)
+	result := d.rightAlign("left", "right", 20)
 	assert.Contains(t, result, "left")
 	assert.Contains(t, result, "right")
-	assert.Len(t, result, 20, "rightAlignBg output should have exactly the requested width")
+	assert.Len(t, result, 20, "rightAlign output should have exactly the requested width")
 	leftIdx := strings.Index(result, "left")
 	rightIdx := strings.Index(result, "right")
 	assert.Greater(t, rightIdx, leftIdx, "right text should appear after left text")
 }
 
 // TestStyledName verifies that styledName always produces bold output with the item name,
-// and that selected applies a background color making it differ from normal.
+// and that selected applies the accent foreground making it differ from normal.
 func TestStyledName(t *testing.T) {
 	d := newTestDelegate()
 	normal := d.styledName("Track Name", false, 40)
 	selected := d.styledName("Track Name", true, 40)
 	assert.Contains(t, normal, "Track Name")
 	assert.Contains(t, selected, "Track Name")
-	// Selected should differ from normal (background applied).
+	// Selected should differ from normal (ActiveBorder foreground applied).
 	assert.NotEqual(t, normal, selected, "styledName should differ when selected")
 }
 
@@ -651,7 +650,7 @@ func TestStyledBadge(t *testing.T) {
 	categories := []string{"track", "artist", "album", "playlist"}
 	for _, cat := range categories {
 		t.Run(cat, func(t *testing.T) {
-			badge := d.styledBadge(cat, false)
+			badge := d.styledBadge(cat)
 			assert.NotEmpty(t, badge)
 		})
 	}
@@ -741,7 +740,7 @@ func TestHeight(t *testing.T) {
 // TestWrapLine_Selected verifies that a selected line contains the left border │ character.
 func TestWrapLine_Selected(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", 40, true)
+	out := d.wrapLine("hello", true)
 	assert.Contains(t, out, "│", "selected wrapLine should contain left border │")
 	assert.Contains(t, out, "hello", "selected wrapLine should contain content")
 }
@@ -749,13 +748,13 @@ func TestWrapLine_Selected(t *testing.T) {
 // TestWrapLine_Normal verifies that an unselected line has at least 2-space left indent (no border).
 func TestWrapLine_Normal(t *testing.T) {
 	d := newTestDelegate()
-	out := d.wrapLine("hello", 40, false)
+	out := d.wrapLine("hello", false)
 	assert.Contains(t, out, "hello", "normal wrapLine should contain content")
 	// Normal items use Padding(0,0,0,2) — output should start with spaces, not a border char.
 	assert.NotContains(t, out, "│", "normal wrapLine should not contain border │")
 }
 
-// --- Task 20: styledName() always bold, with background on selected ---
+// --- styledName(): always bold, with SelectedFg accent on selected ---
 
 // TestStyledName_AlwaysBold verifies styledName always applies bold regardless of selected.
 func TestStyledName_AlwaysBold(t *testing.T) {
@@ -772,13 +771,13 @@ func TestStyledName_AlwaysBold(t *testing.T) {
 	}
 }
 
-// TestStyledName_SelectedBackground verifies styledName applies background when selected.
-func TestStyledName_SelectedBackground(t *testing.T) {
+// TestStyledName_SelectedAccentFg verifies styledName applies SelectedFg accent when selected.
+func TestStyledName_SelectedAccentFg(t *testing.T) {
 	d := newTestDelegate()
 	normalOut := d.styledName("Name", false, 40)
 	selectedOut := d.styledName("Name", true, 40)
-	// Selected output should differ (has SelectedBg background).
-	assert.NotEqual(t, normalOut, selectedOut, "styledName should differ when selected (background added)")
+	// Selected output should differ (SelectedFg foreground accent applied).
+	assert.NotEqual(t, normalOut, selectedOut, "styledName should differ when selected (SelectedFg accent applied)")
 	// Both should contain the name text.
 	assert.Contains(t, normalOut, "Name")
 	assert.Contains(t, selectedOut, "Name")
@@ -993,48 +992,7 @@ func TestRenderDefault_ThreeLines(t *testing.T) {
 	assert.Contains(t, out, "Mystery Item")
 }
 
-// --- withBg / selected helper tests ---
-
-// TestWithBg verifies withBg conditionally applies background.
-func TestWithBg(t *testing.T) {
-	d := newTestDelegate()
-	base := lipgloss.NewStyle().Foreground(d.theme.TextPrimary())
-	normal := d.withBg(base, false).Render("test")
-	selected := d.withBg(base, true).Render("test")
-	assert.NotEqual(t, normal, selected, "withBg(true) should add background, making output differ")
-	assert.Contains(t, normal, "test")
-	assert.Contains(t, selected, "test")
-}
-
-// TestStyledBadge_Selected verifies styledBadge differs when selected.
-func TestStyledBadge_Selected(t *testing.T) {
-	d := newTestDelegate()
-	for _, cat := range []string{"track", "artist", "album", "playlist"} {
-		t.Run(cat, func(t *testing.T) {
-			normal := d.styledBadge(cat, false)
-			selected := d.styledBadge(cat, true)
-			assert.NotEqual(t, normal, selected, "selected badge should differ (background)")
-		})
-	}
-}
-
-// TestStyledDot_Selected verifies styledDot differs when selected.
-func TestStyledDot_Selected(t *testing.T) {
-	d := newTestDelegate()
-	normal := d.styledDot(false)
-	selected := d.styledDot(true)
-	assert.NotEqual(t, normal, selected, "selected dot should differ (background)")
-}
-
-// TestRightAlignBg_Selected verifies gap fill differs when selected.
-func TestRightAlignBg_Selected(t *testing.T) {
-	d := newTestDelegate()
-	normal := d.rightAlignBg("left", "right", 20, false)
-	selected := d.rightAlignBg("left", "right", 20, true)
-	assert.Contains(t, selected, "left")
-	assert.Contains(t, selected, "right")
-	assert.NotEqual(t, normal, selected, "selected rightAlignBg should differ (background-styled gap)")
-}
+// --- selected helper tests ---
 
 // --- Selected-state tests for artist, album, playlist, default ---
 
