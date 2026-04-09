@@ -47,7 +47,7 @@ run: build
 ## Run all tests
 test:
 	@echo "→ Running tests..."
-	$(GO) test ./... -race -count=1
+	GOFLAGS="" $(GO) test ./... -race -count=1
 	@echo "✓ All tests passed"
 
 ## Run integration tests (requires build tag)
@@ -59,7 +59,7 @@ test-integration:
 ## Run tests with coverage report
 test-coverage:
 	@echo "→ Running tests with coverage..."
-	$(GO) test ./... -race -count=1 \
+	GOFLAGS="" $(GO) test ./... -race -count=1 \
 		-coverprofile=coverage.out \
 		-covermode=atomic
 	$(GO) tool cover -func=coverage.out | tail -1
