@@ -152,7 +152,7 @@ without leaving the app.
 If auth fails, delete stored tokens and retry:
 
 ```bash
-./bin/spotnik auth --reset
+./bin/spotnik auth logout
 ```
 
 Tokens are stored in the OS keychain (macOS Keychain, Linux Secret Service, Windows

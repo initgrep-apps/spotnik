@@ -270,6 +270,7 @@ Use table-driven tests for all `Update()` paths and `View()` output:
 package panes_test
 
 import (
+    "errors"
     "testing"
 
     tea "github.com/charmbracelet/bubbletea"

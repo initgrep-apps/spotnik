@@ -76,7 +76,7 @@ Opens your browser for the Spotify PKCE OAuth flow. Tokens are stored in the OS 
 | `/` | Open search overlay |
 | `d` | Open device switcher |
 | `t` | Open theme switcher |
-| `?` | Open help overlay *(planned)* |
+| `?` | Open help overlay |
 | `q` | Quit |
 | `0` | Toggle Page A / Page B |
 | `1`–`8` | Toggle pane visibility (Page A only) |

@@ -10,9 +10,12 @@ of tests.
 | Target | When to use |
 |--------|-------------|
 | `make test` | Quick feedback loop during development — runs unit tests only |
-| `make test-integration` | Before pushing — runs integration tests alongside unit tests |
+| `make test-integration` | Before pushing — runs integration tests (not included in `make ci`) |
 | `make test-coverage` | Before PR — ensures coverage stays above 80% |
-| `make ci` | Before pushing — full gate: lint + tests + coverage + build |
+| `make ci` | Before pushing — full gate: `fmt-check → tidy-check → lint → test-coverage → build` (unit tests only; does **not** run integration tests) |
+
+> **Note:** `make ci` does not run integration tests. Run `make test-integration` separately
+> before submitting a PR that touches API client code or multi-component flows.
 
 ---
 

@@ -141,7 +141,7 @@ View()
               └── viewGrid:
                     ├── renderHeader()      (1 line: app name, page, shortcuts, device)
                     ├── renderGrid()        (pane grid with borders)
-                    ├── renderStatusBar()   (1 line: global keybinding hints)
+                    ├── renderStatusBar()   (3 lines: border + keybinding hints + border)
                     └── Overlay compositing:
                           ├── deviceOverlayOpen? → btoverlay.Composite(device, dimmed, Right, Top)
                           └── searchOpen?        → btoverlay.Composite(search, dimmed, Center, Center)
@@ -199,10 +199,12 @@ User Keypress / Mouse Wheel
      ▼
 routing.go: handleKeyMsg / handleMouseMsg
      │
-     ├── Guard 1: Device overlay open → all keys to DeviceOverlay
-     ├── Guard 2: Search overlay open → all keys to SearchOverlay
-     ├── Guard 3: Auth view → only quit keys
-     ├── Guard 4: Pane has active filter → all keys to pane
+     ├── Guard 1: Theme overlay open → all keys to ThemeOverlay
+     ├── Guard 2: Help overlay open → all keys to HelpOverlay
+     ├── Guard 3: Device overlay open → all keys to DeviceOverlay
+     ├── Guard 4: Search overlay open → all keys to SearchOverlay
+     ├── Guard 5: Auth view → only quit keys
+     ├── Guard 6: Pane has active filter → all keys to pane
      ├── Global keys (q, /, d, 0, p, 1-8, Tab, Shift+Tab)
      ├── Playback keys (Space, n, +, -, s, r, v, ←, →) → always NowPlayingPane
      └── All other keys → focused pane
@@ -234,12 +236,13 @@ all input and prevent lower-priority handlers from running:
 | Priority | Guard | Action |
 |----------|-------|--------|
 | 1 | Theme overlay open | All keys → ThemeOverlay |
-| 2 | Device overlay open | All keys → DeviceOverlay |
-| 3 | Search overlay open | All keys → SearchOverlay |
-| 4 | Auth view active | Only quit keys (`q`, `ctrl+c`) pass; all others dropped |
-| 5 | Pane has active filter | All keys → focused pane (filter captures input) |
-| 6 | Global shortcuts | `q`, `/`, `d`, `t`, `0`, `p`, `1`–`8`, `Tab`, `Shift+Tab` |
-| 7 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
+| 2 | Help overlay open | All keys → HelpOverlay |
+| 3 | Device overlay open | All keys → DeviceOverlay |
+| 4 | Search overlay open | All keys → SearchOverlay |
+| 5 | Auth view active | Only quit keys (`q`, `ctrl+c`) pass; all others dropped |
+| 6 | Pane has active filter | All keys → focused pane (filter captures input) |
+| 7 | Global shortcuts | `q`, `/`, `d`, `t`, `0`, `p`, `1`–`8`, `Tab`, `Shift+Tab` |
+| 8 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
 | 8 | Default | All other keys → focused pane |
 
 This means: if the device overlay is open, `q` goes to the overlay (not quit). Theme
@@ -393,14 +396,12 @@ changes and flushes them to disk in a single debounced write.
 
 ### Design
 
-`PreferenceStore` holds a `pending map[string]any` of dirty preferences. `Set(key, value)`
-marks a preference dirty without writing to disk. `FlushCmd()` returns a `tea.Cmd` that
-reads the existing TOML config, applies all pending changes to the `[preferences]` section,
-and writes it back atomically. The pending map is cleared after a successful write.
-
-A **generation counter** pattern prevents stale flushes: each `FlushCmd()` call captures
-the current generation number. If the flush fires after new `Set()` calls have bumped the
-generation, the stale flush is discarded and a new `FlushCmd()` is scheduled.
+`PreferenceStore` holds a `pending map[string]any` of dirty preferences protected by a
+`sync.Mutex`. `Set(key, value)` adds to the `pending` map under the mutex without writing
+to disk. `FlushCmd()` returns a `tea.Cmd` that snapshots and clears `pending` (under the
+mutex), then reads the existing TOML config, applies the snapshot to the `[preferences]`
+section, and writes it back. On write failure the snapshot entries are re-queued for any
+keys not superseded by a newer `Set()` call.
 
 ### Supported Preferences
 
@@ -408,7 +409,7 @@ generation, the stale flush is discarded and a new `FlushCmd()` is scheduled.
 |-----|------|-------------|
 | `theme` | `string` | Active theme ID (e.g., `"black"`, `"dracula"`) |
 | `preset` | `int` | Active preset index within the current page |
-| `visualizer` | `string` | Active visualizer animation pattern |
+| `visualizer` | `int` | Active visualizer animation pattern index |
 
 ### Disk Path
 
@@ -439,7 +440,7 @@ preset cycle, visualizer toggle), `Update()` calls `prefs.Set(key, value)` and r
 - `internal/api/models.go` — Spotify API response model definitions
 - `internal/api/browser.go` — Opens default browser for OAuth callback
 
-**Known issue:** `postTokenRequest` in `internal/app/auth.go` uses `http.DefaultClient`
+**Known issue:** `postTokenRequest` in `internal/api/auth.go` uses `http.DefaultClient`
 for the PKCE token exchange rather than the injected `*http.Client`. This bypasses the
 gateway and makes the function difficult to test with `httptest.NewServer`. Story 111
 will fix this by injecting the HTTP client and adding a corresponding test.

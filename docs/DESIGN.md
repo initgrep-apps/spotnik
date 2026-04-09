@@ -85,7 +85,7 @@ Note: for these features and existing featues a lot of componetns are available 
 | # | Pane | ID | Data Source | Border Accent |
 |---|------|----|-------------|---------------|
 | — | Request Flow | `PaneRequestFlow` | Gateway state, inflight map, Store sentinels | `PaneBorderRequestFlow()` orange/amber |
-| — | Network Log | `PaneNetworkLog` | `store.NetLogEntries()` (200-entry ring buffer) | `PaneBorderNetworkLog()` warm grey |
+| — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer) | `PaneBorderNetworkLog()` warm grey |
 
 Page B panes are not toggleable with number keys (those control Page A only).
 
@@ -821,7 +821,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `/` | Open search overlay | Global |
 | `d` | Open device overlay | Global |
 | `t` | Open theme switcher overlay | Global |
-| `?` | Open help overlay *(PLANNED — not yet implemented)* | Global |
+| `?` | Open help overlay | Global |
 | `q` | Quit | Global |
 
 ---
@@ -1174,7 +1174,7 @@ POLLING  tick: 1000ms  state: active|idle  idle: 0s|45s    STORE  fetching: [pla
 
 ### Pane 2: Network Log (scrollable table)
 
-Scrollable reverse-chronological log of all API requests, sourced from `store.NetLogEntries()` (200-entry ring buffer):
+Scrollable reverse-chronological log of all API requests, sourced from `store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer):
 
 ```
 ╭─ Network Log ────────────────────── ᐅf filter ── ᐅj/k scroll ───────╮
@@ -1186,7 +1186,7 @@ Scrollable reverse-chronological log of all API requests, sourced from `store.Ne
 │  12:03:42  GET     /me/top/tracks          200     95ms     ████    │
 │  12:03:41  PUT     /me/player/play         204     34ms     ██      │
 │  12:03:40  GET     /me/player              200     51ms     ██      │
-│  ▼ more below (200 entry ring buffer)                                │
+│  ▼ more below (500-entry ring buffer)                                │
 ╰──────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -1198,7 +1198,7 @@ Scrollable reverse-chronological log of all API requests, sourced from `store.Ne
 - **Latency bar**: Inline `█` chars (1–10) proportional to response time
 - **429 marker**: `⚠` appended to rate-limited rows
 - **Newest at top**: Reverse chronological order
-- **Data source**: `store.NetLogEntries()` — each entry has `Timestamp`, `Method`, `Path`, `StatusCode`, `DurationMs`
+- **Data source**: `store.ReadEventsFrom(cursor)` — each `domain.GatewayEvent` has `Timestamp`, `Method`, `Path`, `StatusCode`, `DurationMs`
 
 ### Animation Design
 
@@ -1234,7 +1234,7 @@ Scrollable reverse-chronological log of all API requests, sourced from `store.Ne
 | Concurrent requests | `Gateway.concurrent` (semaphore, max 5) | Every app tick |
 | Backoff timer | `Store.IsThrottled()`, `Store.ThrottleRetryAfterSecs()` | Every app tick |
 | Inflight/dedup | `Gateway.inflight` map (GET key → waiters) | Every app tick |
-| Request log | `Store.NetLogEntries()` (200-entry ring buffer) | On each API response |
+| Request log | `Store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer) | On each API response |
 | Polling state | `tickCount`, `backoffTicks`, `isIdle()`, `pollIntervals()` | Every app tick |
 | Store fetching | `Store.*Fetching()` sentinels | Every app tick |
 | Store staleness | `Store.*FetchedAt()` + TTL constants | Every app tick |
@@ -1332,7 +1332,7 @@ type App struct {
 
     // Removed: playerPane, libraryPane, queuePane, statsPane, playlistPane
     // Removed: focus focusedPane, currentView viewMode
-    // Page B components read directly from Gateway + Store (no separate logger needed — uses store.NetLogEntries())
+    // Page B components read directly from Gateway + Store (no separate logger needed — uses store.ReadEventsFrom(cursor))
 }
 ```
 
@@ -1350,7 +1350,7 @@ type App struct {
 | `StatsView` | Split into `TopTracksPane` + `TopArtistsPane` (separate panes). RecentlyPlayed section → `RecentlyPlayedPane` |
 | `PlaylistManager` | Merged into `PlaylistsPane` (Enter=track sub-view, n=new, r=rename, x=delete, Shift+arrow=reorder as border actions) |
 | — (new) | `RequestFlowPane` (Page B, reads from Gateway/Store — live flow visualization) |
-| — (new) | `NetworkLogPane` (Page B, reads from `store.NetLogEntries()` — scrollable API log) |
+| — (new) | `NetworkLogPane` (Page B, reads from `store.ReadEventsFrom(cursor)` — scrollable API log) |
 
 ### Pane Interface Migration Checklist
 
