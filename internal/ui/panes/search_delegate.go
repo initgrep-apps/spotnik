@@ -164,8 +164,8 @@ func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected
 	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
 	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
-	line2Content := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary()).Render(si.ArtistNames)
-	line3Content := lipgloss.NewStyle().Foreground(d.theme.ColumnTertiary()).Render(si.AlbumName)
+	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render(si.ArtistNames)
+	line3Content := d.line3Style(selected, d.theme.ColumnTertiary()).Render(si.AlbumName)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
 		d.wrapLine(line1Content, selected),
@@ -187,15 +187,15 @@ func (d SearchItemDelegate) renderArtist(w io.Writer, si SearchListItem, selecte
 	name := d.styledName(truncateString(si.Name, innerW-2), selected, innerW-2)
 	line1Content := badge + " " + name
 
-	line2Content := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary()).Render(si.Genres)
+	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render(si.Genres)
 
-	followerStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
+	l3st := d.line3Style(selected, d.theme.TextMuted())
 	var line3Parts []string
 	if si.Followers != "" {
-		line3Parts = append(line3Parts, followerStyle.Render(si.Followers))
+		line3Parts = append(line3Parts, l3st.Render(si.Followers))
 	}
 	if si.Popularity > 0 {
-		line3Parts = append(line3Parts, followerStyle.Render(fmt.Sprintf("Pop: %d", si.Popularity)))
+		line3Parts = append(line3Parts, l3st.Render(fmt.Sprintf("Pop: %d", si.Popularity)))
 	}
 	line3Content := strings.Join(line3Parts, d.styledDot())
 
@@ -228,8 +228,8 @@ func (d SearchItemDelegate) renderAlbum(w io.Writer, si SearchListItem, selected
 	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
 	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
-	line2Content := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary()).Render(si.AlbumArtists)
-	line3Content := lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(si.TrackCount)
+	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render(si.AlbumArtists)
+	line3Content := d.line3Style(selected, d.theme.TextMuted()).Render(si.TrackCount)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
 		d.wrapLine(line1Content, selected),
@@ -257,10 +257,11 @@ func (d SearchItemDelegate) renderPlaylist(w io.Writer, si SearchListItem, selec
 	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
 	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
-	line2Content := lipgloss.NewStyle().Foreground(d.theme.ColumnSecondary()).Render("by " + si.Owner)
+	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render("by " + si.Owner)
 
 	desc := truncateString(si.PlaylistDesc, innerW)
-	line3Content := lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Italic(true).Render(desc)
+	// line3Style adds Italic when selected; for non-selected we add it explicitly.
+	line3Content := d.line3Style(selected, d.theme.TextMuted()).Italic(!selected).Render(desc)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
 		d.wrapLine(line1Content, selected),
@@ -279,7 +280,7 @@ func (d SearchItemDelegate) renderDefault(w io.Writer, si SearchListItem, select
 	name := d.styledName(truncateString(si.Name, innerW-2), selected, innerW-2)
 	line1Content := badge + " " + name
 
-	line2Content := lipgloss.NewStyle().Foreground(d.theme.TextSecondary()).Render(si.Subtitle)
+	line2Content := d.line2Style(selected, d.theme.TextSecondary()).Render(si.Subtitle)
 	line3Content := ""
 
 	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
@@ -299,16 +300,35 @@ func (d SearchItemDelegate) styledBadge(category string) string {
 }
 
 // styledName renders the item name in bold. When selected, the foreground switches to
-// ActiveBorder colour so the name visually matches the selection border indicator.
+// SelectedFg — a dedicated selection accent guaranteed to differ from ColumnSecondary,
+// ColumnTertiary, and TextPrimary in every theme.
 func (d SearchItemDelegate) styledName(name string, selected bool, _ int) string {
 	fg := d.theme.TextPrimary()
 	if selected {
-		fg = d.theme.ActiveBorder()
+		fg = d.theme.SelectedFg()
 	}
 	return lipgloss.NewStyle().
 		Foreground(fg).
 		Bold(true).
 		Render(name)
+}
+
+// line2Style returns a style for the second (subtitle) line of a list item.
+// When selected, uses the SelectedFg accent at normal weight.
+func (d SearchItemDelegate) line2Style(selected bool, normal lipgloss.Color) lipgloss.Style {
+	if selected {
+		return lipgloss.NewStyle().Foreground(d.theme.SelectedFg())
+	}
+	return lipgloss.NewStyle().Foreground(normal)
+}
+
+// line3Style returns a style for the third (detail) line of a list item.
+// When selected, uses the SelectedFg accent with italic for a graduated look.
+func (d SearchItemDelegate) line3Style(selected bool, normal lipgloss.Color) lipgloss.Style {
+	if selected {
+		return lipgloss.NewStyle().Foreground(d.theme.SelectedFg()).Italic(true)
+	}
+	return lipgloss.NewStyle().Foreground(normal)
 }
 
 // styledDot returns " · " rendered in TextMuted color.
