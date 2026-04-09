@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +19,7 @@ func newTestPlaylists(baseURL, token string) *PlaylistsClient {
 
 // TestCreatePlaylist covers success and server-error variants for CreatePlaylist.
 func TestCreatePlaylist(t *testing.T) {
+	successBody := string(testhelpers.LoadFixture(t, "create_playlist_response.json"))
 	tests := []struct {
 		name       string
 		status     int
@@ -29,13 +31,7 @@ func TestCreatePlaylist(t *testing.T) {
 		{
 			name:   "success",
 			status: http.StatusCreated,
-			body: `{
-				"id": "new-playlist-id",
-				"name": "My New Playlist",
-				"uri": "spotify:playlist:new-playlist-id",
-				"tracks": {"total": 0},
-				"owner": {"id": "user-1", "display_name": "Test User"}
-			}`,
+			body:   successBody,
 			checkResp: func(t *testing.T, pl *SimplePlaylist) {
 				require.NotNil(t, pl)
 				assert.Equal(t, "new-playlist-id", pl.ID)
