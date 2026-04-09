@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,8 +20,7 @@ func newUserClient(baseURL string) *api.UserClient {
 
 // TestGetTopTracks_Success verifies that GetTopTracks returns parsed tracks for a time range.
 func TestGetTopTracks_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/top_tracks_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "top_tracks_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/top/tracks", r.URL.Path)
@@ -60,8 +59,7 @@ func TestGetTopTracks_EmptyResults(t *testing.T) {
 
 // TestGetTopArtists_Success verifies that GetTopArtists returns parsed artists for a time range.
 func TestGetTopArtists_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/top_artists_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "top_artists_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/top/artists", r.URL.Path)
@@ -101,8 +99,7 @@ func TestGetTopArtists_EmptyResults(t *testing.T) {
 
 // TestGetRecentlyPlayed_Success verifies GetRecentlyPlayed returns play history items with timestamps.
 func TestGetRecentlyPlayed_Success(t *testing.T) {
-	fixture, err := os.ReadFile("../../testdata/fixtures/recently_played_response.json")
-	require.NoError(t, err)
+	fixture := testhelpers.LoadFixture(t, "recently_played_response.json")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me/player/recently-played", r.URL.Path)
