@@ -110,8 +110,10 @@ type Pane interface {
     IsFocused() bool                   // Query focus state
     ID() PaneID                        // Slot identifier
     Title() string                     // Display title for border
-    ToggleKey() int                     // Toggle key number (1-8) for border display, 0 if not toggleable
+    ToggleKey() int                    // Toggle key number (1-8) for border display, 0 if not toggleable
     Actions() []Action                 // Pane-specific shortcuts for border
+    SetTheme(th theme.Theme)           // Updates the pane's theme for runtime switching;
+                                       // table panes must rebuild their tables with new column colors
 }
 
 type Action struct {
@@ -819,7 +821,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `/` | Open search overlay | Global |
 | `d` | Open device overlay | Global |
 | `t` | Open theme switcher overlay | Global |
-| `?` | Open help overlay | Global |
+| `?` | Open help overlay *(PLANNED — not yet implemented)* | Global |
 | `q` | Quit | Global |
 
 ---
@@ -859,9 +861,10 @@ PaneBorderNetworkLog() lipgloss.Color      // warm grey accent (API log)
 // FilterInputBg dropped — use SurfaceAlt() instead (same value, no need for separate token)
 ```
 
-All 5 existing themes (black, monokai, catppuccin, nord, light) must implement these tokens.
+All 11 themes (black, monokai, catppuccin, nord, light, dracula, gruvbox, rosepine,
+solarized, synthwave, tokyonight) implement these tokens.
 
-### New Token Values — All 5 Themes
+### Token Values — All 11 Themes
 
 #### True Black (`black`) — Default
 
@@ -968,6 +971,132 @@ All 5 existing themes (black, monokai, catppuccin, nord, light) must implement t
 | `PaneBorderTopArtists` | `#d20f39` | Red |
 | `PaneBorderRequestFlow` | `#fe640b` | Orange |
 | `PaneBorderNetworkLog` | `#9ca0b0` | Latte overlay0 grey |
+
+#### Dracula (`dracula`)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| `Gradient1` | `#50FA7B` | Green |
+| `Gradient2` | `#F1FA8C` | Yellow |
+| `Gradient3` | `#FF5555` | Red |
+| `VisualizerFg` | `#BD93F9` | Purple |
+| `TableHeader` | `#6272A4` | Comment grey |
+| `PresetIndicator` | `#BD93F9` | Purple |
+| `PaneBorderNowPlaying` | `#50FA7B` | Green |
+| `PaneBorderQueue` | `#F1FA8C` | Yellow |
+| `PaneBorderPlaylists` | `#BD93F9` | Purple |
+| `PaneBorderAlbums` | `#8BE9FD` | Cyan |
+| `PaneBorderLikedSongs` | `#50FA7B` | Green |
+| `PaneBorderRecentlyPlayed` | `#8BE9FD` | Cyan |
+| `PaneBorderTopTracks` | `#FF79C6` | Pink |
+| `PaneBorderTopArtists` | `#FF5555` | Red |
+| `PaneBorderRequestFlow` | `#FFB86C` | Orange |
+| `PaneBorderNetworkLog` | `#69ff47` | Bright green |
+
+#### Gruvbox Dark (`gruvbox`)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| `Gradient1` | `#b8bb26` | Gruvbox green |
+| `Gradient2` | `#fabd2f` | Gruvbox yellow |
+| `Gradient3` | `#fb4934` | Gruvbox red |
+| `VisualizerFg` | `#fe8019` | Gruvbox orange |
+| `TableHeader` | `#665c54` | Gruvbox grey |
+| `PresetIndicator` | `#fe8019` | Orange |
+| `PaneBorderNowPlaying` | `#b8bb26` | Green |
+| `PaneBorderQueue` | `#fabd2f` | Yellow |
+| `PaneBorderPlaylists` | `#83a598` | Teal/aqua |
+| `PaneBorderAlbums` | `#8ec07c` | Bright green |
+| `PaneBorderLikedSongs` | `#b8bb26` | Green |
+| `PaneBorderRecentlyPlayed` | `#8ec07c` | Bright green |
+| `PaneBorderTopTracks` | `#d3869b` | Purple |
+| `PaneBorderTopArtists` | `#fb4934` | Red |
+| `PaneBorderRequestFlow` | `#fe8019` | Orange |
+| `PaneBorderNetworkLog` | `#458588` | Blue/teal |
+
+#### Rose Pine (`rosepine`)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| `Gradient1` | `#9ccfd8` | Foam (teal) |
+| `Gradient2` | `#f6c177` | Gold |
+| `Gradient3` | `#eb6f92` | Love (red/pink) |
+| `VisualizerFg` | `#c4a7e7` | Iris (purple) |
+| `TableHeader` | `#6e6a86` | Muted |
+| `PresetIndicator` | `#c4a7e7` | Iris (purple) |
+| `PaneBorderNowPlaying` | `#9ccfd8` | Foam (teal) |
+| `PaneBorderQueue` | `#f6c177` | Gold |
+| `PaneBorderPlaylists` | `#c4a7e7` | Iris (purple) |
+| `PaneBorderAlbums` | `#31748f` | Pine (blue) |
+| `PaneBorderLikedSongs` | `#ebbcba` | Rose |
+| `PaneBorderRecentlyPlayed` | `#9ccfd8` | Foam (teal) |
+| `PaneBorderTopTracks` | `#c4a7e7` | Iris (purple) |
+| `PaneBorderTopArtists` | `#eb6f92` | Love (red/pink) |
+| `PaneBorderRequestFlow` | `#f6c177` | Gold |
+| `PaneBorderNetworkLog` | `#ff6e91` | Warm pink |
+
+#### Solarized Dark (`solarized`)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| `Gradient1` | `#859900` | Solarized green |
+| `Gradient2` | `#b58900` | Solarized yellow |
+| `Gradient3` | `#dc322f` | Solarized red |
+| `VisualizerFg` | `#268bd2` | Solarized blue |
+| `TableHeader` | `#586e75` | Base01 |
+| `PresetIndicator` | `#268bd2` | Blue |
+| `PaneBorderNowPlaying` | `#859900` | Green |
+| `PaneBorderQueue` | `#b58900` | Yellow |
+| `PaneBorderPlaylists` | `#268bd2` | Blue |
+| `PaneBorderAlbums` | `#2aa198` | Cyan |
+| `PaneBorderLikedSongs` | `#859900` | Green |
+| `PaneBorderRecentlyPlayed` | `#2aa198` | Cyan |
+| `PaneBorderTopTracks` | `#6c71c4` | Violet |
+| `PaneBorderTopArtists` | `#d33682` | Magenta |
+| `PaneBorderRequestFlow` | `#cb4b16` | Orange |
+| `PaneBorderNetworkLog` | `#dc322f` | Red |
+
+#### Synthwave '84 (`synthwave`)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| `Gradient1` | `#72f1b8` | Mint green |
+| `Gradient2` | `#fede5d` | Yellow |
+| `Gradient3` | `#fe4450` | Neon red |
+| `VisualizerFg` | `#ff7edb` | Pink |
+| `TableHeader` | `#848bbd` | Muted blue |
+| `PresetIndicator` | `#36f9f6` | Cyan |
+| `PaneBorderNowPlaying` | `#72f1b8` | Mint green |
+| `PaneBorderQueue` | `#fede5d` | Yellow |
+| `PaneBorderPlaylists` | `#ff7edb` | Pink |
+| `PaneBorderAlbums` | `#36f9f6` | Cyan |
+| `PaneBorderLikedSongs` | `#72f1b8` | Mint green |
+| `PaneBorderRecentlyPlayed` | `#36f9f6` | Cyan |
+| `PaneBorderTopTracks` | `#ff7edb` | Pink |
+| `PaneBorderTopArtists` | `#fe4450` | Neon red |
+| `PaneBorderRequestFlow` | `#fede5d` | Yellow |
+| `PaneBorderNetworkLog` | `#ff8b39` | Orange |
+
+#### Tokyo Night (`tokyonight`)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| `Gradient1` | `#9ece6a` | Green |
+| `Gradient2` | `#e0af68` | Yellow/gold |
+| `Gradient3` | `#f7768e` | Red |
+| `VisualizerFg` | `#7aa2f7` | Blue |
+| `TableHeader` | `#565f89` | Muted blue |
+| `PresetIndicator` | `#7aa2f7` | Blue |
+| `PaneBorderNowPlaying` | `#9ece6a` | Green |
+| `PaneBorderQueue` | `#e0af68` | Yellow/gold |
+| `PaneBorderPlaylists` | `#7aa2f7` | Blue |
+| `PaneBorderAlbums` | `#73daca` | Teal |
+| `PaneBorderLikedSongs` | `#9ece6a` | Green |
+| `PaneBorderRecentlyPlayed` | `#73daca` | Teal |
+| `PaneBorderTopTracks` | `#bb9af7` | Purple |
+| `PaneBorderTopArtists` | `#f7768e` | Red |
+| `PaneBorderRequestFlow` | `#ff9e64` | Orange |
+| `PaneBorderNetworkLog` | `#7dcfff` | Light blue |
 
 ---
 
