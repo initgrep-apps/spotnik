@@ -420,20 +420,13 @@ func (a *AlbumsPane) resizeTable() {
 // Called when the user switches themes at runtime.
 func (a *AlbumsPane) SetTheme(th theme.Theme) {
 	a.theme = th
-	a.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	a.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	a.table.SetFocused(a.focused && !a.inTrackView)
+	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused && !a.inTrackView)
 	a.resizeTable()
 	a.refreshRows()
 

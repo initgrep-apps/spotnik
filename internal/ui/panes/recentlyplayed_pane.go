@@ -214,20 +214,13 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 // Called when the user switches themes at runtime.
 func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 	r.theme = th
-	r.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	r.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	r.table.SetFocused(r.focused)
+	r.table, r.filter = components.RebuildTableTheme(th, cols, r.table.Rows(), r.focused && !r.filter.IsActive())
 	r.resizeTable()
 	r.refreshRows()
 }

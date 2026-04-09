@@ -229,20 +229,13 @@ func (q *QueuePane) resizeTable() {
 // Called when the user switches themes at runtime.
 func (q *QueuePane) SetTheme(th theme.Theme) {
 	q.theme = th
-	q.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	q.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	q.table.SetFocused(q.focused)
+	q.table, q.filter = components.RebuildTableTheme(th, cols, q.table.Rows(), q.focused && !q.filter.IsActive())
 	q.resizeTable()
 	q.refreshRows()
 }

@@ -558,20 +558,12 @@ func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 // Called when the user switches themes at runtime.
 func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	p.theme = th
-	p.filter = components.NewFilter(th)
-
-	listColumns := []components.ColumnDef{
+	listCols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
-	p.table = components.NewTable(components.TableConfig{
-		Columns:      listColumns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	p.table.SetFocused(p.focused && !p.inTrackView)
+	p.table, p.filter = components.RebuildTableTheme(th, listCols, p.table.Rows(), p.focused && !p.inTrackView)
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{

@@ -225,20 +225,13 @@ func (l *LikedSongsPane) filteredTracks() []domain.SavedTrack {
 // Called when the user switches themes at runtime.
 func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 	l.theme = th
-	l.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	l.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	l.table.SetFocused(l.focused)
+	l.table, l.filter = components.RebuildTableTheme(th, cols, l.table.Rows(), l.focused && !l.filter.IsActive())
 	l.resizeTable()
 	l.refreshRows()
 }

@@ -263,20 +263,13 @@ func (p *TopTracksPane) filteredTracks() []domain.Track {
 // Called when the user switches themes at runtime.
 func (p *TopTracksPane) SetTheme(th theme.Theme) {
 	p.theme = th
-	p.filter = components.NewFilter(th)
-	columns := []components.ColumnDef{
+	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "pop", Header: "Pop", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	p.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	p.table.SetFocused(p.focused)
+	p.table, p.filter = components.RebuildTableTheme(th, cols, p.table.Rows(), p.focused && !p.filter.IsActive())
 	p.resizeTable()
 	p.refreshRows()
 }
