@@ -165,7 +165,8 @@ func StartCallbackServer() (*callbackServer, <-chan CallbackResult, error) {
 // The tokenBaseURL parameter allows overriding for tests (use "" for production).
 func ExchangeCode(
 	ctx context.Context,
-	tokenBaseURL string, // base URL for the token endpoint; production uses spotifyTokenURL
+	httpClient *http.Client, // HTTP client used for the token request
+	tokenBaseURL string,     // base URL for the token endpoint; production uses spotifyTokenURL
 	code, verifier, redirectURI, clientID string,
 	store keychain.TokenStore,
 ) (TokenPair, error) {
@@ -178,7 +179,7 @@ func ExchangeCode(
 	formData.Set("client_id", clientID)
 	formData.Set("code_verifier", verifier)
 
-	pair, err := postTokenRequest(ctx, endpoint, formData)
+	pair, err := postTokenRequest(ctx, httpClient, endpoint, formData)
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("exchanging code: %w", err)
 	}
@@ -202,7 +203,8 @@ func ExchangeCode(
 // The tokenBaseURL parameter allows overriding for tests (use "" for production).
 func Refresh(
 	ctx context.Context,
-	tokenBaseURL string, // base URL for the token endpoint; production uses spotifyTokenURL
+	httpClient *http.Client, // HTTP client used for the token request
+	tokenBaseURL string,     // base URL for the token endpoint; production uses spotifyTokenURL
 	refreshToken, clientID string,
 	store keychain.TokenStore,
 ) error {
@@ -213,7 +215,7 @@ func Refresh(
 	formData.Set("refresh_token", refreshToken)
 	formData.Set("client_id", clientID)
 
-	pair, err := postTokenRequest(ctx, endpoint, formData)
+	pair, err := postTokenRequest(ctx, httpClient, endpoint, formData)
 	if err != nil {
 		// Check if this is an invalid_grant HTTP 400 — must wrap with ErrInvalidGrant.
 		var httpErr *httpStatusError
@@ -269,7 +271,8 @@ func buildTokenEndpoint(baseURL string) string {
 }
 
 // postTokenRequest sends a POST request to the token endpoint and parses the response.
-func postTokenRequest(ctx context.Context, endpoint string, formData url.Values) (TokenPair, error) {
+// httpClient must not be nil — callers are responsible for providing a valid client.
+func postTokenRequest(ctx context.Context, httpClient *http.Client, endpoint string, formData url.Values) (TokenPair, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
 		strings.NewReader(formData.Encode()))
 	if err != nil {
@@ -277,7 +280,7 @@ func postTokenRequest(ctx context.Context, endpoint string, formData url.Values)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("posting to token endpoint: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -567,7 +568,7 @@ func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL stri
 		if err != nil || refreshToken == "" {
 			return tokenRefreshedMsg{err: errors.New("no refresh token available")}
 		}
-		if err := api.Refresh(context.Background(), tokenBaseURL, refreshToken, clientID, store); err != nil {
+		if err := api.Refresh(context.Background(), http.DefaultClient, tokenBaseURL, refreshToken, clientID, store); err != nil {
 			return tokenRefreshedMsg{err: err}
 		}
 		newToken, err := store.Get(keychain.KeyAccessToken)

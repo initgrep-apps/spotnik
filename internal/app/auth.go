@@ -80,6 +80,7 @@ func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, re
 			}
 			pair, err := api.ExchangeCode(
 				context.Background(),
+				http.DefaultClient,
 				"", // production token endpoint
 				result.Code,
 				verifier,

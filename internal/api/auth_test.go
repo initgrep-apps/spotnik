@@ -153,6 +153,7 @@ func TestExchangeCode_Success(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	pair, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient
 		srv.URL,
 		"mycode",
 		"myverifier",
@@ -184,6 +185,7 @@ func TestExchangeCode_ServerError(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -204,6 +206,7 @@ func TestExchangeCode_InvalidJSON(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -224,6 +227,7 @@ func TestExchangeCode_MissingFields(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -255,7 +259,7 @@ func TestRefresh_Success(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	require.NoError(t, store.Set(keychain.KeyRefreshToken, "old-refresh"))
 
-	err := api.Refresh(context.Background(), srv.URL, "old-refresh", "test-client-id", store)
+	err := api.Refresh(context.Background(), http.DefaultClient, srv.URL, "old-refresh", "test-client-id", store)
 	require.NoError(t, err)
 
 	access, err := store.Get(keychain.KeyAccessToken)
@@ -273,7 +277,7 @@ func TestRefresh_InvalidGrant(t *testing.T) {
 	defer srv.Close()
 
 	store := keychain.NewInMemoryTokenStore()
-	err := api.Refresh(context.Background(), srv.URL, "bad-refresh", "test-client-id", store)
+	err := api.Refresh(context.Background(), http.DefaultClient, srv.URL, "bad-refresh", "test-client-id", store)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, api.ErrInvalidGrant)
 }
@@ -282,7 +286,7 @@ func TestRefresh_InvalidGrant(t *testing.T) {
 func TestRefresh_NetworkError(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	// Use a non-existent server address.
-	err := api.Refresh(context.Background(), "http://localhost:1", "refresh", "client-id", store)
+	err := api.Refresh(context.Background(), http.DefaultClient, "http://localhost:1", "refresh", "client-id", store)
 	require.Error(t, err)
 	// Should wrap the network error with context.
 	assert.True(t, strings.Contains(err.Error(), "refreshing token") || strings.Contains(err.Error(), "connection refused"),
@@ -294,6 +298,7 @@ func TestExchangeCode_NetworkError(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	_, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient
 		"http://localhost:1",
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -357,6 +362,7 @@ func TestExchangeCode_ZeroExpiresIn(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	pair, err := api.ExchangeCode(
 		context.Background(),
+		http.DefaultClient
 		srv.URL,
 		"code", "verifier", "http://localhost/callback", "client-id",
 		store,
@@ -388,7 +394,7 @@ func TestRefresh_NoRefreshTokenInResponse(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	require.NoError(t, store.Set(keychain.KeyRefreshToken, "old-refresh"))
 
-	err := api.Refresh(context.Background(), srv.URL, "old-refresh", "test-client", store)
+	err := api.Refresh(context.Background(), http.DefaultClient, srv.URL, "old-refresh", "test-client", store)
 	require.NoError(t, err)
 
 	// Access token updated.
