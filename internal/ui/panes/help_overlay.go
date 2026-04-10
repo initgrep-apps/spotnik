@@ -49,7 +49,7 @@ var helpContent = [2][]helpSection{
 	},
 	{
 		{title: "Playback", bindings: []helpBinding{
-			{"Space", "play / pause"}, {"n", "next track"}, {"← / →", "prev / next"},
+			{"Space", "play / pause"}, {"← / →", "prev / next"},
 			{"+  / -", "volume"}, {"s", "shuffle"}, {"r", "repeat"}, {"v", "visualizer"},
 		}},
 		{title: "Pane Actions", bindings: []helpBinding{

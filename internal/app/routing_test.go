@@ -10,7 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
+	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -189,4 +191,64 @@ func TestFilterActive_U_DoesNotOpenProfileOverlay(t *testing.T) {
 
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
 	assert.False(t, a.ProfileOverlayOpen(), "'u' with active filter should not open profile overlay")
+}
+
+// --- Playback key routing tests ---
+
+// newPremiumPlaybackTestApp creates an App pre-configured as a Premium user with a reasonable
+// window size so playback keys pass the premium gate and reach NowPlayingPane.
+func newPremiumPlaybackTestApp(t *testing.T) *app.App {
+	t.Helper()
+	a := app.New(&config.Config{}, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	// Set premium profile so playback keys are not blocked by the subscription gate.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+	return a
+}
+
+// cmdProducesPlaybackRequestMsg returns true if cmd (possibly a batch) produces a
+// panes.PlaybackRequestMsg. Used to verify that a key is routed to NowPlayingPane.
+func cmdProducesPlaybackRequestMsg(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	msg := cmd()
+	if _, ok := msg.(panes.PlaybackRequestMsg); ok {
+		return true
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			if _, ok := c().(panes.PlaybackRequestMsg); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestIsPlaybackKey_Space verifies that tea.KeySpace is treated as a playback key
+// and routes to NowPlayingPane, producing a PlaybackRequestMsg.
+func TestIsPlaybackKey_Space(t *testing.T) {
+	a := newPremiumPlaybackTestApp(t)
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.True(t, cmdProducesPlaybackRequestMsg(cmd),
+		"tea.KeySpace must route to NowPlayingPane and return PlaybackRequestMsg")
+}
+
+// TestIsPlaybackKey_N_NotPlaybackKey verifies that the "n" rune is no longer treated as a
+// global playback key. Even for a Premium user, pressing "n" when NowPlayingPane is not
+// focused must NOT produce a PlaybackRequestMsg — it must fall through to the focused pane.
+func TestIsPlaybackKey_N_NotPlaybackKey(t *testing.T) {
+	a := newPremiumPlaybackTestApp(t)
+	// Tab away from NowPlayingPane so the focused pane is not NowPlaying.
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	require.NotEqual(t, layout.PaneNowPlaying, a.FocusedPane(), "should have tabbed past NowPlaying")
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	assert.False(t, cmdProducesPlaybackRequestMsg(cmd),
+		"'n' must not produce PlaybackRequestMsg — it must fall through to the focused pane")
 }

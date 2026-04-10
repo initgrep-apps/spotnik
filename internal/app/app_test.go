@@ -106,11 +106,12 @@ func TestApp_NowPlayingPaneRouting(t *testing.T) {
 		Device: &api.Device{VolumePercent: 60},
 	})
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace, not as a rune.
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := a.Update(spaceMsg)
 
 	// When player is focused and there is playback state, space should
-	// produce a command (pause/play).
+	// produce a command (pause/play or premium-gate toast).
 	assert.NotNil(t, cmd, "space key when player focused should produce a command")
 }
 
@@ -267,7 +268,8 @@ func TestApp_SetPlayer(t *testing.T) {
 		Device:    &api.Device{VolumePercent: 60},
 	})
 
-	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace, not as a rune.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeySpace})
 	assert.NotNil(t, cmd, "space key should produce a command when player is set")
 }
 
@@ -578,7 +580,8 @@ func TestApp_PlaybackKey_WhenQueueFocused(t *testing.T) {
 	})
 
 	// Space should still produce a playback command even when NowPlaying is not focused.
-	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace, not as a rune.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeySpace})
 	assert.NotNil(t, cmd, "space when other pane focused should route to NowPlaying pane")
 }
 
