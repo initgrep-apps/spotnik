@@ -807,6 +807,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `Esc` | Close overlay/filter | Context |
 | **Pane Actions** | | |
 | `f` | Toggle filter in focused pane | List panes |
+| `g` | Cycle time range | TopTracks / TopArtists |
 | `i` | Like/unlike track | LikedSongs pane |
 | `A` | Add to queue | Search overlay, list panes |
 | **Playlist Management (Playlists pane)** | | |

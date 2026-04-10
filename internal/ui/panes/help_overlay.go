@@ -53,8 +53,9 @@ var helpContent = [2][]helpSection{
 			{"+  / -", "volume"}, {"s", "shuffle"}, {"r", "repeat"}, {"v", "visualizer"},
 		}},
 		{title: "Pane Actions", bindings: []helpBinding{
-			{"Enter", "select / play"}, {"f", "filter"}, {"A", "add to queue"},
-			{"i", "like / unlike"}, {"x", "remove track"}, {"Shift+↑/↓", "reorder (playlists)"},
+			{"Enter", "select / play"}, {"f", "filter"}, {"g", "cycle time range"},
+			{"A", "add to queue"}, {"i", "like / unlike"}, {"x", "remove track"},
+			{"Shift+↑/↓", "reorder (playlists)"},
 		}},
 	},
 }
