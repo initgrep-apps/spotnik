@@ -46,7 +46,7 @@ type themeColors struct {
 	Warning          string `toml:"warning"`
 	Error            string `toml:"error"`
 	Info             string `toml:"info"`
-	DeviceActive     string `toml:"device_active"`
+	HeaderChipFg     string `toml:"header_chip_fg"`
 	StatusBarBg      string `toml:"status_bar_bg"`
 	StatusBarFg      string `toml:"status_bar_fg"`
 	KeyHint          string `toml:"key_hint"`
@@ -199,8 +199,8 @@ func (t *ConfigTheme) Error() lipgloss.Color { return lipgloss.Color(t.c.Error) 
 // Info returns the informational notice color (used for info toasts).
 func (t *ConfigTheme) Info() lipgloss.Color { return lipgloss.Color(t.c.Info) }
 
-// DeviceActive returns the active device indicator color.
-func (t *ConfigTheme) DeviceActive() lipgloss.Color { return lipgloss.Color(t.c.DeviceActive) }
+// HeaderChipFg returns the foreground color for header chips (device chip, profile chip).
+func (t *ConfigTheme) HeaderChipFg() lipgloss.Color { return lipgloss.Color(t.c.HeaderChipFg) }
 
 // Status bar
 

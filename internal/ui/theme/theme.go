@@ -48,7 +48,7 @@ type Theme interface {
 	Warning() lipgloss.Color          // Caution notices
 	Error() lipgloss.Color            // Error messages
 	Info() lipgloss.Color             // Informational notices (info toasts)
-	DeviceActive() lipgloss.Color     // ◉ active device indicator
+	HeaderChipFg() lipgloss.Color     // header chip foreground (device chip, profile chip)
 
 	// Status bar
 	StatusBarBg() lipgloss.Color // Status bar background

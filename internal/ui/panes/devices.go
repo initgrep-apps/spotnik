@@ -208,7 +208,7 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 	if isCursor {
 		bg := d.theme.SelectedBg()
 		if dev.IsActive {
-			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.DeviceActive()).Background(bg)
+			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.HeaderChipFg()).Background(bg)
 			bullet = "◉"
 		} else {
 			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.InactiveBorder()).Background(bg)
@@ -218,7 +218,7 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 	} else {
 		// Non-cursor: no Background() at all.
 		if dev.IsActive {
-			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.DeviceActive())
+			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.HeaderChipFg())
 			bullet = "◉"
 		} else {
 			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.InactiveBorder())

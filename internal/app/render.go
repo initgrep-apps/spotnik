@@ -373,11 +373,9 @@ func (a *App) renderProfileChip() string {
 
 	name := truncateProfileName(profile.DisplayName)
 
-	// DeviceActive matches the device chip colour — profile name reads as
-	// part of the same "active session" group in the header.
 	nameStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.DeviceActive())
+		Foreground(a.theme.HeaderChipFg())
 
 	var badge string
 	if a.store.IsPremium() {
@@ -455,7 +453,7 @@ func (a *App) renderHeader() string {
 		name := truncateDeviceName(device.Name)
 		activeStyle := lipgloss.NewStyle().
 			Background(a.theme.StatusBarBg()).
-			Foreground(a.theme.DeviceActive())
+			Foreground(a.theme.HeaderChipFg())
 		deviceChip = activeStyle.Render("◉ " + name + " ")
 	} else {
 		deviceChip = bgStyle.Render("○ No device ")

@@ -76,7 +76,7 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.Success()), "Success()")
 	assert.NotEmpty(t, string(th.Warning()), "Warning()")
 	assert.NotEmpty(t, string(th.Error()), "Error()")
-	assert.NotEmpty(t, string(th.DeviceActive()), "DeviceActive()")
+	assert.NotEmpty(t, string(th.HeaderChipFg()), "HeaderChipFg()")
 	assert.NotEmpty(t, string(th.StatusBarBg()), "StatusBarBg()")
 	assert.NotEmpty(t, string(th.StatusBarFg()), "StatusBarFg()")
 	assert.NotEmpty(t, string(th.KeyHint()), "KeyHint()")
@@ -405,7 +405,7 @@ success          = "#ff0000"
 warning          = "#00ff00"
 error            = "#0000ff"
 info             = "#00aaff"
-device_active    = "#112233"
+header_chip_fg    = "#112233"
 status_bar_bg    = "#223344"
 status_bar_fg    = "#334455"
 key_hint         = "#445566"
@@ -513,7 +513,7 @@ func TestConfigTheme_ReturnsCorrectColors(t *testing.T) {
 		{"Warning", string(th.Warning()), "#00ff00"},
 		{"Error", string(th.Error()), "#0000ff"},
 		{"Info", string(th.Info()), "#00aaff"},
-		{"DeviceActive", string(th.DeviceActive()), "#112233"},
+		{"HeaderChipFg", string(th.HeaderChipFg()), "#112233"},
 		{"StatusBarBg", string(th.StatusBarBg()), "#223344"},
 		{"StatusBarFg", string(th.StatusBarFg()), "#334455"},
 		{"KeyHint", string(th.KeyHint()), "#445566"},
@@ -639,7 +639,7 @@ success          = "#f01234"
 warning          = "#012345"
 error            = "#123450"
 info             = "#1188ee"
-device_active    = "#234561"
+header_chip_fg    = "#234561"
 status_bar_bg    = "#345672"
 status_bar_fg    = "#456783"
 key_hint         = "#567894"
@@ -705,7 +705,7 @@ success          = "#89abc7"
 warning          = "#9abcd8"
 error            = "#abcde9"
 info             = "#22bbff"
-device_active    = "#bcdef0"
+header_chip_fg    = "#bcdef0"
 status_bar_bg    = "#cdef01"
 status_bar_fg    = "#def012"
 key_hint         = "#ef0123"
@@ -862,7 +862,7 @@ success          = "#110000"
 warning          = "#100000"
 error            = "#0f0000"
 info             = "#0e00ff"
-device_active    = "#0e0000"
+header_chip_fg    = "#0e0000"
 status_bar_bg    = "#0d0000"
 status_bar_fg    = "#0c0000"
 key_hint         = "#0b0000"
