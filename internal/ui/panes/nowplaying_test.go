@@ -80,7 +80,7 @@ func TestNowPlayingPane_View_EmptyState(t *testing.T) {
 func TestNowPlayingPane_Update_Space_WhenPlaying(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd, "space when playing should return a command")
@@ -93,7 +93,7 @@ func TestNowPlayingPane_Update_Space_WhenPlaying(t *testing.T) {
 func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(false, true)
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd, "space when paused should return a command")
@@ -358,7 +358,7 @@ func TestNowPlayingPane_ArrowKeys(t *testing.T) {
 func TestNowPlayingPane_Space_NilState(t *testing.T) {
 	pane := newTestNowPlayingPane(true)
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd)

@@ -354,9 +354,9 @@ func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	switch {
 	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (Type field), not as a rune.
-	// We keep the rune " " branch for safety but tea.KeySpace is the live path.
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == " ",
-		msg.Type == tea.KeySpace:
+	// The rune " " branch has been removed — it was dead code and bypassed the
+	// premium gate in routing.go which only checks tea.KeySpace.
+	case msg.Type == tea.KeySpace:
 		ps := p.store.PlaybackState()
 		if ps != nil && ps.IsPlaying {
 			return p, emitPlaybackRequest(ActionPause)
