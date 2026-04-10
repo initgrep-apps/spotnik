@@ -634,9 +634,9 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 }
 
 // buildFetchCurrentUserCmd fetches the authenticated user's Spotify profile via
-// GET /v1/me. The returned userProfileLoadedMsg carries the user's Spotify ID,
+// GET /v1/me. The returned userProfileLoadedMsg carries the full domain.UserProfile,
 // which the routing layer stores so the playlist pane can distinguish owned from
-// followed playlists.
+// followed playlists and downstream stories can access subscription tier.
 func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 	userAPI := a.userAPI
 	return func() tea.Msg {
