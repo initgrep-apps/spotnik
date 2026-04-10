@@ -247,10 +247,18 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 		typeStyle = typeStyle.Background(d.theme.SelectedBg())
 	}
 
+	var capSuffix string
+	if dev.IsRestricted {
+		capSuffix = lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(" [restricted]")
+	} else if !dev.SupportsVolume {
+		capSuffix = lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(" (no vol)")
+	}
+
 	return bulletStyle.Render(bullet) + " " +
 		typeStyle.Render(typeIcon) + " " +
 		nameStyle.Render(dev.Name) +
-		label
+		label +
+		capSuffix
 }
 
 // deviceTypeIcon returns the display icon prefix for a Spotify device type.
