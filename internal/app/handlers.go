@@ -504,9 +504,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
+				msg := forbiddenErr.Message
+				if msg == "" {
+					msg = "Spotify Premium required"
+				}
 				return a, tea.Batch(
 					fetchPlaybackStateCmd(a.player),
-					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+					a.alerts.NewAlertCmd("warning", msg),
 				)
 			}
 			return a, tea.Batch(
@@ -843,10 +847,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rawDevices := make([]domain.Device, 0, len(m.Devices))
 		for _, info := range m.Devices {
 			rawDevices = append(rawDevices, domain.Device{
-				ID:       info.ID,
-				Name:     info.Name,
-				Type:     info.Type,
-				IsActive: info.IsActive,
+				ID:             info.ID,
+				Name:           info.Name,
+				Type:           info.Type,
+				IsActive:       info.IsActive,
+				IsRestricted:   info.IsRestricted,
+				SupportsVolume: info.SupportsVolume,
 			})
 		}
 		a.store.SetDevices(rawDevices)
@@ -865,6 +871,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Gate: free-tier users cannot transfer playback — block before any API call.
 		if !a.store.IsPremium() {
 			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+		}
+		if ps := a.store.PlaybackState(); ps != nil {
+			if ps.Actions.Disallows.TransferringPlayback {
+				return a, a.alerts.NewAlertCmd("warning", "Playback transfer not available")
+			}
+		}
+		if a.store.IsTargetDeviceRestricted(m.DeviceID) {
+			return a, a.alerts.NewAlertCmd("warning", "Device not controllable via API")
 		}
 		return a, tea.Batch(
 			a.buildTransferPlaybackCmd(m.DeviceID),
