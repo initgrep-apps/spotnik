@@ -70,6 +70,15 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// When profile overlay is open, route all keys to the profile pane.
+	if a.profileOverlayOpen {
+		updated, cmd := a.profilePane.Update(m)
+		if pp, ok := updated.(*panes.ProfileOverlay); ok {
+			a.profilePane = pp
+		}
+		return a, cmd
+	}
+
 	// When search overlay is open, route all keys to the search pane first.
 	if a.searchOpen {
 		updated, cmd := a.searchPane.Update(m)
@@ -112,6 +121,11 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 'd' opens the device switcher overlay from any pane.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "d" {
 		return a.openDeviceOverlay()
+	}
+	// 'u' opens the user profile overlay from any pane.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "u" {
+		a.profileOverlayOpen = true
+		return a, nil
 	}
 
 	// 't' opens the theme switcher overlay — but only if no other overlay is already open.
@@ -213,7 +227,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
 	// Ignore mouse events when any overlay is open.
 	// Overlays handle their own input; scroll behind them is unintuitive.
-	if a.deviceOverlayOpen || a.searchOpen || a.helpOpen {
+	if a.deviceOverlayOpen || a.searchOpen || a.helpOpen || a.profileOverlayOpen {
 		return nil
 	}
 

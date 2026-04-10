@@ -751,6 +751,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Device overlay closed via Esc — close overlay.
 		return a.closeDeviceOverlay()
 
+	case panes.ProfileOverlayClosedMsg:
+		// Profile overlay closed via Esc — clear flag.
+		a.profileOverlayOpen = false
+		return a, nil
+
 	case panes.ThemeSwitchMsg:
 		// User selected a theme in the overlay — load new theme, propagate to all panes.
 		newTheme := theme.Load(m.ThemeID)

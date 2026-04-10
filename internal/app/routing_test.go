@@ -127,3 +127,66 @@ func TestFilterActive_NumberKeys_DoNotTogglePanes(t *testing.T) {
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
 	assert.Equal(t, originalFocus, a.FocusedPane(), "'0' with active filter should not toggle page")
 }
+
+// --- Profile overlay routing tests ---
+
+// newProfileTestApp creates a minimal App for profile overlay routing tests.
+func newProfileTestApp(t *testing.T) *app.App {
+	t.Helper()
+	a := app.New(&config.Config{}, app.AppOptions{})
+	// Resize so the app is in grid view (splash needs a size to dismiss).
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	return a
+}
+
+// TestProfileOverlay_UKey_OpensOverlay verifies that pressing 'u' opens the profile overlay.
+func TestProfileOverlay_UKey_OpensOverlay(t *testing.T) {
+	a := newProfileTestApp(t)
+
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	assert.True(t, a.ProfileOverlayOpen(), "'u' should open the profile overlay")
+}
+
+// TestProfileOverlay_EscKey_ClosesOverlay verifies that pressing Esc closes the profile overlay.
+// In Bubble Tea, Esc routes to the pane which returns a ProfileOverlayClosedMsg command.
+// The test simulates the runtime loop by executing the command and feeding the message back.
+func TestProfileOverlay_EscKey_ClosesOverlay(t *testing.T) {
+	a := newProfileTestApp(t)
+
+	// Open the overlay.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	require.True(t, a.ProfileOverlayOpen(), "profile overlay should be open after 'u'")
+
+	// Esc returns a command that emits ProfileOverlayClosedMsg.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	require.NotNil(t, cmd, "Esc should return a close command")
+
+	// Execute the command and deliver the resulting message.
+	msg := cmd()
+	a.Update(msg)
+	assert.False(t, a.ProfileOverlayOpen(), "ProfileOverlayClosedMsg should close the profile overlay")
+}
+
+// TestProfileOverlay_KeysIntercepted_WhenOpen verifies that other keys (e.g. 'q') do not
+// pass through to global handlers while the profile overlay is open.
+func TestProfileOverlay_KeysIntercepted_WhenOpen(t *testing.T) {
+	a := newProfileTestApp(t)
+
+	// Open the overlay.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	require.True(t, a.ProfileOverlayOpen(), "profile overlay should be open")
+
+	// 'q' normally quits but must be captured by the overlay, not global handler.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	assert.False(t, cmdProducesQuit(t, cmd), "'q' must not quit while profile overlay is open")
+}
+
+// TestFilterActive_U_DoesNotOpenProfileOverlay verifies that 'u' while filter is
+// active does NOT open the profile overlay.
+func TestFilterActive_U_DoesNotOpenProfileOverlay(t *testing.T) {
+	a := setupAppWithFilterablePane(t)
+	activateFilter(a)
+
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	assert.False(t, a.ProfileOverlayOpen(), "'u' with active filter should not open profile overlay")
+}
