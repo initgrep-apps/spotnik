@@ -1,4 +1,12 @@
 
+## Orphaned app-layer handlers after dead-pane-actions removal
+**Found:** 2026-04-10 | **Source:** PR #154 Review
+**Feature:** 24-controls-cleanup
+
+`PlaylistCreateRequestMsg`, `PlaylistRenameRequestMsg`, `PlaylistReorderRequestMsg`, and `LikeTrackRequestMsg` handlers (plus their response-message handlers and command builders) remain in `internal/app/routing.go` and `handlers.go` after story 120 removed the pane-side emitters. Nothing emits these messages anymore. Not a runtime bug but a maintenance hazard — future readers may assume create/rename/reorder/like are wired up. Clean up in a future story or mark with `// TODO(24-controls-cleanup): orphaned — no pane emitter` comments.
+
+---
+
 ## Duplicate time-range cycle tests in topartists/toptracks panes
 **Found:** 2026-04-10 | **Source:** PR #153 Review
 **Feature:** 24-controls-cleanup
