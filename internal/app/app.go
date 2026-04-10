@@ -84,6 +84,9 @@ type App struct {
 	searchPane *panes.SearchOverlay
 	devicePane *panes.DeviceOverlay
 
+	// profilePane is the floating user profile overlay. Populated at startup.
+	profilePane *panes.ProfileOverlay
+
 	// themeOverlay is the floating theme switcher overlay. Populated when open.
 	themeOverlay *panes.ThemeOverlay
 
@@ -133,6 +136,9 @@ type App struct {
 
 	// deviceOverlayOpen is true while the device switcher overlay is visible.
 	deviceOverlayOpen bool
+
+	// profileOverlayOpen is true while the user profile overlay is visible.
+	profileOverlayOpen bool
 
 	// showThemeSwitcher is true while the theme switcher overlay is visible.
 	showThemeSwitcher bool
@@ -274,6 +280,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 
 	searchPane := panes.NewSearchOverlay(t)
 	devicePane := panes.NewDeviceOverlay(s, t)
+	profilePane := panes.NewProfileOverlay(s, t)
 
 	mgr := layout.NewManager()
 
@@ -286,6 +293,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		panes:           panesMap,
 		searchPane:      searchPane,
 		devicePane:      devicePane,
+		profilePane:     profilePane,
 		statusHelp:      newStatusHelp(t),
 		statusKeyMap:    newAppKeyMap(),
 		currentView:     viewSplash,
@@ -536,6 +544,11 @@ func (a *App) SearchPane() *panes.SearchOverlay {
 // DeviceOverlayOpen returns true while the device switcher overlay is visible.
 func (a *App) DeviceOverlayOpen() bool {
 	return a.deviceOverlayOpen
+}
+
+// ProfileOverlayOpen returns true while the user profile overlay is visible.
+func (a *App) ProfileOverlayOpen() bool {
+	return a.profileOverlayOpen
 }
 
 // ThemeSwitcherOpen returns true while the theme switcher overlay is visible.

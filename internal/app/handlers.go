@@ -190,6 +190,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.syncFocus()
 		a.searchPane.SetSize(m.Width, m.Height)
 		a.devicePane.SetSize(m.Width, m.Height)
+		a.profilePane.SetSize(40, 12) // fixed size — profile card is not resizable
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetSize(m.Width, m.Height)
 		}
