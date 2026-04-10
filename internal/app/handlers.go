@@ -767,6 +767,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Propagate to overlay panes.
 		a.searchPane.SetTheme(newTheme)
 		a.devicePane.SetTheme(newTheme)
+		a.profilePane.SetTheme(newTheme)
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetTheme(newTheme)
 		}

@@ -347,6 +347,16 @@ func pageLabel(page layout.PageID) string {
 // maxProfileDisplayNameLen is the maximum runes shown for the display name in the header chip.
 const maxProfileDisplayNameLen = 20
 
+// truncateProfileName truncates a display name to maxProfileDisplayNameLen runes,
+// appending … if truncated. Mirrors truncateDeviceName for display name capping.
+func truncateProfileName(name string) string {
+	runes := []rune(name)
+	if len(runes) > maxProfileDisplayNameLen {
+		return string(runes[:maxProfileDisplayNameLen-1]) + "…"
+	}
+	return name
+}
+
 // renderProfileChip renders the profile chip shown in the header right side.
 // Returns "" if the profile has not yet been loaded (graceful startup).
 // Format: "DisplayName ♛ " (Premium) or "DisplayName ○ " (Free).
@@ -359,12 +369,7 @@ func (a *App) renderProfileChip() string {
 
 	bgStyle := lipgloss.NewStyle().Background(a.theme.StatusBarBg())
 
-	// Truncate display name if needed.
-	name := profile.DisplayName
-	runes := []rune(name)
-	if len(runes) > maxProfileDisplayNameLen {
-		name = string(runes[:maxProfileDisplayNameLen-1]) + "…"
-	}
+	name := truncateProfileName(profile.DisplayName)
 
 	nameStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
