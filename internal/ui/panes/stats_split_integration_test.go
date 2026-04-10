@@ -105,7 +105,7 @@ func TestStatsSplit_TopTracksAndTopArtistsCycleIndependently(t *testing.T) {
 	ap.SetSize(120, 20)
 
 	// Cycle artists to medium_term
-	ap.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	ap.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "medium_term", ap.TimeRange())
 
 	// Tracks pane should still be on short_term
@@ -174,7 +174,7 @@ func TestStatsSplit_TopTracksFilterThenCycleRange(t *testing.T) {
 	assert.False(t, pane.filter.IsActive())
 
 	// Cycle to medium_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "medium_term", pane.TimeRange())
 
 	view = pane.View()
