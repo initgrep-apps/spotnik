@@ -154,6 +154,31 @@ func TestPremiumGate_PremiumUser_PlaybackKeyDispatches(t *testing.T) {
 		"premium user: cmd must contain a PlaybackRequestMsg (gate passed, dispatched to NowPlayingPane)")
 }
 
+// TestPremiumGate_FreeUser_TransferPlaybackEmitsToast verifies that when a free-tier user
+// selects a device to transfer playback, the app emits a "Spotify Premium required" toast
+// and does NOT batch a buildTransferPlaybackCmd.
+// Before the gate: returns tea.Batch(buildTransferPlaybackCmd, infoToast) — a BatchMsg.
+// After the gate:  returns only the warningToast — NOT a BatchMsg.
+func TestPremiumGate_FreeUser_TransferPlaybackEmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := New(cfg, AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	// Mark user as free tier.
+	a.store.SetUserProfile(domain.UserProfile{ID: "user-free", Product: "free"})
+
+	_, cmd := a.Update(panes.TransferPlaybackMsg{DeviceID: "dev-1", DeviceName: "My Speaker"})
+	require.NotNil(t, cmd, "free user: TransferPlaybackMsg must return a non-nil cmd (warning toast)")
+
+	// Without the gate the handler returns tea.Batch(buildTransferPlaybackCmd, infoToast).
+	// tea.Batch() returns a Cmd that produces a tea.BatchMsg when called.
+	// The gate should short-circuit and return a single toast cmd — NOT a BatchMsg.
+	msg := cmd()
+	_, isBatch := msg.(tea.BatchMsg)
+	assert.False(t, isBatch,
+		"free user: cmd must NOT be a BatchMsg (gate should return single toast, not batch with transfer cmd)")
+}
+
 // TestBuildFetchCurrentUserCmd covers the command closure for all key error paths
 // and the happy path. It injects MockUser directly into a.userAPI so no HTTP server
 // is needed.
