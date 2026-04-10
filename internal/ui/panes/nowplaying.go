@@ -101,6 +101,10 @@ func (p *NowPlayingPane) ToggleKey() int {
 }
 
 // Actions returns the pane-specific shortcuts shown in the border.
+// NOTE: layout.RenderPaneBorder drops all actions atomically when the pane is too
+// narrow to fit title + actions within cfg.Width (dashCount < 0 after computing
+// fixedWidth). At narrow widths none of these five actions will appear; once the
+// pane is wide enough they all appear. This is expected graceful degradation, not a bug.
 func (p *NowPlayingPane) Actions() []layout.Action {
 	return []layout.Action{
 		{Key: "s", Label: "shfl"},

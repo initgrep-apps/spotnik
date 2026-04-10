@@ -1,7 +1,7 @@
 ---
 title: "t→g Time-Range Rebind and TopArtists Enter to Play"
 feature: 24-controls-cleanup
-status: open
+status: done
 ---
 
 ## Background

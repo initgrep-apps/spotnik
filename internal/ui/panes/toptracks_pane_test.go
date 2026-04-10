@@ -54,7 +54,7 @@ func TestTopTracksPane_Actions_Default_ShowsFilterAndRange(t *testing.T) {
 	actions := pane.Actions()
 	require.Len(t, actions, 2)
 	assert.Equal(t, "f", actions[0].Key)
-	assert.Equal(t, "t", actions[1].Key)
+	assert.Equal(t, "g", actions[1].Key)
 	// Default is short_term → label "4wk"
 	assert.Equal(t, "4wk", actions[1].Label)
 }
@@ -101,18 +101,18 @@ func TestTopTracksPane_TimeRangeCycles(t *testing.T) {
 	// Initial: short_term (4wk)
 	assert.Equal(t, "short_term", pane.TimeRange())
 
-	// Press t → medium_term
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	// Press g → medium_term
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
 	assert.Equal(t, "medium_term", pane.TimeRange())
 	// Data already cached → no fetch command
 	assert.Nil(t, cmd)
 
-	// Press t → long_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	// Press g → long_term
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "long_term", pane.TimeRange())
 
-	// Press t → wraps to short_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	// Press g → wraps to short_term
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "short_term", pane.TimeRange())
 }
 
@@ -121,7 +121,7 @@ func TestTopTracksPane_TimeRangeEmitsFetchOnCacheMiss(t *testing.T) {
 	// Store only has short_term; medium_term is not loaded.
 	pane.SetFocused(true)
 
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
 	assert.Equal(t, "medium_term", pane.TimeRange())
 	// Cache miss → must emit FetchStatsMsg
 	require.NotNil(t, cmd)
@@ -138,17 +138,17 @@ func TestTopTracksPane_ActionsLabelReflectsRange(t *testing.T) {
 	populateStoreTopTracks(st, "long_term")
 
 	// Cycle to medium_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	actions := pane.Actions()
-	tAction := actions[len(actions)-1]
-	assert.Equal(t, "t", tAction.Key)
-	assert.Equal(t, "6mo", tAction.Label)
+	gAction := actions[len(actions)-1]
+	assert.Equal(t, "g", gAction.Key)
+	assert.Equal(t, "6mo", gAction.Label)
 
 	// Cycle to long_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	actions = pane.Actions()
-	tAction = actions[len(actions)-1]
-	assert.Equal(t, "all", tAction.Label)
+	gAction = actions[len(actions)-1]
+	assert.Equal(t, "all", gAction.Label)
 }
 
 // TestTopTracksPane_Enter_EmitsPlayTrackListMsg verifies Enter on row N emits
@@ -279,4 +279,43 @@ func TestTopTracksPane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
 	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
 	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Pop column should use ColumnTertiary()")
+}
+
+// ── Story 119: t→g rebind ────────────────────────────────────────────────────
+
+// TestTopTracksPane_GKey_CyclesTimeRange verifies pressing g advances the time range.
+func TestTopTracksPane_GKey_CyclesTimeRange(t *testing.T) {
+	pane, st := newTestTopTracksPane()
+	pane.SetFocused(true)
+
+	populateStoreTopTracks(st, "medium_term")
+	populateStoreTopTracks(st, "long_term")
+
+	assert.Equal(t, "short_term", pane.TimeRange())
+
+	// Press g → medium_term
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	assert.Equal(t, "medium_term", pane.TimeRange())
+	// Data already cached → no fetch command
+	assert.Nil(t, cmd)
+
+	// Press g → long_term
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
+	assert.Equal(t, "long_term", pane.TimeRange())
+
+	// Press g → wraps to short_term
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
+	assert.Equal(t, "short_term", pane.TimeRange())
+}
+
+// TestTopTracksPane_TKey_DoesNotCycle verifies that pressing t no longer cycles
+// the time range — it passes through to global routing (theme switcher).
+func TestTopTracksPane_TKey_DoesNotCycle(t *testing.T) {
+	pane, _ := newTestTopTracksPane()
+	pane.SetFocused(true)
+
+	initial := pane.TimeRange()
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	// Time range must be unchanged — t no longer cycles range in the pane.
+	assert.Equal(t, initial, pane.TimeRange())
 }

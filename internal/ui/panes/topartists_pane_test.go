@@ -55,7 +55,7 @@ func TestTopArtistsPane_Actions_Default_ShowsFilterAndRange(t *testing.T) {
 	actions := pane.Actions()
 	require.Len(t, actions, 2)
 	assert.Equal(t, "f", actions[0].Key)
-	assert.Equal(t, "t", actions[1].Key)
+	assert.Equal(t, "g", actions[1].Key)
 	assert.Equal(t, "4wk", actions[1].Label)
 }
 
@@ -102,15 +102,15 @@ func TestTopArtistsPane_TimeRangeCycles(t *testing.T) {
 	assert.Equal(t, "short_term", pane.TimeRange())
 
 	// short → medium
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "medium_term", pane.TimeRange())
 
 	// medium → long
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "long_term", pane.TimeRange())
 
 	// long → short (wraps)
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, "short_term", pane.TimeRange())
 }
 
@@ -118,7 +118,7 @@ func TestTopArtistsPane_TimeRangeEmitsFetchOnCacheMiss(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	pane.SetFocused(true)
 
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
 	assert.Equal(t, "medium_term", pane.TimeRange())
 	require.NotNil(t, cmd)
 	msg := cmd()
@@ -133,11 +133,11 @@ func TestTopArtistsPane_ActionsLabelReflectsRange(t *testing.T) {
 	populateStoreTopArtists(st, "medium_term")
 	populateStoreTopArtists(st, "long_term")
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	actions := pane.Actions()
 	assert.Equal(t, "6mo", actions[len(actions)-1].Label)
 
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	actions = pane.Actions()
 	assert.Equal(t, "all", actions[len(actions)-1].Label)
 }
@@ -208,9 +208,9 @@ func TestTopArtistsPane_StatsLoadedMsgWrongRange(t *testing.T) {
 
 func TestTopArtistsPane_NotFocusedIgnoresKeys(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
-	// t key on unfocused pane should not change time range
+	// g key on unfocused pane should not change time range
 	initialRange := pane.TimeRange()
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	assert.Equal(t, initialRange, pane.TimeRange())
 }
 
@@ -252,4 +252,68 @@ func TestTopArtistsPane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
 	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Artist column should use ColumnPrimary()")
 	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Genre column should use ColumnSecondary()")
+}
+
+// ── Story 119: t→g rebind and Enter to play artist ──────────────────────────
+
+// TestTopArtistsPane_GKey_CyclesTimeRange verifies pressing g advances the time range.
+func TestTopArtistsPane_GKey_CyclesTimeRange(t *testing.T) {
+	pane, st := newTestTopArtistsPane()
+	pane.SetFocused(true)
+
+	populateStoreTopArtists(st, "medium_term")
+	populateStoreTopArtists(st, "long_term")
+
+	assert.Equal(t, "short_term", pane.TimeRange())
+
+	// Press g → medium_term
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	assert.Equal(t, "medium_term", pane.TimeRange())
+	assert.Nil(t, cmd)
+
+	// Press g → long_term
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
+	assert.Equal(t, "long_term", pane.TimeRange())
+
+	// Press g → wraps to short_term
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
+	assert.Equal(t, "short_term", pane.TimeRange())
+}
+
+// TestTopArtistsPane_TKey_DoesNotCycle verifies that pressing t no longer cycles
+// the time range — it passes through to global routing (theme switcher).
+func TestTopArtistsPane_TKey_DoesNotCycle(t *testing.T) {
+	pane, _ := newTestTopArtistsPane()
+	pane.SetFocused(true)
+
+	initial := pane.TimeRange()
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
+	assert.Equal(t, initial, pane.TimeRange())
+}
+
+// TestTopArtistsPane_Enter_EmitsPlayContextMsg verifies Enter on a row emits
+// PlayContextMsg with the selected artist's URI as ContextURI.
+func TestTopArtistsPane_Enter_EmitsPlayContextMsg(t *testing.T) {
+	pane, _ := newTestTopArtistsPane()
+	pane.SetFocused(true)
+
+	// Table starts at row 0 (first artist: a1, The Weeknd).
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd, "Enter should produce a command")
+
+	msg := cmd()
+	playMsg, ok := msg.(PlayContextMsg)
+	require.True(t, ok, "command should produce PlayContextMsg, got %T", msg)
+	assert.Equal(t, "spotify:artist:a1", playMsg.ContextURI)
+}
+
+// TestTopArtistsPane_Enter_NoData_NoOp verifies Enter on an empty list returns nil cmd.
+func TestTopArtistsPane_Enter_NoData_NoOp(t *testing.T) {
+	st := state.New()
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(120, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.Nil(t, cmd, "Enter on empty list should not emit a command")
 }

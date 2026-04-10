@@ -1,4 +1,12 @@
 
+## Duplicate time-range cycle tests in topartists/toptracks panes
+**Found:** 2026-04-10 | **Source:** PR #153 Review
+**Feature:** 24-controls-cleanup
+
+`TestTopArtistsPane_GKey_CyclesTimeRange` and `TestTopTracksPane_GKey_CyclesTimeRange` are behaviorally identical to the pre-existing `TestTopArtistsPane_TimeRangeCycles` and `TestTopTracksPane_TimeRangeCycles` (which were updated from `t` to `g` in the same PR). The new tests add no additional coverage — consider removing the duplicates to reduce test file noise.
+
+---
+
 ## Stale comment in routing.go isPlaybackKey
 **Found:** 2026-04-10 | **Source:** PR #152 Review
 **Feature:** 24-controls-cleanup
