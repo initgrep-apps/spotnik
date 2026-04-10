@@ -16,6 +16,7 @@ skills:
   - systematic-debugging
   - requesting-code-review
   - receiving-code-review
+  - pr-review-toolkit:review-pr
   - context7-mcp
   - commit-commands:commit
   - commit-commands:commit-push-pr
