@@ -111,7 +111,7 @@ func TestNetworkLogPane_Actions_NoFilter(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "f key should appear in actions when filter is not active")
-	assert.Contains(t, keys, "j/k", "j/k should appear as scroll hint")
+	assert.NotContains(t, keys, "j/k", "j/k implicit scroll hint must not appear in actions (5D)")
 }
 
 func TestNetworkLogPane_Actions_WithFilter(t *testing.T) {
