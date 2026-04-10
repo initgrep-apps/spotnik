@@ -213,6 +213,7 @@ type splashDismissMsg struct{}
 type unauthorizedMsg struct{}
 
 // userProfileLoadedMsg is sent when the initial GET /v1/me fetch completes.
+// profile carries the full authenticated user profile; err is non-nil on failure.
 type userProfileLoadedMsg struct {
 	profile domain.UserProfile
 	err     error

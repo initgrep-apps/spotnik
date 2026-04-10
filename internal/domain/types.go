@@ -17,10 +17,16 @@ func unmarshalJSON(data []byte, v interface{}) error {
 // as returned by GET /v1/me.
 type UserProfile struct {
 	// ID is the Spotify user ID. Used to distinguish owned vs followed playlists.
-	ID          string `json:"id"`
+	ID string `json:"id"`
+
+	// DisplayName is the user's Spotify display name.
 	DisplayName string `json:"display_name"`
-	Product     string `json:"product"` // "premium" or "free"
-	Country     string `json:"country"` // ISO 3166-1 alpha-2, e.g. "DE"
+
+	// Product is the subscription tier: "premium" or "free".
+	Product string `json:"product"`
+
+	// Country is the ISO 3166-1 alpha-2 country code (e.g. "DE").
+	Country string `json:"country"`
 }
 
 // PlaybackState represents the full playback state returned by GET /me/player.
