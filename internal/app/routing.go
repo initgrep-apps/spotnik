@@ -7,6 +7,8 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -297,8 +299,13 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case userProfileLoadedMsg:
 		if m.err != nil {
 			if errors.Is(m.err, errNilClient) {
-				// Programming error — userAPI was nil at startup; no toast.
+				// Programming error — userAPI was nil at startup; log to stderr but no toast.
+				fmt.Fprintf(os.Stderr, "spotnik: userProfileLoadedMsg: userAPI is nil — profile fetch skipped\n")
 				return a, nil, true
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.err, &forbiddenErr) {
+				return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required"), true
 			}
 			// Surface the failure so the user knows ownership detection is degraded.
 			return a, a.alerts.NewAlertCmd("warning",
@@ -309,7 +316,9 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// Refresh playlist rows so the ~ prefix appears immediately.
 			return a, a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{}), true
 		}
-		return a, nil, true
+		fmt.Fprintf(os.Stderr, "spotnik: userProfileLoadedMsg: profile loaded with empty ID (unexpected)\n")
+		return a, a.alerts.NewAlertCmd("warning",
+			"Could not load your Spotify profile. Playlist ownership markers may be incorrect."), true
 
 	case panes.PlaylistAccessDeniedMsg:
 		return a, a.alerts.NewAlertCmd("warning", "Track access limited to playlists you own or collaborate on"), true

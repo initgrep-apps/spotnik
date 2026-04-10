@@ -643,13 +643,17 @@ func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 		if userAPI == nil {
 			return userProfileLoadedMsg{err: errNilClient}
 		}
-		profile, err := userAPI.Profile(context.Background())
+		profile, err := userAPI.Profile(api.WithPriority(context.Background(), api.Interactive))
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
 			}
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(err, &forbiddenErr) {
+				return userProfileLoadedMsg{err: forbiddenErr}
 			}
 			return userProfileLoadedMsg{err: err}
 		}
