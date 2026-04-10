@@ -59,8 +59,8 @@ func TestHelpOverlay_View_ContainsPaneActionKeys(t *testing.T) {
 	o := newTestHelpOverlay()
 	o.SetSize(120, 40)
 	view := o.View()
-	// Enter, f, g remain after story 120 dead action removal.
-	for _, label := range []string{"select / play", "filter", "cycle time range"} {
+	// Enter, f, g remain after story 120 dead action removal (now title-case labels).
+	for _, label := range []string{"Select / Play", "Filter", "Cycle time range"} {
 		assert.Contains(t, view, label, "pane action label %q should appear", label)
 	}
 	// Removed dead action labels must not appear.
@@ -112,4 +112,39 @@ func TestHelpOverlay_View_NarrowTerminal(t *testing.T) {
 	o := newTestHelpOverlay()
 	o.SetSize(60, 30) // narrower than fixed 78-col width
 	assert.NotPanics(t, func() { _ = o.View() })
+}
+
+// TestHelpOverlay_Labels_TitleCase asserts that every binding label in helpContent
+// starts with an uppercase letter. A label like "search" fails; "Search" passes.
+func TestHelpOverlay_Labels_TitleCase(t *testing.T) {
+	for _, col := range helpContent {
+		for _, sec := range col {
+			for _, b := range sec.bindings {
+				if len(b.label) == 0 {
+					continue
+				}
+				first := rune(b.label[0])
+				assert.True(t, first >= 'A' && first <= 'Z',
+					"label %q must start with an uppercase letter", b.label)
+			}
+		}
+	}
+}
+
+// TestHelpOverlay_Navigation_NoJK asserts that the Navigation section contains
+// no binding whose key is "j / k" or "j/k".
+func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
+	for _, col := range helpContent {
+		for _, sec := range col {
+			if sec.title != "Navigation" {
+				continue
+			}
+			for _, b := range sec.bindings {
+				assert.NotEqual(t, "j / k", b.key,
+					"Navigation must not list j / k (implicit scroll)")
+				assert.NotEqual(t, "j/k", b.key,
+					"Navigation must not list j/k (implicit scroll)")
+			}
+		}
+	}
 }
