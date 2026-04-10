@@ -12,6 +12,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestPostTokenRequest_NilClientReturnsError verifies that passing a nil httpClient
+// returns an error instead of panicking.
+func TestPostTokenRequest_NilClientReturnsError(t *testing.T) {
+	_, err := postTokenRequest(
+		context.Background(),
+		nil,
+		"http://example.com/token",
+		url.Values{"grant_type": {"client_credentials"}},
+	)
+	assert.ErrorContains(t, err, "httpClient must not be nil")
+}
+
 // TestPostTokenRequest_UsesInjectedClient verifies that postTokenRequest reaches
 // the injected *http.Client rather than falling through to http.DefaultClient.
 // If the test server is not called, http.DefaultClient is still being used.
