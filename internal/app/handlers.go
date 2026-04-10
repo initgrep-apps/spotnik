@@ -506,7 +506,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					fetchPlaybackStateCmd(a.player),
-					a.alerts.NewAlertCmd("warning", "Playback control not available on this device"),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
 				)
 			}
 			return a, tea.Batch(
