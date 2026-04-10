@@ -57,3 +57,19 @@ Items to log:
 **Feature:** 23-user-profile-subscription
 
 `truncateRunes` in `internal/ui/panes/profile.go` and `truncateProfileName` in `internal/app/render.go` have no test for the truncation branch (name longer than 20 runes). All existing test profiles use short names. The off-by-one behaviour (truncate to max-1 runes + `…`) is unverified. Add a `TestProfileOverlay_View_TruncatesLongDisplayName` test case with a name exceeding 20 runes and assert the output contains `…` and does not contain the full untruncated name.
+
+---
+
+## isPremiumOnlyPlaybackKey: no direct unit test for key enumeration
+**Found:** 2026-04-10 | **Source:** PR #149 Review
+**Feature:** 23-user-profile-subscription
+
+`isPremiumOnlyPlaybackKey` in `internal/app/routing.go` is tested indirectly via `TestPremiumGate_FreeUser_PlaybackKeyEmitsToast` (8 keys) and `TestPremiumGate_FreeUser_VisualizerKeyNotBlocked`. A direct table-driven unit test listing every key in `isPlaybackKey` and whether it requires premium would serve as a living specification and catch any future addition to `isPlaybackKey` that doesn't get added to `isPremiumOnlyPlaybackKey`.
+
+---
+
+## PlayContextMsg/PlayTrackListMsg/PlayTrackMsg not premium-gated
+**Found:** 2026-04-10 | **Source:** PR #149 Review
+**Feature:** 23-user-profile-subscription
+
+`PlayContextMsg`, `PlayTrackListMsg`, and `PlayTrackMsg` handlers in `handlers.go` dispatch Premium-only playback API calls but are not gated by `IsPremium()`. Story 116 intentionally scoped only the operations in the design table. These could be a follow-up story to complete gating coverage for free-tier users navigating search results or queue pane.

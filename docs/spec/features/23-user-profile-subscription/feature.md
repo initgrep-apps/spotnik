@@ -1,6 +1,6 @@
 ---
 title: "User Profile & Subscription Awareness"
-status: open
+status: done
 ---
 
 ## Description
