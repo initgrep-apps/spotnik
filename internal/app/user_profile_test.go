@@ -7,6 +7,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -105,7 +106,7 @@ func isPlaybackRequestMsg(cmd tea.Cmd) bool {
 	return false
 }
 
-// TestPremiumGate_FreeUser_PlaybackKeyEmitsToast verifies that pressing a playback key
+// TestPremiumGate_FreeUser_PlaybackKeyEmitsToast verifies that pressing a Premium-only playback key
 // while the store has a free-tier profile returns a non-nil cmd that does NOT contain
 // a PlaybackRequestMsg — it should be a warning toast cmd instead.
 func TestPremiumGate_FreeUser_PlaybackKeyEmitsToast(t *testing.T) {
@@ -134,6 +135,40 @@ func TestPremiumGate_FreeUser_PlaybackKeyEmitsToast(t *testing.T) {
 		assert.False(t, isPlaybackRequestMsg(cmd),
 			"free user: cmd must NOT be a PlaybackRequestMsg (gate should block before dispatching to NowPlayingPane)")
 	}
+}
+
+// TestPremiumGate_FreeUser_VisualizerKeyNotBlocked verifies that 'v' (visualizer cycle)
+// is NOT blocked by the premium gate — it is a local UI action with no API call.
+// A free user pressing 'v' should get the same result as a premium user pressing 'v'.
+func TestPremiumGate_FreeUser_VisualizerKeyNotBlocked(t *testing.T) {
+	vKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
+
+	// Premium user result.
+	cfgP := &config.Config{}
+	cfgP.Preferences.Theme = "black"
+	ap := New(cfgP, AppOptions{})
+	ap.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	ap.store.SetUserProfile(domain.UserProfile{ID: "premium", Product: "premium"})
+	_, premiumCmd := ap.Update(vKey)
+
+	// Free user result.
+	cfgF := &config.Config{}
+	cfgF.Preferences.Theme = "black"
+	af := New(cfgF, AppOptions{})
+	af.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	af.store.SetUserProfile(domain.UserProfile{ID: "free", Product: "free"})
+	_, freeCmd := af.Update(vKey)
+
+	// Both should produce the same (non-nil) result: VisualizerPatternChangedMsg.
+	// The gate must NOT block 'v' for free users.
+	require.NotNil(t, freeCmd, "free user: 'v' must not be blocked (gate exempt)")
+	require.NotNil(t, premiumCmd, "premium user: 'v' must return cmd")
+
+	// Both cmds should produce VisualizerPatternChangedMsg (same type for both tiers).
+	freeMsg := freeCmd()
+	premiumMsg := premiumCmd()
+	assert.Equal(t, fmt.Sprintf("%T", premiumMsg), fmt.Sprintf("%T", freeMsg),
+		"'v' key should produce same message type for free and premium users")
 }
 
 // TestPremiumGate_PremiumUser_PlaybackKeyDispatches verifies that pressing a playback key

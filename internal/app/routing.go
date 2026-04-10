@@ -40,6 +40,18 @@ func isPlaybackKey(m tea.KeyMsg) bool {
 	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight
 }
 
+// isPremiumOnlyPlaybackKey returns true for playback keys that require Spotify Premium.
+// 'v' (visualizer cycle) is excluded — it is a local UI action that makes no API call.
+func isPremiumOnlyPlaybackKey(m tea.KeyMsg) bool {
+	if m.Type == tea.KeyRunes {
+		switch string(m.Runes) {
+		case " ", "n", "+", "-", "s", "r":
+			return true
+		}
+	}
+	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight
+}
+
 // handleKeyMsg routes a keyboard event through all overlay and view guards before
 // dispatching to the focused pane. Extracted from Update() to keep that function readable.
 func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -187,10 +199,11 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Playback keys always go to the NowPlaying pane regardless of focus.
-	// Gate: free-tier users are blocked before any API call is dispatched.
 	// Temporarily enable focus so the pane handles the key even when it isn't focused.
 	if isPlaybackKey(m) {
-		if !a.store.IsPremium() {
+		// Gate: free-tier users are blocked from Premium-only API operations.
+		// 'v' (visualizer cycle) is exempt — it is a local UI action, not an API call.
+		if isPremiumOnlyPlaybackKey(m) && !a.store.IsPremium() {
 			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
 		}
 		np := a.nowPlayingPane()
