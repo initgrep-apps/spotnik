@@ -1,7 +1,7 @@
 ---
 title: "Data Layer — UserProfile Expansion and Profile Pipeline"
 feature: 23-user-profile-subscription
-status: open
+status: done
 ---
 
 ## Background

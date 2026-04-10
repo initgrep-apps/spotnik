@@ -1,4 +1,28 @@
 
+## buildFetchCurrentUserCmd uses non-cancellable context
+**Found:** 2026-04-10 | **Source:** PR #147 Review
+**Feature:** 23-user-profile-subscription
+
+`buildFetchCurrentUserCmd` in `internal/app/commands.go` calls `userAPI.Profile(api.WithPriority(context.Background(), api.Interactive))` using `context.Background()` rather than a cancellable context tied to the app lifecycle. If the user quits while the fetch is in-flight, the HTTP request will not be cancelled. Pre-existing pattern gap — `buildSearchPageCmd` and others handle this correctly.
+
+---
+
+## No concurrent store test for UserProfile methods
+**Found:** 2026-04-10 | **Source:** PR #147 Review
+**Feature:** 23-user-profile-subscription
+
+`UserProfile()`, `SetUserProfile()`, and `IsPremium()` have correct mutex locking but `store_test.go` has no goroutine-concurrent test to act as a race-detection regression guard. A short concurrent test calling `SetUserProfile` and `IsPremium` simultaneously would protect against future locking mistakes.
+
+---
+
+## TestUserClient_Profile_Success not table-driven
+**Found:** 2026-04-10 | **Source:** PR #147 Review
+**Feature:** 23-user-profile-subscription
+
+`internal/api/user_test.go` `TestUserClient_Profile_Success` was extended with new field assertions but remains a flat single-case test. Project convention (CLAUDE.md) requires table-driven style. Acceptable now with one scenario; should be refactored if a second fixture path is added.
+
+---
+
 ## StateReader and auth test coverage refinements (PR #146 review findings)
 **Found:** 2026-04-10 | **Source:** PR #146 Review
 **Feature:** 22-developer-foundations
