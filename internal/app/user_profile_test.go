@@ -214,6 +214,108 @@ func TestPremiumGate_FreeUser_TransferPlaybackEmitsToast(t *testing.T) {
 		"free user: cmd must NOT be a BatchMsg (gate should return single toast, not batch with transfer cmd)")
 }
 
+// --- AddToQueue premium gate tests ---
+
+// isAddToQueueResultMsg returns true if cmd produces a panes.AddToQueueResultMsg.
+// Used to distinguish "gate blocked → toast" from "gate passed → API cmd dispatched".
+func isAddToQueueResultMsg(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	msg := cmd()
+	if _, ok := msg.(panes.AddToQueueResultMsg); ok {
+		return true
+	}
+	// Handle batch commands.
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			inner := c()
+			if _, ok := inner.(panes.AddToQueueResultMsg); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestPremiumGate_FreeUser_AddToQueueEmitsToast verifies that a free-tier user
+// sending AddToQueueMsg receives a warning toast and NOT an AddToQueueResultMsg.
+// The premium gate in the AddToQueueMsg handler must intercept before buildAddToQueueCmd.
+func TestPremiumGate_FreeUser_AddToQueueEmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := New(cfg, AppOptions{})
+	// Mark user as free tier.
+	a.store.SetUserProfile(domain.UserProfile{ID: "user-free", Product: "free"})
+
+	_, cmd := a.Update(panes.AddToQueueMsg{TrackURI: "spotify:track:abc", TrackName: "Test Song"})
+
+	require.NotNil(t, cmd, "free user: AddToQueueMsg must return a non-nil cmd (warning toast)")
+	assert.False(t, isAddToQueueResultMsg(cmd),
+		"free user: cmd must NOT produce AddToQueueResultMsg (gate should block before API call)")
+}
+
+// TestPremiumGate_PremiumUser_AddToQueueDispatches verifies that a premium-tier user
+// sending AddToQueueMsg bypasses the gate and dispatches a buildAddToQueueCmd.
+// With no player configured the result is AddToQueueResultMsg (errNilClient) — proving
+// the API cmd was dispatched rather than a plain toast.
+func TestPremiumGate_PremiumUser_AddToQueueDispatches(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := New(cfg, AppOptions{})
+	// Mark user as premium.
+	a.store.SetUserProfile(domain.UserProfile{ID: "user-premium", Product: "premium"})
+
+	_, cmd := a.Update(panes.AddToQueueMsg{TrackURI: "spotify:track:abc", TrackName: "Test Song"})
+
+	require.NotNil(t, cmd, "premium user: AddToQueueMsg must return a non-nil cmd")
+	assert.True(t, isAddToQueueResultMsg(cmd),
+		"premium user: cmd must produce AddToQueueResultMsg (gate passed, buildAddToQueueCmd dispatched)")
+}
+
+// TestPlaybackCmdSentMsg_ForbiddenEmitsWarningToast verifies that a 403 ForbiddenError
+// wrapped in PlaybackCmdSentMsg emits "Spotify Premium required" in the toast overlay
+// and does NOT show a generic "not available" message that would confuse users.
+func TestPlaybackCmdSentMsg_ForbiddenEmitsWarningToast(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := New(cfg, AppOptions{})
+	// Resize so the view renders properly.
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	forbiddenErr := &api.ForbiddenError{Message: "Spotify Premium required"}
+	_, cmd := a.Update(panes.PlaybackCmdSentMsg{Err: forbiddenErr})
+
+	require.NotNil(t, cmd, "403 PlaybackCmdSentMsg must return a non-nil cmd (toast + fetch)")
+
+	// The handler returns tea.Batch(fetchPlaybackStateCmd, alertCmd).
+	// Execute the batch to get the BatchMsg, then feed each cmd to Update.
+	batchMsg := cmd()
+	batchCmds, ok := batchMsg.(tea.BatchMsg)
+	require.True(t, ok, "PlaybackCmdSentMsg 403 handler must return a BatchMsg, got %T", batchMsg)
+
+	// Feed each sub-cmd result to Update to activate the alert overlay.
+	for _, c := range batchCmds {
+		if c == nil {
+			continue
+		}
+		innerMsg := c()
+		updatedModel, _ := a.Update(innerMsg)
+		if app, ok := updatedModel.(*App); ok {
+			a = app
+		}
+	}
+
+	output := a.View()
+	assert.Contains(t, output, "Spotify Premium required",
+		"403 PlaybackCmdSentMsg toast must show 'Spotify Premium required'")
+	assert.NotContains(t, output, "not available",
+		"403 PlaybackCmdSentMsg toast must NOT show generic 'not available' text")
+}
+
 // TestBuildFetchCurrentUserCmd covers the command closure for all key error paths
 // and the happy path. It injects MockUser directly into a.userAPI so no HTTP server
 // is needed.
