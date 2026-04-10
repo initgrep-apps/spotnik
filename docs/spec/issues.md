@@ -41,3 +41,19 @@ Items to log:
 1. `internal/api/devices_test.go` — `TransferPlayback` with `play: false` is untested; only the `true` path is exercised. Adding a second table row would pin the serialisation contract.
 2. `internal/api/devices_test.go` — `{"devices": null}` JSON response not tested; only the `[]` case is covered. A `devices_null.json` fixture and `TestGetDevices_NullDevicesField` would pin the nil-guard on line 49 of devices.go.
 3. `internal/testhelpers/fixtures_test.go:22` — `assert.Contains(…, "{")` is a weak JSON validity check; `json.Valid(data)` would be more precise.
+
+---
+
+## Duplicate truncation helpers: truncateRunes (panes) vs truncateProfileName (render)
+**Found:** 2026-04-10 | **Source:** PR #148 Review
+**Feature:** 23-user-profile-subscription
+
+`internal/ui/panes/profile.go` has a private `truncateRunes(s string, max int) string` helper and `internal/app/render.go` has a private `truncateProfileName(s string) string` that wraps the same logic with a hardcoded 20-rune cap. Both functions slice `[]rune` and append `"…"`. They can diverge independently. Consider consolidating into a shared utility (e.g., `ui/components/`) or at minimum exporting one and calling it from both sites.
+
+---
+
+## truncateRunes: long-name truncation branch untested
+**Found:** 2026-04-10 | **Source:** PR #148 Review
+**Feature:** 23-user-profile-subscription
+
+`truncateRunes` in `internal/ui/panes/profile.go` and `truncateProfileName` in `internal/app/render.go` have no test for the truncation branch (name longer than 20 runes). All existing test profiles use short names. The off-by-one behaviour (truncate to max-1 runes + `…`) is unverified. Add a `TestProfileOverlay_View_TruncatesLongDisplayName` test case with a name exceeding 20 runes and assert the output contains `…` and does not contain the full untruncated name.

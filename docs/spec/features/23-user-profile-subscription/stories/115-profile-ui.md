@@ -1,7 +1,7 @@
 ---
 title: "Profile UI — Overlay Pane, Header Chip, App Wiring"
 feature: 23-user-profile-subscription
-status: open
+status: done
 ---
 
 ## Background
