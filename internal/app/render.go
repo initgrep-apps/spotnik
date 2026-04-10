@@ -45,7 +45,7 @@ func (k appKeyMap) ShortHelp() []key.Binding {
 
 // FullHelp returns groups of bindings for the column layout.
 // Each inner slice is one column rendered vertically; columns are joined horizontally.
-// Column 3 (Pane/Devices/Profile) has 3 entries — both are overlay shortcuts.
+// Column 3 (Pane/Devices/Profile) has 3 entries — Devices and Profile are overlay shortcuts.
 func (k appKeyMap) FullHelp() [][]key.Binding {
 	if k.activePage == layout.PageA {
 		return [][]key.Binding{
@@ -478,7 +478,7 @@ func (a *App) renderHeader() string {
 // keys in Info() color, descriptions in TextMuted(), wrapped in RenderPaneBorder.
 //
 // The panel is always 3 lines tall (border + 1 content row + border).
-// Page A shows all 9 bindings in a single row; Page B omits preset/toggle.
+// Page A shows all 10 bindings in a single row; Page B omits preset/toggle.
 func (a *App) renderStatusBar() string {
 	const statusH = 3 // 1 content row + top/bottom border
 	// Use a minimum rendering width of 160 so all bindings are visible on one row
