@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/prefs"
 	"github.com/initgrep-apps/spotnik/internal/state"
@@ -212,10 +213,9 @@ type splashDismissMsg struct{}
 type unauthorizedMsg struct{}
 
 // userProfileLoadedMsg is sent when the initial GET /v1/me fetch completes.
-// userID is the authenticated user's Spotify ID; err is non-nil on failure.
 type userProfileLoadedMsg struct {
-	userID string
-	err    error
+	profile domain.UserProfile
+	err     error
 }
 
 // tokenRefreshedMsg is sent when a token refresh attempt completes.

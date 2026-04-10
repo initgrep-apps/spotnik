@@ -653,7 +653,7 @@ func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 			}
 			return userProfileLoadedMsg{err: err}
 		}
-		return userProfileLoadedMsg{userID: profile.ID}
+		return userProfileLoadedMsg{profile: profile}
 	}
 }
 

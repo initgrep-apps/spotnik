@@ -304,8 +304,8 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return a, a.alerts.NewAlertCmd("warning",
 				"Could not load your Spotify profile. Playlist ownership markers may be incorrect."), true
 		}
-		if m.userID != "" {
-			a.store.SetUserID(m.userID)
+		if m.profile.ID != "" {
+			a.store.SetUserProfile(m.profile)
 			// Refresh playlist rows so the ~ prefix appears immediately.
 			return a, a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{}), true
 		}
