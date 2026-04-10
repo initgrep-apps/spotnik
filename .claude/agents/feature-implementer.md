@@ -99,6 +99,9 @@ Parse the target story file completely:
 4. Note any **referenced docs** (architecture, design docs) — read the relevant parts
 5. Review CLAUDE.md rules — they override everything else
 
+### Step 4: Codebase exploration
+Invoke `feature-dev:feature-dev` to explore the codebase for patterns, integration points, and test conventions relevant to this story. Summarize findings — do not dump raw file traces. Use the findings to inform the architecture checkpoint and implementation.
+
 Use `TodoWrite` to create a todo item per task from the story. This is your progress tracker. You must keep it updated throughout the implementation.
 
 ---
