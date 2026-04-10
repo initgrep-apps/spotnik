@@ -106,6 +106,16 @@ Use `TodoWrite` to create a todo item per task from the story. This is your prog
 
 ---
 
+## PHASE 2.5 — ARCHITECTURE
+
+Before writing any code, invoke `feature-dev:feature-dev` for architecture design.
+
+Scale to story complexity:
+- **Simple** (test-only, single-file, or uses a pattern already present in previous stories): one-sentence sketch of what changes and why — no multi-approach analysis needed.
+- **Complex** (new interfaces, multiple packages, or a pattern not seen in previous stories): full architecture design with trade-offs before proceeding.
+
+---
+
 ## PHASE 3 — IMPLEMENT
 
 Invoke the `feature-dev:feature-dev` skill for structured development guidance. Work through tasks **in order**. For each task:
