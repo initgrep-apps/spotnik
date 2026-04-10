@@ -61,6 +61,7 @@ func TestPlaylistsPane_ToggleKey(t *testing.T) {
 }
 
 // TestPlaylistsPane_Actions_ListView returns standard actions when not in track view.
+// n and r actions were removed in story 120 (dead pane action removal).
 func TestPlaylistsPane_Actions_ListView(t *testing.T) {
 	pane := newTestPlaylistsPane(true)
 	actions := pane.Actions()
@@ -69,8 +70,8 @@ func TestPlaylistsPane_Actions_ListView(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "should have filter action")
-	assert.Contains(t, keys, "n", "should have new action")
-	assert.Contains(t, keys, "r", "should have rename action")
+	assert.NotContains(t, keys, "n", "n (new playlist stub) must be absent")
+	assert.NotContains(t, keys, "r", "r (rename stub) must be absent")
 }
 
 // TestPlaylistsPane_Actions_FilterActive returns close action when filter is active.
@@ -161,31 +162,24 @@ func TestPlaylistsPane_Esc_ReturnsToListView(t *testing.T) {
 	assert.True(t, isClosed, "Esc should produce PlaylistTrackViewClosedMsg, got %T", msg)
 }
 
-// TestPlaylistsPane_N_EmitsCreateRequest verifies 'n' emits PlaylistCreateRequestMsg.
-func TestPlaylistsPane_N_EmitsCreateRequest(t *testing.T) {
+// TestPlaylistsPane_N_IsNoOp verifies 'n' is a no-op after stub removal (story 120).
+func TestPlaylistsPane_N_IsNoOp(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	require.NotNil(t, cmd, "'n' should return a command")
-
-	msg := cmd()
-	_, ok := msg.(PlaylistCreateRequestMsg)
-	assert.True(t, ok, "command should produce PlaylistCreateRequestMsg")
+	assert.Nil(t, cmd, "'n' handler was removed; should return nil cmd")
 }
 
-// TestPlaylistsPane_R_EmitsRenameRequest verifies 'r' emits PlaylistRenameRequestMsg.
-func TestPlaylistsPane_R_EmitsRenameRequest(t *testing.T) {
+// TestPlaylistsPane_R_IsNoOp verifies 'r' is a no-op after stub removal (story 120).
+// Note: 'r' is also a global playback key (cycle repeat) so it would never reach
+// the pane in practice anyway.
+func TestPlaylistsPane_R_IsNoOp(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	require.NotNil(t, cmd, "'r' should return a command")
-
-	msg := cmd()
-	req, ok := msg.(PlaylistRenameRequestMsg)
-	assert.True(t, ok, "command should produce PlaylistRenameRequestMsg")
-	assert.Equal(t, "pl1", req.PlaylistID)
+	assert.Nil(t, cmd, "'r' handler was removed; should return nil cmd")
 }
 
 // TestPlaylistsPane_X_IsNoOpInStory106 verifies 'x' in track view is a no-op
@@ -207,9 +201,10 @@ func TestPlaylistsPane_X_IsNoOpInStory106(t *testing.T) {
 	assert.Nil(t, cmd, "'x' is a no-op in story 106 (management operations out of scope)")
 }
 
-// TestPlaylistsPane_ShiftUp_ReorderRequest verifies Shift+Up in track view
-// with loadedTracks set emits PlaylistReorderRequestMsg. Bounds read from p.loadedTracks.
-func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
+// TestPlaylistsPane_ShiftUp_IsNoOp verifies Shift+Up in track view is a no-op
+// after removal of the unimplemented reorder handler (story 120).
+// Most terminals don't deliver xterm shift-arrow sequences reliably anyway.
+func TestPlaylistsPane_ShiftUp_IsNoOp(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
 		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 2},
@@ -222,7 +217,6 @@ func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
 	pane := NewPlaylistsPane(s, th, true)
 	pane.SetSize(80, 20)
 
-	// Switch to track sub-view with loadedTracks set (for cursor navigation)
 	pane.inTrackView = true
 	pane.selectedID = "pl1"
 	pane.selectedName = "LoFi"
@@ -230,22 +224,15 @@ func TestPlaylistsPane_ShiftUp_ReorderRequest(t *testing.T) {
 	pane.refreshTrackRows()
 	pane.trackTable.SetFocused(true)
 
-	// Move cursor to row 1, then press Shift+Up
+	// Move cursor to row 1, then press Shift+Up — should be a no-op now.
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}) //nolint:errcheck
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyShiftUp})
-	require.NotNil(t, cmd, "Shift+Up should return a command")
-
-	msg := cmd()
-	req, ok := msg.(PlaylistReorderRequestMsg)
-	assert.True(t, ok, "command should produce PlaylistReorderRequestMsg")
-	assert.Equal(t, "pl1", req.PlaylistID)
-	assert.Equal(t, 1, req.RangeStart)
-	assert.Equal(t, 0, req.InsertBefore)
+	assert.Nil(t, cmd, "Shift+Up handler was removed; should return nil cmd")
 }
 
-// TestPlaylistsPane_ShiftDown_ReorderRequest verifies Shift+Down in track view
-// with loadedTracks set emits PlaylistReorderRequestMsg. Bounds read from p.loadedTracks.
-func TestPlaylistsPane_ShiftDown_ReorderRequest(t *testing.T) {
+// TestPlaylistsPane_ShiftDown_IsNoOp verifies Shift+Down in track view is a no-op
+// after removal of the unimplemented reorder handler (story 120).
+func TestPlaylistsPane_ShiftDown_IsNoOp(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
 		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 2},
@@ -264,16 +251,9 @@ func TestPlaylistsPane_ShiftDown_ReorderRequest(t *testing.T) {
 	pane.loadedTracks = tracks
 	pane.refreshTrackRows()
 
-	// Cursor at 0, press Shift+Down
+	// Cursor at 0, press Shift+Down — should be a no-op now.
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyShiftDown})
-	require.NotNil(t, cmd, "Shift+Down should return a command")
-
-	msg := cmd()
-	req, ok := msg.(PlaylistReorderRequestMsg)
-	assert.True(t, ok, "command should produce PlaylistReorderRequestMsg")
-	assert.Equal(t, "pl1", req.PlaylistID)
-	assert.Equal(t, 0, req.RangeStart)
-	assert.Equal(t, 2, req.InsertBefore)
+	assert.Nil(t, cmd, "Shift+Down handler was removed; should return nil cmd")
 }
 
 // TestPlaylistsPane_Filter_FiltersPlaylists verifies filter narrows the list.
@@ -801,4 +781,58 @@ func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnPrimary(), trackCols[1].Color, "Track column should use ColumnPrimary()")
 	assert.Equal(t, th.ColumnSecondary(), trackCols[2].Color, "Artist column should use ColumnSecondary()")
 	assert.Equal(t, th.ColumnTertiary(), trackCols[3].Color, "Duration column should use ColumnTertiary()")
+}
+
+// ── Story 120: dead pane action removal ──────────────────────────────────────
+
+// TestPlaylistsPane_NKey_NoOp verifies that pressing 'n' in the list view
+// returns nil cmd after removal of the stub handler.
+func TestPlaylistsPane_NKey_NoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	assert.Nil(t, cmd, "'n' should return nil cmd (handler removed)")
+}
+
+// TestPlaylistsPane_RKey_NoOp verifies that pressing 'r' in the list view
+// returns nil cmd after removal of the stub handler.
+func TestPlaylistsPane_RKey_NoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	assert.Nil(t, cmd, "'r' should return nil cmd (handler removed)")
+}
+
+// TestPlaylistsPane_Actions_ListView_NoNOrR verifies that Actions() in list view
+// does not include 'n' or 'r' after dead action removal.
+func TestPlaylistsPane_Actions_ListView_NoNOrR(t *testing.T) {
+	pane := newTestPlaylistsPane(true)
+	actions := pane.Actions()
+	for _, a := range actions {
+		assert.NotEqual(t, "n", a.Key, "Actions() must not include 'n'")
+		assert.NotEqual(t, "r", a.Key, "Actions() must not include 'r'")
+	}
+	keys := make([]string, len(actions))
+	for i, a := range actions {
+		keys[i] = a.Key
+	}
+	assert.Contains(t, keys, "f", "Actions() must still include 'f' (filter)")
+}
+
+// TestPlaylistsPane_ShiftArrows_TrackView_NoOp verifies that ShiftUp and
+// ShiftDown in the track sub-view return nil cmd after dead action removal.
+func TestPlaylistsPane_ShiftArrows_TrackView_NoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.trackTable.SetFocused(true)
+	pane.table.SetFocused(false)
+
+	_, cmdUp := pane.Update(tea.KeyMsg{Type: tea.KeyShiftUp})
+	assert.Nil(t, cmdUp, "ShiftUp should return nil cmd (handler removed)")
+
+	_, cmdDown := pane.Update(tea.KeyMsg{Type: tea.KeyShiftDown})
+	assert.Nil(t, cmdDown, "ShiftDown should return nil cmd (handler removed)")
 }
