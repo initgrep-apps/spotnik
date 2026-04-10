@@ -136,8 +136,6 @@ func (p *PlaylistsPane) Actions() []layout.Action {
 	}
 	return []layout.Action{
 		{Key: "f", Label: "filter"},
-		{Key: "n", Label: "new"},
-		{Key: "r", Label: "rename"},
 	}
 }
 
@@ -307,23 +305,6 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return p, nil
 
-	case key.Type == tea.KeyRunes && string(key.Runes) == "n":
-		// TODO(feature-53): integrate textinput to collect playlist name from user
-		return p, func() tea.Msg {
-			return PlaylistCreateRequestMsg{Name: "New Playlist"}
-		}
-
-	case key.Type == tea.KeyRunes && string(key.Runes) == "r":
-		// TODO(feature-53): integrate textinput to collect new name from user
-		playlist := p.filteredPlaylist()
-		idx := p.table.SelectedIndex()
-		if idx >= 0 && idx < len(playlist) {
-			pl := playlist[idx]
-			return p, func() tea.Msg {
-				return PlaylistRenameRequestMsg{PlaylistID: pl.ID, NewName: pl.Name}
-			}
-		}
-		return p, nil
 	}
 
 	// Forward navigation to the table.
@@ -352,44 +333,6 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 				return PlayContextMsg{
 					ContextURI: playlistURI,
 					OffsetURI:  track.URI,
-				}
-			}
-		}
-		return p, nil
-
-	case key.Type == tea.KeyShiftUp:
-		// NOTE: management operations (x, Shift+↑/↓) are out of scope for story 106.
-		// They use p.loadedTracks (pane-owned) for bounds — story 107 will implement the API call.
-		idx := p.trackTable.SelectedIndex()
-		if idx > 0 && idx < len(p.loadedTracks) {
-			playlistID := p.selectedID
-			from := idx
-			to := idx - 1
-			return p, func() tea.Msg {
-				return PlaylistReorderRequestMsg{
-					PlaylistID:   playlistID,
-					RangeStart:   from,
-					InsertBefore: to,
-					RangeLength:  1,
-				}
-			}
-		}
-		return p, nil
-
-	case key.Type == tea.KeyShiftDown:
-		// NOTE: management operations (x, Shift+↑/↓) are out of scope for story 106.
-		// They use p.loadedTracks (pane-owned) for bounds — story 107 will implement the API call.
-		idx := p.trackTable.SelectedIndex()
-		if idx >= 0 && idx < len(p.loadedTracks)-1 {
-			playlistID := p.selectedID
-			from := idx
-			to := idx + 2
-			return p, func() tea.Msg {
-				return PlaylistReorderRequestMsg{
-					PlaylistID:   playlistID,
-					RangeStart:   from,
-					InsertBefore: to,
-					RangeLength:  1,
 				}
 			}
 		}

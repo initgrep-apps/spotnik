@@ -1,7 +1,7 @@
 ---
 title: "Dead Pane Actions Removal"
 feature: 24-controls-cleanup
-status: open
+status: done
 ---
 
 ## Background

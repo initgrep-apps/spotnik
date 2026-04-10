@@ -83,7 +83,8 @@ func TestLikedSongsPane_ToggleKey(t *testing.T) {
 	assert.Equal(t, 5, pane.ToggleKey())
 }
 
-// TestLikedSongsPane_Actions_Default returns filter and like actions.
+// TestLikedSongsPane_Actions_Default returns only filter action.
+// 'i' (like/unlike) was removed in story 120: the feature returned 403 and was pulled.
 func TestLikedSongsPane_Actions_Default(t *testing.T) {
 	pane := newTestLikedSongsPane(true)
 	actions := pane.Actions()
@@ -92,7 +93,7 @@ func TestLikedSongsPane_Actions_Default(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "should have filter action")
-	assert.Contains(t, keys, "i", "should have like/unlike action")
+	assert.NotContains(t, keys, "i", "i (like/unlike) must be absent")
 }
 
 // TestLikedSongsPane_Actions_FilterActive returns close action when filter is active.
@@ -159,20 +160,14 @@ func TestLikedSongsPane_Enter_EmptyList_EmitsNoCommand(t *testing.T) {
 	assert.Nil(t, cmd, "Enter on empty list should not emit a command")
 }
 
-// TestLikedSongsPane_I_EmitsLikeTrackRequest verifies 'i' emits LikeTrackRequestMsg.
-func TestLikedSongsPane_I_EmitsLikeTrackRequest(t *testing.T) {
+// TestLikedSongsPane_I_IsNoOp verifies 'i' is a no-op after handler removal (story 120).
+// The like/unlike feature always returned 403; it has been removed entirely.
+func TestLikedSongsPane_I_IsNoOp(t *testing.T) {
 	pane := newTestLikedSongsPaneWithData(true)
 	pane.SetSize(80, 20)
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
-	require.NotNil(t, cmd, "'i' should return a command")
-
-	msg := cmd()
-	req, ok := msg.(LikeTrackRequestMsg)
-	require.True(t, ok, "command should produce LikeTrackRequestMsg")
-	assert.Equal(t, "t1", req.TrackID, "should use first track ID")
-	// Track in liked songs → unlike action
-	assert.True(t, req.Unlike, "liked songs 'i' action should unlike the track")
+	assert.Nil(t, cmd, "'i' handler was removed; should return nil cmd")
 }
 
 // TestLikedSongsPane_Filter_ByTrackName verifies filter narrows results by track name.
@@ -292,12 +287,24 @@ func TestLikedSongsPane_RefreshRows_UpdatesTable(t *testing.T) {
 }
 
 // TestLikedSongsPane_I_EmptyList does not panic on empty list.
+// Handler was removed in story 120; 'i' is always a no-op regardless.
 func TestLikedSongsPane_I_EmptyList(t *testing.T) {
 	pane := newTestLikedSongsPane(true)
 	pane.SetSize(80, 20)
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
-	assert.Nil(t, cmd, "'i' on empty list should not emit a command")
+	assert.Nil(t, cmd, "'i' should return nil cmd (handler removed)")
+}
+
+// ── Story 120: dead pane action removal ──────────────────────────────────────
+
+// TestLikedSongsPane_Actions_NoLikeEntry verifies 'i' is not in Actions()
+// after dead action removal (story 120).
+func TestLikedSongsPane_Actions_NoLikeEntry(t *testing.T) {
+	pane := newTestLikedSongsPane(false)
+	for _, a := range pane.Actions() {
+		assert.NotEqual(t, "i", a.Key, "Actions() must not include 'i'")
+	}
 }
 
 // ── Story 71 Task 2: column color tokens ─────────────────────────────────────

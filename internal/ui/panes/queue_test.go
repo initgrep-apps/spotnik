@@ -242,15 +242,14 @@ func TestQueuePane_ToggleKey(t *testing.T) {
 	assert.Equal(t, 2, pane.ToggleKey())
 }
 
-// TestQueuePane_Actions verifies that Actions() returns filter and add actions by default.
+// TestQueuePane_Actions verifies that Actions() returns only filter action by default.
+// 'A' (add) was removed in story 120 — no handler existed for it in queue.go.
 func TestQueuePane_Actions(t *testing.T) {
 	pane := newTestQueuePane(false)
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
+	require.Len(t, actions, 1)
 	assert.Equal(t, "f", actions[0].Key)
 	assert.Equal(t, "filter", actions[0].Label)
-	assert.Equal(t, "A", actions[1].Key)
-	assert.Equal(t, "add", actions[1].Label)
 }
 
 // --- Task 2: bubble-table rendering ---
@@ -483,9 +482,9 @@ func TestQueuePane_Filter_ActionsChangedWhenActive(t *testing.T) {
 	pane := newTestQueuePaneWithData(true)
 	pane.SetSize(80, 20)
 
-	// Default actions.
+	// Default actions: only filter (A was removed in story 120).
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
+	require.Len(t, actions, 1)
 	assert.Equal(t, "f", actions[0].Key)
 
 	// Activate filter.
@@ -672,6 +671,17 @@ func TestQueuePane_LongTrackName(t *testing.T) {
 	assert.NotEmpty(t, output)
 	for _, line := range splitLines(output) {
 		assert.LessOrEqual(t, lipgloss.Width(line), 80, "line should not massively overflow pane width")
+	}
+}
+
+// ── Story 120: dead pane action removal ──────────────────────────────────────
+
+// TestQueuePane_Actions_NoAddEntry verifies 'A' is not in queue Actions()
+// after removal of the phantom add-to-queue action (story 120).
+func TestQueuePane_Actions_NoAddEntry(t *testing.T) {
+	pane := newTestQueuePane(false)
+	for _, a := range pane.Actions() {
+		assert.NotEqual(t, "A", a.Key, "Actions() must not include 'A' (no handler exists)")
 	}
 }
 

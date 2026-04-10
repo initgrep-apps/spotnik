@@ -808,14 +808,8 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | **Pane Actions** | | |
 | `f` | Toggle filter in focused pane | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
-| `i` | Like/unlike track | LikedSongs pane |
-| `A` | Add to queue | Search overlay, list panes |
 | **Playlist Management (Playlists pane)** | | |
 | `Enter` | Open playlist tracks (sub-view) | Playlists pane |
-| `n` | New playlist | Playlists pane |
-| `r` | Rename playlist | Playlists pane (as border action) |
-| `x` | Remove track from playlist | Playlists pane track sub-view |
-| `Shift+↑/↓` | Reorder playlist | Playlists pane |
 | **Global** | | |
 | `/` | Open search overlay | Global |
 | `d` | Open device overlay | Global |
