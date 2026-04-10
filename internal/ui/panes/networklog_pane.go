@@ -93,7 +93,6 @@ func (p *NetworkLogPane) Actions() []layout.Action {
 	}
 	return []layout.Action{
 		{Key: "f", Label: "filter"},
-		{Key: "j/k", Label: "scroll"},
 	}
 }
 

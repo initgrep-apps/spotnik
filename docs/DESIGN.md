@@ -802,7 +802,6 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | **Navigation** | | |
 | `Tab` | Next pane focus | Visible panes |
 | `Shift+Tab` | Previous pane focus | Visible panes |
-| `j` / `k` | Scroll down/up | Focused pane |
 | `Enter` | Select/play item | Focused pane |
 | `Esc` | Close overlay/filter | Context |
 | **Pane Actions** | | |
@@ -1171,7 +1170,7 @@ POLLING  tick: 1000ms  state: active|idle  idle: 0s|45s    STORE  fetching: [pla
 Scrollable reverse-chronological log of all API requests, sourced from `store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer):
 
 ```
-╭─ Network Log ────────────────────── ᐅf filter ── ᐅj/k scroll ───────╮
+╭─ Network Log ──────────────────────────────────── ᐅf filter ─────────╮
 │  TIME      METHOD  ENDPOINT                STATUS  LATENCY  NOTES   │
 │  12:03:45  GET     /me/player              200     45ms     ██      │
 │  12:03:45  GET     /me/player/queue        200     62ms     ███     │
@@ -1364,7 +1363,7 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 | → `TopArtistsPane` | `PaneTopArtists` | "Top Artists" | `8` | filter, 4wk/6mo/all | Top artists extracted |
 | `PlaylistManager` | — | — | — | — | Merge into PlaylistsPane |
 | — (new) | `PaneRequestFlow` | "Request Flow" | — | — | Page B, live flow visualization (APP → GATEWAY → SPOTIFY) |
-| — (new) | `PaneNetworkLog` | "Network Log" | — | j/k scroll, f filter | Page B, scrollable API request history |
+| — (new) | `PaneNetworkLog` | "Network Log" | — | f filter | Page B, scrollable API request history |
 
 ### Code Migration Notes
 

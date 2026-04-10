@@ -26,7 +26,7 @@ type helpSection struct {
 }
 
 // keyColWidth is the fixed width of the key sub-column in each binding row.
-// Wide enough for "Shift+Tab" and "Shift+↑/↓" with comfortable gap before the label.
+// Wide enough for "Shift+Tab" with comfortable gap before the label.
 const keyColWidth = 16
 
 // colPadLeft is the left-indent applied inside each column so content doesn't
@@ -39,21 +39,21 @@ const colPadLeft = 2
 var helpContent = [2][]helpSection{
 	{
 		{title: "Global", bindings: []helpBinding{
-			{"/", "search"}, {"d", "devices"}, {"u", "profile"}, {"t", "theme"}, {"?", "help"},
-			{"q", "quit"}, {"0", "toggle page"}, {"1-8", "toggle pane"}, {"p", "preset"},
+			{"/", "Search"}, {"d", "Devices"}, {"u", "Profile"}, {"t", "Theme"}, {"?", "Help"},
+			{"q", "Quit"}, {"0", "Toggle page"}, {"1-8", "Toggle pane"}, {"p", "Preset"},
 		}},
 		{title: "Navigation", bindings: []helpBinding{
-			{"Tab", "next pane"}, {"Shift+Tab", "prev pane"},
-			{"j / k", "scroll"}, {"Esc", "close overlay"},
+			{"Tab", "Next pane"}, {"Shift+Tab", "Prev pane"},
+			{"Esc", "Close overlay"},
 		}},
 	},
 	{
 		{title: "Playback", bindings: []helpBinding{
-			{"Space", "play / pause"}, {"← / →", "prev / next"},
-			{"+  / -", "volume"}, {"s", "shuffle"}, {"r", "repeat"}, {"v", "visualizer"},
+			{"Space", "Play / Pause"}, {"← / →", "Prev / Next"},
+			{"+  / -", "Volume"}, {"s", "Shuffle"}, {"r", "Repeat"}, {"v", "Visualizer"},
 		}},
 		{title: "Pane Actions", bindings: []helpBinding{
-			{"Enter", "select / play"}, {"f", "filter"}, {"g", "cycle time range"},
+			{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
 		}},
 	},
 }
@@ -169,7 +169,7 @@ func (o *HelpOverlay) renderColumn(sections []helpSection, width int) string {
 		Bold(true)
 	// Keys use KeyHint — the same token as status-bar key labels — so they stand
 	// out from the muted label descriptions while remaining on-theme.
-	keyStyle := lipgloss.NewStyle().Foreground(o.theme.KeyHint())
+	keyStyle := lipgloss.NewStyle().Foreground(o.theme.KeyHint()).Bold(true)
 	labelStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 
 	pad := strings.Repeat(" ", colPadLeft)
