@@ -26,7 +26,7 @@ type helpSection struct {
 }
 
 // keyColWidth is the fixed width of the key sub-column in each binding row.
-// Wide enough for "Shift+Tab" and "Shift+↑/↓" with comfortable gap before the label.
+// Wide enough for "Shift+Tab" with comfortable gap before the label.
 const keyColWidth = 16
 
 // colPadLeft is the left-indent applied inside each column so content doesn't
