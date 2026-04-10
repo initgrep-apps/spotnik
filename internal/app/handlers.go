@@ -738,20 +738,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
-	// TODO(24-controls-cleanup): orphaned — no pane emitter after story 120 removed the 'i' handler from likedsongs_pane.
-	case panes.LikeTrackRequestMsg:
-		return a, a.buildToggleLikeCmd(m.TrackID, m.Unlike)
-
-	case panes.LikeToggleResultMsg:
-		// Like/unlike result — no action needed unless there's an error.
-		if m.Err != nil {
-			if errors.Is(m.Err, errNilClient) {
-				return a, nil
-			}
-			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
-		}
-		return a, nil
-
 	case panes.DeviceOverlayClosedMsg:
 		// Device overlay closed via Esc — close overlay.
 		return a.closeDeviceOverlay()
