@@ -924,3 +924,110 @@ func TestNowPlayingPane_HandleKey_N_NoOp(t *testing.T) {
 	// After removing the "n" arm from handleKey, pressing 'n' must return nil.
 	assert.Nil(t, cmd, "'n' key on NowPlayingPane must not emit a playback command")
 }
+
+// ── Task 8: Optimistic UI (pending state) tests ──────────────────────────────
+
+func TestNowPlayingPane_OptimisticShuffle(t *testing.T) {
+	store := state.New()
+	store.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:    true,
+		ShuffleState: false,
+		RepeatState:  "off",
+		Device:       &api.Device{VolumePercent: 50, SupportsVolume: true},
+		Item: &api.Track{
+			Name:       "Test",
+			DurationMs: 200000,
+			Artists:    []api.Artist{{Name: "Artist"}},
+		},
+	})
+	p := NewNowPlayingPane(store, theme.Load("black"), false)
+	p.SetSize(80, 20)
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}
+	p.SetFocused(true)
+	updated, _ := p.Update(keyMsg)
+	np := updated.(*NowPlayingPane)
+
+	require.NotNil(t, np.pendingShuffleOn, "pendingShuffleOn should be set after keypress")
+	assert.True(t, *np.pendingShuffleOn, "shuffle was off, pending should be true")
+}
+
+func TestNowPlayingPane_OptimisticShuffleClearedOnFetch(t *testing.T) {
+	store := state.New()
+	store.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:    true,
+		ShuffleState: false,
+		RepeatState:  "off",
+		Device:       &api.Device{VolumePercent: 50, SupportsVolume: true},
+		Item: &api.Track{
+			Name:       "Test",
+			DurationMs: 200000,
+			Artists:    []api.Artist{{Name: "Artist"}},
+		},
+	})
+	p := NewNowPlayingPane(store, theme.Load("black"), false)
+	p.SetSize(80, 20)
+	p.SetFocused(true)
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}
+	updated, _ := p.Update(keyMsg)
+	np := updated.(*NowPlayingPane)
+	require.NotNil(t, np.pendingShuffleOn)
+
+	updated2, _ := np.Update(PlaybackStateFetchedMsg{State: store.PlaybackState()})
+	np2 := updated2.(*NowPlayingPane)
+	assert.Nil(t, np2.pendingShuffleOn, "pendingShuffleOn should clear after PlaybackStateFetchedMsg")
+}
+
+func TestNowPlayingPane_VolumeAccumulation(t *testing.T) {
+	store := state.New()
+	store.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:   true,
+		RepeatState: "off",
+		Device:      &api.Device{VolumePercent: 50, SupportsVolume: true},
+		Item: &api.Track{
+			Name:       "Test",
+			DurationMs: 200000,
+			Artists:    []api.Artist{{Name: "Artist"}},
+		},
+	})
+	p := NewNowPlayingPane(store, theme.Load("black"), false)
+	p.SetSize(80, 20)
+	p.SetFocused(true)
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")}
+	var updated tea.Model = p
+	for i := 0; i < 5; i++ {
+		updated, _ = updated.(*NowPlayingPane).Update(keyMsg)
+	}
+	np := updated.(*NowPlayingPane)
+
+	require.NotNil(t, np.pendingVolume, "pendingVolume should be set")
+	assert.Equal(t, 55, *np.pendingVolume, "five +1 presses from 50 should reach 55")
+}
+
+func TestNowPlayingPane_VolumeClearedOnFetch(t *testing.T) {
+	store := state.New()
+	store.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:   true,
+		RepeatState: "off",
+		Device:      &api.Device{VolumePercent: 50, SupportsVolume: true},
+		Item: &api.Track{
+			Name:       "Test",
+			DurationMs: 200000,
+			Artists:    []api.Artist{{Name: "Artist"}},
+		},
+	})
+	p := NewNowPlayingPane(store, theme.Load("black"), false)
+	p.SetSize(80, 20)
+	p.SetFocused(true)
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")}
+	updated, _ := p.Update(keyMsg)
+	np := updated.(*NowPlayingPane)
+	require.NotNil(t, np.pendingVolume)
+
+	updated2, _ := np.Update(PlaybackStateFetchedMsg{State: store.PlaybackState()})
+	np2 := updated2.(*NowPlayingPane)
+	assert.Nil(t, np2.pendingVolume, "pendingVolume should clear after PlaybackStateFetchedMsg")
+}

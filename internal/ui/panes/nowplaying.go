@@ -31,6 +31,14 @@ type NowPlayingPane struct {
 	// on each tick when playing, for smooth seek bar updates between polls.
 	localProgressMs int
 
+	// Optimistic state — set on keypress to update the UI immediately.
+	// Cleared by handlePlaybackFetched() when the server poll arrives (server truth wins).
+	// This mirrors the localProgressMs pattern for smooth seek-bar interpolation.
+	pendingIsPlaying  *bool   // nil = no pending state
+	pendingShuffleOn  *bool
+	pendingRepeatMode *string // "off" | "context" | "track"
+	pendingVolume     *int    // absolute volume to set, accumulated across rapid keypresses
+
 	// infoBox is the bordered sub-pane on the left showing track/artist/album/controls.
 	infoBox *components.InfoBox
 
@@ -200,16 +208,43 @@ func (p *NowPlayingPane) View() string {
 		artistNames[i] = a.Name
 	}
 
+	// Resolve optimistic state: pending values take precedence until server poll clears them.
+	isPlaying := ps.IsPlaying
+	if p.pendingIsPlaying != nil {
+		isPlaying = *p.pendingIsPlaying
+	}
+	shuffleOn := ps.ShuffleState
+	if p.pendingShuffleOn != nil {
+		shuffleOn = *p.pendingShuffleOn
+	}
+	repeatMode := ps.RepeatState
+	if p.pendingRepeatMode != nil {
+		repeatMode = *p.pendingRepeatMode
+	}
 	volume := 0
+	supportsVolume := true
 	if ps.Device != nil {
 		volume = ps.Device.VolumePercent
+		supportsVolume = ps.Device.SupportsVolume
 	}
-	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
+	if p.pendingVolume != nil {
+		volume = *p.pendingVolume
+	}
+
+	ctrl := components.NewControls(p.theme, isPlaying, shuffleOn, repeatMode)
 
 	// Compute available inner height to decide which info lines to include.
 	// This mirrors SetSize: bodyHeight = max(height-4, 4), innerH = bodyHeight-2.
 	bodyHeight := paneMax(p.height-4, 4)
 	innerH := bodyHeight - 2 // InfoBox border rows consume 2
+
+	// Render the volume bar (or a "unavailable" placeholder for devices that ignore volume).
+	var volLine string
+	if supportsVolume {
+		volLine = p.volumeBar.Render(volume)
+	} else {
+		volLine = lipgloss.NewStyle().Foreground(p.theme.TextMuted()).Render("♪ volume unavailable")
+	}
 
 	// Priority: always show track name, controls, and volume bar (essential).
 	// Add artists, album, spacer as space allows.
@@ -223,7 +258,7 @@ func (p *NowPlayingPane) View() string {
 			mutedStyle.Render(t.Album.Name),
 			"",
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			volLine,
 		}
 	case innerH >= 5:
 		// Drop spacer: track, artists, album, controls, volume.
@@ -232,7 +267,7 @@ func (p *NowPlayingPane) View() string {
 			secondaryStyle.Render(strings.Join(artistNames, ", ")),
 			mutedStyle.Render(t.Album.Name),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			volLine,
 		}
 	case innerH >= 4:
 		// Drop album: track, artists, controls, volume.
@@ -240,14 +275,14 @@ func (p *NowPlayingPane) View() string {
 			primaryStyle.Render(t.Name),
 			secondaryStyle.Render(strings.Join(artistNames, ", ")),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			volLine,
 		}
 	case innerH >= 3:
 		// Drop artists: track, controls, volume.
 		infoLines = []string{
 			primaryStyle.Render(t.Name),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			volLine,
 		}
 	default:
 		// Minimal: track and controls only (no room for volume bar).
@@ -340,7 +375,8 @@ func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 }
 
 // handlePlaybackFetched processes notification that the store has fresh playback state.
-// It resets localProgressMs to the server value and syncs engine playing state.
+// It resets localProgressMs to the server value, syncs engine playing state,
+// and clears all optimistic pending fields — server truth wins.
 func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil {
@@ -350,11 +386,18 @@ func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 		p.localProgressMs = 0
 		p.engine.SetPlaying(false)
 	}
+	// Clear all optimistic state — server truth wins.
+	p.pendingIsPlaying = nil
+	p.pendingShuffleOn = nil
+	p.pendingRepeatMode = nil
+	p.pendingVolume = nil
 	return p, nil
 }
 
 // handleKey dispatches key events to playback request messages.
 // The root app model receives these and dispatches the corresponding Spotify API calls.
+// Sets optimistic pending state so the UI reflects the action immediately without
+// waiting for the next server poll.
 func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	switch {
 	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (Type field), not as a rune.
@@ -363,8 +406,12 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	case msg.Type == tea.KeySpace:
 		ps := p.store.PlaybackState()
 		if ps != nil && ps.IsPlaying {
+			f := false
+			p.pendingIsPlaying = &f
 			return p, emitPlaybackRequest(ActionPause)
 		}
+		t := true
+		p.pendingIsPlaying = &t
 		return p, emitPlaybackRequest(ActionPlay)
 
 	case msg.Type == tea.KeyRight:
@@ -375,15 +422,41 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		return p, emitPlaybackRequest(ActionPrevious)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":
-		return p, emitPlaybackRequest(ActionVolumeUp)
+		newVol := p.resolvedVolume() + 1
+		if newVol > 100 {
+			newVol = 100
+		}
+		p.pendingVolume = &newVol
+		return p, func() tea.Msg {
+			return PlaybackRequestMsg{Action: ActionVolumeUp, TargetVolume: newVol}
+		}
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "-":
-		return p, emitPlaybackRequest(ActionVolumeDown)
+		newVol := p.resolvedVolume() - 1
+		if newVol < 0 {
+			newVol = 0
+		}
+		p.pendingVolume = &newVol
+		return p, func() tea.Msg {
+			return PlaybackRequestMsg{Action: ActionVolumeDown, TargetVolume: newVol}
+		}
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "s":
+		ps := p.store.PlaybackState()
+		next := true
+		if ps != nil {
+			next = !ps.ShuffleState
+		}
+		p.pendingShuffleOn = &next
 		return p, emitPlaybackRequest(ActionToggleShuffle)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "r":
+		ps := p.store.PlaybackState()
+		mode := "context"
+		if ps != nil {
+			mode = nextRepeatMode(ps.RepeatState)
+		}
+		p.pendingRepeatMode = &mode
 		return p, emitPlaybackRequest(ActionCycleRepeat)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "v":
@@ -411,6 +484,32 @@ func formatDurationMs(ms int) string {
 func emitPlaybackRequest(action PlaybackAction) tea.Cmd {
 	return func() tea.Msg {
 		return PlaybackRequestMsg{Action: action}
+	}
+}
+
+// resolvedVolume returns the current pending volume if set, otherwise the server-confirmed
+// volume from the store. Used to correctly accumulate rapid +/- keypresses.
+func (p *NowPlayingPane) resolvedVolume() int {
+	if p.pendingVolume != nil {
+		return *p.pendingVolume
+	}
+	ps := p.store.PlaybackState()
+	if ps != nil && ps.Device != nil {
+		return ps.Device.VolumePercent
+	}
+	return 65 // safe default when no device info available
+}
+
+// nextRepeatMode returns the next repeat mode in the cycle off→context→track→off.
+// Mirrors the same function in app/commands.go — kept local to avoid cross-package dependency.
+func nextRepeatMode(current string) string {
+	switch current {
+	case "off":
+		return "context"
+	case "context":
+		return "track"
+	default:
+		return "off"
 	}
 }
 
