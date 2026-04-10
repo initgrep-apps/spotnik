@@ -38,23 +38,18 @@ const SearchPageSize = 10
 // closure is returned. The closure must never read from the Store — only use snapshots.
 // Reading Store inside the closure would be a data race because closures execute
 // asynchronously while Update() may be writing.
-func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
+func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction, targetVolume int) tea.Cmd {
 	if a.player == nil {
 		return func() tea.Msg { return panes.PlaybackCmdSentMsg{Err: errNilClient} }
 	}
 	player := a.player
-	volStep := a.volumeStep
 
 	// Snapshot store values in Update() context (thread-safe).
 	// The closure uses these captured values instead of calling store.PlaybackState() later.
 	ps := a.store.PlaybackState()
-	currentVolume := 65 // default when no device info is available
 	isShuffled := false
 	repeatMode := "off"
 	if ps != nil {
-		if ps.Device != nil {
-			currentVolume = ps.Device.VolumePercent
-		}
 		isShuffled = ps.ShuffleState
 		repeatMode = ps.RepeatState
 	}
@@ -73,18 +68,8 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 			err = player.Next(ctx)
 		case panes.ActionPrevious:
 			err = player.Previous(ctx)
-		case panes.ActionVolumeUp:
-			newVol := currentVolume + volStep
-			if newVol > 100 {
-				newVol = 100
-			}
-			err = player.SetVolume(ctx, newVol)
-		case panes.ActionVolumeDown:
-			newVol := currentVolume - volStep
-			if newVol < 0 {
-				newVol = 0
-			}
-			err = player.SetVolume(ctx, newVol)
+		case panes.ActionVolumeUp, panes.ActionVolumeDown:
+			err = player.SetVolume(ctx, targetVolume)
 		case panes.ActionToggleShuffle:
 			err = player.SetShuffle(ctx, !isShuffled)
 		case panes.ActionCycleRepeat:
@@ -385,10 +370,12 @@ func (a *App) buildFetchDevicesCmd() tea.Cmd {
 		var infos []panes.DeviceInfo
 		for _, d := range devList {
 			infos = append(infos, panes.DeviceInfo{
-				ID:       d.ID,
-				Name:     d.Name,
-				Type:     d.Type,
-				IsActive: d.IsActive,
+				ID:             d.ID,
+				Name:           d.Name,
+				Type:           d.Type,
+				IsActive:       d.IsActive,
+				IsRestricted:   d.IsRestricted,
+				SupportsVolume: d.SupportsVolume,
 			})
 		}
 		return panes.DevicesLoadedMsg{Devices: infos}

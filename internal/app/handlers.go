@@ -521,7 +521,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, fetchPlaybackStateCmd(a.player)
 
 	case panes.PlaybackRequestMsg:
-		return a, a.buildPlaybackAPICmd(m.Action)
+		return a, a.buildPlaybackAPICmd(m.Action, m.TargetVolume)
 
 	case panes.PlayContextMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.

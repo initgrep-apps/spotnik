@@ -297,7 +297,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		statusHelp:      newStatusHelp(t),
 		statusKeyMap:    newAppKeyMap(),
 		currentView:     viewSplash,
-		volumeStep:      5,
+		volumeStep:      1,
 		needsAuth:       opts.NeedsAuth,
 		clientID:        opts.ClientID,
 		tokenStore:      opts.TokenStore,
