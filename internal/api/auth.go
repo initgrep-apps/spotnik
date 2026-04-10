@@ -273,6 +273,9 @@ func buildTokenEndpoint(baseURL string) string {
 // postTokenRequest sends a POST request to the token endpoint and parses the response.
 // httpClient must not be nil — callers are responsible for providing a valid client.
 func postTokenRequest(ctx context.Context, httpClient *http.Client, endpoint string, formData url.Values) (TokenPair, error) {
+	if httpClient == nil {
+		return TokenPair{}, errors.New("postTokenRequest: httpClient must not be nil")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
 		strings.NewReader(formData.Encode()))
 	if err != nil {

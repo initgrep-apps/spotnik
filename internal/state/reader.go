@@ -77,18 +77,11 @@ type StateReader interface {
 
 	// --- Staleness ---
 
-	// PlaylistsStale returns true if the playlists list should be re-fetched.
-	PlaylistsStale() bool
-	// AlbumsStale returns true if the saved albums should be re-fetched.
-	AlbumsStale() bool
-	// LikedTracksStale returns true if the liked tracks should be re-fetched.
-	LikedTracksStale() bool
-	// RecentlyPlayedStale returns true if the recently played list should be re-fetched.
-	RecentlyPlayedStale() bool
 	// StatsStale returns true if stats for the given time range should be re-fetched.
+	// Other staleness methods (PlaylistsStale, AlbumsStale, LikedTracksStale,
+	// RecentlyPlayedStale, DevicesStale) are omitted because only handlers.go
+	// calls them on the concrete *Store — no pane reads them via StateReader.
 	StatsStale(timeRange string) bool
-	// DevicesStale returns true if the device list should be re-fetched.
-	DevicesStale() bool
 
 	// --- Fetching sentinels (read-only) ---
 

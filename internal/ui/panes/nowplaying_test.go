@@ -16,6 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testStateWriter wraps *state.Store to expose write methods for test setup
+// without requiring a type assertion through the StateReader interface.
+type testStateWriter struct {
+	*state.Store
+}
+
 // newTestNowPlayingPane creates a NowPlayingPane with a fresh store and black theme.
 func newTestNowPlayingPane(focused bool) *NowPlayingPane {
 	s := state.New()
@@ -24,8 +30,11 @@ func newTestNowPlayingPane(focused bool) *NowPlayingPane {
 }
 
 // newTestNowPlayingPaneWithState creates a NowPlayingPane pre-loaded with playback state.
-func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) *NowPlayingPane {
+// It also returns a testStateWriter so tests can mutate the shared store without
+// a type assertion through the StateReader interface.
+func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) (*NowPlayingPane, *testStateWriter) {
 	s := state.New()
+	w := &testStateWriter{s}
 	s.SetPlaybackState(&api.PlaybackState{
 		IsPlaying:    isPlaying,
 		ProgressMs:   30000,
@@ -45,13 +54,13 @@ func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) *NowPlayingPan
 		},
 	})
 	t := theme.Load("black")
-	return NewNowPlayingPane(s, t, focused)
+	return NewNowPlayingPane(s, t, focused), w
 }
 
 // ── Task 1: Rename tests ─────────────────────────────────────────────────────
 
 func TestNowPlayingPane_View_NowPlaying(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 	output := pane.View()
 
@@ -69,7 +78,7 @@ func TestNowPlayingPane_View_EmptyState(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_Space_WhenPlaying(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
 	_, cmd := pane.Update(spaceMsg)
@@ -82,7 +91,7 @@ func TestNowPlayingPane_Update_Space_WhenPlaying(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(false, true)
+	pane, _ := newTestNowPlayingPaneWithState(false, true)
 
 	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
 	_, cmd := pane.Update(spaceMsg)
@@ -95,7 +104,7 @@ func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_N_SkipsNext(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	nMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 	_, cmd := pane.Update(nMsg)
@@ -108,7 +117,7 @@ func TestNowPlayingPane_Update_N_SkipsNext(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_P_SkipsPrev(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	pMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
 	_, cmd := pane.Update(pMsg)
@@ -121,7 +130,7 @@ func TestNowPlayingPane_Update_P_SkipsPrev(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_Plus_VolUp(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	plusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}
 	_, cmd := pane.Update(plusMsg)
@@ -134,7 +143,7 @@ func TestNowPlayingPane_Update_Plus_VolUp(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_Minus_VolDown(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	minusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}
 	_, cmd := pane.Update(minusMsg)
@@ -147,7 +156,7 @@ func TestNowPlayingPane_Update_Minus_VolDown(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_S_TogglesShuffle(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	sMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}
 	_, cmd := pane.Update(sMsg)
@@ -199,7 +208,7 @@ func TestNowPlayingPane_Update_R_CyclesRepeat(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_PlaybackFetched(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, w := newTestNowPlayingPaneWithState(true, true)
 
 	// Simulate app.go updating the store and sending PlaybackStateFetchedMsg.
 	newState := &api.PlaybackState{
@@ -214,7 +223,7 @@ func TestNowPlayingPane_Update_PlaybackFetched(t *testing.T) {
 		},
 		Device: &api.Device{VolumePercent: 70},
 	}
-	pane.store.(*state.Store).SetPlaybackState(newState)
+	w.SetPlaybackState(newState)
 
 	fetchedMsg := PlaybackStateFetchedMsg{}
 	updatedModel, _ := pane.Update(fetchedMsg)
@@ -227,11 +236,11 @@ func TestNowPlayingPane_Update_PlaybackFetched(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_PlaybackFetched_NilState(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, w := newTestNowPlayingPaneWithState(true, true)
 	pane.localProgressMs = 60000
 
 	// Nil state (nothing playing) — store is cleared, then notification sent.
-	pane.store.(*state.Store).SetPlaybackState(nil)
+	w.SetPlaybackState(nil)
 
 	fetchedMsg := PlaybackStateFetchedMsg{}
 	updatedModel, _ := pane.Update(fetchedMsg)
@@ -244,7 +253,7 @@ func TestNowPlayingPane_Update_PlaybackFetched_NilState(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_IgnoresKeysWhenNotFocused(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, false) // not focused
+	pane, _ := newTestNowPlayingPaneWithState(true, false) // not focused
 
 	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
 	_, cmd := pane.Update(spaceMsg)
@@ -253,7 +262,7 @@ func TestNowPlayingPane_Update_IgnoresKeysWhenNotFocused(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_TickIncrements(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.localProgressMs = 30000
 
 	tickMsg := TickMsg{}
@@ -266,7 +275,7 @@ func TestNowPlayingPane_Update_TickIncrements(t *testing.T) {
 }
 
 func TestNowPlayingPane_Update_TickNoIncrement_WhenPaused(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(false, true)
+	pane, _ := newTestNowPlayingPaneWithState(false, true)
 	pane.localProgressMs = 30000
 
 	tickMsg := TickMsg{}
@@ -280,7 +289,7 @@ func TestNowPlayingPane_Update_TickNoIncrement_WhenPaused(t *testing.T) {
 
 func TestNowPlayingPane_Update_TickClampsAtDuration(t *testing.T) {
 	// localProgressMs must not exceed DurationMs (252000 in the test fixture).
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.localProgressMs = 251500 // one tick away from exceeding DurationMs
 
 	tickMsg := TickMsg{}
@@ -344,7 +353,7 @@ func TestNowPlayingPane_ArrowKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pane := newTestNowPlayingPaneWithState(true, true)
+			pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 			keyMsg := tea.KeyMsg{Type: tt.keyType}
 			_, cmd := pane.Update(keyMsg)
@@ -419,7 +428,7 @@ func TestNowPlayingPane_Actions(t *testing.T) {
 // ── Task 4: viz.Engine migration tests ───────────────────────────────────────
 
 func TestNowPlayingPane_VizTickMsg_AdvancesFrame(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	initialFrame := pane.engine.FrameIndex()
@@ -440,11 +449,11 @@ func TestNowPlayingPane_VizTickMsg_ReturnsCmd(t *testing.T) {
 }
 
 func TestNowPlayingPane_PlaybackFetched_SetsEnginePlaying(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(false, true)
+	pane, w := newTestNowPlayingPaneWithState(false, true)
 	pane.SetSize(80, 24)
 
 	// Update store to playing=true, then send PlaybackStateFetchedMsg.
-	pane.store.(*state.Store).SetPlaybackState(&api.PlaybackState{
+	w.SetPlaybackState(&api.PlaybackState{
 		IsPlaying:  true,
 		ProgressMs: 5000,
 		Item: &api.Track{
@@ -463,11 +472,11 @@ func TestNowPlayingPane_PlaybackFetched_SetsEnginePlaying(t *testing.T) {
 }
 
 func TestNowPlayingPane_PlaybackFetched_PausesEngine(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, w := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	// Update store to paused, send PlaybackStateFetchedMsg.
-	pane.store.(*state.Store).SetPlaybackState(&api.PlaybackState{
+	w.SetPlaybackState(&api.PlaybackState{
 		IsPlaying:  false,
 		ProgressMs: 5000,
 		Item: &api.Track{
@@ -486,7 +495,7 @@ func TestNowPlayingPane_PlaybackFetched_PausesEngine(t *testing.T) {
 }
 
 func TestNowPlayingPane_FullView_ContainsBrailleChars(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -505,7 +514,7 @@ func TestNowPlayingPane_FullView_ContainsBrailleChars(t *testing.T) {
 // ── Task 4: Gradient bars tests ──────────────────────────────────────────────
 
 func TestNowPlayingPane_SeekBar_Renders(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -514,7 +523,7 @@ func TestNowPlayingPane_SeekBar_Renders(t *testing.T) {
 }
 
 func TestNowPlayingPane_VolumeBar_Renders(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -523,7 +532,7 @@ func TestNowPlayingPane_VolumeBar_Renders(t *testing.T) {
 }
 
 func TestNowPlayingPane_BarsResize_WithSetSize(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	pane.SetSize(40, 24)
 	small := pane.View()
@@ -535,7 +544,7 @@ func TestNowPlayingPane_BarsResize_WithSetSize(t *testing.T) {
 }
 
 func TestNowPlayingPane_FullView_ContainsTrackAndAlbum(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -570,7 +579,7 @@ func TestNowPlayingPane_ZeroDuration(t *testing.T) {
 // TestNowPlayingPane_V_CyclesEnginePattern verifies that pressing 'v' while
 // focused advances the engine's pattern index and emits a VisualizerPatternChangedMsg.
 func TestNowPlayingPane_V_CyclesEnginePattern(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 	pane.engine.SetSize(40, 10) // ensure frames are generated
 
@@ -593,7 +602,7 @@ func TestNowPlayingPane_V_CyclesEnginePattern(t *testing.T) {
 // TestNowPlayingPane_V_IgnoredWhenNotFocused verifies that 'v' is ignored when
 // the pane is not focused (routing.go handles global routing; pane itself guards focus).
 func TestNowPlayingPane_V_IgnoredWhenNotFocused(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, false) // not focused
+	pane, _ := newTestNowPlayingPaneWithState(true, false) // not focused
 	pane.SetSize(80, 24)
 
 	startPat := pane.engine.Pattern()
@@ -610,7 +619,7 @@ func TestNowPlayingPane_V_IgnoredWhenNotFocused(t *testing.T) {
 // TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders verifies that View() at
 // 80x24 contains the rounded-corner border characters produced by the InfoBox.
 func TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -621,7 +630,7 @@ func TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders(t *testing.T) {
 // TestNowPlayingPane_SplitLayout_ContainsBraille verifies that View() contains
 // braille characters from the engine rendered on the right side.
 func TestNowPlayingPane_SplitLayout_ContainsBraille(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -639,7 +648,7 @@ func TestNowPlayingPane_SplitLayout_ContainsBraille(t *testing.T) {
 // TestNowPlayingPane_SplitLayout_ContainsSeekBar verifies that View() contains
 // the seek bar time stamps rendered at the bottom.
 func TestNowPlayingPane_SplitLayout_ContainsSeekBar(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 	pane.localProgressMs = 30000
 
@@ -651,7 +660,7 @@ func TestNowPlayingPane_SplitLayout_ContainsSeekBar(t *testing.T) {
 // TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox verifies that View()
 // contains ♪ from the volume bar rendered inside the InfoBox.
 func TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -661,7 +670,7 @@ func TestNowPlayingPane_SplitLayout_ContainsVolumeInInfoBox(t *testing.T) {
 // TestNowPlayingPane_SplitLayout_ContainsControls verifies that View() contains
 // the playback control characters from the Controls component.
 func TestNowPlayingPane_SplitLayout_ContainsControls(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
@@ -673,7 +682,7 @@ func TestNowPlayingPane_SplitLayout_ContainsControls(t *testing.T) {
 // TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall verifies that Title() includes
 // track name when the pane height is below 8 (the new compact-title threshold).
 func TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 6) // height < 8
 	pane.localProgressMs = 30000
 
@@ -686,7 +695,7 @@ func TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall(t *testing.T) {
 // TestNowPlayingPane_Title_DefaultWhenTall verifies that Title() returns the
 // default "Now Playing" string when the pane height is >= 8.
 func TestNowPlayingPane_Title_DefaultWhenTall(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24) // height >= 8
 
 	title := pane.Title()
@@ -696,7 +705,7 @@ func TestNowPlayingPane_Title_DefaultWhenTall(t *testing.T) {
 // TestNowPlayingPane_SplitLayout_AdaptsToDifferentSizes verifies that
 // different pane sizes produce different view output (layout is proportional).
 func TestNowPlayingPane_SplitLayout_AdaptsToDifferentSizes(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	pane.SetSize(60, 20)
 	small := pane.View()
@@ -710,7 +719,7 @@ func TestNowPlayingPane_SplitLayout_AdaptsToDifferentSizes(t *testing.T) {
 // ── Task 5: Two-column layout with seek bar in right panel ───────────────────
 
 func TestNowPlayingPane_SeekBarInRightPanel(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 20)
 	view := pane.View()
 
@@ -765,7 +774,7 @@ func TestNowPlayingPane_RenderStyledLines_Empty(t *testing.T) {
 // ── Task 6: Vertical centering in expanded mode ───────────────────────────────
 
 func TestNowPlayingPane_ExpandedVerticalCentering(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	// Expanded: large height
 	pane.SetSize(80, 30)
@@ -778,7 +787,7 @@ func TestNowPlayingPane_ExpandedVerticalCentering(t *testing.T) {
 }
 
 func TestNowPlayingPane_CompactNoCentering(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
 	// Compact: small height — content should not be over-padded.
 	pane.SetSize(80, 10)
@@ -796,7 +805,7 @@ func TestNowPlayingPane_CompactNoCentering(t *testing.T) {
 // At this height, InfoBox.Render() previously truncated content to 4 lines which
 // cut off controls (line 5) and volume bar (line 6) from the 6-line infoLines.
 func TestNowPlayingPane_CompactShowsControls(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 10)
 
 	output := pane.View()
@@ -810,7 +819,7 @@ func TestNowPlayingPane_CompactShowsControls(t *testing.T) {
 // At this height only 2 inner lines are available so the layout should show
 // track name + controls (dropping artists, album, spacer, and volume bar).
 func TestNowPlayingPane_VeryCompactShowsControls(t *testing.T) {
-	pane := newTestNowPlayingPaneWithState(true, true)
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 8)
 
 	output := pane.View()
