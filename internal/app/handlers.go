@@ -190,6 +190,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.syncFocus()
 		a.searchPane.SetSize(m.Width, m.Height)
 		a.devicePane.SetSize(m.Width, m.Height)
+		a.profilePane.SetSize(40, 12) // fixed size — profile card is not resizable
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetSize(m.Width, m.Height)
 		}
@@ -750,6 +751,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Device overlay closed via Esc — close overlay.
 		return a.closeDeviceOverlay()
 
+	case panes.ProfileOverlayClosedMsg:
+		// Profile overlay closed via Esc — clear flag.
+		a.profileOverlayOpen = false
+		return a, nil
+
 	case panes.ThemeSwitchMsg:
 		// User selected a theme in the overlay — load new theme, propagate to all panes.
 		newTheme := theme.Load(m.ThemeID)
@@ -761,6 +767,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Propagate to overlay panes.
 		a.searchPane.SetTheme(newTheme)
 		a.devicePane.SetTheme(newTheme)
+		a.profilePane.SetTheme(newTheme)
 		if a.themeOverlay != nil {
 			a.themeOverlay.SetTheme(newTheme)
 		}

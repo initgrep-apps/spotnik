@@ -820,6 +820,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | **Global** | | |
 | `/` | Open search overlay | Global |
 | `d` | Open device overlay | Global |
+| `u` | Open user profile overlay | Global |
 | `t` | Open theme switcher overlay | Global |
 | `?` | Open help overlay | Global |
 | `q` | Quit | Global |

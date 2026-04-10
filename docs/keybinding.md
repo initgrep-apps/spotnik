@@ -11,6 +11,7 @@
 |-----|--------|
 | `/` | Open search overlay |
 | `d` | Open device switcher |
+| `u` | Open user profile overlay |
 | `t` | Open theme switcher |
 | `?` | Open help overlay |
 | `q` | Quit |
