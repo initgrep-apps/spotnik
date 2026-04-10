@@ -118,10 +118,10 @@ Scale to story complexity:
 
 ## PHASE 3 — IMPLEMENT
 
-Invoke the `feature-dev:feature-dev` skill for structured development guidance. Work through tasks **in order**. For each task:
+Work through tasks **in order**. For each task:
 
 1. **Mark task in-progress** via `TodoUpdate`
-2. **Tests** — invoke `test-driven-development` for this task
+2. **Tests first** — invoke `test-driven-development` for this task, using the task's test list from the spec
 3. **Implement** — use your available skills that match the project's tech stack for idiomatic implementation.
 4. **Look up docs — don't guess** — when working with libraries, frameworks, or APIs, you should use the following order 
    - check the project level skills about the tech stack used. if present, use those skills first
