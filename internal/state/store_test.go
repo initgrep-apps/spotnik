@@ -251,7 +251,7 @@ func TestStore_UserID_Default(t *testing.T) {
 
 func TestStore_SetGetUserID(t *testing.T) {
 	s := New()
-	s.SetUserID("spotify-user-123")
+	s.SetUserProfile(domain.UserProfile{ID: "spotify-user-123"})
 	assert.Equal(t, "spotify-user-123", s.UserID())
 }
 
@@ -749,4 +749,50 @@ func TestStore_ReadEventsFrom_IncrementalCursor(t *testing.T) {
 	_, events2 := s.ReadEventsFrom(cursor)
 	require.Len(t, events2, 1)
 	assert.Equal(t, domain.EventSemaphoreAcquired, events2[0].Kind)
+}
+
+// TestStore_SetGetUserProfile verifies the round-trip for SetUserProfile / UserProfile
+// and that UserID() delegates to userProfile.ID for call-site compatibility.
+func TestStore_SetGetUserProfile(t *testing.T) {
+	s := New()
+
+	// Zero state: UserID and UserProfile must return safe defaults.
+	assert.Equal(t, "", s.UserID(), "UserID should be empty before profile is loaded")
+	assert.Equal(t, domain.UserProfile{}, s.UserProfile(), "UserProfile should be zero-value before set")
+
+	p := domain.UserProfile{
+		ID:          "user123",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "DE",
+	}
+	s.SetUserProfile(p)
+
+	assert.Equal(t, "user123", s.UserID(), "UserID must delegate to userProfile.ID")
+	got := s.UserProfile()
+	assert.Equal(t, "user123", got.ID)
+	assert.Equal(t, "Test User", got.DisplayName)
+	assert.Equal(t, "premium", got.Product)
+	assert.Equal(t, "DE", got.Country)
+}
+
+// TestStore_IsPremium verifies that IsPremium returns true only for the "premium" product tier.
+func TestStore_IsPremium(t *testing.T) {
+	tests := []struct {
+		name    string
+		product string
+		want    bool
+	}{
+		{name: "premium user", product: "premium", want: true},
+		{name: "free user", product: "free", want: false},
+		{name: "empty product (not yet loaded)", product: "", want: false},
+		{name: "unexpected tier", product: "open", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New()
+			s.SetUserProfile(domain.UserProfile{ID: "u1", Product: tt.product})
+			assert.Equal(t, tt.want, s.IsPremium())
+		})
+	}
 }

@@ -634,16 +634,16 @@ func (a *App) buildFetchPlaylistTracksCmd(ctx context.Context, playlistID string
 }
 
 // buildFetchCurrentUserCmd fetches the authenticated user's Spotify profile via
-// GET /v1/me. The returned userProfileLoadedMsg carries the user's Spotify ID,
+// GET /v1/me. The returned userProfileLoadedMsg carries the full domain.UserProfile,
 // which the routing layer stores so the playlist pane can distinguish owned from
-// followed playlists.
+// followed playlists and downstream stories can access subscription tier.
 func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 	userAPI := a.userAPI
 	return func() tea.Msg {
 		if userAPI == nil {
 			return userProfileLoadedMsg{err: errNilClient}
 		}
-		profile, err := userAPI.Profile(context.Background())
+		profile, err := userAPI.Profile(api.WithPriority(context.Background(), api.Interactive))
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}
@@ -651,9 +651,13 @@ func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(err, &forbiddenErr) {
+				return userProfileLoadedMsg{err: forbiddenErr}
+			}
 			return userProfileLoadedMsg{err: err}
 		}
-		return userProfileLoadedMsg{userID: profile.ID}
+		return userProfileLoadedMsg{profile: profile}
 	}
 }
 

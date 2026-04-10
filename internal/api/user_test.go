@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -171,14 +172,18 @@ func TestGetTopArtists_ErrorWrapped(t *testing.T) {
 	assert.Contains(t, err.Error(), "getting top artists")
 }
 
-// TestUserClient_Profile_Success verifies that Profile returns the user's Spotify ID.
+// TestUserClient_Profile_Success verifies that Profile returns the full user profile
+// including all four fields from the me_profile.json fixture.
 func TestUserClient_Profile_Success(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/fixtures/me_profile.json")
+	require.NoError(t, err, "fixture must exist at testdata/fixtures/me_profile.json")
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/me", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"id":"user123","display_name":"Test User"}`))
+		_, _ = w.Write(fixture)
 	}))
 	defer srv.Close()
 
@@ -186,6 +191,9 @@ func TestUserClient_Profile_Success(t *testing.T) {
 	profile, err := client.Profile(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "user123", profile.ID)
+	assert.Equal(t, "Test User", profile.DisplayName)
+	assert.Equal(t, "premium", profile.Product)
+	assert.Equal(t, "DE", profile.Country)
 }
 
 // TestUserClient_Profile_ErrorWrapped verifies that API errors are wrapped with context.

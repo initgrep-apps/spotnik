@@ -104,9 +104,9 @@ type Store struct {
 	// Playlist Manager data: tracks for each playlist keyed by playlist ID.
 	playlistTracks map[string][]domain.Track
 
-	// userID is the Spotify user ID of the authenticated user.
-	// Set at startup via GET /v1/me. Used to distinguish owned vs followed playlists.
-	userID string
+	// userProfile is the authenticated user's full Spotify profile.
+	// Set once at startup after GET /v1/me succeeds.
+	userProfile domain.UserProfile
 
 	// playingPlaylistID is the Spotify playlist ID that is currently playing.
 	// Used by PlaylistsPane to render the ▶ indicator next to the active playlist.
@@ -154,20 +154,36 @@ func (s *Store) PlaybackState() *domain.PlaybackState {
 	return s.playbackState
 }
 
-// UserID returns the Spotify user ID of the authenticated user.
-// Returns "" if the profile has not yet been fetched.
+// UserID returns the Spotify user ID. Returns "" before profile is loaded.
+// Preserved for call-site compatibility — delegates to userProfile.ID.
 func (s *Store) UserID() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.userID
+	return s.userProfile.ID
 }
 
-// SetUserID stores the authenticated user's Spotify ID.
-// Called once at startup after fetching GET /v1/me.
-func (s *Store) SetUserID(id string) {
+// UserProfile returns the full authenticated user profile.
+// Returns a zero-value UserProfile before profile is loaded.
+func (s *Store) UserProfile() domain.UserProfile {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.userProfile
+}
+
+// SetUserProfile stores the authenticated user's full Spotify profile.
+// Called once at startup after GET /v1/me succeeds.
+func (s *Store) SetUserProfile(p domain.UserProfile) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.userID = id
+	s.userProfile = p
+}
+
+// IsPremium returns true only when Product == "premium".
+// Returns false for free users, unknown tier, or when profile not yet loaded.
+func (s *Store) IsPremium() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.userProfile.Product == "premium"
 }
 
 // SetPlaybackState updates the playback state. Pass nil to clear (204 response).
