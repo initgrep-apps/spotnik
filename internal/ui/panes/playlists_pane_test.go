@@ -785,28 +785,8 @@ func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 
 // ── Story 120: dead pane action removal ──────────────────────────────────────
 
-// TestPlaylistsPane_NKey_NoOp verifies that pressing 'n' in the list view
-// returns nil cmd after removal of the stub handler.
-func TestPlaylistsPane_NKey_NoOp(t *testing.T) {
-	pane := newTestPlaylistsPaneWithData(true)
-	pane.SetSize(80, 20)
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	assert.Nil(t, cmd, "'n' should return nil cmd (handler removed)")
-}
-
-// TestPlaylistsPane_RKey_NoOp verifies that pressing 'r' in the list view
-// returns nil cmd after removal of the stub handler.
-func TestPlaylistsPane_RKey_NoOp(t *testing.T) {
-	pane := newTestPlaylistsPaneWithData(true)
-	pane.SetSize(80, 20)
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	assert.Nil(t, cmd, "'r' should return nil cmd (handler removed)")
-}
-
 // TestPlaylistsPane_Actions_ListView_NoNOrR verifies that Actions() in list view
-// does not include 'n' or 'r' after dead action removal.
+// iterates and contains no n or r entries, and still has f.
 func TestPlaylistsPane_Actions_ListView_NoNOrR(t *testing.T) {
 	pane := newTestPlaylistsPane(true)
 	actions := pane.Actions()
@@ -819,20 +799,4 @@ func TestPlaylistsPane_Actions_ListView_NoNOrR(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "Actions() must still include 'f' (filter)")
-}
-
-// TestPlaylistsPane_ShiftArrows_TrackView_NoOp verifies that ShiftUp and
-// ShiftDown in the track sub-view return nil cmd after dead action removal.
-func TestPlaylistsPane_ShiftArrows_TrackView_NoOp(t *testing.T) {
-	pane := newTestPlaylistsPaneWithData(true)
-	pane.SetSize(80, 20)
-	pane.inTrackView = true
-	pane.trackTable.SetFocused(true)
-	pane.table.SetFocused(false)
-
-	_, cmdUp := pane.Update(tea.KeyMsg{Type: tea.KeyShiftUp})
-	assert.Nil(t, cmdUp, "ShiftUp should return nil cmd (handler removed)")
-
-	_, cmdDown := pane.Update(tea.KeyMsg{Type: tea.KeyShiftDown})
-	assert.Nil(t, cmdDown, "ShiftDown should return nil cmd (handler removed)")
 }

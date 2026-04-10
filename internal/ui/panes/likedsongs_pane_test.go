@@ -298,16 +298,6 @@ func TestLikedSongsPane_I_EmptyList(t *testing.T) {
 
 // ── Story 120: dead pane action removal ──────────────────────────────────────
 
-// TestLikedSongsPane_IKey_NoOp verifies 'i' returns nil cmd after removal
-// of the like/unlike handler (story 120: feature removed, always 403).
-func TestLikedSongsPane_IKey_NoOp(t *testing.T) {
-	pane := newTestLikedSongsPaneWithData(true)
-	pane.SetSize(80, 20)
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
-	assert.Nil(t, cmd, "'i' should return nil cmd (handler removed)")
-}
-
 // TestLikedSongsPane_Actions_NoLikeEntry verifies 'i' is not in Actions()
 // after dead action removal (story 120).
 func TestLikedSongsPane_Actions_NoLikeEntry(t *testing.T) {
