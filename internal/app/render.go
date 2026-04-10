@@ -361,7 +361,7 @@ func truncateProfileName(name string) string {
 
 // renderProfileChip renders the profile chip shown in the header right side.
 // Returns "" if the profile has not yet been loaded (graceful startup).
-// Format: "DisplayName ♛ " (Premium) or "DisplayName ○ " (Free).
+// Format: "♛ DisplayName " (Premium) or "○ DisplayName " (Free) — badge precedes name.
 func (a *App) renderProfileChip() string {
 	profile := a.store.UserProfile()
 	if profile.ID == "" {
@@ -373,9 +373,10 @@ func (a *App) renderProfileChip() string {
 
 	name := truncateProfileName(profile.DisplayName)
 
+	// StatusBarFg gives the name a distinct colour relative to the cyan DeviceActive chip.
 	nameStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.TextPrimary())
+		Foreground(a.theme.StatusBarFg())
 
 	var badge string
 	if a.store.IsPremium() {
@@ -390,12 +391,12 @@ func (a *App) renderProfileChip() string {
 		badge = badgeStyle.Render("○")
 	}
 
-	return bgStyle.Render(" ") + nameStyle.Render(name) + bgStyle.Render(" ") + badge + bgStyle.Render(" ")
+	return bgStyle.Render(" ") + badge + bgStyle.Render(" ") + nameStyle.Render(name) + bgStyle.Render(" ")
 }
 
 // renderHeader renders the btop-style header bar containing:
-// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName   DisplayName ♛
-// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName   DisplayName ♛
+// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName   ♛ DisplayName
+// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName   ♛ DisplayName
 //
 // The profile chip (name + tier badge) appears to the right of the device chip.
 // The profile chip is absent when the profile has not yet been loaded.
