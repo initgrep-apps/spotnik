@@ -3,13 +3,19 @@ package components
 import (
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 )
 
 func newTestControls(isPlaying, shuffleOn bool, repeatMode string) Controls {
 	t := theme.Load("black")
-	return NewControls(t, isPlaying, shuffleOn, repeatMode)
+	return NewControls(t, isPlaying, shuffleOn, repeatMode, domain.PlaybackActions{}, true)
+}
+
+func newTestControlsDisallows(isPlaying, shuffleOn bool, repeatMode string, disallows domain.PlaybackActions, supportsVolume bool) Controls {
+	t := theme.Load("black")
+	return NewControls(t, isPlaying, shuffleOn, repeatMode, disallows, supportsVolume)
 }
 
 func TestControls_Playing_ShowsPause(t *testing.T) {
@@ -42,7 +48,7 @@ func TestControls_RepeatOff(t *testing.T) {
 	c := newTestControls(false, false, "off")
 	out := c.Render()
 	assert.Contains(t, out, "↻")
-	assert.NotContains(t, out, "↻1")
+	assert.NotContains(t, out, "↻¹", "off state should not show superscript one")
 }
 
 func TestControls_RepeatContext(t *testing.T) {
@@ -54,7 +60,7 @@ func TestControls_RepeatContext(t *testing.T) {
 func TestControls_RepeatTrack(t *testing.T) {
 	c := newTestControls(false, false, "track")
 	out := c.Render()
-	assert.Contains(t, out, "↻1")
+	assert.Contains(t, out, "↻¹") // was "↻1"
 }
 
 func TestControls_QueueIcon(t *testing.T) {
@@ -75,4 +81,39 @@ func TestControls_NoOldSymbols(t *testing.T) {
 	out := c.Render()
 	assert.NotContains(t, out, "~")
 	assert.NotContains(t, out, "=>")
+}
+
+func TestControls_RepeatTrack_SuperscriptOne(t *testing.T) {
+	c := newTestControls(false, false, "track")
+	out := c.Render()
+	assert.Contains(t, out, "↻¹", "repeat-track should use superscript one (U+00B9)")
+	assert.NotContains(t, out, "↻1", "repeat-track should not use ASCII 1")
+}
+
+func TestControls_ShuffleDisabled(t *testing.T) {
+	c := newTestControlsDisallows(false, false, "off",
+		domain.PlaybackActions{TogglingShuffle: true}, true)
+	out := c.Render()
+	assert.Contains(t, out, "⇄", "disabled shuffle should still render the icon")
+}
+
+func TestControls_RepeatDisabled_BothModesDisallowed(t *testing.T) {
+	c := newTestControlsDisallows(false, false, "off",
+		domain.PlaybackActions{TogglingRepeatContext: true, TogglingRepeatTrack: true}, true)
+	out := c.Render()
+	assert.Contains(t, out, "↻", "disabled repeat should still render the icon")
+}
+
+func TestControls_RepeatNotDisabled_OnlyContextDisallowed(t *testing.T) {
+	c := newTestControlsDisallows(false, false, "off",
+		domain.PlaybackActions{TogglingRepeatContext: true, TogglingRepeatTrack: false}, true)
+	out := c.Render()
+	assert.Contains(t, out, "↻")
+}
+
+func TestControls_PlayDisabled_ResumingDisallowed(t *testing.T) {
+	c := newTestControlsDisallows(false, false, "off",
+		domain.PlaybackActions{Resuming: true}, true)
+	out := c.Render()
+	assert.Contains(t, out, "▷", "disabled play should still render the icon")
 }

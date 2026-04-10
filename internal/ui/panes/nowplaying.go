@@ -231,7 +231,7 @@ func (p *NowPlayingPane) View() string {
 		volume = *p.pendingVolume
 	}
 
-	ctrl := components.NewControls(p.theme, isPlaying, shuffleOn, repeatMode)
+	ctrl := components.NewControls(p.theme, isPlaying, shuffleOn, repeatMode, ps.Actions.Disallows, supportsVolume)
 
 	// Compute available inner height to decide which info lines to include.
 	// This mirrors SetSize: bodyHeight = max(height-4, 4), innerH = bodyHeight-2.
