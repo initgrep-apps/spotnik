@@ -361,9 +361,103 @@ No architecture changes — purely visual, reads from `DeviceInfo` fields added 
 | `internal/ui/components/controls.go` | Three-state styles; extended `NewControls` signature; `↻¹` glyph |
 | `internal/ui/panes/devices.go` | Render capability indicators in device list |
 
+| `docs/ARCHITECTURE.md` | Routing gate documentation; capability gating pattern; error table; domain types list |
+
 ---
 
-## 5. Out of Scope
+## 5. ARCHITECTURE.md Updates
+
+`docs/ARCHITECTURE.md` must be updated in the same PR as the implementation. Four locations:
+
+### 5.1 Routing guard table — playback key entry (priority 8)
+
+Current text (§ "Overlay Routing Precedence" table):
+
+```
+| 8 | Playback keys | Space, +, -, s, r, v, ←, → → always NowPlayingPane |
+```
+
+Replace with:
+
+```
+| 8 | Playback keys | Two pre-flight gates checked before forwarding to NowPlayingPane: |
+|   |               | Gate 1 — Premium: !store.IsPremium() → "Spotify Premium required" |
+|   |               | Gate 2 — Capability: !store.ActionAllowed(action) → reason string  |
+|   |               | If both pass: key forwarded to NowPlayingPane regardless of focus   |
+```
+
+Also update the routing diagram above the table (the ASCII flow diagram showing guards 1–8) to
+note that priority 8 runs two checks before reaching the pane.
+
+### 5.2 New subsection: "Capability Gating" (after Staleness Tracking)
+
+Add a new subsection in the State Management section documenting `Store.ActionAllowed()` as the
+single decision point for operation capability. Content to include:
+
+**What it is:** A pre-flight check that consults three Spotify API signals before any playback
+command is dispatched:
+
+1. `device.is_restricted` — total lockout; no Web API commands accepted by this device
+2. `device.supports_volume` — volume-specific; `PUT /me/player/volume` will fail on this device
+3. `playbackState.actions.disallows.*` — runtime signal from Spotify; reflects current
+   subscription tier, content type (ads, DRM, radio), and device capability in one object
+
+**Where it lives:** `state/Store.ActionAllowed(action PlaybackAction) (bool, string)`. The Store
+is the authority because it holds both `PlaybackState` (for `actions.disallows`) and the cached
+device list (for `is_restricted` lookups). Routing and handlers query it; they never inspect
+capability fields directly.
+
+**Two call sites:**
+
+- `routing.go` `handleKeyMsg` — gate for all keyboard-triggered playback actions
+- `handlers.go` `TransferPlaybackMsg` handler — gate for device transfer (three-layer:
+  Premium → `ActionAllowed(ActionTransferPlayback)` → `IsTargetDeviceRestricted(deviceID)`)
+
+**Rule for future operations:** Any new playback operation that maps to a Spotify `actions.disallows`
+field or a device capability field must be added to `ActionAllowed`'s switch statement. Never
+add a new ad-hoc check in routing or a handler — funnel it through `ActionAllowed`.
+
+**Companion method:** `Store.IsTargetDeviceRestricted(deviceID string) bool` — used only for
+device transfer where the *target* device's `is_restricted` must be checked independently of
+the current playback state.
+
+### 5.3 Error handling table — 403 row
+
+Current text:
+
+```
+| 403 (no premium) | "warning" | "Spotify Premium required for playback" |
+```
+
+Replace with:
+
+```
+| 403 (capability blocked) | "warning" | Proactively prevented by capability gate before |
+|                          |           | reaching the API. If a race delivers a 403 anyway, |
+|                          |           | ForbiddenError.Message is shown verbatim; fallback |
+|                          |           | is "Spotify Premium required" when body is empty.  |
+```
+
+Also add a note: the 403 label is now "capability blocked" not "no premium" — volume on a
+restricted device, seek during an ad, and missing Premium all return 403. The gate distinguishes
+them before the call fires; the error handler treats all surviving 403s uniformly.
+
+### 5.4 Domain types list
+
+In the Domain Package section, update the `types.go` entry:
+
+Current:
+```
+- `types.go` — Core types: `PlaybackState`, `Track`, `Artist`, `Album`, `Device`,
+  `SimplePlaylist`, `SavedAlbum`, `SavedTrack`, `PlayHistory`, `QueueResponse`,
+  `FullArtist`, `PlayOptions`
+```
+
+Add `PlaybackActions`, `PlaybackActionsWrapper` to the list.
+
+---
+
+## 7. Out of Scope
 
 - Nerd Font icon set — deferred to a future feature
 - `actions.disallows.transferring_playback` UI indicator in DeviceOverlay (gate is wired, visual TBD)
@@ -373,7 +467,7 @@ No architecture changes — purely visual, reads from `DeviceInfo` fields added 
 
 ---
 
-## 6. Testing Notes
+## 8. Testing Notes
 
 - Table-driven tests for `Store.ActionAllowed` covering: nil state, `is_restricted`, each
   disallow field, `supports_volume: false`
