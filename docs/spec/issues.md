@@ -1,4 +1,14 @@
 
+## StateReader and auth test coverage refinements (PR #146 review findings)
+**Found:** 2026-04-10 | **Source:** PR #146 Review
+**Feature:** 22-developer-foundations
+
+Items to log:
+1. `internal/ui/panes/nowplaying_test.go` — `testStateWriter` embeds full `*state.Store`; a narrower `playbackWriter` interface (just `SetPlaybackState`) would document intent more precisely and prevent future tests from calling unrelated write methods.
+2. `internal/api/auth_test.go` — no public-boundary test for nil-client propagation through `ExchangeCode` or `Refresh`; the internal test in `auth_internal_test.go` covers the guard, but a higher-level test would catch any future wrapping regression.
+
+---
+
 ## Test coverage gaps in devices.go (PR #145 review findings)
 **Found:** 2026-04-10 | **Source:** PR #145 Review
 **Feature:** 22-developer-foundations

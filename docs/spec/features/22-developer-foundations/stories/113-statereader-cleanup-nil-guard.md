@@ -1,7 +1,7 @@
 ---
 title: "StateReader Interface Cleanup, NowPlaying Test Helper & Nil Guard"
 feature: 22-developer-foundations
-status: open
+status: done
 ---
 
 ## Background
