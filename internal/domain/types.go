@@ -49,6 +49,9 @@ type PlaybackState struct {
 
 	// Device is the currently active playback device. May be nil if no device.
 	Device *Device `json:"device"`
+
+	// Actions lists operations currently disallowed by Spotify (content, device, or tier).
+	Actions PlaybackActionsWrapper `json:"actions"`
 }
 
 // Track represents a Spotify track item returned in the playback state.
@@ -232,6 +235,31 @@ type Device struct {
 
 	// VolumePercent is the current volume as a percentage (0–100).
 	VolumePercent int `json:"volume_percent"`
+
+	// SupportsVolume indicates whether PUT /me/player/volume is accepted by this device.
+	// false for speakers, Chromecast, TV, Automobile, etc. that manage their own volume.
+	SupportsVolume bool `json:"supports_volume"`
+}
+
+// PlaybackActions lists which player operations Spotify is currently disallowing.
+// A field set to true means that operation is NOT available right now.
+// This reflects subscription tier, active content type (ads, DRM, radio), and device capability.
+type PlaybackActions struct {
+	Pausing               bool `json:"pausing"`
+	Resuming              bool `json:"resuming"`
+	Seeking               bool `json:"seeking"`
+	SkippingNext          bool `json:"skipping_next"`
+	SkippingPrev          bool `json:"skipping_prev"`
+	TogglingRepeatContext bool `json:"toggling_repeat_context"`
+	TogglingRepeatTrack   bool `json:"toggling_repeat_track"`
+	TogglingShuffle       bool `json:"toggling_shuffle"`
+	TransferringPlayback  bool `json:"transferring_playback"`
+}
+
+// PlaybackActionsWrapper wraps the disallows object in the Spotify API response.
+// Spotify sends: { "actions": { "disallows": { "pausing": true, ... } } }
+type PlaybackActionsWrapper struct {
+	Disallows PlaybackActions `json:"disallows"`
 }
 
 // PlayOffset specifies where within a context to start playback.
