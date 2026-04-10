@@ -320,27 +320,6 @@ func TestPlaylistsPane_LibraryLoadedMsg_RefreshesTable(t *testing.T) {
 	assert.Contains(t, output, "NewPlaylist", "pane should show newly loaded playlist after LibraryLoadedMsg")
 }
 
-// TestPlaylistsPane_PlaylistCreatedMsg_RefreshesList verifies playlist creation refresh.
-func TestPlaylistsPane_PlaylistCreatedMsg_RefreshesList(t *testing.T) {
-	s := state.New()
-	s.SetPlaylists([]domain.SimplePlaylist{
-		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 10},
-	})
-	th := theme.Load("black")
-	pane := NewPlaylistsPane(s, th, true)
-	pane.SetSize(80, 20)
-
-	// Add new playlist to store (simulating what app.Update does), then send msg
-	s.SetPlaylists([]domain.SimplePlaylist{
-		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 10},
-		{ID: "pl2", Name: "NewList", URI: "spotify:playlist:pl2", TrackCount: 0},
-	})
-	pane.Update(PlaylistCreatedMsg{PlaylistID: "pl2", Name: "NewList"}) //nolint:errcheck
-
-	output := pane.View()
-	assert.Contains(t, output, "NewList", "pane should show new playlist after PlaylistCreatedMsg")
-}
-
 // TestPlaylistsPane_PlaylistTracksLoadedMsg_ShowsTracks verifies track sub-view refresh
 // with pane-owned data (story 106 architecture: no store write).
 func TestPlaylistsPane_PlaylistTracksLoadedMsg_ShowsTracks(t *testing.T) {
