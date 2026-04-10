@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/testhelpers"
@@ -162,6 +161,5 @@ func TestGetDevices_InvalidJSON(t *testing.T) {
 	devices, err := client.Devices(context.Background())
 	require.Error(t, err)
 	assert.Nil(t, devices)
-	assert.True(t, strings.Contains(err.Error(), "decoding") || strings.Contains(err.Error(), "getting devices"),
-		"expected error to contain 'decoding' or 'getting devices', got: %s", err.Error())
+	assert.ErrorContains(t, err, "getting devices")
 }

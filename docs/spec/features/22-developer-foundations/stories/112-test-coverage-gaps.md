@@ -1,7 +1,7 @@
 ---
 title: "Test Coverage Gaps and Assertion Fixes"
 feature: 22-developer-foundations
-status: open
+status: done
 ---
 
 ## Background
