@@ -75,7 +75,6 @@ func (l *LikedSongsPane) Actions() []layout.Action {
 	}
 	return []layout.Action{
 		{Key: "f", Label: "filter"},
-		{Key: "i", Label: "like"},
 	}
 }
 
@@ -148,17 +147,6 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return l, nil
 
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "i":
-		// Toggle like/unlike. Tracks shown here are already liked, so 'i' means unlike.
-		tracks := l.filteredTracks()
-		idx := l.table.SelectedIndex()
-		if idx >= 0 && idx < len(tracks) {
-			trackID := tracks[idx].Track.ID
-			return l, func() tea.Msg {
-				return LikeTrackRequestMsg{TrackID: trackID, Unlike: true}
-			}
-		}
-		return l, nil
 	}
 
 	// Forward navigation to the table.
