@@ -1,7 +1,7 @@
 ---
 title: "Playback Key Bugs — Space Fix and Remove n"
 feature: 24-controls-cleanup
-status: open
+status: done
 ---
 
 ## Background

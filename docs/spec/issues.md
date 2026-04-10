@@ -1,4 +1,12 @@
 
+## Stale comment in routing.go isPlaybackKey
+**Found:** 2026-04-10 | **Source:** PR #152 Review
+**Feature:** 24-controls-cleanup
+
+`internal/app/routing.go` `isPlaybackKey` comment at line 34 mentioned `NowPlayingPane.handleKey also accepts the rune " " as a fallback` — this fallback was removed in the same PR. Comment was updated in the doc-finalization commit, but worth noting as a pattern: when removing a fallback branch, search for comments in companion files that reference it.
+
+---
+
 ## buildFetchCurrentUserCmd uses non-cancellable context
 **Found:** 2026-04-10 | **Source:** PR #147 Review
 **Feature:** 23-user-profile-subscription
