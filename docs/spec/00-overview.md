@@ -31,7 +31,7 @@
 | 20 | Playback Context & Navigation | `features/20-playback-context/` | done | 105 (done), 106 (done), 107 (done) | Context-aware playback for all song-list panes, full playlist functionality, album drill-down |
 | 21 | Help Overlay | `features/21-help-overlay/` | done | 108 (done) | `?` key opens centered keybinding reference overlay; introduces docs/keybinding.md and CLAUDE.md maintenance rule |
 | 22 | Developer Foundations | `features/22-developer-foundations/` | done | 109 (done), 110 (done), 111 (done), 112 (done), 113 (done) | Onboarding docs, test infra, StateReader interface, file splits, BasePane pattern, RebuildTableTheme helper, auth client fix; follow-up: test coverage gaps, interface cleanup, nil guard |
-| 23 | User Profile & Subscription Awareness | `features/23-user-profile-subscription/` | in-progress | 114 (done), 115 (done), 116 (done), 117 | Expand UserProfile with tier/country, profile overlay (`u` key), header chip, Premium gate for playback keys and device transfer, splash notice |
+| 23 | User Profile & Subscription Awareness | `features/23-user-profile-subscription/` | done | 114 (done), 115 (done), 116 (done), 117 (done) | Expand UserProfile with tier/country, profile overlay (`u` key), header chip, Premium gate for playback keys and device transfer, splash notice |
 
 ---
 

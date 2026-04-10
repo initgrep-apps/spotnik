@@ -1,6 +1,6 @@
 ---
 title: "User Profile & Subscription Awareness"
-status: in-progress
+status: done
 ---
 
 ## Description

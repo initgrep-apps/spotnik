@@ -1,7 +1,7 @@
 ---
 title: "Profile Overlay UX Fixes — Remove Duplicate Hint, Add Status Bar Binding"
 feature: 23-user-profile-subscription
-status: open
+status: done
 ---
 
 ## Background
