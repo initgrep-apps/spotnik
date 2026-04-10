@@ -1,6 +1,6 @@
 ---
 title: "User Profile & Subscription Awareness"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -49,9 +49,10 @@ Three parts that build on each other:
 
 | # | Title | Status |
 |---|-------|--------|
-| 114 | Data layer — UserProfile expansion and profile pipeline | open |
-| 115 | Profile UI — overlay pane, header chip, App wiring | open |
-| 116 | Subscription gating, splash notice, keybinding docs | open |
+| 114 | Data layer — UserProfile expansion and profile pipeline | done |
+| 115 | Profile UI — overlay pane, header chip, App wiring | done |
+| 116 | Subscription gating, splash notice, keybinding docs | done |
+| 117 | Profile overlay UX fixes — remove duplicate hint, add status bar binding | open |
 
 ## Premium-Only Operations (from `docs/API-CAPABILITY.md §21`)
 
