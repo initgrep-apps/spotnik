@@ -14,10 +14,13 @@ func unmarshalJSON(data []byte, v interface{}) error {
 }
 
 // UserProfile represents the authenticated user's Spotify profile,
-// as returned by GET /v1/me. Used to determine playlist ownership.
+// as returned by GET /v1/me.
 type UserProfile struct {
-	// ID is the Spotify user ID.
-	ID string `json:"id"`
+	// ID is the Spotify user ID. Used to distinguish owned vs followed playlists.
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Product     string `json:"product"` // "premium" or "free"
+	Country     string `json:"country"` // ISO 3166-1 alpha-2, e.g. "DE"
 }
 
 // PlaybackState represents the full playback state returned by GET /me/player.

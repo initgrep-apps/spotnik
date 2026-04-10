@@ -1,0 +1,7 @@
+{
+  "id": "user123",
+  "display_name": "Test User",
+  "product": "premium",
+  "country": "DE",
+  "email": "test@example.com"
+}
