@@ -1,5 +1,6 @@
 // Package panes — TopArtistsPane displays the user's top artists in a dense
-// bubble-table with in-pane filtering and time range cycling via the t key.
+// bubble-table with in-pane filtering and time range cycling via the g key.
+// Enter on a row emits PlayContextMsg to play the selected artist.
 // The genre column shows the first genre from each artist's genre list.
 // Implements layout.Pane (toggle key 8).
 package panes
@@ -19,7 +20,7 @@ import (
 // Compile-time check: TopArtistsPane implements layout.Pane.
 var _ layout.Pane = &TopArtistsPane{}
 
-// topArtistsTimeRanges is the cycle order for the t key.
+// topArtistsTimeRanges is the cycle order for the g key.
 var topArtistsTimeRanges = []string{"short_term", "medium_term", "long_term"}
 
 // topArtistsRangeLabels maps API values to human-readable display labels.
@@ -32,7 +33,8 @@ var topArtistsRangeLabels = map[string]string{
 // TopArtistsPane is the Bubble Tea model for the Top Artists pane (toggle key 8).
 // It renders a dense bubble-table of the user's top artists with columns for index,
 // name, and genre (first genre from each artist's genre list). It supports in-pane
-// filtering by artist name and genre, and per-pane time range cycling via the t key.
+// filtering by artist name and genre, and per-pane time range cycling via the g key.
+// Enter on a selected row emits PlayContextMsg to start playback of that artist.
 type TopArtistsPane struct {
 	BasePane
 
@@ -88,7 +90,7 @@ func (a *TopArtistsPane) TimeRange() string { return a.timeRange }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
 // When the filter is active, only shows the Esc/close hint.
-// Otherwise shows filter (f) and time range cycle (t) with the current range as label.
+// Otherwise shows filter (f) and time range cycle (g) with the current range as label.
 func (a *TopArtistsPane) Actions() []layout.Action {
 	if a.filter.IsActive() {
 		return []layout.Action{{Key: "Esc", Label: "close"}}
@@ -96,7 +98,7 @@ func (a *TopArtistsPane) Actions() []layout.Action {
 	rangeLabel := topArtistsRangeLabels[a.timeRange]
 	return []layout.Action{
 		{Key: "f", Label: "filter"},
-		{Key: "t", Label: rangeLabel},
+		{Key: "g", Label: rangeLabel},
 	}
 }
 
@@ -157,13 +159,20 @@ func (a *TopArtistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.resizeTable()
 		return a, nil
 
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "t":
+	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "g":
 		return a.cycleTimeRange()
+
+	case keyMsg.Type == tea.KeyEnter:
+		artists := a.filteredArtists()
+		idx := a.table.SelectedIndex()
+		if idx >= 0 && idx < len(artists) {
+			uri := artists[idx].URI
+			return a, func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
+		}
+		return a, nil
 	}
 
 	// Forward navigation to the table.
-	// NOTE: Enter has no action for artists — artists aren't directly playable
-	// (PlayContextMsg requires explicit artist play support).
 	cmd := a.table.Update(keyMsg)
 	return a, cmd
 }
