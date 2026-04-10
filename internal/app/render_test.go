@@ -627,3 +627,30 @@ func TestRenderWithProfileOverlay_ZeroWidth(t *testing.T) {
 	result := a.renderWithProfileOverlay(background)
 	assert.NotEmpty(t, result, "renderWithProfileOverlay should return non-empty result even at zero size")
 }
+
+func TestTruncateProfileName_ShortName(t *testing.T) {
+	assert.Equal(t, "Alice", truncateProfileName("Alice"))
+}
+
+func TestTruncateProfileName_ExactLength(t *testing.T) {
+	name := strings.Repeat("a", maxProfileDisplayNameLen)
+	assert.Equal(t, name, truncateProfileName(name))
+}
+
+func TestTruncateProfileName_LongName(t *testing.T) {
+	// 25 runes — exceeds the 20-rune cap.
+	name := strings.Repeat("a", maxProfileDisplayNameLen+5)
+	result := truncateProfileName(name)
+	assert.True(t, len([]rune(result)) <= maxProfileDisplayNameLen,
+		"truncated name must not exceed maxProfileDisplayNameLen runes")
+	assert.True(t, strings.HasSuffix(result, "…"), "truncated name must end with ellipsis")
+	assert.NotEqual(t, name, result, "truncated name must differ from original")
+}
+
+func TestTruncateProfileName_UnicodeRunes(t *testing.T) {
+	// 21 multi-byte runes — truncation must operate on rune count, not byte count.
+	name := strings.Repeat("é", maxProfileDisplayNameLen+1)
+	result := truncateProfileName(name)
+	assert.True(t, len([]rune(result)) <= maxProfileDisplayNameLen)
+	assert.True(t, strings.HasSuffix(result, "…"))
+}

@@ -738,6 +738,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	// TODO(24-controls-cleanup): orphaned — no pane emitter after story 120 removed the 'i' handler from likedsongs_pane.
 	case panes.LikeTrackRequestMsg:
 		return a, a.buildToggleLikeCmd(m.TrackID, m.Unlike)
 

@@ -360,6 +360,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case panes.PlaylistAccessDeniedMsg:
 		return a, a.alerts.NewAlertCmd("warning", "Track access limited to playlists you own or collaborate on"), true
 
+	// TODO(24-controls-cleanup): orphaned — no pane emitter after story 120 removed the n/r stub handlers.
 	case panes.PlaylistCreateRequestMsg:
 		return a, a.buildCreatePlaylistCmd(m.Name, m.Description), true
 
@@ -373,6 +374,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// Re-fetch playlists so the new one appears.
 		return a, a.buildFetchPlaylistsCmd(0), true
 
+	// TODO(24-controls-cleanup): orphaned — no pane emitter after story 120.
 	case panes.PlaylistRenameRequestMsg:
 		return a, a.buildRenamePlaylistCmd(m.PlaylistID, m.NewName), true
 
@@ -411,6 +413,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return a, nil, true
 
+	// TODO(24-controls-cleanup): orphaned — no pane emitter after story 120.
 	case panes.PlaylistReorderRequestMsg:
 		return a, a.buildReorderPlaylistTracksCmd(m.PlaylistID, m.RangeStart, m.InsertBefore, m.RangeLength), true
 

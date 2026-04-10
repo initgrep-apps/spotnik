@@ -163,3 +163,44 @@ func TestGetDevices_InvalidJSON(t *testing.T) {
 	assert.Nil(t, devices)
 	assert.ErrorContains(t, err, "getting devices")
 }
+
+// TestGetDevices_NullDevicesField verifies that {"devices": null} is treated the same
+// as {"devices": []} — the nil-guard on devices.go:49 must return an empty non-nil slice.
+func TestGetDevices_NullDevicesField(t *testing.T) {
+	fixture := testhelpers.LoadFixture(t, "devices_null.json")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	client := NewDevicesClient(srv.URL, "test-token")
+	devices, err := client.Devices(context.Background())
+	require.NoError(t, err)
+	assert.NotNil(t, devices, "expected non-nil slice when devices field is JSON null")
+	assert.Empty(t, devices, "expected empty slice when devices field is JSON null")
+}
+
+// TestTransferPlayback_PlayFalse verifies that passing play=false serialises the
+// play field as false in the request body — pinning the serialisation contract.
+func TestTransferPlayback_PlayFalse(t *testing.T) {
+	var gotBody map[string]interface{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &gotBody)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	client := NewDevicesClient(srv.URL, "test-token")
+	err := client.TransferPlayback(context.Background(), "device-xyz", false)
+	require.NoError(t, err)
+
+	assert.Equal(t, false, gotBody["play"], "play field must be false when play=false")
+	ids, ok := gotBody["device_ids"].([]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "device-xyz", ids[0])
+}
