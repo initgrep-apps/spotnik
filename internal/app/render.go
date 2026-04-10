@@ -373,10 +373,11 @@ func (a *App) renderProfileChip() string {
 
 	name := truncateProfileName(profile.DisplayName)
 
-	// StatusBarFg gives the name a distinct colour relative to the cyan DeviceActive chip.
+	// TextSecondary gives the name a fluent, softer colour — distinct from both
+	// the cyan DeviceActive chip and the StatusBarFg used for keybinding labels.
 	nameStyle := lipgloss.NewStyle().
 		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.StatusBarFg())
+		Foreground(a.theme.TextSecondary())
 
 	var badge string
 	if a.store.IsPremium() {
