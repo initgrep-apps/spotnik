@@ -68,14 +68,13 @@ func (q *QueuePane) Title() string { return "Queue" }
 func (q *QueuePane) ToggleKey() int { return 2 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// Returns close action when filter is active; otherwise filter and add actions.
+// Returns close action when filter is active; otherwise filter action.
 func (q *QueuePane) Actions() []layout.Action {
 	if q.filter.IsActive() {
 		return []layout.Action{{Key: "Esc", Label: "close"}}
 	}
 	return []layout.Action{
 		{Key: "f", Label: "filter"},
-		{Key: "A", Label: "add"},
 	}
 }
 
