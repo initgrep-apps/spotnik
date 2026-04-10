@@ -32,6 +32,7 @@
 | 21 | Help Overlay | `features/21-help-overlay/` | done | 108 (done) | `?` key opens centered keybinding reference overlay; introduces docs/keybinding.md and CLAUDE.md maintenance rule |
 | 22 | Developer Foundations | `features/22-developer-foundations/` | done | 109 (done), 110 (done), 111 (done), 112 (done), 113 (done) | Onboarding docs, test infra, StateReader interface, file splits, BasePane pattern, RebuildTableTheme helper, auth client fix; follow-up: test coverage gaps, interface cleanup, nil guard |
 | 23 | User Profile & Subscription Awareness | `features/23-user-profile-subscription/` | done | 114 (done), 115 (done), 116 (done), 117 (done) | Expand UserProfile with tier/country, profile overlay (`u` key), header chip, Premium gate for playback keys and device transfer, splash notice |
+| 24 | Controls Cleanup and Fix | `features/24-controls-cleanup/` | open | 118, 119, 120, 121 | Fix broken Space/n keybindings, rebind t→g for time range, TopArtists Enter to play, remove dead pane actions, help overlay polish |
 
 ---
 
@@ -41,5 +42,5 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-10*
+*Last updated: 2026-04-10* (added feature 24)
 
