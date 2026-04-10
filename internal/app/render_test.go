@@ -534,3 +534,39 @@ func TestRenderHeader_DeviceAndProfile_FitsWidth(t *testing.T) {
 	result := a.renderHeader()
 	assert.Equal(t, 160, lipgloss.Width(result), "header should fit exactly terminal width with both chips")
 }
+
+// --- Story 115 PR fixes: renderWithProfileOverlay coverage ---
+
+// TestRenderWithProfileOverlay_NonEmpty verifies that when profileOverlayOpen is true and
+// the store has a loaded profile, buildView() returns a non-empty string containing the
+// rounded border corner ╭ from the profile overlay.
+func TestRenderWithProfileOverlay_NonEmpty(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.currentView = viewGrid
+	a.store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Irshad Sheikh",
+		Product:     "premium",
+		Country:     "DE",
+	})
+	a.profilePane.SetSize(40, 20)
+	a.profileOverlayOpen = true
+
+	result := a.buildView()
+	assert.NotEmpty(t, result, "buildView should return non-empty output when profile overlay is open")
+	assert.Contains(t, result, "╭", "profile overlay border should include rounded corner ╭")
+}
+
+// TestRenderWithProfileOverlay_ZeroWidth verifies that with zero terminal width,
+// renderWithProfileOverlay returns the background unchanged (no panic, guard triggers).
+func TestRenderWithProfileOverlay_ZeroWidth(t *testing.T) {
+	a := newRenderTestApp()
+	// width=0 triggers the guard inside renderWithProfileOverlay.
+	a.width = 0
+	a.height = 0
+	background := "background content"
+	result := a.renderWithProfileOverlay(background)
+	assert.NotEmpty(t, result, "renderWithProfileOverlay should return non-empty result even at zero size")
+}

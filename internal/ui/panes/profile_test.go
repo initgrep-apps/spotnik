@@ -182,3 +182,25 @@ func TestProfileOverlay_SetSize(t *testing.T) {
 	assert.Equal(t, 40, overlay.width, "SetSize should store width")
 	assert.Equal(t, 12, overlay.height, "SetSize should store height")
 }
+
+// TestProfileOverlay_SetTheme verifies that after calling SetTheme the overlay renders
+// without panicking and reflects the new theme (smoke test).
+func TestProfileOverlay_SetTheme(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Theme Switcher",
+		Product:     "premium",
+		Country:     "US",
+	})
+
+	// Switch to a different theme.
+	newTheme := theme.Load("dracula")
+	overlay.SetTheme(newTheme)
+
+	// View must not panic and must still render content.
+	view := overlay.View()
+	assert.NotEmpty(t, view, "View should return non-empty content after SetTheme")
+	assert.Contains(t, view, "Theme Switcher", "overlay should render profile name after SetTheme")
+}

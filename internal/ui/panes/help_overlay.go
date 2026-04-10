@@ -39,7 +39,7 @@ const colPadLeft = 2
 var helpContent = [2][]helpSection{
 	{
 		{title: "Global", bindings: []helpBinding{
-			{"/", "search"}, {"d", "devices"}, {"t", "theme"}, {"?", "help"},
+			{"/", "search"}, {"d", "devices"}, {"u", "profile"}, {"t", "theme"}, {"?", "help"},
 			{"q", "quit"}, {"0", "toggle page"}, {"1-8", "toggle pane"}, {"p", "preset"},
 		}},
 		{title: "Navigation", bindings: []helpBinding{

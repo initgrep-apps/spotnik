@@ -122,15 +122,17 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.Type == tea.KeyRunes && string(m.Runes) == "d" {
 		return a.openDeviceOverlay()
 	}
-	// 'u' opens the user profile overlay from any pane.
+	// 'u' opens the user profile overlay — only if no other overlay is already open.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "u" {
-		a.profileOverlayOpen = true
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen {
+			a.profileOverlayOpen = true
+		}
 		return a, nil
 	}
 
 	// 't' opens the theme switcher overlay — but only if no other overlay is already open.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "t" {
-		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.profileOverlayOpen {
 			return a.openThemeSwitcher()
 		}
 		return a, nil
@@ -138,7 +140,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// '?' opens the help overlay — but only if no other overlay is already open.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "?" {
-		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen && !a.profileOverlayOpen {
 			return a.openHelp()
 		}
 		return a, nil
