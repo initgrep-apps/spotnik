@@ -835,3 +835,64 @@ func TestStore_UserProfile_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	// No assertion needed — the race detector catches data races if locking is broken.
 }
+
+func TestStore_IsTargetDeviceRestricted(t *testing.T) {
+	tests := []struct {
+		name     string
+		devices  []domain.Device
+		deviceID string
+		want     bool
+	}{
+		{
+			name:     "no devices cached — returns false (safe default)",
+			devices:  nil,
+			deviceID: "abc",
+			want:     false,
+		},
+		{
+			name: "device found, not restricted",
+			devices: []domain.Device{
+				{ID: "abc", IsRestricted: false},
+			},
+			deviceID: "abc",
+			want:     false,
+		},
+		{
+			name: "device found, is restricted",
+			devices: []domain.Device{
+				{ID: "abc", IsRestricted: true},
+			},
+			deviceID: "abc",
+			want:     true,
+		},
+		{
+			name: "device ID not in list — returns false",
+			devices: []domain.Device{
+				{ID: "xyz", IsRestricted: true},
+			},
+			deviceID: "abc",
+			want:     false,
+		},
+		{
+			name: "multiple devices, target is restricted",
+			devices: []domain.Device{
+				{ID: "aaa", IsRestricted: false},
+				{ID: "bbb", IsRestricted: true},
+				{ID: "ccc", IsRestricted: false},
+			},
+			deviceID: "bbb",
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New()
+			if tt.devices != nil {
+				s.SetDevices(tt.devices)
+			}
+			got := s.IsTargetDeviceRestricted(tt.deviceID)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

@@ -227,6 +227,21 @@ func (s *Store) SetDevices(devices []domain.Device) {
 	s.devices = devices
 }
 
+// IsTargetDeviceRestricted returns true if the device with the given ID has
+// IsRestricted set in the cached device list. Returns false when the device is
+// not found (safe default — let the API decide). Used by the TransferPlaybackMsg
+// handler to block transfers to restricted devices before making an API call.
+func (s *Store) IsTargetDeviceRestricted(deviceID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, d := range s.devices {
+		if d.ID == deviceID {
+			return d.IsRestricted
+		}
+	}
+	return false
+}
+
 // Playlists returns the user's saved playlists.
 func (s *Store) Playlists() []domain.SimplePlaylist {
 	s.mu.RLock()
