@@ -1,6 +1,6 @@
 ---
 title: "Controls Cleanup and Fix"
-status: open
+status: done
 ---
 
 ## Description

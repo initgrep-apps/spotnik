@@ -1,7 +1,7 @@
 ---
 title: "Help Overlay Polish"
 feature: 24-controls-cleanup
-status: open
+status: done
 ---
 
 ## Background
