@@ -56,6 +56,34 @@ func isPremiumOnlyPlaybackKey(m tea.KeyMsg) bool {
 	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight || m.Type == tea.KeySpace
 }
 
+// playbackKeyToAction maps a Premium-only playback key to its PlaybackAction.
+// Only called after isPremiumOnlyPlaybackKey returns true, so the switch is exhaustive.
+func playbackKeyToAction(m tea.KeyMsg) panes.PlaybackAction {
+	if m.Type == tea.KeyRunes {
+		switch string(m.Runes) {
+		case "+":
+			return panes.ActionVolumeUp
+		case "-":
+			return panes.ActionVolumeDown
+		case "s":
+			return panes.ActionToggleShuffle
+		case "r":
+			return panes.ActionCycleRepeat
+		}
+	}
+	switch m.Type {
+	case tea.KeyLeft:
+		return panes.ActionPrevious
+	case tea.KeyRight:
+		return panes.ActionNext
+	default: // tea.KeySpace
+		// Space toggles play/pause; map to Pause as the conservative choice.
+		// checkCapability will use ps.IsPlaying context — but routing only needs
+		// to identify the key; the pane will send the correct ActionPause/ActionPlay.
+		return panes.ActionPause
+	}
+}
+
 // handleKeyMsg routes a keyboard event through all overlay and view guards before
 // dispatching to the focused pane. Extracted from Update() to keep that function readable.
 func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -205,10 +233,19 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Playback keys always go to the NowPlaying pane regardless of focus.
 	// Temporarily enable focus so the pane handles the key even when it isn't focused.
 	if isPlaybackKey(m) {
-		// Gate: free-tier users are blocked from Premium-only API operations.
+		// Gate 1: free-tier users are blocked from Premium-only API operations.
 		// 'v' (visualizer cycle) is exempt — it is a local UI action, not an API call.
 		if isPremiumOnlyPlaybackKey(m) && !a.store.IsPremium() {
 			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+		}
+		// Gate 2: device capability check — blocks actions the active device or current
+		// Spotify context disallows (wrong device type, DRM content, ad playback, etc.).
+		// 'v' is exempt for the same reason as above.
+		if isPremiumOnlyPlaybackKey(m) {
+			action := playbackKeyToAction(m)
+			if ok, reason := checkCapability(a.store.PlaybackState(), action); !ok {
+				return a, a.alerts.NewAlertCmd("warning", reason)
+			}
 		}
 		np := a.nowPlayingPane()
 		if np == nil {
