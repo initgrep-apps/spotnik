@@ -49,6 +49,9 @@ Parse into:
 5. If a specific story was requested, verify it exists and is open.
 6. If the feature is not found, already done, or ambiguous: **STOP** and tell
    the user. List available open features.
+7. **Dependency check**: if the feature spec declares dependencies on other
+   features, verify those features have `status: done` and their PRs are
+   merged. If not, **STOP** and report which dependency must be completed first.
 
 ---
 
@@ -64,7 +67,9 @@ Parse into:
 3. Await the agent's return. Expect:
    - A summary of what was built
    - A PR URL
-4. **Store the agent ID** (for SendMessage in later steps).
+4. **Note the agent's name** from the task result — this is the identifier used
+   in the `to` field of `SendMessage` for all subsequent fix cycles. Keep it
+   for Steps 3 and 4.
 5. Extract the PR number from the URL.
 
 **If the agent escalates** (spec ambiguity, persistent CI failure, blocker):
@@ -80,28 +85,30 @@ surface the escalation message to the user and **STOP**.
 The feature-implementer already self-reviews (its Phase 6). This external
 review is an independent second opinion.
 
+Initialise an empty list `minor_issues = []` before entering the loop.
+
 ```
 for round = 1 to 3:
 ```
 
-1. Invoke the `pr-review-toolkit:review-pr` skill with the PR number.
+1. Invoke the `pr-review-toolkit:review-pr` skill via the `Skill` tool, passing
+   the PR number.
 2. Parse the review output for severity:
    - **CRITICAL / IMPORTANT** — must fix before merge
-   - **MINOR / SUGGESTION** — log as known issues, do not block merge
+   - **MINOR / SUGGESTION** — append to `minor_issues`, do not block merge
 
 3. **If clean or minor-only:**
-   - Collect any minor issues for later (Step 4 will handle them).
    - **Break the loop** — review passed.
 
 4. **If critical/important issues found:**
    - Format the issues as an actionable fix list with file paths and
      descriptions.
    - Use the **SendMessage tool** to message the feature-implementer agent
-     (the `to` field is the stored agent ID from Step 2). **Do NOT launch a
+     (the `to` field is the agent name noted in Step 2). **Do NOT launch a
      new Agent** — SendMessage resumes the existing agent with its full
      implementation context:
      ```
-     SendMessage(to: <stored-agent-id>, message: "PR review round {N} found
+     SendMessage(to: <agent-name>, message: "PR review round {N} found
      {count} critical issues. Fix these on the feature branch, run CI,
      commit, and push:
 
@@ -131,7 +138,7 @@ Only reached when the PR has passed external review.
 ### 4a. Doc finalization
 
 Use the **SendMessage tool** (NOT the Agent tool) to message the
-feature-implementer agent (stored agent ID from Step 2):
+feature-implementer agent (agent name from Step 2):
 
 ```
 PR is approved. On the feature branch, make these final updates:
@@ -140,7 +147,7 @@ PR is approved. On the feature branch, make these final updates:
 2. If all stories in the feature are now done, update the feature's
    `feature.md` frontmatter `status: done` as well
 3. Update the overview index (docs/spec/00-overview.md) to reflect status
-4. {If minor issues were found: "Append these minor issues to
+4. {If minor_issues is non-empty: "Append these minor issues to
    docs/spec/issues.md using this format:
 
    ---
@@ -155,12 +162,14 @@ PR is approved. On the feature branch, make these final updates:
    1. {minor issue}
    2. ..."}
 5. Commit as: chore(docs): mark story {NN} as done
-5. Push to the feature branch.
+6. Push to the feature branch.
 ```
 
 Await confirmation that the commit is pushed.
 
 ### 4b. Merge
+
+Run these commands yourself (not via SendMessage):
 
 1. `gh pr merge {number} --merge`
 2. `git checkout main && git pull origin main`
@@ -185,8 +194,22 @@ Report to the user:
 ```
 
 ---
-## STEP 6 — Compact
-- To avoid overflowing the context, your must run /compact to compact the conversation after each story is done
+
+## STEP 6 — CONTINUE OR COMPACT
+
+After each story completes:
+
+- **If the feature has more open stories** and the user requested the full
+  feature (not a single story): run `/compact` to trim context, then loop
+  back to Step 1 with the next open story.
+- **If this was the last story** (or the user requested a single story): you
+  are done. No further action needed.
+
+> **Note:** `/compact` is a Claude Code CLI command — invoke it as a slash
+> command to compress conversation history before starting the next story.
+> This prevents context overflow on long feature runs.
+
+---
 
 ## CONSTRAINTS
 
@@ -197,5 +220,5 @@ Report to the user:
   implementation context.
 - **Never merge on failure** — if review issues persist after 3 rounds, leave
   the PR open and escalate to the user.
-- **Respect dependency order** — if the spec depends on another spec, verify
-  that dependency is merged first.
+- **Respect dependency order** — dependency verification is part of Step 1.
+  Never start implementation if a declared dependency is not yet merged.
