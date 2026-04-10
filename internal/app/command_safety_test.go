@@ -15,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -408,6 +409,8 @@ func TestErrNilClientGuard_PlaybackStateFetchedMsg_NoCounterIncrement(t *testing
 // does not emit a toast.
 func TestErrNilClientGuard_AddToQueueResultMsg(t *testing.T) {
 	a := newSafetyTestApp()
+	// Premium required so AddToQueueMsg passes the gate and dispatches the API cmd.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
 
 	// Build the nil-client cmd by triggering AddToQueue, then execute it.
 	_, fetchCmd := a.Update(panes.AddToQueueMsg{TrackURI: "spotify:track:abc", TrackName: "Test"})

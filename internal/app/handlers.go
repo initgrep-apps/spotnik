@@ -506,7 +506,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					fetchPlaybackStateCmd(a.player),
-					a.alerts.NewAlertCmd("warning", "Playback control not available on this device"),
+					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
 				)
 			}
 			return a, tea.Batch(
@@ -533,6 +533,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildPlayTrackListCmd([]string{m.TrackURI})
 
 	case panes.AddToQueueMsg:
+		// Gate: free-tier users cannot add to queue — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+		}
 		return a, a.buildAddToQueueCmd(m.TrackURI, m.TrackName)
 
 	case panes.AddToQueueResultMsg:
@@ -869,8 +873,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.TransferPlaybackMsg:
-		// User selected a device; show info toast and dispatch transfer API call.
+		// User selected a device; close overlay first.
 		a.deviceOverlayOpen = false
+		// Gate: free-tier users cannot transfer playback — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+		}
 		return a, tea.Batch(
 			a.buildTransferPlaybackCmd(m.DeviceID),
 			a.alerts.NewAlertCmd("info", fmt.Sprintf("Switching to %s...", m.DeviceName)),

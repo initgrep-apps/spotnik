@@ -601,6 +601,8 @@ func TestApp_QuitKey(t *testing.T) {
 func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Premium required for add-to-queue to pass the subscription gate.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
 
 	queueMsg := panes.AddToQueueMsg{TrackURI: "spotify:track:abc"}
 	_, cmd := a.Update(queueMsg)
@@ -1038,6 +1040,8 @@ func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
 	// Set a window size large enough for the main view so alerts render.
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	a = m.(*app.App)
+	// Premium user required for transfer to proceed past the subscription gate.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
 
 	transferMsg := panes.TransferPlaybackMsg{DeviceID: "def456", DeviceName: "iPhone 14"}
 	_, cmd := a.Update(transferMsg)

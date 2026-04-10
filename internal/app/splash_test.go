@@ -25,3 +25,13 @@ func TestRenderSplash_SmallTerminal(t *testing.T) {
 	assert.NotEmpty(t, view)
 	assert.Contains(t, view, appVersion)
 }
+
+func TestRenderSplash_ContainsPremiumNotice(t *testing.T) {
+	th := theme.Load("black")
+	view := renderSplashView(th, 120, 40)
+
+	assert.Contains(t, view, "Playback controls require",
+		"splash should contain the static Premium notice line")
+	assert.Contains(t, view, "Spotify Premium",
+		"splash should mention Spotify Premium in the notice")
+}

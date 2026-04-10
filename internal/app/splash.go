@@ -27,11 +27,17 @@ func renderSplashView(t theme.Theme, width, height int) string {
 		Foreground(t.TextMuted()).
 		Render(appVersion)
 
+	notice := lipgloss.NewStyle().
+		Foreground(t.TextMuted()).
+		Render("Playback controls require Spotify Premium")
+
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		bannerStyle.Render(banner),
 		"",
 		tagline,
 		version,
+		"",
+		notice,
 	)
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)

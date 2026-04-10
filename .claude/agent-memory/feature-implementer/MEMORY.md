@@ -32,3 +32,4 @@
 - [project_spotnik_feature69_complete.md](project_spotnik_feature69_complete.md) — Feature 69 (Network Log Event Migration): NetLog retirement, cursor-based reads, PRIORITY/DECISION columns, blocked visibility, stale comment gotchas
 - [project_spotnik_feature77_complete.md](project_spotnik_feature77_complete.md) — Story 77 (Overlay Backgrounds, Border Corner, Network Log Colors, Status Bar Pills): TOML collision gotcha (8/11 themes collided), saturation test pattern, ANSI background test strategies
 - [project_spotnik_feature114_complete.md](project_spotnik_feature114_complete.md) — Story 114 (UserProfile Data Layer): domain expansion, store methods, app pipeline, IsPremium(), delegation shim for UserID()
+- [project_spotnik_feature116_complete.md](project_spotnik_feature116_complete.md) — Story 116 (Subscription Gating): premium gate patterns, visualizer exemption, test update pattern for gated handlers
