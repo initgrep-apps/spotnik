@@ -48,10 +48,6 @@ Playback keys are always active regardless of which pane has focus.
 | `Enter` | Select / play item | Focused pane |
 | `f` | Toggle filter | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
-| `A` | Add to queue | Search overlay, list panes |
-| `i` | Like / unlike track | LikedSongs pane |
-| `x` | Remove track from playlist | Playlists pane track sub-view |
-| `Shift+↑` / `Shift+↓` | Reorder track | Playlists pane track sub-view |
 
 ## Search Overlay
 

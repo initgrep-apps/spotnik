@@ -59,8 +59,13 @@ func TestHelpOverlay_View_ContainsPaneActionKeys(t *testing.T) {
 	o := newTestHelpOverlay()
 	o.SetSize(120, 40)
 	view := o.View()
-	for _, k := range []string{"Enter", "f", "A", "i", "x"} {
-		assert.Contains(t, view, k, "pane action key %q should appear", k)
+	// Enter, f, g remain after story 120 dead action removal.
+	for _, label := range []string{"select / play", "filter", "cycle time range"} {
+		assert.Contains(t, view, label, "pane action label %q should appear", label)
+	}
+	// Removed dead action labels must not appear.
+	for _, label := range []string{"add to queue", "like / unlike", "remove track", "reorder (playlists)"} {
+		assert.NotContains(t, view, label, "removed pane action label %q must not appear", label)
 	}
 }
 
