@@ -93,14 +93,6 @@ func (p *ProfileOverlay) View() string {
 			codeStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
 			lines = append(lines, iconStyle.Render("◎  ")+codeStyle.Render(profile.Country))
 		}
-
-		// Spacer before hint.
-		lines = append(lines, "")
-
-		// Close hint.
-		hintStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-		keyStyle := lipgloss.NewStyle().Foreground(p.theme.KeyHint())
-		lines = append(lines, keyStyle.Render("esc")+" "+hintStyle.Render("close"))
 	}
 
 	inner := strings.Join(lines, "\n")
@@ -109,12 +101,9 @@ func (p *ProfileOverlay) View() string {
 		Render(inner)
 
 	cfg := layout.BorderConfig{
-		Width:  innerWidth + 2, // +2 for left/right border
-		Height: strings.Count(inner, "\n") + 3,
-		Title:  "Profile",
-		Actions: []layout.Action{
-			{Key: "esc", Label: "close"},
-		},
+		Width:       innerWidth + 2, // +2 for left/right border
+		Height:      strings.Count(inner, "\n") + 3,
+		Title:       "Profile",
 		AccentColor: p.theme.ActiveBorder(),
 		Focused:     true, // overlays are always focused
 		Theme:       p.theme,
