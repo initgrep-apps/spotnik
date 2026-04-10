@@ -15,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
@@ -322,6 +323,8 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 	a.SetPlayer(api.NewPlayer(srv.URL, "test-token"))
+	// Premium required so AddToQueueMsg passes the gate and dispatches the API cmd.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
 
 	// Send AddToQueueMsg — this builds a command that will hit the 403 server.
 	_, cmd := a.Update(panes.AddToQueueMsg{TrackURI: "spotify:track:abc", TrackName: "Test Song"})

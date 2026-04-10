@@ -601,6 +601,8 @@ func TestApp_QuitKey(t *testing.T) {
 func TestApp_AddToQueueMsg_DispatchesAPICmd(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
+	// Premium required for add-to-queue to pass the subscription gate.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
 
 	queueMsg := panes.AddToQueueMsg{TrackURI: "spotify:track:abc"}
 	_, cmd := a.Update(queueMsg)

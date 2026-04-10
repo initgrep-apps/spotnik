@@ -533,6 +533,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.buildPlayTrackListCmd([]string{m.TrackURI})
 
 	case panes.AddToQueueMsg:
+		// Gate: free-tier users cannot add to queue — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+		}
 		return a, a.buildAddToQueueCmd(m.TrackURI, m.TrackName)
 
 	case panes.AddToQueueResultMsg:
