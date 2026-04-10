@@ -1,6 +1,7 @@
 package testhelpers_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/testhelpers"
@@ -19,5 +20,5 @@ func TestLoadFixture_ReturnsNonEmptyContent(t *testing.T) {
 	// playback_state.json is a stable fixture guaranteed to exist in testdata/fixtures/.
 	data := testhelpers.LoadFixture(t, "playback_state.json")
 	require.NotEmpty(t, data, "fixture file should not be empty")
-	assert.Contains(t, string(data), "{", "fixture content should be valid JSON")
+	assert.True(t, json.Valid(data), "fixture content must be valid JSON")
 }

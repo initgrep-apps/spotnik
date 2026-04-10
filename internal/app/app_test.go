@@ -401,8 +401,6 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 		{"FetchAlbums", panes.FetchAlbumsRequestMsg{Offset: 0}},
 		{"FetchLikedTracks", panes.FetchLikedTracksRequestMsg{Offset: 0}},
 		{"FetchRecentlyPlayed", panes.FetchRecentlyPlayedRequestMsg{}},
-		{"LikeTrack", panes.LikeTrackRequestMsg{TrackID: "t1", Unlike: false}},
-		{"UnlikeTrack", panes.LikeTrackRequestMsg{TrackID: "t1", Unlike: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -412,36 +410,6 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 			require.NotNil(t, msg)
 		})
 	}
-}
-
-// TestApp_LikeToggleResultMsg_WithError verifies that a like error emits a toast with the error text.
-// Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
-func TestApp_LikeToggleResultMsg_WithError(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	// Set a window size large enough for the main view so alerts render.
-	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	a = m.(*app.App)
-
-	errMsg := panes.LikeToggleResultMsg{TrackID: "t1", Err: fmt.Errorf("like failed")}
-	_, cmd := a.Update(errMsg)
-	require.NotNil(t, cmd, "error result should produce an alert toast cmd")
-
-	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
-	alertMsg := cmd()
-	_, _ = a.Update(alertMsg)
-	assert.Contains(t, a.View(), "like failed", "error toast should show the error text")
-}
-
-// TestApp_LikeToggleResultMsg_NoError verifies a successful like clears status.
-func TestApp_LikeToggleResultMsg_NoError(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-
-	successMsg := panes.LikeToggleResultMsg{TrackID: "t1", Err: nil}
-	m, cmd := a.Update(successMsg)
-	require.NotNil(t, m)
-	assert.Nil(t, cmd, "successful like should not produce a cmd")
 }
 
 // TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast with the error text.
@@ -1328,32 +1296,6 @@ func TestApp_PlaylistView_GridRendersPlaylists(t *testing.T) {
 	assert.NotEmpty(t, view, "grid view should render with playlists data")
 }
 
-// TestApp_PlaylistViewHandlesCreateRequest verifies PlaylistCreateRequestMsg is handled.
-func TestApp_PlaylistViewHandlesCreateRequest(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-
-	// Send create request directly — root app handles it regardless of which pane is focused.
-	msg := panes.PlaylistCreateRequestMsg{Name: "New Playlist", Description: ""}
-	model, _ := a.Update(msg)
-	a = model.(*app.App)
-	_ = a
-}
-
-// TestApp_PlaylistViewHandlesRenameRequest verifies PlaylistRenameRequestMsg is handled.
-func TestApp_PlaylistViewHandlesRenameRequest(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	a.Store().SetPlaylists([]api.SimplePlaylist{
-		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 24},
-	})
-
-	msg := panes.PlaylistRenameRequestMsg{PlaylistID: "pl-1", NewName: "Renamed"}
-	model, _ := a.Update(msg)
-	a = model.(*app.App)
-	_ = a
-}
-
 // TestApp_PlaylistViewHandlesRemoveRequest verifies PlaylistRemoveRequestMsg is handled.
 func TestApp_PlaylistViewHandlesRemoveRequest(t *testing.T) {
 	cfg := &config.Config{}
@@ -1440,20 +1382,6 @@ func TestApp_CloseDeviceOverlay_RestoresPrevFocus(t *testing.T) {
 	assert.False(t, a.NowPlayingFocused(), "NowPlaying should not be focused after restoring previous pane")
 }
 
-// TestApp_PlaylistViewHandlesReorderRequest verifies PlaylistReorderRequestMsg is handled.
-func TestApp_PlaylistViewHandlesReorderRequest(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	a.Store().SetPlaylists([]api.SimplePlaylist{
-		{ID: "pl-1", Name: "Chill Vibes", URI: "spotify:playlist:pl-1", TrackCount: 2},
-	})
-
-	msg := panes.PlaylistReorderRequestMsg{PlaylistID: "pl-1", RangeStart: 0, InsertBefore: 2, RangeLength: 1}
-	model, _ := a.Update(msg)
-	a = model.(*app.App)
-	_ = a
-}
-
 // TestApp_PlaylistViewHandlesFetchTracksRequest verifies FetchPlaylistTracksRequestMsg is handled.
 func TestApp_PlaylistViewHandlesFetchTracksRequest(t *testing.T) {
 	cfg := &config.Config{}
@@ -1464,57 +1392,6 @@ func TestApp_PlaylistViewHandlesFetchTracksRequest(t *testing.T) {
 	a = model.(*app.App)
 	// Library client is nil in test — command still returns a message.
 	require.NotNil(t, cmd)
-	_ = a
-}
-
-// TestApp_PlaylistCreatedMsg_Success verifies PlaylistCreatedMsg triggers playlist re-fetch.
-func TestApp_PlaylistCreatedMsg_Success(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-
-	msg := panes.PlaylistCreatedMsg{PlaylistID: "new-pl", Name: "New Playlist"}
-	model, cmd := a.Update(msg)
-	a = model.(*app.App)
-	require.NotNil(t, cmd, "should return fetch playlists command after create")
-	_ = a
-}
-
-// TestApp_PlaylistCreatedMsg_Error verifies PlaylistCreatedMsg with error shows status.
-func TestApp_PlaylistCreatedMsg_Error(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-
-	msg := panes.PlaylistCreatedMsg{Err: fmt.Errorf("create failed")}
-	model, cmd := a.Update(msg)
-	a = model.(*app.App)
-	require.NotNil(t, cmd, "should return dismiss timer on error")
-	_ = a
-}
-
-// TestApp_PlaylistRenamedMsg_Success verifies PlaylistRenamedMsg triggers playlist re-fetch.
-func TestApp_PlaylistRenamedMsg_Success(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-
-	msg := panes.PlaylistRenamedMsg{PlaylistID: "pl-1", NewName: "Renamed"}
-	model, cmd := a.Update(msg)
-	a = model.(*app.App)
-	require.NotNil(t, cmd, "should return fetch playlists command after rename")
-	_ = a
-}
-
-// TestApp_PlaylistRenamedMsg_Error verifies PlaylistRenamedMsg with error shows status.
-func TestApp_PlaylistRenamedMsg_Error(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	a.Store().SetPlaylists([]api.SimplePlaylist{
-		{ID: "pl-1", Name: "Chill Vibes"},
-	})
-
-	msg := panes.PlaylistRenamedMsg{PlaylistID: "pl-1", NewName: "Renamed", Err: fmt.Errorf("rename failed")}
-	model, cmd := a.Update(msg)
-	a = model.(*app.App)
-	require.NotNil(t, cmd, "should return dismiss timer on error")
 	_ = a
 }
 
@@ -1530,18 +1407,6 @@ func TestApp_PlaylistRemoveResultMsg_Error(t *testing.T) {
 	})
 
 	msg := panes.PlaylistRemoveResultMsg{PlaylistID: "pl-1", Err: fmt.Errorf("remove failed")}
-	model, cmd := a.Update(msg)
-	a = model.(*app.App)
-	require.NotNil(t, cmd, "should return dismiss timer on error")
-	_ = a
-}
-
-// TestApp_PlaylistReorderResultMsg_Error verifies reorder error is forwarded to playlist pane.
-func TestApp_PlaylistReorderResultMsg_Error(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-
-	msg := panes.PlaylistReorderResultMsg{Err: fmt.Errorf("reorder failed")}
 	model, cmd := a.Update(msg)
 	a = model.(*app.App)
 	require.NotNil(t, cmd, "should return dismiss timer on error")

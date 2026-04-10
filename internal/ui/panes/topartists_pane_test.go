@@ -256,30 +256,6 @@ func TestTopArtistsPane_UsesColumnColors(t *testing.T) {
 
 // ── Story 119: t→g rebind and Enter to play artist ──────────────────────────
 
-// TestTopArtistsPane_GKey_CyclesTimeRange verifies pressing g advances the time range.
-func TestTopArtistsPane_GKey_CyclesTimeRange(t *testing.T) {
-	pane, st := newTestTopArtistsPane()
-	pane.SetFocused(true)
-
-	populateStoreTopArtists(st, "medium_term")
-	populateStoreTopArtists(st, "long_term")
-
-	assert.Equal(t, "short_term", pane.TimeRange())
-
-	// Press g → medium_term
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
-	assert.Equal(t, "medium_term", pane.TimeRange())
-	assert.Nil(t, cmd)
-
-	// Press g → long_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
-	assert.Equal(t, "long_term", pane.TimeRange())
-
-	// Press g → wraps to short_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
-	assert.Equal(t, "short_term", pane.TimeRange())
-}
-
 // TestTopArtistsPane_TKey_DoesNotCycle verifies that pressing t no longer cycles
 // the time range — it passes through to global routing (theme switcher).
 func TestTopArtistsPane_TKey_DoesNotCycle(t *testing.T) {

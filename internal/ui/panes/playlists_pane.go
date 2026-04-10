@@ -179,18 +179,6 @@ func (p *PlaylistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.refreshPlaylistRows()
 		return p, nil
 
-	case PlaylistCreatedMsg:
-		if m.Err == nil {
-			p.refreshPlaylistRows()
-		}
-		return p, nil
-
-	case PlaylistRenamedMsg:
-		if m.Err == nil {
-			p.refreshPlaylistRows()
-		}
-		return p, nil
-
 	case UserProfileReadyMsg:
 		// User ID is now available in the store — refresh rows so the ~ prefix
 		// appears on followed playlists without waiting for a library reload.

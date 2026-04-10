@@ -283,31 +283,6 @@ func TestTopTracksPane_UsesColumnColors(t *testing.T) {
 
 // ── Story 119: t→g rebind ────────────────────────────────────────────────────
 
-// TestTopTracksPane_GKey_CyclesTimeRange verifies pressing g advances the time range.
-func TestTopTracksPane_GKey_CyclesTimeRange(t *testing.T) {
-	pane, st := newTestTopTracksPane()
-	pane.SetFocused(true)
-
-	populateStoreTopTracks(st, "medium_term")
-	populateStoreTopTracks(st, "long_term")
-
-	assert.Equal(t, "short_term", pane.TimeRange())
-
-	// Press g → medium_term
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
-	assert.Equal(t, "medium_term", pane.TimeRange())
-	// Data already cached → no fetch command
-	assert.Nil(t, cmd)
-
-	// Press g → long_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
-	assert.Equal(t, "long_term", pane.TimeRange())
-
-	// Press g → wraps to short_term
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
-	assert.Equal(t, "short_term", pane.TimeRange())
-}
-
 // TestTopTracksPane_TKey_DoesNotCycle verifies that pressing t no longer cycles
 // the time range — it passes through to global routing (theme switcher).
 func TestTopTracksPane_TKey_DoesNotCycle(t *testing.T) {

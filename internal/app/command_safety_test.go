@@ -496,25 +496,6 @@ func TestErrNilClientGuard_DeviceTransferredMsg(t *testing.T) {
 	_ = batchCmd
 }
 
-// TestErrNilClientGuard_LikeToggleResultMsg verifies LikeToggleResultMsg with errNilClient
-// does not emit a toast.
-func TestErrNilClientGuard_LikeToggleResultMsg(t *testing.T) {
-	a := newSafetyTestApp()
-
-	// Trigger a like toggle — nil library client returns errNilClient.
-	_, fetchCmd := a.Update(panes.LikeTrackRequestMsg{TrackID: "t1", Unlike: false})
-	require.NotNil(t, fetchCmd)
-
-	resultMsg := fetchCmd()
-	lMsg, ok := resultMsg.(panes.LikeToggleResultMsg)
-	require.True(t, ok, "expected LikeToggleResultMsg, got %T", resultMsg)
-	require.Error(t, lMsg.Err, "nil library client must set Err on LikeToggleResultMsg")
-
-	// Feed errNilClient message back — must be silent.
-	_, cmd := a.Update(lMsg)
-	assert.Nil(t, cmd, "errNilClient in LikeToggleResultMsg must not emit a toast")
-}
-
 // TestErrNilClientGuard_StatsLoadedMsg verifies StatsLoadedMsg with errNilClient
 // does not emit a toast.
 func TestErrNilClientGuard_StatsLoadedMsg(t *testing.T) {
@@ -553,44 +534,6 @@ func TestErrNilClientGuard_PlaylistTracksLoadedMsg(t *testing.T) {
 	assert.Nil(t, cmd, "errNilClient in PlaylistTracksLoadedMsg must not emit a toast")
 }
 
-// TestErrNilClientGuard_PlaylistCreatedMsg verifies PlaylistCreatedMsg with errNilClient
-// does not emit a toast.
-func TestErrNilClientGuard_PlaylistCreatedMsg(t *testing.T) {
-	a := newSafetyTestApp()
-
-	// Trigger a create playlist — nil playlistsAPI returns errNilClient.
-	_, fetchCmd := a.Update(panes.PlaylistCreateRequestMsg{Name: "My List", Description: ""})
-	require.NotNil(t, fetchCmd)
-
-	resultMsg := fetchCmd()
-	cMsg, ok := resultMsg.(panes.PlaylistCreatedMsg)
-	require.True(t, ok, "expected PlaylistCreatedMsg, got %T", resultMsg)
-	require.Error(t, cMsg.Err, "nil playlistsAPI must set Err on PlaylistCreatedMsg")
-
-	// Feed errNilClient message back — must be silent.
-	_, cmd := a.Update(cMsg)
-	assert.Nil(t, cmd, "errNilClient in PlaylistCreatedMsg must not emit a toast")
-}
-
-// TestErrNilClientGuard_PlaylistRenamedMsg verifies PlaylistRenamedMsg with errNilClient
-// does not emit a toast.
-func TestErrNilClientGuard_PlaylistRenamedMsg(t *testing.T) {
-	a := newSafetyTestApp()
-
-	// Trigger a rename — nil playlistsAPI returns errNilClient.
-	_, fetchCmd := a.Update(panes.PlaylistRenameRequestMsg{PlaylistID: "pl1", NewName: "New Name"})
-	require.NotNil(t, fetchCmd)
-
-	resultMsg := fetchCmd()
-	rMsg, ok := resultMsg.(panes.PlaylistRenamedMsg)
-	require.True(t, ok, "expected PlaylistRenamedMsg, got %T", resultMsg)
-	require.Error(t, rMsg.Err, "nil playlistsAPI must set Err on PlaylistRenamedMsg")
-
-	// Feed errNilClient message back — must be silent.
-	_, cmd := a.Update(rMsg)
-	assert.Nil(t, cmd, "errNilClient in PlaylistRenamedMsg must not emit a toast")
-}
-
 // TestErrNilClientGuard_PlaylistRemoveResultMsg verifies PlaylistRemoveResultMsg
 // with errNilClient does not emit a toast.
 func TestErrNilClientGuard_PlaylistRemoveResultMsg(t *testing.T) {
@@ -608,30 +551,6 @@ func TestErrNilClientGuard_PlaylistRemoveResultMsg(t *testing.T) {
 	// Feed errNilClient message back — must be silent.
 	_, cmd := a.Update(rmMsg)
 	assert.Nil(t, cmd, "errNilClient in PlaylistRemoveResultMsg must not emit a toast")
-}
-
-// TestErrNilClientGuard_PlaylistReorderResultMsg verifies PlaylistReorderResultMsg
-// with errNilClient does not emit a toast.
-func TestErrNilClientGuard_PlaylistReorderResultMsg(t *testing.T) {
-	a := newSafetyTestApp()
-
-	// Trigger a reorder — nil playlistsAPI returns errNilClient.
-	_, fetchCmd := a.Update(panes.PlaylistReorderRequestMsg{
-		PlaylistID:   "pl1",
-		RangeStart:   0,
-		InsertBefore: 2,
-		RangeLength:  1,
-	})
-	require.NotNil(t, fetchCmd)
-
-	resultMsg := fetchCmd()
-	reMsg, ok := resultMsg.(panes.PlaylistReorderResultMsg)
-	require.True(t, ok, "expected PlaylistReorderResultMsg, got %T", resultMsg)
-	require.Error(t, reMsg.Err, "nil playlistsAPI must set Err on PlaylistReorderResultMsg")
-
-	// Feed errNilClient message back — must be silent.
-	_, cmd := a.Update(reMsg)
-	assert.Nil(t, cmd, "errNilClient in PlaylistReorderResultMsg must not emit a toast")
 }
 
 // TestErrNilClientGuard_AlbumTracksLoadedMsg verifies AlbumTracksLoadedMsg

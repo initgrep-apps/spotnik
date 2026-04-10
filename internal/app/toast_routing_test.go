@@ -79,13 +79,6 @@ func TestApp_AddToQueueResult_ErrorEmitsToast(t *testing.T) {
 	require.NotNil(t, cmd, "error AddToQueueResultMsg must return non-nil cmd for toast")
 }
 
-func TestApp_LikeToggleResult_ErrorEmitsToast(t *testing.T) {
-	a := newToastTestApp()
-	_, cmd := a.Update(panes.LikeToggleResultMsg{Err: errors.New("like error")})
-
-	require.NotNil(t, cmd, "error LikeToggleResultMsg must return non-nil cmd for toast")
-}
-
 func TestApp_DeviceTransferred_SuccessDoesNotReturnNil(t *testing.T) {
 	// DeviceTransferredMsg success triggers a playback state fetch.
 	a := newToastTestApp()

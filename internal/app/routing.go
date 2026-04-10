@@ -360,38 +360,6 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case panes.PlaylistAccessDeniedMsg:
 		return a, a.alerts.NewAlertCmd("warning", "Track access limited to playlists you own or collaborate on"), true
 
-	case panes.PlaylistCreateRequestMsg:
-		return a, a.buildCreatePlaylistCmd(m.Name, m.Description), true
-
-	case panes.PlaylistCreatedMsg:
-		if m.Err != nil {
-			if errors.Is(m.Err, errNilClient) {
-				return a, nil, true
-			}
-			return a, a.alerts.NewAlertCmd("error", m.Err.Error()), true
-		}
-		// Re-fetch playlists so the new one appears.
-		return a, a.buildFetchPlaylistsCmd(0), true
-
-	case panes.PlaylistRenameRequestMsg:
-		return a, a.buildRenamePlaylistCmd(m.PlaylistID, m.NewName), true
-
-	case panes.PlaylistRenamedMsg:
-		if m.Err != nil {
-			if errors.Is(m.Err, errNilClient) {
-				return a, nil, true
-			}
-			if pp := a.playlistsPane(); pp != nil {
-				updated, _ := pp.Update(m)
-				if ppu, ok := updated.(*panes.PlaylistsPane); ok {
-					a.panes[layout.PanePlaylists] = ppu
-				}
-			}
-			return a, a.alerts.NewAlertCmd("error", m.Err.Error()), true
-		}
-		// Re-fetch playlists to reflect rename.
-		return a, a.buildFetchPlaylistsCmd(0), true
-
 	case panes.PlaylistRemoveRequestMsg:
 		return a, a.buildRemovePlaylistTrackCmd(m.PlaylistID, m.TrackURI), true
 
@@ -411,24 +379,6 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return a, nil, true
 
-	case panes.PlaylistReorderRequestMsg:
-		return a, a.buildReorderPlaylistTracksCmd(m.PlaylistID, m.RangeStart, m.InsertBefore, m.RangeLength), true
-
-	case panes.PlaylistReorderResultMsg:
-		if m.Err != nil && errors.Is(m.Err, errNilClient) {
-			return a, nil, true
-		}
-		if pp := a.playlistsPane(); pp != nil {
-			updated, cmd := pp.Update(m)
-			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
-				a.panes[layout.PanePlaylists] = ppu
-			}
-			if m.Err != nil {
-				return a, tea.Batch(cmd, a.alerts.NewAlertCmd("error", m.Err.Error())), true
-			}
-			return a, cmd, true
-		}
-		return a, nil, true
 	}
 
 	return nil, nil, false

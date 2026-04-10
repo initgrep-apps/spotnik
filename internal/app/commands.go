@@ -409,25 +409,6 @@ func (a *App) buildTransferPlaybackCmd(deviceID string) tea.Cmd {
 	}
 }
 
-// buildToggleLikeCmd creates a command that likes or unlikes a track.
-func (a *App) buildToggleLikeCmd(trackID string, unlike bool) tea.Cmd {
-	library := a.library
-	return func() tea.Msg {
-		if library == nil {
-			return panes.LikeToggleResultMsg{Err: errNilClient, TrackID: trackID}
-		}
-		// Like/unlike is user-triggered — bypass token bucket.
-		ctx := api.WithPriority(context.Background(), api.Interactive)
-		var err error
-		if unlike {
-			err = library.UnlikeTrack(ctx, trackID)
-		} else {
-			err = library.LikeTrack(ctx, trackID)
-		}
-		return panes.LikeToggleResultMsg{TrackID: trackID, Err: err}
-	}
-}
-
 // buildFetchStatsCmd creates a command that fetches top tracks and top artists
 // concurrently for the given time range and returns them in a StatsLoadedMsg payload.
 // No Store writes occur — Update() writes data to the store when it receives the Msg.
@@ -705,35 +686,6 @@ func (a *App) buildFetchAlbumTracksCmd(ctx context.Context, albumID string, offs
 	}
 }
 
-// buildCreatePlaylistCmd creates a command that calls CreatePlaylist on the playlists API
-// and returns a PlaylistCreatedMsg with the result.
-func (a *App) buildCreatePlaylistCmd(name, description string) tea.Cmd {
-	playlistsAPI := a.playlistsAPI
-	return func() tea.Msg {
-		if playlistsAPI == nil {
-			return panes.PlaylistCreatedMsg{Err: errNilClient, Name: name}
-		}
-		playlist, err := playlistsAPI.CreatePlaylist(api.WithPriority(context.Background(), api.Interactive), name, description, false)
-		if err != nil {
-			return panes.PlaylistCreatedMsg{Name: name, Err: err}
-		}
-		return panes.PlaylistCreatedMsg{PlaylistID: playlist.ID, Name: playlist.Name}
-	}
-}
-
-// buildRenamePlaylistCmd creates a command that calls UpdatePlaylist on the playlists API
-// and returns a PlaylistRenamedMsg.
-func (a *App) buildRenamePlaylistCmd(playlistID, newName string) tea.Cmd {
-	playlistsAPI := a.playlistsAPI
-	return func() tea.Msg {
-		if playlistsAPI == nil {
-			return panes.PlaylistRenamedMsg{Err: errNilClient, PlaylistID: playlistID, NewName: newName}
-		}
-		err := playlistsAPI.UpdatePlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, newName, "")
-		return panes.PlaylistRenamedMsg{PlaylistID: playlistID, NewName: newName, Err: err}
-	}
-}
-
 // buildRemovePlaylistTrackCmd creates a command that calls RemoveTracksFromPlaylist
 // and returns a PlaylistRemoveResultMsg.
 func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
@@ -744,18 +696,5 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 		}
 		err := playlistsAPI.RemoveTracksFromPlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, []string{trackURI})
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
-	}
-}
-
-// buildReorderPlaylistTracksCmd creates a command that calls ReorderPlaylistTracks
-// and returns a PlaylistReorderResultMsg.
-func (a *App) buildReorderPlaylistTracksCmd(playlistID string, rangeStart, insertBefore, rangeLength int) tea.Cmd {
-	playlistsAPI := a.playlistsAPI
-	return func() tea.Msg {
-		if playlistsAPI == nil {
-			return panes.PlaylistReorderResultMsg{Err: errNilClient}
-		}
-		err := playlistsAPI.ReorderPlaylistTracks(api.WithPriority(context.Background(), api.Interactive), playlistID, rangeStart, insertBefore, rangeLength)
-		return panes.PlaylistReorderResultMsg{Err: err}
 	}
 }

@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -795,4 +796,42 @@ func TestStore_IsPremium(t *testing.T) {
 			assert.Equal(t, tt.want, s.IsPremium())
 		})
 	}
+}
+
+// TestStore_UserProfile_ConcurrentAccess runs SetUserProfile and IsPremium/UserProfile
+// concurrently under the race detector to catch any missing mutex coverage.
+// Run with: go test -race ./internal/state/...
+func TestStore_UserProfile_ConcurrentAccess(t *testing.T) {
+	s := New()
+	var wg sync.WaitGroup
+
+	// Writer: repeatedly set the user profile.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			s.SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+		}
+	}()
+
+	// Reader A: read IsPremium while writes are in-flight.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			_ = s.IsPremium()
+		}
+	}()
+
+	// Reader B: read UserProfile while writes are in-flight.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			_ = s.UserProfile()
+		}
+	}()
+
+	wg.Wait()
+	// No assertion needed — the race detector catches data races if locking is broken.
 }

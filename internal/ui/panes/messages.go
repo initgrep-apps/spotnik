@@ -85,14 +85,6 @@ type FetchLikedTracksRequestMsg struct {
 // load recently played tracks from the API.
 type FetchRecentlyPlayedRequestMsg struct{}
 
-// LikeTrackRequestMsg is emitted by the library pane when the user presses 'l'
-// on a track. The root app model dispatches the like/unlike API call.
-type LikeTrackRequestMsg struct {
-	TrackID string
-	// Unlike is true when the track should be unliked (currently liked).
-	Unlike bool
-}
-
 // PlayContextMsg is sent when the user selects a playlist, album, or collection
 // to play. OffsetURI is optional — when set, playback starts at that track URI
 // within the context rather than from the beginning.
@@ -158,13 +150,6 @@ type LikedTracksLoadedMsg struct {
 type RecentlyPlayedLoadedMsg struct {
 	Items []domain.PlayHistory
 	Err   error
-}
-
-// LikeToggleResultMsg carries the result of a like/unlike operation.
-// TrackID identifies which track was affected. Err is non-nil on failure.
-type LikeToggleResultMsg struct {
-	TrackID string
-	Err     error
 }
 
 // AddToQueueResultMsg carries the result of an add-to-queue operation.
@@ -286,36 +271,6 @@ type PlaylistAccessDeniedMsg struct{}
 // playlists without waiting for the next library reload.
 type UserProfileReadyMsg struct{}
 
-// PlaylistCreateRequestMsg is emitted by PlaylistsPane when the user submits
-// a new playlist name. The root app creates the playlist via the API.
-type PlaylistCreateRequestMsg struct {
-	Name        string
-	Description string
-}
-
-// PlaylistRenameRequestMsg is emitted by PlaylistsPane when the user submits
-// a rename. The root app updates the playlist via the API.
-type PlaylistRenameRequestMsg struct {
-	PlaylistID string
-	NewName    string
-}
-
-// PlaylistCreatedMsg is returned after a create playlist API call completes.
-// Err is non-nil if the call failed.
-type PlaylistCreatedMsg struct {
-	PlaylistID string
-	Name       string
-	Err        error
-}
-
-// PlaylistRenamedMsg is returned after an update playlist API call completes.
-// Err is non-nil if the call failed.
-type PlaylistRenamedMsg struct {
-	PlaylistID string
-	NewName    string
-	Err        error
-}
-
 // PlaylistRemoveRequestMsg is emitted by PlaylistsPane when the user confirms
 // removing a track from a playlist. The root app handles the API call.
 type PlaylistRemoveRequestMsg struct {
@@ -329,21 +284,6 @@ type PlaylistRemoveResultMsg struct {
 	PlaylistID string
 	TrackURI   string
 	Err        error
-}
-
-// PlaylistReorderRequestMsg is emitted by PlaylistsPane when the user reorders
-// a track via Shift+Up/Down. The root app handles the API call.
-type PlaylistReorderRequestMsg struct {
-	PlaylistID   string
-	RangeStart   int
-	InsertBefore int
-	RangeLength  int
-}
-
-// PlaylistReorderResultMsg is returned after a reorder-tracks API call completes.
-// Err is non-nil if the call failed; the pane reverts the optimistic update on error.
-type PlaylistReorderResultMsg struct {
-	Err error
 }
 
 // FetchAlbumTracksRequestMsg is emitted by AlbumsPane when the user opens an album's
