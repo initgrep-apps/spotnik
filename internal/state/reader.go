@@ -26,6 +26,15 @@ type StateReader interface {
 	// UserID returns the Spotify user ID of the authenticated user.
 	UserID() string
 
+	// --- User Profile ---
+
+	// UserProfile returns the full authenticated user profile.
+	// Returns a zero-value UserProfile before profile is loaded.
+	UserProfile() domain.UserProfile
+	// IsPremium returns true only when the authenticated user's Product is "premium".
+	// Returns false for free users, unknown tier, or when profile not yet loaded.
+	IsPremium() bool
+
 	// --- Queue ---
 
 	// Queue returns the upcoming tracks in the user's play queue.

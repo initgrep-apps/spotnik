@@ -228,6 +228,10 @@ type DevicesLoadedMsg struct {
 // signalling the root app model to close the overlay and restore the previous focus.
 type DeviceOverlayClosedMsg struct{}
 
+// ProfileOverlayClosedMsg is emitted by ProfileOverlay when the user presses Esc,
+// signalling the root app model to close the profile overlay.
+type ProfileOverlayClosedMsg struct{}
+
 // TransferPlaybackMsg is emitted by DeviceOverlay when the user presses Enter on
 // a non-active device. The root app model receives it, calls TransferPlayback, and
 // shows the status bar message.
