@@ -1,5 +1,5 @@
 // Package panes — TopTracksPane displays the user's top tracks in a dense
-// bubble-table with in-pane filtering and time range cycling via the t key.
+// bubble-table with in-pane filtering and time range cycling via the g key.
 // Selecting a track emits PlayTrackListMsg with URIs from the selected index
 // onward so the queue fills with remaining top tracks.
 // Implements layout.Pane (toggle key 7).
@@ -20,7 +20,7 @@ import (
 // Compile-time check: TopTracksPane implements layout.Pane.
 var _ layout.Pane = &TopTracksPane{}
 
-// topTracksTimeRanges is the cycle order for the t key.
+// topTracksTimeRanges is the cycle order for the g key.
 var topTracksTimeRanges = []string{"short_term", "medium_term", "long_term"}
 
 // topTracksRangeLabels maps API values to human-readable display labels.
@@ -33,7 +33,7 @@ var topTracksRangeLabels = map[string]string{
 // TopTracksPane is the Bubble Tea model for the Top Tracks pane (toggle key 7).
 // It renders a dense bubble-table of the user's top tracks with columns for index,
 // track name, artist, and popularity. It supports in-pane filtering and per-pane
-// time range cycling via the t key (short_term → medium_term → long_term → short_term).
+// time range cycling via the g key (short_term → medium_term → long_term → short_term).
 type TopTracksPane struct {
 	BasePane
 
@@ -90,7 +90,7 @@ func (p *TopTracksPane) TimeRange() string { return p.timeRange }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
 // When the filter is active, only shows the Esc/close hint.
-// Otherwise shows filter (f) and time range cycle (t) with the current range as label.
+// Otherwise shows filter (f) and time range cycle (g) with the current range as label.
 func (p *TopTracksPane) Actions() []layout.Action {
 	if p.filter.IsActive() {
 		return []layout.Action{{Key: "Esc", Label: "close"}}
@@ -98,7 +98,7 @@ func (p *TopTracksPane) Actions() []layout.Action {
 	rangeLabel := topTracksRangeLabels[p.timeRange]
 	return []layout.Action{
 		{Key: "f", Label: "filter"},
-		{Key: "t", Label: rangeLabel},
+		{Key: "g", Label: rangeLabel},
 	}
 }
 
@@ -159,7 +159,7 @@ func (p *TopTracksPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.resizeTable()
 		return p, nil
 
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "t":
+	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "g":
 		return p.cycleTimeRange()
 
 	case keyMsg.Type == tea.KeyEnter:
