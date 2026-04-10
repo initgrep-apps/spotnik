@@ -97,8 +97,9 @@ func TestProfileOverlay_View_LoadingState(t *testing.T) {
 	assert.Contains(t, view, "Loading profile...", "View should show loading placeholder when profile not loaded")
 }
 
-// TestProfileOverlay_View_EscHint verifies that View() shows the "esc close" hint.
-func TestProfileOverlay_View_EscHint(t *testing.T) {
+// TestProfileOverlay_View_NoEscHint verifies that View() does NOT contain any "esc" or
+// "close" text. Esc-to-close is a universal convention; the hint is redundant noise.
+func TestProfileOverlay_View_NoEscHint(t *testing.T) {
 	overlay, store := newTestProfileOverlay()
 	overlay.SetSize(40, 12)
 	store.SetUserProfile(domain.UserProfile{
@@ -110,7 +111,8 @@ func TestProfileOverlay_View_EscHint(t *testing.T) {
 
 	view := overlay.View()
 
-	assert.Contains(t, view, "esc", "View should show esc close hint")
+	assert.NotContains(t, view, "esc", "View should NOT contain 'esc' hint — universal convention")
+	assert.NotContains(t, view, "close", "View should NOT contain 'close' hint — redundant noise")
 }
 
 // TestProfileOverlay_View_HasBorderCorners verifies that the overlay uses rounded border corners.

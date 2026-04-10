@@ -406,14 +406,20 @@ func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
 // --- bubbles/help component tests ---
 
 // TestAppKeyMap_PageA_FullHelp_FiveGroups verifies that the Page A appKeyMap produces
-// 5 FullHelp groups (one per column) each with at most 2 bindings (2-row layout).
+// 5 FullHelp groups (one per column). Column 3 (Pane/Devices/Profile) has 3 bindings;
+// all others have at most 2 (story 117: Profile was added to column 3).
 func TestAppKeyMap_PageA_FullHelp_FiveGroups(t *testing.T) {
 	km := newAppKeyMap()
 	km.activePage = layout.PageA
 	groups := km.FullHelp()
 	assert.Len(t, groups, 5, "Page A FullHelp must have 5 groups (5 columns)")
+	// Column 3 (index 2) holds Pane, Devices, Profile — 3 entries since story 117.
 	for i, g := range groups {
-		assert.LessOrEqual(t, len(g), 2, "group %d must have at most 2 bindings (2-row layout)", i)
+		if i == 2 {
+			assert.LessOrEqual(t, len(g), 3, "group %d (pane/devices/profile column) must have at most 3 bindings", i)
+		} else {
+			assert.LessOrEqual(t, len(g), 2, "group %d must have at most 2 bindings (2-row layout)", i)
+		}
 	}
 }
 
@@ -443,15 +449,66 @@ func TestRenderStatusBar_HeightIsThreeLines(t *testing.T) {
 	assert.Len(t, lines, 3, "status bar must be exactly 3 lines tall (1 content row + top/bottom border)")
 }
 
-// TestRenderStatusBar_ShowsAllPageABindings verifies that all 9 Page A key descriptions
-// appear in the rendered status bar output.
+// TestRenderStatusBar_ShowsAllPageABindings verifies that all 10 Page A key descriptions
+// appear in the rendered status bar output (including "profile" added in story 117).
 func TestRenderStatusBar_ShowsAllPageABindings(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 200 // wide terminal so nothing is truncated
 	// Default page is Page A.
 	result := a.renderStatusBar()
-	for _, want := range []string{"search", "page", "preset", "toggle", "pane", "devices", "theme", "help", "quit"} {
+	for _, want := range []string{"search", "page", "preset", "toggle", "pane", "devices", "profile", "theme", "help", "quit"} {
 		assert.Contains(t, result, want, "Page A status bar must show %q", want)
+	}
+}
+
+// TestRenderStatusBar_ContainsProfileHint verifies that "u" and "profile" appear in the
+// status bar on both Page A and Page B — fix for story 117.
+func TestRenderStatusBar_ContainsProfileHint(t *testing.T) {
+	tests := []struct {
+		name  string
+		pageB bool
+	}{
+		{"Page A", false},
+		{"Page B", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newRenderTestApp()
+			a.width = 200
+			if tt.pageB {
+				a.layout.TogglePage()
+			}
+			result := a.renderStatusBar()
+			assert.Contains(t, result, "u", "status bar should contain 'u' key for profile shortcut")
+			assert.Contains(t, result, "profile", "status bar should contain 'profile' label")
+		})
+	}
+}
+
+// TestRenderStatusBar_ProfileAdjacentToDevices verifies that "devices" and "profile" both
+// appear in the status bar on both pages and that devices comes before profile.
+func TestRenderStatusBar_ProfileAdjacentToDevices(t *testing.T) {
+	tests := []struct {
+		name  string
+		pageB bool
+	}{
+		{"Page A", false},
+		{"Page B", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newRenderTestApp()
+			a.width = 200
+			if tt.pageB {
+				a.layout.TogglePage()
+			}
+			result := a.renderStatusBar()
+			dIdx := strings.Index(result, "devices")
+			pIdx := strings.Index(result, "profile")
+			assert.Greater(t, dIdx, -1, "status bar should contain 'devices'")
+			assert.Greater(t, pIdx, -1, "status bar should contain 'profile'")
+			assert.Less(t, dIdx, pIdx, "'devices' should appear before 'profile' in status bar")
+		})
 	}
 }
 

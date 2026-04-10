@@ -19,18 +19,18 @@ import (
 // appKeyMap implements help.KeyMap for the app-level status bar.
 // activePage is set via a copy per render call so renderStatusBar() stays pure.
 //
-// Page A (9 bindings, 5 columns × 2 rows):
+// Page A (10 bindings, 5 columns × 2 rows):
 //
 //	/ search   p preset   Tab pane    t theme    q quit
-//	0 page     1-8 toggle  d devices   ? help
+//	0 page     1-8 toggle  d devices   u profile  ? help
 //
-// Page B (7 bindings, 4 columns × 2 rows):
+// Page B (8 bindings, 4 columns × 2 rows):
 //
 //	/ search   Tab pane    t theme    q quit
-//	0 page     d devices   ? help
+//	0 page     d devices   u profile  ? help
 type appKeyMap struct {
-	activePage                                                     layout.PageID
-	Search, Page, Preset, Toggle, Pane, Devices, Theme, Help, Quit key.Binding
+	activePage                                                              layout.PageID
+	Search, Page, Preset, Toggle, Pane, Devices, Profile, Theme, Help, Quit key.Binding
 }
 
 // ShortHelp returns all applicable bindings for the active page.
@@ -38,26 +38,27 @@ type appKeyMap struct {
 // complete so callers inspecting the KeyMap programmatically see the full set.
 func (k appKeyMap) ShortHelp() []key.Binding {
 	if k.activePage == layout.PageA {
-		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Theme, k.Help, k.Quit}
+		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
 	}
-	return []key.Binding{k.Search, k.Page, k.Pane, k.Devices, k.Theme, k.Help, k.Quit}
+	return []key.Binding{k.Search, k.Page, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
 }
 
-// FullHelp returns groups of bindings for the 2-row column layout.
+// FullHelp returns groups of bindings for the column layout.
 // Each inner slice is one column rendered vertically; columns are joined horizontally.
+// Column 3 (Pane/Devices/Profile) has 3 entries — Devices and Profile are overlay shortcuts.
 func (k appKeyMap) FullHelp() [][]key.Binding {
 	if k.activePage == layout.PageA {
 		return [][]key.Binding{
 			{k.Search, k.Page},
 			{k.Preset, k.Toggle},
-			{k.Pane, k.Devices},
+			{k.Pane, k.Devices, k.Profile},
 			{k.Theme, k.Help},
 			{k.Quit},
 		}
 	}
 	return [][]key.Binding{
 		{k.Search, k.Page},
-		{k.Pane, k.Devices},
+		{k.Pane, k.Devices, k.Profile},
 		{k.Theme, k.Help},
 		{k.Quit},
 	}
@@ -72,6 +73,7 @@ func newAppKeyMap() appKeyMap {
 		Toggle:  key.NewBinding(key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8"), key.WithHelp("1-8", "toggle")),
 		Pane:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane")),
 		Devices: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "devices")),
+		Profile: key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "profile")),
 		Theme:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "theme")),
 		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
@@ -476,7 +478,7 @@ func (a *App) renderHeader() string {
 // keys in Info() color, descriptions in TextMuted(), wrapped in RenderPaneBorder.
 //
 // The panel is always 3 lines tall (border + 1 content row + border).
-// Page A shows all 9 bindings in a single row; Page B omits preset/toggle.
+// Page A shows all 10 bindings in a single row; Page B omits preset/toggle.
 func (a *App) renderStatusBar() string {
 	const statusH = 3 // 1 content row + top/bottom border
 	// Use a minimum rendering width of 160 so all bindings are visible on one row
