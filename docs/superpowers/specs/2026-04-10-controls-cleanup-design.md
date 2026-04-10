@@ -59,62 +59,13 @@ case msg.Type == tea.KeyRunes && string(msg.Runes) == "n",
 
 ---
 
-### 1C + 1D. Volume on phone — 403, misleading toast, gateway dedup burst
-
-**Observations (from user + screenshot analysis):**
-
-1. Volume `+`/`-` works when MacBook is the active Spotify device.
-2. Volume `+`/`-` does NOT work when phone is the active Spotify device — a
-   "Spotify Premium required" toast appears.
-3. The network log (screenshot) confirms: `PUT /v1/me/player/volume` requests are
-   **allowed by the gateway** (decision = allowed, Interactive priority) and
-   **reach Spotify**, which returns **403** with latency ~55–380ms.
-4. After each 403, `handlers.go:508` triggers `fetchPlaybackStateCmd` (a GET on
-   `/v1/me/player`). When multiple volume presses each trigger a refetch, those
-   GET requests arrive in bursts and get **inflight-deduped** with the background
-   poll. These dedup events are visible in the gateway panel as
-   `→ GET /v1/me/player entered [n]`.
-5. User reports "a lot of requests get deduped even though I didn't press much."
-
-**Confirmed from code:**
-
-- `routing.go:204-208` has a client-side `IsPremium()` gate — BUT this is NOT the
-  cause here. The screenshot proves requests reach Spotify (non-zero latency, HTTP
-  response received). The profile IS loaded before volume is pressed. The gate is
-  NOT firing.
-
-- The 403 comes from Spotify's API. Spotify restricts `PUT /v1/me/player/volume`
-  on certain device types. Mobile devices do not support programmatic volume control
-  via the Web API — this is a Spotify platform restriction, not a Premium issue.
-
-- `handlers.go:505-510` hardcodes the toast text to "Spotify Premium required" for
-  **all** `ForbiddenError` responses from playback commands. This is wrong for the
-  phone-volume case where the actual restriction is device type, not subscription tier.
-
-**Open question:** What exact message does Spotify include in the 403 response body
-for this case? The `ForbiddenError.Message` field carries the Spotify-side message
-(e.g. "Player command failed: Premium required" vs "Player command failed: Not
-available for current device"). The correct fix depends on this. Need to log or
-inspect `forbiddenErr.Message` in the volume-403 case.
-
-**Agreed on:**
-- The gateway dedup burst (observation 4/5) is **correct behavior** — it is a
-  consequence of each 403 triggering a playback state refetch. Multiple rapid volume
-  presses each trigger a refetch, causing a GET burst that deduplicates correctly.
-  No gateway change needed for dedup.
-- The misleading "Spotify Premium required" toast for volume-on-phone must be fixed.
-  Two approaches:
-  - **Option A (preferred):** Use `forbiddenErr.Message` verbatim in the toast for
-    all playback command 403s, instead of hardcoding "Spotify Premium required".
-    This surfaces Spotify's actual reason.
-  - **Option B:** Detect volume-specific 403s and show "Volume control not supported
-    on this device". Requires knowing the exact Spotify message first (open question above).
-- The client-side `IsPremium()` gate (`routing.go:204-208`) is NOT the root cause
-  here but remains a latent problem (false-positive if profile loads late). Keep it
-  for now — do not remove until the toast message fix is confirmed working.
-
-**Deferred:** The `RequestKey` uses `(Method, Path)` without query params. Volume is
-`PUT` (not deduped), so this is not currently a problem. Noted for future reference.
+> **1C + 1D (Volume on phone — 403, misleading toast, gateway dedup) — DEFERRED.**
+> Full root-cause analysis is documented separately. Short summary: Spotify returns
+> 403 from its API (not a client-side gate issue) when volume is changed on a phone
+> device; `handlers.go` hardcodes "Spotify Premium required" for all 403s which is
+> misleading for this case. Gateway dedup burst is correct behavior. Fix approach
+> is known (use `forbiddenErr.Message` verbatim in toast) but open question on exact
+> Spotify message text remains. Will be addressed in a dedicated follow-up.
 
 ---
 
@@ -330,7 +281,6 @@ behavior. Not blocked — can be investigated during implementation.
 |---|---|
 | `internal/app/routing.go` | Remove `"n"` from `isPlaybackKey`/`isPremiumOnlyPlaybackKey`; add `tea.KeySpace` to both |
 | `internal/ui/panes/nowplaying.go` | Add `tea.KeySpace` to space case; remove `"n"` case |
-| `internal/app/handlers.go` | Fix hardcoded "Spotify Premium required" in PlaybackCmdSentMsg ForbiddenError handler (volume on phone) |
 | `internal/ui/panes/toptracks_pane.go` | Change `"t"` → `"g"` for time range key |
 | `internal/ui/panes/topartists_pane.go` | Change `"t"` → `"g"`; add Enter → PlayContextMsg |
 | `internal/ui/panes/playlists_pane.go` | Remove `n`, `r` from Actions + handlers; remove Shift+Up/Down |
@@ -344,13 +294,9 @@ behavior. Not blocked — can be investigated during implementation.
 
 ## Open Questions Before Implementation
 
-1. **Volume 403 message on phone:** What exact string is in `forbiddenErr.Message`
-   when Spotify rejects volume for a phone device? This determines whether Option A
-   (use raw message) or Option B (custom string) is better for the toast fix.
-
-2. **NowPlaying actions truncation:** Why does the user only see `s` and `r` in the
+1. **NowPlaying actions truncation:** Why does the user only see `s` and `r` in the
    border? Is `layout.RenderPaneBorder` truncating actions when the pane is narrow?
+   Investigate during implementation — not a blocker.
 
-3. **`i` unlike scope:** The 403 may require user to re-authenticate to pick up the
-   `user-library-modify` scope. Should we add a note in the toast? Moot if we remove
-   the feature entirely.
+2. **`i` unlike scope (moot):** The 403 on unlike may require re-auth to pick up
+   `user-library-modify`. Irrelevant since we are removing the feature entirely (3D).
