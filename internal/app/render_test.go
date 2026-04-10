@@ -454,3 +454,83 @@ func TestRenderStatusBar_ShowsAllPageABindings(t *testing.T) {
 		assert.Contains(t, result, want, "Page A status bar must show %q", want)
 	}
 }
+
+// --- Story 115: Profile chip tests ---
+
+// TestRenderProfileChip_EmptyWhenNotLoaded verifies that renderProfileChip() returns ""
+// when the user profile has not yet been loaded (ID == "").
+func TestRenderProfileChip_EmptyWhenNotLoaded(t *testing.T) {
+	a := newRenderTestApp()
+	// Store has zero-value profile (ID == "")
+	chip := a.renderProfileChip()
+	assert.Empty(t, chip, "profile chip should be empty when profile not loaded")
+}
+
+// TestRenderProfileChip_PremiumBadge verifies that a premium user shows ♛.
+func TestRenderProfileChip_PremiumBadge(t *testing.T) {
+	a := newRenderTestApp()
+	a.store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Irshad",
+		Product:     "premium",
+		Country:     "DE",
+	})
+	chip := a.renderProfileChip()
+	assert.Contains(t, chip, "♛", "premium profile chip should contain ♛")
+	assert.Contains(t, chip, "Irshad", "profile chip should contain display name")
+}
+
+// TestRenderProfileChip_FreeBadge verifies that a free user shows ○.
+func TestRenderProfileChip_FreeBadge(t *testing.T) {
+	a := newRenderTestApp()
+	a.store.SetUserProfile(domain.UserProfile{
+		ID:          "user2",
+		DisplayName: "Free User",
+		Product:     "free",
+		Country:     "US",
+	})
+	chip := a.renderProfileChip()
+	assert.Contains(t, chip, "○", "free profile chip should contain ○")
+	assert.Contains(t, chip, "Free User", "profile chip should contain display name")
+}
+
+// TestRenderHeader_WithProfile_ShowsProfileChip verifies that when a profile is loaded,
+// the header right side contains the display name and tier badge.
+func TestRenderHeader_WithProfile_ShowsProfileChip(t *testing.T) {
+	a := newRenderTestApp()
+	a.store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Irshad Sheikh",
+		Product:     "premium",
+		Country:     "DE",
+	})
+	result := a.renderHeader()
+	assert.Contains(t, result, "Irshad Sheikh", "header should contain profile display name")
+	assert.Contains(t, result, "♛", "header should contain premium badge")
+}
+
+// TestRenderHeader_WithoutProfile_NoProfileChip verifies that when the profile is not
+// yet loaded, the header right side does not contain spurious profile content.
+func TestRenderHeader_WithoutProfile_NoProfileChip(t *testing.T) {
+	a := newRenderTestApp()
+	// No profile in store (zero-value).
+	result := a.renderHeader()
+	assert.NotContains(t, result, "♛", "header should not show premium badge when profile not loaded")
+	assert.NotContains(t, result, "○  Free", "header should not show Free badge when profile not loaded")
+}
+
+// TestRenderHeader_DeviceAndProfile_FitsWidth verifies that the header fits its width
+// when both a device chip and a profile chip are present.
+func TestRenderHeader_DeviceAndProfile_FitsWidth(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.store.SetActiveDevice(&domain.Device{ID: "d1", Name: "MacBook", IsActive: true})
+	a.store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Irshad Sheikh",
+		Product:     "premium",
+		Country:     "DE",
+	})
+	result := a.renderHeader()
+	assert.Equal(t, 160, lipgloss.Width(result), "header should fit exactly terminal width with both chips")
+}

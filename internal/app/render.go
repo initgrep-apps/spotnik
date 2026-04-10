@@ -144,6 +144,10 @@ func (a *App) buildView() string {
 		return a.renderWithDeviceOverlay(body)
 	}
 
+	if a.profileOverlayOpen {
+		return a.renderWithProfileOverlay(body)
+	}
+
 	if a.searchOpen {
 		return a.renderWithSearchOverlay(body)
 	}
@@ -248,6 +252,17 @@ func (a *App) renderWithThemeOverlay(background string) string {
 	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
 }
 
+// renderWithProfileOverlay renders the grid dimmed and places the profile overlay
+// in the top-right area using bubbletea-overlay Composite().
+func (a *App) renderWithProfileOverlay(background string) string {
+	fg := a.profilePane.View()
+	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
+	if a.width <= 0 || a.height <= 0 {
+		return dimmed + "\n" + fg
+	}
+	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
+}
+
 // renderWithDeviceOverlay renders the grid dimmed and places the
 // device switcher overlay in the top-right area using bubbletea-overlay Composite().
 func (a *App) renderWithDeviceOverlay(background string) string {
@@ -329,9 +344,54 @@ func pageLabel(page layout.PageID) string {
 	}
 }
 
+// maxProfileDisplayNameLen is the maximum runes shown for the display name in the header chip.
+const maxProfileDisplayNameLen = 20
+
+// renderProfileChip renders the profile chip shown in the header right side.
+// Returns "" if the profile has not yet been loaded (graceful startup).
+// Format: "DisplayName ♛ " (Premium) or "DisplayName ○ " (Free).
+func (a *App) renderProfileChip() string {
+	profile := a.store.UserProfile()
+	if profile.ID == "" {
+		// Profile not yet loaded — render nothing so header is clean on startup.
+		return ""
+	}
+
+	bgStyle := lipgloss.NewStyle().Background(a.theme.StatusBarBg())
+
+	// Truncate display name if needed.
+	name := profile.DisplayName
+	runes := []rune(name)
+	if len(runes) > maxProfileDisplayNameLen {
+		name = string(runes[:maxProfileDisplayNameLen-1]) + "…"
+	}
+
+	nameStyle := lipgloss.NewStyle().
+		Background(a.theme.StatusBarBg()).
+		Foreground(a.theme.TextPrimary())
+
+	var badge string
+	if a.store.IsPremium() {
+		badgeStyle := lipgloss.NewStyle().
+			Background(a.theme.StatusBarBg()).
+			Foreground(a.theme.Info())
+		badge = badgeStyle.Render("♛")
+	} else {
+		badgeStyle := lipgloss.NewStyle().
+			Background(a.theme.StatusBarBg()).
+			Foreground(a.theme.TextMuted())
+		badge = badgeStyle.Render("○")
+	}
+
+	return bgStyle.Render(" ") + nameStyle.Render(name) + bgStyle.Render(" ") + badge + bgStyle.Render(" ")
+}
+
 // renderHeader renders the btop-style header bar containing:
-// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName (or ○ No device)
-// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName (or ○ No device)
+// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName   DisplayName ♛
+// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName   DisplayName ♛
+//
+// The profile chip (name + tier badge) appears to the right of the device chip.
+// The profile chip is absent when the profile has not yet been loaded.
 //
 // Shortcut hints (search, devices, preset key) are omitted from the header because
 // they already appear in the bottom status bar — the header is for contextual info only.
@@ -379,18 +439,19 @@ func (a *App) renderHeader() string {
 		left = appName + sep + page + sep + preset
 	}
 
-	// Right side: device indicator.
+	// Right side: device chip then profile chip (profile is rightmost).
 	device := a.store.ActiveDevice()
-	var right string
+	var deviceChip string
 	if device != nil {
 		name := truncateDeviceName(device.Name)
 		activeStyle := lipgloss.NewStyle().
 			Background(a.theme.StatusBarBg()).
 			Foreground(a.theme.DeviceActive())
-		right = activeStyle.Render("◉ " + name + " ")
+		deviceChip = activeStyle.Render("◉ " + name + " ")
 	} else {
-		right = bgStyle.Render("○ No device ")
+		deviceChip = bgStyle.Render("○ No device ")
 	}
+	right := deviceChip + a.renderProfileChip()
 
 	if a.width > 0 {
 		leftW := lipgloss.Width(left)
