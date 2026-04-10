@@ -30,9 +30,9 @@ var toggleKeyMap = map[rune]layout.PaneID{
 }
 
 // isPlaybackKey returns true for keys that control playback regardless of focus.
-// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (not a rune), so we check
-// both the rune " " (legacy path) and tea.KeySpace here.
-// "n" was removed — → (tea.KeyRight) is the sole next-track binding.
+// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (not a rune), so tea.KeySpace
+// is checked here. NowPlayingPane.handleKey also accepts the rune " " as a fallback
+// for direct-focus routing. "n" was removed — → (tea.KeyRight) is the sole next-track binding.
 func isPlaybackKey(m tea.KeyMsg) bool {
 	if m.Type == tea.KeyRunes {
 		switch string(m.Runes) {
