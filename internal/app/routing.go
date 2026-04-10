@@ -187,8 +187,12 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Playback keys always go to the NowPlaying pane regardless of focus.
+	// Gate: free-tier users are blocked before any API call is dispatched.
 	// Temporarily enable focus so the pane handles the key even when it isn't focused.
 	if isPlaybackKey(m) {
+		if !a.store.IsPremium() {
+			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+		}
 		np := a.nowPlayingPane()
 		if np == nil {
 			return a, nil

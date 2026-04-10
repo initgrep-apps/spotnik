@@ -9,6 +9,7 @@ import (
 	"errors"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/api/apitest"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -75,6 +76,82 @@ func TestUserProfileLoadedMsg_NetworkErrorEmitsWarningToast(t *testing.T) {
 
 	assert.Equal(t, "", a.store.UserID(), "network error must not set a user ID")
 	require.NotNil(t, cmd, "network error must emit a warning toast command")
+}
+
+// --- Premium gate tests ---
+
+// isPlaybackRequestMsg returns true if cmd (possibly a batch) produces a panes.PlaybackRequestMsg.
+// Used to distinguish "gate blocked → toast" from "gate passed → playback dispatched".
+func isPlaybackRequestMsg(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	msg := cmd()
+	if _, ok := msg.(panes.PlaybackRequestMsg); ok {
+		return true
+	}
+	// Handle batch commands.
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			inner := c()
+			if _, ok := inner.(panes.PlaybackRequestMsg); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestPremiumGate_FreeUser_PlaybackKeyEmitsToast verifies that pressing a playback key
+// while the store has a free-tier profile returns a non-nil cmd that does NOT contain
+// a PlaybackRequestMsg — it should be a warning toast cmd instead.
+func TestPremiumGate_FreeUser_PlaybackKeyEmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := New(cfg, AppOptions{})
+	// Resize so panes exist.
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	// Mark user as free tier.
+	a.store.SetUserProfile(domain.UserProfile{ID: "user-free", Product: "free"})
+
+	playbackKeys := []tea.KeyMsg{
+		{Type: tea.KeyRunes, Runes: []rune{' '}},
+		{Type: tea.KeyRunes, Runes: []rune{'n'}},
+		{Type: tea.KeyLeft},
+		{Type: tea.KeyRight},
+		{Type: tea.KeyRunes, Runes: []rune{'+'}},
+		{Type: tea.KeyRunes, Runes: []rune{'-'}},
+		{Type: tea.KeyRunes, Runes: []rune{'s'}},
+		{Type: tea.KeyRunes, Runes: []rune{'r'}},
+	}
+
+	for _, key := range playbackKeys {
+		_, cmd := a.Update(key)
+		require.NotNil(t, cmd, "free user: playback key must return a non-nil cmd (warning toast)")
+		assert.False(t, isPlaybackRequestMsg(cmd),
+			"free user: cmd must NOT be a PlaybackRequestMsg (gate should block before dispatching to NowPlayingPane)")
+	}
+}
+
+// TestPremiumGate_PremiumUser_PlaybackKeyDispatches verifies that pressing a playback key
+// while the store has a premium profile dispatches to NowPlayingPane — the cmd contains
+// a PlaybackRequestMsg (not short-circuited by the gate).
+func TestPremiumGate_PremiumUser_PlaybackKeyDispatches(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := New(cfg, AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	// Mark user as premium.
+	a.store.SetUserProfile(domain.UserProfile{ID: "user-premium", Product: "premium"})
+
+	// Space (play/pause) dispatches to NowPlayingPane which emits PlaybackRequestMsg.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	require.NotNil(t, cmd, "premium user: playback key must return a non-nil cmd")
+	assert.True(t, isPlaybackRequestMsg(cmd),
+		"premium user: cmd must contain a PlaybackRequestMsg (gate passed, dispatched to NowPlayingPane)")
 }
 
 // TestBuildFetchCurrentUserCmd covers the command closure for all key error paths
