@@ -61,6 +61,10 @@ const (
 // appropriate Spotify API command.
 type PlaybackRequestMsg struct {
 	Action PlaybackAction
+	// TargetVolume is the resolved absolute volume to set (0–100).
+	// Only meaningful for ActionVolumeUp and ActionVolumeDown — ignored for all other actions.
+	// The pane computes this from its pending state so the command never re-reads the store.
+	TargetVolume int
 }
 
 // FetchPlaylistsRequestMsg is emitted by the library pane when it needs to
@@ -193,10 +197,12 @@ type StatsLoadedMsg struct {
 // DeviceInfo is the UI-facing representation of a Spotify device.
 // It mirrors the fields needed for rendering without importing api/.
 type DeviceInfo struct {
-	ID       string
-	Name     string
-	Type     string
-	IsActive bool
+	ID             string
+	Name           string
+	Type           string
+	IsActive       bool
+	IsRestricted   bool // true = no Web API commands accepted by this device
+	SupportsVolume bool // false = PUT /me/player/volume will fail
 }
 
 // DevicesLoadedMsg is returned by the fetch-devices command after the device list
