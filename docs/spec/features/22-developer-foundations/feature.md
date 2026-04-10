@@ -1,6 +1,6 @@
 ---
 title: "Developer Foundations"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -50,6 +50,8 @@ navigable for new contributors, easier to test, and more consistent in its Go pa
 
 | # | Title | Status |
 |---|-------|--------|
-| 109 | Onboarding docs, test infrastructure & doc corrections | open |
-| 110 | StateReader interface, file splits & table-driven tests | open |
-| 111 | BasePane embedding, RebuildTableTheme & auth client fix | open |
+| 109 | Onboarding docs, test infrastructure & doc corrections | done |
+| 110 | StateReader interface, file splits & table-driven tests | done |
+| 111 | BasePane embedding, RebuildTableTheme & auth client fix | done |
+| 112 | Test coverage gaps and assertion fixes | open |
+| 113 | StateReader interface cleanup, NowPlaying test helper & nil guard | open |
