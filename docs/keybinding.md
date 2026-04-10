@@ -26,7 +26,6 @@ Playback keys are always active regardless of which pane has focus.
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `n` | Next track |
 | `←` / `→` | Previous / next track |
 | `+` / `-` | Volume up / down |
 | `s` | Toggle shuffle |

@@ -762,7 +762,6 @@ Keys `1`-`8` toggle pane visibility rather than jumping focus. Use `Tab`/`Shift+
 | Key | Action |
 |-----|--------|
 | `Space` | Play/pause |
-| `n` | Next track |
 | `←` / `→` | Previous/next track |
 | `+` / `-` | Volume up/down |
 | `s` | Toggle shuffle |
@@ -795,7 +794,6 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `p` | Cycle to next preset | Current page |
 | **Playback (always route to NowPlaying)** | | |
 | `Space` | Play/pause | Always |
-| `n` | Next track | Always |
 | `←` / `→` | Previous/next track | Always |
 | `+` / `-` | Volume up/down | Always |
 | `s` | Toggle shuffle | Always |

@@ -353,15 +353,17 @@ func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 // The root app model receives these and dispatches the corresponding Spotify API calls.
 func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	switch {
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == " ":
+	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (Type field), not as a rune.
+	// The rune " " branch has been removed — it was dead code and bypassed the
+	// premium gate in routing.go which only checks tea.KeySpace.
+	case msg.Type == tea.KeySpace:
 		ps := p.store.PlaybackState()
 		if ps != nil && ps.IsPlaying {
 			return p, emitPlaybackRequest(ActionPause)
 		}
 		return p, emitPlaybackRequest(ActionPlay)
 
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == "n",
-		msg.Type == tea.KeyRight:
+	case msg.Type == tea.KeyRight:
 		return p, emitPlaybackRequest(ActionNext)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "p",

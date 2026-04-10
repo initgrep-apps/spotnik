@@ -30,26 +30,30 @@ var toggleKeyMap = map[rune]layout.PaneID{
 }
 
 // isPlaybackKey returns true for keys that control playback regardless of focus.
+// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (not a rune), so tea.KeySpace
+// is checked here. "n" was removed — → (tea.KeyRight) is the sole next-track binding.
 func isPlaybackKey(m tea.KeyMsg) bool {
 	if m.Type == tea.KeyRunes {
 		switch string(m.Runes) {
-		case " ", "n", "+", "-", "s", "r", "v":
+		case "+", "-", "s", "r", "v":
 			return true
 		}
 	}
-	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight
+	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight || m.Type == tea.KeySpace
 }
 
 // isPremiumOnlyPlaybackKey returns true for playback keys that require Spotify Premium.
 // 'v' (visualizer cycle) is excluded — it is a local UI action that makes no API call.
+// NOTE: Space is included here because play/pause requires an active Spotify session.
+// "n" was removed — → (tea.KeyRight) is the sole next-track binding.
 func isPremiumOnlyPlaybackKey(m tea.KeyMsg) bool {
 	if m.Type == tea.KeyRunes {
 		switch string(m.Runes) {
-		case " ", "n", "+", "-", "s", "r":
+		case "+", "-", "s", "r":
 			return true
 		}
 	}
-	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight
+	return m.Type == tea.KeyLeft || m.Type == tea.KeyRight || m.Type == tea.KeySpace
 }
 
 // handleKeyMsg routes a keyboard event through all overlay and view guards before

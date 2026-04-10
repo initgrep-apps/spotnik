@@ -80,7 +80,7 @@ func TestNowPlayingPane_View_EmptyState(t *testing.T) {
 func TestNowPlayingPane_Update_Space_WhenPlaying(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd, "space when playing should return a command")
@@ -93,7 +93,7 @@ func TestNowPlayingPane_Update_Space_WhenPlaying(t *testing.T) {
 func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(false, true)
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd, "space when paused should return a command")
@@ -101,19 +101,6 @@ func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
 	req, ok := msg.(PlaybackRequestMsg)
 	assert.True(t, ok, "space cmd should return PlaybackRequestMsg, got %T", msg)
 	assert.Equal(t, ActionPlay, req.Action, "paused → space should request play")
-}
-
-func TestNowPlayingPane_Update_N_SkipsNext(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, true)
-
-	nMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
-	_, cmd := pane.Update(nMsg)
-
-	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(PlaybackRequestMsg)
-	assert.True(t, ok)
-	assert.Equal(t, ActionNext, req.Action)
 }
 
 func TestNowPlayingPane_Update_P_SkipsPrev(t *testing.T) {
@@ -371,7 +358,7 @@ func TestNowPlayingPane_ArrowKeys(t *testing.T) {
 func TestNowPlayingPane_Space_NilState(t *testing.T) {
 	pane := newTestNowPlayingPane(true)
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := pane.Update(spaceMsg)
 
 	require.NotNil(t, cmd)
@@ -891,4 +878,49 @@ func TestNowPlayingPane_SetTheme_PreservesVisualizerPattern(t *testing.T) {
 	// Pattern must be preserved after the theme change.
 	assert.Equal(t, 2, pane.engine.Pattern(),
 		"SetTheme must not reset the visualizer pattern")
+}
+
+// ── Story 118: Playback key bug fixes ────────────────────────────────────────
+
+// TestNowPlayingPane_HandleKey_KeySpace_Plays verifies that tea.KeySpace (not a rune)
+// triggers play/pause — fixing the Bubbletea v0.27 Space delivery bug.
+func TestNowPlayingPane_HandleKey_KeySpace_Plays(t *testing.T) {
+	tests := []struct {
+		name       string
+		isPlaying  bool
+		wantAction PlaybackAction
+	}{
+		{"KeySpace when playing → pause", true, ActionPause},
+		{"KeySpace when paused → play", false, ActionPlay},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pane, _ := newTestNowPlayingPaneWithState(tt.isPlaying, true)
+
+			// tea.KeySpace is how Bubbletea v0.27 delivers the Space key —
+			// Type is tea.KeySpace, Runes is empty (not a rune ' ').
+			spaceMsg := tea.KeyMsg{Type: tea.KeySpace}
+			_, cmd := pane.Update(spaceMsg)
+
+			require.NotNil(t, cmd, "tea.KeySpace must return a command")
+			msg := cmd()
+			req, ok := msg.(PlaybackRequestMsg)
+			require.True(t, ok, "tea.KeySpace must produce PlaybackRequestMsg, got %T", msg)
+			assert.Equal(t, tt.wantAction, req.Action)
+		})
+	}
+}
+
+// TestNowPlayingPane_HandleKey_N_NoOp verifies that pressing "n" on the NowPlayingPane
+// no longer emits a playback command — the n→next binding was removed in Story 118.
+// The → key (tea.KeyRight) remains the authoritative "next track" binding.
+func TestNowPlayingPane_HandleKey_N_NoOp(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+
+	nMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+	_, cmd := pane.Update(nMsg)
+
+	// After removing the "n" arm from handleKey, pressing 'n' must return nil.
+	assert.Nil(t, cmd, "'n' key on NowPlayingPane must not emit a playback command")
 }

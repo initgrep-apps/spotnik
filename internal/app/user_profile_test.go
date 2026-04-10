@@ -119,8 +119,9 @@ func TestPremiumGate_FreeUser_PlaybackKeyEmitsToast(t *testing.T) {
 	a.store.SetUserProfile(domain.UserProfile{ID: "user-free", Product: "free"})
 
 	playbackKeys := []tea.KeyMsg{
-		{Type: tea.KeyRunes, Runes: []rune{' '}},
-		{Type: tea.KeyRunes, Runes: []rune{'n'}},
+		// NOTE: "n" was removed as a global playback key in Story 118.
+		// Space is delivered as tea.KeySpace by Bubbletea v0.27 (not as a rune).
+		{Type: tea.KeySpace},
 		{Type: tea.KeyLeft},
 		{Type: tea.KeyRight},
 		{Type: tea.KeyRunes, Runes: []rune{'+'}},
@@ -183,7 +184,8 @@ func TestPremiumGate_PremiumUser_PlaybackKeyDispatches(t *testing.T) {
 	a.store.SetUserProfile(domain.UserProfile{ID: "user-premium", Product: "premium"})
 
 	// Space (play/pause) dispatches to NowPlayingPane which emits PlaybackRequestMsg.
-	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	// NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace, not as a rune.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeySpace})
 	require.NotNil(t, cmd, "premium user: playback key must return a non-nil cmd")
 	assert.True(t, isPlaybackRequestMsg(cmd),
 		"premium user: cmd must contain a PlaybackRequestMsg (gate passed, dispatched to NowPlayingPane)")
