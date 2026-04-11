@@ -295,6 +295,28 @@ case panes.QueueLoadedMsg:
 
 All message types in `internal/ui/panes/messages.go` carry their data payload and an `Err error` field. `Update()` is the sole writer to the Store.
 
+### Optimistic Updates
+
+For user-triggered actions where the new state is **fully predictable from local state**,
+`Update()` may write an optimistic value to the store immediately — before the API cmd
+fires — to give instant UI feedback.
+
+**When to use:** volume up/down, play/pause, shuffle toggle, repeat cycle.
+**When NOT to use:** actions whose outcome depends on server data (Next, Previous, any fetch).
+
+**Pattern:**
+```go
+case panes.PlaybackRequestMsg:
+    a.applyOptimisticUpdate(m.Action) // sync: store written, UI renders next frame
+    return a, a.buildPlaybackAPICmd(m.Action) // async: API call, result overwrites store
+```
+
+The optimistic write happens in `Update()` — consistent with the Elm contract. Commands
+still never write to the store. When the API response arrives via `PlaybackStateFetchedMsg`,
+`store.SetPlaybackState()` overwrites the optimistic value with the authoritative one. On
+API error, the `fetchPlaybackStateCmd` fired from the `PlaybackCmdSentMsg` error handler
+corrects the store automatically.
+
 ---
 
 ## State Management
