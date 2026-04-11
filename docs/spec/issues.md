@@ -1,4 +1,12 @@
 
+## TestControls_RepeatContext missing NotContains("↻1") guard
+**Found:** 2026-04-11 | **Source:** PR #158 Review
+**Feature:** 25-nowplaying-controls-polish
+
+`internal/ui/components/controls_test.go` `TestControls_RepeatContext` asserts `Contains("↻")` and `NotContains("↻¹")` but is missing a `NotContains("↻1")` guard. The test is asymmetric with `TestControls_RepeatOff`, which guards both old and new forms. Low-priority cosmetic hardening — the context branch does not contain a digit today, so regression risk is minimal.
+
+---
+
 ## Orphaned app-layer handlers after dead-pane-actions removal
 **Found:** 2026-04-10 | **Source:** PR #154 Review
 **Feature:** 24-controls-cleanup
