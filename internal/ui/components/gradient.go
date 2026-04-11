@@ -13,6 +13,11 @@ import (
 // gradientVolumeBarWidth is the default number of fill characters in the volume bar.
 const gradientVolumeBarWidth = 14
 
+// volumePartialChars are the Unicode block-element characters providing 8-step
+// sub-character fill resolution (1/8 through 8/8). Index i represents (i+1)/8
+// of a cell filled. Index 7 (█, U+2588) is a fully filled cell.
+var volumePartialChars = []string{"▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"}
+
 // GradientSeekBar renders a seek bar with a gradient fill interpolated from
 // Gradient1() (left) to Gradient2() (right), with an empty portion in Surface().
 type GradientSeekBar struct {
@@ -80,7 +85,10 @@ func (b *GradientSeekBar) Render(progressMs, durationMs int) string {
 }
 
 // GradientVolumeBar renders a volume bar with color bands and a music note icon.
-// Format: "♪ ■■■■□□□□□□ 31%"
+// Format: "♪ ████▎□□□□□□□□□ 31%"
+//
+// Full cells use █; the fractional last cell uses one of ▏▎▍▌▋▊▉ (1/8–7/8 fill)
+// to give sub-character resolution so the bar moves on every 1% step.
 //
 // Color bands:
 //   - 0-33%:  Gradient1() (green/cool)
@@ -107,7 +115,11 @@ func (b *GradientVolumeBar) SetWidth(width int) {
 
 // Render returns the volume bar string for the given volume level.
 // Volume is clamped to [0, 100].
-// Format: "♪ ■■■■□□□□□□ 31%"
+// Format: "♪ ████▎□□□□□□□□□ 31%"
+//
+// Full cells use █ (U+2588). The fractional last cell uses one of the eight
+// partial-block characters ▏▎▍▌▋▊▉█ (U+258F–U+2588, 1/8 to 8/8 fill) so the
+// bar moves smoothly on every 1% step regardless of bar width.
 func (b *GradientVolumeBar) Render(volume int) string {
 	if volume > 100 {
 		volume = 100
@@ -126,9 +138,9 @@ func (b *GradientVolumeBar) Render(volume int) string {
 			barWidth = computed
 		}
 	}
-
-	filled := int(float64(volume) / 100.0 * float64(barWidth))
-	empty := barWidth - filled
+	if barWidth < 1 {
+		barWidth = 1
+	}
 
 	// Pick fill color from the volume band.
 	var fillColor lipgloss.Color
@@ -144,8 +156,28 @@ func (b *GradientVolumeBar) Render(volume int) string {
 	fillStyle := lipgloss.NewStyle().Foreground(fillColor)
 	emptyStyle := lipgloss.NewStyle().Foreground(b.th.Surface())
 
-	bar := fillStyle.Render(strings.Repeat("■", filled)) +
-		emptyStyle.Render(strings.Repeat("□", empty))
+	filledF := float64(volume) / 100.0 * float64(barWidth)
+	fullBlocks := int(filledF)
+	fraction := filledF - float64(fullBlocks)
+	partialIdx := int(fraction * 8) // 0 when fraction == 0.0 exactly
+
+	var sb strings.Builder
+	// Full blocks.
+	for i := 0; i < fullBlocks; i++ {
+		sb.WriteString(fillStyle.Render("█"))
+	}
+	// Partial block: only when fraction > 0 (partialIdx > 0).
+	if partialIdx > 0 {
+		sb.WriteString(fillStyle.Render(volumePartialChars[partialIdx-1]))
+	}
+	// Empty cells.
+	emptyCount := barWidth - fullBlocks
+	if partialIdx > 0 {
+		emptyCount--
+	}
+	sb.WriteString(emptyStyle.Render(strings.Repeat("□", emptyCount)))
+
+	bar := sb.String()
 
 	// Music note icon: green when volume > 0, muted when 0.
 	var icon string

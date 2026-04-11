@@ -137,9 +137,8 @@ func TestGradientVolumeBar_ZeroVolume(t *testing.T) {
 	out := b.Render(0)
 	assert.Contains(t, out, "♪", "zero volume should show music note icon")
 	assert.Contains(t, out, "0%")
-	assert.NotContains(t, out, "■", "zero volume should show no filled chars")
+	assert.NotContains(t, out, "■", "zero volume should show no filled chars (old ■ char)")
 	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
-	assert.NotContains(t, out, "█", "should not use old filled block character")
 }
 
 func TestGradientVolumeBar_LowVolume_Gradient1(t *testing.T) {
@@ -149,7 +148,8 @@ func TestGradientVolumeBar_LowVolume_Gradient1(t *testing.T) {
 	out := b.Render(25)
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "25%")
-	assert.Contains(t, out, "■")
+	assert.Contains(t, out, "█", "filled blocks use █")
+	assert.NotContains(t, out, "■", "old ■ char no longer used")
 	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
 }
 
@@ -159,7 +159,8 @@ func TestGradientVolumeBar_MidVolume_Gradient2(t *testing.T) {
 	out := b.Render(50)
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "50%")
-	assert.Contains(t, out, "■")
+	assert.Contains(t, out, "█", "filled blocks use █")
+	assert.NotContains(t, out, "■", "old ■ char no longer used")
 	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
 }
 
@@ -169,7 +170,8 @@ func TestGradientVolumeBar_HighVolume_Gradient3(t *testing.T) {
 	out := b.Render(80)
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "80%")
-	assert.Contains(t, out, "■")
+	assert.Contains(t, out, "█", "filled blocks use █")
+	assert.NotContains(t, out, "■", "old ■ char no longer used")
 	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
 }
 
@@ -185,11 +187,11 @@ func TestGradientVolumeBar_Format(t *testing.T) {
 	b := newTestGradientVolumeBar(30)
 	out := b.Render(50)
 	assert.Contains(t, out, "♪", "should contain music note icon")
-	assert.Contains(t, out, "■", "should contain filled block character")
+	assert.Contains(t, out, "█", "should contain full block character")
 	assert.Contains(t, out, "□", "should contain empty block character")
 	assert.Contains(t, out, "50%")
 	assert.NotContains(t, out, "VOL", "should not use old VOL prefix")
-	assert.NotContains(t, out, "█", "should not use old filled block character")
+	assert.NotContains(t, out, "■", "should not use old filled block character ■")
 	assert.NotContains(t, out, "░", "should not use old empty block character")
 }
 
@@ -258,4 +260,61 @@ func TestGradientVolumeBar_At67_Gradient3(t *testing.T) {
 	out := b.Render(67)
 	// 67% crosses into band 3 (67-100%).
 	assert.Contains(t, out, "67%")
+}
+
+// --------------------------------------------------------------------------
+// Partial-block rendering tests (barWidth=14, the default)
+// --------------------------------------------------------------------------
+
+// TestGradientVolumeBar_PartialBlocks verifies the partial-block fill algorithm at barWidth=14
+// for boundary volumes. When SetWidth is 0 the default barWidth of 14 is used.
+func TestGradientVolumeBar_PartialBlocks(t *testing.T) {
+	tests := []struct {
+		name        string
+		volume      int
+		wantFull    int    // expected number of full █ blocks
+		wantPartial string // expected partial-block character, or "" if none
+		wantEmpty   int    // expected number of □ empty characters
+	}{
+		// vol=0: filledF=0.0 → 0 full, no partial, 14 empty
+		{name: "0pct", volume: 0, wantFull: 0, wantPartial: "", wantEmpty: 14},
+		// vol=1: filledF=0.14 → 0 full, partialIdx=int(0.14*8)=1 → ▏, 13 empty
+		{name: "1pct", volume: 1, wantFull: 0, wantPartial: "▏", wantEmpty: 13},
+		// vol=7: filledF=0.98 → 0 full, partialIdx=int(0.98*8)=7 → ▉, 13 empty
+		{name: "7pct", volume: 7, wantFull: 0, wantPartial: "▉", wantEmpty: 13},
+		// vol=14: filledF=1.96 → 1 full, partialIdx=int(0.96*8)=7 → ▉, 12 empty
+		{name: "14pct", volume: 14, wantFull: 1, wantPartial: "▉", wantEmpty: 12},
+		// vol=31: filledF=4.34 → 4 full, partialIdx=int(0.34*8)=2 → ▎, 9 empty
+		{name: "31pct", volume: 31, wantFull: 4, wantPartial: "▎", wantEmpty: 9},
+		// vol=50: filledF=7.0 → 7 full, fraction=0 → no partial, 7 empty
+		{name: "50pct", volume: 50, wantFull: 7, wantPartial: "", wantEmpty: 7},
+		// vol=99: filledF=13.86 → 13 full, partialIdx=int(0.86*8)=6 → ▊, 0 empty
+		{name: "99pct", volume: 99, wantFull: 13, wantPartial: "▊", wantEmpty: 0},
+		// vol=100: filledF=14.0 → 14 full, fraction=0 → no partial, 0 empty
+		{name: "100pct", volume: 100, wantFull: 14, wantPartial: "", wantEmpty: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newTestGradientVolumeBar(0) // 0 → use default barWidth=14
+			out := b.Render(tt.volume)
+
+			gotFull := strings.Count(out, "█")
+			gotEmpty := strings.Count(out, "□")
+			assert.Equal(t, tt.wantFull, gotFull, "full block count mismatch for volume=%d", tt.volume)
+			assert.Equal(t, tt.wantEmpty, gotEmpty, "empty block count mismatch for volume=%d", tt.volume)
+
+			if tt.wantPartial == "" {
+				// volumePartialChars[:7] = ▏▎▍▌▋▊▉ (exclude the full █ at index 7)
+				for _, pc := range volumePartialChars[:7] {
+					assert.NotContains(t, out, pc, "should have no partial block for volume=%d", tt.volume)
+				}
+			} else {
+				assert.Contains(t, out, tt.wantPartial, "partial block mismatch for volume=%d", tt.volume)
+				// Exactly one partial block char should be present.
+				gotPartialCount := strings.Count(out, tt.wantPartial)
+				assert.Equal(t, 1, gotPartialCount, "should be exactly one partial block for volume=%d", tt.volume)
+			}
+		})
+	}
 }
