@@ -30,11 +30,11 @@ import (
 // The fix: call buildPlaybackAPICmd first, then applyOptimisticUpdate.
 func TestPlaybackAPICmd_UsesPreOptimisticState(t *testing.T) {
 	tests := []struct {
-		name          string
-		initial       domain.PlaybackState
-		action        panes.PlaybackAction
-		checkAPI      func(t *testing.T, mock *apitest.MockPlayer)
-		checkStore    func(t *testing.T, got *domain.PlaybackState)
+		name       string
+		initial    domain.PlaybackState
+		action     panes.PlaybackAction
+		checkAPI   func(t *testing.T, mock *apitest.MockPlayer)
+		checkStore func(t *testing.T, got *domain.PlaybackState)
 	}{
 		{
 			name: "volume up at 74 — API receives 75 not 76",
