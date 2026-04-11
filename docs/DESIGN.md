@@ -192,7 +192,7 @@ All 8 panes visible across 3 rows. NowPlaying spans full width.
 │ │ Martbaan          │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ │ Samar Mehdi       │ ─── 1:41 ████████████████░░░░░░░░░░░░░░░  5:30 ──       │
 │ │ ⇄  ▷  ≡  ↻        │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
-│ │ ♪ ■■■□□□ 65%      │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
+│ │ ♪ ███▎□□□ 65%     │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ ╰───────────────────╯ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ ³Playlists ─────────╮╭─ ⁴Albums ────────────╮╭─ ⁵Liked Songs ──────╮  Row 2 (weight 3)
@@ -233,7 +233,7 @@ NowPlaying expanded with large visualizer. Queue and RecentlyPlayed below. All o
 │ │ Martbaan (Album)          │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ │ ⇄  ▷  ≡  ↻               │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
-│ │ ♪ ■■■■■□□□□ 65%          │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
+│ │ ♪ █████▎□□□ 65%          │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ ╰───────────────────────────╯  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
@@ -623,15 +623,17 @@ Replace the current monochrome `SeekBar()` / `VolumeBar()` fills:
 
 **Volume bar:**
 ```
-♪ ■■■■□□□□□□  65%
+♪ ████▎□□□□□□□□□  65%
 ```
+- Full cells: `█` (U+2588); fractional last cell: one of `▏▎▍▌▋▊▉` (1/8–7/8 fill, 8-step resolution)
+- Empty cells: `□` in `Surface()` color
 - Low volume (0-33%): `Gradient1()` (green/cool)
 - Mid volume (34-66%): `Gradient2()` (yellow/warm)
 - High volume (67-100%): `Gradient3()` (red/hot)
-- Volume = 0: `♪` icon in `TextMuted()` color
+- Volume = 0: `♪` icon in `TextMuted()` color; all cells empty
 - Volume > 0: `♪` icon in `Gradient1()` color
 
-**Implementation:** Component in `internal/ui/components/gradient.go`. Uses discrete block characters (`■□`) with per-character color application for the seek bar gradient.
+**Implementation:** Component in `internal/ui/components/gradient.go`. Uses partial-block characters (`█▏▎▍▌▋▊▉□`) with fractional fill algorithm for sub-character resolution.
 
 ### NowPlaying Split Layout (btop-inspired)
 
@@ -643,7 +645,7 @@ The NowPlaying pane uses a horizontal split layout inspired by btop's CPU pane:
   - Artist names (`TextSecondary()`)
   - Album name (`TextMuted()`)
   - Controls row (`⇄  ▷  ≡  ↻`)
-  - Volume bar (`♪ ■■■□□□ 65%`)
+  - Volume bar (`♪ ████▎□□□□□□□□□ 65%`)
 - **Right (~2/3 width):** viz.Engine animated visualization with per-row color gradient
   - Top viz rows (top half of frame)
   - Gradient seek bar with time labels (1 row, `vizWidth` wide)
