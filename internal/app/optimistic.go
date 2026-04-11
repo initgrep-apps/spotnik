@@ -31,19 +31,11 @@ func (a *App) applyOptimisticUpdate(action panes.PlaybackAction) {
 	switch action {
 	case panes.ActionVolumeUp:
 		if updated.Device != nil {
-			v := updated.Device.VolumePercent + a.volumeStep
-			if v > 100 {
-				v = 100
-			}
-			updated.Device.VolumePercent = v
+			updated.Device.VolumePercent = min(updated.Device.VolumePercent+a.volumeStep, 100)
 		}
 	case panes.ActionVolumeDown:
 		if updated.Device != nil {
-			v := updated.Device.VolumePercent - a.volumeStep
-			if v < 0 {
-				v = 0
-			}
-			updated.Device.VolumePercent = v
+			updated.Device.VolumePercent = max(updated.Device.VolumePercent-a.volumeStep, 0)
 		}
 	case panes.ActionPause:
 		updated.IsPlaying = false

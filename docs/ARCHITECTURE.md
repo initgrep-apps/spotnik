@@ -307,9 +307,16 @@ fires — to give instant UI feedback.
 **Pattern:**
 ```go
 case panes.PlaybackRequestMsg:
-    a.applyOptimisticUpdate(m.Action) // sync: store written, UI renders next frame
-    return a, a.buildPlaybackAPICmd(m.Action) // async: API call, result overwrites store
+    cmd := a.buildPlaybackAPICmd(m.Action) // snapshot pre-optimistic store state
+    a.applyOptimisticUpdate(m.Action)      // sync: store written, UI renders next frame
+    return a, cmd                          // async: API call, result overwrites store
 ```
+
+**Order matters:** `buildPlaybackAPICmd` must be called before `applyOptimisticUpdate`.
+The cmd closure captures store values (volume, shuffle state, repeat mode) at construction
+time. If the optimistic write happens first, the closure captures the already-predicted
+value and computes the wrong next state (e.g. sends `SetShuffle(false)` when the user
+intended to turn shuffle on).
 
 The optimistic write happens in `Update()` — consistent with the Elm contract. Commands
 still never write to the store. When the API response arrives via `PlaybackStateFetchedMsg`,
