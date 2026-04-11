@@ -1,7 +1,7 @@
 ---
 title: "Repeat-Track Superscript Icon"
 feature: 25-nowplaying-controls-polish
-status: open
+status: done
 ---
 
 ## Background
