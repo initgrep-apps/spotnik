@@ -1,7 +1,7 @@
 ---
 title: "Volume 1% Steps and Partial-Block Bar"
 feature: 25-nowplaying-controls-polish
-status: open
+status: done
 ---
 
 ## Background

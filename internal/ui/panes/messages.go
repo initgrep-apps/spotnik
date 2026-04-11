@@ -46,9 +46,9 @@ const (
 	ActionNext
 	// ActionPrevious goes back to the previous track.
 	ActionPrevious
-	// ActionVolumeUp raises volume by 5%.
+	// ActionVolumeUp raises volume by 1%.
 	ActionVolumeUp
-	// ActionVolumeDown lowers volume by 5%.
+	// ActionVolumeDown lowers volume by 1%.
 	ActionVolumeDown
 	// ActionToggleShuffle toggles shuffle mode.
 	ActionToggleShuffle
