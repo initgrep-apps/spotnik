@@ -304,12 +304,26 @@ fires — to give instant UI feedback.
 **When to use:** volume up/down, play/pause, shuffle toggle, repeat cycle.
 **When NOT to use:** actions whose outcome depends on server data (Next, Previous, any fetch).
 
-**Pattern:**
+**Pattern (full three-case flow):**
 ```go
+// In app.Update():
 case panes.PlaybackRequestMsg:
     cmd := a.buildPlaybackAPICmd(m.Action) // snapshot pre-optimistic store state
     a.applyOptimisticUpdate(m.Action)      // sync: store written, UI renders next frame
-    return a, cmd                          // async: API call, result overwrites store
+    a.playbackCmdPending++                 // suppress stale polling writes until cmd completes
+    return a, cmd                          // async: API call fires through gateway
+
+case panes.PlaybackCmdSentMsg:
+    if a.playbackCmdPending > 0 {
+        a.playbackCmdPending--             // cmd resolved — allow next fetch to write store
+    }
+    // ... fire reconcile fetch ...
+
+case panes.PlaybackStateFetchedMsg:
+    if a.playbackCmdPending > 0 {
+        return a, nil                      // discard: Spotify state is pre-command
+    }
+    // ... write store ...
 ```
 
 **Order matters:** `buildPlaybackAPICmd` must be called before `applyOptimisticUpdate`.
@@ -323,6 +337,11 @@ still never write to the store. When the API response arrives via `PlaybackState
 `store.SetPlaybackState()` overwrites the optimistic value with the authoritative one. On
 API error, the `fetchPlaybackStateCmd` fired from the `PlaybackCmdSentMsg` error handler
 corrects the store automatically.
+
+**Polling suppression:** while `playbackCmdPending > 0`, polling fetches that return stale
+Spotify state (before the API command has taken effect) are discarded. The reconcile fetch
+fired by `PlaybackCmdSentMsg` writes the authoritative post-command state. `playbackCmdPending`
+never goes negative — the decrement is guarded by `if a.playbackCmdPending > 0`.
 
 ---
 

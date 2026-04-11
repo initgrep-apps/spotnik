@@ -197,6 +197,12 @@ type App struct {
 	// a non-nil State is received.
 	nilPlaybackStateTicks int
 
+	// playbackCmdPending counts PlaybackRequestMsgs that have fired their API cmd but
+	// whose PlaybackCmdSentMsg has not yet arrived. While non-zero, PlaybackStateFetchedMsg
+	// store writes are suppressed to prevent background polling from overwriting optimistic
+	// state with stale Spotify data.
+	playbackCmdPending int
+
 	// prefs is the preference store that coalesces in-memory changes and writes
 	// them to disk via FlushCmd. All runtime preference changes go through here.
 	prefs *prefs.PreferenceStore
