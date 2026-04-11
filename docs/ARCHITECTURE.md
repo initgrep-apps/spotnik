@@ -206,7 +206,7 @@ routing.go: handleKeyMsg / handleMouseMsg
      ├── Guard 5: Auth view → only quit keys
      ├── Guard 6: Pane has active filter → all keys to pane
      ├── Global keys (q, /, d, 0, p, 1-8, Tab, Shift+Tab)
-     ├── Playback keys (Space, n, +, -, s, r, v, ←, →) → always NowPlayingPane
+     ├── Playback keys (Space, +, -, s, r, v, ←, →) → always NowPlayingPane
      └── All other keys → focused pane
               │
               ▼
@@ -242,7 +242,7 @@ all input and prevent lower-priority handlers from running:
 | 5 | Auth view active | Only quit keys (`q`, `ctrl+c`) pass; all others dropped |
 | 6 | Pane has active filter | All keys → focused pane (filter captures input) |
 | 7 | Global shortcuts | `q`, `/`, `d`, `t`, `0`, `p`, `1`–`8`, `Tab`, `Shift+Tab` |
-| 8 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
+| 8 | Playback keys | `Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
 | 8 | Default | All other keys → focused pane |
 
 This means: if the device overlay is open, `q` goes to the overlay (not quit). Theme
