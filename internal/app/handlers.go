@@ -517,8 +517,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, fetchPlaybackStateCmd(a.player)
 
 	case panes.PlaybackRequestMsg:
-		a.applyOptimisticUpdate(m.Action)
-		return a, a.buildPlaybackAPICmd(m.Action)
+		cmd := a.buildPlaybackAPICmd(m.Action) // snapshot pre-optimistic store state
+		a.applyOptimisticUpdate(m.Action)      // sync: store written, UI renders next frame
+		return a, cmd                          // async: API call, result overwrites store
 
 	case panes.PlayContextMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
