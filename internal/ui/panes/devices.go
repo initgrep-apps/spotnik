@@ -247,11 +247,15 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 		typeStyle = typeStyle.Background(d.theme.SelectedBg())
 	}
 
+	capStyle := lipgloss.NewStyle().Foreground(d.theme.TextMuted())
+	if isCursor {
+		capStyle = capStyle.Background(d.theme.SelectedBg())
+	}
 	var capSuffix string
 	if dev.IsRestricted {
-		capSuffix = lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(" [restricted]")
+		capSuffix = capStyle.Render(" [restricted]")
 	} else if !dev.SupportsVolume {
-		capSuffix = lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(" (no vol)")
+		capSuffix = capStyle.Render(" (no vol)")
 	}
 
 	return bulletStyle.Render(bullet) + " " +

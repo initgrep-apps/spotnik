@@ -417,8 +417,7 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	case msg.Type == tea.KeyRight:
 		return p, emitPlaybackRequest(ActionNext)
 
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == "p",
-		msg.Type == tea.KeyLeft:
+	case msg.Type == tea.KeyLeft:
 		return p, emitPlaybackRequest(ActionPrevious)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":

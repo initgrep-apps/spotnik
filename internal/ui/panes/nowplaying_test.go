@@ -103,19 +103,6 @@ func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
 	assert.Equal(t, ActionPlay, req.Action, "paused → space should request play")
 }
 
-func TestNowPlayingPane_Update_P_SkipsPrev(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, true)
-
-	pMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
-	_, cmd := pane.Update(pMsg)
-
-	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(PlaybackRequestMsg)
-	assert.True(t, ok)
-	assert.Equal(t, ActionPrevious, req.Action)
-}
-
 func TestNowPlayingPane_Update_Plus_VolUp(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 
