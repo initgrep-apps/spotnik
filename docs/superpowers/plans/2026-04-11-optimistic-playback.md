@@ -1,7 +1,5 @@
 # Optimistic Playback Updates Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Eliminate ~500ms–1s UI lag on playback controls (volume, play/pause, shuffle, repeat) by writing the predicted state to the store immediately when the key is pressed, before the API roundtrip completes.
 
 **Architecture:** Add a single `applyOptimisticUpdate` method on `*App` that deep-copies the current playback state, applies the predicted mutation, and writes it back to the store synchronously inside `Update()`. The existing API cmd fires after this and the API response overwrites with authoritative state. No new types, messages, or store fields needed.
@@ -23,22 +21,7 @@
 
 ---
 
-## Task 1: Feature branch
-
-**Files:** none
-
-- [ ] **Step 1: Create branch**
-
-```bash
-git checkout main && git pull origin main
-git checkout -b feat/optimistic-playback
-```
-
-Expected: branch `feat/optimistic-playback` checked out, clean working tree.
-
----
-
-## Task 2: Fix stale `n` key in ARCHITECTURE.md
+## Task 1: Fix stale `n` key in ARCHITECTURE.md
 
 **Files:**
 - Modify: `docs/ARCHITECTURE.md:209`
@@ -344,7 +327,8 @@ func (a *App) applyOptimisticUpdate(action panes.PlaybackAction) {
 		updated.ShuffleState = !updated.ShuffleState
 	case panes.ActionCycleRepeat:
 		updated.RepeatState = nextRepeatMode(updated.RepeatState)
-	// ActionNext and ActionPrevious: no-op — next track is not predictable.
+	case panes.ActionNext, panes.ActionPrevious:
+		// no-op: next track is determined by Spotify, not local state
 	}
 
 	a.store.SetPlaybackState(&updated)
@@ -465,7 +449,7 @@ make ci
 
 Expected: lint passes, all tests pass, coverage ≥ 80%.
 
-If lint fails with `exhaustive` or similar on the `switch action` in `optimistic.go`: the switch is intentionally non-exhaustive (Next/Previous are deliberate no-ops, not missing cases). Add a comment `// ActionNext, ActionPrevious: intentional no-op` — already present in the implementation above, but if the linter still complains add a `default:` case with just a comment.
+If lint fails with `exhaustive` or similar on the `switch action` in `optimistic.go`: all `PlaybackAction` values are now explicitly handled — `ActionNext` and `ActionPrevious` have an explicit no-op case. This should satisfy any exhaustiveness checker.
 
 If coverage drops below 80%: run `make test-coverage` to identify the gap, add missing test cases to `optimistic_test.go`.
 

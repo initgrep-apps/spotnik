@@ -72,8 +72,8 @@ Location: `internal/app/handlers.go` (or `internal/app/optimistic.go`)
 | `ActionPlay` | `ps.IsPlaying = true` |
 | `ActionToggleShuffle` | `ps.ShuffleState = !ps.ShuffleState` |
 | `ActionCycleRepeat` | `ps.RepeatState = nextRepeatMode(ps.RepeatState)` |
-| `ActionNext` | no-op (unpredictable) |
-| `ActionPrevious` | no-op (unpredictable) |
+| `ActionNext` | explicit no-op case — next track is determined by Spotify |
+| `ActionPrevious` | explicit no-op case — next track is determined by Spotify |
 
 Guard for volume actions: `ps.Device != nil` required before touching `VolumePercent`.
 
