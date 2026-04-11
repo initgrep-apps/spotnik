@@ -101,10 +101,11 @@ For **features and improvements:**
 - Explore scope — what's in, what's out
 - Identify user stories, edge cases, acceptance criteria
 - Consider dependencies on existing features
+- Read the relevant code by invoking skill `feature-dev:code-explorer`. This will provide you comprehensive view of the application code,
 - Propose 2-3 approaches if the solution isn't obvious
 
 For **bugs and issues:**
-- Investigate the problem — read relevant code, trace the execution path using
+- Investigate the problem — read relevant code, trace the execution path by invoking skill
   `feature-dev:code-explorer` if needed
 - Verify the issue still exists and is relevant
 - Understand root cause before proposing a fix
