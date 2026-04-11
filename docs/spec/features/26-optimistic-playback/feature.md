@@ -53,7 +53,9 @@ and documents the new optimistic update pattern for future maintainers.
 
 | # | Title | Status |
 |---|-------|--------|
-| 124 | Optimistic playback update on key press | open |
+| 124 | Optimistic playback update on key press | done |
+| 125 | Fix: buildPlaybackAPICmd snapshots post-optimistic store state | open |
+| 126 | Fix: background polling overwrites optimistic state before API completes | open |
 
 ## Files Touched (Summary)
 
