@@ -43,18 +43,22 @@ func TestControls_RepeatOff(t *testing.T) {
 	out := c.Render()
 	assert.Contains(t, out, "↻")
 	assert.NotContains(t, out, "↻1")
+	assert.NotContains(t, out, "↻¹")
 }
 
 func TestControls_RepeatContext(t *testing.T) {
 	c := newTestControls(false, false, "context")
 	out := c.Render()
 	assert.Contains(t, out, "↻")
+	assert.NotContains(t, out, "↻¹")
 }
 
 func TestControls_RepeatTrack(t *testing.T) {
 	c := newTestControls(false, false, "track")
 	out := c.Render()
-	assert.Contains(t, out, "↻1")
+	// superscript one (U+00B9) not ASCII 1
+	assert.Contains(t, out, "↻¹")
+	assert.NotContains(t, out, "↻1")
 }
 
 func TestControls_QueueIcon(t *testing.T) {

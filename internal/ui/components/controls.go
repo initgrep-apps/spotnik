@@ -50,7 +50,7 @@ func (c Controls) Render() string {
 	var repeat string
 	switch c.repeatMode {
 	case "track":
-		repeat = c.activeStyle.Render("↻1")
+		repeat = c.activeStyle.Render("↻¹")
 	case "context":
 		repeat = c.activeStyle.Render("↻")
 	default:
