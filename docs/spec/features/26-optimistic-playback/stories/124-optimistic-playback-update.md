@@ -22,6 +22,19 @@ Spotify, not local state.
 
 ## Design
 
+### Data Flow
+
+**Before:**
+```
+PlaybackRequestMsg → buildPlaybackAPICmd(action)
+```
+
+**After:**
+```
+PlaybackRequestMsg → applyOptimisticUpdate(action)   ← store written, UI renders next frame
+                   → buildPlaybackAPICmd(action)     ← API fires async, unchanged
+```
+
 ### New method: `applyOptimisticUpdate`
 
 Location: `internal/app/optimistic.go` (new file, `package app`)
@@ -194,7 +207,8 @@ corrects the store automatically.
 
 - [ ] Add `TestApplyOptimisticUpdate_NilPlaybackState_DoesNotPanic` — store has no playback
       state; call `a.Update(panes.PlaybackRequestMsg{Action: panes.ActionVolumeUp})`; assert
-      no panic and `a.Store().PlaybackState()` is still nil.
+      no panic and `a.Store().PlaybackState()` is still nil. This is a separate named test
+      (not a table row) because no initial state is injected — the store starts nil by default.
 
 - [ ] Run: `go test ./internal/app/ -run TestApplyOptimisticUpdate -v` → **FAIL** (expected —
       `applyOptimisticUpdate` does not exist yet, store value unchanged)
