@@ -73,7 +73,7 @@ PANES (10 total):
 
 `internal/domain/` contains shared types that bridge `api/` and `ui/` without creating import cycles. Key files:
 
-- `types.go` — Core types: `PlaybackState`, `Track`, `Artist`, `Album`, `Device`, `SimplePlaylist`, `SavedAlbum`, `SavedTrack`, `PlayHistory`, `QueueResponse`, `FullArtist`, `PlayOptions`
+- `types.go` — Core types: `PlaybackState`, `Track`, `Artist`, `Album`, `Device`, `SimplePlaylist`, `SavedAlbum`, `SavedTrack`, `PlayHistory`, `QueueResponse`, `FullArtist`, `PlayOptions`, `PlaybackActions`, `PlaybackActionsWrapper`
 - `gateway.go` — `EventKind` (13 constants), `GatewayStateSnapshot`, `GatewayEvent`, `GatewayEventRecorder` interface, `RequestPriority` constants
 - `search.go` — `SearchResult` type
 
@@ -242,7 +242,11 @@ all input and prevent lower-priority handlers from running:
 | 5 | Auth view active | Only quit keys (`q`, `ctrl+c`) pass; all others dropped |
 | 6 | Pane has active filter | All keys → focused pane (filter captures input) |
 | 7 | Global shortcuts | `q`, `/`, `d`, `t`, `0`, `p`, `1`–`8`, `Tab`, `Shift+Tab` |
-| 8 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
+| 8 | Playback keys | Two pre-flight gates run before forwarding to NowPlayingPane:          |
+|   |               | **Gate 1 — Premium:** `!store.IsPremium()` → "Spotify Premium required" |
+|   |               | **Gate 2 — Capability:** `checkCapability(ps, action)` → reason string |
+|   |               | If both pass: key forwarded to NowPlayingPane regardless of focus      |
+|   |               | `v` (visualizer) is exempt from both gates — local UI action only      |
 | 8 | Default | All other keys → focused pane |
 
 This means: if the device overlay is open, `q` goes to the overlay (not quit). Theme
@@ -338,6 +342,34 @@ func (s *Store) PlaylistsStale() bool {
     return IsStale(s.playlistsFetchedAt, PlaylistsTTL)
 }
 ```
+
+### Capability Gating
+
+`checkCapability(ps *domain.PlaybackState, action panes.PlaybackAction) (bool, string)` in
+`internal/app/capability.go` is the single decision point for operation capability checks.
+It returns `(true, "")` when allowed and `(false, reason)` when blocked.
+
+**Three signal sources, checked in order:**
+
+1. `device.IsRestricted` — total lockout; no Web API commands accepted by this device.
+2. `device.SupportsVolume` — volume-specific; `PUT /me/player/volume` fails on this device.
+3. `PlaybackState.Actions.Disallows.*` — runtime signal from Spotify reflecting subscription
+   tier, content type (ads, DRM, radio), and device capability in one object. Fields:
+   `Pausing`, `Resuming`, `Seeking`, `SkippingNext`, `SkippingPrev`, `TogglingRepeatContext`,
+   `TogglingRepeatTrack`, `TogglingShuffle`, `TransferringPlayback`.
+
+**Two call sites:**
+
+- `routing.go` `handleKeyMsg` — gate 2 for all keyboard-triggered playback actions.
+- `handlers.go` `TransferPlaybackMsg` handler — inline check for
+  `Actions.Disallows.TransferringPlayback` and `IsTargetDeviceRestricted(deviceID)`.
+
+**Rule for future operations:** Any new playback operation that maps to a Spotify
+`actions.disallows` field must be added to `checkCapability`'s switch statement. Never add
+an ad-hoc capability check in routing or a handler.
+
+`Store.IsTargetDeviceRestricted(deviceID string) bool` — used only for device transfer where
+the *target* device's `IsRestricted` must be checked independently of current playback state.
 
 **`Update()` gate pattern:**
 
@@ -628,7 +660,10 @@ All errors surface as toast notifications. Keep messages short and actionable.
 | Error | Toast Type | User Message |
 |---|---|---|
 | 401 (re-auth needed) | `"error"` | `Session expired. Run: spotnik auth` |
-| 403 (no premium) | `"warning"` | `Spotify Premium required for playback` |
+| 403 (capability blocked) | `"warning"` | Proactively prevented by capability gate before the |
+|                          |             | API call fires. If a 403 arrives anyway (race), the |
+|                          |             | actual Spotify error body is shown; fallback is     |
+|                          |             | "Spotify Premium required" when body is empty.      |
 | 429 (rate limited) | `"ratelimit"` | `Too many requests. Retrying in Ns...` |
 | 503 (Spotify down) | `"error"` | `Spotify is unavailable. Retrying...` |
 | Network error | `"error"` | `No connection to Spotify` |
