@@ -1,7 +1,7 @@
 ---
 title: "Optimistic Playback Update on Key Press"
 feature: 26-optimistic-playback
-status: open
+status: done
 ---
 
 ## Background
