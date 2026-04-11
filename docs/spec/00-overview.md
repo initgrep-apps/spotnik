@@ -34,7 +34,7 @@
 | 23 | User Profile & Subscription Awareness | `features/23-user-profile-subscription/` | done | 114 (done), 115 (done), 116 (done), 117 (done) | Expand UserProfile with tier/country, profile overlay (`u` key), header chip, Premium gate for playback keys and device transfer, splash notice |
 | 24 | Controls Cleanup and Fix | `features/24-controls-cleanup/` | done | 118 (done), 119 (done), 120 (done), 121 (done) | Fix broken Space/n keybindings, rebind t→g for time range, TopArtists Enter to play, remove dead pane actions, help overlay polish |
 | 25 | NowPlaying Controls Polish | `features/25-nowplaying-controls-polish/` | done | 122 (done), 123 (done) | Repeat-track superscript icon (↻¹), volume 1% steps, partial-block bar rendering |
-| 26 | Optimistic Playback Updates | `features/26-optimistic-playback/` | done | 124 | Eliminate ~500ms–1s UI lag on playback controls by writing predicted state to store immediately on key press |
+| 26 | Optimistic Playback Updates | `features/26-optimistic-playback/` | in-progress | 124 (done), 125 (done), 126 (open) | Eliminate ~500ms–1s UI lag on playback controls by writing predicted state to store immediately on key press |
 
 ---
 
@@ -44,5 +44,5 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-12* (feature 26 done)
+*Last updated: 2026-04-12* (story 125 done; story 126 open)
 

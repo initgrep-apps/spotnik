@@ -1,7 +1,7 @@
 ---
 title: "Fix: buildPlaybackAPICmd snapshots post-optimistic store state"
 feature: 26-optimistic-playback
-status: open
+status: done
 ---
 
 ## Background
