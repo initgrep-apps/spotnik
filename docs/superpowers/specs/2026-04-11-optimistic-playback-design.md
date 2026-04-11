@@ -132,6 +132,45 @@ before async cmd resolves.
 
 ---
 
+## docs/ARCHITECTURE.md Updates Required
+
+Two stale entries found during design review — must be fixed in the same PR as the implementation:
+
+### 1. Remove stale `n` key from playback routing table
+
+`n` (next track) was removed in story 118 but still appears in ARCHITECTURE.md in two places:
+
+- The key event flow diagram (`Playback keys (Space, n, +, -, s, r, v, ←, →)`)
+- The overlay routing precedence table (same list)
+
+Remove `n` from both.
+
+### 2. Add Optimistic Update Pattern section
+
+Add a new subsection under "Data-Carrying Messages" (or after it) documenting the optimistic
+update pattern. Key points to cover:
+
+- **When to use it**: user-triggered actions where the new state is fully predictable
+  (volume, play/pause, shuffle, repeat). Do NOT use for actions with unpredictable outcomes
+  (Next, Previous, any fetch that depends on server data).
+- **Where it happens**: inside `app.Update()` — the same place all other Store writes live.
+  This is consistent with the Elm contract: commands still never write to the store.
+- **Pattern**: read current store state → deep-copy → apply predicted mutation → write back
+  → return the API Cmd. The API response overwrites with authoritative state on completion.
+- **Revert**: on API error, the existing `fetchPlaybackStateCmd` fired from the error handler
+  corrects the store. No separate revert mechanism needed.
+
+Example skeleton to include in the doc:
+
+```go
+// In app.Update(), BEFORE returning the API cmd:
+case panes.PlaybackRequestMsg:
+    a.applyOptimisticUpdate(m.Action)        // sync: store written, UI renders next frame
+    return a, a.buildPlaybackAPICmd(m.Action) // async: API call, result overwrites store
+```
+
+---
+
 ## Out of Scope
 
 - Next / Previous loading state (unpredictable — deferred to future story)
