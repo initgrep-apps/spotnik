@@ -282,6 +282,10 @@ func TestGradientVolumeBar_PartialBlocks(t *testing.T) {
 		{name: "1pct", volume: 1, wantFull: 0, wantPartial: "▏", wantEmpty: 13},
 		// vol=7: filledF=0.98 → 0 full, partialIdx=int(0.98*8)=7 → ▉, 13 empty
 		{name: "7pct", volume: 7, wantFull: 0, wantPartial: "▉", wantEmpty: 13},
+		// vol=8: filledF=1.12 → 1 full, fraction=0.12, partialIdx=int(0.12*8)=0 → no partial.
+		// NOTE: this is an intentional dead zone — the truncation algorithm skips the partial
+		// block when fraction*8 < 1. The bar advances by one full cell rather than a partial sliver.
+		{name: "8pct", volume: 8, wantFull: 1, wantPartial: "", wantEmpty: 13},
 		// vol=14: filledF=1.96 → 1 full, partialIdx=int(0.96*8)=7 → ▉, 12 empty
 		{name: "14pct", volume: 14, wantFull: 1, wantPartial: "▉", wantEmpty: 12},
 		// vol=31: filledF=4.34 → 4 full, partialIdx=int(0.34*8)=2 → ▎, 9 empty
@@ -303,6 +307,14 @@ func TestGradientVolumeBar_PartialBlocks(t *testing.T) {
 			gotEmpty := strings.Count(out, "□")
 			assert.Equal(t, tt.wantFull, gotFull, "full block count mismatch for volume=%d", tt.volume)
 			assert.Equal(t, tt.wantEmpty, gotEmpty, "empty block count mismatch for volume=%d", tt.volume)
+
+			// Total cells must always equal barWidth (14) regardless of partial-block presence.
+			partialPresent := 0
+			if tt.wantPartial != "" {
+				partialPresent = 1
+			}
+			assert.Equal(t, gradientVolumeBarWidth, gotFull+gotEmpty+partialPresent,
+				"total cell count must equal barWidth for volume=%d", tt.volume)
 
 			if tt.wantPartial == "" {
 				// volumePartialChars[:7] = ▏▎▍▌▋▊▉ (exclude the full █ at index 7)
