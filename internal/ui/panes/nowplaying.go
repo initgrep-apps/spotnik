@@ -34,7 +34,7 @@ type NowPlayingPane struct {
 	// Optimistic state — set on keypress to update the UI immediately.
 	// Cleared by handlePlaybackFetched() when the server poll arrives (server truth wins).
 	// This mirrors the localProgressMs pattern for smooth seek-bar interpolation.
-	pendingIsPlaying  *bool   // nil = no pending state
+	pendingIsPlaying  *bool // nil = no pending state
 	pendingShuffleOn  *bool
 	pendingRepeatMode *string // "off" | "context" | "track"
 	pendingVolume     *int    // absolute volume to set, accumulated across rapid keypresses
