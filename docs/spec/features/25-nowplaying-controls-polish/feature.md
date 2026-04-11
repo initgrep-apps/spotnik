@@ -1,6 +1,6 @@
 ---
 title: "NowPlaying Controls Polish"
-status: open
+status: done
 ---
 
 ## Description
