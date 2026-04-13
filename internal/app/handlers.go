@@ -448,12 +448,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.PlaybackStateFetchedMsg:
-		if a.playbackCmdPending > 0 {
-			// A command is in flight — this fetch carries pre-command Spotify state.
-			// Discard it: the reconcile fetch fired by PlaybackCmdSentMsg will correct
-			// the store when the command completes.
-			return a, nil
-		}
 		// Write state to store from Msg payload (Elm Architecture: only Update writes store).
 		// Only write to store when State is non-nil — nil State means either:
 		//   a) player == nil (no API client injected), or
@@ -501,9 +495,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.PlaybackCmdSentMsg:
-		if a.playbackCmdPending > 0 {
-			a.playbackCmdPending-- // cmd resolved — allow next fetch to write store
-		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
@@ -524,8 +515,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.PlaybackRequestMsg:
 		cmd := a.buildPlaybackAPICmd(m.Action) // snapshot pre-optimistic store state
 		a.applyOptimisticUpdate(m.Action)      // sync: store written, UI renders next frame
-		a.playbackCmdPending++                 // suppress stale polling writes until cmd completes
-		return a, cmd                          // async: API call fires through gateway
+		return a, cmd                          // async: API call, result overwrites store
 
 	case panes.PlayContextMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
