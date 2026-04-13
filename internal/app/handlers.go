@@ -517,7 +517,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, fetchPlaybackStateCmd(a.player)
 
 	case panes.PlaybackRequestMsg:
-		a.applyOptimisticUpdate(m.Action)
 		return a, a.buildPlaybackAPICmd(m.Action)
 
 	case panes.PlayContextMsg:
