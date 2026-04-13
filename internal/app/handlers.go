@@ -399,7 +399,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.RateLimitedMsg:
 		// 429 from Spotify — activate backoff and emit a ratelimit toast.
-		backoff := max(m.RetryAfterSecs, defaultBackoffTicks)
+		backoff := m.RetryAfterSecs
+		if backoff < defaultBackoffTicks {
+			backoff = defaultBackoffTicks
+		}
 		a.backoffTicks = backoff
 		// Update store throttle observability so UI components can read gateway state.
 		a.store.SetThrottle(true, m.RetryAfterSecs, time.Now())
@@ -499,7 +502,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
-			if _, ok := errors.AsType[*api.ForbiddenError](m.Err); ok {
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					fetchPlaybackStateCmd(a.player),
 					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
@@ -513,9 +517,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, fetchPlaybackStateCmd(a.player)
 
 	case panes.PlaybackRequestMsg:
-		cmd := a.buildPlaybackAPICmd(m.Action) // snapshot pre-optimistic store state
-		a.applyOptimisticUpdate(m.Action)      // sync: store written, UI renders next frame
-		return a, cmd                          // async: API call, result overwrites store
+		a.applyOptimisticUpdate(m.Action)
+		return a, a.buildPlaybackAPICmd(m.Action)
 
 	case panes.PlayContextMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
@@ -542,7 +545,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
-			if forbiddenErr, ok := errors.AsType[*api.ForbiddenError](m.Err); ok {
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
 				return a, a.alerts.NewAlertCmd("error", forbiddenErr.Message)
 			}
 			return a, a.alerts.NewAlertCmd("error", m.Err.Error())

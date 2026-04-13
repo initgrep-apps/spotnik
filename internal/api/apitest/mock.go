@@ -9,7 +9,6 @@ import (
 // MockPlayer is a test double for PlayerAPI.
 // Set the Result/Err fields before calling the method to control behavior.
 // Called booleans record whether mutating methods were invoked.
-// LastSet* fields record the argument passed to the most recent call.
 type MockPlayer struct {
 	PlaybackStateResult *api.PlaybackState
 	PlaybackStateErr    error
@@ -34,13 +33,6 @@ type MockPlayer struct {
 	SetShuffleCalled bool
 	SetRepeatCalled  bool
 	AddToQueueCalled bool
-
-	// LastSetVolume records the volume argument passed to the most recent SetVolume call.
-	LastSetVolume int
-	// LastSetShuffle records the state argument passed to the most recent SetShuffle call.
-	LastSetShuffle bool
-	// LastSetRepeat records the mode argument passed to the most recent SetRepeat call.
-	LastSetRepeat string
 }
 
 // Compile-time assertion: *MockPlayer must implement PlayerAPI.
@@ -81,24 +73,21 @@ func (m *MockPlayer) Seek(_ context.Context, _ int) error {
 	return m.SeekErr
 }
 
-// SetVolume records the call and the volume argument, then returns the configured error.
-func (m *MockPlayer) SetVolume(_ context.Context, volume int) error {
+// SetVolume records the call and returns the configured error.
+func (m *MockPlayer) SetVolume(_ context.Context, _ int) error {
 	m.SetVolumeCalled = true
-	m.LastSetVolume = volume
 	return m.SetVolumeErr
 }
 
-// SetShuffle records the call and the state argument, then returns the configured error.
-func (m *MockPlayer) SetShuffle(_ context.Context, state bool) error {
+// SetShuffle records the call and returns the configured error.
+func (m *MockPlayer) SetShuffle(_ context.Context, _ bool) error {
 	m.SetShuffleCalled = true
-	m.LastSetShuffle = state
 	return m.SetShuffleErr
 }
 
-// SetRepeat records the call and the mode argument, then returns the configured error.
-func (m *MockPlayer) SetRepeat(_ context.Context, mode string) error {
+// SetRepeat records the call and returns the configured error.
+func (m *MockPlayer) SetRepeat(_ context.Context, _ string) error {
 	m.SetRepeatCalled = true
-	m.LastSetRepeat = mode
 	return m.SetRepeatErr
 }
 
