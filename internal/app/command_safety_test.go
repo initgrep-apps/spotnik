@@ -370,7 +370,7 @@ func TestErrNilClientGuard_PlaybackCmdSentMsg(t *testing.T) {
 // PlaybackStateFetchedMsg with errNilClient does NOT increment consecutivePlaybackErrors.
 // This means even 10 such messages never trigger the 5th-error toast.
 // We use the Init() tick path: with no player injected, the first tick dispatches
-// fetchPlaybackStateCmd(nil) which returns PlaybackStateFetchedMsg{Err: errNilClient}.
+// fetchPlaybackStateCmd(nil, api.Background) which returns PlaybackStateFetchedMsg{Err: errNilClient}.
 func TestErrNilClientGuard_PlaybackStateFetchedMsg_NoCounterIncrement(t *testing.T) {
 	a := newSafetyTestApp()
 
