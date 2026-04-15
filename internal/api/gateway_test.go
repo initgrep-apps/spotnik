@@ -1448,8 +1448,8 @@ func TestDedup_InteractiveDoesNotJoinBackground(t *testing.T) {
 // deduplicated via the inflight map regardless of whether one is already executing.
 //
 // Design: the first Interactive GET enters its HTTP handler (which blocks). The second
-// Interactive GET then arrives while the
-// first is still executing. With the old code the second would join the inflight map
+// Interactive GET then arrives while the first is still executing. With the old code the
+// second would join the inflight map
 // and reuse the first's response (callCount == 1). With the fix the second fires its
 // own HTTP call (callCount == 2).
 func TestDedup_InteractiveDoesNotJoinInteractive(t *testing.T) {
