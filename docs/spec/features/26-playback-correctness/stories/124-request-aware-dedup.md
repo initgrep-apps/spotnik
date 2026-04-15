@@ -1,7 +1,7 @@
 ---
 title: "Request-Aware Dedup"
 feature: 26-playback-correctness
-status: open
+status: done
 ---
 
 ## Background
