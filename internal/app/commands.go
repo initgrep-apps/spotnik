@@ -498,12 +498,18 @@ func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 // fetchPlaybackStateCmd creates a command that fetches the current playback state
 // and returns it in the PlaybackStateFetchedMsg payload. No Store writes occur —
 // Update() writes State to the store when the Msg is received.
-func fetchPlaybackStateCmd(player api.PlayerAPI) tea.Cmd {
+//
+// The priority argument controls gateway routing:
+//   - api.Interactive: bypasses the inflight dedup map so a post-command reconcile
+//     GET always fires a fresh HTTP call, never joining a pre-command Background poll.
+//   - api.Background: uses normal dedup — suitable for regular polling.
+func fetchPlaybackStateCmd(player api.PlayerAPI, priority api.Priority) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
 			return panes.PlaybackStateFetchedMsg{Err: errNilClient}
 		}
-		ps, err := player.PlaybackState(context.Background())
+		ctx := api.WithPriority(context.Background(), priority)
+		ps, err := player.PlaybackState(ctx)
 		if err != nil {
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}

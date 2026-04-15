@@ -104,7 +104,7 @@ func TestGateway_MaxConcurrentRequests(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			key := RequestKey{Method: "GET", Path: fmt.Sprintf("/hold/%d", i)}
+			key := RequestKey{Method: "GET", Path: fmt.Sprintf("/hold/%d", i), Priority: Background}
 			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 				started <- struct{}{} // signal: slot acquired
 				<-release             // hold the slot
@@ -127,7 +127,7 @@ func TestGateway_MaxConcurrentRequests(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		key := RequestKey{Method: "GET", Path: "/sixth"}
+		key := RequestKey{Method: "GET", Path: "/sixth", Priority: Background}
 		close(blocked) // signal that we're about to try
 		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 			started <- struct{}{}
@@ -172,7 +172,7 @@ func TestGateway_SemaphoreRespectsContextCancellation(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			key := RequestKey{Method: "GET", Path: fmt.Sprintf("/hold/%d", i)}
+			key := RequestKey{Method: "GET", Path: fmt.Sprintf("/hold/%d", i), Priority: Background}
 			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 				<-release
 				return newFakeResponse(200, "ok"), nil
@@ -187,7 +187,7 @@ func TestGateway_SemaphoreRespectsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, err := gw.Do(ctx, Background, RequestKey{Method: "GET", Path: "/sixth"}, func() (*http.Response, error) {
+	_, err := gw.Do(ctx, Background, RequestKey{Method: "GET", Path: "/sixth", Priority: Background}, func() (*http.Response, error) {
 		return newFakeResponse(200, "ok"), nil
 	})
 
@@ -205,7 +205,7 @@ func TestGateway_Dedup_SameKey_OneHTTPCall(t *testing.T) {
 	callCount := 0
 	release := make(chan struct{})
 
-	key := RequestKey{Method: "GET", Path: "/tracks/1"}
+	key := RequestKey{Method: "GET", Path: "/tracks/1", Priority: Background}
 
 	var wg sync.WaitGroup
 	results := make([]string, 2)
@@ -244,8 +244,8 @@ func TestGateway_Dedup_SameKey_OneHTTPCall(t *testing.T) {
 func TestGateway_Dedup_DifferentKeys_IndependentCalls(t *testing.T) {
 	gw := NewGateway()
 
-	key1 := RequestKey{Method: "GET", Path: "/tracks/1"}
-	key2 := RequestKey{Method: "GET", Path: "/tracks/2"}
+	key1 := RequestKey{Method: "GET", Path: "/tracks/1", Priority: Background}
+	key2 := RequestKey{Method: "GET", Path: "/tracks/2", Priority: Background}
 
 	resp1, err1 := gw.Do(context.Background(), Background, key1, func() (*http.Response, error) {
 		return newFakeResponse(200, "track-1"), nil
@@ -266,7 +266,7 @@ func TestGateway_Dedup_ErrorSharedWithWaiters(t *testing.T) {
 	gw := NewGateway()
 
 	release := make(chan struct{})
-	key := RequestKey{Method: "GET", Path: "/error-endpoint"}
+	key := RequestKey{Method: "GET", Path: "/error-endpoint", Priority: Background}
 
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
@@ -298,7 +298,7 @@ func TestGateway_Backoff_BackgroundRejectedDuringBackoff(t *testing.T) {
 
 	// Trigger a 429.
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited"},
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
 		func() (*http.Response, error) {
 			resp := newFakeResponse(429, "")
 			resp.Header.Set("Retry-After", "10")
@@ -309,7 +309,7 @@ func TestGateway_Backoff_BackgroundRejectedDuringBackoff(t *testing.T) {
 
 	// Subsequent background request should be rejected immediately.
 	_, err2 := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/other"},
+		RequestKey{Method: "GET", Path: "/other", Priority: Background},
 		func() (*http.Response, error) {
 			t.Error("fn should not be called during backoff")
 			return newFakeResponse(200, "ok"), nil
@@ -322,7 +322,7 @@ func TestGateway_Backoff_InteractiveWaitsAndProceeds(t *testing.T) {
 
 	// Set a very short backoff (50ms) directly via a 429 response.
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited"},
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
 		func() (*http.Response, error) {
 			resp := newFakeResponse(429, "")
 			resp.Header.Set("Retry-After", "0") // 0s → backoffUntil = now, expires instantly
@@ -337,7 +337,7 @@ func TestGateway_Backoff_InteractiveWaitsAndProceeds(t *testing.T) {
 	// Interactive request should wait ~100ms then succeed.
 	start := time.Now()
 	resp, err := gw.Do(context.Background(), Interactive,
-		RequestKey{Method: "GET", Path: "/interactive"},
+		RequestKey{Method: "GET", Path: "/interactive", Priority: Interactive},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -366,7 +366,7 @@ func TestGateway_Interactive_BypassesTokenBucket(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	_, err := gw.Do(ctx, Interactive,
-		RequestKey{Method: "POST", Path: "/play"},
+		RequestKey{Method: "POST", Path: "/play", Priority: Interactive},
 		func() (*http.Response, error) {
 			return newFakeResponse(204, ""), nil
 		})
@@ -383,7 +383,7 @@ func TestGateway_IsThrottled(t *testing.T) {
 
 	// Trigger a 429.
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited"},
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
 		func() (*http.Response, error) {
 			resp := newFakeResponse(429, "")
 			resp.Header.Set("Retry-After", "30")
@@ -403,7 +403,7 @@ func TestGateway_Dedup_OnlyForGET(t *testing.T) {
 
 	var callCount int64
 	release := make(chan struct{})
-	key := RequestKey{Method: http.MethodPost, Path: "/me/player/next"}
+	key := RequestKey{Method: http.MethodPost, Path: "/me/player/next", Priority: Background}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
@@ -446,7 +446,7 @@ func TestGateway_Dedup_WaitersDoNotConsumeSlots(t *testing.T) {
 		wgPrimary.Add(1)
 		go func(i int) {
 			defer wgPrimary.Done()
-			key := RequestKey{Method: http.MethodGet, Path: fmt.Sprintf("/tracks/%d", i)}
+			key := RequestKey{Method: http.MethodGet, Path: fmt.Sprintf("/tracks/%d", i), Priority: Background}
 			_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 				<-release
 				atomic.AddInt64(&callCount, 1)
@@ -462,7 +462,7 @@ func TestGateway_Dedup_WaitersDoNotConsumeSlots(t *testing.T) {
 	waiterDone := make(chan struct{}, concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func(i int) {
-			key := RequestKey{Method: http.MethodGet, Path: fmt.Sprintf("/tracks/%d", i)}
+			key := RequestKey{Method: http.MethodGet, Path: fmt.Sprintf("/tracks/%d", i), Priority: Background}
 			resp, err := gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 				// This fn should never be called — dedup waiter reuses the result.
 				t.Error("dedup waiter should not make a new HTTP call")
@@ -550,7 +550,7 @@ func TestGateway_StateSnapshot_TokensAvailable(t *testing.T) {
 	gw := NewGateway()
 	gw.SetRecorder(rec)
 
-	key := RequestKey{Method: "PUT", Path: "/v1/me/player/play"}
+	key := RequestKey{Method: "PUT", Path: "/v1/me/player/play", Priority: Interactive}
 	_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
 		req, _ := http.NewRequest("PUT", srv.URL+"/play", http.NoBody)
 		return http.DefaultClient.Do(req)
@@ -586,7 +586,7 @@ func TestGateway_StateSnapshot_ConcurrentActive(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		key := RequestKey{Method: "PUT", Path: "/v1/me/player/play"}
+		key := RequestKey{Method: "PUT", Path: "/v1/me/player/play", Priority: Interactive}
 		_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
 			req, _ := http.NewRequest("PUT", srv.URL+"/play", http.NoBody)
 			return http.DefaultClient.Do(req)
@@ -639,7 +639,7 @@ func TestGateway_StateSnapshot_BackoffRemaining(t *testing.T) {
 	gw := NewGateway()
 	gw.SetRecorder(rec)
 
-	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
+	key := RequestKey{Method: "GET", Path: "/v1/me/player", Priority: Background}
 	_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 		req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
 		return http.DefaultClient.Do(req)
@@ -674,7 +674,7 @@ func TestGateway_StateSnapshot_DedupWaiters(t *testing.T) {
 	rec := &mockEventRecorder{}
 	gw := NewGateway()
 	gw.SetRecorder(rec)
-	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
+	key := RequestKey{Method: "GET", Path: "/v1/me/player", Priority: Background}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
@@ -713,7 +713,7 @@ func TestGateway_SetRecorder_NilSafe(t *testing.T) {
 	// SetRecorder(nil) must not panic.
 	gw.SetRecorder(nil)
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/test"},
+		RequestKey{Method: "GET", Path: "/test", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -726,7 +726,7 @@ func TestGateway_Recorder_AllowedDecision(t *testing.T) {
 	gw.SetRecorder(rec)
 
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/me/player"},
+		RequestKey{Method: "GET", Path: "/me/player", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -748,7 +748,7 @@ func TestGateway_Recorder_BlockedDecision(t *testing.T) {
 
 	// Trigger a 429 to put the gateway in backoff.
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited"},
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
 		func() (*http.Response, error) {
 			resp := newFakeResponse(429, "")
 			resp.Header.Set("Retry-After", "30")
@@ -757,7 +757,7 @@ func TestGateway_Recorder_BlockedDecision(t *testing.T) {
 
 	// Now a Background request during backoff should emit EventRequestBlocked.
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/blocked"},
+		RequestKey{Method: "GET", Path: "/blocked", Priority: Background},
 		func() (*http.Response, error) {
 			t.Error("fn should not be called for blocked request")
 			return newFakeResponse(200, "ok"), nil
@@ -783,7 +783,7 @@ func TestGateway_Recorder_DedupedDecision(t *testing.T) {
 	gw.SetRecorder(rec)
 
 	release := make(chan struct{})
-	key := RequestKey{Method: "GET", Path: "/dedup-endpoint"}
+	key := RequestKey{Method: "GET", Path: "/dedup-endpoint", Priority: Background}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
@@ -823,7 +823,7 @@ func TestGateway_Recorder_InteractiveCancelledDuringBackoff_RecordsWaited(t *tes
 	defer cancel()
 
 	_, err := gw.Do(ctx, Interactive,
-		RequestKey{Method: "GET", Path: "/interactive-cancelled"},
+		RequestKey{Method: "GET", Path: "/interactive-cancelled", Priority: Interactive},
 		func() (*http.Response, error) {
 			t.Error("fn should not be called for cancelled request")
 			return newFakeResponse(200, "ok"), nil
@@ -859,7 +859,7 @@ func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocke
 	defer cancel()
 
 	_, err := gw.Do(ctx, Background,
-		RequestKey{Method: "GET", Path: "/bg-bucket-cancelled"},
+		RequestKey{Method: "GET", Path: "/bg-bucket-cancelled", Priority: Background},
 		func() (*http.Response, error) {
 			t.Error("fn should not be called for cancelled request")
 			return newFakeResponse(200, "ok"), nil
@@ -895,7 +895,7 @@ func TestGateway_StateSnapshot_InFlightKeys(t *testing.T) {
 	rec := &mockEventRecorder{}
 	gw := NewGateway()
 	gw.SetRecorder(rec)
-	key := RequestKey{Method: "GET", Path: "/v1/me/player"}
+	key := RequestKey{Method: "GET", Path: "/v1/me/player", Priority: Background}
 
 	_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 		req, _ := http.NewRequest("GET", srv.URL+"/player", http.NoBody)
@@ -967,7 +967,7 @@ func TestGateway_CaptureSnapshot_TokenLevel(t *testing.T) {
 	gw := NewGateway()
 	// Consume 3 tokens.
 	for i := 0; i < 3; i++ {
-		key := RequestKey{Method: "GET", Path: fmt.Sprintf("/snap/%d", i)}
+		key := RequestKey{Method: "GET", Path: fmt.Sprintf("/snap/%d", i), Priority: Background}
 		_, _ = gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -991,7 +991,7 @@ func TestGateway_CaptureSnapshot_ConcurrentActive(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		key := RequestKey{Method: "PUT", Path: "/player/play"}
+		key := RequestKey{Method: "PUT", Path: "/player/play", Priority: Interactive}
 		_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
 			<-release
 			return newFakeResponse(204, ""), nil
@@ -1077,7 +1077,7 @@ func TestGateway_Do_NormalRequest_EmitsLifecycle(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/me/player"},
+		RequestKey{Method: "GET", Path: "/me/player", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -1108,7 +1108,7 @@ func TestGateway_Do_BlockedRequest_EmitsBlockedEvent(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/blocked"},
+		RequestKey{Method: "GET", Path: "/blocked", Priority: Background},
 		func() (*http.Response, error) {
 			t.Error("fn must not be called for blocked request")
 			return newFakeResponse(200, "ok"), nil
@@ -1135,7 +1135,7 @@ func TestGateway_Do_InteractiveWait_EmitsWaitedEvent(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, err := gw.Do(context.Background(), Interactive,
-		RequestKey{Method: "PUT", Path: "/play"},
+		RequestKey{Method: "PUT", Path: "/play", Priority: Interactive},
 		func() (*http.Response, error) {
 			return newFakeResponse(204, ""), nil
 		})
@@ -1160,7 +1160,7 @@ func TestGateway_Do_DedupRequest_EmitsJoinAndResolve(t *testing.T) {
 	gw.mu.Unlock()
 
 	release := make(chan struct{})
-	key := RequestKey{Method: "GET", Path: "/dedup-test"}
+	key := RequestKey{Method: "GET", Path: "/dedup-test", Priority: Background}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
@@ -1193,7 +1193,7 @@ func TestGateway_Do_429Response_EmitsBackoffStarted(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited"},
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
 		func() (*http.Response, error) {
 			resp := newFakeResponse(429, "")
 			resp.Header.Set("Retry-After", "5")
@@ -1214,7 +1214,7 @@ func TestGateway_Do_EventsHaveCorrectRequestID(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/req-id-test"},
+		RequestKey{Method: "GET", Path: "/req-id-test", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -1240,7 +1240,7 @@ func TestGateway_Do_EventsHaveSnapshots(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/snapshot-test"},
+		RequestKey{Method: "GET", Path: "/snapshot-test", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -1263,7 +1263,7 @@ func TestGateway_Do_SnapshotReflectsStateAtMoment(t *testing.T) {
 	gw.mu.Unlock()
 
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/state-moment"},
+		RequestKey{Method: "GET", Path: "/state-moment", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -1288,7 +1288,7 @@ func TestGateway_CheckAndEmitRefill_EmitsOnChange(t *testing.T) {
 
 	// Consume a token (changes the token level from the initial max).
 	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/consume"},
+		RequestKey{Method: "GET", Path: "/consume", Priority: Background},
 		func() (*http.Response, error) {
 			return newFakeResponse(200, "ok"), nil
 		})
@@ -1383,4 +1383,166 @@ func TestGateway_CheckAndEmitRefill_NilRecorder(t *testing.T) {
 		gw.CheckAndEmitRefill()
 		gw.CheckAndEmitBackoffExpiry()
 	})
+}
+
+// --- Story 124: Request-Aware Dedup ---
+
+// TestDedup_InteractiveDoesNotJoinBackground verifies that an Interactive GET
+// to the same path as an in-flight Background GET fires its own HTTP call
+// independently — it does NOT join the Background request as a dedup waiter.
+func TestDedup_InteractiveDoesNotJoinBackground(t *testing.T) {
+	gw := NewGateway()
+
+	// holdBg blocks the Background HTTP call so an Interactive GET can arrive
+	// while the Background GET is still in flight.
+	holdBg := make(chan struct{})
+	// bgCallCount tracks Background HTTP calls; interactiveCallCount tracks Interactive ones.
+	var bgCallCount, interactiveCallCount atomic.Int64
+
+	path := "/v1/me/player"
+
+	// Launch the Background GET and hold it in the HTTP handler.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = gw.Do(context.Background(), Background,
+			RequestKey{Method: http.MethodGet, Path: path, Priority: Background},
+			func() (*http.Response, error) {
+				bgCallCount.Add(1)
+				<-holdBg // hold until released
+				return newFakeResponse(200, `{"bg":"true"}`), nil
+			})
+	}()
+
+	// Give the Background goroutine time to register in the inflight map.
+	time.Sleep(30 * time.Millisecond)
+
+	// Fire an Interactive GET to the same path — must NOT join the Background.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = gw.Do(context.Background(), Interactive,
+			RequestKey{Method: http.MethodGet, Path: path, Priority: Interactive},
+			func() (*http.Response, error) {
+				interactiveCallCount.Add(1)
+				return newFakeResponse(200, `{"interactive":"true"}`), nil
+			})
+	}()
+
+	// Wait for the Interactive request to complete. Since it bypasses the inflight
+	// map it will finish before the held Background GET.
+	// Give up to 500ms for the Interactive goroutine (100ms debounce + overhead).
+	time.Sleep(250 * time.Millisecond)
+
+	// The Interactive HTTP call must have fired independently.
+	assert.Equal(t, int64(1), interactiveCallCount.Load(),
+		"Interactive GET must fire its own HTTP call, not join the Background waiter")
+
+	// Release the Background hold and wait for everything to finish.
+	close(holdBg)
+	wg.Wait()
+
+	assert.Equal(t, int64(1), bgCallCount.Load(),
+		"Background GET must also complete with exactly 1 HTTP call")
+}
+
+// TestDedup_InteractiveDoesNotJoinInteractive verifies that two Interactive GETs
+// to the same path each fire their own independent HTTP calls — they are never
+// deduplicated via the inflight map regardless of whether one is already executing.
+//
+// Design: the first Interactive GET is allowed past the debounce hold and enters
+// its HTTP handler (which blocks). The second Interactive GET then arrives while the
+// first is still executing. With the old code the second would join the inflight map
+// and reuse the first's response (callCount == 1). With the fix the second fires its
+// own HTTP call (callCount == 2).
+func TestDedup_InteractiveDoesNotJoinInteractive(t *testing.T) {
+	gw := NewGateway()
+
+	holdFirst := make(chan struct{})
+	var callCount atomic.Int64
+	path := "/v1/me/player"
+
+	key := RequestKey{Method: http.MethodGet, Path: path, Priority: Interactive}
+
+	// First Interactive GET: gets past debounce and then blocks in the HTTP handler.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+			callCount.Add(1)
+			<-holdFirst // hold until released
+			return newFakeResponse(200, `{"state":"first"}`), nil
+		})
+	}()
+
+	// Wait for the first Interactive GET to pass the 100ms debounce and enter the
+	// HTTP handler. 150ms is comfortably past the debounce hold.
+	time.Sleep(150 * time.Millisecond)
+
+	// Second Interactive GET arrives while the first is still executing its HTTP call.
+	// It must fire its own HTTP call (not join the first as a dedup waiter).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+			callCount.Add(1)
+			return newFakeResponse(200, `{"state":"second"}`), nil
+		})
+	}()
+
+	// Wait for the second Interactive GET to also complete (it has its own 100ms debounce).
+	// Release the first hold after the second goroutine has had time to start.
+	time.Sleep(250 * time.Millisecond)
+	close(holdFirst)
+	wg.Wait()
+
+	// Both Interactive GETs must result in independent HTTP calls.
+	assert.Equal(t, int64(2), callCount.Load(),
+		"two Interactive GETs must each fire their own HTTP call (no dedup between them)")
+}
+
+// TestDedup_BackgroundJoinsBackground verifies that two concurrent Background GETs
+// to the same path are deduplicated — exactly one HTTP call fires and both callers
+// receive the same response body.
+func TestDedup_BackgroundJoinsBackground(t *testing.T) {
+	gw := NewGateway()
+
+	var callCount atomic.Int64
+	holdBg := make(chan struct{})
+	path := "/v1/me/player"
+
+	key := RequestKey{Method: http.MethodGet, Path: path, Priority: Background}
+	results := make([]string, 2)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			resp, err := gw.Do(context.Background(), Background, key,
+				func() (*http.Response, error) {
+					callCount.Add(1)
+					<-holdBg
+					return newFakeResponse(200, "shared-body"), nil
+				})
+			if err == nil && resp != nil {
+				body, _ := io.ReadAll(resp.Body)
+				results[idx] = string(body)
+			}
+		}(i)
+	}
+
+	// Give both goroutines time to race to the inflight map.
+	time.Sleep(30 * time.Millisecond)
+	close(holdBg)
+	wg.Wait()
+
+	// Only one HTTP call should fire.
+	assert.Equal(t, int64(1), callCount.Load(),
+		"two concurrent Background GETs must be deduplicated into exactly one HTTP call")
+	// Both callers must receive the same body.
+	assert.Equal(t, "shared-body", results[0])
+	assert.Equal(t, "shared-body", results[1])
 }
