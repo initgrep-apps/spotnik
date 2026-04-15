@@ -126,7 +126,7 @@ func TestGateway_NilResponseFromFn(t *testing.T) {
 	gw := NewGateway()
 
 	_, err := gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/nil-transport"},
+		RequestKey{Method: "GET", Path: "/nil-transport", Priority: Background},
 		func() (*http.Response, error) {
 			return nil, nil // degenerate case
 		})
@@ -189,7 +189,7 @@ func TestGateway_429_DedupWaitersGetRateLimitError(t *testing.T) {
 	gw := NewGateway()
 
 	release := make(chan struct{})
-	key := RequestKey{Method: "GET", Path: "/rate-limited"}
+	key := RequestKey{Method: "GET", Path: "/rate-limited", Priority: Background}
 
 	var wg sync.WaitGroup
 	errs := make([]error, 3)
@@ -232,7 +232,7 @@ func TestGateway_429_PrimaryAndWaiterConsistentError(t *testing.T) {
 	gw := NewGateway()
 
 	release := make(chan struct{})
-	key := RequestKey{Method: "GET", Path: "/rl-body"}
+	key := RequestKey{Method: "GET", Path: "/rl-body", Priority: Background}
 
 	var wg sync.WaitGroup
 	errs := make([]error, 2)

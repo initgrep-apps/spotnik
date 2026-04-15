@@ -53,10 +53,13 @@ func PriorityFromContext(ctx context.Context) Priority {
 // --- Gateway ---
 
 // RequestKey uniquely identifies a request for deduplication purposes.
-// Two requests with the same Method and Path are considered identical.
+// Two requests with the same Method, Path, and Priority are considered identical.
+// Interactive requests skip the inflight map entirely, so only
+// {GET, path, Background} entries ever exist in practice.
 type RequestKey struct {
-	Method string
-	Path   string
+	Method   string
+	Path     string
+	Priority Priority
 }
 
 // Gateway is the central control point for all outbound Spotify API requests.
@@ -379,15 +382,17 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		}
 	}
 
-	// Phase 2: in-flight deduplication for GET requests only.
+	// Phase 2: in-flight deduplication for Background GET requests only.
 	// Dedup waiters do NOT consume a semaphore slot — they wait for the primary
 	// caller (which holds a slot) to finish, then reuse its result.
 	// Mutating requests (POST/PUT/DELETE) are never deduplicated because each
 	// side-effect must fire independently.
-	if key.Method == http.MethodGet {
+	// Interactive GETs skip this check entirely — a reconcile GET fired after a
+	// user command must not join a pre-command Background poll that carries stale state.
+	if key.Method == http.MethodGet && priority == Background {
 		g.mu.Lock()
 		if entry, ok := g.inflight[key]; ok {
-			// A matching GET is already in flight — join as a dedup waiter.
+			// A matching Background GET is already in flight — join as a dedup waiter.
 			g.mu.Unlock()
 			// Emit DedupJoined before waiting on entry.done.
 			g.emitEvent(domain.EventDedupJoined, reqID, key.Method, key.Path, domainPriority, 0, 0)
@@ -433,11 +438,14 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		return nil, ctx.Err()
 	}
 
-	// Phase 4: register in inflight map for GET requests, then execute.
+	// Phase 4: register in inflight map for Background GET requests, then execute.
 	// Double-check: another goroutine may have registered between our check
 	// and acquiring the semaphore.
+	// Interactive GETs skip registration entirely — they must never be joined by
+	// other callers, ensuring each Interactive request gets a fresh HTTP response
+	// that post-dates the command that triggered it.
 	var entry *inflightEntry
-	if key.Method == http.MethodGet {
+	if key.Method == http.MethodGet && priority == Background {
 		g.mu.Lock()
 		if existing, ok := g.inflight[key]; ok {
 			// Lost the race — become a waiter (semaphore slot is held via defer).

@@ -150,7 +150,7 @@ func TestGateway_Do_BackgroundBypassesDebounce(t *testing.T) {
 	defer srv.Close()
 
 	gw := NewGateway()
-	key := RequestKey{Method: http.MethodGet, Path: "/v1/me/player/queue"}
+	key := RequestKey{Method: http.MethodGet, Path: "/v1/me/player/queue", Priority: Background}
 
 	start := time.Now()
 	_, err := gw.Do(context.Background(), Background, key, func() (*http.Response, error) {
@@ -176,7 +176,7 @@ func TestGateway_Do_InteractiveExperiencesDebounceHold(t *testing.T) {
 	defer srv.Close()
 
 	gw := NewGateway()
-	key := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
+	key := RequestKey{Method: http.MethodGet, Path: "/v1/search", Priority: Interactive}
 
 	start := time.Now()
 	_, err := gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
@@ -220,7 +220,7 @@ func TestGateway_InteractiveDebounce_LastWins(t *testing.T) {
 	defer srv.Close()
 
 	gw := NewGateway()
-	key := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
+	key := RequestKey{Method: http.MethodGet, Path: "/v1/search", Priority: Interactive}
 
 	// Launch two goroutines that call Interactive Do() for the same path in rapid succession.
 	var wg sync.WaitGroup
@@ -274,8 +274,8 @@ func TestGateway_InteractiveDebounce_DifferentPathsIndependent(t *testing.T) {
 	defer srv.Close()
 
 	gw := NewGateway()
-	searchKey := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
-	devicesKey := RequestKey{Method: http.MethodGet, Path: "/v1/me/player/devices"}
+	searchKey := RequestKey{Method: http.MethodGet, Path: "/v1/search", Priority: Interactive}
+	devicesKey := RequestKey{Method: http.MethodGet, Path: "/v1/me/player/devices", Priority: Interactive}
 
 	var wg sync.WaitGroup
 	var errs [2]error
@@ -326,7 +326,7 @@ func TestGateway_Background_NoDebounce(t *testing.T) {
 	defer srv.Close()
 
 	gw := NewGateway()
-	key := RequestKey{Method: http.MethodGet, Path: "/v1/me/player"}
+	key := RequestKey{Method: http.MethodGet, Path: "/v1/me/player", Priority: Background}
 
 	// Two sequential Background requests: measure total time.
 	// If debounce were applied (100ms per request) the total would be ≥200ms.
@@ -359,8 +359,8 @@ func TestGateway_Background_vs_Interactive_TimingComparison(t *testing.T) {
 	defer srv.Close()
 
 	gw := NewGateway()
-	bgKey := RequestKey{Method: http.MethodGet, Path: "/v1/me/player"}
-	interactiveKey := RequestKey{Method: http.MethodGet, Path: "/v1/search"}
+	bgKey := RequestKey{Method: http.MethodGet, Path: "/v1/me/player", Priority: Background}
+	interactiveKey := RequestKey{Method: http.MethodGet, Path: "/v1/search", Priority: Interactive}
 
 	// Background: should complete without any debounce hold.
 	bgStart := time.Now()

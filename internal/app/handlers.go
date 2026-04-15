@@ -80,7 +80,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		authCmds := append(paneCmds,
-			fetchPlaybackStateCmd(a.player),
+			fetchPlaybackStateCmd(a.player, api.Background),
 			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 				return panes.TickMsg{}
 			}),
@@ -344,7 +344,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.tickCount = 0
 				return a, tea.Batch(
 					nextTick,
-					fetchPlaybackStateCmd(a.player),
+					fetchPlaybackStateCmd(a.player, api.Background),
 					fetchQueueCmd(a.player),
 				)
 			}
@@ -357,7 +357,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmds []tea.Cmd
 		cmds = append(cmds, nextTick)
 		if a.tickCount%playbackInterval == 0 {
-			cmds = append(cmds, fetchPlaybackStateCmd(a.player))
+			cmds = append(cmds, fetchPlaybackStateCmd(a.player, api.Background))
 		}
 		if a.tickCount%queueInterval == 0 {
 			cmds = append(cmds, fetchQueueCmd(a.player))
@@ -505,16 +505,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
-					fetchPlaybackStateCmd(a.player),
+					fetchPlaybackStateCmd(a.player, api.Background),
 					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
 				)
 			}
 			return a, tea.Batch(
-				fetchPlaybackStateCmd(a.player),
+				fetchPlaybackStateCmd(a.player, api.Background),
 				a.alerts.NewAlertCmd("error", m.Err.Error()),
 			)
 		}
-		return a, fetchPlaybackStateCmd(a.player)
+		// User command succeeded — use Interactive priority so the reconcile GET
+		// fires a fresh HTTP call and does not join a pre-command Background poll.
+		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 
 	case panes.PlaybackRequestMsg:
 		return a, a.buildPlaybackAPICmd(m.Action)
@@ -877,12 +879,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			return a, tea.Batch(
-				fetchPlaybackStateCmd(a.player),
+				fetchPlaybackStateCmd(a.player, api.Background),
 				a.alerts.NewAlertCmd("error", m.Err.Error()),
 			)
 		}
-		// Transfer succeeded — next poll will update the header.
-		return a, fetchPlaybackStateCmd(a.player)
+		// Transfer succeeded — use Interactive priority so the reconcile GET fires
+		// a fresh HTTP call and does not join a pre-transfer Background poll.
+		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 
 	case throttleExpiredMsg:
 		// Clear throttle state in the store once the backoff period expires.

@@ -756,7 +756,7 @@ func (a *App) Init() tea.Cmd {
 	}
 
 	initCmds := append(paneCmds,
-		fetchPlaybackStateCmd(a.player),
+		fetchPlaybackStateCmd(a.player, api.Background),
 		tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return panes.TickMsg{}
 		}),
