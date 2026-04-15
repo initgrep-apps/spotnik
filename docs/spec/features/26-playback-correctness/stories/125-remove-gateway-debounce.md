@@ -1,7 +1,7 @@
 ---
 title: "Remove Gateway Debounce"
 feature: 26-playback-correctness
-status: open
+status: done
 ---
 
 ## Background
