@@ -68,7 +68,6 @@ type RequestKey struct {
 //   - Concurrency cap of 5 simultaneous in-flight requests
 //   - In-flight request deduplication (same key → only one HTTP call)
 //   - 429 backoff with priority bypass for Interactive requests
-//   - 100ms transport-layer debounce for Interactive requests (path-keyed)
 type Gateway struct {
 	mu            sync.Mutex
 	bucket        *tokenBucket
@@ -85,12 +84,6 @@ type Gateway struct {
 	// lastBackoffActive tracks whether backoff was active at the last check.
 	// Used to detect the backoff→clear transition for BackoffExpired events.
 	lastBackoffActive bool
-
-	// debounceMu protects debounceEntries.
-	debounceMu sync.Mutex
-	// debounceEntries maps API path → pending Interactive debounce entry.
-	// Only one entry per path exists at a time; a new arrival cancels the prior.
-	debounceEntries map[string]*interactiveDebounceEntry
 }
 
 // SetRecorder sets the gateway event recorder. Pass nil to disable recording.
@@ -105,10 +98,9 @@ func (g *Gateway) SetRecorder(r domain.GatewayEventRecorder) {
 // 10 requests/second token bucket, burst of 10, max 5 concurrent in-flight.
 func NewGateway() *Gateway {
 	g := &Gateway{
-		bucket:          newTokenBucket(10, 10),
-		semaphore:       make(chan struct{}, 5),
-		inflight:        make(map[RequestKey]*inflightEntry),
-		debounceEntries: make(map[string]*interactiveDebounceEntry),
+		bucket:    newTokenBucket(10, 10),
+		semaphore: make(chan struct{}, 5),
+		inflight:  make(map[RequestKey]*inflightEntry),
 	}
 	// Initialize lastEmittedTokens to max so the first CheckAndEmitRefill
 	// only fires when the level actually changes from the initial full state.
@@ -371,15 +363,6 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		}
 		// Token successfully consumed — emit TokenConsumed event.
 		g.emitEvent(domain.EventTokenConsumed, reqID, key.Method, key.Path, domainPriority, 0, 0)
-	}
-
-	// Phase 1b: transport-layer debounce for Interactive requests only.
-	// Keyed by path (query params ignored) — all /v1/search requests share one slot.
-	// Background requests bypass this phase entirely.
-	if priority == Interactive {
-		if err := g.interactiveDebounce(ctx, key.Path); err != nil {
-			return nil, err
-		}
 	}
 
 	// Phase 2: in-flight deduplication for Background GET requests only.
