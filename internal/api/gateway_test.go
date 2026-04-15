@@ -359,8 +359,6 @@ func TestGateway_Interactive_BypassesTokenBucket(t *testing.T) {
 	require.NoError(t, gw.bucket.wait(context.Background()))
 
 	// Interactive request should not wait for the bucket.
-	// NOTE: the 100ms gateway debounce hold is added for Interactive requests
-	// (story 103), so the total time is ~100ms debounce + minimal HTTP.
 	// We assert well below the 1000s token-refill time to prove the bucket was bypassed.
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -593,8 +591,7 @@ func TestGateway_StateSnapshot_ConcurrentActive(t *testing.T) {
 		})
 	}()
 
-	// Wait longer than the 100ms Interactive debounce hold (story 103) so the
-	// request has reached the semaphore-acquired stage.
+	// 150ms synchronization buffer to ensure the goroutine has acquired the semaphore.
 	time.Sleep(150 * time.Millisecond)
 	// The SemaphoreAcquired event should show ConcurrentActive >= 1.
 	events := rec.all()
@@ -998,8 +995,7 @@ func TestGateway_CaptureSnapshot_ConcurrentActive(t *testing.T) {
 		})
 	}()
 
-	// Wait longer than the 100ms Interactive debounce hold (story 103) so the
-	// request has passed the debounce and acquired the semaphore.
+	// 150ms synchronization buffer to ensure the goroutine has acquired the semaphore.
 	time.Sleep(150 * time.Millisecond)
 	snap := gw.captureSnapshot()
 	assert.GreaterOrEqual(t, snap.ConcurrentActive, 1,
@@ -1432,7 +1428,7 @@ func TestDedup_InteractiveDoesNotJoinBackground(t *testing.T) {
 
 	// Wait for the Interactive request to complete. Since it bypasses the inflight
 	// map it will finish before the held Background GET.
-	// Give up to 500ms for the Interactive goroutine (100ms debounce + overhead).
+	// 250ms synchronization buffer to ensure the Interactive goroutine has completed.
 	time.Sleep(250 * time.Millisecond)
 
 	// The Interactive HTTP call must have fired independently.
@@ -1451,8 +1447,8 @@ func TestDedup_InteractiveDoesNotJoinBackground(t *testing.T) {
 // to the same path each fire their own independent HTTP calls — they are never
 // deduplicated via the inflight map regardless of whether one is already executing.
 //
-// Design: the first Interactive GET is allowed past the debounce hold and enters
-// its HTTP handler (which blocks). The second Interactive GET then arrives while the
+// Design: the first Interactive GET enters its HTTP handler (which blocks). The second
+// Interactive GET then arrives while the
 // first is still executing. With the old code the second would join the inflight map
 // and reuse the first's response (callCount == 1). With the fix the second fires its
 // own HTTP call (callCount == 2).
@@ -1465,7 +1461,7 @@ func TestDedup_InteractiveDoesNotJoinInteractive(t *testing.T) {
 
 	key := RequestKey{Method: http.MethodGet, Path: path, Priority: Interactive}
 
-	// First Interactive GET: gets past debounce and then blocks in the HTTP handler.
+	// First Interactive GET: enters the HTTP handler and blocks there.
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -1477,8 +1473,7 @@ func TestDedup_InteractiveDoesNotJoinInteractive(t *testing.T) {
 		})
 	}()
 
-	// Wait for the first Interactive GET to pass the 100ms debounce and enter the
-	// HTTP handler. 150ms is comfortably past the debounce hold.
+	// 150ms synchronization buffer to ensure the first goroutine has entered the HTTP handler.
 	time.Sleep(150 * time.Millisecond)
 
 	// Second Interactive GET arrives while the first is still executing its HTTP call.
@@ -1492,7 +1487,7 @@ func TestDedup_InteractiveDoesNotJoinInteractive(t *testing.T) {
 		})
 	}()
 
-	// Wait for the second Interactive GET to also complete (it has its own 100ms debounce).
+	// 250ms synchronization buffer to ensure both goroutines have completed.
 	// Release the first hold after the second goroutine has had time to start.
 	time.Sleep(250 * time.Millisecond)
 	close(holdFirst)

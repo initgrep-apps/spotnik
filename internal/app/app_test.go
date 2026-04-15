@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -455,7 +456,7 @@ func TestApp_FetchPlaybackStateCmd_NilPlayer(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Init returns a batch cmd; when player is nil it calls fetchPlaybackStateCmd(nil, store).
+	// Init returns a batch cmd; when player is nil it calls fetchPlaybackStateCmd(nil, api.Background).
 	// Simulate via TickMsg which also calls fetchPlaybackStateCmd.
 	_, cmd := a.Update(panes.TickMsg{})
 	require.NotNil(t, cmd)
@@ -2431,4 +2432,67 @@ func TestApp_AlbumTrackViewClosedMsg_ClearsID(t *testing.T) {
 	a = model.(*app.App)
 	assert.Nil(t, cmd, "AlbumTrackViewClosedMsg must not emit a cmd")
 	assert.Equal(t, "", a.AlbumTracksID(), "AlbumTrackViewClosedMsg must clear the staleness ID")
+}
+
+// ctxCapturingPlayer is a test-local PlayerAPI that records the context passed to PlaybackState.
+// It implements the full api.PlayerAPI interface so it can be injected via SetPlayer.
+type ctxCapturingPlayer struct {
+	capturedCtx context.Context
+}
+
+func (p *ctxCapturingPlayer) PlaybackState(ctx context.Context) (*api.PlaybackState, error) {
+	p.capturedCtx = ctx
+	return nil, nil
+}
+func (p *ctxCapturingPlayer) Play(_ context.Context, _ api.PlayOptions) error     { return nil }
+func (p *ctxCapturingPlayer) Pause(_ context.Context) error                       { return nil }
+func (p *ctxCapturingPlayer) Next(_ context.Context) error                        { return nil }
+func (p *ctxCapturingPlayer) Previous(_ context.Context) error                    { return nil }
+func (p *ctxCapturingPlayer) Seek(_ context.Context, _ int) error                 { return nil }
+func (p *ctxCapturingPlayer) SetVolume(_ context.Context, _ int) error            { return nil }
+func (p *ctxCapturingPlayer) SetShuffle(_ context.Context, _ bool) error          { return nil }
+func (p *ctxCapturingPlayer) SetRepeat(_ context.Context, _ string) error         { return nil }
+func (p *ctxCapturingPlayer) AddToQueue(_ context.Context, _ string) error        { return nil }
+func (p *ctxCapturingPlayer) Queue(_ context.Context) (*api.QueueResponse, error) { return nil, nil }
+
+// TestPlaybackCmdSentMsg_SuccessUsesInteractivePriority verifies that the PlaybackCmdSentMsg
+// success path dispatches fetchPlaybackStateCmd with api.Interactive priority.
+// This is a regression guard: if the handler is reverted to api.Background, this test fails.
+func TestPlaybackCmdSentMsg_SuccessUsesInteractivePriority(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	mock := &ctxCapturingPlayer{}
+	a.SetPlayer(mock)
+
+	// Send success message — success path calls fetchPlaybackStateCmd(player, api.Interactive).
+	_, cmd := a.Update(panes.PlaybackCmdSentMsg{Err: nil})
+	require.NotNil(t, cmd, "success path must return a fetch cmd")
+
+	// Execute the command to invoke PlaybackState and capture its context.
+	_ = cmd()
+
+	require.NotNil(t, mock.capturedCtx, "PlaybackState must have been called")
+	assert.Equal(t, api.Interactive, api.PriorityFromContext(mock.capturedCtx),
+		"PlaybackCmdSentMsg success path must use api.Interactive priority")
+}
+
+// TestDeviceTransferredMsg_SuccessUsesInteractivePriority verifies that the DeviceTransferredMsg
+// success path dispatches fetchPlaybackStateCmd with api.Interactive priority.
+// This is a regression guard: if the handler is reverted to api.Background, this test fails.
+func TestDeviceTransferredMsg_SuccessUsesInteractivePriority(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	mock := &ctxCapturingPlayer{}
+	a.SetPlayer(mock)
+
+	// Send success message — success path calls fetchPlaybackStateCmd(player, api.Interactive).
+	_, cmd := a.Update(panes.DeviceTransferredMsg{DeviceID: "abc123", Err: nil})
+	require.NotNil(t, cmd, "success path must return a fetch cmd")
+
+	// Execute the command to invoke PlaybackState and capture its context.
+	_ = cmd()
+
+	require.NotNil(t, mock.capturedCtx, "PlaybackState must have been called")
+	assert.Equal(t, api.Interactive, api.PriorityFromContext(mock.capturedCtx),
+		"DeviceTransferredMsg success path must use api.Interactive priority")
 }

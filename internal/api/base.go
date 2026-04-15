@@ -89,6 +89,8 @@ func (b *BaseClient) doJSON(req *http.Request, out interface{}) error {
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path, Priority: priority}
+		// priority and key.Priority are always identical — both come from PriorityFromContext.
+		// Do() gates Phase 2/4 on the priority argument; the key is used as the inflight map key.
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
@@ -128,6 +130,8 @@ func (b *BaseClient) doJSONOptional(req *http.Request, out interface{}) (bool, e
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path, Priority: priority}
+		// priority and key.Priority are always identical — both come from PriorityFromContext.
+		// Do() gates Phase 2/4 on the priority argument; the key is used as the inflight map key.
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})
@@ -170,6 +174,8 @@ func (b *BaseClient) doNoContent(req *http.Request) error {
 	if gw := b.gateway.Load(); gw != nil {
 		priority := PriorityFromContext(req.Context())
 		key := RequestKey{Method: req.Method, Path: req.URL.Path, Priority: priority}
+		// priority and key.Priority are always identical — both come from PriorityFromContext.
+		// Do() gates Phase 2/4 on the priority argument; the key is used as the inflight map key.
 		resp, err = gw.Do(req.Context(), priority, key, func() (*http.Response, error) {
 			return b.http.Do(req)
 		})

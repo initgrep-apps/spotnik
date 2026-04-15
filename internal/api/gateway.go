@@ -299,15 +299,16 @@ func (g *Gateway) RetryAfterSecs() int {
 // For Background requests:
 //   - Go through the token bucket.
 //   - If in 429 backoff, return a RateLimitError immediately.
+//   - GET requests: check the in-flight map; if a matching Background GET is
+//     already running, join as a waiter and return the shared result.
 //
 // For Interactive requests:
 //   - Skip token bucket.
 //   - If in 429 backoff, wait until the backoff expires before proceeding.
+//   - Skip the in-flight map entirely — always fire a fresh HTTP call.
 //
 // Both priorities:
 //   - Acquire the concurrency semaphore.
-//   - Check the in-flight map; if a matching request is already running,
-//     wait for it and return the cached result.
 //   - On 429 response, set backoffUntil and return RateLimitError.
 //
 // When a GatewayEventRecorder is attached, Do() emits fine-grained lifecycle events

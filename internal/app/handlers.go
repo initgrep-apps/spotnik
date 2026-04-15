@@ -137,7 +137,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// silently discarded — emitting a toast for "context canceled" would disrupt the
 		// new request's loading state and confuse the user.
 		if errors.Is(m.Err, errNilClient) {
-			// errNilClient is a programming error, not a network result — always surface it.
+			// errNilClient is an expected pre-auth startup condition — drop silently.
 			return a, nil
 		}
 		// Discard stale results AND stale errors — the user moved on to a different query or page.
