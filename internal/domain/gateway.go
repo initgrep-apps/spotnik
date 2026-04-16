@@ -32,9 +32,7 @@ const (
 	EventBackoffExpired
 	// EventRequestAllowed means a request passed through the gateway normally.
 	EventRequestAllowed
-	// EventRequestWaited means an interactive request waited on the backoff timer.
-	EventRequestWaited
-	// EventRequestBlocked means a background request was rejected by active backoff.
+	// EventRequestBlocked means a request was rejected by active backoff or token bucket.
 	EventRequestBlocked
 	// EventDedupJoined means a GET request joined an existing in-flight GET (dedup).
 	EventDedupJoined

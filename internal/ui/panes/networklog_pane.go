@@ -192,13 +192,13 @@ func (p *NetworkLogPane) refreshRows() {
 	p.eventCursor = newCursor
 
 	// Build a map of RequestID → decision kind for lookups.
-	// Decision events (allowed/blocked/waited/dedupJoined) precede EventHttpCompleted
+	// Decision events (allowed/blocked/dedupJoined) precede EventHttpCompleted
 	// in the event stream for the same request.
 	decisions := make(map[uint64]domain.EventKind)
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventRequestAllowed, domain.EventRequestBlocked,
-			domain.EventRequestWaited, domain.EventDedupJoined:
+			domain.EventDedupJoined:
 			decisions[e.RequestID] = e.Kind
 		}
 	}
@@ -264,8 +264,6 @@ func (p *NetworkLogPane) buildTableRows() {
 			dec = "allowed"
 		case domain.EventRequestBlocked:
 			dec = "blocked"
-		case domain.EventRequestWaited:
-			dec = "waited"
 		case domain.EventDedupJoined:
 			dec = "dedup"
 		}

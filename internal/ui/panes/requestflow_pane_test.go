@@ -452,10 +452,6 @@ func TestFormatDecisionLabel_AllKinds(t *testing.T) {
 			contains: "allowed",
 		},
 		{
-			event:    domain.GatewayEvent{Kind: domain.EventRequestWaited, Method: "GET", Path: "/ep"},
-			contains: "waited",
-		},
-		{
 			event:    domain.GatewayEvent{Kind: domain.EventRequestBlocked, Method: "GET", Path: "/ep"},
 			contains: "blocked",
 		},

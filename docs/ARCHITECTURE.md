@@ -758,9 +758,9 @@ POLLING  tick: 1000ms  state: active    STORE  fetching: []
 - **Three sub-boxes**: APP (endpoints), GATEWAY (state bars + decision log), SPOTIFY (responses) with rounded corners
 - **Dual arrow columns**: left (APP→GW decision based on `requestAnimation.decision` EventKind), right (GW→SPOTIFY outcome based on phase + status code)
 - **GATEWAY box sections**: state bars (token bucket bar + semaphore bar + optional backoff timer) from `displayState.snapshot`; scrolling decision log below with per-EventKind theme colors
-- **Decision log colors**: `✓` allowed/expired → Success; `✗` blocked → Error; `⧖` waited/dedup → Warning; resource events → TextSecondary; `↻` refill → TextMuted
+- **Decision log colors**: `✓` allowed/expired → Success; `✗` blocked → Error; `⧖` dedup → Warning; resource events → TextSecondary; `↻` refill → TextMuted
 - **`renderSubBox(title, lines, width)`** — pure helper that draws rounded-corner box; used by all three sub-boxes
-- **`formatDecisionLabel(e GatewayEvent) string`** — maps all 13 EventKind values to display strings
+- **`formatDecisionLabel(e GatewayEvent) string`** — maps all 12 EventKind values to display strings
 - **Flat fallback** (`viewFlat()`): original column headers + request rows + gateway state block; used when width < 60
 - Status strip always spans full pane width below the boxes
 
@@ -774,8 +774,7 @@ POLLING  tick: 1000ms  state: active    STORE  fetching: []
 | `EventTokenConsumed` | After `bucket.wait()` returns for Background requests |
 | `EventSemaphoreAcquired` | After acquiring a concurrency slot |
 | `EventSemaphoreReleased` | Deferred on slot release |
-| `EventRequestBlocked` | Background request rejected by backoff or bucket cancellation |
-| `EventRequestWaited` | Interactive request waited on backoff timer |
+| `EventRequestBlocked` | Request rejected by active backoff or context cancellation during bucket wait (both priorities) |
 | `EventDedupJoined` | GET waiter joins an in-flight dedup entry |
 | `EventDedupResolved` | Dedup waiter received the shared response |
 | `EventHttpCompleted` | After `fn()` returns, with status code and latency |
@@ -814,7 +813,7 @@ RequestFlowPane.
 
 - Data flow: `BaseClient.doJSON` → `Gateway.Do()` → `store.RecordEvent()` → `GatewayEventLog`
 - NetworkLogPane drains events via cursor-based `store.ReadEventsFrom(cursor)` on each 1s tick
-- Columns: TIME, METHOD, ENDPOINT, STATUS, LATENCY, PRI (int/bg), DECISION (allowed/blocked/waited/dedup), NOTES
+- Columns: TIME, METHOD, ENDPOINT, STATUS, LATENCY, PRI (int/bg), DECISION (allowed/blocked/dedup), NOTES
 - Blocked requests (`EventRequestBlocked`) appear with status 0 and "✗ blocked" in NOTES
 - Interactive vs background priority visible in PRI column; gateway decision in DECISION column
 

@@ -301,9 +301,6 @@ func (p *RequestFlowPane) renderFlatArrow(a *requestAnimation, colWidth int) str
 	var style lipgloss.Style
 
 	switch a.decision {
-	case domain.EventRequestWaited:
-		arrow = "── wait ──"
-		style = lipgloss.NewStyle().Foreground(p.theme.Warning())
 	case domain.EventDedupJoined:
 		arrow = "──→ dedup"
 		style = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
@@ -415,9 +412,6 @@ func (p *RequestFlowPane) processRequestEvent(event domain.GatewayEvent) {
 	case domain.EventDedupJoined:
 		anim.phase = phaseAtGateway
 		anim.decision = domain.EventDedupJoined
-	case domain.EventRequestWaited:
-		anim.phase = phaseAtGateway
-		anim.decision = domain.EventRequestWaited
 	case domain.EventHttpCompleted:
 		anim.phase = phaseInFlight
 		anim.statusCode = event.StatusCode
@@ -504,8 +498,6 @@ func formatDecisionLabel(e domain.GatewayEvent) string {
 		return "✓ backoff cleared"
 	case domain.EventRequestAllowed:
 		return fmt.Sprintf("✓ %s %s allowed", e.Method, e.Path)
-	case domain.EventRequestWaited:
-		return fmt.Sprintf("⧖ %s %s waited", e.Method, e.Path)
 	case domain.EventRequestBlocked:
 		return fmt.Sprintf("✗ %s %s blocked", e.Method, e.Path)
 	case domain.EventDedupJoined:
