@@ -502,6 +502,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			var rateLimitErr *api.RateLimitError
+			if errors.As(m.Err, &rateLimitErr) {
+				// Defense-in-depth: buildPlaybackAPICmd may return a RateLimitError if the
+				// gateway rejects the request during active backoff (F27-S126). Emit a
+				// distinct "Rate limited" toast rather than the raw error string.
+				// NOTE: no fetchPlaybackStateCmd — the request never reached Spotify,
+				// so there is no state change to reconcile. Dispatching a Background
+				// fetch here would itself be rejected (backoff still active), producing
+				// a second toast and noise in the request-flow pane.
+				return a, a.alerts.NewAlertCmd("warning",
+					fmt.Sprintf("Rate limited — wait %ds before retrying", rateLimitErr.RetryAfter))
+			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(

@@ -466,7 +466,7 @@ The root model's 1-second tick loop is the single polling mechanism in the app. 
 - Feature 06 extends the tick to also dispatch `fetchQueue` alongside the playback fetch
 - Feature 04 (Library) fetches on-demand (Init, section expand, view open) with staleness gating — data within its TTL (albums/liked/playlists: 5m, recently played: 2m) is not re-fetched
 - Feature 08 (Stats) fetches on-demand per time range with staleness gating — data within `StatsTTL` (10m) is not re-fetched even if the view is closed and reopened
-- Feature 07 (Devices) only fetches when the device overlay opens — the overlay emits `FetchDevicesRequestMsg` on `Init()` and the app dispatches the API call. Device list is considered stale after `DevicesTTL` (5s). The short TTL balances freshness (devices appear/disappear externally) with API efficiency. Device fetches use `api.Interactive` priority to bypass the gateway token bucket.
+- Feature 07 (Devices) only fetches when the device overlay opens — the overlay emits `FetchDevicesRequestMsg` on `Init()` and the app dispatches the API call. Device list is considered stale after `DevicesTTL` (5s). The short TTL balances freshness (devices appear/disappear externally) with API efficiency. Device fetches use `api.Interactive` priority so each fetch bypasses in-flight dedup and always fires a fresh HTTP call.
 - No feature other than 03 and 06 should add recurring poll commands to the tick cycle
 - Library/stats use **staleness-based refresh**, not polling — see "Staleness Tracking" in State Management
 
@@ -690,9 +690,15 @@ at any time. A 6th request blocks until one of the 5 completes or the context is
 
 ### 3. In-Flight Request Deduplication
 
-If two goroutines issue a request with the same `(Method, Path)` key simultaneously,
-only one HTTP call is made. The second goroutine waits on a `done` channel and receives
-a copy of the buffered response body. This prevents tick-storm duplicates during polling.
+Deduplication is **Background-only**. The inflight map is keyed by `RequestKey{Method, Path, Priority}`.
+
+- **Background GET**: if a matching request is already in-flight, the caller joins as a waiter,
+  receives a copy of the buffered response body, and no second HTTP call is made. This prevents
+  tick-storm duplicates during polling.
+- **Interactive GET**: always fires a fresh HTTP call — it never joins an existing in-flight request,
+  regardless of priority. This prevents a post-command reconcile GET from joining a pre-command
+  Background poll that carries stale state.
+- **PUT/POST/DELETE**: never deduplicated regardless of priority (non-idempotent).
 
 ### 4. 429 Backoff with Priority Bypass
 
@@ -712,6 +718,9 @@ Background is the default; `api.PriorityFromContext(ctx)` reads it in `BaseClien
 Command builders in `internal/app/commands.go` set `Interactive` for:
 play, pause, next, previous, volume, shuffle, repeat, search, add-to-queue,
 like/unlike, transfer playback, create/rename/remove/reorder playlist, fetch devices.
+The post-command reconcile GET (`fetchPlaybackStateCmd`) also uses `api.Interactive` on the
+success paths of `PlaybackCmdSentMsg` and `DeviceTransferredMsg` — ensuring it fires fresh
+and does not join a pre-command Background poll carrying stale state.
 
 ### Gateway Observability
 
