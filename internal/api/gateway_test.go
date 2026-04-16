@@ -1112,8 +1112,6 @@ func TestGateway_Do_BlockedRequest_EmitsBlockedEvent(t *testing.T) {
 	assert.Contains(t, kinds, domain.EventRequestBlocked, "must emit RequestBlocked")
 }
 
-// TestGateway_Do_InteractiveWait_EmitsWaitedEvent verifies an interactive request
-// during backoff emits RequestWaited as the final decision event (not RequestAllowed).
 // TestGateway_Do_InteractiveBackoff_EmitsBlocked verifies that an Interactive request
 // arriving during active backoff emits EventRequestBlocked (F27-S126: waitForBackoff
 // removed; Interactive requests rejected immediately like Background).

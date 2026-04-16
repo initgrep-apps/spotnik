@@ -187,9 +187,7 @@ func TestHandlers_PlaybackCmdSentMsg_RateLimitToast(t *testing.T) {
 	_, cmd := a.Update(panes.PlaybackCmdSentMsg{Err: rlErr})
 
 	// Must emit a non-nil command (contains toast + reconcile playback fetch).
-	require.NotNil(t, cmd, "RateLimitError in PlaybackCmdSentMsg must return non-nil cmd")
-
 	// We can't type-assert into the unexported bubbleup alertMsg; checking cmd != nil
 	// and that it differs from the raw error path is the reliable external verification.
-	assert.NotNil(t, cmd, "Rate limit toast path must return cmd")
+	require.NotNil(t, cmd, "RateLimitError in PlaybackCmdSentMsg must return non-nil cmd")
 }
