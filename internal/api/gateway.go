@@ -67,7 +67,8 @@ type RequestKey struct {
 //   - Token-bucket rate limiting (10 req/s burst of 10)
 //   - Concurrency cap of 5 simultaneous in-flight requests
 //   - In-flight request deduplication (same key → only one HTTP call)
-//   - 429 backoff with priority bypass for Interactive requests
+//   - 429 backoff: both priorities are rejected immediately; Interactive
+//     requests are not queued so stale commands do not pile up (F27-S126)
 type Gateway struct {
 	mu            sync.Mutex
 	bucket        *tokenBucket

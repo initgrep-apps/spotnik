@@ -181,13 +181,20 @@ func TestApp_PlaylistTracksLoadedMsg_403_EmitsWarningToast(t *testing.T) {
 // TestHandlers_PlaybackCmdSentMsg_RateLimitToast verifies that a RateLimitError in
 // PlaybackCmdSentMsg emits a distinct "Rate limited" warning toast rather than the
 // raw error string. This is the defense-in-depth path added by F27-S126.
+// NOTE: per spec, no fetchPlaybackStateCmd is dispatched — the request never reached
+// Spotify so there is no state change to reconcile. Only the alert cmd is returned.
 func TestHandlers_PlaybackCmdSentMsg_RateLimitToast(t *testing.T) {
 	a := newToastTestApp()
 	rlErr := &api.RateLimitError{RetryAfter: 10}
 	_, cmd := a.Update(panes.PlaybackCmdSentMsg{Err: rlErr})
 
-	// Must emit a non-nil command (contains toast + reconcile playback fetch).
-	// We can't type-assert into the unexported bubbleup alertMsg; checking cmd != nil
-	// and that it differs from the raw error path is the reliable external verification.
-	require.NotNil(t, cmd, "RateLimitError in PlaybackCmdSentMsg must return non-nil cmd")
+	// cmd must be non-nil — the handler returns a single alert command.
+	require.NotNil(t, cmd, "RateLimitError in PlaybackCmdSentMsg must return a non-nil alert cmd")
+
+	// The returned cmd must NOT be a batch — the rate-limit branch returns only the
+	// alert, not tea.Batch(fetchPlaybackStateCmd, alertCmd). A batch here would mean
+	// the handler dispatched a wasted Background fetch during active backoff.
+	msg := cmd()
+	_, isBatch := msg.(tea.BatchMsg)
+	assert.False(t, isBatch, "rate-limit branch must return a single alert cmd, not a batch (no reconcile fetch)")
 }

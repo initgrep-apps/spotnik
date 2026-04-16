@@ -466,7 +466,7 @@ The root model's 1-second tick loop is the single polling mechanism in the app. 
 - Feature 06 extends the tick to also dispatch `fetchQueue` alongside the playback fetch
 - Feature 04 (Library) fetches on-demand (Init, section expand, view open) with staleness gating — data within its TTL (albums/liked/playlists: 5m, recently played: 2m) is not re-fetched
 - Feature 08 (Stats) fetches on-demand per time range with staleness gating — data within `StatsTTL` (10m) is not re-fetched even if the view is closed and reopened
-- Feature 07 (Devices) only fetches when the device overlay opens — the overlay emits `FetchDevicesRequestMsg` on `Init()` and the app dispatches the API call. Device list is considered stale after `DevicesTTL` (5s). The short TTL balances freshness (devices appear/disappear externally) with API efficiency. Device fetches use `api.Interactive` priority to bypass the gateway token bucket.
+- Feature 07 (Devices) only fetches when the device overlay opens — the overlay emits `FetchDevicesRequestMsg` on `Init()` and the app dispatches the API call. Device list is considered stale after `DevicesTTL` (5s). The short TTL balances freshness (devices appear/disappear externally) with API efficiency. Device fetches use `api.Interactive` priority so each fetch bypasses in-flight dedup and always fires a fresh HTTP call.
 - No feature other than 03 and 06 should add recurring poll commands to the tick cycle
 - Library/stats use **staleness-based refresh**, not polling — see "Staleness Tracking" in State Management
 

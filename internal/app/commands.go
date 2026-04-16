@@ -60,7 +60,7 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		// Playback controls are user-triggered — bypass token bucket.
+		// Playback controls are user-triggered — Interactive priority skips in-flight dedup.
 		ctx := api.WithPriority(context.Background(), api.Interactive)
 		var err error
 
@@ -264,7 +264,7 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 		if player == nil {
 			return panes.AddToQueueResultMsg{Err: errNilClient, TrackName: trackName}
 		}
-		// Add to queue is user-triggered — bypass token bucket.
+		// Add to queue is user-triggered — Interactive priority skips in-flight dedup.
 		err := player.AddToQueue(api.WithPriority(context.Background(), api.Interactive), trackURI)
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
@@ -297,7 +297,7 @@ func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string,
 		if offset >= 1000 {
 			return nil
 		}
-		// Search is user-triggered (debounce fires after keypress) — bypass token bucket.
+		// Search is user-triggered (debounce fires after keypress) — Interactive priority skips in-flight dedup.
 		result, err := client.Search(
 			api.WithPriority(ctx, api.Interactive),
 			query,
@@ -658,7 +658,7 @@ func (a *App) buildFetchCurrentUserCmd() tea.Cmd {
 // buildFetchAlbumTracksCmd fetches a page of tracks for the given album ID.
 // Offset 0 = first page (replace); Offset > 0 = subsequent page (append).
 // The context is passed in from the caller to support cancellation when the user
-// switches albums or presses Esc. api.Interactive priority bypasses the token bucket.
+// switches albums or presses Esc. api.Interactive priority skips in-flight dedup.
 func (a *App) buildFetchAlbumTracksCmd(ctx context.Context, albumID string, offset int) tea.Cmd {
 	library := a.library
 	return func() tea.Msg {
