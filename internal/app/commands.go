@@ -403,8 +403,15 @@ func (a *App) buildTransferPlaybackCmd(deviceID string) tea.Cmd {
 		if devices == nil {
 			return panes.DeviceTransferredMsg{Err: errNilClient, DeviceID: deviceID}
 		}
-		// Transfer playback is user-triggered — bypass token bucket.
 		err := devices.TransferPlayback(api.WithPriority(context.Background(), api.Interactive), deviceID, true)
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
 		return panes.DeviceTransferredMsg{DeviceID: deviceID, Err: err}
 	}
 }
@@ -701,6 +708,14 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 			return panes.PlaylistRemoveResultMsg{Err: errNilClient, PlaylistID: playlistID, TrackURI: trackURI}
 		}
 		err := playlistsAPI.RemoveTracksFromPlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, []string{trackURI})
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
 	}
 }

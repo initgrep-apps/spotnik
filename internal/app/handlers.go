@@ -502,6 +502,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			var rateLimitErr *api.RateLimitError
+			if errors.As(m.Err, &rateLimitErr) {
+				// Defense-in-depth: buildPlaybackAPICmd may return a RateLimitError if the
+				// gateway rejects the request during active backoff (F27-S126). Emit a
+				// distinct "Rate limited" toast rather than the raw error string.
+				return a, tea.Batch(
+					fetchPlaybackStateCmd(a.player, api.Background),
+					a.alerts.NewAlertCmd("warning", "Rate limited — please wait a moment"),
+				)
+			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(

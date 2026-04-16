@@ -571,3 +571,77 @@ func TestErrNilClientGuard_AlbumTracksLoadedMsg(t *testing.T) {
 	_, cmd := a.Update(atMsg)
 	assert.Nil(t, cmd, "errNilClient in AlbumTracksLoadedMsg must not emit a toast")
 }
+
+// --- F27-S126: parse429RetryAfter intercept in buildTransferPlaybackCmd and
+// buildRemovePlaylistTrackCmd ---
+
+// TestBuildTransferPlaybackCmd_429_EmitsRateLimitedMsg verifies that a 429 from
+// the transfer playback endpoint causes buildTransferPlaybackCmd to return
+// RateLimitedMsg (not DeviceTransferredMsg) so the gateway-level rate limit is
+// surfaced and fetching sentinels are cleared.
+func TestBuildTransferPlaybackCmd_429_EmitsRateLimitedMsg(t *testing.T) {
+	srv := rateLimitServer("7")
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetDevices(api.NewDevicesClient(srv.URL, "test-token"))
+	// Premium gate must pass — otherwise the handler returns before building the cmd.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+
+	_, cmd := a.Update(panes.TransferPlaybackMsg{DeviceID: "dev-1", DeviceName: "Speaker"})
+	require.NotNil(t, cmd)
+
+	// The batch has two commands (transfer + info toast). Execute sequentially to find
+	// the RateLimitedMsg from buildTransferPlaybackCmd.
+	var foundRateLimit bool
+	msgs := collectBatchMsgs(cmd)
+	for _, msg := range msgs {
+		if rl, ok := msg.(panes.RateLimitedMsg); ok {
+			foundRateLimit = true
+			assert.Equal(t, 7, rl.RetryAfterSecs, "RetryAfterSecs should match Retry-After header")
+		}
+	}
+	assert.True(t, foundRateLimit, "429 from TransferPlayback should produce RateLimitedMsg, got: %v", msgs)
+}
+
+// TestBuildRemovePlaylistTrackCmd_429_EmitsRateLimitedMsg verifies that a 429 from
+// the remove-playlist-track endpoint causes buildRemovePlaylistTrackCmd to return
+// RateLimitedMsg (not PlaylistRemoveResultMsg) so the gateway-level rate limit is
+// surfaced and fetching sentinels are cleared.
+func TestBuildRemovePlaylistTrackCmd_429_EmitsRateLimitedMsg(t *testing.T) {
+	srv := rateLimitServer("12")
+	defer srv.Close()
+
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetPlaylistsAPI(api.NewPlaylistsClient(srv.URL, "test-token"))
+
+	_, cmd := a.Update(panes.PlaylistRemoveRequestMsg{PlaylistID: "pl1", TrackURI: "spotify:track:t1"})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	rl, ok := msg.(panes.RateLimitedMsg)
+	assert.True(t, ok, "429 from RemoveTracksFromPlaylist should produce RateLimitedMsg, got %T", msg)
+	assert.Equal(t, 12, rl.RetryAfterSecs, "RetryAfterSecs should match Retry-After header")
+}
+
+// collectBatchMsgs executes a tea.Cmd and, if it returns a tea.BatchMsg, executes
+// each sub-command and collects the resulting messages. This helper is needed when
+// a handler dispatches tea.Batch(...) and we need to inspect results from any sub-cmd.
+func collectBatchMsgs(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			if c != nil {
+				msgs = append(msgs, c())
+			}
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
