@@ -303,8 +303,10 @@ func (g *Gateway) RetryAfterSecs() int {
 //     already running, join as a waiter and return the shared result.
 //
 // For Interactive requests:
-//   - Skip token bucket.
-//   - If in 429 backoff, wait until the backoff expires before proceeding.
+//   - Consume a token from the bucket (same as Background).
+//   - If in 429 backoff, return a RateLimitError immediately — Interactive
+//     requests are never queued; they are rejected so the caller can surface
+//     a "rate limited" notification rather than pile up sleeping goroutines.
 //   - Skip the in-flight map entirely — always fire a fresh HTTP call.
 //
 // Both priorities:
@@ -325,46 +327,31 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	// Emit RequestEntered at the top of Do(), before any policy checks.
 	g.emitEvent(domain.EventRequestEntered, reqID, key.Method, key.Path, domainPriority, 0, 0)
 
-	// waited is set true when an Interactive request blocks on the backoff timer.
-	// This causes the final event to use EventRequestWaited instead of EventRequestAllowed,
-	// so the UI can distinguish "passed through immediately" from "had to wait at backoff".
-	var waited bool
-
-	// Phase 1: rate limiting policy based on priority.
-	if priority == Interactive {
-		// Interactive: wait for backoff to expire, then proceed immediately.
-		// Check first whether any backoff is active — if so, the request waited.
-		g.mu.Lock()
-		waited = time.Now().Before(g.backoffUntil)
-		g.mu.Unlock()
-		if err := g.waitForBackoff(ctx); err != nil {
-			// Context cancelled while waiting on backoff — emit RequestWaited (was blocked).
-			g.emitEvent(domain.EventRequestWaited, reqID, key.Method, key.Path, domainPriority, 0, 0)
-			return nil, err
-		}
-	} else {
-		// Background: reject immediately if throttled.
-		g.mu.Lock()
-		throttled := time.Now().Before(g.backoffUntil)
-		retryAfter := g.retryAfter
-		// Emit blocked event under g.mu using emitEventLocked — g.mu is held.
-		if throttled {
-			g.emitEventLocked(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
-		}
-		g.mu.Unlock()
-		if throttled {
-			return nil, &RateLimitError{RetryAfter: retryAfter}
-		}
-		// Apply token-bucket throttle.
-		if err := g.bucket.wait(ctx); err != nil {
-			// Context cancelled while waiting for a token — emit blocked event.
-			// g.mu is NOT held here (bucket.wait releases bucket.mu before returning).
-			g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
-			return nil, fmt.Errorf("rate limit wait: %w", err)
-		}
-		// Token successfully consumed — emit TokenConsumed event.
-		g.emitEvent(domain.EventTokenConsumed, reqID, key.Method, key.Path, domainPriority, 0, 0)
+	// Phase 1: rate limiting policy — both Interactive and Background are rejected
+	// immediately during an active 429 backoff. Interactive requests are never queued
+	// (waitForBackoff was removed in F27-S126): parking goroutines until backoff expires
+	// causes a burst-fire stampede that re-triggers the 429.
+	g.mu.Lock()
+	throttled := time.Now().Before(g.backoffUntil)
+	retryAfter := g.retryAfter
+	if throttled {
+		g.emitEventLocked(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 	}
+	g.mu.Unlock()
+	if throttled {
+		return nil, &RateLimitError{RetryAfter: retryAfter}
+	}
+
+	// Apply token-bucket throttle for all requests (Interactive and Background alike).
+	// Interactive requests previously skipped this, allowing OS key-repeat events
+	// (~15/s) to bypass the bucket and directly hit Spotify's rate limit.
+	if err := g.bucket.wait(ctx); err != nil {
+		// Context cancelled while waiting for a token — emit blocked event.
+		g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
+		return nil, fmt.Errorf("rate limit wait: %w", err)
+	}
+	// Token successfully consumed — emit TokenConsumed event.
+	g.emitEvent(domain.EventTokenConsumed, reqID, key.Method, key.Path, domainPriority, 0, 0)
 
 	// Phase 2: in-flight deduplication for Background GET requests only.
 	// Dedup waiters do NOT consume a semaphore slot — they wait for the primary
@@ -532,13 +519,8 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	}
 
 	// Emit the final decision event for the primary caller.
-	// EventRequestWaited is used when an Interactive request had to block on the
-	// backoff timer before proceeding; EventRequestAllowed covers all other primary paths.
-	if waited {
-		g.emitEvent(domain.EventRequestWaited, reqID, key.Method, key.Path, domainPriority, httpStatus, httpDuration)
-	} else {
-		g.emitEvent(domain.EventRequestAllowed, reqID, key.Method, key.Path, domainPriority, httpStatus, httpDuration)
-	}
+	// All primary callers that reach this point were allowed through — no waiting path exists.
+	g.emitEvent(domain.EventRequestAllowed, reqID, key.Method, key.Path, domainPriority, httpStatus, httpDuration)
 
 	if err != nil {
 		return nil, err
@@ -553,31 +535,6 @@ func priorityToDomain(p Priority) domain.RequestPriority {
 		return domain.PriorityInteractive
 	}
 	return domain.PriorityBackground
-}
-
-// waitForBackoff blocks until the current 429 backoff period expires or ctx is cancelled.
-func (g *Gateway) waitForBackoff(ctx context.Context) error {
-	for {
-		g.mu.Lock()
-		until := g.backoffUntil
-		g.mu.Unlock()
-
-		remaining := time.Until(until)
-		if remaining <= 0 {
-			return nil
-		}
-
-		// Use time.NewTimer instead of time.After to prevent timer leaks
-		// when ctx is cancelled before the timer fires.
-		timer := time.NewTimer(remaining)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-			return nil
-		}
-	}
 }
 
 // defaultRetryAfterSecs is the fallback wait duration when no parseable

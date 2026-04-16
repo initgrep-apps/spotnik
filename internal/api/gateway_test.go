@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -317,62 +318,56 @@ func TestGateway_Backoff_BackgroundRejectedDuringBackoff(t *testing.T) {
 	require.ErrorAs(t, err2, &rlErr, "background request should get RateLimitError during backoff")
 }
 
-func TestGateway_Backoff_InteractiveWaitsAndProceeds(t *testing.T) {
+// TestGateway_Backoff_InteractiveRejectedImmediately verifies that after F27-S126,
+// Interactive requests during an active backoff are rejected immediately (not queued).
+func TestGateway_Backoff_InteractiveRejectedImmediately(t *testing.T) {
 	gw := NewGateway()
 
-	// Set a very short backoff (50ms) directly via a 429 response.
-	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
-		func() (*http.Response, error) {
-			resp := newFakeResponse(429, "")
-			resp.Header.Set("Retry-After", "0") // 0s → backoffUntil = now, expires instantly
-			return resp, nil
-		})
-
-	// Force a small backoff manually so we can test the wait path.
+	// Force a backoff window.
 	gw.mu.Lock()
-	gw.backoffUntil = time.Now().Add(100 * time.Millisecond)
+	gw.retryAfter = 5
+	gw.backoffUntil = time.Now().Add(5 * time.Second)
 	gw.mu.Unlock()
 
-	// Interactive request should wait ~100ms then succeed.
+	// Interactive request should return a RateLimitError without waiting.
 	start := time.Now()
-	resp, err := gw.Do(context.Background(), Interactive,
+	_, err := gw.Do(context.Background(), Interactive,
 		RequestKey{Method: "GET", Path: "/interactive", Priority: Interactive},
 		func() (*http.Response, error) {
+			t.Error("fn should not be called — rejected before HTTP")
 			return newFakeResponse(200, "ok"), nil
 		})
 	elapsed := time.Since(start)
 
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.GreaterOrEqual(t, elapsed.Milliseconds(), int64(80),
-		"interactive request should have waited for backoff, got %v", elapsed)
+	require.Error(t, err)
+	var rlErr *RateLimitError
+	require.ErrorAs(t, err, &rlErr, "must return RateLimitError")
+	assert.Equal(t, 5, rlErr.RetryAfter)
+	assert.Less(t, elapsed.Milliseconds(), int64(200),
+		"Interactive rejection must be immediate (no waiting), got %v", elapsed)
 }
 
-func TestGateway_Interactive_BypassesTokenBucket(t *testing.T) {
-	// Bucket with rate=0.001 tokens/s → would take 1000s to refill.
-	// We drain it first, then verify an Interactive call goes through immediately.
+// TestGateway_Interactive_ConsumesTokenBucket verifies that Interactive requests
+// now consume tokens from the bucket (F27-S126: bucket bypass was the root cause
+// of burst-fire 429s when holding a volume key at OS key-repeat rate).
+func TestGateway_Interactive_ConsumesTokenBucket(t *testing.T) {
 	gw := NewGateway()
-	// Replace the bucket with a very slow one.
+	// Replace the bucket with a very slow one (1 token, essentially zero refill rate).
 	gw.bucket = newTokenBucket(1, 0.001)
 	// Drain the single token.
 	require.NoError(t, gw.bucket.wait(context.Background()))
 
-	// Interactive request should not wait for the bucket.
-	// We assert well below the 1000s token-refill time to prove the bucket was bypassed.
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	// Interactive request must now wait for the bucket — context timeout proves it blocks.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	start := time.Now()
 	_, err := gw.Do(ctx, Interactive,
 		RequestKey{Method: "POST", Path: "/play", Priority: Interactive},
 		func() (*http.Response, error) {
 			return newFakeResponse(204, ""), nil
 		})
-	elapsed := time.Since(start)
 
-	require.NoError(t, err, "interactive call should bypass empty token bucket")
-	assert.Less(t, elapsed.Milliseconds(), int64(250),
-		"interactive call should not have waited for token bucket")
+	// Expect a timeout error proving the request waited on the empty bucket.
+	require.Error(t, err, "interactive call should now wait on the token bucket")
 }
 
 func TestGateway_IsThrottled(t *testing.T) {
@@ -805,39 +800,40 @@ func TestGateway_Recorder_DedupedDecision(t *testing.T) {
 	assert.Contains(t, kinds, domain.EventDedupResolved, "dedup waiter emits DedupResolved")
 }
 
-func TestGateway_Recorder_InteractiveCancelledDuringBackoff_RecordsWaited(t *testing.T) {
+// TestGateway_Recorder_InteractiveRejectedDuringBackoff_RecordsBlocked verifies that an
+// Interactive request during an active backoff emits EventRequestBlocked (F27-S126:
+// Interactive requests are rejected immediately, not queued behind waitForBackoff).
+func TestGateway_Recorder_InteractiveRejectedDuringBackoff_RecordsBlocked(t *testing.T) {
 	gw := NewGateway()
 	rec := &mockEventRecorder{}
 	gw.SetRecorder(rec)
 
-	// Set a long backoff so waitForBackoff blocks until the context is cancelled.
+	// Set a long backoff so an Interactive request would have previously parked until expiry.
 	gw.mu.Lock()
 	gw.backoffUntil = time.Now().Add(30 * time.Second)
 	gw.mu.Unlock()
 
-	// Cancel the context while the Interactive request is waiting on the backoff.
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	_, err := gw.Do(ctx, Interactive,
-		RequestKey{Method: "GET", Path: "/interactive-cancelled", Priority: Interactive},
+	_, err := gw.Do(context.Background(), Interactive,
+		RequestKey{Method: "GET", Path: "/interactive-backoff-rejected", Priority: Interactive},
 		func() (*http.Response, error) {
-			t.Error("fn should not be called for cancelled request")
+			t.Error("fn should not be called — request rejected before HTTP")
 			return newFakeResponse(200, "ok"), nil
 		})
-	require.Error(t, err, "expected context cancellation error")
+	require.Error(t, err, "expected RateLimitError")
 
-	// Cancelled Interactive request must emit EventRequestWaited (was waiting on backoff).
+	var rlErr *RateLimitError
+	require.ErrorAs(t, err, &rlErr)
+
+	// Interactive request rejected during backoff must emit EventRequestBlocked.
 	events := rec.all()
-	var waited *domain.GatewayEvent
+	var blocked *domain.GatewayEvent
 	for i := range events {
-		if events[i].Kind == domain.EventRequestWaited && events[i].Path == "/interactive-cancelled" {
-			waited = &events[i]
+		if events[i].Kind == domain.EventRequestBlocked && events[i].Path == "/interactive-backoff-rejected" {
+			blocked = &events[i]
 		}
 	}
-	require.NotNil(t, waited, "cancelled Interactive request should emit EventRequestWaited")
-	assert.Equal(t, domain.PriorityInteractive, waited.Priority)
-	assert.Equal(t, 0, waited.StatusCode, "cancelled request has no HTTP status")
+	require.NotNil(t, blocked, "Interactive request rejected during backoff should emit EventRequestBlocked")
+	assert.Equal(t, domain.PriorityInteractive, blocked.Priority)
 }
 
 func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocked(t *testing.T) {
@@ -1118,11 +1114,13 @@ func TestGateway_Do_BlockedRequest_EmitsBlockedEvent(t *testing.T) {
 
 // TestGateway_Do_InteractiveWait_EmitsWaitedEvent verifies an interactive request
 // during backoff emits RequestWaited as the final decision event (not RequestAllowed).
-func TestGateway_Do_InteractiveWait_EmitsWaitedEvent(t *testing.T) {
+// TestGateway_Do_InteractiveBackoff_EmitsBlocked verifies that an Interactive request
+// arriving during active backoff emits EventRequestBlocked (F27-S126: waitForBackoff
+// removed; Interactive requests rejected immediately like Background).
+func TestGateway_Do_InteractiveBackoff_EmitsBlocked(t *testing.T) {
 	gw := NewGateway()
-	// Set a short backoff.
 	gw.mu.Lock()
-	gw.backoffUntil = time.Now().Add(50 * time.Millisecond)
+	gw.backoffUntil = time.Now().Add(10 * time.Second)
 	gw.mu.Unlock()
 
 	rec := &mockEventRecorder{}
@@ -1133,17 +1131,18 @@ func TestGateway_Do_InteractiveWait_EmitsWaitedEvent(t *testing.T) {
 	_, err := gw.Do(context.Background(), Interactive,
 		RequestKey{Method: "PUT", Path: "/play", Priority: Interactive},
 		func() (*http.Response, error) {
+			t.Error("fn should not be called during backoff")
 			return newFakeResponse(204, ""), nil
 		})
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	kinds := collectKinds(rec.all())
 	assert.Contains(t, kinds, domain.EventRequestEntered, "must emit RequestEntered")
-	// An interactive request that waited on backoff emits RequestWaited as the
-	// final decision (not RequestAllowed) to distinguish "had to wait" from "passed through".
-	assert.Contains(t, kinds, domain.EventRequestWaited, "must emit RequestWaited as final decision")
+	assert.Contains(t, kinds, domain.EventRequestBlocked, "must emit RequestBlocked as rejection event")
 	assert.NotContains(t, kinds, domain.EventRequestAllowed,
-		"waited interactive request must not emit RequestAllowed (RequestWaited is the final decision)")
+		"blocked interactive request must not emit RequestAllowed")
+	assert.NotContains(t, kinds, domain.EventRequestWaited,
+		"EventRequestWaited is removed — no waiting path exists any more")
 }
 
 // TestGateway_Do_DedupRequest_EmitsJoinAndResolve verifies a dedup waiter
@@ -1540,4 +1539,51 @@ func TestDedup_BackgroundJoinsBackground(t *testing.T) {
 	// Both callers must receive the same body.
 	assert.Equal(t, "shared-body", results[0])
 	assert.Equal(t, "shared-body", results[1])
+}
+
+// --- Interactive backoff rejection tests (F27-S126) ---
+
+// TestGateway_InteractiveRejectedDuringBackoff verifies that an Interactive request
+// arriving during an active 429 backoff returns a RateLimitError immediately without
+// invoking the HTTP fn (no goroutine parking / burst-fire cycle).
+func TestGateway_InteractiveRejectedDuringBackoff(t *testing.T) {
+	gw := NewGateway()
+	gw.mu.Lock()
+	gw.retryAfter = 10
+	gw.backoffUntil = time.Now().Add(10 * time.Second)
+	gw.mu.Unlock()
+
+	key := RequestKey{Method: http.MethodPut, Path: "/v1/me/player/volume", Priority: Interactive}
+	calls := 0
+	_, err := gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 204, Body: io.NopCloser(strings.NewReader(""))}, nil
+	})
+
+	require.Error(t, err)
+	var rlErr *RateLimitError
+	require.ErrorAs(t, err, &rlErr, "must return RateLimitError, not block")
+	assert.Equal(t, 10, rlErr.RetryAfter)
+	assert.Equal(t, 0, calls, "fn must not be called — request rejected before HTTP")
+}
+
+// TestGateway_InteractiveAllowedAfterBackoffExpires verifies that an Interactive request
+// is allowed through once the 429 backoff window has passed.
+func TestGateway_InteractiveAllowedAfterBackoffExpires(t *testing.T) {
+	gw := NewGateway()
+	gw.mu.Lock()
+	gw.retryAfter = 1
+	gw.backoffUntil = time.Now().Add(-1 * time.Millisecond) // already expired
+	gw.mu.Unlock()
+
+	key := RequestKey{Method: http.MethodPut, Path: "/v1/me/player/volume", Priority: Interactive}
+	calls := 0
+	resp, err := gw.Do(context.Background(), Interactive, key, func() (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 204, Body: io.NopCloser(strings.NewReader(""))}, nil
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, 204, resp.StatusCode)
+	assert.Equal(t, 1, calls, "fn must be called once when backoff has expired")
 }

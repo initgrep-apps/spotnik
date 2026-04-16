@@ -79,45 +79,6 @@ func TestTokenBucket_ContextCancelReturnsImmediately(t *testing.T) {
 		"wait() should return quickly on cancellation, got %v", elapsed)
 }
 
-// TestWaitForBackoff_ContextCancelReturnsImmediately verifies that waitForBackoff
-// returns quickly on context cancellation.
-func TestWaitForBackoff_ContextCancelReturnsImmediately(t *testing.T) {
-	gw := NewGateway()
-	// Set a 1-minute backoff.
-	gw.mu.Lock()
-	gw.backoffUntil = time.Now().Add(time.Minute)
-	gw.mu.Unlock()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
-
-	start := time.Now()
-	err := gw.waitForBackoff(ctx)
-	elapsed := time.Since(start)
-
-	assert.ErrorIs(t, err, context.Canceled)
-	assert.Less(t, elapsed.Milliseconds(), int64(100),
-		"waitForBackoff() should return quickly on cancellation, got %v", elapsed)
-}
-
-// TestWaitForBackoff_CompletesAfterDuration verifies that waitForBackoff
-// waits for the full backoff period before returning.
-func TestWaitForBackoff_CompletesAfterDuration(t *testing.T) {
-	gw := NewGateway()
-	// Set a short backoff.
-	gw.mu.Lock()
-	gw.backoffUntil = time.Now().Add(80 * time.Millisecond)
-	gw.mu.Unlock()
-
-	start := time.Now()
-	err := gw.waitForBackoff(context.Background())
-	elapsed := time.Since(start)
-
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, elapsed.Milliseconds(), int64(60),
-		"waitForBackoff should wait for the full duration, got %v", elapsed)
-}
-
 // --- Task 3: nil response guard after fn() ---
 
 // TestGateway_NilResponseFromFn verifies that a (nil, nil) return from fn
