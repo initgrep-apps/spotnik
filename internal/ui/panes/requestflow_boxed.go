@@ -238,7 +238,7 @@ func (p *RequestFlowPane) buildGatewayBoxLines(maxRows int) []string {
 				style = successStyle
 			case domain.EventRequestBlocked:
 				style = errorStyle
-			case domain.EventRequestWaited, domain.EventDedupJoined:
+			case domain.EventDedupJoined:
 				style = warnStyle
 			case domain.EventTokenConsumed, domain.EventSemaphoreAcquired,
 				domain.EventSemaphoreReleased:
@@ -317,9 +317,6 @@ func (p *RequestFlowPane) buildLeftArrowLines(maxRows, colWidth int) []string {
 			var arrow string
 			var style lipgloss.Style
 			switch a.decision {
-			case domain.EventRequestWaited:
-				arrow = "── wait ──"
-				style = lipgloss.NewStyle().Foreground(p.theme.Warning())
 			case domain.EventDedupJoined:
 				arrow = "──→ dedup"
 				style = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())

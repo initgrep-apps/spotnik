@@ -371,19 +371,7 @@ func TestBuildRightArrowLines_ZeroMaxRows(t *testing.T) {
 	assert.Nil(t, lines)
 }
 
-// --- Decision log: EventRequestWaited and EventDedupJoined arrow labels ---
-
-func TestBuildLeftArrowLines_WaitedDecision(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 30
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestWaited, RequestID: reqID, Method: "GET", Path: "/ep"})
-
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.Contains(t, combined, "wait", "EventRequestWaited should render 'wait' in left arrow")
-}
+// --- Decision log: EventDedupJoined arrow labels ---
 
 func TestBuildLeftArrowLines_DedupDecision(t *testing.T) {
 	s := state.New()

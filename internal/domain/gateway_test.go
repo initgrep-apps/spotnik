@@ -23,13 +23,12 @@ func TestEventKind_Distinct(t *testing.T) {
 		domain.EventBackoffStarted,
 		domain.EventBackoffExpired,
 		domain.EventRequestAllowed,
-		domain.EventRequestWaited,
 		domain.EventRequestBlocked,
 		domain.EventDedupJoined,
 		domain.EventDedupResolved,
 		domain.EventHttpCompleted,
 	}
-	assert.Len(t, kinds, 13, "EventKind enum must have exactly 13 constants")
+	assert.Len(t, kinds, 12, "EventKind enum must have exactly 12 constants")
 	seen := make(map[domain.EventKind]bool)
 	for _, k := range kinds {
 		assert.False(t, seen[k], "EventKind values must be distinct")

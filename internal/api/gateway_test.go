@@ -357,17 +357,33 @@ func TestGateway_Interactive_ConsumesTokenBucket(t *testing.T) {
 	// Drain the single token.
 	require.NoError(t, gw.bucket.wait(context.Background()))
 
+	rec := &mockEventRecorder{}
+	gw.SetRecorder(rec)
+
 	// Interactive request must now wait for the bucket — context timeout proves it blocks.
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	_, err := gw.Do(ctx, Interactive,
-		RequestKey{Method: "POST", Path: "/play", Priority: Interactive},
+		RequestKey{Method: "POST", Path: "/interactive-bucket-block", Priority: Interactive},
 		func() (*http.Response, error) {
 			return newFakeResponse(204, ""), nil
 		})
 
 	// Expect a timeout error proving the request waited on the empty bucket.
 	require.Error(t, err, "interactive call should now wait on the token bucket")
+
+	// Cancelled-during-bucket-wait must emit EventRequestBlocked.
+	events := rec.all()
+	var blocked *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventRequestBlocked &&
+			events[i].Path == "/interactive-bucket-block" {
+			blocked = &events[i]
+		}
+	}
+	require.NotNil(t, blocked, "Interactive request cancelled during token bucket wait must emit EventRequestBlocked")
+	assert.Equal(t, domain.PriorityInteractive, blocked.Priority)
+	assert.Equal(t, 0, blocked.StatusCode)
 }
 
 func TestGateway_IsThrottled(t *testing.T) {
@@ -872,6 +888,40 @@ func TestGateway_Recorder_BackgroundCancelledDuringTokenBucketWait_RecordsBlocke
 	assert.Equal(t, 0, blocked.StatusCode, "cancelled request has no HTTP status")
 }
 
+// TestGateway_Recorder_InteractiveCancelledDuringTokenBucketWait_RecordsBlocked verifies
+// that an Interactive request whose context is cancelled while waiting for a bucket token
+// emits EventRequestBlocked — the Interactive counterpart to the Background version above.
+func TestGateway_Recorder_InteractiveCancelledDuringTokenBucketWait_RecordsBlocked(t *testing.T) {
+	gw := NewGateway()
+	gw.bucket = newTokenBucket(1, 0.001)
+	require.NoError(t, gw.bucket.wait(context.Background()))
+
+	rec := &mockEventRecorder{}
+	gw.SetRecorder(rec)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := gw.Do(ctx, Interactive,
+		RequestKey{Method: "PUT", Path: "/interactive-bucket-cancelled", Priority: Interactive},
+		func() (*http.Response, error) {
+			t.Error("fn should not be called for cancelled request")
+			return newFakeResponse(204, ""), nil
+		})
+	require.Error(t, err, "expected context cancellation error")
+
+	events := rec.all()
+	var blocked *domain.GatewayEvent
+	for i := range events {
+		if events[i].Kind == domain.EventRequestBlocked && events[i].Path == "/interactive-bucket-cancelled" {
+			blocked = &events[i]
+		}
+	}
+	require.NotNil(t, blocked, "Interactive request cancelled during token bucket wait should emit EventRequestBlocked")
+	assert.Equal(t, domain.PriorityInteractive, blocked.Priority)
+	assert.Equal(t, 0, blocked.StatusCode, "cancelled request has no HTTP status")
+}
+
 // TestGateway_StateSnapshot_InFlightKeys verifies that EventHttpCompleted carries
 // InFlightKeys showing the in-flight GET request, and that EventSemaphoreReleased
 // does not (because the inflight entry is cleaned up before SemaphoreReleased).
@@ -1139,8 +1189,6 @@ func TestGateway_Do_InteractiveBackoff_EmitsBlocked(t *testing.T) {
 	assert.Contains(t, kinds, domain.EventRequestBlocked, "must emit RequestBlocked as rejection event")
 	assert.NotContains(t, kinds, domain.EventRequestAllowed,
 		"blocked interactive request must not emit RequestAllowed")
-	assert.NotContains(t, kinds, domain.EventRequestWaited,
-		"EventRequestWaited is removed — no waiting path exists any more")
 }
 
 // TestGateway_Do_DedupRequest_EmitsJoinAndResolve verifies a dedup waiter
