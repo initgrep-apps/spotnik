@@ -35,6 +35,7 @@
 | 24 | Controls Cleanup and Fix | `features/24-controls-cleanup/` | done | 118 (done), 119 (done), 120 (done), 121 (done) | Fix broken Space/n keybindings, rebind t→g for time range, TopArtists Enter to play, remove dead pane actions, help overlay polish |
 | 25 | NowPlaying Controls Polish | `features/25-nowplaying-controls-polish/` | done | 122 (done), 123 (done) | Repeat-track superscript icon (↻¹), volume 1% steps, partial-block bar rendering |
 | 26 | Playback Control Correctness | `features/26-playback-correctness/` | done | 124 (done), 125 (done) | Request-aware dedup (Interactive GETs skip inflight map), remove gateway debounce |
+| 27 | Gateway Rate Protection | `features/27-gateway-rate-protection/` | done | 126, 127 | Reject Interactive requests during backoff (no more stuck queue), apply token bucket to Interactive (prevents hold-key 429) |
 
 
 ---
@@ -45,5 +46,5 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-15* (feature 26 done)
+*Last updated: 2026-04-16* (feature 27 added)
 
