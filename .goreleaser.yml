@@ -1,0 +1,96 @@
+# GoReleaser configuration for Spotnik.
+# Triggered by the GitHub Actions release workflow on v* tag push.
+# See docs/GITHUB-SETUP.md for the manual prerequisites (RELEASE_PAT, tap/bucket repos).
+version: 2
+
+project_name: spotnik
+
+builds:
+  - id: spotnik
+    binary: spotnik
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.buildTime={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Windows arm64 is not a common target; restrict windows to amd64.
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: "spotnik_{{.Version}}_{{.Os}}_{{.Arch}}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "spotnik_{{.Version}}_checksums.txt"
+  algorithm: sha256
+
+# release-please manages the CHANGELOG; skip GoReleaser changelog generation.
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: initgrep-apps
+    name: spotnik
+
+brews:
+  - name: spotnik
+    repository:
+      owner: initgrep-apps
+      name: homebrew-tap
+      token: "{{ .Env.RELEASE_PAT }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore: brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/initgrep-apps/spotnik"
+    description: "A terminal Spotify client for developers. Keyboard-driven, single binary."
+    license: MIT
+    install: |
+      bin.install "spotnik"
+    test: |
+      system "#{bin}/spotnik", "--version"
+
+scoops:
+  - repository:
+      owner: initgrep-apps
+      name: scoop-bucket
+      token: "{{ .Env.RELEASE_PAT }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore: scoop manifest update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/initgrep-apps/spotnik"
+    description: "A terminal Spotify client for developers. Keyboard-driven, single binary."
+    license: MIT
+
+nfpms:
+  - id: packages
+    package_name: spotnik
+    file_name_template: "spotnik_{{.Version}}_{{.Os}}_{{.Arch}}"
+    homepage: "https://github.com/initgrep-apps/spotnik"
+    maintainer: "irshad.mike@gmail.com"
+    description: "A terminal Spotify client for developers. Keyboard-driven, single binary, beautiful in a terminal."
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents: []
