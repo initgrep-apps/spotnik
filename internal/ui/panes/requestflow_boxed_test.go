@@ -319,6 +319,63 @@ func TestRenderGatewayState_BackwardCompat(t *testing.T) {
 	assert.Contains(t, out, "●")
 }
 
+// --- Task 5: renderGatewayBanner ---
+
+func TestRenderGatewayBanner_ContainsTokens(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{
+		TokensAvailable:  8,
+		TokensMax:        10,
+		ConcurrentActive: 0,
+		ConcurrentMax:    5,
+	}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "TOKENS")
+	assert.Contains(t, out, "8/10")
+}
+
+func TestRenderGatewayBanner_ContainsSlots(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{
+		TokensMax: 10, ConcurrentActive: 2, ConcurrentMax: 5,
+	}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "SLOTS")
+	assert.Contains(t, out, "2/5")
+}
+
+func TestRenderGatewayBanner_BackoffNone_WhenNotThrottled(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "BACKOFF")
+	assert.Contains(t, out, "none")
+}
+
+func TestRenderGatewayBanner_DedupNone_WhenZeroWaiters(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5, DedupWaiters: 0}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "DEDUP")
+	assert.Contains(t, out, "none")
+}
+
+func TestRenderGatewayBanner_DedupWaiters(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5, DedupWaiters: 3}
+	// Use a wide enough box so the dedup segment is not truncated.
+	out := p.renderGatewayBanner(200)
+	assert.Contains(t, out, "3 waiting")
+}
+
+func TestRenderGatewayBanner_HasBorders(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "╭")
+	assert.Contains(t, out, "╰")
+}
+
 // --- Arrow alignment: buildLeftArrowLines / buildRightArrowLines ---
 
 func TestBuildLeftArrowLines_LengthMatchesMaxRows(t *testing.T) {

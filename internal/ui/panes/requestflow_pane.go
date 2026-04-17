@@ -351,6 +351,50 @@ func (p *RequestFlowPane) renderGatewayState() string {
 	return strings.Join(p.gatewayStateLines(), "\n")
 }
 
+// renderGatewayBanner renders a full-width single-row box showing live gateway health.
+// Content: token bar · slot bar · backoff state · dedup count.
+func (p *RequestFlowPane) renderGatewayBanner(width int) string {
+	snap := p.displayState.snapshot
+
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+
+	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
+	tokenSeg := secondaryStyle.Render("TOKENS") + "  " + tokenBar + "  " +
+		secondaryStyle.Render(fmt.Sprintf("%d/%d", snap.TokensAvailable, snap.TokensMax))
+
+	slotBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
+	slotSeg := secondaryStyle.Render("SLOTS") + "  " + slotBar + "  " +
+		secondaryStyle.Render(fmt.Sprintf("%d/%d", snap.ConcurrentActive, snap.ConcurrentMax))
+
+	var backoffSeg string
+	if p.store != nil && p.store.IsThrottled() {
+		remaining := snap.BackoffRemaining
+		if remaining <= 0 {
+			remaining = float64(p.store.ThrottleRetryAfterSecs())
+		}
+		backoffSeg = errorStyle.Render(fmt.Sprintf("BACKOFF  %.1fs", remaining))
+	} else {
+		backoffSeg = secondaryStyle.Render("BACKOFF") + "  " + mutedStyle.Render("none")
+	}
+
+	var dedupSeg string
+	if snap.DedupWaiters > 0 {
+		dedupSeg = secondaryStyle.Render("DEDUP") + "  " +
+			secondaryStyle.Render(fmt.Sprintf("%d waiting", snap.DedupWaiters))
+	} else {
+		dedupSeg = secondaryStyle.Render("DEDUP") + "  " + mutedStyle.Render("none")
+	}
+
+	sep := mutedStyle.Render("  ·  ")
+	content := tokenSeg + sep + slotSeg + sep + backoffSeg + sep + dedupSeg
+
+	return p.renderSubBox("GATEWAY", []string{content}, width, p.theme.PaneBorderRequestFlow())
+}
+
 // --- Replay engine ---
 
 // drainEvents reads new events from the store's event log and appends
