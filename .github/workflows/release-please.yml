@@ -1,0 +1,27 @@
+# release-please workflow — runs on every push to main.
+# Analyzes Conventional Commits since last release, creates/updates a Release PR
+# with a version bump and CHANGELOG.md. When the Release PR is merged,
+# release-please creates the v* tag which triggers the Release workflow.
+name: release-please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: go
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

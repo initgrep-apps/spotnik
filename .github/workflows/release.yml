@@ -1,0 +1,47 @@
+# Release workflow — fires when a v* tag is pushed.
+# GoReleaser builds 5 platform binaries, creates a GitHub Release,
+# pushes the Homebrew formula and Scoop manifest, and uploads DEB/RPM packages.
+# Prerequisite: RELEASE_PAT secret must exist (see docs/GITHUB-SETUP.md).
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code (full history for GoReleaser)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.RELEASE_PAT }}" ]; then
+            echo "ERROR: RELEASE_PAT secret is not set. Homebrew and Scoop pushes will fail." >&2
+            echo "See docs/GITHUB-SETUP.md for setup instructions." >&2
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
