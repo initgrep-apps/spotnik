@@ -1,7 +1,7 @@
 ---
 title: "GitHub Setup — Manual Prerequisite"
 feature: 11-cicd
-status: open
+status: done
 ---
 
 ## Background

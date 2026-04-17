@@ -1,6 +1,6 @@
 ---
 title: "CI/CD & Release"
-status: in-progress
+status: done
 ---
 
 ## Description

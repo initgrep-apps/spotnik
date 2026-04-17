@@ -19,7 +19,7 @@
 | 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79 | Token-based themes, TOML config, runtime switcher, 11 built-in themes |
 | 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | in-progress | 02, 17, 76, 79*, 80, 114–117 | PKCE OAuth, token refresh, first-launch bootstrap, profile overlay, Premium gating |
 | 10 | Developer Visibility (Page B) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
-| 11 | CI/CD & Release | `features/11-cicd/` | in-progress | 57, 128–133 | GitHub Actions, GoReleaser, release-please, version injection, multi-platform distribution |
+| 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133 | GitHub Actions, GoReleaser, release-please, version injection, multi-platform distribution |
 
 
 ---
