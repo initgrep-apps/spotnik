@@ -194,46 +194,6 @@ func TestRequestFlowPane_TickMsg_Updates(t *testing.T) {
 	assert.Nil(t, cmd)
 }
 
-// --- Status strip ---
-
-func TestRequestFlowPane_View_StatusStrip_ShowsPollingState(t *testing.T) {
-	pane := newTestRequestFlowPane()
-	// Use flat layout (width=40) — renderStatusStrip() is only shown in flat layout.
-	// The boxed four-zone layout uses AUTO-TRAFFIC strip for polling state instead.
-	pane.SetSize(40, 20)
-	_, _ = pane.Update(panes.PollingSnapshotMsg{
-		TickIntervalMs: 1000,
-		IsIdle:         false,
-		IdleSecs:       0,
-	})
-	v := pane.View()
-	assert.Contains(t, v, "POLLING")
-	assert.Contains(t, v, "1000ms")
-}
-
-func TestRequestFlowPane_View_StatusStrip_ShowsIdleState(t *testing.T) {
-	pane := newTestRequestFlowPane()
-	pane.SetSize(100, 20)
-	_, _ = pane.Update(panes.PollingSnapshotMsg{
-		TickIntervalMs: 1000,
-		IsIdle:         true,
-		IdleSecs:       45,
-	})
-	v := pane.View()
-	assert.Contains(t, v, "idle")
-	assert.Contains(t, v, "45s")
-}
-
-func TestRequestFlowPane_View_StatusStrip_ShowsStoreFetching(t *testing.T) {
-	s := state.New()
-	s.SetPlaylistsFetching(true)
-	p := panes.NewRequestFlowPane(s, theme.Load("black"))
-	// Use flat layout (width=40) — STORE status is only in renderStatusStrip() (flat layout).
-	p.SetSize(40, 20)
-	v := p.View()
-	assert.Contains(t, v, "STORE")
-}
-
 // --- Replay engine: drainEvents / processNextEvent ---
 
 func TestRequestFlowPane_Replay_DrainEvents(t *testing.T) {
@@ -904,15 +864,6 @@ func TestRequestFlowPane_View_AutoTrafficStrip_StalePlaylist(t *testing.T) {
 }
 
 // --- Helper functions ---
-
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
-}
 
 func viewContainsBox(output, title string) bool {
 	for _, line := range strings.Split(output, "\n") {

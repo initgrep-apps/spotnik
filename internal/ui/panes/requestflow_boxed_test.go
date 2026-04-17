@@ -85,65 +85,6 @@ func TestRenderSubBox_EmptyLinesSlice(t *testing.T) {
 	assert.Len(t, lines, 2, "empty content slice should produce 2-line box")
 }
 
-// --- Task 2: renderRightArrow ---
-
-func TestRenderRightArrow_2xx_ContainsAnimatedArrow(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-
-	const reqID uint64 = 1
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/ep", StatusCode: 200, DurationMs: 30})
-
-	anim := &requestAnimation{statusCode: 200}
-	out := p.renderRightArrow(anim, 12)
-	animatedFrames := []string{"──→──", "───→─", "────→"}
-	found := false
-	for _, f := range animatedFrames {
-		if strings.Contains(out, f) {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "2xx status should render an animated arrow frame")
-}
-
-func TestRenderRightArrow_429_ContainsX(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{statusCode: 429}
-	out := p.renderRightArrow(anim, 12)
-	assert.Contains(t, out, "╳")
-}
-
-func TestRenderRightArrow_500_ContainsArrow(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{statusCode: 500}
-	out := p.renderRightArrow(anim, 12)
-	animatedFrames := []string{"──→──", "───→─", "────→"}
-	found := false
-	for _, f := range animatedFrames {
-		if strings.Contains(out, f) {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "5xx status should render an animated arrow frame")
-}
-
-func TestRenderRightArrow_StatusZero_ContainsX(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{statusCode: 0}
-	out := p.renderRightArrow(anim, 12)
-	assert.Contains(t, out, "╳")
-}
-
-func TestRenderRightArrow_Blocked_ContainsX(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{decision: domain.EventRequestBlocked, statusCode: 0}
-	out := p.renderRightArrow(anim, 12)
-	assert.Contains(t, out, "╳", "blocked request should render ╳ symbol")
-}
-
 // --- Task 3: buildAppBoxLines ---
 
 func TestBuildAppBoxLines_PadsToMaxRows(t *testing.T) {
@@ -321,36 +262,6 @@ func TestBuildGatewayBoxLines_ContainsDecisionEntry(t *testing.T) {
 	assert.Contains(t, combined, "allowed")
 }
 
-// --- Task 6: gatewayStateLines ---
-
-func TestGatewayStateLines_ReturnsSlice(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	injectEventInternal(p, s, domain.GatewayEvent{
-		Kind: domain.EventTokenConsumed,
-		Snapshot: domain.GatewayStateSnapshot{
-			TokensAvailable: 10,
-			TokensMax:       10,
-			ConcurrentMax:   5,
-		},
-	})
-	lines := p.gatewayStateLines()
-	assert.GreaterOrEqual(t, len(lines), 2)
-}
-
-func TestGatewayStateLines_ThrottledAddsBackoff(t *testing.T) {
-	s1 := state.New()
-	p1 := newInternalTestPaneWithStore(s1)
-	linesNoThrottle := p1.gatewayStateLines()
-
-	s2 := state.New()
-	s2.SetThrottle(true, 30, time.Now())
-	p2 := newInternalTestPaneWithStore(s2)
-	linesThrottled := p2.gatewayStateLines()
-
-	assert.Greater(t, len(linesThrottled), len(linesNoThrottle))
-}
-
 func TestRenderGatewayState_BackwardCompat(t *testing.T) {
 	s := state.New()
 	p := newInternalTestPaneWithStore(s)
@@ -417,84 +328,6 @@ func TestRenderGatewayBanner_HasBorders(t *testing.T) {
 	out := p.renderGatewayBanner(80)
 	assert.Contains(t, out, "╭")
 	assert.Contains(t, out, "╰")
-}
-
-// --- Arrow alignment: buildLeftArrowLines / buildRightArrowLines ---
-
-func TestBuildLeftArrowLines_LengthMatchesMaxRows(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildLeftArrowLines(4, 12)
-	assert.Len(t, lines, 4)
-}
-
-func TestBuildRightArrowLines_LengthMatchesMaxRows(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildRightArrowLines(4, 12)
-	assert.Len(t, lines, 4)
-}
-
-func TestBuildLeftArrowLines_RequestRowHasArrow(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	injectEventInternal(p, s, domain.GatewayEvent{
-		Kind:      domain.EventRequestEntered,
-		RequestID: 1,
-		Method:    "GET",
-		Path:      "/me/player",
-	})
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.True(t, strings.TrimSpace(combined) != "",
-		"at least one arrow line must be non-blank with a request injected")
-}
-
-func TestBuildRightArrowLines_RequestRowHasArrow(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 20
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/ep", StatusCode: 200, DurationMs: 20})
-	lines := p.buildRightArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.True(t, strings.TrimSpace(combined) != "", "right arrow lines must be non-blank with a request present")
-}
-
-func TestBuildLeftArrowLines_ZeroMaxRows(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildLeftArrowLines(0, 10)
-	assert.Nil(t, lines)
-}
-
-func TestBuildRightArrowLines_ZeroMaxRows(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildRightArrowLines(0, 10)
-	assert.Nil(t, lines)
-}
-
-// --- Decision log: EventDedupJoined arrow labels ---
-
-func TestBuildLeftArrowLines_DedupDecision(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 31
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventDedupJoined, RequestID: reqID, Method: "GET", Path: "/ep"})
-
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.Contains(t, combined, "dedup", "EventDedupJoined should render 'dedup' in left arrow")
-}
-
-func TestBuildLeftArrowLines_BlockedDecision(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 32
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestBlocked, RequestID: reqID, Method: "GET", Path: "/ep"})
-
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.Contains(t, combined, "╳", "EventRequestBlocked should render ╳ in left arrow")
 }
 
 // --- Task 8: renderAutoTrafficStrip ---

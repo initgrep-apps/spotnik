@@ -241,10 +241,6 @@ func (p *RequestFlowPane) viewFlat() string {
 
 	// Gateway state block (token bucket, semaphore, backoff, dedup).
 	sb.WriteString(p.renderGatewayState())
-	sb.WriteString("\n")
-
-	// Bottom status strip.
-	sb.WriteString(p.renderStatusStrip())
 
 	return sb.String()
 }
@@ -675,98 +671,6 @@ func (p *RequestFlowPane) renderColoredDotBar(filled, total int, filledRune, emp
 		}
 	}
 	return sb.String()
-}
-
-// renderStatusStrip renders the bottom polling + store status line.
-func (p *RequestFlowPane) renderStatusStrip() string {
-	ps := p.pollingState
-	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	// Polling section.
-	stateLabel := "active"
-	idlePart := ""
-	if ps.IsIdle {
-		stateLabel = "idle"
-		idlePart = mutedStyle.Render(fmt.Sprintf("  idle: %ds", ps.IdleSecs))
-	}
-	intervalMs := ps.TickIntervalMs
-	if intervalMs <= 0 {
-		intervalMs = 1000
-	}
-	pollingPart := labelStyle.Render("POLLING") + mutedStyle.Render(fmt.Sprintf("  tick: %dms  state: %s", intervalMs, stateLabel)) + idlePart
-
-	// Store section.
-	storePart := p.renderStoreStatus()
-
-	if storePart != "" {
-		return pollingPart + "    " + storePart
-	}
-	return pollingPart
-}
-
-// renderStoreStatus renders the STORE section of the status strip.
-// Shows active fetches and, when present, stale data domains.
-func (p *RequestFlowPane) renderStoreStatus() string {
-	if p.store == nil {
-		return ""
-	}
-	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	var fetching []string
-	if p.store.PlaylistsFetching() {
-		fetching = append(fetching, "playlists")
-	}
-	if p.store.AlbumsFetching() {
-		fetching = append(fetching, "albums")
-	}
-	if p.store.LikedFetching() {
-		fetching = append(fetching, "liked")
-	}
-	if p.store.RecentFetching() {
-		fetching = append(fetching, "recent")
-	}
-
-	result := labelStyle.Render("STORE")
-	if len(fetching) > 0 {
-		result += mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
-	}
-
-	stalePart := p.renderStalenessStatus()
-	if stalePart != "" {
-		result += "  " + stalePart
-	}
-
-	return result
-}
-
-// renderStalenessStatus builds the "stale: domain(Xs), ..." segment.
-// Only non-zero FetchedAt values that exceed their TTL are shown.
-// Returns empty string when no data is stale.
-func (p *RequestFlowPane) renderStalenessStatus() string {
-	if p.store == nil {
-		return ""
-	}
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	var stale []string
-	if fa := p.store.PlaylistsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.PlaylistsTTL) {
-		stale = append(stale, fmt.Sprintf("playlists(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if fa := p.store.AlbumsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.AlbumsTTL) {
-		stale = append(stale, fmt.Sprintf("albums(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if fa := p.store.LikedTracksFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.LikedTracksTTL) {
-		stale = append(stale, fmt.Sprintf("liked(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if fa := p.store.RecentPlayedFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.RecentlyPlayedTTL) {
-		stale = append(stale, fmt.Sprintf("recent(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if len(stale) == 0 {
-		return ""
-	}
-	return mutedStyle.Render(fmt.Sprintf("stale: %s", strings.Join(stale, ", ")))
 }
 
 // padRightVisible pads s with spaces to visible width w using lipgloss.Width()
