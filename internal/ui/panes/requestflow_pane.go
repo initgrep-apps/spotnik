@@ -199,9 +199,9 @@ func (p *RequestFlowPane) viewBoxed() string {
 	rightArrows := p.buildRightArrowLines(innerRows, arrowW)
 
 	// Render bordered sub-boxes.
-	appBox := p.renderSubBox("APP", appLines, appBoxW)
-	gwBox := p.renderSubBox("GATEWAY", gwLines, gwBoxW)
-	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyBoxW)
+	appBox := p.renderSubBox("APP", appLines, appBoxW, p.theme.PaneBorderRequestFlow())
+	gwBox := p.renderSubBox("GATEWAY", gwLines, gwBoxW, p.theme.PaneBorderRequestFlow())
+	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyBoxW, p.theme.PaneBorderRequestFlow())
 
 	// Arrow blocks: pad with a blank line above and below to align
 	// arrow rows with box content rows (offset by border rows).

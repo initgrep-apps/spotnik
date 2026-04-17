@@ -17,19 +17,18 @@ import (
 // NOTE: viewBoxed() guarantees width >= 10 for all boxes via minimum clamps
 // and falls back to viewFlat() if totals exceed pane width, so the empty-string
 // path is a safety net rather than a normal render path.
-func (p *RequestFlowPane) renderSubBox(title string, lines []string, width int) string {
+func (p *RequestFlowPane) renderSubBox(title string, lines []string, width int, borderColor lipgloss.Color) string {
 	if width < 8 {
 		return ""
 	}
 
-	borderColor := p.theme.PaneBorderRequestFlow()
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 	borderChar := borderStyle.Render("│")
 
 	innerW := width - 2 // subtract left/right border chars
 
 	// Build top border: ╭─ TITLE ──────╮
-	titleStyled := lipgloss.NewStyle().Foreground(p.theme.PaneBorderRequestFlow()).Bold(true).Render(title)
+	titleStyled := lipgloss.NewStyle().Foreground(borderColor).Bold(true).Render(title)
 	titleVisible := lipgloss.Width(titleStyled)
 
 	// Fill pattern: "─ <title> " then pad to innerW
