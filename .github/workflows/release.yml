@@ -22,6 +22,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.RELEASE_PAT }}" ]; then
+            echo "ERROR: RELEASE_PAT secret is not set. Homebrew and Scoop pushes will fail." >&2
+            echo "See docs/GITHUB-SETUP.md for setup instructions." >&2
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -32,7 +40,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

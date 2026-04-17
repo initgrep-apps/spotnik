@@ -13,7 +13,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.buildTime={{.Date}}
+      - -s -w -X main.version={{.Tag}}
     goos:
       - linux
       - darwin

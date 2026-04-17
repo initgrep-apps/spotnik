@@ -4,16 +4,13 @@ package main
 
 import "github.com/initgrep-apps/spotnik/cmd"
 
-// version and buildTime are injected at build time via LDFLAGS:
+// version is injected at build time via LDFLAGS:
 //
-//	-X main.version={{.Version}} -X main.buildTime={{.Date}}
+//	-X main.version={{.Tag}}
 //
-// They fall back to "dev" and "" when running without a release build.
-var (
-	version   = "dev"
-	buildTime = ""
-)
+// It falls back to "dev" when running without a release build.
+var version = "dev"
 
 func main() {
-	cmd.Execute(version, buildTime)
+	cmd.Execute(version)
 }

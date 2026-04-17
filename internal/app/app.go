@@ -183,9 +183,6 @@ type App struct {
 	// Set from AppOptions.Version; displayed on the splash screen.
 	version string
 
-	// buildTime is the build-time injected timestamp (e.g. "2026-01-01T00:00:00Z").
-	buildTime string
-
 	// authURL is the Spotify authorization URL shown in the auth panel.
 	authURL string
 
@@ -251,8 +248,6 @@ type AppOptions struct {
 	// Version is the build-time injected version string (e.g. "v0.1.0").
 	// Falls back to "dev" when not provided.
 	Version string
-	// BuildTime is the build-time injected timestamp (e.g. "2026-01-01T00:00:00Z").
-	BuildTime string
 }
 
 // New creates a new App, loading the theme from cfg.Preferences.Theme.
@@ -320,7 +315,6 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		tokenStore:      opts.TokenStore,
 		tokenBaseURL:    opts.TokenBaseURL,
 		version:         ver,
-		buildTime:       opts.BuildTime,
 		lastInteraction: time.Now(),
 		idleThreshold:   idleThresholdSecs * time.Second,
 		prefs:           prefs.New(config.DefaultConfigPath()),
