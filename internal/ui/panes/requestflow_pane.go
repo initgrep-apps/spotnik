@@ -162,12 +162,13 @@ func (p *RequestFlowPane) viewBoxed() string {
 		return p.viewFlat()
 	}
 
-	// Column widths: APP 28% | gap 2% | GATEWAY LOG 42% | gap 3% | SPOTIFY 25%
+	// Column widths: APP 28% | gap 2% | GATEWAY LOG (remainder) | gap 2% | SPOTIFY 25%
+	// Gaps are equal so the layout is visually balanced. GATEWAY LOG absorbs all rounding.
 	appW := p.width * 28 / 100
-	gwW := p.width * 42 / 100
 	spotifyW := p.width * 25 / 100
 	leftGapW := p.width * 2 / 100
-	rightGapW := p.width - appW - gwW - spotifyW - leftGapW
+	rightGapW := leftGapW
+	gwW := p.width - appW - spotifyW - leftGapW - rightGapW
 	if rightGapW < 1 {
 		rightGapW = 1
 	}
