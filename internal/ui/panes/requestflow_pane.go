@@ -473,15 +473,21 @@ func (p *RequestFlowPane) sortedAnimations() []*requestAnimation {
 	return out
 }
 
+// stripAPIPrefix removes the "/v1/me" prefix common to all Spotify API paths.
+func stripAPIPrefix(path string) string {
+	return strings.TrimPrefix(path, "/v1/me")
+}
+
 // formatDecisionLabel builds the display string for a decision log entry.
 func formatDecisionLabel(e domain.GatewayEvent) string {
+	path := stripAPIPrefix(e.Path)
 	switch e.Kind {
 	case domain.EventRequestEntered:
 		tag := "◷"
 		if e.Priority == domain.PriorityInteractive {
 			tag = "⚡"
 		}
-		return fmt.Sprintf("→ %s %s entered [%s]", e.Method, e.Path, tag)
+		return fmt.Sprintf("%s %s %s", tag, e.Method, path)
 	case domain.EventTokenConsumed:
 		return fmt.Sprintf("⊖ token consumed → %d", e.Snapshot.TokensAvailable)
 	case domain.EventTokenRefilled:
@@ -493,19 +499,19 @@ func formatDecisionLabel(e domain.GatewayEvent) string {
 		return fmt.Sprintf("⊟ semaphore released (%d/%d)",
 			e.Snapshot.ConcurrentActive, e.Snapshot.ConcurrentMax)
 	case domain.EventBackoffStarted:
-		return fmt.Sprintf("⏳ backoff started %.0fs", e.Snapshot.BackoffRemaining)
+		return fmt.Sprintf("⏳ backoff started  %ds", int(e.Snapshot.BackoffRemaining))
 	case domain.EventBackoffExpired:
 		return "✓ backoff cleared"
 	case domain.EventRequestAllowed:
-		return fmt.Sprintf("✓ %s %s allowed", e.Method, e.Path)
+		return fmt.Sprintf("✓ %s %s  allowed", e.Method, path)
 	case domain.EventRequestBlocked:
-		return fmt.Sprintf("✗ %s %s blocked", e.Method, e.Path)
+		return fmt.Sprintf("✗ %s %s  blocked", e.Method, path)
 	case domain.EventDedupJoined:
-		return fmt.Sprintf("⧖ %s %s dedup", e.Method, e.Path)
+		return fmt.Sprintf("⧖ %s %s  dedup joined", e.Method, path)
 	case domain.EventDedupResolved:
-		return fmt.Sprintf("✓ dedup resolved %d", e.StatusCode)
+		return fmt.Sprintf("✓ dedup resolved  %d", e.StatusCode)
 	case domain.EventHttpCompleted:
-		return fmt.Sprintf("✓ %d %dms", e.StatusCode, e.DurationMs)
+		return fmt.Sprintf("✓ %d  %dms", e.StatusCode, e.DurationMs)
 	default:
 		return "? unknown event"
 	}

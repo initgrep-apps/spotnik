@@ -417,11 +417,11 @@ func TestFormatDecisionLabel_AllKinds(t *testing.T) {
 	}{
 		{
 			event:    domain.GatewayEvent{Kind: domain.EventRequestEntered, Method: "GET", Path: "/ep", Priority: domain.PriorityBackground},
-			contains: "entered",
+			contains: "◷",
 		},
 		{
 			event:    domain.GatewayEvent{Kind: domain.EventRequestEntered, Method: "GET", Path: "/ep", Priority: domain.PriorityInteractive},
-			contains: "[⚡]",
+			contains: "⚡",
 		},
 		{
 			event:    domain.GatewayEvent{Kind: domain.EventTokenConsumed, Snapshot: domain.GatewayStateSnapshot{TokensAvailable: 9}},
