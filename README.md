@@ -1,5 +1,10 @@
 # Spotnik
 
+[![CI](https://github.com/initgrep-apps/spotnik/actions/workflows/ci.yml/badge.svg)](https://github.com/initgrep-apps/spotnik/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/initgrep-apps/spotnik)](https://github.com/initgrep-apps/spotnik/releases/latest)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/initgrep-apps/spotnik)](go.mod)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A terminal Spotify client for developers. Keyboard-driven, single binary, beautiful in a terminal.
 
 Not a Spotify clone — a developer-first music environment. Target user: developer with Spotify
@@ -28,42 +33,72 @@ Premium who lives in the terminal all day.
 
 ---
 
-## Install from Source
+## Installation
 
-### Prerequisites
-
-- Go 1.22 or later
-- `golangci-lint` (for linting only — not required to run)
-- A Spotify Premium account
-- A Spotify Developer app (see [DEV-SETUP.md](docs/DEV-SETUP.md))
-
-### Build
+### Homebrew (macOS / Linux)
 
 ```bash
-git clone https://github.com/initgrep-apps/spotnik.git
-cd spotnik
-
-# Set your Spotify client ID (from the developer dashboard)
-export SPOTIFY_CLIENT_ID=<your-client-id>
-
-make build
+brew install initgrep-apps/tap/spotnik
 ```
 
-This produces `bin/spotnik`.
+### Scoop (Windows)
 
-### Authenticate
+```powershell
+scoop bucket add spotnik https://github.com/initgrep-apps/scoop-bucket
+scoop install spotnik
+```
+
+### DEB package (Ubuntu / Debian)
 
 ```bash
-./bin/spotnik auth
+# Replace <version> with the latest release, e.g. 0.1.0
+wget https://github.com/initgrep-apps/spotnik/releases/latest/download/spotnik_<version>_linux_amd64.deb
+sudo dpkg -i spotnik_<version>_linux_amd64.deb
 ```
 
-Opens your browser for the Spotify PKCE OAuth flow. Tokens are stored in the OS keychain.
-
-### Run
+### RPM package (Fedora / RHEL)
 
 ```bash
-./bin/spotnik
+# Replace <version> with the latest release, e.g. 0.1.0
+wget https://github.com/initgrep-apps/spotnik/releases/latest/download/spotnik_<version>_linux_amd64.rpm
+sudo rpm -i spotnik_<version>_linux_amd64.rpm
 ```
+
+### Go install
+
+```bash
+go install github.com/initgrep-apps/spotnik@latest
+```
+
+### Binary download
+
+Download a pre-built binary for your platform from the
+[Releases page](https://github.com/initgrep-apps/spotnik/releases/latest).
+
+---
+
+## Prerequisites
+
+- **Spotify Premium** — playback controls require a Premium subscription
+- **Spotify Developer app** — needed for the PKCE OAuth flow:
+  1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+  2. Create an app and add `http://127.0.0.1` as a Redirect URI
+  3. Copy the Client ID — you'll need it in the config file (see [Configuration](#configuration))
+
+---
+
+## Quick Start
+
+```bash
+# First launch — Spotnik opens your browser for Spotify authorization
+spotnik
+
+# Or run the auth flow explicitly
+spotnik auth
+```
+
+Tokens are stored securely in your OS keychain. After the first auth, `spotnik` launches
+directly into the TUI.
 
 ---
 
@@ -89,7 +124,6 @@ Playback keys are always active regardless of which pane has focus.
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `n` | Next track |
 | `←` / `→` | Previous / next track |
 | `+` / `-` | Volume up / down |
 | `s` | Toggle shuffle |
@@ -127,19 +161,72 @@ Playback keys are always active regardless of which pane has focus.
 | `PgDn` / `PgUp` | Next / previous result page |
 | `Esc` | Close search overlay |
 
+Full keybinding reference: [docs/keybinding.md](docs/keybinding.md)
+
+---
+
+## Configuration
+
+Config file location: `~/.config/spotnik/config.toml`
+
+Spotnik bootstraps this file on first launch. Key options:
+
+```toml
+[spotify]
+# Your Spotify Developer app client ID.
+# Required only if you did not use a pre-built binary with an embedded client ID.
+client_id = "your-client-id-here"
+
+[preferences]
+# Active theme. Options: black (default), monokai, catppuccin, nord, light,
+# dracula, gruvbox, rosepine, solarized, synthwave, tokyonight
+theme = "black"
+```
+
+---
+
+## Building from Source
+
+Requires Go 1.26+ (see `go.mod`).
+
+```bash
+git clone https://github.com/initgrep-apps/spotnik.git
+cd spotnik
+make build
+./bin/spotnik
+```
+
+To set your own Spotify client ID at build time:
+
+```bash
+SPOTIFY_CLIENT_ID=your-client-id make build
+```
+
+All make targets:
+
+```
+make build          Build binary for current platform
+make run            Build and run
+make test           Run all tests
+make lint           Run golangci-lint
+make test-coverage  Coverage report (min 80%)
+make ci             Full pre-commit check (lint + tests + build)
+make clean          Remove build artifacts
+```
+
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit conventions, test
-requirements, and the PR process.
+- Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `test`, `chore`
+- Run `make ci` before pushing — CI fails on lint or coverage violations
+- One feature per branch; branch naming: `feat/NN-description`
+- Never merge your own PR
 
-## Dev Setup
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-See [docs/DEV-SETUP.md](docs/DEV-SETUP.md) for prerequisites, Spotify app setup, environment
-variables, and all make targets.
+---
 
-## Testing
+## License
 
-See [docs/TESTING.md](docs/TESTING.md) for the test architecture, patterns, and how to run
-each category of tests.
+MIT — see [LICENSE](LICENSE).

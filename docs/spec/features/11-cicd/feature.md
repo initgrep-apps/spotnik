@@ -1,6 +1,6 @@
 ---
 title: "CI/CD & Release"
-status: open
+status: done
 ---
 
 ## Description

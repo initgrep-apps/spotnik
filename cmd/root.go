@@ -38,8 +38,17 @@ func RootCommand() *cobra.Command {
 	return rootCmd
 }
 
+// appVersion holds the value injected by main.go via cmd.Execute(version).
+// It is package-level so runApp can forward it into AppOptions without
+// threading through cobra commands.
+var appVersion string
+
 // Execute is the entry point called from main.go.
-func Execute() {
+// version is injected at build time via LDFLAGS and forwarded into the root
+// command's Version field and the TUI app options.
+func Execute(version string) {
+	appVersion = version
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -328,6 +337,7 @@ func runApp(_ *cobra.Command, _ []string) error {
 		NeedsAuth:  needsAuth,
 		ClientID:   cfg.ClientID,
 		TokenStore: store,
+		Version:    appVersion,
 	}
 	a := app.New(cfg, opts)
 

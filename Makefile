@@ -14,7 +14,7 @@ GOFLAGS          = -trimpath
 SPOTIFY_CLIENT_ID ?=
 LDFLAGS          = -s -w
 VERSION          ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_TIME       = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+
 
 # Build platforms for release
 PLATFORMS = \
@@ -34,7 +34,7 @@ build:
 	@echo "→ Building $(BINARY_NAME)..."
 	@mkdir -p $(BINARY_DIR)
 	$(GO) build $(GOFLAGS) \
-		-ldflags="$(LDFLAGS) -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X $(MODULE)/cmd.spotifyClientID=$(SPOTIFY_CLIENT_ID)" \
+		-ldflags="$(LDFLAGS) -X main.version=$(VERSION) -X $(MODULE)/cmd.spotifyClientID=$(SPOTIFY_CLIENT_ID)" \
 		-o $(BINARY_DIR)/$(BINARY_NAME) \
 		.
 	@echo "✓ Built: $(BINARY_DIR)/$(BINARY_NAME)"
