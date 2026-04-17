@@ -1,12 +1,14 @@
-# Release workflow — fires when release-please creates a GitHub Release.
+# Release workflow — fires when a v* tag is pushed.
 # GoReleaser builds 5 platform binaries, creates a GitHub Release,
 # pushes the Homebrew formula and Scoop manifest, and uploads DEB/RPM packages.
 # Prerequisite: RELEASE_PAT secret must exist (see docs/GITHUB-SETUP.md).
 name: Release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
