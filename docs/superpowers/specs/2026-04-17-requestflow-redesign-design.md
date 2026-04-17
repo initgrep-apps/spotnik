@@ -29,24 +29,31 @@ The existing RequestFlow pane has three issues:
 ### Layout overview
 
 ```
-╭─ GATEWAY banner (full width, 1 content row) ──────────────────────────────────╮
-│  TOKENS ●●●●●●●●○○ 8/10 · SLOTS ■■□□□ 2/5 · BACKOFF none · DEDUP 1 waiting    │
-╰───────────────────────────────────────────────────────────────────────────────╯
+╭─ GATEWAY banner (full width, 1 content row) ──────────────────────────────────────────────────────────────╮
+│  TOKENS  ●●●●●●●●○○  8/10  ·  SLOTS  ■■□□□  2/5  ·  BACKOFF  none  ·  DEDUP  1 waiting                  │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-╭─ APP ──────────────╮  ╭─ GATEWAY LOG ──────────────────────────────╮  ╭─ SPOTIFY ──╮
-│ ⚡ PUT /player/vol  │  │ ✓ PUT /player/volume  token→8  slot 1/5    │  │ 200  43ms  │
-│ ◷  GET /player     │  │ ⧖ GET /player  dedup joined  ×3            │  │            │
-│ ◷  GET /player     │  │ ✗ PUT /player  blocked · backoff 8.2s      │  │ 200 322ms  │
-│ ◷  GET /queue      │  │ ⊖ token consumed → 7                       │  │            │
-│                    │  │ ⊞ semaphore acquired (2/5)                 │  │            │
-│                    │  │ ↻ tokens refilled → 10                     │  │            │
-│                    │  │ ✓ GET /player/queue  allowed               │  │            │
-╰────────────────────╯  ╰────────────────────────────────────────────╯  ╰────────────╯
+╭─[blue] APP ────────────╮    ╭─[orange] GATEWAY LOG ─────────────────────────────────────╮    ╭─[green] SPOTIFY ──────────────╮
+│ ⚡ PUT /player/volume   │    │ ✓ PUT /player/volume  token→8  slot 1/5                   │    │ 200  GET /player/volume  43ms │
+│ ◷  GET /player          │    │ ⧖ GET /player  dedup joined  ×3                           │    │ 200  GET /player/queue  322ms │
+│ ◷  GET /player          │    │ ✗ PUT /player  blocked · backoff 8.2s                     │    │ 429  PUT /player/volume   8ms │
+│ ◷  GET /player/queue    │    │ ⊖ token consumed → 7                                      │    │ ···  GET /player          ··· │
+│                         │    │ ⊞ semaphore acquired (2/5)                                │    │                               │
+│                         │    │ ↻ tokens refilled → 10                                    │    │                               │
+│                         │    │ ✓ GET /player/queue  allowed                              │    │                               │
+╰─────────────────────────╯    ╰────────────────────────────────────────────────────────────╯    ╰───────────────────────────────╯
 
-╭─ AUTO-TRAFFIC (full width, 1 content row) ────────────────────────────────────╮
-│  ▶ playback every 1s · running   ·   ⚠ playlists 21m ago   ·   liked fresh   │
-╰───────────────────────────────────────────────────────────────────────────────╯
+╭─ AUTO-TRAFFIC (full width, 1 content row) ────────────────────────────────────────────────────────────────╮
+│  ▶ playback  every 1s · running   ·   ⚠ playlists  21m ago   ·   ⚠ albums  21m ago   ·   liked  fresh    │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
+Key observations in the mockup:
+- SPOTIFY has 4 rows while APP has 4 requests — the dedup-joined GET /player entries
+  do **not** appear in SPOTIFY (they never reached Spotify), confirming the omission rule.
+- The in-flight row (`···  GET /player  ···`) shows a request still waiting for a response.
+- The 429 row appears in SPOTIFY because it **did** reach Spotify — it was Spotify that
+  returned 429, not a gateway rejection.
 
 Four distinct zones replace the old three-box layout:
 
