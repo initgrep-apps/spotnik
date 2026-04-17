@@ -60,8 +60,10 @@ Reach for the right tool for each task:
   fix spec. More thorough than `Explore` for a single focused area.
 - **`context7` MCP**: library and framework documentation. Use whenever the
   feature involves a library, API, or framework you need to understand.
-- **`firecrawl-search` / `WebSearch`**: external research, finding prior art,
-  checking community patterns.
+- **`firecrawl-search`**: external research requiring full page content —
+  docs, GitHub issues, blog posts.
+- **`WebSearch`**: quick lookup when a snippet or title is enough — finding
+  prior art, checking community patterns.
 
 These extend what you can do — use them freely alongside your own tool calls.
 
@@ -79,9 +81,48 @@ Determine which category this falls into:
   regression, error, wrong, incorrect
 
 Improvements are treated as issues for output purposes (added to `issues.md`
-or triaged into a story), unless scope warrants a full feature spec.
+or triaged into a story), unless scope warrants a full feature spec (use Path B).
 
 **If ambiguous:** ask the user to clarify before proceeding.
+
+---
+
+## DETERMINE FEATURE HOME
+
+Before deciding whether to create a new feature directory, check whether this
+work belongs to an existing feature.
+
+Read the spec overview index (`docs/spec/00-overview.md`) and scan existing
+feature directories. Then answer:
+
+**Add a story to an existing feature when ALL of these are true:**
+- The work touches the same user-facing domain as an existing feature (same
+  pane, same API endpoint domain, same user workflow)
+- It can be described as polishing, extending, fixing, or completing something
+  already tracked in that feature
+- It doesn't require an entirely new domain concept (new pane, new API client
+  domain, new user flow with no existing home)
+- Story count is small (1–3 stories) — it won't make the feature incoherent
+
+**Create a new feature directory when ANY of these are true:**
+- No existing feature's domain naturally contains this work
+- Requires a new pane, new API client domain, or new top-level user flow
+- Scope warrants 4+ stories of genuinely new ground
+- Adding it to an existing feature would make that feature's description
+  incoherent or overly broad
+
+**How to decide:** Read the feature descriptions in `00-overview.md`. If you
+can complete the sentence "This is a story for the [Feature Name] feature
+because it [extends/polishes/fixes] [specific aspect]" — add it there. If you
+can't complete that sentence clearly, it's a new feature.
+
+**If ambiguous:** surface the choice to the user. Say which existing feature
+seems closest and ask if that's the right home, or whether they see this as
+a new feature area.
+
+**If the user overrides your decision** (e.g., insists on a new feature when
+you'd add a story, or vice versa) — respect their call. They know the product
+intent better than the code.
 
 ---
 
@@ -101,7 +142,7 @@ For **features and improvements:**
 - Explore scope — what's in, what's out
 - Identify user stories, edge cases, acceptance criteria
 - Consider dependencies on existing features
-- Read the relevant code by invoking skill `feature-dev:code-explorer`. This will provide you comprehensive view of the application code,
+- Read the relevant code by invoking skill `feature-dev:code-explorer` to get a comprehensive view of the application code.
 - Propose 2-3 approaches if the solution isn't obvious
 
 For **bugs and issues:**
@@ -116,18 +157,40 @@ For **bugs and issues:**
 ## OUTPUT: THE SPEC
 
 When you and the user have aligned on what to build or fix, produce the spec.
+There are three paths — use `DETERMINE FEATURE HOME` to pick the right one.
 
-### For features and large improvements
+---
 
-Features are directories with a `feature.md` and individual story files:
+### Path A: New story in an existing feature
+
+When the work belongs to an existing feature's domain:
+
+1. Locate the feature directory: `docs/spec/features/NN-name/`
+2. Determine the next story number — story numbers are **global** across the
+   entire project (not per-feature). Scan all existing story files across all
+   features for the highest number, then increment by one.
+3. Create the story file: `docs/spec/features/NN-name/stories/NNN-story-name.md`
+4. Match the exact format of existing story files (learned in "Before Anything Else")
+5. If the feature's status needs updating (e.g., was `done`, now has open work),
+   update `feature.md` frontmatter status
+6. Update `docs/spec/00-overview.md` — update the Stories column for this feature
+
+---
+
+### Path B: New feature directory
+
+When no existing feature covers this work:
 
 1. Determine the next feature number by listing existing feature directories
    and incrementing
 2. Create `docs/spec/features/NN-name/`
 3. Create `feature.md` — high-level description and acceptance criteria only
 4. Create `stories/` subdirectory with individual story files — each story has
-   background, design, acceptance criteria, and tasks with tests
+   background, design, acceptance criteria, and tasks with tests. Story numbers
+   are **global** across the entire project (not per-feature) — scan all
+   existing story files for the highest number before numbering the new stories.
 5. Match the project's existing format exactly (learned in "Before Anything Else")
+6. Update `docs/spec/00-overview.md` — add a new row for this feature
 
 **Story granularity:** a story is one logical unit of work that can be reviewed
 and shipped independently. If a task touches a single layer cleanly, it's likely
@@ -143,15 +206,27 @@ micro-stories (one function per story). Each story's tasks should specify:
 Stories must be detailed enough for an autonomous implementer agent to execute
 without ambiguity.
 
-### For bugs, issues, and small improvements
+---
 
-Add to `docs/spec/issues.md` rather than creating a full feature. When ready
-to triage into a proper story, move it to the appropriate feature's `stories/`
-directory.
+### Path C: Bug or small improvement
 
-### User review
+When the work is a bug fix or small improvement not warranting a full story:
 
-Present the complete spec to the user. Iterate until they approve.
+Add to `docs/spec/issues.md` rather than creating a full feature or story.
+Read `issues.md` first to match the existing entry format exactly.
+When ready to triage, move it to the appropriate feature's `stories/` directory.
+
+---
+
+## REVIEW WITH USER
+
+Present the complete spec in the conversation before writing any files.
+Iterate until the user approves.
+
+During review, verify:
+- Format matches the templates learned from existing specs
+- Acceptance criteria are testable and unambiguous
+- Tasks have enough detail for an autonomous implementer to execute without clarification
 
 ---
 
@@ -159,10 +234,12 @@ Present the complete spec to the user. Iterate until they approve.
 
 Once the user approves:
 
-1. Write the feature directory, `feature.md`, and story files (or update
-   `issues.md` for bugs)
-2. Update the overview index file to include the new feature
-3. Commit with: `docs(spec): add feature {NN} — {title}`
+1. Write the spec files per the appropriate path (A, B, or C)
+2. Update `docs/spec/00-overview.md` to reflect the change
+3. Commit with the message matching the path taken:
+   - Path A: `docs(spec): add story {NNN} to feature {NN} — {title}`
+   - Path B: `docs(spec): add feature {NN} — {title}`
+   - Path C: `docs(spec): add issue — {title}`
 4. Confirm with the user before pushing — ask where they want this to go
    (main, a branch, or they'll handle it)
 
@@ -175,4 +252,5 @@ After the spec is committed:
 > "Spec committed. Ready to implement? I'll hand this to the orchestrator."
 
 - **User says yes** → invoke the `/orchestrate` skill with `feature {NN}`
+  (the orchestrator picks up the spec and drives end-to-end implementation)
 - **User says no** → "Spec is saved at `{path}`. Run `/orchestrate feature {NN}` when ready."
