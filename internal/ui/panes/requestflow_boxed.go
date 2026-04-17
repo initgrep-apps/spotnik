@@ -256,44 +256,60 @@ func (p *RequestFlowPane) buildGatewayBoxLines(maxRows int) []string {
 }
 
 // buildSpotifyBoxLines returns styled content lines for the SPOTIFY sub-box.
-// Lines show HTTP status + latency only for requests in phaseInFlight or phaseCompleted.
-// Padded with empty strings if fewer requests exist.
+// Format per row: [status]  [method] [path]  [latency]
+// Only requests that reached Spotify are included — blocked and dedup-joined
+// requests are omitted. No padding: the box height reflects actual HTTP traffic.
 func (p *RequestFlowPane) buildSpotifyBoxLines(maxRows int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
 	anims := p.sortedAnimations()
-	lines := make([]string, 0, maxRows)
+	lines := make([]string, 0, len(anims))
+
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+
 	for _, a := range anims {
 		if len(lines) >= maxRows {
 			break
 		}
-		// Only show SPOTIFY entry when an HTTP call was made or is in progress.
-		if a.phase < phaseInFlight {
-			lines = append(lines, "")
+		// Skip requests that never reached Spotify.
+		if a.decision == domain.EventDedupJoined || a.decision == domain.EventRequestBlocked {
 			continue
 		}
-		latencyStr := fmt.Sprintf("%dms", a.durationMs)
+
+		// Skip requests that haven't yet reached the HTTP call phase.
+		if a.phase < phaseInFlight {
+			continue
+		}
+
+		path := stripAPIPrefix(a.path)
+		methodStr := secondaryStyle.Render(a.method)
+
+		if a.statusCode == 0 {
+			// In-flight — HTTP call in progress, no response yet.
+			placeholder := mutedStyle.Render("···")
+			lines = append(lines, fmt.Sprintf("%s  %s %s  %s",
+				placeholder, methodStr, mutedStyle.Render(path), placeholder))
+			continue
+		}
+
 		var statusStyle lipgloss.Style
-		suffix := ""
 		switch {
-		case a.statusCode == 0:
-			statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 		case a.statusCode >= 200 && a.statusCode < 300:
 			statusStyle = lipgloss.NewStyle().Foreground(p.theme.Success())
 		case a.statusCode == 429:
 			statusStyle = lipgloss.NewStyle().Foreground(p.theme.Warning())
-			suffix = " ⚠"
 		case a.statusCode >= 500:
 			statusStyle = lipgloss.NewStyle().Foreground(p.theme.Error())
 		default:
 			statusStyle = lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
 		}
-		statusStr := statusStyle.Render(fmt.Sprintf("%-6d", a.statusCode))
-		lines = append(lines, fmt.Sprintf("%s %-8s%s", statusStr, latencyStr, suffix))
-	}
-	for len(lines) < maxRows {
-		lines = append(lines, "")
+
+		statusStr := statusStyle.Render(fmt.Sprintf("%d", a.statusCode))
+		pathStr := statusStyle.Render(path)
+		latStr := secondaryStyle.Render(fmt.Sprintf("%dms", a.durationMs))
+		lines = append(lines, fmt.Sprintf("%s  %s %s  %s", statusStr, methodStr, pathStr, latStr))
 	}
 	return lines
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // newInternalTestPane creates a RequestFlowPane for internal helper testing.
@@ -206,41 +207,89 @@ func TestBuildGatewayBoxLines_ShowsDecisionLog(t *testing.T) {
 
 // --- Task 3: buildSpotifyBoxLines ---
 
-func TestBuildSpotifyBoxLines_429ContainsWarning(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 5
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/me/player"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/me/player", StatusCode: 429, DurationMs: 5})
-	lines := p.buildSpotifyBoxLines(3)
-	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "⚠")
-}
-
-func TestBuildSpotifyBoxLines_BeforeHttpCompleted_EmptyEntry(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	// Only RequestEntered — no HTTP response yet.
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: 1, Method: "GET", Path: "/ep"})
-	lines := p.buildSpotifyBoxLines(3)
-	// The request is in phaseEntered, so SPOTIFY entry should be empty.
-	assert.Len(t, lines, 3)
-}
-
-func TestBuildSpotifyBoxLines_PadsToMaxRows(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 10
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/ep", StatusCode: 200, DurationMs: 30})
-	lines := p.buildSpotifyBoxLines(3)
-	assert.Len(t, lines, 3)
-}
-
 func TestBuildSpotifyBoxLines_ZeroMaxRows(t *testing.T) {
 	p := newInternalTestPane()
 	lines := p.buildSpotifyBoxLines(0)
 	assert.Len(t, lines, 0)
+}
+
+// --- Task 7: buildSpotifyBoxLines new format ---
+
+func TestBuildSpotifyBoxLines_ShowsStatusMethodPath(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 1
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID:  reqID,
+		method:     "GET",
+		path:       "/v1/me/player",
+		phase:      phaseCompleted,
+		decision:   domain.EventRequestAllowed,
+		statusCode: 200,
+		durationMs: 43,
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	require.NotEmpty(t, lines)
+	combined := strings.Join(lines, "\n")
+	assert.Contains(t, combined, "200")
+	assert.Contains(t, combined, "GET")
+	assert.Contains(t, combined, "/player") // /v1/me stripped
+	assert.Contains(t, combined, "43ms")
+}
+
+func TestBuildSpotifyBoxLines_OmitsBlockedRequests(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 2
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID: reqID,
+		method:    "PUT",
+		path:      "/v1/me/player/volume",
+		phase:     phaseCompleted,
+		decision:  domain.EventRequestBlocked,
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.NotContains(t, combined, "PUT", "blocked request must not appear in SPOTIFY box")
+}
+
+func TestBuildSpotifyBoxLines_OmitsDedupJoined(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 3
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID: reqID,
+		method:    "GET",
+		path:      "/v1/me/player",
+		phase:     phaseCompleted,
+		decision:  domain.EventDedupJoined,
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.Empty(t, strings.TrimSpace(combined), "dedup-joined request must not appear in SPOTIFY box")
+}
+
+func TestBuildSpotifyBoxLines_InFlightShowsPlaceholder(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 4
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID: reqID,
+		method:    "GET",
+		path:      "/v1/me/player",
+		phase:     phaseInFlight, // in-flight = HTTP call in progress, no response yet
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.Contains(t, combined, "···", "in-flight request must show placeholder")
 }
 
 // --- Task 6: buildGatewayBoxLines pure event log ---
