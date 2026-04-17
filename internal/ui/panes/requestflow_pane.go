@@ -556,9 +556,16 @@ func (p *RequestFlowPane) ageOutEntries() {
 	p.displayState.decisions = filtered
 
 	// Age out completed requests older than 5s.
+	// Also force-remove any request stuck in an incomplete phase for more than
+	// 30s — this covers the ring-buffer overflow case where EventRequestAllowed
+	// was overwritten before drainEvents() could read it, leaving the animation
+	// permanently below phaseCompleted.
 	completedCutoff := now.Add(-5 * time.Second)
+	staleCutoff := now.Add(-30 * time.Second)
 	for id, anim := range p.displayState.requests {
 		if anim.phase >= phaseCompleted && anim.enteredAt.Before(completedCutoff) {
+			delete(p.displayState.requests, id)
+		} else if anim.enteredAt.Before(staleCutoff) {
 			delete(p.displayState.requests, id)
 		}
 	}
