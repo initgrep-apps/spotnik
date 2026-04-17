@@ -178,41 +178,6 @@ func TestBuildAppBoxLines_ZeroMaxRows(t *testing.T) {
 
 // --- Task 3: buildGatewayBoxLines ---
 
-func TestBuildGatewayBoxLines_AlwaysIncludesTokenAndSemaphore(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	// Inject snapshot with full bucket.
-	injectEventInternal(p, s, domain.GatewayEvent{
-		Kind: domain.EventSemaphoreReleased,
-		Snapshot: domain.GatewayStateSnapshot{
-			TokensAvailable:  10,
-			TokensMax:        10,
-			ConcurrentActive: 0,
-			ConcurrentMax:    5,
-		},
-	})
-	lines := p.buildGatewayBoxLines(5)
-	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "●")
-	assert.Contains(t, combined, "□")
-}
-
-func TestBuildGatewayBoxLines_ThrottleShowsBackoff(t *testing.T) {
-	s := state.New()
-	s.SetThrottle(true, 30, time.Now())
-	p := newInternalTestPaneWithStore(s)
-	lines := p.buildGatewayBoxLines(6)
-	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "backoff")
-}
-
-func TestBuildGatewayBoxLines_NoThrottleNoBackoff(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildGatewayBoxLines(5)
-	combined := strings.Join(lines, "\n")
-	assert.NotContains(t, combined, "backoff")
-}
-
 func TestBuildGatewayBoxLines_PadsToMaxRows(t *testing.T) {
 	p := newInternalTestPane()
 	lines := p.buildGatewayBoxLines(8)
@@ -276,6 +241,35 @@ func TestBuildSpotifyBoxLines_ZeroMaxRows(t *testing.T) {
 	p := newInternalTestPane()
 	lines := p.buildSpotifyBoxLines(0)
 	assert.Len(t, lines, 0)
+}
+
+// --- Task 6: buildGatewayBoxLines pure event log ---
+
+func TestBuildGatewayBoxLines_NoStateMetrics(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	// Push a decision event so there's something in the log.
+	p.displayState.decisions = append(p.displayState.decisions, decisionEntry{
+		kind:  domain.EventRequestAllowed,
+		label: "✓ GET /player  allowed",
+	})
+	lines := p.buildGatewayBoxLines(10)
+	for _, l := range lines {
+		assert.NotContains(t, l, "tokens", "gateway log box must not contain token metric header")
+		assert.NotContains(t, l, "concurrent", "gateway log box must not contain semaphore metric header")
+	}
+}
+
+func TestBuildGatewayBoxLines_ContainsDecisionEntry(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	p.displayState.decisions = append(p.displayState.decisions, decisionEntry{
+		kind:  domain.EventRequestAllowed,
+		label: "✓ GET /player  allowed",
+	})
+	lines := p.buildGatewayBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.Contains(t, combined, "allowed")
 }
 
 // --- Task 6: gatewayStateLines ---

@@ -345,10 +345,17 @@ func (p *RequestFlowPane) renderFlatSpotifyEntry(a *requestAnimation) string {
 	return fmt.Sprintf("%s %-8s%s", statusStr, latencyStr, suffix)
 }
 
-// renderGatewayState renders the GATEWAY column details (token bucket, semaphore, backoff).
-// Delegates to gatewayStateLines() defined in requestflow_boxed.go for DRY reuse.
+// renderGatewayState renders a compact one-line gateway state summary for the flat layout.
 func (p *RequestFlowPane) renderGatewayState() string {
-	return strings.Join(p.gatewayStateLines(), "\n")
+	snap := p.displayState.snapshot
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
+	slotBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
+	return secondaryStyle.Render("tokens") + " " + tokenBar + "  " +
+		secondaryStyle.Render("slots") + " " + slotBar
 }
 
 // renderGatewayBanner renders a full-width single-row box showing live gateway health.
@@ -427,9 +434,11 @@ func (p *RequestFlowPane) processNextEvent() {
 
 	// Append to decision log.
 	p.displayState.decisions = append(p.displayState.decisions, decisionEntry{
-		kind:    event.Kind,
-		label:   formatDecisionLabel(event),
-		shownAt: time.Now(),
+		kind:       event.Kind,
+		label:      formatDecisionLabel(event),
+		shownAt:    time.Now(),
+		priority:   event.Priority,
+		statusCode: event.StatusCode,
 	})
 }
 

@@ -194,61 +194,59 @@ func (p *RequestFlowPane) buildAppBoxLines(maxRows int) []string {
 	return lines
 }
 
-// buildGatewayBoxLines returns styled content lines for the GATEWAY sub-box.
-// Lines show gateway state bars (token bucket, semaphore, backoff, dedup, in-flight)
-// followed by the scrolling decision log, up to maxRows. Padded with empty strings.
+// buildGatewayBoxLines returns styled content lines for the GATEWAY LOG sub-box.
+// Pure event stream — no state metric bars. State is shown in the GATEWAY banner.
+// Events are newest-first (most recent at top). Padded to maxRows with empty strings.
 func (p *RequestFlowPane) buildGatewayBoxLines(maxRows int) []string {
 	if maxRows <= 0 {
 		return nil
 	}
-	// State bars from snapshot.
-	raw := p.gatewayStateLines()
+
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
+
 	lines := make([]string, 0, maxRows)
-	for i, l := range raw {
-		if i >= maxRows {
-			break
-		}
-		lines = append(lines, l)
-	}
-
-	// Decision log below state bars.
-	if len(lines) < maxRows {
-		successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
-		errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
-		warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
-		secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-		mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-		primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
-
-		for i := len(p.displayState.decisions) - 1; i >= 0 && len(lines) < maxRows; i-- {
-			d := p.displayState.decisions[i]
-			var style lipgloss.Style
-			switch d.kind {
-			case domain.EventRequestEntered:
-				// Interactive entries use TextPrimary; background use TextMuted.
-				// We don't have priority info on decisionEntry, use label prefix heuristic.
-				if strings.Contains(d.label, "[int]") {
-					style = primaryStyle
-				} else {
-					style = mutedStyle
-				}
-			case domain.EventRequestAllowed, domain.EventBackoffExpired,
-				domain.EventDedupResolved, domain.EventHttpCompleted:
-				style = successStyle
-			case domain.EventRequestBlocked:
-				style = errorStyle
-			case domain.EventDedupJoined:
-				style = warnStyle
-			case domain.EventTokenConsumed, domain.EventSemaphoreAcquired,
-				domain.EventSemaphoreReleased:
-				style = secondaryStyle
-			case domain.EventTokenRefilled:
-				style = mutedStyle
-			default:
+	for i := len(p.displayState.decisions) - 1; i >= 0 && len(lines) < maxRows; i-- {
+		d := p.displayState.decisions[i]
+		var style lipgloss.Style
+		switch d.kind {
+		case domain.EventRequestEntered:
+			if d.priority == domain.PriorityInteractive {
+				style = primaryStyle
+			} else {
 				style = mutedStyle
 			}
-			lines = append(lines, style.Render(d.label))
+		case domain.EventRequestAllowed, domain.EventBackoffExpired,
+			domain.EventDedupResolved:
+			style = successStyle
+		case domain.EventHttpCompleted:
+			switch {
+			case d.statusCode >= 200 && d.statusCode < 300:
+				style = successStyle
+			case d.statusCode == 429:
+				style = warnStyle
+			case d.statusCode >= 500:
+				style = errorStyle
+			default:
+				style = secondaryStyle
+			}
+		case domain.EventRequestBlocked, domain.EventBackoffStarted:
+			style = errorStyle
+		case domain.EventDedupJoined:
+			style = warnStyle
+		case domain.EventTokenConsumed, domain.EventSemaphoreAcquired,
+			domain.EventSemaphoreReleased:
+			style = secondaryStyle
+		case domain.EventTokenRefilled:
+			style = mutedStyle
+		default:
+			style = mutedStyle
 		}
+		lines = append(lines, style.Render(d.label))
 	}
 
 	for len(lines) < maxRows {

@@ -32,9 +32,11 @@ type requestAnimation struct {
 
 // decisionEntry is one line in the GATEWAY box's scrolling decision log.
 type decisionEntry struct {
-	kind    domain.EventKind
-	label   string    // formatted: "✓ GET /player allowed", "↻ refilled → 10"
-	shownAt time.Time // when this entry was added (for age-out)
+	kind       domain.EventKind
+	label      string                 // formatted: "✓ GET /player allowed", "↻ refilled → 10"
+	shownAt    time.Time              // when this entry was added (for age-out)
+	priority   domain.RequestPriority // for EventRequestEntered color
+	statusCode int                    // for EventHttpCompleted color
 }
 
 // replayDisplayState is the render model that View() reads from.
