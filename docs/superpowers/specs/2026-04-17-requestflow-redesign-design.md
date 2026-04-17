@@ -30,14 +30,14 @@ The existing RequestFlow pane has three issues:
 
 ```
 ╭─ GATEWAY banner (full width, 1 content row) ──────────────────────────────────╮
-│  TOKENS ●●●●●●●●○○ 8/10 · SLOTS ■■□□□ 2/5 · BACKOFF none · DEDUP 1 waiting  │
+│  TOKENS ●●●●●●●●○○ 8/10 · SLOTS ■■□□□ 2/5 · BACKOFF none · DEDUP 1 waiting    │
 ╰───────────────────────────────────────────────────────────────────────────────╯
 
-╭─ APP ─────────────╮  ╭─ GATEWAY LOG ───────────────────────────────╮  ╭─ SPOTIFY ──╮
-│ ⚡ PUT /player/vol │  │ ✓ PUT /player/volume  token→8  slot 1/5    │  │ 200  43ms  │
-│ ◷  GET /player     │  │ ⧖ GET /player  dedup joined  ×3           │  │            │
-│ ◷  GET /player     │  │ ✗ PUT /player  blocked · backoff 8.2s     │  │ 200 322ms  │
-│ ◷  GET /queue      │  │ ⊖ token consumed → 7                      │  │            │
+╭─ APP ──────────────╮  ╭─ GATEWAY LOG ──────────────────────────────╮  ╭─ SPOTIFY ──╮
+│ ⚡ PUT /player/vol  │  │ ✓ PUT /player/volume  token→8  slot 1/5    │  │ 200  43ms  │
+│ ◷  GET /player     │  │ ⧖ GET /player  dedup joined  ×3            │  │            │
+│ ◷  GET /player     │  │ ✗ PUT /player  blocked · backoff 8.2s      │  │ 200 322ms  │
+│ ◷  GET /queue      │  │ ⊖ token consumed → 7                       │  │            │
 │                    │  │ ⊞ semaphore acquired (2/5)                 │  │            │
 │                    │  │ ↻ tokens refilled → 10                     │  │            │
 │                    │  │ ✓ GET /player/queue  allowed               │  │            │
@@ -181,12 +181,45 @@ with `/v1/me`.
 
 #### SPOTIFY box (green border)
 
-Unchanged in content. One line per request that has reached `phaseInFlight` or
-`phaseCompleted`. Empty line for requests that did not reach Spotify (blocked, dedup
-joined).
+Shows only requests that actually reached Spotify — requests rejected by the gateway
+(blocked, dedup joined) are omitted entirely. This makes the box self-contained: you
+do not need to cross-reference the APP or GATEWAY LOG columns to understand what it
+shows.
 
-Color rules unchanged: `Success()` for 2xx, `Warning()` for 429, `Error()` for 5xx,
-`TextMuted()` for in-flight (no code yet).
+Each line: `[status]  [method] [path]  [latency]`
+
+```
+200  GET /player         43ms
+200  GET /player/queue  322ms
+429  PUT /player/vol      8ms
+```
+
+Path uses the same `/v1/me` prefix stripping as the GATEWAY LOG. Method is included
+because it distinguishes reads (GET) from writes (PUT/POST/DELETE) — two requests to
+the same path with different methods mean different things.
+
+In-flight requests (status not yet known) render as a dim placeholder:
+
+```
+···  PUT /player/vol      ···
+```
+
+**Color rules:**
+
+| Element | Color |
+|---|---|
+| Status 2xx | `Success()` |
+| Status 429 | `Warning()` |
+| Status 5xx | `Error()` |
+| In-flight placeholder (`···`) | `TextMuted()` |
+| Method (GET/PUT/POST/DELETE) | `TextSecondary()` |
+| Path | inherits from status color |
+| Latency | `TextSecondary()` |
+
+Because blocked and dedup-joined requests are omitted, the SPOTIFY box may have
+fewer rows than the APP or GATEWAY LOG boxes. Empty rows are NOT padded to match —
+the box simply shows fewer lines, which itself communicates "fewer requests reached
+Spotify than the app sent."
 
 ---
 
@@ -273,9 +306,14 @@ No changes to `requestflow_replay.go`, `domain/`, `state/`, or theme files.
 - GATEWAY LOG shows only the decision log — no token/semaphore metric bars.
 - `EventRequestBlocked` lines render in `Error()`.
 - `EventDedupJoined` lines render in `Warning()`.
-- `EventRequestAllowed` and `EventHttpCompleted` lines render in `Success()`.
+- `EventRequestAllowed` and `EventHttpCompleted` (2xx) lines render in `Success()`.
+- `EventHttpCompleted` (429) renders in `Warning()`, (5xx) in `Error()`.
 - `EventTokenConsumed`, `EventSemaphoreAcquired/Released` render in `TextSecondary()`.
 - Path strings in the log are truncated to strip the `/v1/me` prefix.
+- SPOTIFY box shows `[status]  [method] [path]  [latency]` per request.
+- SPOTIFY box omits blocked and dedup-joined requests entirely (no empty placeholder rows).
+- SPOTIFY box in-flight requests render as `···  [method] [path]  ···` in `TextMuted()`.
+- SPOTIFY box method column renders in `TextSecondary()`, path inherits status color.
 - AUTO-TRAFFIC strip is visible as a single full-width box at the bottom.
 - Polling state shows `▶ playback every Xs · running` (green) or `⏸ … idle Xs` (yellow).
 - Stale cache domains show `⚠ domain Xm ago` in `Warning()`; fresh domains show `fresh` in `TextMuted()`.
