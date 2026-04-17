@@ -217,5 +217,8 @@ func (p *RequestFlowPane) buildSpotifyBoxLines(maxRows int) []string {
 		latStr := secondaryStyle.Render(fmt.Sprintf("%dms", a.durationMs))
 		lines = append(lines, fmt.Sprintf("%s  %s %s  %s", statusStr, methodStr, pathStr, latStr))
 	}
+	for len(lines) < maxRows {
+		lines = append(lines, "")
+	}
 	return lines
 }
