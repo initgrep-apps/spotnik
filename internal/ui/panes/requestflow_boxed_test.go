@@ -497,6 +497,68 @@ func TestBuildLeftArrowLines_BlockedDecision(t *testing.T) {
 	assert.Contains(t, combined, "╳", "EventRequestBlocked should render ╳ in left arrow")
 }
 
+// --- Task 8: renderAutoTrafficStrip ---
+
+func TestRenderAutoTrafficStrip_HasBorders(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "AUTO-TRAFFIC")
+	assert.Contains(t, out, "╭")
+	assert.Contains(t, out, "╰")
+}
+
+func TestRenderAutoTrafficStrip_ShowsPollingRunning(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	_, _ = p.Update(PollingSnapshotMsg{TickIntervalMs: 1000, IsIdle: false})
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "▶")
+	assert.Contains(t, out, "1s")
+	assert.Contains(t, out, "running")
+}
+
+func TestRenderAutoTrafficStrip_ShowsPollingIdle(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	_, _ = p.Update(PollingSnapshotMsg{TickIntervalMs: 3000, IsIdle: true, IdleSecs: 60})
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "⏸")
+	assert.Contains(t, out, "60s")
+}
+
+func TestRenderAutoTrafficStrip_NeverFetchedCache(t *testing.T) {
+	s := state.New() // no FetchedAt stamps — all zero
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "never fetched")
+}
+
+func TestRenderAutoTrafficStrip_FreshCache(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetchedAt(time.Now().Add(-1 * time.Minute))
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "fresh")
+}
+
+func TestRenderAutoTrafficStrip_StaleCache(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "⚠")
+	assert.Contains(t, out, "playlists")
+}
+
+func TestRenderAutoTrafficStrip_NilStore_NoPanic(t *testing.T) {
+	p := NewRequestFlowPane(nil, theme.Load("black"))
+	assert.NotPanics(t, func() {
+		out := p.renderAutoTrafficStrip(120)
+		assert.Contains(t, out, "AUTO-TRAFFIC")
+	})
+}
+
 // --- Story 74 Task 1: renderSubBox uses accent color ---
 
 // TestRenderSubBox_UsesAccentColor verifies that renderSubBox() uses

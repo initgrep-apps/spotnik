@@ -852,6 +852,44 @@ func TestRequestFlowPane_View_InFlightKeys_Truncated(t *testing.T) {
 	assert.NotPanics(t, func() { _ = p.View() })
 }
 
+// --- AUTO-TRAFFIC strip via View() ---
+
+func TestRequestFlowPane_View_AutoTrafficStrip_Present(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(120, 30)
+	v := pane.View()
+	assert.Contains(t, v, "AUTO-TRAFFIC")
+}
+
+func TestRequestFlowPane_View_AutoTrafficStrip_RunningState(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(120, 30)
+	_, _ = pane.Update(panes.PollingSnapshotMsg{TickIntervalMs: 1000, IsIdle: false})
+	v := pane.View()
+	assert.Contains(t, v, "AUTO-TRAFFIC")
+	assert.Contains(t, v, "running")
+}
+
+func TestRequestFlowPane_View_AutoTrafficStrip_IdleState(t *testing.T) {
+	pane := newTestRequestFlowPane()
+	pane.SetSize(120, 30)
+	_, _ = pane.Update(panes.PollingSnapshotMsg{TickIntervalMs: 3000, IsIdle: true, IdleSecs: 90})
+	v := pane.View()
+	assert.Contains(t, v, "AUTO-TRAFFIC")
+	assert.Contains(t, v, "90s")
+}
+
+func TestRequestFlowPane_View_AutoTrafficStrip_StalePlaylist(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	p := panes.NewRequestFlowPane(s, theme.Load("black"))
+	p.SetSize(120, 30)
+	v := p.View()
+	assert.Contains(t, v, "AUTO-TRAFFIC")
+	assert.Contains(t, v, "playlists")
+	assert.Contains(t, v, "⚠")
+}
+
 // --- Helper functions ---
 
 func containsAny(s string, subs ...string) bool {

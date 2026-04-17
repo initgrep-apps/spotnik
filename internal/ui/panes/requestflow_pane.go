@@ -151,8 +151,9 @@ func (p *RequestFlowPane) View() string {
 func (p *RequestFlowPane) viewBoxed() string {
 	contentWidth := p.width
 	statusStripHeight := 1
-	// boxAreaHeight: subtract status strip and 1 blank separator row.
-	boxAreaHeight := p.height - statusStripHeight - 1
+	autoTrafficHeight := 3 // bordered sub-box: top border + 1 content row + bottom border
+	// boxAreaHeight: subtract status strip, auto-traffic strip, and 1 blank separator row.
+	boxAreaHeight := p.height - statusStripHeight - autoTrafficHeight - 1
 	// Need at least 3 rows for a meaningful box (top border + 1 content row + bottom border).
 	if boxAreaHeight < 3 {
 		return p.viewFlat()
@@ -213,7 +214,7 @@ func (p *RequestFlowPane) viewBoxed() string {
 	composite := lipgloss.JoinHorizontal(lipgloss.Top,
 		appBox, leftBlock, gwBox, rightBlock, spotifyBox)
 
-	return composite + "\n" + p.renderStatusStrip()
+	return composite + "\n" + p.renderAutoTrafficStrip(contentWidth) + "\n" + p.renderStatusStrip()
 }
 
 // viewFlat renders the original flat table layout. Used as a fallback for narrow
@@ -400,6 +401,61 @@ func (p *RequestFlowPane) renderGatewayBanner(width int) string {
 	content := tokenSeg + sep + slotSeg + sep + backoffSeg + sep + dedupSeg
 
 	return p.renderSubBox("GATEWAY", []string{content}, width, p.theme.PaneBorderRequestFlow())
+}
+
+// renderAutoTrafficStrip renders a full-width AUTO-TRAFFIC box explaining why
+// background requests appear. It shows the current playback polling state and
+// library cache freshness for playlists, albums, liked tracks, and recent plays.
+func (p *RequestFlowPane) renderAutoTrafficStrip(width int) string {
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	sep := mutedStyle.Render("  ·  ")
+
+	// Polling segment.
+	interval := humanInterval(p.pollingState.TickIntervalMs)
+	var pollSeg string
+	if p.pollingState.IsIdle {
+		pollSeg = warnStyle.Render(fmt.Sprintf("⏸ playback  every %s · idle %ds", interval, p.pollingState.IdleSecs))
+	} else {
+		pollSeg = successStyle.Render(fmt.Sprintf("▶ playback  every %s · running", interval))
+	}
+
+	// Cache freshness segments.
+	segments := []string{pollSeg}
+	if p.store != nil {
+		type cacheEntry struct {
+			name string
+			fa   time.Time
+			ttl  time.Duration
+		}
+		entries := []cacheEntry{
+			{"playlists", p.store.PlaylistsFetchedAt(), state.PlaylistsTTL},
+			{"albums", p.store.AlbumsFetchedAt(), state.AlbumsTTL},
+			{"liked", p.store.LikedTracksFetchedAt(), state.LikedTracksTTL},
+			{"recent", p.store.RecentPlayedFetchedAt(), state.RecentlyPlayedTTL},
+		}
+		for _, e := range entries {
+			if e.fa.IsZero() {
+				segments = append(segments, mutedStyle.Render(e.name+"  never fetched"))
+				continue
+			}
+			if !state.IsStale(e.fa, e.ttl) {
+				segments = append(segments, mutedStyle.Render(e.name+"  fresh"))
+				continue
+			}
+			age := humanAge(e.fa)
+			if time.Since(e.fa) >= time.Hour {
+				segments = append(segments, errorStyle.Render(fmt.Sprintf("⚠ %s  %s", e.name, age)))
+			} else {
+				segments = append(segments, warnStyle.Render(fmt.Sprintf("⚠ %s  %s", e.name, age)))
+			}
+		}
+	}
+
+	content := strings.Join(segments, sep)
+	return p.renderSubBox("AUTO-TRAFFIC", []string{content}, width, p.theme.ColumnPrimary())
 }
 
 // --- Replay engine ---
