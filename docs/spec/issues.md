@@ -81,3 +81,19 @@ Two test comments reference the old `fetchPlaybackStateCmd` signature:
 - `internal/app/app_test.go:458` — comment says `fetchPlaybackStateCmd(nil, store)` (wrong second arg); correct is `fetchPlaybackStateCmd(nil, api.Background)`
 
 Both are comment-only (non-executable), harmless but misleading to future readers.
+
+---
+
+## Splash test assertions match substring "dev" in "developers"
+**Found:** 2026-04-17 | **Source:** PR #170 Review
+**Feature:** 11-cicd
+
+The `assert.Contains(t, output, "dev")` assertions in `splash_test.go` and `app_test.go` (TestApp_SplashScreen_ShownOnStartup) can pass vacuously because the tagline "A terminal Spotify client for developers" contains "dev". Use a unique sentinel version string (e.g., "v-test-sentinel") for version rendering tests to avoid ambiguous assertions.
+
+---
+
+## No test for rootCmd.Version wiring in Execute()
+**Found:** 2026-04-17 | **Source:** PR #170 Review
+**Feature:** 11-cicd
+
+`cmd.Execute(version)` sets `rootCmd.Version = version` to enable `spotnik --version`, but there is no test verifying this wiring. A refactor that drops the assignment would silently break `--version` output. Add a test to `cmd/root_test.go` that calls `Execute("v1.2.3")` and asserts `RootCommand().Version == "v1.2.3"`.
