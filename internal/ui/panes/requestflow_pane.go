@@ -144,77 +144,82 @@ func (p *RequestFlowPane) View() string {
 	return p.viewBoxed()
 }
 
-// viewBoxed renders the three bordered sub-boxes layout.
-// Box proportions (approximate):
-//
-//	APP ~25% | left arrow ~8% | GATEWAY ~26% | right arrow ~8% | SPOTIFY ~20%
+// viewBoxed renders the four-zone redesigned layout:
+//  1. GATEWAY banner — full-width health summary (3 rows)
+//  2. Three-column area — APP | GATEWAY LOG | SPOTIFY (remaining height)
+//  3. AUTO-TRAFFIC strip — full-width polling + cache status (3 rows)
 func (p *RequestFlowPane) viewBoxed() string {
-	contentWidth := p.width
-	statusStripHeight := 1
-	autoTrafficHeight := 3 // bordered sub-box: top border + 1 content row + bottom border
-	// boxAreaHeight: subtract status strip, auto-traffic strip, and 1 blank separator row.
-	boxAreaHeight := p.height - statusStripHeight - autoTrafficHeight - 1
-	// Need at least 3 rows for a meaningful box (top border + 1 content row + bottom border).
+	const bannerHeight = 3 // border + 1 content + border
+	const autoHeight = 3   // border + 1 content + border
+	const spacing = 2      // 1 blank row above columns + 1 below
+
+	boxAreaHeight := p.height - bannerHeight - autoHeight - spacing
 	if boxAreaHeight < 3 {
 		return p.viewFlat()
 	}
-
-	// Column widths (proportional to pane width).
-	appBoxW := contentWidth * 25 / 100
-	arrowW := contentWidth * 8 / 100
-	gwBoxW := contentWidth * 26 / 100
-	spotifyBoxW := contentWidth * 20 / 100
-
-	// Enforce minimum widths so boxes are always meaningful.
-	if appBoxW < 10 {
-		appBoxW = 10
-	}
-	if arrowW < 7 {
-		arrowW = 7
-	}
-	if gwBoxW < 12 {
-		gwBoxW = 12
-	}
-	if spotifyBoxW < 10 {
-		spotifyBoxW = 10
-	}
-
-	// Guard: if minimums push total beyond pane width, fall back to flat layout.
-	if appBoxW+arrowW+gwBoxW+arrowW+spotifyBoxW > contentWidth {
+	innerRows := boxAreaHeight - 2 // subtract top/bottom border of column boxes
+	if innerRows < 1 {
 		return p.viewFlat()
 	}
 
-	// Inner row count = box height minus top/bottom border rows.
-	innerRows := boxAreaHeight - 2
-	if innerRows < 1 {
-		innerRows = 1
+	// Column widths: APP 28% | gap 2% | GATEWAY LOG 42% | gap 3% | SPOTIFY 25%
+	appW := p.width * 28 / 100
+	gwW := p.width * 42 / 100
+	spotifyW := p.width * 25 / 100
+	leftGapW := p.width * 2 / 100
+	rightGapW := p.width - appW - gwW - spotifyW - leftGapW
+	if rightGapW < 1 {
+		rightGapW = 1
 	}
 
-	// Build content lines for each box.
+	// Enforce minimum widths.
+	if appW < 12 {
+		appW = 12
+	}
+	if gwW < 20 {
+		gwW = 20
+	}
+	if spotifyW < 10 {
+		spotifyW = 10
+	}
+	if appW+leftGapW+gwW+rightGapW+spotifyW > p.width {
+		return p.viewFlat()
+	}
+
+	// Build content lines for each column.
 	appLines := p.buildAppBoxLines(innerRows)
 	gwLines := p.buildGatewayBoxLines(innerRows)
 	spotifyLines := p.buildSpotifyBoxLines(innerRows)
 
-	// Build arrow columns (one line per content row).
-	leftArrows := p.buildLeftArrowLines(innerRows, arrowW)
-	rightArrows := p.buildRightArrowLines(innerRows, arrowW)
+	// Render the three column boxes with distinct border colors.
+	appBox := p.renderSubBox("APP", appLines, appW, p.theme.ColumnPrimary())
+	gwBox := p.renderSubBox("GATEWAY LOG", gwLines, gwW, p.theme.PaneBorderRequestFlow())
+	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyW, p.theme.Success())
 
-	// Render bordered sub-boxes.
-	appBox := p.renderSubBox("APP", appLines, appBoxW, p.theme.PaneBorderRequestFlow())
-	gwBox := p.renderSubBox("GATEWAY", gwLines, gwBoxW, p.theme.PaneBorderRequestFlow())
-	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyBoxW, p.theme.PaneBorderRequestFlow())
+	// Gap blocks spanning the full column box area height (boxAreaHeight rows).
+	leftGap := buildGapBlock(leftGapW, boxAreaHeight)
+	rightGap := buildGapBlock(rightGapW, boxAreaHeight)
 
-	// Arrow blocks: pad with a blank line above and below to align
-	// arrow rows with box content rows (offset by border rows).
-	blankArrow := strings.Repeat(" ", arrowW)
-	leftBlock := blankArrow + "\n" + strings.Join(leftArrows, "\n") + "\n" + blankArrow
-	rightBlock := blankArrow + "\n" + strings.Join(rightArrows, "\n") + "\n" + blankArrow
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, appBox, leftGap, gwBox, rightGap, spotifyBox)
 
-	// Compose horizontally: APP | left arrows | GATEWAY | right arrows | SPOTIFY
-	composite := lipgloss.JoinHorizontal(lipgloss.Top,
-		appBox, leftBlock, gwBox, rightBlock, spotifyBox)
+	banner := p.renderGatewayBanner(p.width)
+	autoTraffic := p.renderAutoTrafficStrip(p.width)
 
-	return composite + "\n" + p.renderAutoTrafficStrip(contentWidth) + "\n" + p.renderStatusStrip()
+	return banner + "\n" + columns + "\n" + autoTraffic
+}
+
+// buildGapBlock returns a blank-space block for use as a gap column
+// in lipgloss.JoinHorizontal. Each line is `width` spaces; the block is `height` lines tall.
+func buildGapBlock(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	line := strings.Repeat(" ", width)
+	lines := make([]string, height)
+	for i := range lines {
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
 }
 
 // viewFlat renders the original flat table layout. Used as a fallback for narrow
