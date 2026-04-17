@@ -219,4 +219,3 @@ func (p *RequestFlowPane) buildSpotifyBoxLines(maxRows int) []string {
 	}
 	return lines
 }
-
