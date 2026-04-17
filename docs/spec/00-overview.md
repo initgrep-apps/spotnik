@@ -9,33 +9,17 @@
 
 | # | Feature | Path | Status | Stories | Description |
 |---|---------|------|--------|---------|-------------|
-| 00 | Architecture | `features/00-architecture/` | done | 21, 22, 34, 35 | Cross-cutting codebase health: import boundaries, app decomposition, dead code, type alignment |
-| 01 | Theme System | `features/01-theme/` | done | 01, 40 | Token-based color theming with five built-in themes and 16 extended tokens |
-| 02 | Authentication | `features/02-auth/` | done | 02, 17 | PKCE OAuth flow, token refresh, keychain storage, auth UX |
-| 03 | Playback Controls | `features/03-playback/` | done | 03, 11, 36 | Player polling, transport controls, progress/volume, command safety |
-| 04 | Library Browser | `features/04-library/` | done | 04, 10, 47 | Browse playlists/albums/liked songs, split into dedicated panes |
-| 05 | Search | `features/05-search/` | done | 05, 16 | Keyboard-native search overlay with debounced live results |
-| 06 | Queue Management | `features/06-queue/` | done | 06, 12, 46 | Queue viewer pane with bubble-table and layout.Pane interface |
-| 07 | Device Switcher | `features/07-devices/` | done | 07, 13 | Spotify Connect device selection overlay |
-| 08 | Stats Dashboard | `features/08-stats/` | done | 08, 14, 48, 55 | Top tracks, top artists, recently played — split into dedicated panes |
-| 09 | Playlist Manager | `features/09-playlists/` | done | 09 | Create, rename, reorder, delete playlists |
-| 10 | Error Resilience | `features/10-error-resilience/` | done | 18, 19, 24, 27 | Token refresh, rate limiting, typed errors, correctness fixes |
-| 11 | API Gateway | `features/11-api-gateway/` | done | 20, 23, 25, 28, 29-33, 37-39, 65 | Data-carrying messages, centralized gateway, notifications, staleness, idle backoff |
-| 12 | Layout System | `features/12-layout/` | done | 15, 26, 41-44, 49-50, 52-54 | Grid layout manager, btop borders, reusable components, responsive design |
-| 13 | NowPlaying | `features/13-nowplaying/` | done | 45, 58-60 | Real-time playback display with visualizer engine and split layout |
-| 14 | Nerd Status | `features/14-nerd-status/` | done | 51, 56, 61-64, 66-69 | Page B developer visibility: request flow, network log, gateway events |
-| 15 | CI/CD | `features/15-cicd/` | open | 57 | GitHub Actions, GoReleaser, multi-platform distribution |
-| 16 | Vivid Theme System | `features/16-vivid-themes/` | in-progress | 70, 71, 72, 73, 74, 75, 77, 78, 79 | Config-driven TOML themes, colorful borders, per-column colors, 6 new themes, runtime switcher overlay |
-| 17 | Bootstrap | `features/17-bootstrap/` | done | 76, 79, 80 | First-launch config bootstrap, embedded client ID, preference persistence engine |
-| 19 | Search Redesign | `features/19-search-redesign/` | done | 81–104 (done) | Full-screen search overlay with tabs, bubbles/list delegate, prefix autocomplete, rich metadata, UX polish; redesign (97–104): universal debounce, per-page fetch, context cancellation, gateway Interactive debounce, pagination controls, store cleanup |
-| 20 | Playback Context & Navigation | `features/20-playback-context/` | done | 105 (done), 106 (done), 107 (done) | Context-aware playback for all song-list panes, full playlist functionality, album drill-down |
-| 21 | Help Overlay | `features/21-help-overlay/` | done | 108 (done) | `?` key opens centered keybinding reference overlay; introduces docs/keybinding.md and CLAUDE.md maintenance rule |
-| 22 | Developer Foundations | `features/22-developer-foundations/` | done | 109 (done), 110 (done), 111 (done), 112 (done), 113 (done) | Onboarding docs, test infra, StateReader interface, file splits, BasePane pattern, RebuildTableTheme helper, auth client fix; follow-up: test coverage gaps, interface cleanup, nil guard |
-| 23 | User Profile & Subscription Awareness | `features/23-user-profile-subscription/` | done | 114 (done), 115 (done), 116 (done), 117 (done) | Expand UserProfile with tier/country, profile overlay (`u` key), header chip, Premium gate for playback keys and device transfer, splash notice |
-| 24 | Controls Cleanup and Fix | `features/24-controls-cleanup/` | done | 118 (done), 119 (done), 120 (done), 121 (done) | Fix broken Space/n keybindings, rebind t→g for time range, TopArtists Enter to play, remove dead pane actions, help overlay polish |
-| 25 | NowPlaying Controls Polish | `features/25-nowplaying-controls-polish/` | done | 122 (done), 123 (done) | Repeat-track superscript icon (↻¹), volume 1% steps, partial-block bar rendering |
-| 26 | Playback Control Correctness | `features/26-playback-correctness/` | done | 124 (done), 125 (done) | Request-aware dedup (Interactive GETs skip inflight map), remove gateway debounce |
-| 27 | Gateway Rate Protection | `features/27-gateway-rate-protection/` | done | 126, 127 | Reject Interactive requests during backoff (no more stuck queue), apply token bucket to Interactive (prevents hold-key 429) |
+| 01 | UI Layout & Components | `features/01-ui-foundation/` | done | 15, 26, 41–44, 49, 50, 52–54, 108 | Grid layout manager, btop borders, reusable table/filter components, help overlay |
+| 02 | API Gateway & Reliability | `features/02-api-infrastructure/` | in-progress | 18–35, 37–39, 65, 126–127 | Centralized gateway, rate limiting, dedup, error types, architecture health |
+| 03 | Playback & NowPlaying | `features/03-playback/` | in-progress | 03, 11, 36, 45, 58–60, 105–107, 118–125 | Transport controls, NowPlaying display, visualizer, context-aware playback, polish |
+| 04 | Queue & Device Switching | `features/04-queue-and-devices/` | in-progress | 06, 07, 12, 13, 46 | Queue viewer pane, Spotify Connect device selection |
+| 05 | Library Browser & Playlists | `features/05-library/` | in-progress | 04, 09, 10, 47 | Browse playlists/albums/liked songs, full playlist management |
+| 06 | Search | `features/06-search/` | in-progress | 05, 16, 81–104 | Full-screen overlay, multi-tab results, prefix autocomplete, pagination |
+| 07 | Stats & Listening History | `features/07-stats/` | in-progress | 08, 14, 48, 55 | Top tracks, top artists, recently played with time-range cycling |
+| 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79 | Token-based themes, TOML config, runtime switcher, 11 built-in themes |
+| 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | in-progress | 02, 17, 76, 79*, 80, 114–117 | PKCE OAuth, token refresh, first-launch bootstrap, profile overlay, Premium gating |
+| 10 | Developer Visibility (Page B) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
+| 11 | CI/CD & Release | `features/11-cicd/` | open | 57 | GitHub Actions, GoReleaser, multi-platform distribution |
 
 
 ---
@@ -46,5 +30,5 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-16* (feature 27 added)
+*Last updated: 2026-04-17* (spec reorganized: 27 features → 11)
 
