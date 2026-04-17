@@ -144,76 +144,83 @@ func (p *RequestFlowPane) View() string {
 	return p.viewBoxed()
 }
 
-// viewBoxed renders the three bordered sub-boxes layout.
-// Box proportions (approximate):
-//
-//	APP ~25% | left arrow ~8% | GATEWAY ~26% | right arrow ~8% | SPOTIFY ~20%
+// viewBoxed renders the four-zone redesigned layout:
+//  1. GATEWAY banner — full-width health summary (3 rows)
+//  2. Three-column area — APP | GATEWAY LOG | SPOTIFY (remaining height)
+//  3. AUTO-TRAFFIC strip — full-width polling + cache status (3 rows)
 func (p *RequestFlowPane) viewBoxed() string {
-	contentWidth := p.width
-	statusStripHeight := 1
-	// boxAreaHeight: subtract status strip and 1 blank separator row.
-	boxAreaHeight := p.height - statusStripHeight - 1
-	// Need at least 3 rows for a meaningful box (top border + 1 content row + bottom border).
+	const bannerHeight = 3 // border + 1 content + border
+	const autoHeight = 3   // border + 1 content + border
+	const spacing = 2      // 1 blank row above columns + 1 below
+
+	boxAreaHeight := p.height - bannerHeight - autoHeight - spacing
 	if boxAreaHeight < 3 {
 		return p.viewFlat()
 	}
-
-	// Column widths (proportional to pane width).
-	appBoxW := contentWidth * 25 / 100
-	arrowW := contentWidth * 8 / 100
-	gwBoxW := contentWidth * 26 / 100
-	spotifyBoxW := contentWidth * 20 / 100
-
-	// Enforce minimum widths so boxes are always meaningful.
-	if appBoxW < 10 {
-		appBoxW = 10
-	}
-	if arrowW < 7 {
-		arrowW = 7
-	}
-	if gwBoxW < 12 {
-		gwBoxW = 12
-	}
-	if spotifyBoxW < 10 {
-		spotifyBoxW = 10
-	}
-
-	// Guard: if minimums push total beyond pane width, fall back to flat layout.
-	if appBoxW+arrowW+gwBoxW+arrowW+spotifyBoxW > contentWidth {
+	innerRows := boxAreaHeight - 2 // subtract top/bottom border of column boxes
+	if innerRows < 1 {
 		return p.viewFlat()
 	}
 
-	// Inner row count = box height minus top/bottom border rows.
-	innerRows := boxAreaHeight - 2
-	if innerRows < 1 {
-		innerRows = 1
+	// Column widths: APP 28% | gap 2% | GATEWAY LOG (remainder) | gap 2% | SPOTIFY 25%
+	// Gaps are equal so the layout is visually balanced. GATEWAY LOG absorbs all rounding.
+	appW := p.width * 28 / 100
+	spotifyW := p.width * 25 / 100
+	leftGapW := p.width * 2 / 100
+	rightGapW := leftGapW
+	gwW := p.width - appW - spotifyW - leftGapW - rightGapW
+	if rightGapW < 1 {
+		rightGapW = 1
 	}
 
-	// Build content lines for each box.
+	// Enforce minimum widths.
+	if appW < 12 {
+		appW = 12
+	}
+	if gwW < 20 {
+		gwW = 20
+	}
+	if spotifyW < 10 {
+		spotifyW = 10
+	}
+	if appW+leftGapW+gwW+rightGapW+spotifyW > p.width {
+		return p.viewFlat()
+	}
+
+	// Build content lines for each column.
 	appLines := p.buildAppBoxLines(innerRows)
 	gwLines := p.buildGatewayBoxLines(innerRows)
 	spotifyLines := p.buildSpotifyBoxLines(innerRows)
 
-	// Build arrow columns (one line per content row).
-	leftArrows := p.buildLeftArrowLines(innerRows, arrowW)
-	rightArrows := p.buildRightArrowLines(innerRows, arrowW)
+	// Render the three column boxes with distinct border colors.
+	appBox := p.renderSubBox("APP", appLines, appW, p.theme.ColumnPrimary())
+	gwBox := p.renderSubBox("GATEWAY LOG", gwLines, gwW, p.theme.PaneBorderRequestFlow())
+	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyW, p.theme.Success())
 
-	// Render bordered sub-boxes.
-	appBox := p.renderSubBox("APP", appLines, appBoxW)
-	gwBox := p.renderSubBox("GATEWAY", gwLines, gwBoxW)
-	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyBoxW)
+	// Gap blocks spanning the full column box area height (boxAreaHeight rows).
+	leftGap := buildGapBlock(leftGapW, boxAreaHeight)
+	rightGap := buildGapBlock(rightGapW, boxAreaHeight)
 
-	// Arrow blocks: pad with a blank line above and below to align
-	// arrow rows with box content rows (offset by border rows).
-	blankArrow := strings.Repeat(" ", arrowW)
-	leftBlock := blankArrow + "\n" + strings.Join(leftArrows, "\n") + "\n" + blankArrow
-	rightBlock := blankArrow + "\n" + strings.Join(rightArrows, "\n") + "\n" + blankArrow
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, appBox, leftGap, gwBox, rightGap, spotifyBox)
 
-	// Compose horizontally: APP | left arrows | GATEWAY | right arrows | SPOTIFY
-	composite := lipgloss.JoinHorizontal(lipgloss.Top,
-		appBox, leftBlock, gwBox, rightBlock, spotifyBox)
+	banner := p.renderGatewayBanner(p.width)
+	autoTraffic := p.renderAutoTrafficStrip(p.width)
 
-	return composite + "\n" + p.renderStatusStrip()
+	return banner + "\n" + columns + "\n" + autoTraffic
+}
+
+// buildGapBlock returns a blank-space block for use as a gap column
+// in lipgloss.JoinHorizontal. Each line is `width` spaces; the block is `height` lines tall.
+func buildGapBlock(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	line := strings.Repeat(" ", width)
+	lines := make([]string, height)
+	for i := range lines {
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
 }
 
 // viewFlat renders the original flat table layout. Used as a fallback for narrow
@@ -235,10 +242,6 @@ func (p *RequestFlowPane) viewFlat() string {
 
 	// Gateway state block (token bucket, semaphore, backoff, dedup).
 	sb.WriteString(p.renderGatewayState())
-	sb.WriteString("\n")
-
-	// Bottom status strip.
-	sb.WriteString(p.renderStatusStrip())
 
 	return sb.String()
 }
@@ -345,10 +348,116 @@ func (p *RequestFlowPane) renderFlatSpotifyEntry(a *requestAnimation) string {
 	return fmt.Sprintf("%s %-8s%s", statusStr, latencyStr, suffix)
 }
 
-// renderGatewayState renders the GATEWAY column details (token bucket, semaphore, backoff).
-// Delegates to gatewayStateLines() defined in requestflow_boxed.go for DRY reuse.
+// renderGatewayState renders a compact one-line gateway state summary for the flat layout.
 func (p *RequestFlowPane) renderGatewayState() string {
-	return strings.Join(p.gatewayStateLines(), "\n")
+	snap := p.displayState.snapshot
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
+	slotBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
+	return secondaryStyle.Render("tokens") + " " + tokenBar + "  " +
+		secondaryStyle.Render("slots") + " " + slotBar
+}
+
+// renderGatewayBanner renders a full-width single-row box showing live gateway health.
+// Content: token bar · slot bar · backoff state · dedup count.
+func (p *RequestFlowPane) renderGatewayBanner(width int) string {
+	snap := p.displayState.snapshot
+
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+
+	tokenBar := p.renderColoredDotBar(snap.TokensAvailable, snap.TokensMax, '●', '○', successStyle, mutedStyle)
+	tokenSeg := secondaryStyle.Render("TOKENS") + "  " + tokenBar + "  " +
+		secondaryStyle.Render(fmt.Sprintf("%d/%d", snap.TokensAvailable, snap.TokensMax))
+
+	slotBar := p.renderColoredDotBar(snap.ConcurrentActive, snap.ConcurrentMax, '■', '□', warnStyle, mutedStyle)
+	slotSeg := secondaryStyle.Render("SLOTS") + "  " + slotBar + "  " +
+		secondaryStyle.Render(fmt.Sprintf("%d/%d", snap.ConcurrentActive, snap.ConcurrentMax))
+
+	var backoffSeg string
+	if p.store != nil && p.store.IsThrottled() {
+		remaining := snap.BackoffRemaining
+		if remaining <= 0 {
+			remaining = float64(p.store.ThrottleRetryAfterSecs())
+		}
+		backoffSeg = errorStyle.Render(fmt.Sprintf("BACKOFF  %.1fs", remaining))
+	} else {
+		backoffSeg = secondaryStyle.Render("BACKOFF") + "  " + mutedStyle.Render("none")
+	}
+
+	var dedupSeg string
+	if snap.DedupWaiters > 0 {
+		dedupSeg = secondaryStyle.Render("DEDUP") + "  " +
+			secondaryStyle.Render(fmt.Sprintf("%d waiting", snap.DedupWaiters))
+	} else {
+		dedupSeg = secondaryStyle.Render("DEDUP") + "  " + mutedStyle.Render("none")
+	}
+
+	sep := mutedStyle.Render("  ·  ")
+	content := tokenSeg + sep + slotSeg + sep + backoffSeg + sep + dedupSeg
+
+	return p.renderSubBox("GATEWAY", []string{content}, width, p.theme.PaneBorderRequestFlow())
+}
+
+// renderAutoTrafficStrip renders a full-width AUTO-TRAFFIC box explaining why
+// background requests appear. It shows the current playback polling state and
+// library cache freshness for playlists, albums, liked tracks, and recent plays.
+func (p *RequestFlowPane) renderAutoTrafficStrip(width int) string {
+	successStyle := lipgloss.NewStyle().Foreground(p.theme.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	errorStyle := lipgloss.NewStyle().Foreground(p.theme.Error())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	sep := mutedStyle.Render("  ·  ")
+
+	// Polling segment.
+	interval := humanInterval(p.pollingState.TickIntervalMs)
+	var pollSeg string
+	if p.pollingState.IsIdle {
+		pollSeg = warnStyle.Render(fmt.Sprintf("⏸ playback  every %s · idle %ds", interval, p.pollingState.IdleSecs))
+	} else {
+		pollSeg = successStyle.Render(fmt.Sprintf("▶ playback  every %s · running", interval))
+	}
+
+	// Cache freshness segments.
+	segments := []string{pollSeg}
+	if p.store != nil {
+		type cacheEntry struct {
+			name string
+			fa   time.Time
+			ttl  time.Duration
+		}
+		entries := []cacheEntry{
+			{"playlists", p.store.PlaylistsFetchedAt(), state.PlaylistsTTL},
+			{"albums", p.store.AlbumsFetchedAt(), state.AlbumsTTL},
+			{"liked", p.store.LikedTracksFetchedAt(), state.LikedTracksTTL},
+			{"recent", p.store.RecentPlayedFetchedAt(), state.RecentlyPlayedTTL},
+		}
+		for _, e := range entries {
+			if e.fa.IsZero() {
+				segments = append(segments, mutedStyle.Render(e.name+"  never fetched"))
+				continue
+			}
+			if !state.IsStale(e.fa, e.ttl) {
+				segments = append(segments, mutedStyle.Render(e.name+"  fresh"))
+				continue
+			}
+			age := humanAge(e.fa)
+			if time.Since(e.fa) >= time.Hour {
+				segments = append(segments, errorStyle.Render(fmt.Sprintf("⚠ %s  %s", e.name, age)))
+			} else {
+				segments = append(segments, warnStyle.Render(fmt.Sprintf("⚠ %s  %s", e.name, age)))
+			}
+		}
+	}
+
+	content := strings.Join(segments, sep)
+	return p.renderSubBox("AUTO-TRAFFIC", []string{content}, width, p.theme.ColumnPrimary())
 }
 
 // --- Replay engine ---
@@ -383,9 +492,11 @@ func (p *RequestFlowPane) processNextEvent() {
 
 	// Append to decision log.
 	p.displayState.decisions = append(p.displayState.decisions, decisionEntry{
-		kind:    event.Kind,
-		label:   formatDecisionLabel(event),
-		shownAt: time.Now(),
+		kind:       event.Kind,
+		label:      formatDecisionLabel(event),
+		shownAt:    time.Now(),
+		priority:   event.Priority,
+		statusCode: event.StatusCode,
 	})
 }
 
@@ -473,15 +584,50 @@ func (p *RequestFlowPane) sortedAnimations() []*requestAnimation {
 	return out
 }
 
+// stripAPIPrefix removes the "/v1/me" prefix common to all Spotify API paths.
+func stripAPIPrefix(path string) string {
+	return strings.TrimPrefix(path, "/v1/me")
+}
+
+// humanInterval converts a polling interval in milliseconds to a human-readable string.
+// Intervals >= 1000ms are shown in whole seconds. Below 1000ms are shown as-is.
+func humanInterval(ms int) string {
+	if ms <= 0 {
+		return "?"
+	}
+	if ms >= 1000 {
+		return fmt.Sprintf("%ds", ms/1000)
+	}
+	return fmt.Sprintf("%dms", ms)
+}
+
+// humanAge converts a past time.Time to a human-readable age string.
+func humanAge(t time.Time) string {
+	d := time.Since(t)
+	if d < time.Minute {
+		return "just now"
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if m == 0 {
+		return fmt.Sprintf("%dh ago", h)
+	}
+	return fmt.Sprintf("%dh %dm ago", h, m)
+}
+
 // formatDecisionLabel builds the display string for a decision log entry.
 func formatDecisionLabel(e domain.GatewayEvent) string {
+	path := stripAPIPrefix(e.Path)
 	switch e.Kind {
 	case domain.EventRequestEntered:
 		tag := "◷"
 		if e.Priority == domain.PriorityInteractive {
 			tag = "⚡"
 		}
-		return fmt.Sprintf("→ %s %s entered [%s]", e.Method, e.Path, tag)
+		return fmt.Sprintf("%s %s %s", tag, e.Method, path)
 	case domain.EventTokenConsumed:
 		return fmt.Sprintf("⊖ token consumed → %d", e.Snapshot.TokensAvailable)
 	case domain.EventTokenRefilled:
@@ -493,19 +639,19 @@ func formatDecisionLabel(e domain.GatewayEvent) string {
 		return fmt.Sprintf("⊟ semaphore released (%d/%d)",
 			e.Snapshot.ConcurrentActive, e.Snapshot.ConcurrentMax)
 	case domain.EventBackoffStarted:
-		return fmt.Sprintf("⏳ backoff started %.0fs", e.Snapshot.BackoffRemaining)
+		return fmt.Sprintf("⏳ backoff started  %ds", int(e.Snapshot.BackoffRemaining))
 	case domain.EventBackoffExpired:
 		return "✓ backoff cleared"
 	case domain.EventRequestAllowed:
-		return fmt.Sprintf("✓ %s %s allowed", e.Method, e.Path)
+		return fmt.Sprintf("✓ %s %s  allowed", e.Method, path)
 	case domain.EventRequestBlocked:
-		return fmt.Sprintf("✗ %s %s blocked", e.Method, e.Path)
+		return fmt.Sprintf("✗ %s %s  blocked", e.Method, path)
 	case domain.EventDedupJoined:
-		return fmt.Sprintf("⧖ %s %s dedup", e.Method, e.Path)
+		return fmt.Sprintf("⧖ %s %s  dedup joined", e.Method, path)
 	case domain.EventDedupResolved:
-		return fmt.Sprintf("✓ dedup resolved %d", e.StatusCode)
+		return fmt.Sprintf("✓ dedup resolved  %d", e.StatusCode)
 	case domain.EventHttpCompleted:
-		return fmt.Sprintf("✓ %d %dms", e.StatusCode, e.DurationMs)
+		return fmt.Sprintf("✓ %d  %dms", e.StatusCode, e.DurationMs)
 	default:
 		return "? unknown event"
 	}
@@ -526,98 +672,6 @@ func (p *RequestFlowPane) renderColoredDotBar(filled, total int, filledRune, emp
 		}
 	}
 	return sb.String()
-}
-
-// renderStatusStrip renders the bottom polling + store status line.
-func (p *RequestFlowPane) renderStatusStrip() string {
-	ps := p.pollingState
-	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	// Polling section.
-	stateLabel := "active"
-	idlePart := ""
-	if ps.IsIdle {
-		stateLabel = "idle"
-		idlePart = mutedStyle.Render(fmt.Sprintf("  idle: %ds", ps.IdleSecs))
-	}
-	intervalMs := ps.TickIntervalMs
-	if intervalMs <= 0 {
-		intervalMs = 1000
-	}
-	pollingPart := labelStyle.Render("POLLING") + mutedStyle.Render(fmt.Sprintf("  tick: %dms  state: %s", intervalMs, stateLabel)) + idlePart
-
-	// Store section.
-	storePart := p.renderStoreStatus()
-
-	if storePart != "" {
-		return pollingPart + "    " + storePart
-	}
-	return pollingPart
-}
-
-// renderStoreStatus renders the STORE section of the status strip.
-// Shows active fetches and, when present, stale data domains.
-func (p *RequestFlowPane) renderStoreStatus() string {
-	if p.store == nil {
-		return ""
-	}
-	labelStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	var fetching []string
-	if p.store.PlaylistsFetching() {
-		fetching = append(fetching, "playlists")
-	}
-	if p.store.AlbumsFetching() {
-		fetching = append(fetching, "albums")
-	}
-	if p.store.LikedFetching() {
-		fetching = append(fetching, "liked")
-	}
-	if p.store.RecentFetching() {
-		fetching = append(fetching, "recent")
-	}
-
-	result := labelStyle.Render("STORE")
-	if len(fetching) > 0 {
-		result += mutedStyle.Render(fmt.Sprintf("  fetching: [%s]", strings.Join(fetching, ", ")))
-	}
-
-	stalePart := p.renderStalenessStatus()
-	if stalePart != "" {
-		result += "  " + stalePart
-	}
-
-	return result
-}
-
-// renderStalenessStatus builds the "stale: domain(Xs), ..." segment.
-// Only non-zero FetchedAt values that exceed their TTL are shown.
-// Returns empty string when no data is stale.
-func (p *RequestFlowPane) renderStalenessStatus() string {
-	if p.store == nil {
-		return ""
-	}
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	var stale []string
-	if fa := p.store.PlaylistsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.PlaylistsTTL) {
-		stale = append(stale, fmt.Sprintf("playlists(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if fa := p.store.AlbumsFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.AlbumsTTL) {
-		stale = append(stale, fmt.Sprintf("albums(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if fa := p.store.LikedTracksFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.LikedTracksTTL) {
-		stale = append(stale, fmt.Sprintf("liked(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if fa := p.store.RecentPlayedFetchedAt(); !fa.IsZero() && state.IsStale(fa, state.RecentlyPlayedTTL) {
-		stale = append(stale, fmt.Sprintf("recent(%ds)", int(time.Since(fa).Seconds())))
-	}
-	if len(stale) == 0 {
-		return ""
-	}
-	return mutedStyle.Render(fmt.Sprintf("stale: %s", strings.Join(stale, ", ")))
 }
 
 // padRightVisible pads s with spaces to visible width w using lipgloss.Width()

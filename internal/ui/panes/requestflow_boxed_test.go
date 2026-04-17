@@ -14,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // newInternalTestPane creates a RequestFlowPane for internal helper testing.
@@ -38,7 +39,7 @@ func injectEventInternal(p *RequestFlowPane, s *state.Store, event domain.Gatewa
 
 func TestRenderSubBox_ContainsRoundedCorners(t *testing.T) {
 	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"line1", "line2"}, 20)
+	out := p.renderSubBox("APP", []string{"line1", "line2"}, 20, p.theme.PaneBorderRequestFlow())
 	assert.Contains(t, out, "╭")
 	assert.Contains(t, out, "╮")
 	assert.Contains(t, out, "╰")
@@ -47,19 +48,19 @@ func TestRenderSubBox_ContainsRoundedCorners(t *testing.T) {
 
 func TestRenderSubBox_ContainsTitle(t *testing.T) {
 	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"line1"}, 20)
+	out := p.renderSubBox("APP", []string{"line1"}, 20, p.theme.PaneBorderRequestFlow())
 	assert.Contains(t, out, "APP")
 }
 
 func TestRenderSubBox_ContainsSideBorders(t *testing.T) {
 	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"line1", "line2"}, 20)
+	out := p.renderSubBox("APP", []string{"line1", "line2"}, 20, p.theme.PaneBorderRequestFlow())
 	assert.Contains(t, out, "│")
 }
 
 func TestRenderSubBox_ContentLinesPresent(t *testing.T) {
 	p := newInternalTestPane()
-	out := p.renderSubBox("GW", []string{"hello", "world"}, 20)
+	out := p.renderSubBox("GW", []string{"hello", "world"}, 20, p.theme.PaneBorderRequestFlow())
 	assert.Contains(t, out, "hello")
 	assert.Contains(t, out, "world")
 }
@@ -67,80 +68,21 @@ func TestRenderSubBox_ContentLinesPresent(t *testing.T) {
 func TestRenderSubBox_LongLineTruncated(t *testing.T) {
 	p := newInternalTestPane()
 	longLine := strings.Repeat("x", 50)
-	out := p.renderSubBox("T", []string{longLine}, 20)
+	out := p.renderSubBox("T", []string{longLine}, 20, p.theme.PaneBorderRequestFlow())
 	assert.Contains(t, out, "…")
 }
 
 func TestRenderSubBox_TooNarrowReturnsEmpty(t *testing.T) {
 	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"hi"}, 7)
+	out := p.renderSubBox("APP", []string{"hi"}, 7, p.theme.PaneBorderRequestFlow())
 	assert.Empty(t, out)
 }
 
 func TestRenderSubBox_EmptyLinesSlice(t *testing.T) {
 	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{}, 20)
+	out := p.renderSubBox("APP", []string{}, 20, p.theme.PaneBorderRequestFlow())
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	assert.Len(t, lines, 2, "empty content slice should produce 2-line box")
-}
-
-// --- Task 2: renderRightArrow ---
-
-func TestRenderRightArrow_2xx_ContainsAnimatedArrow(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-
-	const reqID uint64 = 1
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/ep", StatusCode: 200, DurationMs: 30})
-
-	anim := &requestAnimation{statusCode: 200}
-	out := p.renderRightArrow(anim, 12)
-	animatedFrames := []string{"──→──", "───→─", "────→"}
-	found := false
-	for _, f := range animatedFrames {
-		if strings.Contains(out, f) {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "2xx status should render an animated arrow frame")
-}
-
-func TestRenderRightArrow_429_ContainsX(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{statusCode: 429}
-	out := p.renderRightArrow(anim, 12)
-	assert.Contains(t, out, "╳")
-}
-
-func TestRenderRightArrow_500_ContainsArrow(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{statusCode: 500}
-	out := p.renderRightArrow(anim, 12)
-	animatedFrames := []string{"──→──", "───→─", "────→"}
-	found := false
-	for _, f := range animatedFrames {
-		if strings.Contains(out, f) {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "5xx status should render an animated arrow frame")
-}
-
-func TestRenderRightArrow_StatusZero_ContainsX(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{statusCode: 0}
-	out := p.renderRightArrow(anim, 12)
-	assert.Contains(t, out, "╳")
-}
-
-func TestRenderRightArrow_Blocked_ContainsX(t *testing.T) {
-	p := newInternalTestPane()
-	anim := &requestAnimation{decision: domain.EventRequestBlocked, statusCode: 0}
-	out := p.renderRightArrow(anim, 12)
-	assert.Contains(t, out, "╳", "blocked request should render ╳ symbol")
 }
 
 // --- Task 3: buildAppBoxLines ---
@@ -178,41 +120,6 @@ func TestBuildAppBoxLines_ZeroMaxRows(t *testing.T) {
 
 // --- Task 3: buildGatewayBoxLines ---
 
-func TestBuildGatewayBoxLines_AlwaysIncludesTokenAndSemaphore(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	// Inject snapshot with full bucket.
-	injectEventInternal(p, s, domain.GatewayEvent{
-		Kind: domain.EventSemaphoreReleased,
-		Snapshot: domain.GatewayStateSnapshot{
-			TokensAvailable:  10,
-			TokensMax:        10,
-			ConcurrentActive: 0,
-			ConcurrentMax:    5,
-		},
-	})
-	lines := p.buildGatewayBoxLines(5)
-	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "●")
-	assert.Contains(t, combined, "□")
-}
-
-func TestBuildGatewayBoxLines_ThrottleShowsBackoff(t *testing.T) {
-	s := state.New()
-	s.SetThrottle(true, 30, time.Now())
-	p := newInternalTestPaneWithStore(s)
-	lines := p.buildGatewayBoxLines(6)
-	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "backoff")
-}
-
-func TestBuildGatewayBoxLines_NoThrottleNoBackoff(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildGatewayBoxLines(5)
-	combined := strings.Join(lines, "\n")
-	assert.NotContains(t, combined, "backoff")
-}
-
 func TestBuildGatewayBoxLines_PadsToMaxRows(t *testing.T) {
 	p := newInternalTestPane()
 	lines := p.buildGatewayBoxLines(8)
@@ -241,71 +148,118 @@ func TestBuildGatewayBoxLines_ShowsDecisionLog(t *testing.T) {
 
 // --- Task 3: buildSpotifyBoxLines ---
 
-func TestBuildSpotifyBoxLines_429ContainsWarning(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 5
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/me/player"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/me/player", StatusCode: 429, DurationMs: 5})
-	lines := p.buildSpotifyBoxLines(3)
-	combined := strings.Join(lines, "\n")
-	assert.Contains(t, combined, "⚠")
-}
-
-func TestBuildSpotifyBoxLines_BeforeHttpCompleted_EmptyEntry(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	// Only RequestEntered — no HTTP response yet.
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: 1, Method: "GET", Path: "/ep"})
-	lines := p.buildSpotifyBoxLines(3)
-	// The request is in phaseEntered, so SPOTIFY entry should be empty.
-	assert.Len(t, lines, 3)
-}
-
-func TestBuildSpotifyBoxLines_PadsToMaxRows(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 10
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/ep", StatusCode: 200, DurationMs: 30})
-	lines := p.buildSpotifyBoxLines(3)
-	assert.Len(t, lines, 3)
-}
-
 func TestBuildSpotifyBoxLines_ZeroMaxRows(t *testing.T) {
 	p := newInternalTestPane()
 	lines := p.buildSpotifyBoxLines(0)
 	assert.Len(t, lines, 0)
 }
 
-// --- Task 6: gatewayStateLines ---
+// --- Task 7: buildSpotifyBoxLines new format ---
 
-func TestGatewayStateLines_ReturnsSlice(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	injectEventInternal(p, s, domain.GatewayEvent{
-		Kind: domain.EventTokenConsumed,
-		Snapshot: domain.GatewayStateSnapshot{
-			TokensAvailable: 10,
-			TokensMax:       10,
-			ConcurrentMax:   5,
-		},
-	})
-	lines := p.gatewayStateLines()
-	assert.GreaterOrEqual(t, len(lines), 2)
+func TestBuildSpotifyBoxLines_ShowsStatusMethodPath(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 1
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID:  reqID,
+		method:     "GET",
+		path:       "/v1/me/player",
+		phase:      phaseCompleted,
+		decision:   domain.EventRequestAllowed,
+		statusCode: 200,
+		durationMs: 43,
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	require.NotEmpty(t, lines)
+	combined := strings.Join(lines, "\n")
+	assert.Contains(t, combined, "200")
+	assert.Contains(t, combined, "GET")
+	assert.Contains(t, combined, "/player") // /v1/me stripped
+	assert.Contains(t, combined, "43ms")
 }
 
-func TestGatewayStateLines_ThrottledAddsBackoff(t *testing.T) {
-	s1 := state.New()
-	p1 := newInternalTestPaneWithStore(s1)
-	linesNoThrottle := p1.gatewayStateLines()
+func TestBuildSpotifyBoxLines_OmitsBlockedRequests(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 2
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID: reqID,
+		method:    "PUT",
+		path:      "/v1/me/player/volume",
+		phase:     phaseCompleted,
+		decision:  domain.EventRequestBlocked,
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.NotContains(t, combined, "PUT", "blocked request must not appear in SPOTIFY box")
+}
 
-	s2 := state.New()
-	s2.SetThrottle(true, 30, time.Now())
-	p2 := newInternalTestPaneWithStore(s2)
-	linesThrottled := p2.gatewayStateLines()
+func TestBuildSpotifyBoxLines_OmitsDedupJoined(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 3
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID: reqID,
+		method:    "GET",
+		path:      "/v1/me/player",
+		phase:     phaseCompleted,
+		decision:  domain.EventDedupJoined,
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.Empty(t, strings.TrimSpace(combined), "dedup-joined request must not appear in SPOTIFY box")
+}
 
-	assert.Greater(t, len(linesThrottled), len(linesNoThrottle))
+func TestBuildSpotifyBoxLines_InFlightShowsPlaceholder(t *testing.T) {
+	p := newInternalTestPane()
+	const reqID uint64 = 4
+	if p.displayState.requests == nil {
+		p.displayState.requests = make(map[uint64]*requestAnimation)
+	}
+	p.displayState.requests[reqID] = &requestAnimation{
+		requestID: reqID,
+		method:    "GET",
+		path:      "/v1/me/player",
+		phase:     phaseInFlight, // in-flight = HTTP call in progress, no response yet
+	}
+	lines := p.buildSpotifyBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.Contains(t, combined, "···", "in-flight request must show placeholder")
+}
+
+// --- Task 6: buildGatewayBoxLines pure event log ---
+
+func TestBuildGatewayBoxLines_NoStateMetrics(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	// Push a decision event so there's something in the log.
+	p.displayState.decisions = append(p.displayState.decisions, decisionEntry{
+		kind:  domain.EventRequestAllowed,
+		label: "✓ GET /player  allowed",
+	})
+	lines := p.buildGatewayBoxLines(10)
+	for _, l := range lines {
+		assert.NotContains(t, l, "tokens", "gateway log box must not contain token metric header")
+		assert.NotContains(t, l, "concurrent", "gateway log box must not contain semaphore metric header")
+	}
+}
+
+func TestBuildGatewayBoxLines_ContainsDecisionEntry(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	p.displayState.decisions = append(p.displayState.decisions, decisionEntry{
+		kind:  domain.EventRequestAllowed,
+		label: "✓ GET /player  allowed",
+	})
+	lines := p.buildGatewayBoxLines(10)
+	combined := strings.Join(lines, "\n")
+	assert.Contains(t, combined, "allowed")
 }
 
 func TestRenderGatewayState_BackwardCompat(t *testing.T) {
@@ -319,82 +273,123 @@ func TestRenderGatewayState_BackwardCompat(t *testing.T) {
 	assert.Contains(t, out, "●")
 }
 
-// --- Arrow alignment: buildLeftArrowLines / buildRightArrowLines ---
+// --- Task 5: renderGatewayBanner ---
 
-func TestBuildLeftArrowLines_LengthMatchesMaxRows(t *testing.T) {
+func TestRenderGatewayBanner_ContainsTokens(t *testing.T) {
 	p := newInternalTestPane()
-	lines := p.buildLeftArrowLines(4, 12)
-	assert.Len(t, lines, 4)
+	p.displayState.snapshot = domain.GatewayStateSnapshot{
+		TokensAvailable:  8,
+		TokensMax:        10,
+		ConcurrentActive: 0,
+		ConcurrentMax:    5,
+	}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "TOKENS")
+	assert.Contains(t, out, "8/10")
 }
 
-func TestBuildRightArrowLines_LengthMatchesMaxRows(t *testing.T) {
+func TestRenderGatewayBanner_ContainsSlots(t *testing.T) {
 	p := newInternalTestPane()
-	lines := p.buildRightArrowLines(4, 12)
-	assert.Len(t, lines, 4)
+	p.displayState.snapshot = domain.GatewayStateSnapshot{
+		TokensMax: 10, ConcurrentActive: 2, ConcurrentMax: 5,
+	}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "SLOTS")
+	assert.Contains(t, out, "2/5")
 }
 
-func TestBuildLeftArrowLines_RequestRowHasArrow(t *testing.T) {
+func TestRenderGatewayBanner_BackoffNone_WhenNotThrottled(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "BACKOFF")
+	assert.Contains(t, out, "none")
+}
+
+func TestRenderGatewayBanner_DedupNone_WhenZeroWaiters(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5, DedupWaiters: 0}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "DEDUP")
+	assert.Contains(t, out, "none")
+}
+
+func TestRenderGatewayBanner_DedupWaiters(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5, DedupWaiters: 3}
+	// Use a wide enough box so the dedup segment is not truncated.
+	out := p.renderGatewayBanner(200)
+	assert.Contains(t, out, "3 waiting")
+}
+
+func TestRenderGatewayBanner_HasBorders(t *testing.T) {
+	p := newInternalTestPane()
+	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5}
+	out := p.renderGatewayBanner(80)
+	assert.Contains(t, out, "╭")
+	assert.Contains(t, out, "╰")
+}
+
+// --- Task 8: renderAutoTrafficStrip ---
+
+func TestRenderAutoTrafficStrip_HasBorders(t *testing.T) {
 	s := state.New()
 	p := newInternalTestPaneWithStore(s)
-	injectEventInternal(p, s, domain.GatewayEvent{
-		Kind:      domain.EventRequestEntered,
-		RequestID: 1,
-		Method:    "GET",
-		Path:      "/me/player",
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "AUTO-TRAFFIC")
+	assert.Contains(t, out, "╭")
+	assert.Contains(t, out, "╰")
+}
+
+func TestRenderAutoTrafficStrip_ShowsPollingRunning(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	_, _ = p.Update(PollingSnapshotMsg{TickIntervalMs: 1000, IsIdle: false})
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "▶")
+	assert.Contains(t, out, "1s")
+	assert.Contains(t, out, "running")
+}
+
+func TestRenderAutoTrafficStrip_ShowsPollingIdle(t *testing.T) {
+	s := state.New()
+	p := newInternalTestPaneWithStore(s)
+	_, _ = p.Update(PollingSnapshotMsg{TickIntervalMs: 3000, IsIdle: true, IdleSecs: 60})
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "⏸")
+	assert.Contains(t, out, "60s")
+}
+
+func TestRenderAutoTrafficStrip_NeverFetchedCache(t *testing.T) {
+	s := state.New() // no FetchedAt stamps — all zero
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "never fetched")
+}
+
+func TestRenderAutoTrafficStrip_FreshCache(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetchedAt(time.Now().Add(-1 * time.Minute))
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "fresh")
+}
+
+func TestRenderAutoTrafficStrip_StaleCache(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
+	p := newInternalTestPaneWithStore(s)
+	out := p.renderAutoTrafficStrip(120)
+	assert.Contains(t, out, "⚠")
+	assert.Contains(t, out, "playlists")
+}
+
+func TestRenderAutoTrafficStrip_NilStore_NoPanic(t *testing.T) {
+	p := NewRequestFlowPane(nil, theme.Load("black"))
+	assert.NotPanics(t, func() {
+		out := p.renderAutoTrafficStrip(120)
+		assert.Contains(t, out, "AUTO-TRAFFIC")
 	})
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.True(t, strings.TrimSpace(combined) != "",
-		"at least one arrow line must be non-blank with a request injected")
-}
-
-func TestBuildRightArrowLines_RequestRowHasArrow(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 20
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventHttpCompleted, RequestID: reqID, Method: "GET", Path: "/ep", StatusCode: 200, DurationMs: 20})
-	lines := p.buildRightArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.True(t, strings.TrimSpace(combined) != "", "right arrow lines must be non-blank with a request present")
-}
-
-func TestBuildLeftArrowLines_ZeroMaxRows(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildLeftArrowLines(0, 10)
-	assert.Nil(t, lines)
-}
-
-func TestBuildRightArrowLines_ZeroMaxRows(t *testing.T) {
-	p := newInternalTestPane()
-	lines := p.buildRightArrowLines(0, 10)
-	assert.Nil(t, lines)
-}
-
-// --- Decision log: EventDedupJoined arrow labels ---
-
-func TestBuildLeftArrowLines_DedupDecision(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 31
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventDedupJoined, RequestID: reqID, Method: "GET", Path: "/ep"})
-
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.Contains(t, combined, "dedup", "EventDedupJoined should render 'dedup' in left arrow")
-}
-
-func TestBuildLeftArrowLines_BlockedDecision(t *testing.T) {
-	s := state.New()
-	p := newInternalTestPaneWithStore(s)
-	const reqID uint64 = 32
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestEntered, RequestID: reqID, Method: "GET", Path: "/ep"})
-	injectEventInternal(p, s, domain.GatewayEvent{Kind: domain.EventRequestBlocked, RequestID: reqID, Method: "GET", Path: "/ep"})
-
-	lines := p.buildLeftArrowLines(4, 12)
-	combined := strings.Join(lines, "")
-	assert.Contains(t, combined, "╳", "EventRequestBlocked should render ╳ in left arrow")
 }
 
 // --- Story 74 Task 1: renderSubBox uses accent color ---
@@ -414,7 +409,7 @@ func TestRenderSubBox_UsesAccentColor(t *testing.T) {
 	const accentANSI = "38;2;255;184;108" // #ffb86c — PaneBorderRequestFlow
 	const greyANSI = "38;2;136;136;136"   // #888888 — TextSecondary
 
-	out := p.renderSubBox("APP", []string{"line1", "line2"}, 30)
+	out := p.renderSubBox("APP", []string{"line1", "line2"}, 30, p.theme.PaneBorderRequestFlow())
 
 	// Output must contain the accent color ANSI escape.
 	assert.Contains(t, out, accentANSI,
