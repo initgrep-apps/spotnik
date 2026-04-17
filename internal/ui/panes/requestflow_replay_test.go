@@ -1,7 +1,9 @@
 package panes
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/stretchr/testify/assert"
@@ -89,4 +91,45 @@ func TestFormatDecisionLabel_EventBackoffStarted(t *testing.T) {
 		Snapshot: domain.GatewayStateSnapshot{BackoffRemaining: 10.0},
 	}
 	assert.Equal(t, "⏳ backoff started  10s", formatDecisionLabel(e))
+}
+
+// --- Task 3: humanInterval and humanAge helpers ---
+
+func TestHumanInterval(t *testing.T) {
+	tests := []struct {
+		ms   int
+		want string
+	}{
+		{1000, "1s"},
+		{3000, "3s"},
+		{500, "500ms"},
+		{999, "999ms"},
+		{0, "?"},
+		{-1, "?"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%dms", tt.ms), func(t *testing.T) {
+			assert.Equal(t, tt.want, humanInterval(tt.ms))
+		})
+	}
+}
+
+func TestHumanAge_JustNow(t *testing.T) {
+	fa := time.Now().Add(-30 * time.Second)
+	assert.Equal(t, "just now", humanAge(fa))
+}
+
+func TestHumanAge_Minutes(t *testing.T) {
+	fa := time.Now().Add(-21 * time.Minute)
+	assert.Equal(t, "21m ago", humanAge(fa))
+}
+
+func TestHumanAge_Hours(t *testing.T) {
+	fa := time.Now().Add(-2 * time.Hour)
+	assert.Equal(t, "2h ago", humanAge(fa))
+}
+
+func TestHumanAge_HoursAndMinutes(t *testing.T) {
+	fa := time.Now().Add(-(1*time.Hour + 2*time.Minute))
+	assert.Equal(t, "1h 2m ago", humanAge(fa))
 }

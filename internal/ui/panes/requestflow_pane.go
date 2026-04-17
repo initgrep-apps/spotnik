@@ -478,6 +478,35 @@ func stripAPIPrefix(path string) string {
 	return strings.TrimPrefix(path, "/v1/me")
 }
 
+// humanInterval converts a polling interval in milliseconds to a human-readable string.
+// Intervals >= 1000ms are shown in whole seconds. Below 1000ms are shown as-is.
+func humanInterval(ms int) string {
+	if ms <= 0 {
+		return "?"
+	}
+	if ms >= 1000 {
+		return fmt.Sprintf("%ds", ms/1000)
+	}
+	return fmt.Sprintf("%dms", ms)
+}
+
+// humanAge converts a past time.Time to a human-readable age string.
+func humanAge(t time.Time) string {
+	d := time.Since(t)
+	if d < time.Minute {
+		return "just now"
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if m == 0 {
+		return fmt.Sprintf("%dh ago", h)
+	}
+	return fmt.Sprintf("%dh %dm ago", h, m)
+}
+
 // formatDecisionLabel builds the display string for a decision log entry.
 func formatDecisionLabel(e domain.GatewayEvent) string {
 	path := stripAPIPrefix(e.Path)
