@@ -304,7 +304,7 @@ func (a *App) renderWithHelpOverlay(background string) string {
 
 // renderSplash renders the startup splash screen with go-figure ASCII art.
 func (a *App) renderSplash() string {
-	return renderSplashView(a.theme, a.width, a.height)
+	return renderSplashView(a.theme, a.version, a.width, a.height)
 }
 
 // renderTooSmall renders the "terminal too small" message.

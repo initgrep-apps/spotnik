@@ -1679,29 +1679,31 @@ func TestApp_FetchQueueCmd_SetsErrorOnFailure(t *testing.T) {
 
 func TestApp_SplashScreen_ShownOnStartup(t *testing.T) {
 	cfg := &config.Config{}
+	// Version defaults to "dev" when not provided in AppOptions.
 	a := app.New(cfg, app.AppOptions{})
 	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	output := a.View()
 	assert.Contains(t, output, "terminal Spotify client", "splash should show tagline")
-	assert.Contains(t, output, "v1.1.0", "splash should show version")
+	assert.Contains(t, output, "dev", "splash should show injected version (dev fallback)")
 }
 
 func TestApp_SplashScreen_StaysOnPlaybackData(t *testing.T) {
 	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
+	// Pass an explicit version so the assertion is unambiguous.
+	a := app.New(cfg, app.AppOptions{Version: "v0.1.0"})
 	a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	// Splash should be active.
 	output := a.View()
-	assert.Contains(t, output, "v1.1.0")
+	assert.Contains(t, output, "v0.1.0")
 
 	// Playback data arrives — splash should STAY for the full 5s duration.
 	model, _ := a.Update(panes.PlaybackStateFetchedMsg{})
 	a = model.(*app.App)
 
 	output = a.View()
-	assert.Contains(t, output, "v1.1.0", "splash should still be visible — only timer dismisses it")
+	assert.Contains(t, output, "v0.1.0", "splash should still be visible — only timer dismisses it")
 }
 
 // TestApp_OverlayRendering_UsesThemeBaseColor verifies that overlay rendering
