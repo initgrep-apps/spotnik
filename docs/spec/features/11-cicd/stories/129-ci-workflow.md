@@ -1,7 +1,7 @@
 ---
 title: "GitHub Actions CI Workflow"
 feature: 11-cicd
-status: open
+status: done
 ---
 
 ## Background

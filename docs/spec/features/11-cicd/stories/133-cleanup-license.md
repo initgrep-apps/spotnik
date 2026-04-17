@@ -1,7 +1,7 @@
 ---
 title: "Cleanup and LICENSE"
 feature: 11-cicd
-status: open
+status: done
 ---
 
 ## Background

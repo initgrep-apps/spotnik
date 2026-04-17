@@ -1,7 +1,7 @@
 ---
 title: "Version Injection"
 feature: 11-cicd
-status: open
+status: done
 ---
 
 ## Background

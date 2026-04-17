@@ -1,7 +1,7 @@
 ---
 title: "Release and release-please GitHub Actions Workflows"
 feature: 11-cicd
-status: open
+status: done
 ---
 
 ## Background
