@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -37,20 +38,28 @@ type PreferencesConfig struct {
 
 // spotifyConfig holds Spotify-specific configuration.
 type spotifyConfig struct {
-	ClientID string `toml:"client_id"`
+	ClientID     string `toml:"client_id"`
+	CallbackPort int    `toml:"callback_port"`
 }
 
 // Config holds all application configuration.
 type Config struct {
 	// ClientID is the Spotify application client ID.
-	// May be empty if not set in config — caller provides embedded fallback.
-	ClientID    string
+	// May be empty if not set in config — user must provide it via onboarding.
+	ClientID string
+
+	// CallbackPort is the port the OAuth callback server listens on.
+	// Defaults to 8888. Register http://127.0.0.1:<port>/callback in the
+	// Spotify Developer Dashboard exactly once — it never changes between launches.
+	CallbackPort int
+
 	Preferences PreferencesConfig `toml:"preferences"`
 }
 
 // Default returns a Config populated with sensible defaults.
 func Default() *Config {
 	return &Config{
+		CallbackPort: 8888,
 		Preferences: PreferencesConfig{
 			Theme: "black",
 		},
@@ -86,6 +95,10 @@ func Load(path string) (*Config, error) {
 
 	// Apply parsed fields.
 	cfg.ClientID = raw.Spotify.ClientID
+	// Only override the default (8888) when an explicit non-zero port is set.
+	if raw.Spotify.CallbackPort > 0 {
+		cfg.CallbackPort = raw.Spotify.CallbackPort
+	}
 	cfg.Preferences = raw.Preferences
 
 	// Clamp theme: if empty or not recognised by the registry, fall back to default.
@@ -161,4 +174,74 @@ func Bootstrap(path string) error {
 		return fmt.Errorf("writing config template: %w", err)
 	}
 	return nil
+}
+
+// ClearClientID removes any line whose trimmed content starts with "client_id"
+// from the config file at path, then writes the result back. The [spotify]
+// section header and all other keys (callback_port, preferences, etc.) are
+// preserved. Returns an error if the file cannot be read or written.
+func ClearClientID(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading config for client ID removal: %w", err)
+	}
+	var out []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "client_id") {
+			continue
+		}
+		out = append(out, line)
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o600); err != nil {
+		return fmt.Errorf("writing config after client ID removal: %w", err)
+	}
+	return nil
+}
+
+// SetClientID writes or updates the client_id key in the config file at path.
+// Three cases are handled:
+//
+//   - client_id line already exists → replace it in-place
+//   - [spotify] section exists but no client_id → insert after the [spotify] header
+//   - Neither exists → append "\n[spotify]\nclient_id = "..."\n"
+//
+// If the file does not exist, it is created (along with its parent directory).
+func SetClientID(path string, clientID string) error {
+	newLine := fmt.Sprintf(`client_id = "%s"`, clientID)
+
+	// Ensure the config directory exists before attempting to read or write.
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("creating config directory: %w", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("reading config for client ID update: %w", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	// Case 1: replace an existing client_id line.
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "client_id") {
+			lines[i] = newLine
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o600)
+		}
+	}
+
+	// Case 2: [spotify] section exists but no client_id — insert after the header.
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "[spotify]" {
+			// Insert the new line immediately after the section header.
+			updated := make([]string, 0, len(lines)+1)
+			updated = append(updated, lines[:i+1]...)
+			updated = append(updated, newLine)
+			updated = append(updated, lines[i+1:]...)
+			return os.WriteFile(path, []byte(strings.Join(updated, "\n")), 0o600)
+		}
+	}
+
+	// Case 3: no [spotify] section — append it.
+	appended := strings.TrimRight(string(data), "\n") + "\n\n[spotify]\n" + newLine + "\n"
+	return os.WriteFile(path, []byte(appended), 0o600)
 }
