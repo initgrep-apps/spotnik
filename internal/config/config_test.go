@@ -442,6 +442,38 @@ callback_port = 9000
 	assert.Equal(t, 9000, cfg.CallbackPort, "callback_port should be preserved after replace")
 }
 
+// TestSetClientID_noSpotifySection verifies that SetClientID appends a [spotify]
+// section with client_id when the config file has no [spotify] section at all.
+func TestSetClientID_noSpotifySection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[preferences]\ntheme = \"black\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	err := config.SetClientID(path, "appended-id")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "appended-id", cfg.ClientID, "client_id should be written via append path")
+	assert.Equal(t, "black", cfg.Preferences.Theme, "theme should be preserved after append")
+}
+
+// TestSetClientID_fileNotExist verifies that SetClientID creates the file (and its
+// parent directory) when neither the file nor its directory exists yet.
+func TestSetClientID_fileNotExist(t *testing.T) {
+	base := t.TempDir()
+	// Use a non-existent subdirectory so both MkdirAll and file creation are exercised.
+	path := filepath.Join(base, "subdir", "config.toml")
+
+	err := config.SetClientID(path, "brand-new-id")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "brand-new-id", cfg.ClientID, "client_id should be set in newly created file")
+}
+
 // TestBootstrap_StatErrorPropagated verifies that Bootstrap returns an error when
 // os.Stat fails for a reason other than the file not existing (e.g. the parent
 // path component is a file, not a directory, which yields ENOTDIR).

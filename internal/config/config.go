@@ -225,7 +225,10 @@ func SetClientID(path string, clientID string) error {
 	for i, line := range lines {
 		if strings.HasPrefix(strings.TrimSpace(line), "client_id") {
 			lines[i] = newLine
-			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o600)
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+				return fmt.Errorf("writing config after client ID update (replace): %w", err)
+			}
+			return nil
 		}
 	}
 
@@ -237,11 +240,17 @@ func SetClientID(path string, clientID string) error {
 			updated = append(updated, lines[:i+1]...)
 			updated = append(updated, newLine)
 			updated = append(updated, lines[i+1:]...)
-			return os.WriteFile(path, []byte(strings.Join(updated, "\n")), 0o600)
+			if err := os.WriteFile(path, []byte(strings.Join(updated, "\n")), 0o600); err != nil {
+				return fmt.Errorf("writing config after client ID update (insert): %w", err)
+			}
+			return nil
 		}
 	}
 
 	// Case 3: no [spotify] section — append it.
 	appended := strings.TrimRight(string(data), "\n") + "\n\n[spotify]\n" + newLine + "\n"
-	return os.WriteFile(path, []byte(appended), 0o600)
+	if err := os.WriteFile(path, []byte(appended), 0o600); err != nil {
+		return fmt.Errorf("writing config after client ID update (append): %w", err)
+	}
+	return nil
 }
