@@ -307,6 +307,173 @@ func TestBootstrap_FilePermissions(t *testing.T) {
 		"config directory should have 0750 permissions")
 }
 
+// ---- CallbackPort tests ----
+
+// TestLoad_CallbackPort_defaultsTo8888 verifies that when callback_port is absent
+// from the config file, the default of 8888 is used.
+func TestLoad_CallbackPort_defaultsTo8888(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `
+[spotify]
+client_id = "my-client-id"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, 8888, cfg.CallbackPort, "callback_port should default to 8888 when absent")
+}
+
+// TestLoad_CallbackPort_fromFile verifies that when callback_port is set in the
+// config file, it overrides the default.
+func TestLoad_CallbackPort_fromFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `
+[spotify]
+client_id = "my-client-id"
+callback_port = 9999
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, 9999, cfg.CallbackPort, "callback_port from file should be 9999")
+}
+
+// ---- ClearClientID tests ----
+
+// TestClearClientID_removesClientIDPreservesPreferences verifies that ClearClientID
+// removes only the client_id line while preserving other settings.
+func TestClearClientID_removesClientIDPreservesPreferences(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[spotify]
+client_id = "abc123"
+callback_port = 9000
+
+[preferences]
+theme = "nord"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	err := config.ClearClientID(path)
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "", cfg.ClientID, "client_id should be removed")
+	assert.Equal(t, 9000, cfg.CallbackPort, "callback_port should be preserved")
+	assert.Equal(t, "nord", cfg.Preferences.Theme, "theme should be preserved")
+}
+
+// TestClearClientID_noClientID_isNoOp verifies that ClearClientID on a file with
+// no client_id returns nil and leaves the file unchanged.
+func TestClearClientID_noClientID_isNoOp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	original := `[spotify]
+callback_port = 9000
+
+[preferences]
+theme = "black"
+`
+	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
+
+	err := config.ClearClientID(path)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, original, string(data), "file should be unchanged when no client_id present")
+}
+
+// TestClearClientID_missingFile_returnsError verifies that ClearClientID returns
+// an error when the file does not exist.
+func TestClearClientID_missingFile_returnsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nonexistent.toml")
+
+	err := config.ClearClientID(path)
+	require.Error(t, err, "ClearClientID should return an error for missing file")
+}
+
+// ---- SetClientID tests ----
+
+// TestSetClientID_writesNewValue verifies that SetClientID inserts client_id when
+// the [spotify] section exists but has no client_id key.
+func TestSetClientID_writesNewValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[spotify]
+callback_port = 9000
+
+[preferences]
+theme = "nord"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	err := config.SetClientID(path, "new-client-id")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "new-client-id", cfg.ClientID, "client_id should be set to new value")
+	assert.Equal(t, 9000, cfg.CallbackPort, "callback_port should be preserved")
+	assert.Equal(t, "nord", cfg.Preferences.Theme, "theme should be preserved")
+}
+
+// TestSetClientID_replacesExistingValue verifies that SetClientID replaces an
+// existing client_id value in-place.
+func TestSetClientID_replacesExistingValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[spotify]
+client_id = "old-client-id"
+callback_port = 9000
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	err := config.SetClientID(path, "new-client-id")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "new-client-id", cfg.ClientID, "client_id should be replaced with new value")
+	assert.Equal(t, 9000, cfg.CallbackPort, "callback_port should be preserved after replace")
+}
+
+// TestSetClientID_noSpotifySection verifies that SetClientID appends a [spotify]
+// section with client_id when the config file has no [spotify] section at all.
+func TestSetClientID_noSpotifySection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[preferences]\ntheme = \"black\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	err := config.SetClientID(path, "appended-id")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "appended-id", cfg.ClientID, "client_id should be written via append path")
+	assert.Equal(t, "black", cfg.Preferences.Theme, "theme should be preserved after append")
+}
+
+// TestSetClientID_fileNotExist verifies that SetClientID creates the file (and its
+// parent directory) when neither the file nor its directory exists yet.
+func TestSetClientID_fileNotExist(t *testing.T) {
+	base := t.TempDir()
+	// Use a non-existent subdirectory so both MkdirAll and file creation are exercised.
+	path := filepath.Join(base, "subdir", "config.toml")
+
+	err := config.SetClientID(path, "brand-new-id")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "brand-new-id", cfg.ClientID, "client_id should be set in newly created file")
+}
+
 // TestBootstrap_StatErrorPropagated verifies that Bootstrap returns an error when
 // os.Stat fails for a reason other than the file not existing (e.g. the parent
 // path component is a file, not a directory, which yields ENOTDIR).
