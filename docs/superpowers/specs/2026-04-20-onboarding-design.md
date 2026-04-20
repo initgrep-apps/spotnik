@@ -118,29 +118,29 @@ The callback server has already started. The redirect URI with exact port is sho
 
 
   ╭── Step 1 of 2 — Set up your Spotify Developer App ───────────────────────────────────────╮
-  │                                                                                            │
-  │  Spotnik requires your own Spotify Developer credentials. Spotify does not allow          │
+  │                                                                                          │
+  │  Spotnik requires your own Spotify Developer credentials. Spotify does not allow         │
   │  shared app credentials, so this is a one-time setup. Takes about 2 minutes.             │
-  │                                                                                            │
+  │                                                                                          │
   │  1.  Open  →  https://developer.spotify.com/dashboard                                    │
   │  2.  Click "Create app" — any name and description will do                               │
   │  3.  Under "Redirect URIs" paste this URL exactly:                                       │
-  │                                                                                            │
-  │      ╭──────────────────────────────────────────────╮                                     │
-  │      │  http://127.0.0.1:8888/callback               │  ← copy and paste this             │
-  │      ╰──────────────────────────────────────────────╯                                     │
-  │                                                                                            │
+  │                                                                                          │
+  │      ╭──────────────────────────────────────────────╮                                    │
+  │      │  http://127.0.0.1:8888/callback               │  ← copy and paste this            │
+  │      ╰──────────────────────────────────────────────╯                                    │
+  │                                                                                          │
   │  4.  Tick "Web API" under "Which API/SDKs are you planning to use?"                      │
-  │  5.  Click Save → open Settings → copy your Client ID (32-character hex string)         │
-  │                                                                                            │
+  │  5.  Click Save → open Settings → copy your Client ID (32-character hex string)          │
+  │                                                                                          │
   │  ⚠   Spotify Premium is required to use playback controls                                │
-  │  ✓   Your Client ID will be saved to ~/.config/spotnik/config.toml                      │
-  │                                                                                            │
+  │  ✓   Your Client ID will be saved to ~/.config/spotnik/config.toml                       │
+  │                                                                                          │
   │  ╭─ Paste your Client ID here ─────────────────────────────────────────────────────╮     │
   │  │  > _                                                                            │     │
   │  ╰─────────────────────────────────────────────────────────────────────────────────╯     │
-  │                                                                                            │
-  ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+  │                                                                                          │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────╯
 
                           Enter  confirm  ·  q  quit
 ```
@@ -159,23 +159,23 @@ Browser auto-opens. Full untruncated URL shown for headless/manual use. Wraps ac
 
 
   ╭── Step 2 of 2 — Authorize Spotnik with Spotify ───────────────────────────────────────────╮
-  │                                                                                             │
+  │                                                                                           │
   │  A browser window has been opened for you. Log in to Spotify and click Agree.             │
-  │                                                                                             │
-  │  On a headless server or browser didn't open? Copy and visit this URL:                   │
-  │                                                                                             │
-  │  ╭──────────────────────────────────────────────────────────────────────────────────────╮  │
+  │                                                                                           │
+  │  On a headless server or browser didn't open? Copy and visit this URL:                    │
+  │                                                                                           │
+  │  ╭─────────────────────────────────────────────────────────────────────────────────────╮  │
   │  │  https://accounts.spotify.com/authorize?client_id=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4  │  │
   │  │  &response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback          │  │
-  │  │  &code_challenge_method=S256&code_challenge=abc123...                                │  │
-  │  │  &scope=user-read-playback-state+user-modify-playback-state+...                      │  │
-  │  ╰──────────────────────────────────────────────────────────────────────────────────────╯  │
-  │                                                                                             │
-  │  ⟳  Waiting for authorization...  (times out in 5 minutes)                               │
-  │                                                                                             │
+  │  │  &code_challenge_method=S256&code_challenge=abc123...                               │  │
+  │  │  &scope=user-read-playback-state+user-modify-playback-state+...                     │  │
+  │  ╰─────────────────────────────────────────────────────────────────────────────────────╯  │
+  │                                                                                           │
+  │  ⟳  Waiting for authorization...  (times out in 5 minutes)                                │
+  │                                                                                           │
   │  Once you approve in the browser, Spotnik continues automatically.                        │
-  │                                                                                             │
-  ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
+  │                                                                                           │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────╯
 
                           c  copy URL  ·  q  quit
 ```
@@ -194,24 +194,24 @@ Shown when OAuth returns an error. `r` takes the user back to Step 1.
 
 
   ╭── Step 2 of 2 — Authorization Failed ─────────────────────────────────────────────────────╮
-  │                                                                                             │
-  │  ✗  Authorization failed                                                                   │
-  │                                                                                             │
+  │                                                                                           │
+  │  ✗  Authorization failed                                                                  │
+  │                                                                                           │
   │  Error: invalid_client — The Client ID was not recognised by Spotify.                     │
-  │                                                                                             │
-  │  Common causes:                                                                             │
-  │    •  Client ID was mistyped or truncated                                                  │
-  │    •  Redirect URI in your Spotify app does not match:                                     │
+  │                                                                                           │
+  │  Common causes:                                                                           │
+  │    •  Client ID was mistyped or truncated                                                 │
+  │    •  Redirect URI in your Spotify app does not match:                                    │
   │       http://127.0.0.1:8888/callback                                                      │
-  │    •  The Spotify app was deleted or suspended                                             │
-  │                                                                                             │
-  │  What would you like to do?                                                                │
-  │                                                                                             │
+  │    •  The Spotify app was deleted or suspended                                            │
+  │                                                                                           │
+  │  What would you like to do?                                                               │
+  │                                                                                           │
   │    r  Re-enter Client ID  (go back to Step 1)                                             │
-  │    l  Try again           (keep current Client ID, retry OAuth)                            │
-  │    q  Quit                                                                                 │
-  │                                                                                             │
-  ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
+  │    l  Try again           (keep current Client ID, retry OAuth)                           │
+  │    q  Quit                                                                                │
+  │                                                                                           │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### Screen 4 — Profile Overlay (enhanced)
@@ -219,7 +219,7 @@ Shown when OAuth returns an error. `r` takes the user back to Step 1.
 Two new actions below a separator. Confirmation required (press key twice).
 
 ```
-  ╭── Profile ──────────────────────────────╮
+  ╭── Profile ───────────────────────────────╮
   │  Irshad Sheikh                           │
   │  ────────────────────                    │
   │  ♛  Premium                              │
