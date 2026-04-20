@@ -30,7 +30,7 @@ Client ID is config-first:
 - If `~/.config/spotnik/config.toml` contains `[spotify] client_id = "..."` → use it, skip registration
 - If absent → show TUI registration flow, user enters their own client ID, it is saved to config
 
-Developer builds: ship a `config.toml` with the client ID pre-populated. No code change needed.
+Everyone — including the app developer — goes through the registration flow on first launch. There is no embedded ID, no special developer mode, no pre-populated config. One path for all users.
 
 ### 2. Fixed Callback Port
 
@@ -304,6 +304,13 @@ spotnik launched
 ```
 
 ---
+
+## Implementation Constraints
+
+- **Pane / screen structure**: All new screens (`viewOnboarding`, `viewAuth` render helpers) must follow the same patterns as existing panes — see `docs/PANE-TEMPLATE.md` and actual implementations in `internal/ui/panes/`. Pure `View()`, messages for state changes, no API calls inside `Update()`.
+- **Theme-aware**: Every colour token must come from the `theme.Theme` interface. No hardcoded hex values anywhere in the onboarding screens or profile overlay changes.
+- **`bubbles/textinput`**: Use `github.com/charmbracelet/bubbles/textinput` for the client ID input field on the registration screen. Already a project dependency — no new imports needed.
+- **`bubbles/spinner`**: Use `github.com/charmbracelet/bubbles/spinner` for the `⟳` waiting indicator on the OAuth screen.
 
 ## Implementation Notes
 
