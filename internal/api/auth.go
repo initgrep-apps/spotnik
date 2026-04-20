@@ -108,14 +108,14 @@ func (s *callbackServer) Close() {
 	_ = s.server.Shutdown(context.Background())
 }
 
-// StartCallbackServer starts a local HTTP server on a random available port
-// to receive the OAuth callback from Spotify.
-// It returns the server (for URL and Close), and a channel that receives
-// the authorization code or error once the callback arrives.
-func StartCallbackServer() (*callbackServer, <-chan CallbackResult, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+// StartCallbackServer starts a local HTTP server on the given port to receive
+// the OAuth callback from Spotify. Pass port=0 to let the OS assign a random
+// port (useful in tests). Returns the server, a result channel, and any error.
+func StartCallbackServer(port int) (*callbackServer, <-chan CallbackResult, error) {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("starting callback server: %w", err)
+		return nil, nil, fmt.Errorf("starting callback server on %s: %w", addr, err)
 	}
 
 	resultCh := make(chan CallbackResult, 1)
