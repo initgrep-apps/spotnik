@@ -43,7 +43,7 @@ func prepareAuthCmd(clientID string) tea.Cmd {
 		}
 		challenge := api.ComputeCodeChallenge(verifier)
 
-		callbackSrv, codeCh, err := api.StartCallbackServer()
+		callbackSrv, codeCh, err := api.StartCallbackServer(0)
 		if err != nil {
 			return authErrorMsg{err: fmt.Errorf("starting callback server: %w", err)}
 		}

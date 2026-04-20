@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -81,7 +82,7 @@ func TestBuildAuthURL_ContainsAllParams(t *testing.T) {
 // TestCallbackServer_ExtractsCode verifies that a GET to /callback?code=abc
 // sends the code on the returned channel.
 func TestCallbackServer_ExtractsCode(t *testing.T) {
-	srv, codeCh, err := api.StartCallbackServer()
+	srv, codeCh, err := api.StartCallbackServer(0)
 	require.NoError(t, err)
 	defer srv.Close()
 
@@ -102,7 +103,7 @@ func TestCallbackServer_ExtractsCode(t *testing.T) {
 
 // TestCallbackServer_HandlesError verifies that error=access_denied sends an error on the channel.
 func TestCallbackServer_HandlesError(t *testing.T) {
-	srv, codeCh, err := api.StartCallbackServer()
+	srv, codeCh, err := api.StartCallbackServer(0)
 	require.NoError(t, err)
 	defer srv.Close()
 
@@ -121,11 +122,42 @@ func TestCallbackServer_HandlesError(t *testing.T) {
 
 // TestCallbackServer_RandomPort verifies the server binds to a port > 0.
 func TestCallbackServer_RandomPort(t *testing.T) {
-	srv, _, err := api.StartCallbackServer()
+	srv, _, err := api.StartCallbackServer(0)
 	require.NoError(t, err)
 	defer srv.Close()
 	assert.NotEmpty(t, srv.URL)
 	assert.NotContains(t, srv.URL, ":0")
+}
+
+// TestStartCallbackServer_fixedPort verifies that passing an explicit port
+// causes the server to bind to that exact port.
+func TestStartCallbackServer_fixedPort(t *testing.T) {
+	srv, ch, err := api.StartCallbackServer(18765)
+	require.NoError(t, err)
+	defer srv.Close()
+	assert.Contains(t, srv.URL, ":18765")
+	assert.NotNil(t, ch)
+}
+
+// TestStartCallbackServer_portZero_randomPort verifies that port 0 lets the OS
+// assign a random port and the resulting URL is non-empty.
+func TestStartCallbackServer_portZero_randomPort(t *testing.T) {
+	srv, ch, err := api.StartCallbackServer(0)
+	require.NoError(t, err)
+	defer srv.Close()
+	assert.NotEmpty(t, srv.URL)
+	assert.NotNil(t, ch)
+}
+
+// TestStartCallbackServer_portBusy_returnsError verifies that attempting to
+// bind to an already-occupied port returns an error.
+func TestStartCallbackServer_portBusy_returnsError(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:18766")
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+
+	_, _, err = api.StartCallbackServer(18766)
+	assert.Error(t, err)
 }
 
 // --- Task 1.5: Token exchange tests ---
@@ -310,7 +342,7 @@ func TestExchangeCode_NetworkError(t *testing.T) {
 // TestCallbackServer_MissingCode verifies that a callback with neither code nor error
 // sends an error on the channel.
 func TestCallbackServer_MissingCode(t *testing.T) {
-	srv, codeCh, err := api.StartCallbackServer()
+	srv, codeCh, err := api.StartCallbackServer(0)
 	require.NoError(t, err)
 	defer srv.Close()
 

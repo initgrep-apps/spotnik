@@ -239,7 +239,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	challenge := api.ComputeCodeChallenge(verifier)
 
 	// Start local callback server on a random port.
-	callbackSrv, codeCh, err := api.StartCallbackServer()
+	callbackSrv, codeCh, err := api.StartCallbackServer(0)
 	if err != nil {
 		return fmt.Errorf("starting callback server: %w", err)
 	}
