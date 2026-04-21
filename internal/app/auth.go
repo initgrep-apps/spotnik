@@ -160,18 +160,27 @@ func (a *App) initAPIClients(token string) {
 	a.playlistsAPI = playlistsAPI
 }
 
-// renderAuthPanel renders a centered auth prompt box.
+// renderAuthPanel renders a centered re-authentication prompt box for returning users.
+// The auth URL is never truncated — wrapURL breaks it into readable lines.
 func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) string {
-	// Truncate URL for display.
-	displayURL := authURL
-	if len(displayURL) > 60 {
-		displayURL = displayURL[:57] + "..."
+	// Derive a sensible inner width for URL wrapping; fall back to 80 when
+	// the terminal size is not yet known.
+	innerW := 60
+	if width > 20 {
+		innerW = width - 20
+	} else if width <= 0 {
+		innerW = 60
 	}
 
-	boxStyle := lipgloss.NewStyle().
+	outerBorder := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.ActiveBorder()).
 		Padding(1, 2)
+
+	urlBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.TextMuted()).
+		Padding(0, 1)
 
 	titleStyle := lipgloss.NewStyle().
 		Foreground(t.TextPrimary()).
@@ -183,16 +192,24 @@ func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) s
 	statusStyle := lipgloss.NewStyle().
 		Foreground(t.TextMuted())
 
+	hintStyle := lipgloss.NewStyle().
+		Foreground(t.TextMuted())
+
+	wrappedURL := wrapURL(authURL, innerW)
+	urlBox := urlBoxStyle.Render(urlStyle.Render(wrappedURL))
+
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render("Authentication Required"),
+		titleStyle.Render("Re-authenticate with Spotify"),
 		"",
 		"Visit this URL to authorize:",
-		urlStyle.Render(displayURL),
+		urlBox,
 		"",
 		statusStyle.Render(status),
+		"",
+		hintStyle.Render("c  copy URL  ·  q  quit"),
 	)
 
-	box := boxStyle.Render(content)
+	box := outerBorder.Render(content)
 
 	if width <= 0 || height <= 0 {
 		return box

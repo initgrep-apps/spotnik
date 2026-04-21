@@ -135,6 +135,191 @@ func wrapURL(rawURL string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+// onboardingTitle renders the shared header for all onboarding screens.
+// Both lines are centered so they appear naturally in the centered panel.
+func (a *App) onboardingTitle() string {
+	titleStyle := lipgloss.NewStyle().
+		Foreground(a.theme.TextPrimary()).
+		Bold(true)
+	subtitleStyle := lipgloss.NewStyle().
+		Foreground(a.theme.TextMuted())
+
+	return lipgloss.JoinVertical(lipgloss.Center,
+		titleStyle.Render("♪  spotnik"),
+		subtitleStyle.Render("A terminal Spotify client for developers"),
+	)
+}
+
+// renderOnboarding dispatches to the active sub-step renderer and centers the
+// result when terminal dimensions are known.
+func (a *App) renderOnboarding() string {
+	var body string
+	switch a.onboardingStep {
+	case stepOAuth:
+		body = a.renderOnboardingOAuth()
+	case stepError:
+		body = a.renderOnboardingError()
+	default:
+		body = a.renderOnboardingRegister()
+	}
+	if a.width > 0 && a.height > 0 {
+		return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, body)
+	}
+	return body
+}
+
+// renderOnboardingRegister renders Step 1: instructions, redirect URI box, and
+// the client ID text input. No network I/O — reads only app.onboardingPort and
+// app.onboardingInput.
+func (a *App) renderOnboardingRegister() string {
+	t := a.theme
+
+	outerBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.ActiveBorder()).
+		Padding(1, 2)
+
+	uriBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.TextMuted()).
+		Padding(0, 1)
+
+	inputBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.ActiveBorder()).
+		Padding(0, 1)
+
+	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
+	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
+	warnStyle := lipgloss.NewStyle().Foreground(t.Warning())
+	successStyle := lipgloss.NewStyle().Foreground(t.Success())
+	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
+
+	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort)
+	uriBox := uriBoxStyle.Render(textStyle.Render(redirectURI))
+
+	instructions := lipgloss.JoinVertical(lipgloss.Left,
+		textStyle.Render("1. Go to https://developer.spotify.com/dashboard and create an app."),
+		textStyle.Render("2. In the app settings, set the Redirect URI exactly as shown below:"),
+		"",
+		uriBox,
+		"",
+		warnStyle.Render("⚠  Spotify Premium is required for playback controls"),
+		successStyle.Render("✓  Your Client ID will be saved to ~/.config/spotnik/config.toml"),
+	)
+
+	inputBox := inputBoxStyle.Render(a.onboardingInput.View())
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		a.onboardingTitle(),
+		"",
+		stepStyle.Render("Step 1 of 2 — Set up your Spotify Developer App"),
+		"",
+		instructions,
+		"",
+		lipgloss.JoinVertical(lipgloss.Left,
+			textStyle.Render("Paste your Client ID here:"),
+			inputBox,
+		),
+		"",
+		hintStyle.Render("Enter  confirm  ·  q  quit"),
+	)
+
+	return outerBorder.Render(body)
+}
+
+// renderOnboardingOAuth renders Step 2: the full auth URL, spinner, and copy hint.
+// The URL is never truncated — wrapURL breaks it across lines to fit the panel.
+func (a *App) renderOnboardingOAuth() string {
+	t := a.theme
+
+	outerBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.ActiveBorder()).
+		Padding(1, 2)
+
+	urlBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.TextMuted()).
+		Padding(0, 1)
+
+	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
+	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
+	urlStyle := lipgloss.NewStyle().Foreground(t.ActiveBorder())
+	muteStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
+	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
+
+	// Use a sensible inner width for URL wrapping; 60 gives readable line lengths.
+	innerW := 60
+	if a.width > 20 {
+		innerW = a.width - 20
+	}
+
+	wrappedURL := wrapURL(a.onboardingAuthURL, innerW)
+	urlBox := urlBoxStyle.Render(urlStyle.Render(wrappedURL))
+
+	spinnerText := lipgloss.JoinHorizontal(lipgloss.Left,
+		a.onboardingSpinner.View(),
+		" ",
+		muteStyle.Render("Waiting for authorization...  (times out in 5 minutes)"),
+	)
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		a.onboardingTitle(),
+		"",
+		stepStyle.Render("Step 2 of 2 — Authorize Spotnik with Spotify"),
+		"",
+		textStyle.Render("A browser window has been opened. Log in and click Agree."),
+		"",
+		textStyle.Render("On a headless server or browser didn't open? Visit this URL:"),
+		urlBox,
+		"",
+		spinnerText,
+		"",
+		hintStyle.Render("c  copy URL  ·  q  quit"),
+	)
+
+	return outerBorder.Render(body)
+}
+
+// renderOnboardingError renders the Step 2 error screen with common causes and
+// retry/quit options. The outer border uses the Error() theme colour.
+func (a *App) renderOnboardingError() string {
+	t := a.theme
+
+	outerBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Error()).
+		Padding(1, 2)
+
+	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
+	errStyle := lipgloss.NewStyle().Foreground(t.Error())
+	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
+	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
+
+	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort)
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		a.onboardingTitle(),
+		"",
+		stepStyle.Render("Step 2 of 2 — Authorization Failed"),
+		"",
+		errStyle.Render("✗  Authorization failed"),
+		errStyle.Render("Error: "+a.onboardingError),
+		"",
+		textStyle.Render("Common causes:"),
+		textStyle.Render("  •  Client ID mistyped or truncated"),
+		textStyle.Render("  •  Redirect URI does not match: "+redirectURI),
+		textStyle.Render("  •  Spotify app deleted or suspended"),
+		"",
+		hintStyle.Render("r  Re-enter Client ID  (go back to Step 1)"),
+		hintStyle.Render("l  Try again           (keep current Client ID, retry OAuth)"),
+		hintStyle.Render("q  Quit"),
+	)
+
+	return outerBorder.Render(body)
+}
+
 // buildView renders the full terminal UI content without the alert overlay.
 // Called by View() which applies alerts.Render() as the final step.
 func (a *App) buildView() string {
@@ -151,17 +336,15 @@ func (a *App) buildView() string {
 		// No size yet — fall through to grid view for tests.
 	}
 
-	// Auth panel shown when the user needs to authenticate.
-	if a.currentView == viewAuth {
-		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
+	// Onboarding flow shown on first launch when no client_id is configured.
+	// Must be checked before viewAuth — onboarding is a superset of the auth step.
+	if a.currentView == viewOnboarding {
+		return a.renderOnboarding()
 	}
 
-	// Onboarding flow shown on first launch when no client_id is configured.
-	// Story 139 will deliver the real onboarding renderer; for now return a
-	// placeholder so the app does not fall through to grid rendering (which
-	// would crash because API clients are nil at this point).
-	if a.currentView == viewOnboarding {
-		return "Onboarding — setting up your Spotify connection…"
+	// Auth panel shown when the user needs to re-authenticate (returning user).
+	if a.currentView == viewAuth {
+		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
 	// Grid view: header + grid content + status bar.
