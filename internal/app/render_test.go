@@ -825,3 +825,59 @@ func TestWrapURL_noAmpersand_breaksAtWidth(t *testing.T) {
 	assert.Equal(t, strings.Repeat("a", 60), lines[1])
 	assert.Equal(t, strings.Repeat("a", 30), lines[2])
 }
+
+// --- Story 144: Onboarding polish tests ---
+
+// TestOnboardingTitle_noForDevelopers verifies the subtitle does not include "for developers".
+func TestOnboardingTitle_noForDevelopers(t *testing.T) {
+	a := &App{theme: theme.Load(theme.DefaultThemeID)}
+	title := a.onboardingTitle()
+	assert.NotContains(t, title, "for developers")
+	assert.Contains(t, title, "A terminal Spotify client")
+}
+
+// TestRenderOnboardingRegister_copyHint_shownWhenEmpty verifies the 'c copy URI' hint
+// appears when the input field is empty.
+func TestRenderOnboardingRegister_copyHint_shownWhenEmpty(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 40
+	// Input is empty by default — copy hint should appear.
+	view := a.renderOnboardingRegister()
+	assert.Contains(t, view, "copy URI")
+}
+
+// TestRenderOnboardingRegister_copyHint_hiddenWhenTyping verifies the 'c copy URI' hint
+// is hidden once the user has started typing in the input field.
+func TestRenderOnboardingRegister_copyHint_hiddenWhenTyping(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 40
+	a.onboardingInput.SetValue("abc")
+	view := a.renderOnboardingRegister()
+	assert.NotContains(t, view, "copy URI")
+}
+
+// TestRenderOnboardingRegister_copiedFeedback verifies the success checkmark and
+// "Copied" text appear on screen 1 when onboardingCopied is true.
+func TestRenderOnboardingRegister_copiedFeedback(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 40
+	a.onboardingCopied = true
+	view := a.renderOnboardingRegister()
+	assert.Contains(t, view, "✓")
+	assert.Contains(t, view, "Copied")
+}
+
+// TestRenderOnboardingOAuth_copiedFeedback verifies the success checkmark and
+// "Copied" text appear on screen 2 when onboardingCopied is true.
+func TestRenderOnboardingOAuth_copiedFeedback(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 40
+	a.onboardingCopied = true
+	view := a.renderOnboardingOAuth()
+	assert.Contains(t, view, "✓")
+	assert.Contains(t, view, "Copied")
+}

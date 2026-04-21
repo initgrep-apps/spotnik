@@ -204,6 +204,10 @@ type App struct {
 	// onboardingAuthURL is the full Spotify OAuth authorization URL, shown on stepOAuth.
 	onboardingAuthURL string
 
+	// onboardingCopied is set true briefly after 'c' copies a URL or URI.
+	// Cleared by copiedFeedbackMsg after 2 seconds.
+	onboardingCopied bool
+
 	// onboardingSpinner is the spinner shown while waiting for the OAuth callback.
 	onboardingSpinner spinner.Model
 

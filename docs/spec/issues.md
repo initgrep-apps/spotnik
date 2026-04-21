@@ -118,3 +118,14 @@ Fix: Add `assert.Contains(t, view, "dev")` back to `TestRenderSplashView_smallTe
 
 Items to log:
 1. Add type assertion `assert.IsType(t, panes.ProfileConfirmToastMsg{}, msg)` and text check to `TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew` in `internal/ui/panes/profile_test.go`
+
+---
+
+## Onboarding copy: onboardingCopied set even when clipboard fails
+**Found:** 2026-04-21 | **Source:** PR #188 Review
+**Feature:** 09-auth-and-profile
+
+`_ = copyToClipboard(...)` silently discards clipboard errors but `onboardingCopied` is set to `true` regardless, showing "✓ Copied!" even if nothing was actually copied. URL is still visible so UX is acceptable, but accuracy could be improved.
+
+Items to log:
+1. In `internal/app/routing.go` (and `auth.go`) copy handler: only set `onboardingCopied = true` on successful clipboard copy, show a different hint on failure.

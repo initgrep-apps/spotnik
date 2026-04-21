@@ -1,6 +1,6 @@
 ---
 title: "Auth, Bootstrap & User Profile"
-status: in-progress
+status: done
 ---
 
 ## Description

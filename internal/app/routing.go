@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -457,6 +458,15 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch a.onboardingStep {
 	case stepRegister:
+		// 'c' copies the redirect URI — only when the input field is empty.
+		// Once the user starts typing, 'c' is a valid hex character and must pass through.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "c" && a.onboardingInput.Value() == "" {
+			_ = copyToClipboard(fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort))
+			a.onboardingCopied = true
+			return a, tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+				return copiedFeedbackMsg{}
+			})
+		}
 		// Enter with non-empty input → save client ID.
 		if m.Type == tea.KeyEnter {
 			clientID := strings.TrimSpace(a.onboardingInput.Value())
@@ -471,9 +481,13 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case stepOAuth:
-		// c → copy auth URL to clipboard (silent on failure).
+		// c → copy auth URL to clipboard and show brief confirmation feedback.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
 			_ = copyToClipboard(a.onboardingAuthURL)
+			a.onboardingCopied = true
+			return a, tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+				return copiedFeedbackMsg{}
+			})
 		}
 		return a, nil
 
