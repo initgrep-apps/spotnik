@@ -25,8 +25,8 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "spotnik",
-	Short: "A terminal Spotify client for developers",
-	Long:  "Spotnik — keyboard-driven Spotify client for developers who live in the terminal.",
+	Short: "A terminal Spotify client",
+	Long:  "Spotnik — keyboard-driven Spotify client.",
 	RunE:  runApp,
 }
 
