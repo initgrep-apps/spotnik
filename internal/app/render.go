@@ -132,6 +132,14 @@ func (a *App) buildView() string {
 		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
+	// Onboarding flow shown on first launch when no client_id is configured.
+	// Story 139 will deliver the real onboarding renderer; for now return a
+	// placeholder so the app does not fall through to grid rendering (which
+	// would crash because API clients are nil at this point).
+	if a.currentView == viewOnboarding {
+		return "Onboarding — setting up your Spotify connection…"
+	}
+
 	// Grid view: header + grid content + status bar.
 	header := a.renderHeader()
 	gridContent := a.renderGrid()

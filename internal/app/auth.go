@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -23,6 +24,15 @@ type authPreparedMsg struct {
 	browserErr  error
 }
 
+// onboardingClientIDSavedMsg is sent when client_id has been written to config.toml.
+type onboardingClientIDSavedMsg struct {
+	clientID string
+}
+
+// onboardingRetryMsg is sent when the user presses 'r' on the onboarding error screen.
+// Key handler (Story 138) will produce and consume this message.
+type onboardingRetryMsg struct{} //nolint:unused
+
 // authSuccessMsg is sent when the OAuth code exchange succeeds.
 type authSuccessMsg struct {
 	accessToken string
@@ -33,32 +43,36 @@ type authErrorMsg struct {
 	err error
 }
 
-// prepareAuthCmd performs PKCE setup, starts the callback server, and opens the browser.
-// It does NOT defer-close the server — the caller (waitForCallbackCmd) handles that.
-func prepareAuthCmd(clientID string) tea.Cmd {
+// saveClientIDCmd writes clientID to the config file at path, then returns
+// onboardingClientIDSavedMsg on success or authErrorMsg on failure.
+func saveClientIDCmd(path, clientID string) tea.Cmd {
+	return func() tea.Msg {
+		if err := config.SetClientID(path, clientID); err != nil {
+			return authErrorMsg{err: fmt.Errorf("saving client ID: %w", err)}
+		}
+		return onboardingClientIDSavedMsg{clientID: clientID}
+	}
+}
+
+// prepareOAuthCmd generates PKCE credentials, builds the Spotify auth URL, and opens
+// the browser. The callback server must already be running (started by cmd/ before
+// the app is created); this command does NOT start or stop the server.
+func prepareOAuthCmd(clientID string, port int, codeCh <-chan api.CallbackResult, serverClose func()) tea.Cmd {
 	return func() tea.Msg {
 		verifier, err := api.GenerateCodeVerifier()
 		if err != nil {
 			return authErrorMsg{err: fmt.Errorf("generating PKCE verifier: %w", err)}
 		}
 		challenge := api.ComputeCodeChallenge(verifier)
-
-		callbackSrv, codeCh, err := api.StartCallbackServer(0)
-		if err != nil {
-			return authErrorMsg{err: fmt.Errorf("starting callback server: %w", err)}
-		}
-
-		redirectURI := callbackSrv.URL + "/callback"
+		redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
 		authURL := api.BuildAuthURL(clientID, redirectURI, challenge, api.SpotifyScopes)
-
 		browserErr := api.OpenBrowser(authURL)
-
 		return authPreparedMsg{
 			authURL:     authURL,
 			codeCh:      codeCh,
 			verifier:    verifier,
 			redirectURI: redirectURI,
-			serverClose: callbackSrv.Close,
+			serverClose: serverClose,
 			browserErr:  browserErr,
 		}
 	}

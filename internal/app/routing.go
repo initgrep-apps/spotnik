@@ -112,6 +112,17 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// During onboarding, only allow Ctrl+C to quit — all other keys are reserved
+	// for the onboarding UI (client ID text input, OAuth wait screen). Story 139
+	// will wire the full key routing for onboarding; for now this guard prevents
+	// grid shortcuts from firing nil API clients before they are initialized.
+	if a.currentView == viewOnboarding {
+		if m.Type == tea.KeyCtrlC {
+			return a, tea.Quit
+		}
+		return a, nil
+	}
+
 	// When a pane's filter is active, route all keys directly to it.
 	// This prevents global shortcuts (q, /, d, etc.) from firing while typing.
 	focusedID := a.layout.FocusedPane()

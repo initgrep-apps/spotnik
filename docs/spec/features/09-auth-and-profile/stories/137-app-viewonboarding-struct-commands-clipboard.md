@@ -1,7 +1,7 @@
 ---
 title: "App — viewOnboarding Mode, Struct Fields, Commands, Clipboard"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
