@@ -27,7 +27,7 @@ func newRenderTestApp() *App {
 }
 
 // TestBuildView_OnboardingMode verifies that when currentView is viewOnboarding,
-// buildView() returns the placeholder string and does not fall through to grid rendering.
+// buildView() dispatches to renderOnboarding() and does not fall through to grid rendering.
 // This prevents nil-pointer crashes because API clients are not initialized during onboarding.
 func TestBuildView_OnboardingMode(t *testing.T) {
 	a := newRenderTestApp()
@@ -36,9 +36,12 @@ func TestBuildView_OnboardingMode(t *testing.T) {
 	a.currentView = viewOnboarding
 
 	result := a.buildView()
-	assert.Contains(t, result, "Onboarding",
-		"buildView should return onboarding placeholder when currentView == viewOnboarding")
-	assert.NotContains(t, result, "spotnik",
+	// renderOnboarding → renderOnboardingRegister (default step) renders the onboarding title
+	// and the step label; assert at least one of these expected strings is present.
+	assert.Contains(t, result, "Step 1 of 2",
+		"buildView should render the onboarding register screen when currentView == viewOnboarding")
+	// The grid header (rendered by renderHeader) must NOT appear.
+	assert.NotContains(t, result, "Page A",
 		"onboarding view must not render the grid header")
 }
 
@@ -669,4 +672,156 @@ func TestTruncateProfileName_UnicodeRunes(t *testing.T) {
 	result := truncateProfileName(name)
 	assert.True(t, len([]rune(result)) <= maxProfileDisplayNameLen)
 	assert.True(t, strings.HasSuffix(result, "…"))
+}
+
+// --- Story 139: onboarding render function tests ---
+
+// TestRenderOnboardingRegister_ContainsExpectedContent verifies the Step 1 screen
+// contains the step title, instructions text, redirect URI with port, the Premium warning,
+// config path notice, and the text input view.
+func TestRenderOnboardingRegister_ContainsExpectedContent(t *testing.T) {
+	a := newRenderTestApp()
+	a.onboardingPort = 8888
+	result := a.renderOnboardingRegister()
+
+	assert.Contains(t, result, "Step 1 of 2", "register screen must contain step label")
+	assert.Contains(t, result, "Set up your Spotify Developer App", "register screen must contain step title")
+	assert.Contains(t, result, "8888", "register screen must include the callback port")
+	assert.Contains(t, result, "http://127.0.0.1:8888/callback", "register screen must show full redirect URI")
+	assert.Contains(t, result, "⚠", "register screen must contain Premium warning icon")
+	assert.Contains(t, result, "Spotify Premium", "register screen must contain Premium warning text")
+	assert.Contains(t, result, "✓", "register screen must contain config path notice icon")
+	assert.Contains(t, result, "config.toml", "register screen must mention config.toml path")
+	assert.Contains(t, result, "╭", "register screen must use rounded borders")
+}
+
+// TestRenderOnboardingOAuth_ContainsExpectedContent verifies the Step 2 screen
+// contains the step title, full auth URL (never truncated), spinner output, and copy hint.
+func TestRenderOnboardingOAuth_ContainsExpectedContent(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.onboardingAuthURL = "https://accounts.spotify.com/authorize?client_id=abc123&scope=user-read-playback-state"
+	result := a.renderOnboardingOAuth()
+
+	assert.Contains(t, result, "Step 2 of 2", "OAuth screen must contain step label")
+	assert.Contains(t, result, "Authorize Spotnik with Spotify", "OAuth screen must contain step title")
+	assert.Contains(t, result, "https://accounts.spotify.com/authorize", "OAuth screen must show the auth URL")
+	assert.Contains(t, result, "Waiting for authorization", "OAuth screen must show spinner status text")
+	assert.Contains(t, result, "c  copy URL", "OAuth screen must show copy URL hint")
+	assert.Contains(t, result, "╭", "OAuth screen must use rounded borders")
+}
+
+// TestRenderOnboardingOAuth_FullURLNotTruncated verifies the complete URL is present
+// in the rendered output (wrapURL splits across lines; no characters are dropped).
+func TestRenderOnboardingOAuth_FullURLNotTruncated(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	longURL := "https://accounts.spotify.com/authorize?client_id=abc123&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A8888%2Fcallback&scope=user-read-playback-state&code_challenge_method=S256&code_challenge=testchallenge"
+	a.onboardingAuthURL = longURL
+	result := a.renderOnboardingOAuth()
+
+	// Stripping ANSI and joining lines would recover the URL, but a simpler proxy is
+	// that the first and last meaningful segments both appear in the output.
+	assert.Contains(t, result, "client_id=abc123", "OAuth screen must contain the client_id segment of the URL")
+	assert.Contains(t, result, "testchallenge", "OAuth screen must contain the final segment of the URL")
+	// The raw un-split URL must NOT appear as a single run (it gets wrapped).
+	assert.NotContains(t, result, longURL, "long auth URL must be wrapped, not shown as a single run")
+}
+
+// TestRenderOnboardingError_ContainsExpectedContent verifies the error screen contains
+// the error message, common causes, redirect URI with port, and retry options.
+func TestRenderOnboardingError_ContainsExpectedContent(t *testing.T) {
+	a := newRenderTestApp()
+	a.onboardingPort = 8888
+	a.onboardingError = "authorization code not received"
+	result := a.renderOnboardingError()
+
+	assert.Contains(t, result, "Step 2 of 2", "error screen must contain step label")
+	assert.Contains(t, result, "Authorization Failed", "error screen must contain failure title")
+	assert.Contains(t, result, "✗", "error screen must contain failure icon")
+	assert.Contains(t, result, "authorization code not received", "error screen must show the error message")
+	assert.Contains(t, result, "Common causes", "error screen must list common causes")
+	assert.Contains(t, result, "http://127.0.0.1:8888/callback", "error screen must show redirect URI with port")
+	assert.Contains(t, result, "r  Re-enter Client ID", "error screen must show retry option r")
+	assert.Contains(t, result, "l  Try again", "error screen must show retry option l")
+	assert.Contains(t, result, "q  Quit", "error screen must show quit option")
+}
+
+// TestRenderOnboarding_StepRegister_Centered verifies that with known dimensions,
+// renderOnboarding() centers the body via lipgloss.Place.
+func TestRenderOnboarding_StepRegister_Centered(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.onboardingStep = stepRegister
+	result := a.renderOnboarding()
+
+	assert.NotEmpty(t, result, "renderOnboarding must return non-empty output")
+	assert.Contains(t, result, "Step 1 of 2", "centered onboarding must still contain step label")
+}
+
+// TestRenderOnboarding_StepOAuth_Dispatches verifies that with stepOAuth active,
+// renderOnboarding returns the OAuth screen content.
+func TestRenderOnboarding_StepOAuth_Dispatches(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.onboardingStep = stepOAuth
+	a.onboardingAuthURL = "https://accounts.spotify.com/authorize"
+	result := a.renderOnboarding()
+
+	assert.Contains(t, result, "Step 2 of 2", "stepOAuth must render the OAuth screen")
+}
+
+// TestRenderOnboarding_StepError_Dispatches verifies that with stepError active,
+// renderOnboarding returns the error screen content.
+func TestRenderOnboarding_StepError_Dispatches(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.onboardingStep = stepError
+	a.onboardingError = "timeout"
+	result := a.renderOnboarding()
+
+	assert.Contains(t, result, "Authorization Failed", "stepError must render the error screen")
+}
+
+// --- Story 139: wrapURL tests ---
+
+// TestWrapURL_shortURL_unchanged verifies that a URL shorter than or equal to width
+// is returned unchanged (no wrapping, no newlines).
+func TestWrapURL_shortURL_unchanged(t *testing.T) {
+	rawURL := "https://accounts.spotify.com/authorize"
+	result := wrapURL(rawURL, 80)
+	assert.Equal(t, rawURL, result, "short URL should be returned unchanged")
+	assert.NotContains(t, result, "\n", "short URL must not contain newlines")
+}
+
+// TestWrapURL_longURL_breaksAtAmpersand verifies that a long Spotify auth URL is
+// broken at '&' boundaries and that all resulting lines are at most width chars.
+func TestWrapURL_longURL_breaksAtAmpersand(t *testing.T) {
+	rawURL := "https://accounts.spotify.com/authorize?client_id=abc123&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcallback&scope=user-read-playback-state&code_challenge_method=S256&code_challenge=xyz"
+	width := 60
+	result := wrapURL(rawURL, width)
+	assert.Contains(t, result, "\n", "long URL should be wrapped with newlines")
+	for _, line := range strings.Split(result, "\n") {
+		assert.LessOrEqual(t, len(line), width,
+			"each wrapped line must be at most %d chars, got %q", width, line)
+	}
+	// The full URL must be reconstructable (no characters lost).
+	assert.Equal(t, rawURL, strings.Join(strings.Split(result, "\n"), ""),
+		"joining all lines must reproduce the original URL")
+}
+
+// TestWrapURL_noAmpersand_breaksAtWidth verifies that a URL with no '&' characters
+// falls back to a hard break at exactly width characters.
+func TestWrapURL_noAmpersand_breaksAtWidth(t *testing.T) {
+	rawURL := strings.Repeat("a", 150)
+	width := 60
+	result := wrapURL(rawURL, width)
+	lines := strings.Split(result, "\n")
+	assert.Len(t, lines, 3, "150 chars at width 60 should produce exactly 3 lines")
+	assert.Equal(t, strings.Repeat("a", 60), lines[0])
+	assert.Equal(t, strings.Repeat("a", 60), lines[1])
+	assert.Equal(t, strings.Repeat("a", 30), lines[2])
 }

@@ -1,7 +1,7 @@
 ---
 title: "Onboarding — Render Functions (Register, OAuth Wait, Error Screens)"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
