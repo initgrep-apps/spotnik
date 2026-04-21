@@ -11,7 +11,9 @@ import (
 // forwarded through AppOptions; it falls back to "dev" for local builds.
 // It is a standalone function so it can be tested without an App instance.
 func renderSplashView(t theme.Theme, version string, width, height int) string {
-	fig := figure.NewFigure("SPOTNIK", "serifcap", false)
+	// NOTE: dotmatrix was the preferred font but requires ~144 columns to render
+	// without wrapping; banner3-D fits cleanly at 120 columns.
+	fig := figure.NewFigure("SPOTNIK", "banner3-D", false)
 	banner := fig.String()
 
 	bannerStyle := lipgloss.NewStyle().
@@ -20,23 +22,31 @@ func renderSplashView(t theme.Theme, version string, width, height int) string {
 
 	tagline := lipgloss.NewStyle().
 		Foreground(t.TextMuted()).
-		Render("A terminal Spotify client for developers")
+		Render("A terminal Spotify client")
 
-	versionStr := lipgloss.NewStyle().
-		Foreground(t.TextMuted()).
-		Render(version)
+	infoPanelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.TextMuted()).
+		Padding(0, 2)
 
-	notice := lipgloss.NewStyle().
-		Foreground(t.TextMuted()).
-		Render("Playback controls require Spotify Premium")
+	versionLine := lipgloss.NewStyle().
+		Foreground(t.TextPrimary()).
+		Render("Version " + version)
+
+	premiumLine := lipgloss.NewStyle().
+		Foreground(t.Warning()).
+		Render("⚠  Playback controls require Spotify Premium")
+
+	infoPanel := infoPanelStyle.Render(
+		lipgloss.JoinVertical(lipgloss.Left, versionLine, premiumLine),
+	)
 
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		bannerStyle.Render(banner),
 		"",
 		tagline,
-		versionStr,
 		"",
-		notice,
+		infoPanel,
 	)
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
