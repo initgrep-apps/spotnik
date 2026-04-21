@@ -97,3 +97,13 @@ The `assert.Contains(t, output, "dev")` assertions in `splash_test.go` and `app_
 **Feature:** 11-cicd
 
 `cmd.Execute(version)` sets `rootCmd.Version = version` to enable `spotnik --version`, but there is no test verifying this wiring. A refactor that drops the assignment would silently break `--version` output. Add a test to `cmd/root_test.go` that calls `Execute("v1.2.3")` and asserts `RootCommand().Version == "v1.2.3"`.
+
+---
+
+## Splash screen small-terminal test missing version assertion
+**Found:** 2026-04-21 | **Source:** PR #186 Review
+**Feature:** 09-auth-and-profile
+
+`TestRenderSplashView_smallTerminal_noPanic` in `splash_test.go` dropped the `assert.Contains(t, view, "dev")` assertion from the old test. Version string is still present at 40×10 but not asserted.
+
+Fix: Add `assert.Contains(t, view, "dev")` back to `TestRenderSplashView_smallTerminal_noPanic` in `internal/ui/panes/splash_test.go`
