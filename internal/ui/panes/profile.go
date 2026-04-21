@@ -31,7 +31,7 @@ const (
 )
 
 // ProfileOverlay renders the authenticated user's profile as a floating overlay.
-// Reads directly from the Store — no local state beyond width/height.
+// Reads directly from the Store. Tracks pending confirmation state for logout/forget.
 // Triggered by the 'u' key; closed by Esc.
 type ProfileOverlay struct {
 	store         state.StateReader
