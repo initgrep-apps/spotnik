@@ -1,7 +1,7 @@
 ---
 title: "CLI — Auth Subcommands + Remove Embedded ldflags Client ID"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
