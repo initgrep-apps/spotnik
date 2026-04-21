@@ -1,7 +1,7 @@
 ---
 title: "Onboarding — Header Centering, Copy Feedback, Subtitle Text"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
