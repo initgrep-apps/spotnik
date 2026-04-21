@@ -253,7 +253,7 @@ type App struct {
 // It clears the throttle observability state in the store.
 type throttleExpiredMsg struct{}
 
-// splashDismissMsg is sent after 2 seconds to close the splash screen.
+// splashDismissMsg is sent after 3 seconds to close the splash screen.
 type splashDismissMsg struct{}
 
 // unauthorizedMsg is sent by any build*Cmd or fetch*Cmd when the Spotify API returns 401.
@@ -839,7 +839,7 @@ func (a *App) NeedsRegister() bool {
 // it also starts data fetching and the polling loop. If not, those are
 // deferred until auth succeeds.
 func (a *App) Init() tea.Cmd {
-	splashTimer := tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
+	splashTimer := tea.Tick(3*time.Second, func(_ time.Time) tea.Msg {
 		return splashDismissMsg{}
 	})
 
