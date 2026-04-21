@@ -9,9 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 )
@@ -104,23 +106,21 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
-	// During auth, only allow quit keys — ignore everything else.
+	// During auth, only allow quit keys and clipboard copy — ignore everything else.
 	if a.currentView == viewAuth {
 		if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") || m.Type == tea.KeyEsc {
 			return a, tea.Quit
 		}
+		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
+			_ = copyToClipboard(a.authURL)
+			return a, nil
+		}
 		return a, nil
 	}
 
-	// During onboarding, only allow Ctrl+C to quit — all other keys are reserved
-	// for the onboarding UI (client ID text input, OAuth wait screen). Story 139
-	// will wire the full key routing for onboarding; for now this guard prevents
-	// grid shortcuts from firing nil API clients before they are initialized.
+	// During onboarding, route all keys through the step-aware handler.
 	if a.currentView == viewOnboarding {
-		if m.Type == tea.KeyCtrlC {
-			return a, tea.Quit
-		}
-		return a, nil
+		return a.handleOnboardingKey(m)
 	}
 
 	// When a pane's filter is active, route all keys directly to it.
@@ -441,4 +441,55 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	return nil, nil, false
+}
+
+// handleOnboardingKey routes key events during viewOnboarding.
+// q and Ctrl+C quit from any step; all other keys are step-specific.
+func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// q or Ctrl+C quits from any onboarding step.
+	if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") {
+		return a, tea.Quit
+	}
+
+	switch a.onboardingStep {
+	case stepRegister:
+		// Enter with non-empty input → save client ID.
+		if m.Type == tea.KeyEnter {
+			clientID := strings.TrimSpace(a.onboardingInput.Value())
+			if clientID == "" {
+				return a, nil
+			}
+			return a, saveClientIDCmd(config.DefaultConfigPath(), clientID)
+		}
+		// All other keys → delegate to the text input component.
+		var cmd tea.Cmd
+		a.onboardingInput, cmd = a.onboardingInput.Update(m)
+		return a, cmd
+
+	case stepOAuth:
+		// c → copy auth URL to clipboard (silent on failure).
+		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
+			_ = copyToClipboard(a.onboardingAuthURL)
+		}
+		return a, nil
+
+	case stepError:
+		if m.Type == tea.KeyRunes {
+			switch string(m.Runes) {
+			case "r":
+				// Emit retry message; the onboardingRetryMsg handler resets to stepRegister.
+				return a, func() tea.Msg { return onboardingRetryMsg{} }
+			case "l":
+				// Re-launch OAuth without resetting the client ID.
+				a.onboardingStep = stepOAuth
+				return a, tea.Batch(
+					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose),
+					a.onboardingSpinner.Tick,
+				)
+			}
+		}
+		return a, nil
+	}
+
+	return a, nil
 }

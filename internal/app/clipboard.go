@@ -11,7 +11,7 @@ import (
 // Returns an error if all methods fail.
 // Callers treat failure silently — the URL remains visible for manual selection.
 // Key handler (Story 138) calls this on the 'c' key during viewAuth and stepOAuth.
-func copyToClipboard(text string) error { //nolint:unused
+func copyToClipboard(text string) error {
 	commands := [][]string{
 		{"pbcopy"},
 		{"xclip", "-selection", "clipboard"},
