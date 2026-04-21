@@ -527,3 +527,25 @@ func TestCheckAuthState_ExpiringSoon(t *testing.T) {
 	assert.False(t, needsRegister, "has client_id should not need register")
 	assert.True(t, needsAuth, "expiring token with failed refresh should need auth")
 }
+
+// TestAuthLogoutCmd_alreadyLoggedOut_noError verifies that LogoutTokens on an empty
+// store exits without error. The real KeychainTokenStore.Delete() ErrNotFound skip
+// is exercised at the OS keychain layer; InMemoryTokenStore.Delete() is a no-op on
+// missing keys, confirming the public contract holds for both implementations.
+func TestAuthLogoutCmd_alreadyLoggedOut_noError(t *testing.T) {
+	store := keychain.NewInMemoryTokenStore()
+	// Store is empty — Delete() must not return an error.
+	err := cmd.LogoutTokens(store)
+	assert.NoError(t, err)
+}
+
+// TestAuthForgetCmd_noClientID_noError verifies that RunForget on an empty store
+// and a config file with no client_id exits without error.
+func TestAuthForgetCmd_noClientID_noError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	err := cmd.RunForget(store, path)
+	assert.NoError(t, err)
+}
