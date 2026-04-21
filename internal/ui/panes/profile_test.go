@@ -187,10 +187,13 @@ func TestProfileOverlay_logoutFirstPress_showsConfirmation(t *testing.T) {
 		Country:     "US",
 	})
 
-	_, cmd := overlay.Update(keyMsg("l"))
+	updated, cmd := overlay.Update(keyMsg("l"))
+	model := updated.(*ProfileOverlay)
 
-	assert.Nil(t, cmd, "first 'l' press should not emit a command")
-	assert.Contains(t, overlay.View(), "Press l again to confirm", "first 'l' should show logout confirmation prompt")
+	// cmd is now non-nil (emits ProfileConfirmToastMsg) — this is expected.
+	assert.NotNil(t, cmd, "first 'l' press should emit a ProfileConfirmToastMsg command")
+	assert.Contains(t, model.View(), "Press l again to confirm", "first 'l' should show logout confirmation prompt")
+	assert.NotContains(t, model.View(), "!!", "confirmation line should not start with !!")
 }
 
 // TestProfileOverlay_logoutSecondPress_emitsLogoutMsg verifies that two consecutive 'l' presses
@@ -226,10 +229,13 @@ func TestProfileOverlay_forgetFirstPress_showsConfirmation(t *testing.T) {
 		Country:     "US",
 	})
 
-	_, cmd := overlay.Update(keyMsg("f"))
+	updated, cmd := overlay.Update(keyMsg("f"))
+	model := updated.(*ProfileOverlay)
 
-	assert.Nil(t, cmd, "first 'f' press should not emit a command")
-	assert.Contains(t, overlay.View(), "Press f again to confirm", "first 'f' should show forget confirmation prompt")
+	// cmd is now non-nil (emits ProfileConfirmToastMsg) — this is expected.
+	assert.NotNil(t, cmd, "first 'f' press should emit a ProfileConfirmToastMsg command")
+	assert.Contains(t, model.View(), "Press f again to confirm", "first 'f' should show forget confirmation prompt")
+	assert.NotContains(t, model.View(), "!!", "confirmation line should not start with !!")
 }
 
 // TestProfileOverlay_forgetSecondPress_emitsForgetMsg verifies that two consecutive 'f' presses
@@ -265,11 +271,13 @@ func TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew(t *testing
 		Country:     "US",
 	})
 
-	overlay.Update(keyMsg("l"))           // arm logout
-	_, cmd := overlay.Update(keyMsg("f")) // different key: cancel + arm forget
+	overlay.Update(keyMsg("l"))                 // arm logout
+	updated, cmd := overlay.Update(keyMsg("f")) // different key: cancel + arm forget
+	model := updated.(*ProfileOverlay)
 
-	assert.Nil(t, cmd, "pressing 'f' after 'l' should arm forget (no cmd)")
-	view := overlay.View()
+	// 'f' arms forget — now emits a ProfileConfirmToastMsg.
+	assert.NotNil(t, cmd, "pressing 'f' after 'l' should emit a ProfileConfirmToastMsg")
+	view := model.View()
 	assert.Contains(t, view, "Press f again to confirm", "after 'l' then 'f', should show forget confirmation")
 	assert.NotContains(t, view, "Press l again to confirm", "logout confirmation should no longer show")
 }
@@ -309,4 +317,51 @@ func TestProfileOverlay_SetTheme(t *testing.T) {
 	view := overlay.View()
 	assert.NotEmpty(t, view, "View should return non-empty content after SetTheme")
 	assert.Contains(t, view, "Theme Switcher", "overlay should render profile name after SetTheme")
+}
+
+// TestProfileOverlay_logoutFirstPress_emitsToastMsg verifies that the first 'l' press
+// emits a ProfileConfirmToastMsg containing "confirm logout".
+func TestProfileOverlay_logoutFirstPress_emitsToastMsg(t *testing.T) {
+	store := state.New()
+	pane := NewProfileOverlay(store, theme.Load("black"))
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	toast, ok := msg.(ProfileConfirmToastMsg)
+	require.True(t, ok, "first 'l' press should produce ProfileConfirmToastMsg, got %T", msg)
+	assert.Contains(t, toast.Text, "confirm logout")
+}
+
+// TestProfileOverlay_forgetFirstPress_emitsToastMsg verifies that the first 'f' press
+// emits a ProfileConfirmToastMsg containing "confirm forget".
+func TestProfileOverlay_forgetFirstPress_emitsToastMsg(t *testing.T) {
+	store := state.New()
+	pane := NewProfileOverlay(store, theme.Load("black"))
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	toast, ok := msg.(ProfileConfirmToastMsg)
+	require.True(t, ok, "first 'f' press should produce ProfileConfirmToastMsg, got %T", msg)
+	assert.Contains(t, toast.Text, "confirm forget")
+}
+
+// TestProfileOverlay_confirmationView_noDoubleExclamation verifies that the confirmation
+// line in View() does not start with "!!" after the first 'l' press.
+func TestProfileOverlay_confirmationView_noDoubleExclamation(t *testing.T) {
+	store := state.New()
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "US",
+	})
+	pane := NewProfileOverlay(store, theme.Load("black"))
+	pane.SetSize(40, 12)
+
+	updated, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	view := updated.(*ProfileOverlay).View()
+	assert.NotContains(t, view, "!!")
+	assert.Contains(t, view, "Press l again to confirm")
 }

@@ -217,6 +217,12 @@ type DeviceOverlayClosedMsg struct{}
 // signalling the root app model to close the profile overlay.
 type ProfileOverlayClosedMsg struct{}
 
+// ProfileConfirmToastMsg is emitted when the user arms a logout or forget action
+// (first keypress). The app converts it into a warning alert via the notifications system.
+type ProfileConfirmToastMsg struct {
+	Text string // e.g. "Press l again to confirm logout"
+}
+
 // ProfileLogoutMsg is emitted when the user confirms logout from the profile overlay.
 // The app clears tokens and quits.
 type ProfileLogoutMsg struct{}
