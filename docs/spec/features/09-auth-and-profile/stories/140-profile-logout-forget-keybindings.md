@@ -1,7 +1,7 @@
 ---
 title: "Profile Overlay — Logout / Forget Actions with Confirmation + Keybinding Docs"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background

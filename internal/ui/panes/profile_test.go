@@ -170,6 +170,110 @@ func TestProfileOverlay_OtherKeysIgnored(t *testing.T) {
 	}
 }
 
+// keyMsg constructs a tea.KeyMsg for a single rune character.
+func keyMsg(r string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(r)}
+}
+
+// TestProfileOverlay_logoutFirstPress_showsConfirmation verifies that the first press of 'l'
+// shows a confirmation prompt in View() without executing logout.
+func TestProfileOverlay_logoutFirstPress_showsConfirmation(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "US",
+	})
+
+	_, cmd := overlay.Update(keyMsg("l"))
+
+	assert.Nil(t, cmd, "first 'l' press should not emit a command")
+	assert.Contains(t, overlay.View(), "Press l again to confirm", "first 'l' should show logout confirmation prompt")
+}
+
+// TestProfileOverlay_logoutSecondPress_emitsLogoutMsg verifies that two consecutive 'l' presses
+// emit ProfileLogoutMsg.
+func TestProfileOverlay_logoutSecondPress_emitsLogoutMsg(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "US",
+	})
+
+	overlay.Update(keyMsg("l"))
+	_, cmd := overlay.Update(keyMsg("l"))
+
+	require.NotNil(t, cmd, "second 'l' press should emit a command")
+	msg := cmd()
+	_, ok := msg.(ProfileLogoutMsg)
+	require.True(t, ok, "second 'l' press should produce ProfileLogoutMsg, got %T", msg)
+}
+
+// TestProfileOverlay_forgetFirstPress_showsConfirmation verifies that the first press of 'f'
+// shows a forget confirmation prompt in View() without executing.
+func TestProfileOverlay_forgetFirstPress_showsConfirmation(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "US",
+	})
+
+	_, cmd := overlay.Update(keyMsg("f"))
+
+	assert.Nil(t, cmd, "first 'f' press should not emit a command")
+	assert.Contains(t, overlay.View(), "Press f again to confirm", "first 'f' should show forget confirmation prompt")
+}
+
+// TestProfileOverlay_forgetSecondPress_emitsForgetMsg verifies that two consecutive 'f' presses
+// emit ProfileForgetMsg.
+func TestProfileOverlay_forgetSecondPress_emitsForgetMsg(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "US",
+	})
+
+	overlay.Update(keyMsg("f"))
+	_, cmd := overlay.Update(keyMsg("f"))
+
+	require.NotNil(t, cmd, "second 'f' press should emit a command")
+	msg := cmd()
+	_, ok := msg.(ProfileForgetMsg)
+	require.True(t, ok, "second 'f' press should produce ProfileForgetMsg, got %T", msg)
+}
+
+// TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew verifies that pressing
+// 'l' then 'f' cancels the logout confirmation and arms the forget confirmation instead.
+func TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+	store.SetUserProfile(domain.UserProfile{
+		ID:          "user1",
+		DisplayName: "Test User",
+		Product:     "premium",
+		Country:     "US",
+	})
+
+	overlay.Update(keyMsg("l"))           // arm logout
+	_, cmd := overlay.Update(keyMsg("f")) // different key: cancel + arm forget
+
+	assert.Nil(t, cmd, "pressing 'f' after 'l' should arm forget (no cmd)")
+	view := overlay.View()
+	assert.Contains(t, view, "Press f again to confirm", "after 'l' then 'f', should show forget confirmation")
+	assert.NotContains(t, view, "Press l again to confirm", "logout confirmation should no longer show")
+}
+
 // TestProfileOverlay_Init_ReturnsNil verifies that Init() returns nil.
 func TestProfileOverlay_Init_ReturnsNil(t *testing.T) {
 	overlay, _ := newTestProfileOverlay()

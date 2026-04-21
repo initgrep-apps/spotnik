@@ -48,6 +48,13 @@ Playback keys are always active regardless of which pane has focus.
 | `f` | Toggle filter | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
 
+## Profile Overlay
+
+| Key | Context | Action |
+|-----|---------|--------|
+| `l` | Profile overlay | Logout — ends session, keeps Client ID. Press twice to confirm. |
+| `f` | Profile overlay | Forget — removes session + Client ID. Press twice to confirm. |
+
 ## Search Overlay
 
 | Key | Action |
