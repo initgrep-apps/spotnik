@@ -14,6 +14,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -24,8 +25,8 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "spotnik",
-	Short: "A terminal Spotify client for developers",
-	Long:  "Spotnik — keyboard-driven Spotify client for developers who live in the terminal.",
+	Short: "A terminal Spotify client",
+	Long:  "Spotnik — keyboard-driven Spotify client.",
 	RunE:  runApp,
 }
 
@@ -117,7 +118,7 @@ var authForgetCmd = &cobra.Command{
 		if err := RunForget(store, config.DefaultConfigPath()); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(c.OutOrStdout(), "Forgotten. Tokens and client_id removed from config.")
+		_, _ = fmt.Fprintln(c.OutOrStdout(), "Session ended. Client ID removed from config.\nRun 'spotnik auth register' to set up again.")
 		return nil
 	},
 }
@@ -153,11 +154,18 @@ func RunForget(store keychain.TokenStore, configPath string) error {
 	return nil
 }
 
-// PrintAuthStatus writes current auth + registration state to w.
-// It shows whether a client_id is present in the config at configPath
-// and whether the token store contains a valid access token.
+// PrintAuthStatus writes current auth + registration state to w using lipgloss
+// styling. Labels are muted, values are bold primary, status uses success/warning
+// colours. Always uses the black theme so colours are safe in any terminal.
 // Exported for testing.
 func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) error {
+	th := theme.Load(theme.DefaultThemeID)
+
+	labelStyle := lipgloss.NewStyle().Foreground(th.TextMuted())
+	valueStyle := lipgloss.NewStyle().Foreground(th.TextPrimary()).Bold(true)
+	okStyle := lipgloss.NewStyle().Foreground(th.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(th.Warning())
+
 	// Load config to check whether a client_id is present.
 	cfg, err := loadConfigFromPath(configPath)
 	if err != nil {
@@ -166,29 +174,44 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 	}
 
 	if cfg.ClientID != "" {
-		_, _ = fmt.Fprintln(w, "Client ID: present")
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Client ID:"),
+			valueStyle.Render("present"),
+		)
 	} else {
-		_, _ = fmt.Fprintln(w, "Client ID: not set")
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Client ID:"),
+			warnStyle.Render("not set  (run: spotnik auth register)"),
+		)
 	}
 
 	access, err := store.Get(keychain.KeyAccessToken)
 	if err != nil || access == "" {
-		_, _ = fmt.Fprintln(w, "Status: not authenticated")
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Status:  "),
+			labelStyle.Render("not authenticated"),
+		)
 		return nil
 	}
+
+	_, _ = fmt.Fprintf(w, "%s  %s\n",
+		labelStyle.Render("Status:  "),
+		okStyle.Render("authenticated"),
+	)
 
 	expiry, err := store.GetExpiry()
-	if err != nil {
-		_, _ = fmt.Fprintln(w, "Status: authenticated (expiry unknown)")
-		return nil
+	if err == nil {
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Expires: "),
+			labelStyle.Render(expiry.Format(time.RFC1123)),
+		)
 	}
-
-	_, _ = fmt.Fprintf(w, "Status: authenticated\n")
-	_, _ = fmt.Fprintf(w, "Token expiry: %s\n", expiry.Format(time.RFC1123))
 
 	expiringSoon, _ := store.IsExpiringSoon()
 	if expiringSoon {
-		_, _ = fmt.Fprintln(w, "Note: token is expiring soon and will be refreshed automatically")
+		_, _ = fmt.Fprintf(w, "%s\n",
+			warnStyle.Render("⚠  Token expiring soon — will refresh automatically"),
+		)
 	}
 
 	return nil
@@ -361,7 +384,6 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
 
-		fmt.Println("Authorization successful! Starting spotnik...")
 		return nil
 
 	case <-ctx.Done():
@@ -412,7 +434,12 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	}
 
 	store := keychain.NewKeychainTokenStore()
-	return RunAuthFlow(cfg, store, "")
+	if err := RunAuthFlow(cfg, store, ""); err != nil {
+		return err
+	}
+	// Authorization succeeded — launch the TUI immediately so the user lands in the app.
+	_, _ = fmt.Fprintln(w, "Authorization complete. Launching spotnik...")
+	return runApp(c, []string{})
 }
 
 // runAuthLogin forces a fresh re-authentication flow.

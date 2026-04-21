@@ -4,6 +4,7 @@
 package keychain
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -68,12 +69,17 @@ func (s *KeychainTokenStore) Set(key, value string) error {
 }
 
 // Delete removes all three token keys from the OS keychain.
-// Errors from individual deletions are collected but deletion continues.
+// Keys that are already absent (ErrNotFound) are skipped silently — the end
+// state is the same whether or not the key existed, so not-found is not an
+// error from the caller's perspective. Other errors are collected and returned.
 func (s *KeychainTokenStore) Delete() error {
 	keys := []string{KeyAccessToken, KeyRefreshToken, KeyTokenExpiry}
 	var errs []error
 	for _, key := range keys {
 		if err := gokeyring.Delete(Service, key); err != nil {
+			if errors.Is(err, gokeyring.ErrNotFound) {
+				continue // key absent — nothing to delete, not an error
+			}
 			errs = append(errs, fmt.Errorf("deleting %s: %w", key, err))
 		}
 	}
