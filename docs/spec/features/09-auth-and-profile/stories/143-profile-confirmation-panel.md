@@ -1,7 +1,7 @@
 ---
 title: "Profile Overlay — Confirmation UX: Replace !! With Warning Toast"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
