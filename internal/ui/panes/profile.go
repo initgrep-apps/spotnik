@@ -18,14 +18,27 @@ import (
 // maxProfileNameLen is the maximum number of runes shown for the display name.
 const maxProfileNameLen = 20
 
+// profileAction represents the pending confirmation action in the profile overlay.
+type profileAction int
+
+const (
+	// profileActionNone means no action is pending — idle state.
+	profileActionNone profileAction = iota
+	// profileActionLogout means the user pressed 'l' once and confirmation is pending.
+	profileActionLogout
+	// profileActionForget means the user pressed 'f' once and confirmation is pending.
+	profileActionForget
+)
+
 // ProfileOverlay renders the authenticated user's profile as a floating overlay.
 // Reads directly from the Store — no local state beyond width/height.
 // Triggered by the 'u' key; closed by Esc.
 type ProfileOverlay struct {
-	store  state.StateReader
-	theme  theme.Theme
-	width  int
-	height int
+	store         state.StateReader
+	theme         theme.Theme
+	width         int
+	height        int
+	pendingAction profileAction
 }
 
 // NewProfileOverlay constructs a ProfileOverlay wired to the given store and theme.
@@ -42,13 +55,47 @@ func (p *ProfileOverlay) Init() tea.Cmd {
 }
 
 // Update handles messages for the ProfileOverlay.
-// Only tea.KeyEsc is handled — it emits ProfileOverlayClosedMsg.
-// All other messages are ignored so the overlay does not interfere with
-// background message processing while it is visible.
+// Esc closes the overlay and resets any pending action.
+// 'l' and 'f' use double-key confirmation: first press arms the action (pendingAction is set),
+// second press of the same key executes it. Any other key resets the pending action and arms
+// the new key if it is 'l' or 'f'.
 func (p *ProfileOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyEsc {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return p, nil
+	}
+
+	if key.Type == tea.KeyEsc {
+		p.pendingAction = profileActionNone
 		return p, func() tea.Msg { return ProfileOverlayClosedMsg{} }
 	}
+
+	if key.Type == tea.KeyRunes && len(key.Runes) == 1 {
+		switch key.Runes[0] {
+		case 'l':
+			if p.pendingAction == profileActionLogout {
+				// Second 'l' press — confirm logout.
+				p.pendingAction = profileActionNone
+				return p, func() tea.Msg { return ProfileLogoutMsg{} }
+			}
+			// First 'l' press — arm confirmation.
+			p.pendingAction = profileActionLogout
+			return p, nil
+		case 'f':
+			if p.pendingAction == profileActionForget {
+				// Second 'f' press — confirm forget.
+				p.pendingAction = profileActionNone
+				return p, func() tea.Msg { return ProfileForgetMsg{} }
+			}
+			// First 'f' press — arm confirmation.
+			p.pendingAction = profileActionForget
+			return p, nil
+		default:
+			// Any other key cancels the pending action.
+			p.pendingAction = profileActionNone
+		}
+	}
+
 	return p, nil
 }
 
@@ -93,6 +140,15 @@ func (p *ProfileOverlay) View() string {
 			codeStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
 			lines = append(lines, iconStyle.Render("◎  ")+codeStyle.Render(profile.Country))
 		}
+
+		// Separator before action section.
+		sepStyle2 := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		lines = append(lines, "")
+		lines = append(lines, sepStyle2.Render("────────────────────"))
+		lines = append(lines, "")
+
+		// Action section: logout and forget with double-key confirmation.
+		lines = append(lines, p.renderActions()...)
 	}
 
 	inner := strings.Join(lines, "\n")
@@ -123,6 +179,37 @@ func (p *ProfileOverlay) SetSize(width, height int) {
 // SetTheme updates the theme reference for runtime theme switching.
 func (p *ProfileOverlay) SetTheme(t theme.Theme) {
 	p.theme = t
+}
+
+// renderActions returns lines for the logout/forget action section of the overlay.
+// When pendingAction is set, the armed action shows a warning prompt instead of
+// the normal label; the other action is shown as normal.
+func (p *ProfileOverlay) renderActions() []string {
+	keyStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
+	subStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+
+	var lines []string
+
+	// Logout row.
+	if p.pendingAction == profileActionLogout {
+		lines = append(lines, warnStyle.Render("!! Press l again to confirm logout"))
+	} else {
+		lines = append(lines, keyStyle.Render("  l  ")+"Logout")
+		lines = append(lines, subStyle.Render("     ends session · keeps Client ID"))
+	}
+
+	lines = append(lines, "")
+
+	// Forget row.
+	if p.pendingAction == profileActionForget {
+		lines = append(lines, warnStyle.Render("!! Press f again to confirm forget"))
+	} else {
+		lines = append(lines, keyStyle.Render("  f  ")+"Forget")
+		lines = append(lines, subStyle.Render("     removes session + Client ID"))
+	}
+
+	return lines
 }
 
 // truncateRunes truncates s to at most max runes, appending … if truncated.

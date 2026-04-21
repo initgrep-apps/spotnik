@@ -217,6 +217,14 @@ type DeviceOverlayClosedMsg struct{}
 // signalling the root app model to close the profile overlay.
 type ProfileOverlayClosedMsg struct{}
 
+// ProfileLogoutMsg is emitted when the user confirms logout from the profile overlay.
+// The app clears tokens and quits.
+type ProfileLogoutMsg struct{}
+
+// ProfileForgetMsg is emitted when the user confirms forget from the profile overlay.
+// The app clears tokens and client_id from config, then quits.
+type ProfileForgetMsg struct{}
+
 // TransferPlaybackMsg is emitted by DeviceOverlay when the user presses Enter on
 // a non-active device. The root app model receives it, calls TransferPlayback, and
 // shows the status bar message.

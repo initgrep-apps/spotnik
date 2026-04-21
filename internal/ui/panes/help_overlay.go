@@ -55,6 +55,10 @@ var helpContent = [2][]helpSection{
 		{title: "Pane Actions", bindings: []helpBinding{
 			{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
 		}},
+		{title: "Profile Overlay", bindings: []helpBinding{
+			{"l", "Logout — end session (keeps Client ID) — press twice"},
+			{"f", "Forget — remove session + Client ID — press twice"},
+		}},
 	},
 }
 

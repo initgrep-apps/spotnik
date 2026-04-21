@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
@@ -799,6 +800,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Profile overlay closed via Esc — clear flag.
 		a.profileOverlayOpen = false
 		return a, nil
+
+	case panes.ProfileLogoutMsg:
+		// User confirmed logout — clear tokens and quit.
+		_ = a.tokenStore.Delete()
+		return a, tea.Quit
+
+	case panes.ProfileForgetMsg:
+		// User confirmed forget — clear tokens and remove client_id from config, then quit.
+		_ = a.tokenStore.Delete()
+		_ = config.ClearClientID(config.DefaultConfigPath())
+		return a, tea.Quit
 
 	case panes.ThemeSwitchMsg:
 		// User selected a theme in the overlay — load new theme, propagate to all panes.

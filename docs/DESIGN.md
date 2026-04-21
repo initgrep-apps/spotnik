@@ -818,6 +818,9 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `t` | Open theme switcher overlay | Global |
 | `?` | Open help overlay | Global |
 | `q` | Quit | Global |
+| **Profile Overlay** | | |
+| `l` | Logout — ends session, keeps Client ID (press twice to confirm) | Profile overlay |
+| `f` | Forget — removes session + Client ID (press twice to confirm) | Profile overlay |
 
 ---
 
