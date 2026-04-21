@@ -26,6 +26,22 @@ func newRenderTestApp() *App {
 	return New(cfg, AppOptions{})
 }
 
+// TestBuildView_OnboardingMode verifies that when currentView is viewOnboarding,
+// buildView() returns the placeholder string and does not fall through to grid rendering.
+// This prevents nil-pointer crashes because API clients are not initialized during onboarding.
+func TestBuildView_OnboardingMode(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.currentView = viewOnboarding
+
+	result := a.buildView()
+	assert.Contains(t, result, "Onboarding",
+		"buildView should return onboarding placeholder when currentView == viewOnboarding")
+	assert.NotContains(t, result, "spotnik",
+		"onboarding view must not render the grid header")
+}
+
 // --- Task 2: Btop-style header tests ---
 
 func TestRenderHeader_ContainsAppName(t *testing.T) {

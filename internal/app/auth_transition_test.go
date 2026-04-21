@@ -133,6 +133,20 @@ func TestQuitDuringAuth(t *testing.T) {
 	}
 }
 
+func TestSplash_TransitionsToOnboarding_WhenNeedsRegister(t *testing.T) {
+	cfg := &config.Config{}
+	opts := AppOptions{NeedsRegister: true, TokenStore: keychain.NewInMemoryTokenStore()}
+	a := New(cfg, opts)
+	require.Equal(t, viewSplash, a.currentView)
+
+	model, cmd := a.Update(splashDismissMsg{})
+	updated := model.(*App)
+
+	assert.Equal(t, viewOnboarding, updated.currentView)
+	assert.Equal(t, stepRegister, updated.OnboardingStep())
+	assert.Nil(t, cmd, "no command needed for stepRegister")
+}
+
 func TestNonQuitKeysDuringAuth_Ignored(t *testing.T) {
 	a := newTestApp(true)
 	a.currentView = viewAuth
@@ -143,5 +157,33 @@ func TestNonQuitKeysDuringAuth_Ignored(t *testing.T) {
 
 	assert.Equal(t, viewAuth, updated.currentView)
 	assert.Nil(t, cmd, "non-quit keys should be ignored during auth")
+	assert.False(t, updated.searchOpen)
+}
+
+func TestCtrlC_QuitsOnboarding(t *testing.T) {
+	cfg := &config.Config{}
+	opts := AppOptions{NeedsRegister: true, TokenStore: keychain.NewInMemoryTokenStore()}
+	a := New(cfg, opts)
+	a.currentView = viewOnboarding
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	assert.NotNil(t, cmd)
+	msg := cmd()
+	_, isQuit := msg.(tea.QuitMsg)
+	assert.True(t, isQuit, "Ctrl+C should quit during onboarding")
+}
+
+func TestNonQuitKeysDuringOnboarding_Ignored(t *testing.T) {
+	cfg := &config.Config{}
+	opts := AppOptions{NeedsRegister: true, TokenStore: keychain.NewInMemoryTokenStore()}
+	a := New(cfg, opts)
+	a.currentView = viewOnboarding
+
+	// Pressing '/' during onboarding should not open search (API clients are nil)
+	model, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	updated := model.(*App)
+
+	assert.Equal(t, viewOnboarding, updated.currentView)
+	assert.Nil(t, cmd, "non-quit keys should be ignored during onboarding")
 	assert.False(t, updated.searchOpen)
 }
