@@ -1,7 +1,7 @@
 ---
 title: "CLI — Auth UX Polish + ErrNotFound Fix"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
