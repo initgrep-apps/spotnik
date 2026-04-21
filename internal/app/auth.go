@@ -32,6 +32,9 @@ type onboardingClientIDSavedMsg struct {
 // Produced by handleOnboardingKey and consumed by the onboardingRetryMsg handler in handlers.go.
 type onboardingRetryMsg struct{}
 
+// copiedFeedbackMsg clears the copy-confirmation indicator after a short delay.
+type copiedFeedbackMsg struct{}
+
 // authSuccessMsg is sent when the OAuth code exchange succeeds.
 type authSuccessMsg struct {
 	accessToken string

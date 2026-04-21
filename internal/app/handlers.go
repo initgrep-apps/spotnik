@@ -124,6 +124,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.onboardingInput.Focus()
 		return a, nil
 
+	case copiedFeedbackMsg:
+		a.onboardingCopied = false
+		return a, nil
+
 	case spinner.TickMsg:
 		if a.currentView == viewOnboarding && a.onboardingStep == stepOAuth {
 			var cmd tea.Cmd
