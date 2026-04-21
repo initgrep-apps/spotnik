@@ -105,7 +105,7 @@ func TestAuthPrepared_BrowserFailed_ShowsURLPrompt(t *testing.T) {
 	})
 	updated := model.(*App)
 
-	assert.Contains(t, updated.authStatus, "Could not open browser")
+	assert.Contains(t, updated.authStatus, "Browser didn't open")
 }
 
 func TestQuitDuringAuth(t *testing.T) {
@@ -179,11 +179,12 @@ func TestNonQuitKeysDuringOnboarding_Ignored(t *testing.T) {
 	a := New(cfg, opts)
 	a.currentView = viewOnboarding
 
-	// Pressing '/' during onboarding should not open search (API clients are nil)
-	model, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	// Pressing '/' during stepRegister is forwarded to the text input (not the search overlay).
+	// The textinput component may return a cursor-blink cmd — that is expected.
+	// The critical assertion is that the search overlay was NOT opened.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 	updated := model.(*App)
 
 	assert.Equal(t, viewOnboarding, updated.currentView)
-	assert.Nil(t, cmd, "non-quit keys should be ignored during onboarding")
-	assert.False(t, updated.searchOpen)
+	assert.False(t, updated.searchOpen, "search overlay must not open during onboarding")
 }
