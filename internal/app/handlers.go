@@ -801,6 +801,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.profileOverlayOpen = false
 		return a, nil
 
+	case panes.ProfileConfirmToastMsg:
+		// User armed a logout or forget action — emit a warning toast as confirmation reminder.
+		return a, a.alerts.NewAlertCmd("warning", m.Text)
+
 	case panes.ProfileLogoutMsg:
 		// User confirmed logout — clear tokens and quit.
 		_ = a.tokenStore.Delete()

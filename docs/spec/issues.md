@@ -107,3 +107,14 @@ The `assert.Contains(t, output, "dev")` assertions in `splash_test.go` and `app_
 `TestRenderSplashView_smallTerminal_noPanic` in `splash_test.go` dropped the `assert.Contains(t, view, "dev")` assertion from the old test. Version string is still present at 40×10 but not asserted.
 
 Fix: Add `assert.Contains(t, view, "dev")` back to `TestRenderSplashView_smallTerminal_noPanic` in `internal/ui/panes/splash_test.go`
+
+---
+
+## Profile overlay: differentKeyAfterFirstPress test missing msg type assertion
+**Found:** 2026-04-21 | **Source:** PR #187 Review
+**Feature:** 09-auth-and-profile
+
+`TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew` verifies `cmd != nil` after pressing `f` following `l`, but doesn't assert the cmd is `ProfileConfirmToastMsg` with "confirm forget" text, unlike its sibling tests.
+
+Items to log:
+1. Add type assertion `assert.IsType(t, panes.ProfileConfirmToastMsg{}, msg)` and text check to `TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew` in `internal/ui/panes/profile_test.go`
