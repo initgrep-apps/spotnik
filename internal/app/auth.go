@@ -30,8 +30,8 @@ type onboardingClientIDSavedMsg struct {
 }
 
 // onboardingRetryMsg is sent when the user presses 'r' on the onboarding error screen.
-// Key handler (Story 138) will produce and consume this message.
-type onboardingRetryMsg struct{} //nolint:unused
+// Produced by handleOnboardingKey and consumed by the onboardingRetryMsg handler in handlers.go.
+type onboardingRetryMsg struct{}
 
 // authSuccessMsg is sent when the OAuth code exchange succeeds.
 type authSuccessMsg struct {

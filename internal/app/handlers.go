@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -50,26 +51,28 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
-			if a.needsRegister {
+			switch {
+			case a.needsRegister:
 				a.currentView = viewOnboarding
 				a.onboardingStep = stepRegister
-				return a, nil
-			}
-			if a.needsAuth {
+				a.onboardingInput.Focus()
+			case a.needsAuth:
 				a.currentView = viewAuth
 				a.authStatus = "Opening browser for authorization..."
 				return a, prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose)
+			default:
+				a.currentView = viewGrid
 			}
-			a.currentView = viewGrid
 		}
 		return a, nil
 
 	case authPreparedMsg:
+		a.onboardingAuthURL = m.authURL
 		a.authURL = m.authURL
 		if m.browserErr != nil {
-			a.authStatus = "Could not open browser. Please visit the URL above."
+			a.authStatus = "Browser didn't open. Visit the URL above manually."
 		} else {
-			a.authStatus = "Waiting for authorization in browser..."
+			a.authStatus = "Waiting for authorization..."
 		}
 		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh, m.serverClose)
 
@@ -94,7 +97,36 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
+		if a.currentView == viewOnboarding {
+			a.onboardingStep = stepError
+			a.onboardingError = m.err.Error()
+			return a, nil
+		}
 		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
+		return a, nil
+
+	case onboardingClientIDSavedMsg:
+		a.clientID = m.clientID
+		a.onboardingStep = stepOAuth
+		a.authStatus = "Opening browser for authorization..."
+		return a, tea.Batch(
+			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose),
+			a.onboardingSpinner.Tick,
+		)
+
+	case onboardingRetryMsg:
+		a.onboardingStep = stepRegister
+		a.onboardingError = ""
+		a.onboardingInput.Reset()
+		a.onboardingInput.Focus()
+		return a, nil
+
+	case spinner.TickMsg:
+		if a.currentView == viewOnboarding && a.onboardingStep == stepOAuth {
+			var cmd tea.Cmd
+			a.onboardingSpinner, cmd = a.onboardingSpinner.Update(m)
+			return a, cmd
+		}
 		return a, nil
 
 	case panes.SearchClosedMsg:
