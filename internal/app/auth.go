@@ -163,13 +163,11 @@ func (a *App) initAPIClients(token string) {
 // renderAuthPanel renders a centered re-authentication prompt box for returning users.
 // The auth URL is never truncated — wrapURL breaks it into readable lines.
 func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) string {
-	// Derive a sensible inner width for URL wrapping; fall back to 80 when
-	// the terminal size is not yet known.
+	// Derive a sensible inner width for URL wrapping; default to 60 when the
+	// terminal size is not yet known (width <= 0) or is too narrow to compute from.
 	innerW := 60
 	if width > 20 {
 		innerW = width - 20
-	} else if width <= 0 {
-		innerW = 60
 	}
 
 	outerBorder := lipgloss.NewStyle().
@@ -189,6 +187,9 @@ func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) s
 	urlStyle := lipgloss.NewStyle().
 		Foreground(t.ActiveBorder())
 
+	textStyle := lipgloss.NewStyle().
+		Foreground(t.TextPrimary())
+
 	statusStyle := lipgloss.NewStyle().
 		Foreground(t.TextMuted())
 
@@ -201,7 +202,7 @@ func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) s
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		titleStyle.Render("Re-authenticate with Spotify"),
 		"",
-		"Visit this URL to authorize:",
+		textStyle.Render("Visit this URL to authorize:"),
 		urlBox,
 		"",
 		statusStyle.Render(status),
