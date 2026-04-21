@@ -1,7 +1,7 @@
 ---
 title: "Onboarding — Message Handlers and Key Routing"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
