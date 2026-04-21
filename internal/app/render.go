@@ -146,7 +146,7 @@ func (a *App) onboardingTitle() string {
 
 	return lipgloss.JoinVertical(lipgloss.Center,
 		titleStyle.Render("♪  spotnik"),
-		subtitleStyle.Render("A terminal Spotify client for developers"),
+		subtitleStyle.Render("A terminal Spotify client"),
 	)
 }
 
@@ -210,8 +210,28 @@ func (a *App) renderOnboardingRegister() string {
 
 	inputBox := inputBoxStyle.Render(a.onboardingInput.View())
 
+	// Center the title block within the panel. panelInnerWidth matches the border width.
+	panelInnerWidth := a.width - 8
+	if panelInnerWidth < 72 {
+		panelInnerWidth = 72
+	}
+	centeredTitle := lipgloss.NewStyle().
+		Width(panelInnerWidth).
+		Align(lipgloss.Center).
+		Render(a.onboardingTitle())
+
+	// Hint varies: copied confirmation, copy-URI when empty, or confirm-only when typing.
+	var hintLine string
+	if a.onboardingCopied {
+		hintLine = lipgloss.NewStyle().Foreground(t.Success()).Render("✓  Copied!")
+	} else if a.onboardingInput.Value() == "" {
+		hintLine = hintStyle.Render("c  copy URI  ·  Enter  confirm  ·  q  quit")
+	} else {
+		hintLine = hintStyle.Render("Enter  confirm  ·  q  quit")
+	}
+
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		a.onboardingTitle(),
+		centeredTitle,
 		"",
 		stepStyle.Render("Step 1 of 2 — Set up your Spotify Developer App"),
 		"",
@@ -222,7 +242,7 @@ func (a *App) renderOnboardingRegister() string {
 			inputBox,
 		),
 		"",
-		hintStyle.Render("Enter  confirm  ·  q  quit"),
+		hintLine,
 	)
 
 	return outerBorder.Render(body)
@@ -264,8 +284,26 @@ func (a *App) renderOnboardingOAuth() string {
 		muteStyle.Render("Waiting for authorization...  (times out in 5 minutes)"),
 	)
 
+	// Center the title block within the panel. panelInnerWidth matches the border width.
+	panelInnerWidth := a.width - 8
+	if panelInnerWidth < 72 {
+		panelInnerWidth = 72
+	}
+	centeredTitle := lipgloss.NewStyle().
+		Width(panelInnerWidth).
+		Align(lipgloss.Center).
+		Render(a.onboardingTitle())
+
+	// Hint shows copy confirmation for 2 seconds after pressing 'c', then normal hint.
+	var hintLine string
+	if a.onboardingCopied {
+		hintLine = lipgloss.NewStyle().Foreground(t.Success()).Render("✓  Copied!")
+	} else {
+		hintLine = hintStyle.Render("c  copy URL  ·  q  quit")
+	}
+
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		a.onboardingTitle(),
+		centeredTitle,
 		"",
 		stepStyle.Render("Step 2 of 2 — Authorize Spotnik with Spotify"),
 		"",
@@ -276,7 +314,7 @@ func (a *App) renderOnboardingOAuth() string {
 		"",
 		spinnerText,
 		"",
-		hintStyle.Render("c  copy URL  ·  q  quit"),
+		hintLine,
 	)
 
 	return outerBorder.Render(body)
