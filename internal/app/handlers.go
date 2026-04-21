@@ -50,10 +50,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case splashDismissMsg:
 		if a.currentView == viewSplash {
+			if a.needsRegister {
+				a.currentView = viewOnboarding
+				a.onboardingStep = stepRegister
+				return a, nil
+			}
 			if a.needsAuth {
 				a.currentView = viewAuth
 				a.authStatus = "Opening browser for authorization..."
-				return a, prepareAuthCmd(a.clientID)
+				return a, prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose)
 			}
 			a.currentView = viewGrid
 		}
