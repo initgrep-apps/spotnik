@@ -59,7 +59,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case a.needsAuth:
 				a.currentView = viewAuth
 				a.authStatus = "Opening browser for authorization..."
-				return a, prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose)
+				return a, prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh)
 			default:
 				a.currentView = viewGrid
 			}
@@ -74,9 +74,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a.authStatus = "Waiting for authorization..."
 		}
-		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh, m.serverClose)
+		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh)
 
 	case authSuccessMsg:
+		// Close the callback server — OAuth completed successfully, no retries needed.
+		a.onboardingClose()
 		a.needsAuth = false
 		a.currentView = viewGrid
 		a.initAPIClients(m.accessToken)
@@ -110,7 +112,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.onboardingStep = stepOAuth
 		a.authStatus = "Opening browser for authorization..."
 		return a, tea.Batch(
-			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose),
+			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
 			a.onboardingSpinner.Tick,
 		)
 

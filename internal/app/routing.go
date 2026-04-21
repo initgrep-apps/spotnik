@@ -109,6 +109,8 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// During auth, only allow quit keys and clipboard copy — ignore everything else.
 	if a.currentView == viewAuth {
 		if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") || m.Type == tea.KeyEsc {
+			// Close the callback server before quitting so it doesn't leak.
+			a.onboardingClose()
 			return a, tea.Quit
 		}
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
@@ -447,7 +449,9 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 // q and Ctrl+C quit from any step; all other keys are step-specific.
 func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// q or Ctrl+C quits from any onboarding step.
+	// Close the callback server before quitting so it doesn't leak.
 	if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") {
+		a.onboardingClose()
 		return a, tea.Quit
 	}
 
@@ -483,7 +487,7 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// Re-launch OAuth without resetting the client ID.
 				a.onboardingStep = stepOAuth
 				return a, tea.Batch(
-					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh, a.onboardingClose),
+					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
 					a.onboardingSpinner.Tick,
 				)
 			}

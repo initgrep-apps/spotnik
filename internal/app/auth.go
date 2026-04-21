@@ -20,7 +20,6 @@ type authPreparedMsg struct {
 	codeCh      <-chan api.CallbackResult
 	verifier    string
 	redirectURI string
-	serverClose func()
 	browserErr  error
 }
 
@@ -57,7 +56,7 @@ func saveClientIDCmd(path, clientID string) tea.Cmd {
 // prepareOAuthCmd generates PKCE credentials, builds the Spotify auth URL, and opens
 // the browser. The callback server must already be running (started by cmd/ before
 // the app is created); this command does NOT start or stop the server.
-func prepareOAuthCmd(clientID string, port int, codeCh <-chan api.CallbackResult, serverClose func()) tea.Cmd {
+func prepareOAuthCmd(clientID string, port int, codeCh <-chan api.CallbackResult) tea.Cmd {
 	return func() tea.Msg {
 		verifier, err := api.GenerateCodeVerifier()
 		if err != nil {
@@ -72,18 +71,16 @@ func prepareOAuthCmd(clientID string, port int, codeCh <-chan api.CallbackResult
 			codeCh:      codeCh,
 			verifier:    verifier,
 			redirectURI: redirectURI,
-			serverClose: serverClose,
 			browserErr:  browserErr,
 		}
 	}
 }
 
-// waitForCallbackCmd blocks on the callback channel, exchanges the code for tokens,
-// and closes the callback server when done.
-func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, redirectURI string, codeCh <-chan api.CallbackResult, serverClose func()) tea.Cmd {
+// waitForCallbackCmd blocks on the callback channel and exchanges the code for tokens.
+// The caller is responsible for closing the callback server — this function intentionally
+// does NOT close it so the server remains alive across retries (e.g. user presses 'r' or 'l').
+func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, redirectURI string, codeCh <-chan api.CallbackResult) tea.Cmd {
 	return func() tea.Msg {
-		defer serverClose()
-
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
