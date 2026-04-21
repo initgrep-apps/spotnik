@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -28,9 +30,17 @@ import (
 type viewMode int
 
 const (
-	viewSplash viewMode = iota // Splash screen shown on startup
-	viewAuth                   // Auth panel shown when user needs to authenticate
-	viewGrid                   // Grid layout: 10 panes across 2 pages, managed by LayoutManager
+	viewSplash     viewMode = iota // Splash screen shown on startup
+	viewOnboarding                 // First-time registration + OAuth flow
+	viewAuth                       // Auth panel shown when user needs to authenticate
+	viewGrid                       // Grid layout: 10 panes across 2 pages, managed by LayoutManager
+)
+
+// Onboarding sub-step constants track which screen within viewOnboarding is active.
+const (
+	stepRegister = iota // Step 1: client ID input + instructions
+	stepOAuth           // Step 2: browser wait + full URL display
+	stepError           // Step 2 error: retry options
 )
 
 const (
@@ -168,6 +178,34 @@ type App struct {
 
 	// needsAuth is true when the user is not authenticated and must go through the auth flow.
 	needsAuth bool
+
+	// needsRegister is true on first launch when no client_id is present in config.
+	// The TUI shows viewOnboarding (stepRegister) after the splash screen.
+	needsRegister bool
+
+	// onboardingStep tracks the active sub-step within viewOnboarding.
+	onboardingStep int
+
+	// onboardingInput is the text input component for the client ID entry field.
+	onboardingInput textinput.Model
+
+	// onboardingError is the error message shown on the onboarding error screen (stepError).
+	onboardingError string
+
+	// onboardingPort is the port the OAuth callback server is already listening on.
+	onboardingPort int
+
+	// onboardingCodeCh receives the OAuth authorization code from the callback server.
+	onboardingCodeCh <-chan api.CallbackResult
+
+	// onboardingClose closes the callback server. Always safe to call (defaulted to no-op).
+	onboardingClose func()
+
+	// onboardingAuthURL is the full Spotify OAuth authorization URL, shown on stepOAuth.
+	onboardingAuthURL string
+
+	// onboardingSpinner is the spinner shown while waiting for the OAuth callback.
+	onboardingSpinner spinner.Model
 
 	// clientID is the Spotify OAuth client ID, needed for the TUI auth flow.
 	clientID string
@@ -307,28 +345,51 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		ver = "dev"
 	}
 
+	// Initialise the client ID text input for the onboarding registration step.
+	ti := textinput.New()
+	ti.Placeholder = "your-client-id-here"
+	ti.CharLimit = 64
+	ti.Width = 60
+
+	// Initialise the spinner shown while waiting for OAuth callback on stepOAuth.
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+
+	// Default onboardingClose to a no-op so it is always safe to call,
+	// even when no callback server was started (e.g. in tests).
+	callbackClose := opts.CallbackClose
+	if callbackClose == nil {
+		callbackClose = func() {}
+	}
+
 	a := &App{
-		theme:           t,
-		store:           s,
-		alerts:          *components.NewNotifications(t),
-		gateway:         gw,
-		layout:          mgr,
-		panes:           panesMap,
-		searchPane:      searchPane,
-		devicePane:      devicePane,
-		profilePane:     profilePane,
-		statusHelp:      newStatusHelp(t),
-		statusKeyMap:    newAppKeyMap(),
-		currentView:     viewSplash,
-		volumeStep:      1,
-		needsAuth:       opts.NeedsAuth,
-		clientID:        opts.ClientID,
-		tokenStore:      opts.TokenStore,
-		tokenBaseURL:    opts.TokenBaseURL,
-		version:         ver,
-		lastInteraction: time.Now(),
-		idleThreshold:   idleThresholdSecs * time.Second,
-		prefs:           prefs.New(config.DefaultConfigPath()),
+		theme:             t,
+		store:             s,
+		alerts:            *components.NewNotifications(t),
+		gateway:           gw,
+		layout:            mgr,
+		panes:             panesMap,
+		searchPane:        searchPane,
+		devicePane:        devicePane,
+		profilePane:       profilePane,
+		statusHelp:        newStatusHelp(t),
+		statusKeyMap:      newAppKeyMap(),
+		currentView:       viewSplash,
+		volumeStep:        1,
+		needsAuth:         opts.NeedsAuth,
+		needsRegister:     opts.NeedsRegister,
+		onboardingInput:   ti,
+		onboardingSpinner: sp,
+		onboardingPort:    opts.CallbackPort,
+		onboardingCodeCh:  opts.CallbackCodeCh,
+		onboardingClose:   callbackClose,
+		clientID:          opts.ClientID,
+		tokenStore:        opts.TokenStore,
+		tokenBaseURL:      opts.TokenBaseURL,
+		version:           ver,
+		lastInteraction:   time.Now(),
+		idleThreshold:     idleThresholdSecs * time.Second,
+		prefs:             prefs.New(config.DefaultConfigPath()),
 		// searchCancel must never be nil; initialize to a no-op so it is always safe to call.
 		searchCancel: func() {},
 		// playlistTracksCancel must never be nil; initialize to a no-op.
@@ -752,6 +813,28 @@ func (a *App) NetworkLogPane() *panes.NetworkLogPane {
 	return nil
 }
 
+// OnboardingStep returns the current onboarding sub-step (exported for testing).
+func (a *App) OnboardingStep() int {
+	return a.onboardingStep
+}
+
+// OnboardingError returns the onboarding error message (exported for testing).
+func (a *App) OnboardingError() string {
+	return a.onboardingError
+}
+
+// OnboardingAuthURL returns the full OAuth authorization URL for the onboarding flow
+// (exported for testing).
+func (a *App) OnboardingAuthURL() string {
+	return a.onboardingAuthURL
+}
+
+// NeedsRegister returns true when the app was started without a client ID in config
+// (exported for testing).
+func (a *App) NeedsRegister() bool {
+	return a.needsRegister
+}
+
 // Init starts the splash timer. If the user is already authenticated,
 // it also starts data fetching and the polling loop. If not, those are
 // deferred until auth succeeds.
@@ -766,8 +849,8 @@ func (a *App) Init() tea.Cmd {
 	// setup command is picked up automatically without code changes.
 	alertsInitCmd := a.alerts.Init()
 
-	if a.needsAuth {
-		// Unauthenticated: only show splash, defer everything else.
+	if a.needsRegister || a.needsAuth {
+		// Unauthenticated: only show splash, defer everything else until auth succeeds.
 		return tea.Batch(splashTimer, alertsInitCmd)
 	}
 
