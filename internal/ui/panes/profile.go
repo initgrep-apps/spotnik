@@ -78,18 +78,22 @@ func (p *ProfileOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				p.pendingAction = profileActionNone
 				return p, func() tea.Msg { return ProfileLogoutMsg{} }
 			}
-			// First 'l' press — arm confirmation.
+			// First 'l' press — arm confirmation and emit a warning toast.
 			p.pendingAction = profileActionLogout
-			return p, nil
+			return p, func() tea.Msg {
+				return ProfileConfirmToastMsg{Text: "Press l again to confirm logout"}
+			}
 		case 'f':
 			if p.pendingAction == profileActionForget {
 				// Second 'f' press — confirm forget.
 				p.pendingAction = profileActionNone
 				return p, func() tea.Msg { return ProfileForgetMsg{} }
 			}
-			// First 'f' press — arm confirmation.
+			// First 'f' press — arm confirmation and emit a warning toast.
 			p.pendingAction = profileActionForget
-			return p, nil
+			return p, func() tea.Msg {
+				return ProfileConfirmToastMsg{Text: "Press f again to confirm forget"}
+			}
 		default:
 			// Any other key cancels the pending action.
 			p.pendingAction = profileActionNone
@@ -193,7 +197,7 @@ func (p *ProfileOverlay) renderActions() []string {
 
 	// Logout row.
 	if p.pendingAction == profileActionLogout {
-		lines = append(lines, warnStyle.Render("!! Press l again to confirm logout"))
+		lines = append(lines, warnStyle.Render("  Press l again to confirm logout"))
 	} else {
 		lines = append(lines, keyStyle.Render("  l  ")+"Logout")
 		lines = append(lines, subStyle.Render("     ends session · keeps Client ID"))
@@ -203,7 +207,7 @@ func (p *ProfileOverlay) renderActions() []string {
 
 	// Forget row.
 	if p.pendingAction == profileActionForget {
-		lines = append(lines, warnStyle.Render("!! Press f again to confirm forget"))
+		lines = append(lines, warnStyle.Render("  Press f again to confirm forget"))
 	} else {
 		lines = append(lines, keyStyle.Render("  f  ")+"Forget")
 		lines = append(lines, subStyle.Render("     removes session + Client ID"))
