@@ -118,7 +118,7 @@ var authForgetCmd = &cobra.Command{
 		if err := RunForget(store, config.DefaultConfigPath()); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(c.OutOrStdout(), "Forgotten. Tokens and client_id removed from config.")
+		_, _ = fmt.Fprintln(c.OutOrStdout(), "Session ended. Client ID removed from config.\nRun 'spotnik auth register' to set up again.")
 		return nil
 	},
 }
