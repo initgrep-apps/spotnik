@@ -14,6 +14,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -153,11 +154,19 @@ func RunForget(store keychain.TokenStore, configPath string) error {
 	return nil
 }
 
-// PrintAuthStatus writes current auth + registration state to w.
-// It shows whether a client_id is present in the config at configPath
-// and whether the token store contains a valid access token.
+// PrintAuthStatus writes current auth + registration state to w using lipgloss
+// styling. Labels are muted, values are bold primary, status uses success/warning
+// colours. Always uses the black theme so colours are safe in any terminal.
 // Exported for testing.
 func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) error {
+	th := theme.Load(theme.DefaultThemeID)
+
+	labelStyle := lipgloss.NewStyle().Foreground(th.TextMuted())
+	valueStyle := lipgloss.NewStyle().Foreground(th.TextPrimary()).Bold(true)
+	okStyle := lipgloss.NewStyle().Foreground(th.Success())
+	warnStyle := lipgloss.NewStyle().Foreground(th.Warning())
+	mutedStyle := lipgloss.NewStyle().Foreground(th.TextMuted())
+
 	// Load config to check whether a client_id is present.
 	cfg, err := loadConfigFromPath(configPath)
 	if err != nil {
@@ -166,29 +175,44 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 	}
 
 	if cfg.ClientID != "" {
-		_, _ = fmt.Fprintln(w, "Client ID: present")
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Client ID:"),
+			valueStyle.Render("present"),
+		)
 	} else {
-		_, _ = fmt.Fprintln(w, "Client ID: not set")
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Client ID:"),
+			warnStyle.Render("not set  (run: spotnik auth register)"),
+		)
 	}
 
 	access, err := store.Get(keychain.KeyAccessToken)
 	if err != nil || access == "" {
-		_, _ = fmt.Fprintln(w, "Status: not authenticated")
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Status:  "),
+			mutedStyle.Render("not authenticated"),
+		)
 		return nil
 	}
+
+	_, _ = fmt.Fprintf(w, "%s  %s\n",
+		labelStyle.Render("Status:  "),
+		okStyle.Render("authenticated"),
+	)
 
 	expiry, err := store.GetExpiry()
-	if err != nil {
-		_, _ = fmt.Fprintln(w, "Status: authenticated (expiry unknown)")
-		return nil
+	if err == nil {
+		_, _ = fmt.Fprintf(w, "%s  %s\n",
+			labelStyle.Render("Expires: "),
+			mutedStyle.Render(expiry.Format(time.RFC1123)),
+		)
 	}
-
-	_, _ = fmt.Fprintf(w, "Status: authenticated\n")
-	_, _ = fmt.Fprintf(w, "Token expiry: %s\n", expiry.Format(time.RFC1123))
 
 	expiringSoon, _ := store.IsExpiringSoon()
 	if expiringSoon {
-		_, _ = fmt.Fprintln(w, "Note: token is expiring soon and will be refreshed automatically")
+		_, _ = fmt.Fprintf(w, "%s\n",
+			warnStyle.Render("⚠  Token expiring soon — will refresh automatically"),
+		)
 	}
 
 	return nil

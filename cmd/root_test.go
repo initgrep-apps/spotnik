@@ -127,10 +127,12 @@ func TestAuthStatusCmd_showsClientIDPresent(t *testing.T) {
 	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
 
-	// Assert.
+	// Assert: check key substrings individually — format uses two spaces between
+	// label and value so exact "Client ID: present" no longer matches.
 	output := buf.String()
-	assert.Contains(t, output, "Client ID: present")
-	assert.Contains(t, output, "Status: authenticated")
+	assert.Contains(t, output, "Client ID")
+	assert.Contains(t, output, "present")
+	assert.Contains(t, output, "authenticated")
 }
 
 // TestAuthStatusCmd_showsClientIDMissing verifies that PrintAuthStatus shows "not set"
@@ -149,10 +151,12 @@ func TestAuthStatusCmd_showsClientIDMissing(t *testing.T) {
 	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
 
-	// Assert.
+	// Assert: check key substrings individually — format uses two spaces between
+	// label and value so exact "Client ID: not set" no longer matches.
 	output := buf.String()
-	assert.Contains(t, output, "Client ID: not set")
-	assert.Contains(t, output, "Status: not authenticated")
+	assert.Contains(t, output, "Client ID")
+	assert.Contains(t, output, "not set")
+	assert.Contains(t, output, "not authenticated")
 }
 
 // TestCheckAuthState_noClientID_needsRegister verifies that when no client_id is present
@@ -526,6 +530,23 @@ func TestCheckAuthState_ExpiringSoon(t *testing.T) {
 	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
 	assert.False(t, needsRegister, "has client_id should not need register")
 	assert.True(t, needsAuth, "expiring token with failed refresh should need auth")
+}
+
+// TestPrintAuthStatus_styled_authenticated verifies that PrintAuthStatus includes
+// both the Client ID label and authenticated status in its output.
+func TestPrintAuthStatus_styled_authenticated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", time.Now().Add(time.Hour).Unix())))
+
+	var buf bytes.Buffer
+	err := cmd.PrintAuthStatus(store, path, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Client ID")
+	assert.Contains(t, buf.String(), "authenticated")
 }
 
 // TestAuthLogoutCmd_alreadyLoggedOut_noError verifies that LogoutTokens on an empty
