@@ -389,6 +389,9 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	scanner := bufio.NewScanner(r)
 	scanner.Scan()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading client_id: %w", err)
+	}
 	clientID := strings.TrimSpace(scanner.Text())
 	if clientID == "" {
 		return fmt.Errorf("client_id cannot be empty")
@@ -457,6 +460,7 @@ func runApp(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("port %d is busy — set a different callback_port in "+
 				"~/.config/spotnik/config.toml: %w", cfg.CallbackPort, err)
 		}
+		defer srv.Close() // safety net: fires even if app exits before auth completes
 		opts.CallbackPort = cfg.CallbackPort
 		opts.CallbackCodeCh = codeCh
 		opts.CallbackClose = srv.Close
