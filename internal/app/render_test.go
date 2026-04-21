@@ -670,3 +670,43 @@ func TestTruncateProfileName_UnicodeRunes(t *testing.T) {
 	assert.True(t, len([]rune(result)) <= maxProfileDisplayNameLen)
 	assert.True(t, strings.HasSuffix(result, "…"))
 }
+
+// --- Story 139: wrapURL tests ---
+
+// TestWrapURL_shortURL_unchanged verifies that a URL shorter than or equal to width
+// is returned unchanged (no wrapping, no newlines).
+func TestWrapURL_shortURL_unchanged(t *testing.T) {
+	rawURL := "https://accounts.spotify.com/authorize"
+	result := wrapURL(rawURL, 80)
+	assert.Equal(t, rawURL, result, "short URL should be returned unchanged")
+	assert.NotContains(t, result, "\n", "short URL must not contain newlines")
+}
+
+// TestWrapURL_longURL_breaksAtAmpersand verifies that a long Spotify auth URL is
+// broken at '&' boundaries and that all resulting lines are at most width chars.
+func TestWrapURL_longURL_breaksAtAmpersand(t *testing.T) {
+	rawURL := "https://accounts.spotify.com/authorize?client_id=abc123&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcallback&scope=user-read-playback-state&code_challenge_method=S256&code_challenge=xyz"
+	width := 60
+	result := wrapURL(rawURL, width)
+	assert.Contains(t, result, "\n", "long URL should be wrapped with newlines")
+	for _, line := range strings.Split(result, "\n") {
+		assert.LessOrEqual(t, len(line), width,
+			"each wrapped line must be at most %d chars, got %q", width, line)
+	}
+	// The full URL must be reconstructable (no characters lost).
+	assert.Equal(t, rawURL, strings.Join(strings.Split(result, "\n"), ""),
+		"joining all lines must reproduce the original URL")
+}
+
+// TestWrapURL_noAmpersand_breaksAtWidth verifies that a URL with no '&' characters
+// falls back to a hard break at exactly width characters.
+func TestWrapURL_noAmpersand_breaksAtWidth(t *testing.T) {
+	rawURL := strings.Repeat("a", 150)
+	width := 60
+	result := wrapURL(rawURL, width)
+	lines := strings.Split(result, "\n")
+	assert.Len(t, lines, 3, "150 chars at width 60 should produce exactly 3 lines")
+	assert.Equal(t, strings.Repeat("a", 60), lines[0])
+	assert.Equal(t, strings.Repeat("a", 60), lines[1])
+	assert.Equal(t, strings.Repeat("a", 30), lines[2])
+}

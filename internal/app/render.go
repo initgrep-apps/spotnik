@@ -111,6 +111,30 @@ const (
 	minTermHeight = 30
 )
 
+// wrapURL breaks a long URL into multiple lines each at most width characters wide.
+// It prefers to break at '&' boundaries found in the second half of each width window
+// so that query parameters land at the start of a new line, which is easier to read.
+// When no '&' is present in the target window it falls back to a hard break at width.
+// A URL that already fits within width is returned unchanged (no newlines added).
+func wrapURL(rawURL string, width int) string {
+	if len(rawURL) <= width {
+		return rawURL
+	}
+	var lines []string
+	for len(rawURL) > width {
+		breakAt := width
+		if idx := strings.LastIndex(rawURL[:width], "&"); idx > width/2 {
+			breakAt = idx
+		}
+		lines = append(lines, rawURL[:breakAt])
+		rawURL = rawURL[breakAt:]
+	}
+	if rawURL != "" {
+		lines = append(lines, rawURL)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // buildView renders the full terminal UI content without the alert overlay.
 // Called by View() which applies alerts.Render() as the final step.
 func (a *App) buildView() string {
