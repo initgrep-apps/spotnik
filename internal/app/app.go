@@ -239,15 +239,26 @@ type tokenRefreshedMsg struct {
 // AppOptions carries optional startup configuration into the app.
 // Zero value means the user is already authenticated and no auth flow is needed.
 type AppOptions struct {
-	NeedsAuth  bool
-	ClientID   string
-	TokenStore keychain.TokenStore
+	// NeedsRegister is true when no client_id is present in config.
+	// The TUI will show the onboarding flow (stepRegister) on first launch.
+	NeedsRegister bool
+	NeedsAuth     bool
+	ClientID      string
+	TokenStore    keychain.TokenStore
 	// TokenBaseURL overrides the Spotify token endpoint for tests.
 	// Leave empty for production (uses the real Spotify endpoint).
 	TokenBaseURL string
 	// Version is the build-time injected version string (e.g. "v0.1.0").
 	// Falls back to "dev" when not provided.
 	Version string
+	// CallbackPort is the port the OAuth callback server is listening on.
+	// Non-zero when the server was started early (needsRegister || needsAuth).
+	CallbackPort int
+	// CallbackCodeCh receives the OAuth authorization code from the callback server.
+	// Non-nil when the server was started early.
+	CallbackCodeCh <-chan api.CallbackResult
+	// CallbackClose closes the callback server. Non-nil when started early.
+	CallbackClose func()
 }
 
 // New creates a new App, loading the theme from cfg.Preferences.Theme.

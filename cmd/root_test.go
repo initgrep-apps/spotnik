@@ -36,7 +36,8 @@ func TestRootCmd_Executes(t *testing.T) {
 	})
 }
 
-// TestRootCmd_HasAuthSubcommand verifies the auth subcommand is registered.
+// TestRootCmd_HasAuthSubcommand verifies the auth subcommand is registered with all
+// required sub-subcommands: register, login, logout, forget, status.
 func TestRootCmd_HasAuthSubcommand(t *testing.T) {
 	rootCmd := cmd.RootCommand()
 	require.NotNil(t, rootCmd)
@@ -44,18 +45,16 @@ func TestRootCmd_HasAuthSubcommand(t *testing.T) {
 	for _, sub := range rootCmd.Commands() {
 		if sub.Use == "auth" {
 			authFound = true
-			// Verify auth has logout and status sub-subcommands.
-			var logoutFound, statusFound bool
+			// Verify auth has all five sub-subcommands.
+			found := map[string]bool{}
 			for _, authSub := range sub.Commands() {
-				switch authSub.Use {
-				case "logout":
-					logoutFound = true
-				case "status":
-					statusFound = true
-				}
+				found[authSub.Use] = true
 			}
-			assert.True(t, logoutFound, "auth logout subcommand should be registered")
-			assert.True(t, statusFound, "auth status subcommand should be registered")
+			assert.True(t, found["register"], "auth register subcommand should be registered")
+			assert.True(t, found["login"], "auth login subcommand should be registered")
+			assert.True(t, found["logout"], "auth logout subcommand should be registered")
+			assert.True(t, found["forget"], "auth forget subcommand should be registered")
+			assert.True(t, found["status"], "auth status subcommand should be registered")
 		}
 	}
 	assert.True(t, authFound, "auth subcommand should be registered")
@@ -80,8 +79,125 @@ func TestAuthLogout_ClearsTokens(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestAuthForgetCmd_clearsTokensAndClientID verifies that RunForget removes all tokens
+// and clears the client_id from the config file.
+func TestAuthForgetCmd_clearsTokensAndClientID(t *testing.T) {
+	// Arrange: config file with client_id.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[spotify]\nclient_id = \"my-secret-client\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	// Arrange: in-memory token store with a token.
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "access"))
+	require.NoError(t, store.Set(keychain.KeyRefreshToken, "refresh"))
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "1234567890"))
+
+	// Act.
+	err := cmd.RunForget(store, path)
+	require.NoError(t, err)
+
+	// Assert: tokens gone.
+	_, err = store.Get(keychain.KeyAccessToken)
+	assert.Error(t, err, "access token should be removed")
+
+	// Assert: client_id removed from config.
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "", cfg.ClientID, "client_id should be cleared")
+}
+
+// TestAuthStatusCmd_showsClientIDPresent verifies that PrintAuthStatus shows "present"
+// when a client ID is set and the user has a valid access token.
+func TestAuthStatusCmd_showsClientIDPresent(t *testing.T) {
+	// Arrange: config with client_id.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc123\"\n"), 0o600))
+
+	// Arrange: store with access token and expiry.
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "valid-access-token"))
+	expiry := time.Now().Add(1 * time.Hour)
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
+
+	// Act.
+	var buf bytes.Buffer
+	err := cmd.PrintAuthStatus(store, path, &buf)
+	require.NoError(t, err)
+
+	// Assert.
+	output := buf.String()
+	assert.Contains(t, output, "Client ID: present")
+	assert.Contains(t, output, "Status: authenticated")
+}
+
+// TestAuthStatusCmd_showsClientIDMissing verifies that PrintAuthStatus shows "not set"
+// when no client_id is in the config and the store is empty.
+func TestAuthStatusCmd_showsClientIDMissing(t *testing.T) {
+	// Arrange: config with no client_id.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\n"), 0o600))
+
+	// Arrange: empty store.
+	store := keychain.NewInMemoryTokenStore()
+
+	// Act.
+	var buf bytes.Buffer
+	err := cmd.PrintAuthStatus(store, path, &buf)
+	require.NoError(t, err)
+
+	// Assert.
+	output := buf.String()
+	assert.Contains(t, output, "Client ID: not set")
+	assert.Contains(t, output, "Status: not authenticated")
+}
+
+// TestCheckAuthState_noClientID_needsRegister verifies that when no client_id is present
+// in the config, needsRegister=true and needsAuth=false.
+func TestCheckAuthState_noClientID_needsRegister(t *testing.T) {
+	cfg := &config.Config{ClientID: ""}
+	store := keychain.NewInMemoryTokenStore()
+
+	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.True(t, needsRegister, "no client_id should need register")
+	assert.False(t, needsAuth, "no client_id should not separately need auth")
+}
+
+// TestCheckAuthState_clientIDNoToken_needsAuth verifies that when a client ID is set
+// but no token is present, needsRegister=false and needsAuth=true.
+func TestCheckAuthState_clientIDNoToken_needsAuth(t *testing.T) {
+	cfg := &config.Config{ClientID: "some-client-id"}
+	store := keychain.NewInMemoryTokenStore()
+
+	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.False(t, needsRegister, "has client_id should not need register")
+	assert.True(t, needsAuth, "no token should need auth")
+}
+
+// TestCheckAuthState_clientIDValidToken_noAuthNeeded verifies that when both client ID
+// and a valid non-expiring token are present, both return values are false.
+func TestCheckAuthState_clientIDValidToken_noAuthNeeded(t *testing.T) {
+	cfg := &config.Config{ClientID: "some-client-id"}
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "valid-token"))
+	require.NoError(t, store.Set(keychain.KeyRefreshToken, "valid-refresh"))
+	expiry := time.Now().Add(1 * time.Hour)
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
+
+	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.False(t, needsRegister, "has client_id should not need register")
+	assert.False(t, needsAuth, "valid token should not need auth")
+}
+
 // TestAuthStatus_PrintsExpiry verifies that auth status includes the formatted expiry time.
 func TestAuthStatus_PrintsExpiry(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+
 	store := keychain.NewInMemoryTokenStore()
 
 	expiry := time.Unix(1735689600, 0)
@@ -89,7 +205,7 @@ func TestAuthStatus_PrintsExpiry(t *testing.T) {
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "1735689600"))
 
 	var buf bytes.Buffer
-	err := cmd.PrintAuthStatus(store, &buf)
+	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -98,9 +214,13 @@ func TestAuthStatus_PrintsExpiry(t *testing.T) {
 
 // TestAuthStatus_NotAuthenticated verifies status output when no token is present.
 func TestAuthStatus_NotAuthenticated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\n"), 0o600))
+
 	store := keychain.NewInMemoryTokenStore()
 	var buf bytes.Buffer
-	err := cmd.PrintAuthStatus(store, &buf)
+	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "not authenticated")
 }
@@ -108,18 +228,26 @@ func TestAuthStatus_NotAuthenticated(t *testing.T) {
 // TestAuthStatus_ExpiredExpiryUnknown verifies status when access token exists
 // but expiry cannot be parsed.
 func TestAuthStatus_ExpiredExpiryUnknown(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+
 	store := keychain.NewInMemoryTokenStore()
 	require.NoError(t, store.Set(keychain.KeyAccessToken, "valid-token"))
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "not-a-number"))
 
 	var buf bytes.Buffer
-	err := cmd.PrintAuthStatus(store, &buf)
+	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "authenticated")
 }
 
 // TestAuthStatus_ExpiringSoon verifies that the "expiring soon" note appears.
 func TestAuthStatus_ExpiringSoon(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+
 	store := keychain.NewInMemoryTokenStore()
 	require.NoError(t, store.Set(keychain.KeyAccessToken, "valid-token"))
 
@@ -128,13 +256,13 @@ func TestAuthStatus_ExpiringSoon(t *testing.T) {
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
 
 	var buf bytes.Buffer
-	err := cmd.PrintAuthStatus(store, &buf)
+	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "expiring soon")
 }
 
 // TestMissingClientID_PrintsInstructions verifies that missing client_id
-// prints helpful setup instructions.
+// prints helpful setup instructions redirecting to spotnik auth register.
 func TestMissingClientID_PrintsInstructions(t *testing.T) {
 	var buf bytes.Buffer
 	err := cmd.PrintMissingClientIDInstructions(&buf)
@@ -165,44 +293,18 @@ func TestLoadConfig_ValidFile(t *testing.T) {
 	assert.Equal(t, "nord", cfg.Preferences.Theme)
 }
 
-// TestLoadConfig_UsesEmbeddedWhenConfigEmpty verifies that LoadConfig falls back
-// to the embedded client ID when the config file has none.
-func TestLoadConfig_UsesEmbeddedWhenConfigEmpty(t *testing.T) {
+// TestLoadConfig_EmptyClientIDNoError verifies that LoadConfig does NOT error when
+// the config file has no client_id — the caller decides what to do via CheckAuthState.
+func TestLoadConfig_EmptyClientIDNoError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 	// Config file exists but has no client_id.
 	content := "[spotify]\n\n[preferences]\ntheme = \"black\"\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-	cfg, err := cmd.LoadConfigWithEmbedded(path, "embedded-client-id-123")
+	cfg, err := cmd.LoadConfig(path)
 	require.NoError(t, err)
-	assert.Equal(t, "embedded-client-id-123", cfg.ClientID)
-}
-
-// TestLoadConfig_ConfigOverridesEmbedded verifies that a config client_id takes
-// priority over the embedded value.
-func TestLoadConfig_ConfigOverridesEmbedded(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-	content := "[spotify]\nclient_id = \"config-client-id\"\n"
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-
-	cfg, err := cmd.LoadConfigWithEmbedded(path, "embedded-client-id-123")
-	require.NoError(t, err)
-	assert.Equal(t, "config-client-id", cfg.ClientID)
-}
-
-// TestLoadConfig_ErrorWhenBothEmpty verifies that LoadConfig returns an error
-// when neither the config file nor the embedded ID provides a client_id.
-func TestLoadConfig_ErrorWhenBothEmpty(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-	content := "[spotify]\n"
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-
-	_, err := cmd.LoadConfigWithEmbedded(path, "") // no embedded ID
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "client_id")
+	assert.Equal(t, "", cfg.ClientID, "empty client_id should not error")
 }
 
 // TestLoadConfig_BootstrapsWhenMissing verifies that LoadConfig creates a config
@@ -211,10 +313,10 @@ func TestLoadConfig_BootstrapsWhenMissing(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 
-	// File doesn't exist; embedded client ID is provided so no error.
-	cfg, err := cmd.LoadConfigWithEmbedded(path, "embedded-id")
+	// File doesn't exist; LoadConfig should bootstrap and return defaults (no error).
+	cfg, err := cmd.LoadConfig(path)
 	require.NoError(t, err)
-	assert.Equal(t, "embedded-id", cfg.ClientID)
+	assert.Equal(t, "", cfg.ClientID, "bootstrapped config has no client_id")
 
 	// Verify the file was created.
 	_, err = os.Stat(path)
@@ -229,7 +331,7 @@ func TestLoadConfig_ClampsUnknownTheme(t *testing.T) {
 	content := "[spotify]\nclient_id = \"test\"\n[preferences]\ntheme = \"not-a-real-theme-xyz\"\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-	cfg, err := cmd.LoadConfigWithEmbedded(path, "")
+	cfg, err := cmd.LoadConfig(path)
 	require.NoError(t, err)
 	assert.Equal(t, "black", cfg.Preferences.Theme, "unknown theme should be clamped to 'black'")
 }
@@ -395,7 +497,8 @@ func TestCheckAuthState_ValidToken(t *testing.T) {
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
 
 	cfg := &config.Config{ClientID: "test-client"}
-	needsAuth := cmd.CheckAuthState(cfg, store)
+	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.False(t, needsRegister, "has client_id should not need register")
 	assert.False(t, needsAuth, "valid token should not need auth")
 }
 
@@ -403,7 +506,8 @@ func TestCheckAuthState_ValidToken(t *testing.T) {
 func TestCheckAuthState_NoToken(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	cfg := &config.Config{ClientID: "test-client"}
-	needsAuth := cmd.CheckAuthState(cfg, store)
+	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.False(t, needsRegister, "has client_id should not need register")
 	assert.True(t, needsAuth, "no token should need auth")
 }
 
@@ -419,6 +523,7 @@ func TestCheckAuthState_ExpiringSoon(t *testing.T) {
 
 	cfg := &config.Config{ClientID: "test-client"}
 	// Refresh will fail (no server running) → should need auth.
-	needsAuth := cmd.CheckAuthState(cfg, store)
+	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+	assert.False(t, needsRegister, "has client_id should not need register")
 	assert.True(t, needsAuth, "expiring token with failed refresh should need auth")
 }
