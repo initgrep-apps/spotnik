@@ -385,7 +385,6 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
 
-		fmt.Println("Authorization successful! Starting spotnik...")
 		return nil
 
 	case <-ctx.Done():
@@ -436,7 +435,12 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	}
 
 	store := keychain.NewKeychainTokenStore()
-	return RunAuthFlow(cfg, store, "")
+	if err := RunAuthFlow(cfg, store, ""); err != nil {
+		return err
+	}
+	// Authorization succeeded — launch the TUI immediately so the user lands in the app.
+	_, _ = fmt.Fprintln(w, "Authorization complete. Launching spotnik...")
+	return runApp(c, []string{})
 }
 
 // runAuthLogin forces a fresh re-authentication flow.
