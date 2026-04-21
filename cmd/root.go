@@ -165,7 +165,6 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 	valueStyle := lipgloss.NewStyle().Foreground(th.TextPrimary()).Bold(true)
 	okStyle := lipgloss.NewStyle().Foreground(th.Success())
 	warnStyle := lipgloss.NewStyle().Foreground(th.Warning())
-	mutedStyle := lipgloss.NewStyle().Foreground(th.TextMuted())
 
 	// Load config to check whether a client_id is present.
 	cfg, err := loadConfigFromPath(configPath)
@@ -190,7 +189,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 	if err != nil || access == "" {
 		_, _ = fmt.Fprintf(w, "%s  %s\n",
 			labelStyle.Render("Status:  "),
-			mutedStyle.Render("not authenticated"),
+			labelStyle.Render("not authenticated"),
 		)
 		return nil
 	}
@@ -204,7 +203,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 	if err == nil {
 		_, _ = fmt.Fprintf(w, "%s  %s\n",
 			labelStyle.Render("Expires: "),
-			mutedStyle.Render(expiry.Format(time.RFC1123)),
+			labelStyle.Render(expiry.Format(time.RFC1123)),
 		)
 	}
 
