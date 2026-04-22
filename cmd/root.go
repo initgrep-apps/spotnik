@@ -52,6 +52,15 @@ func cliOut(w io.Writer, lines ...string) {
 	_, _ = fmt.Fprintln(w, cliWrap.Render(block))
 }
 
+// cliLine writes a single inline progress line with left-only indentation.
+// Use this for sequential step output within a flow where top/bottom blank
+// lines from cliOut/cliWrap would break the compact sequence.
+var cliIndent = lipgloss.NewStyle().PaddingLeft(2)
+
+func cliLine(w io.Writer, text string) {
+	_, _ = fmt.Fprintln(w, cliIndent.Render(text))
+}
+
 // cliKV renders aligned key-value pairs. Labels are dim; values are default foreground.
 func cliKV(pairs [][2]string) string {
 	maxKey := 0
@@ -203,9 +212,7 @@ func PrintLogoutSuccess(w io.Writer) {
 func PrintForgetSuccess(w io.Writer) {
 	cliOut(w,
 		cliAccentS.Render("✓")+" Session ended",
-		"",
 		cliDimS.Render("Tokens and client ID removed"),
-		"",
 		cliAccentS.Render("→")+" Run spotnik auth register to set up again",
 	)
 }
@@ -245,7 +252,6 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 		// Not registered — no client_id in config.
 		cliOut(w,
 			cliDimS.Render("◎ Spotnik  ")+"not registered",
-			"",
 			cliAccentS.Render("→")+" Run spotnik auth register to connect your Spotify account",
 		)
 		return nil
@@ -256,9 +262,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 			// Registered but not authenticated.
 			cliOut(w,
 				cliDimS.Render("◎ Spotnik  ")+"not authenticated",
-				"",
 				cliKV([][2]string{{"Client ID", "present"}}),
-				"",
 				cliAccentS.Render("→")+" Run spotnik auth login to connect",
 			)
 			return nil
@@ -269,9 +273,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 			// Cannot read token state — show warning, don't claim healthy.
 			cliOut(w,
 				cliWarnS.Render("⚠")+" Spotnik  session state unknown",
-				"",
 				cliDimS.Render("Could not read token state from keychain"),
-				"",
 				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate",
 			)
 			return nil
@@ -295,15 +297,12 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 		if expiringSoon {
 			cliOut(w,
 				cliWarnS.Render("⚠")+" Spotnik  session expiring",
-				"",
 				cliKV(kvPairs),
-				"",
 				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate if auto-refresh fails",
 			)
 		} else {
 			cliOut(w,
 				cliAccentS.Render("◉")+" Spotnik  authenticated",
-				"",
 				cliKV(kvPairs),
 			)
 		}
@@ -450,7 +449,6 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	cliOut(w,
 		cliDimS.Render("Visit this URL to authorize:"),
 		authURL,
-		"",
 		cliDimS.Render("Waiting for callback…"),
 	)
 
@@ -470,7 +468,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("authorization failed: %w", result.Err)
 		}
 
-		_, _ = fmt.Fprintln(w, cliWrap.Render(cliAccentS.Render("✓")+" Browser authentication complete"))
+		cliLine(w, cliAccentS.Render("✓")+" Browser authentication complete")
 
 		// Exchange code for tokens using the configured endpoint.
 		_, err := api.ExchangeCode(
@@ -487,7 +485,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
 
-		_, _ = fmt.Fprintln(w, cliWrap.Render(cliAccentS.Render("✓")+" Token exchange successful"))
+		cliLine(w, cliAccentS.Render("✓")+" Token exchange successful")
 
 		return nil
 
@@ -515,7 +513,6 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	cliOut(w,
 		cliDimS.Render("◎ Spotnik  ")+"not registered",
-		"",
 		cliKV([][2]string{
 			{"1", "Go to developer.spotify.com/dashboard"},
 			{"2", "Create or select a Spotify app"},
@@ -538,7 +535,7 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	if err := config.SetClientID(configPath, clientID); err != nil {
 		return fmt.Errorf("saving client_id to config: %w", err)
 	}
-	_, _ = fmt.Fprintln(w, cliWrap.Render(cliAccentS.Render("✓")+" Client ID saved"))
+	cliLine(w, cliAccentS.Render("✓")+" Client ID saved")
 
 	cfg, err = loadConfigFromPath(configPath)
 	if err != nil {
@@ -549,11 +546,9 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	if err := RunAuthFlow(cfg, store, "", w); err != nil {
 		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authorization failed",
-			"",
 			cliKV([][2]string{
 				{"Reason", err.Error()},
 			}),
-			"",
 			cliAccentS.Render("→")+" Run spotnik auth register to try again",
 		)
 		return errAlreadyPrinted
@@ -562,7 +557,6 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	// Authorization succeeded — print confirmation and launch the TUI.
 	cliOut(w,
 		cliAccentS.Render("◉")+" Signed in",
-		"",
 		cliAccentS.Render("→")+" Launching spotnik…",
 	)
 	return runApp(c, []string{})
@@ -578,9 +572,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 	if cfg.ClientID == "" {
 		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authentication failed",
-			"",
 			cliKV([][2]string{{"Reason", "no client_id configured"}}),
-			"",
 			cliAccentS.Render("→")+" Run spotnik auth register to set up your Spotify app",
 		)
 		return errAlreadyPrinted
@@ -595,9 +587,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 	if err := RunAuthFlow(cfg, store, "", c.OutOrStdout()); err != nil {
 		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authentication failed",
-			"",
 			cliKV([][2]string{{"Reason", err.Error()}}),
-			"",
 			cliAccentS.Render("→")+" Run spotnik auth login to try again",
 		)
 		return errAlreadyPrinted
@@ -605,7 +595,6 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 
 	cliOut(c.OutOrStdout(),
 		cliAccentS.Render("◉")+" Signed in",
-		"",
 		cliAccentS.Render("→")+" Launching spotnik…",
 	)
 	return runApp(c, []string{})
