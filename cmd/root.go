@@ -473,19 +473,52 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 
 		cliLine(w, cliAccentS.Render("✓")+" Browser authentication complete")
 
+		// Spinner covers the token-exchange HTTP round-trip so the user sees
+		// progress rather than a silent gap. We stop it — and wait for the
+		// goroutine to exit — before printing the result, ensuring no spinner
+		// frame can write into the TUI's alt-screen buffer after runApp starts.
+		spinnerStop := make(chan struct{})
+		spinnerDone := make(chan struct{})
+		go func() {
+			defer close(spinnerDone)
+			frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+			i := 0
+			for {
+				select {
+				case <-spinnerStop:
+					// Clear the spinner line before returning.
+					_, _ = fmt.Fprint(w, "\r"+strings.Repeat(" ", 40)+"\r")
+					return
+				default:
+					_, _ = fmt.Fprint(w, "\r"+cliWrap.Render(
+						frames[i%len(frames)]+"  "+cliDimS.Render("Signing in…"),
+					))
+					i++
+					time.Sleep(80 * time.Millisecond)
+				}
+			}
+		}()
+
 		// Exchange code for tokens using the configured endpoint.
-		_, err := api.ExchangeCode(
-			context.Background(),
-			http.DefaultClient,
-			tokenBaseURL,
-			result.Code,
-			verifier,
-			redirectURI,
-			cfg.ClientID,
-			store,
-		)
-		if err != nil {
-			return fmt.Errorf("exchanging authorization code: %w", err)
+		exchErr := func() error {
+			_, err := api.ExchangeCode(
+				context.Background(),
+				http.DefaultClient,
+				tokenBaseURL,
+				result.Code,
+				verifier,
+				redirectURI,
+				cfg.ClientID,
+				store,
+			)
+			return err
+		}()
+
+		close(spinnerStop)
+		<-spinnerDone
+
+		if exchErr != nil {
+			return fmt.Errorf("exchanging authorization code: %w", exchErr)
 		}
 
 		cliLine(w, cliAccentS.Render("✓")+" Token exchange successful")
@@ -556,12 +589,10 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 		return errAlreadyPrinted
 	}
 
-	// Authorization succeeded — confirm sign-in and show a static indicator
-	// while the TUI initialises. A goroutine spinner cannot be used here:
-	// WithAltScreen() does not prevent the goroutine from writing into the
-	// TUI's alternate-screen buffer once Bubble Tea takes over stdout.
-	cliOut(w, cliAccentS.Render("◉")+" Signed in")
-	cliLine(w, cliDimS.Render("⠿ Launching spotnik…"))
+	// cliLine keeps "Signed in" flush with the preceding progress lines —
+	// no blank-line gap between "Token exchange successful" and this line.
+	// runApp starts its own spinner to cover TUI initialization delay.
+	cliLine(w, cliAccentS.Render("◉")+" Signed in")
 	return runApp(c, []string{})
 }
 
@@ -596,20 +627,47 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 		return errAlreadyPrinted
 	}
 
-	cliOut(c.OutOrStdout(), cliAccentS.Render("◉")+" Signed in")
-	cliLine(c.OutOrStdout(), cliDimS.Render("⠿ Launching spotnik…"))
+	// runApp starts its own spinner to cover TUI initialization delay.
+	cliLine(c.OutOrStdout(), cliAccentS.Render("◉")+" Signed in")
 	return runApp(c, []string{})
 }
 
 // runApp is the main command handler. It loads config, checks auth state,
 // and launches the Bubble Tea application.
-func runApp(_ *cobra.Command, _ []string) error {
+func runApp(c *cobra.Command, _ []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 
 	store := keychain.NewKeychainTokenStore()
+
+	// Spinner covers keychain auth-state checks, callback-server startup, and
+	// app initialization — all the work between the last CLI line and the TUI
+	// first render. Stopped and drained before p.Run() switches to alt-screen
+	// so no spinner frame can write into the TUI's alternate-screen buffer.
+	spinnerStop := make(chan struct{})
+	spinnerDone := make(chan struct{})
+	go func() {
+		defer close(spinnerDone)
+		frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		i := 0
+		w := c.OutOrStdout()
+		for {
+			select {
+			case <-spinnerStop:
+				_, _ = fmt.Fprint(w, "\r"+strings.Repeat(" ", 40)+"\r")
+				return
+			default:
+				_, _ = fmt.Fprint(w, "\r"+cliWrap.Render(
+					frames[i%len(frames)]+"  "+cliDimS.Render("Launching spotnik…"),
+				))
+				i++
+				time.Sleep(80 * time.Millisecond)
+			}
+		}
+	}()
+
 	needsRegister, needsAuth := CheckAuthState(cfg, store)
 
 	opts := app.AppOptions{
@@ -625,6 +683,8 @@ func runApp(_ *cobra.Command, _ []string) error {
 	if needsRegister || needsAuth {
 		srv, codeCh, err := api.StartCallbackServer(cfg.CallbackPort)
 		if err != nil {
+			close(spinnerStop)
+			<-spinnerDone
 			return fmt.Errorf("port %d is busy — set a different callback_port in "+
 				"~/.config/spotnik/config.toml: %w", cfg.CallbackPort, err)
 		}
@@ -640,6 +700,10 @@ func runApp(_ *cobra.Command, _ []string) error {
 		accessToken, _ := store.Get(keychain.KeyAccessToken)
 		a.InitAPIClients(accessToken)
 	}
+
+	// Stop spinner before p.Run() switches the terminal to the alt-screen buffer.
+	close(spinnerStop)
+	<-spinnerDone
 
 	// Start the Bubble Tea program.
 	// tea.WithMouseCellMotion() enables mouse wheel scroll events (Feature 52).
