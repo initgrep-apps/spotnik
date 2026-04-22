@@ -49,8 +49,10 @@ green against `make ci` independently.
 - [ ] `CLAUDE.md` "What Agents Must NEVER Do" has an entry for message-type/glyph
       additions without updating `docs/CLI-OUTPUT.md`
 - [ ] `cmd/root.go` call sites use `cliout.*`; no local `cliGreen`/`cliOut`/`cliKV`
-- [ ] All five auth subcommands produce byte-identical output to what ships today
-      (golden files confirm)
+- [ ] All five auth subcommands produce output equivalent to what ships today, with
+      one intentional layout change: `spotnik auth register` now renders the
+      redirect URI on its own line (accent-coloured) below the numbered instruction
+      "Add this redirect URI:". Golden files confirm stability post-migration.
 - [ ] `config.Config` has a `CLI` section with `Palette string` field
 - [ ] `config.Bootstrap` writes `[cli] palette = "auto"` into new config files
 - [ ] `NO_COLOR` env var strips ANSI from all CLI output

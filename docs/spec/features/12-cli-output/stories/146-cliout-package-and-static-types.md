@@ -41,6 +41,93 @@ internal/cliout/
 └── testing_test.go
 ```
 
+### Theme interface extension — `Accent()`
+
+The `Theme` interface (`internal/ui/theme/theme.go`) does not currently expose a
+semantic "accent" token. CLI output requires one — the brand/CTA colour used on
+URLs, commands, and action arrows. Two candidates considered:
+
+- Reuse `SeekBar()` as a proxy — semantically conflates UI and CLI roles.
+- Add a dedicated `Accent()` method — explicit, per-theme tunable.
+
+Chosen: **add `Accent() lipgloss.Color` to the `Theme` interface** with a TOML
+field `accent` and a fallback to `seek_bar` when the field is empty (keeps
+existing user-authored themes loading without modification).
+
+#### Changes to `internal/ui/theme/theme.go`
+
+Add to the `Theme` interface (next to `Success`/`Warning`/`Error`):
+
+```go
+// Accent returns the CTA/brand colour used for CLI output, URLs, and commands.
+Accent() lipgloss.Color
+```
+
+#### Changes to `internal/ui/theme/config_theme.go`
+
+Add to `themeColors`:
+
+```go
+Accent string `toml:"accent"` // optional — falls back to seek_bar when empty
+```
+
+Update `validateColorFields` to **skip** `Accent` (optional field). Simplest
+approach: add an allow-list inside the loop:
+
+```go
+optional := map[string]bool{"accent": true}
+// ...inside the field loop:
+name := ct.Field(i).Tag.Get("toml")
+if cv.Field(i).String() == "" && !optional[name] {
+    return fmt.Errorf(...)
+}
+```
+
+Add method:
+
+```go
+// Accent returns the CLI/CTA accent colour. Falls back to SeekBar when the
+// optional [colors].accent TOML field is not set.
+func (t *ConfigTheme) Accent() lipgloss.Color {
+    if t.c.Accent != "" {
+        return lipgloss.Color(t.c.Accent)
+    }
+    return lipgloss.Color(t.c.SeekBar)
+}
+```
+
+#### Theme TOMLs (optional — may ship in follow-up)
+
+Setting `accent = "#..."` explicitly per TOML is recommended but not required.
+Without it, Accent falls back to `seek_bar`, so all 11 built-in themes continue
+to work unchanged. Add explicit accent values in a later story if colour tuning
+becomes a concern.
+
+#### Test addition — `internal/ui/theme/theme_test.go`
+
+```go
+func TestConfigTheme_Accent_fallsBackToSeekBarWhenUnset(t *testing.T) {
+    // Parse a minimal theme TOML without an `accent` field.
+    // Expect Accent() == SeekBar().
+    th := theme.Load("black")
+    assert.Equal(t, th.SeekBar(), th.Accent())
+}
+
+func TestConfigTheme_Accent_usesExplicitValueWhenSet(t *testing.T) {
+    data := []byte(`id = "x"
+name = "X"
+[colors]
+base = "#000000"
+# ...all required fields...
+accent = "#00ff00"
+seek_bar = "#ff0000"
+# ...
+`)
+    // ParseTheme(data) should return a Theme where Accent() == "#00ff00",
+    // not the seek_bar fallback.
+}
+```
+
 ### `palette.go`
 
 ```go
@@ -631,6 +718,9 @@ func activeRecorder() *Recorder {
 
 // Capture runs fn with a package-level Recorder installed.
 // All Write/WriteInline calls during fn are captured and returned.
+// Spinner/Prompt dynamic types (Story 149) also append to the recorder
+// when active, but their input/animation side effects are skipped —
+// tests assert on structure, not on stdin consumption or TTY bytes.
 // Not thread-safe — run tests sequentially.
 func Capture(fn func(w io.Writer)) []Message {
     r := &Recorder{}
@@ -1000,7 +1090,10 @@ golang.org/x/term v0.x.x   // new direct dep for term.IsTerminal
 - [ ] `cliout.SetTestMode(true)` pins `termenv.ColorProfile` to `Ascii`
 - [ ] `cliout.New().Header(...).KV(...).Hint(...).WriteTo(w)` renders equivalent output
       to `cliout.Write(w, Header{...}, KV{...}, Hint{...})`
-- [ ] `docs/CLI-OUTPUT.md` exists at project root with all 10 outlined sections
+- [ ] `docs/CLI-OUTPUT.md` exists under `docs/` with all 10 outlined sections
+- [ ] `theme.Theme` interface has `Accent() lipgloss.Color`; `ConfigTheme`
+      implements it with seek_bar fallback; existing 11 theme TOMLs still
+      parse without modification
 - [ ] `CLAUDE.md` Reading Order references `docs/CLI-OUTPUT.md`
 - [ ] `CLAUDE.md` "What Agents Must NEVER Do" has the message-type/glyph update rule
 - [ ] `internal/cliout` package coverage ≥ 90% (`go test -cover ./internal/cliout/`)
@@ -1008,6 +1101,13 @@ golang.org/x/term v0.x.x   // new direct dep for term.IsTerminal
 - [ ] `make ci` passes
 
 ## Tasks
+
+- [ ] Extend `theme.Theme` with `Accent() lipgloss.Color`; add `Accent` field
+      (TOML key `accent`) to `themeColors`; add `Accent()` method to
+      `ConfigTheme` with seek_bar fallback; loosen `validateColorFields` to
+      treat `accent` as optional; write the two new theme tests
+      - test: `go test ./internal/ui/theme/... -run TestConfigTheme_Accent -v` → PASS;
+        `go test ./internal/ui/theme/...` → all prior tests still PASS
 
 - [ ] Create `internal/cliout/doc.go` with the package doc comment
       - test: `go build ./internal/cliout/...` → clean

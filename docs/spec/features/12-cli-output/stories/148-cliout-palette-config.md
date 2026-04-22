@@ -79,14 +79,15 @@ if cfg.CLI.Palette == "" {
 }
 ```
 
-### `internal/config/bootstrap.go` — default config content
+### `internal/config/config.go` — default config template
 
-The `Bootstrap` function writes a default config when the file doesn't exist.
-Add the `[cli]` section to the default TOML content:
+The `Bootstrap` function writes the `defaultTemplate` string (top of
+`internal/config/config.go`, not a separate `bootstrap.go`) when the config
+file doesn't exist. Append the `[cli]` section to that constant:
 
 ```go
-const defaultConfigTOML = `# Spotnik configuration
-# ...existing sections...
+const defaultTemplate = `# Spotnik configuration
+# ...existing sections unchanged...
 
 [cli]
 # CLI palette: "auto" (default), "fixed", or "theme"
@@ -96,9 +97,6 @@ const defaultConfigTOML = `# Spotnik configuration
 palette = "auto"
 `
 ```
-
-(Find the existing `Bootstrap` or equivalent constant; append the `[cli]`
-section at the end of the template.)
 
 **Backward compatibility:** existing config files without `[cli]` get
 `cfg.CLI.Palette = ""` after decode, which `Load` clamps to `"auto"`. Their
@@ -126,11 +124,9 @@ func resolveCLIPalette(cfg *config.Config, w io.Writer) {
 
     var activeTheme theme.Theme
     if mode == cliout.ModeAuto || mode == cliout.ModeTheme {
-        // Best-effort theme load; nil on error falls back to fixed.
-        t, err := theme.Load(cfg.Theme)
-        if err == nil {
-            activeTheme = t
-        }
+        // theme.Load never errors — it falls back to the default theme internally.
+        // Preferences.Theme is the canonical config key for the active theme.
+        activeTheme = theme.Load(cfg.Preferences.Theme)
     }
 
     isTTY := cliout.IsTTY(w) // exported helper — see below
@@ -167,6 +163,15 @@ func Execute(version string) {
 **Gotcha:** `loadConfig()` triggers `config.Bootstrap` — it's safe to call
 unconditionally. The `err` branch (config file unreadable) keeps `cliout`
 defaulting to `Fixed` since `Use` is never called.
+
+### Config layout note
+
+The existing `Config` struct puts user-facing preferences under
+`cfg.Preferences` (theme, preset, visualizer). The new `CLI` section stays
+top-level (not under Preferences) because palette resolution is a runtime
+concern, not a user preference in the same sense. `cfg.CLI.Palette` is the
+access path; `cfg.Preferences.Theme` is still the access path for the theme
+ID consumed by `theme.Load`.
 
 ### `internal/cliout` — export `IsTTY` and `Resolve`
 
@@ -251,12 +256,12 @@ func TestResolveCLIPalette_fixedMode_usesFixed(t *testing.T) {
 
 func TestResolveCLIPalette_themeMode_usesThemeTokens(t *testing.T) {
     cfg := config.Default()
-    cfg.Theme = "black"
+    cfg.Preferences.Theme = "black"
     cfg.CLI.Palette = "theme"
     var buf bytes.Buffer
     resolveCLIPalette(cfg, &buf)
-    // Expect theme.NewBlack().Accent() to match current palette Accent.
-    th, _ := theme.Load("black")
+    // Expect theme.Load("black").Accent() to match current palette Accent.
+    th := theme.Load("black")
     assert.Equal(t, th.Accent(), cliout.CurrentForTest().Accent)
 }
 

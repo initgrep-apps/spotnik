@@ -158,13 +158,10 @@ func (h *SpinnerHandle) resolve(s Status, text string) {
         return
     }
 
-    // Print resolution as a standard Step.
-    if h.onTTY {
-        WriteInline(h.w, Step{Status: s, Text: text})
-    } else {
-        // Non-TTY: the "◌ <text>" line was printed at start; append the resolution.
-        WriteInline(h.w, Step{Status: s, Text: text})
-    }
+    // Print resolution as a standard Step. Same call for TTY (cursor was just
+    // restored above) and non-TTY (the "◌ <text>" start line stays; this appends
+    // the resolution below it).
+    WriteInline(h.w, Step{Status: s, Text: text})
 }
 
 // Package-level registry of active handles for SIGINT cleanup.
@@ -210,11 +207,11 @@ func installSIGINTHandler() {
     })
 }
 
-// Spinner.render is still unreachable — Spinner messages only flow through
-// StartSpinner (dynamic) or the Recorder (test capture). Keep the panic as a
-// safety net: if a caller ever passes Spinner{} to Write, that's a usage bug.
-func (s Spinner) renderForCapture() Spinner { return s }
 ```
+
+Spinner messages only flow through `StartSpinner` (dynamic) or the `Recorder`
+(test capture) — never through `Write`. `Spinner.render` stays as a panic to
+catch misuse.
 
 Update `message.go`: replace `Spinner.render` body:
 
@@ -608,7 +605,12 @@ validator wiring.)
       clear messages
 - [ ] All new tests in `internal/cliout/spinner_test.go`,
       `internal/cliout/prompt_test.go`, and `cmd/root_test.go` pass
-- [ ] `internal/cliout` coverage ≥ 90%
+- [ ] `internal/cliout` coverage ≥ 85% overall. `spinner.go` in isolation may
+      dip below 90% because the TTY redraw goroutine, cursor escape writes, and
+      SIGINT handler cannot be exercised under `SetTestMode(true)` — those
+      branches are covered manually (see the visual-check tasks below). All
+      other files (`message.go`, `render.go`, `builder.go`, `palette.go`,
+      `prompt.go`, `testing.go`) must each hit ≥ 90%.
 - [ ] `make ci` passes
 - [ ] Visual check: `bin/spotnik auth login` with valid client ID shows animated
       braille spinner on the "Waiting for authorization" line; Ctrl+C restores
@@ -669,6 +671,10 @@ validator wiring.)
       - test: `grep -c $'\r' /tmp/out.log` → 0; `grep -c $'\x1b' /tmp/out.log`
         → 0
 
-- [ ] Run `go test -cover ./internal/cliout/...` → coverage ≥ 90.0%
+- [ ] Run `go test -cover ./internal/cliout/...` → package coverage ≥ 85.0%.
+      Per-file coverage check via `go test -coverprofile=coverage.out
+      ./internal/cliout/...` + `go tool cover -func=coverage.out` shows
+      `spinner.go`-specific branches (run loop, cursor writes, SIGINT handler)
+      are the only exclusions; all other files ≥ 90%.
 
 - [ ] `make ci` → PASS

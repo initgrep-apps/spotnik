@@ -11,8 +11,15 @@ replaces every user-facing output composition in `cmd/root.go` with `cliout.*`
 calls and removes the local style vars + helpers (`cliGreen/cliRed/cliYellow/
 cliDim/cliAccentS/cliDimS/cliErrS/cliWarnS/cliWrap/cliOut/cliLine/cliKV`).
 
-Output must be **byte-identical** to what ships today — this is a pure refactor.
-Golden-file tests added in this story guard against regressions.
+Output matches what ships today except for one deliberate layout change: the
+`spotnik auth register` instructions drop the redirect URI onto its own line
+(accent-coloured) below the "Add this redirect URI:" step. This trades
+byte-identity for a readability win and removes inline style composition from
+the Steps body (see `runRegister` section below). Golden files added in this
+story lock the new layout; every other auth subcommand is byte-identical.
+
+The feature-level acceptance criterion in `feature.md` has been relaxed
+accordingly.
 
 **Depends on:** Story 146 (`internal/cliout` exists).
 
@@ -270,6 +277,7 @@ cmd/testdata/golden/
 ├── auth_status_not_authenticated.txt
 ├── auth_status_authenticated.txt
 ├── auth_status_expiring.txt
+├── auth_status_expiry_unreadable.txt
 ├── auth_login_no_clientid.txt
 ├── auth_register_instructions.txt
 ├── signed_in_launching.txt
@@ -301,6 +309,11 @@ func TestMain(m *testing.M) {
     os.Exit(m.Run())
 }
 ```
+
+**TestMain conflict:** before adding the snippet above, `grep -n "TestMain"
+cmd/root_test.go` — if one already exists, merge the `SetTestMode(true)` call
+into the existing body rather than declare a second. Go only allows one
+`TestMain` per package.
 
 New tests:
 
@@ -339,8 +352,9 @@ them — they provide behavioural coverage; golden files add layout coverage.
 - [ ] `cmd/root.go` imports `internal/cliout`
 - [ ] `cmd/root.go` does not import `lipgloss` (unless a non-CLI need emerges;
       `go vet ./cmd/...` → clean)
-- [ ] `cmd/testdata/golden/` contains ten `.txt` files covering the auth command
-      output states listed above
+- [ ] `cmd/testdata/golden/` contains eleven `.txt` files covering the auth
+      command output states listed above (includes
+      `auth_status_expiry_unreadable.txt` for the IsExpiringSoon-errored branch)
 - [ ] `go test ./cmd/... -v` → PASS (including new `TestGolden_*` tests)
 - [ ] `go test ./cmd/... -update` refreshes golden files; re-running without
       `-update` still passes
