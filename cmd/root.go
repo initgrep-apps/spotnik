@@ -63,36 +63,6 @@ func cliLine(w io.Writer, text string) {
 	_, _ = fmt.Fprintln(w, cliWrap.Render(text))
 }
 
-// cliSpin starts an animated braille spinner on the current output line and
-// returns a stop function. The stop function blocks until the goroutine exits.
-// Use this for the gap between CLI auth completion and TUI startup.
-func cliSpin(w io.Writer, label string) (stop func()) {
-	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	done := make(chan struct{})
-	stopped := make(chan struct{})
-	go func() {
-		defer close(stopped)
-		tick := time.NewTicker(80 * time.Millisecond)
-		defer tick.Stop()
-		i := 0
-		for {
-			select {
-			case <-done:
-				return
-			case <-tick.C:
-				_, _ = fmt.Fprintf(w, "\r  %s %s",
-					cliAccentS.Render(frames[i%len(frames)]),
-					label)
-				i++
-			}
-		}
-	}()
-	return func() {
-		close(done)
-		<-stopped
-	}
-}
-
 // cliKV renders aligned key-value pairs. Labels are dim; values are default foreground.
 func cliKV(pairs [][2]string) string {
 	maxKey := 0
@@ -586,12 +556,13 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 		return errAlreadyPrinted
 	}
 
-	// Authorization succeeded — confirm sign-in then spin while the TUI loads.
+	// Authorization succeeded — confirm sign-in and show a static indicator
+	// while the TUI initialises. A goroutine spinner cannot be used here:
+	// WithAltScreen() does not prevent the goroutine from writing into the
+	// TUI's alternate-screen buffer once Bubble Tea takes over stdout.
 	cliOut(w, cliAccentS.Render("◉")+" Signed in")
-	stop := cliSpin(w, cliDimS.Render("Launching spotnik…"))
-	err = runApp(c, []string{})
-	stop()
-	return err
+	cliLine(w, cliDimS.Render("⠿ Launching spotnik…"))
+	return runApp(c, []string{})
 }
 
 // runAuthLogin forces a fresh re-authentication flow.
@@ -626,10 +597,8 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 	}
 
 	cliOut(c.OutOrStdout(), cliAccentS.Render("◉")+" Signed in")
-	stop := cliSpin(c.OutOrStdout(), cliDimS.Render("Launching spotnik…"))
-	err = runApp(c, []string{})
-	stop()
-	return err
+	cliLine(c.OutOrStdout(), cliDimS.Render("⠿ Launching spotnik…"))
+	return runApp(c, []string{})
 }
 
 // runApp is the main command handler. It loads config, checks auth state,
