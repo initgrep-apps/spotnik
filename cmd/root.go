@@ -41,6 +41,11 @@ var (
 	cliWrap = lipgloss.NewStyle().Padding(1, 2)
 )
 
+// errAlreadyPrinted is returned when a RunE handler has already printed a
+// styled error block to stderr. Execute() recognizes it and exits 1 without
+// printing again.
+var errAlreadyPrinted = errors.New("")
+
 // cliOut writes lines joined vertically, wrapped in the standard CLI padding.
 func cliOut(w io.Writer, lines ...string) {
 	block := lipgloss.JoinVertical(lipgloss.Left, lines...)
@@ -89,7 +94,10 @@ func Execute(version string) {
 	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		// cobra is silenced (SilenceErrors=true); we print once, styled.
-		_, _ = fmt.Fprintln(os.Stderr, cliWrap.Render(cliErrS.Render("✗")+" "+err.Error()))
+		// errAlreadyPrinted means the handler already wrote a styled block to stderr.
+		if !errors.Is(err, errAlreadyPrinted) {
+			_, _ = fmt.Fprintln(os.Stderr, cliWrap.Render(cliErrS.Render("✗")+" "+err.Error()))
+		}
 		os.Exit(1)
 	}
 }
@@ -244,8 +252,20 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 			return nil
 		}
 
-		expiringSoon, _ := store.IsExpiringSoon()
-		expiry, expiryErr := store.GetExpiry()
+		expiringSoon, expiryErr := store.IsExpiringSoon()
+		if expiryErr != nil {
+			// Cannot read token state — show warning, don't claim healthy.
+			cliOut(w,
+				cliWarnS.Render("⚠")+" Spotnik  session state unknown",
+				"",
+				cliDimS.Render("Could not read token state from keychain"),
+				"",
+				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate",
+			)
+			return nil
+		}
+		var expiry time.Time
+		expiry, expiryErr = store.GetExpiry()
 
 		var expiryVal string
 		if expiryErr == nil {
@@ -515,14 +535,16 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	store := keychain.NewKeychainTokenStore()
 	if err := RunAuthFlow(cfg, store, "", w); err != nil {
-		cliOut(w,
-			cliErrS.Render("✗")+" Authentication failed",
+		cliOut(c.ErrOrStderr(),
+			cliErrS.Render("✗")+" Authorization failed",
 			"",
-			cliKV([][2]string{{"Reason", err.Error()}}),
+			cliKV([][2]string{
+				{"Reason", err.Error()},
+			}),
 			"",
-			cliAccentS.Render("→")+" Run spotnik auth login to try again",
+			cliAccentS.Render("→")+" Run spotnik auth register to try again",
 		)
-		os.Exit(1)
+		return errAlreadyPrinted
 	}
 
 	// Authorization succeeded — print confirmation and launch the TUI.
@@ -542,29 +564,31 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 		return err
 	}
 	if cfg.ClientID == "" {
-		cliOut(c.OutOrStdout(),
+		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authentication failed",
 			"",
 			cliKV([][2]string{{"Reason", "no client_id configured"}}),
 			"",
 			cliAccentS.Render("→")+" Run spotnik auth register to set up your Spotify app",
 		)
-		os.Exit(1)
+		return errAlreadyPrinted
 	}
 
 	store := keychain.NewKeychainTokenStore()
 	// Delete existing tokens to force a fresh login.
-	_ = store.Delete()
+	if err := store.Delete(); err != nil {
+		return fmt.Errorf("clearing existing tokens: %w", err)
+	}
 
 	if err := RunAuthFlow(cfg, store, "", c.OutOrStdout()); err != nil {
-		cliOut(c.OutOrStdout(),
+		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authentication failed",
 			"",
 			cliKV([][2]string{{"Reason", err.Error()}}),
 			"",
 			cliAccentS.Render("→")+" Run spotnik auth login to try again",
 		)
-		os.Exit(1)
+		return errAlreadyPrinted
 	}
 
 	cliOut(c.OutOrStdout(),

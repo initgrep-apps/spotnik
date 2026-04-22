@@ -253,8 +253,9 @@ func TestAuthStatus_RegisteredNotAuthenticated(t *testing.T) {
 	assert.Contains(t, output, "present")
 }
 
-// TestAuthStatus_ExpiredExpiryUnknown verifies status when access token exists
-// but expiry cannot be parsed.
+// TestAuthStatus_ExpiredExpiryUnknown verifies that when the access token exists but
+// the expiry key is unparseable, PrintAuthStatus shows a "session state unknown" warning
+// rather than claiming the session is healthy.
 func TestAuthStatus_ExpiredExpiryUnknown(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
@@ -267,7 +268,10 @@ func TestAuthStatus_ExpiredExpiryUnknown(t *testing.T) {
 	var buf bytes.Buffer
 	err := cmd.PrintAuthStatus(store, path, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "authenticated")
+	output := buf.String()
+	assert.Contains(t, output, "session state unknown")
+	assert.Contains(t, output, "Could not read token state from keychain")
+	assert.Contains(t, output, "spotnik auth login")
 }
 
 // TestAuthStatus_ExpiringSoon verifies that the "session expiring" state appears
