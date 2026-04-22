@@ -617,17 +617,22 @@ func TestAuthForgetCmd_noClientID_noError(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// notifyWriter wraps an io.Writer and signals written on the first Write call.
-// Used in TestRunAuthFlow_writesURLToWriter to avoid time.Sleep-based sync.
+// notifyWriter wraps an io.Writer and signals written when a Write call whose
+// content contains trigger is observed. Used in TestRunAuthFlow_writesURLToWriter
+// to avoid time.Sleep-based sync and to survive the split of what was previously
+// a single atomic Write into multiple sequential calls.
 type notifyWriter struct {
 	w       io.Writer
 	once    sync.Once
 	written chan struct{}
+	trigger []byte // close written when this substring appears in a Write payload
 }
 
 func (nw *notifyWriter) Write(p []byte) (int, error) {
 	n, err := nw.w.Write(p)
-	nw.once.Do(func() { close(nw.written) })
+	if bytes.Contains(p, nw.trigger) {
+		nw.once.Do(func() { close(nw.written) })
+	}
 	return n, err
 }
 
@@ -657,7 +662,7 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 	}
 
 	pr, pw := io.Pipe()
-	nw := &notifyWriter{w: pw, written: make(chan struct{})}
+	nw := &notifyWriter{w: pw, written: make(chan struct{}), trigger: []byte("Waiting for callback")}
 
 	// Drain the pipe into a buffer; stops when pr is closed.
 	outputCh := make(chan string, 1)

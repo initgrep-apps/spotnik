@@ -519,9 +519,8 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 		cliKV([][2]string{
 			{"1", "Go to developer.spotify.com/dashboard"},
 			{"2", "Create or select a Spotify app"},
-			{"3", "Add this redirect URI to your app:"},
+			{"3", "Add this redirect URI: " + cliAccentS.Render(redirectURI)},
 		}),
-		"   "+redirectURI,
 	)
 	_, _ = fmt.Fprint(w, "  Client ID: ")
 
