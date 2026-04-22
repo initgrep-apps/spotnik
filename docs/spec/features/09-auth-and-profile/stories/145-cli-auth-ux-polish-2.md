@@ -1,7 +1,7 @@
 ---
 title: "CLI — Auth UX Polish Round 2: TUI Launch, Error Dedup, Structured Output"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background

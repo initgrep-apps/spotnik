@@ -23,6 +23,51 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// CLI output colours — fixed, not theme-dependent.
+// AdaptiveColor keeps output readable on light terminals.
+var (
+	cliGreen  = lipgloss.AdaptiveColor{Dark: "#1DB954", Light: "#1A8C41"}
+	cliRed    = lipgloss.AdaptiveColor{Dark: "#FF5555", Light: "#CC0000"}
+	cliYellow = lipgloss.AdaptiveColor{Dark: "#F1C40F", Light: "#B8860B"}
+	cliDim    = lipgloss.AdaptiveColor{Dark: "#6C7083", Light: "#888888"}
+)
+
+var (
+	cliAccentS = lipgloss.NewStyle().Foreground(cliGreen).Bold(true)
+	cliDimS    = lipgloss.NewStyle().Foreground(cliDim)
+	cliErrS    = lipgloss.NewStyle().Foreground(cliRed).Bold(true)
+	cliWarnS   = lipgloss.NewStyle().Foreground(cliYellow)
+	// cliWrap pads every top-level CLI output block.
+	cliWrap = lipgloss.NewStyle().Padding(1, 2)
+)
+
+// errAlreadyPrinted is returned when a RunE handler has already printed a
+// styled error block to stderr. Execute() recognizes it and exits 1 without
+// printing again.
+var errAlreadyPrinted = errors.New("")
+
+// cliOut writes lines joined vertically, wrapped in the standard CLI padding.
+func cliOut(w io.Writer, lines ...string) {
+	block := lipgloss.JoinVertical(lipgloss.Left, lines...)
+	_, _ = fmt.Fprintln(w, cliWrap.Render(block))
+}
+
+// cliKV renders aligned key-value pairs. Labels are dim; values are default foreground.
+func cliKV(pairs [][2]string) string {
+	maxKey := 0
+	for _, p := range pairs {
+		if len(p[0]) > maxKey {
+			maxKey = len(p[0])
+		}
+	}
+	lines := make([]string, len(pairs))
+	for i, p := range pairs {
+		pad := strings.Repeat(" ", maxKey-len(p[0]))
+		lines[i] = cliDimS.Render(p[0]+pad) + "  " + p[1]
+	}
+	return strings.Join(lines, "\n")
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "spotnik",
 	Short: "A terminal Spotify client",
@@ -48,12 +93,21 @@ func Execute(version string) {
 	appVersion = version
 	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		// cobra is silenced (SilenceErrors=true); we print once, styled.
+		// errAlreadyPrinted means the handler already wrote a styled block to stderr.
+		if !errors.Is(err, errAlreadyPrinted) {
+			_, _ = fmt.Fprintln(os.Stderr, cliWrap.Render(cliErrS.Render("✗")+" "+err.Error()))
+		}
 		os.Exit(1)
 	}
 }
 
 func init() {
+	// Silence cobra's built-in error/usage printing so Execute() owns the single
+	// styled print. SilenceUsage prevents usage output on runtime errors (wrong
+	// state, not wrong flags).
+	rootCmd.SilenceErrors = true
+
 	// Register the auth subcommand and its children.
 	rootCmd.AddCommand(authCmd)
 	authCmd.AddCommand(authRegisterCmd)
@@ -78,8 +132,9 @@ var authCmd = &cobra.Command{
 
 // authRegisterCmd is the `spotnik auth register` subcommand.
 var authRegisterCmd = &cobra.Command{
-	Use:   "register",
-	Short: "Set up your Spotify app credentials and authenticate",
+	Use:          "register",
+	Short:        "Set up your Spotify app credentials and authenticate",
+	SilenceUsage: true,
 	Long: "Show setup instructions, prompt for your Spotify Developer app client ID, " +
 		"save it to config, and run the OAuth authorization flow.",
 	RunE: func(c *cobra.Command, args []string) error {
@@ -89,44 +144,54 @@ var authRegisterCmd = &cobra.Command{
 
 // authLoginCmd is the `spotnik auth login` subcommand.
 var authLoginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Re-authenticate with Spotify (clears existing tokens)",
-	Long:  "Force a fresh Spotify authentication, overwriting any existing stored tokens. Requires client_id to be set in config.",
-	RunE:  runAuthLogin,
+	Use:          "login",
+	Short:        "Re-authenticate with Spotify (clears existing tokens)",
+	SilenceUsage: true,
+	Long:         "Force a fresh Spotify authentication, overwriting any existing stored tokens. Requires client_id to be set in config.",
+	RunE:         runAuthLogin,
 }
 
 // authLogoutCmd is the `spotnik auth logout` subcommand.
 var authLogoutCmd = &cobra.Command{
-	Use:   "logout",
-	Short: "Remove stored Spotify tokens (keeps client_id)",
+	Use:          "logout",
+	Short:        "Remove stored Spotify tokens (keeps client_id)",
+	SilenceUsage: true,
 	RunE: func(c *cobra.Command, args []string) error {
 		store := keychain.NewKeychainTokenStore()
 		if err := LogoutTokens(store); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(c.OutOrStdout(), "Logged out. Stored tokens removed.")
+		cliOut(c.OutOrStdout(), cliAccentS.Render("✓")+" Signed out")
 		return nil
 	},
 }
 
 // authForgetCmd is the `spotnik auth forget` subcommand.
 var authForgetCmd = &cobra.Command{
-	Use:   "forget",
-	Short: "Remove stored tokens and client_id from config",
+	Use:          "forget",
+	Short:        "Remove stored tokens and client_id from config",
+	SilenceUsage: true,
 	RunE: func(c *cobra.Command, args []string) error {
 		store := keychain.NewKeychainTokenStore()
 		if err := RunForget(store, config.DefaultConfigPath()); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(c.OutOrStdout(), "Session ended. Client ID removed from config.\nRun 'spotnik auth register' to set up again.")
+		cliOut(c.OutOrStdout(),
+			cliAccentS.Render("✓")+" Session ended",
+			"",
+			cliDimS.Render("Tokens and client ID removed"),
+			"",
+			cliAccentS.Render("→")+" Run spotnik auth register to set up again",
+		)
 		return nil
 	},
 }
 
 // authStatusCmd is the `spotnik auth status` subcommand.
 var authStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show current authentication status",
+	Use:          "status",
+	Short:        "Show current authentication status",
+	SilenceUsage: true,
 	RunE: func(c *cobra.Command, args []string) error {
 		store := keychain.NewKeychainTokenStore()
 		return PrintAuthStatus(store, config.DefaultConfigPath(), c.OutOrStdout())
@@ -154,67 +219,84 @@ func RunForget(store keychain.TokenStore, configPath string) error {
 	return nil
 }
 
-// PrintAuthStatus writes current auth + registration state to w using lipgloss
-// styling. Labels are muted, values are bold primary, status uses success/warning
-// colours. Always uses the black theme so colours are safe in any terminal.
+// PrintAuthStatus writes current auth + registration state to w using the shared CLI
+// style vars. Always uses the standard CLI colour palette (not theme-dependent).
 // Exported for testing.
 func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) error {
-	th := theme.Load(theme.DefaultThemeID)
-
-	labelStyle := lipgloss.NewStyle().Foreground(th.TextMuted())
-	valueStyle := lipgloss.NewStyle().Foreground(th.TextPrimary()).Bold(true)
-	okStyle := lipgloss.NewStyle().Foreground(th.Success())
-	warnStyle := lipgloss.NewStyle().Foreground(th.Warning())
-
-	// Load config to check whether a client_id is present.
 	cfg, err := loadConfigFromPath(configPath)
 	if err != nil {
-		// Non-fatal: continue and just report no client_id.
 		cfg = config.Default()
 	}
 
-	if cfg.ClientID != "" {
-		_, _ = fmt.Fprintf(w, "%s  %s\n",
-			labelStyle.Render("Client ID:"),
-			valueStyle.Render("present"),
-		)
-	} else {
-		_, _ = fmt.Fprintf(w, "%s  %s\n",
-			labelStyle.Render("Client ID:"),
-			warnStyle.Render("not set  (run: spotnik auth register)"),
-		)
-	}
-
-	access, err := store.Get(keychain.KeyAccessToken)
-	if err != nil || access == "" {
-		_, _ = fmt.Fprintf(w, "%s  %s\n",
-			labelStyle.Render("Status:  "),
-			labelStyle.Render("not authenticated"),
+	switch cfg.ClientID {
+	case "":
+		// Not registered — no client_id in config.
+		cliOut(w,
+			cliDimS.Render("◎ Spotnik  ")+"not registered",
+			"",
+			cliAccentS.Render("→")+" Run spotnik auth register to connect your Spotify account",
 		)
 		return nil
+
+	default:
+		access, _ := store.Get(keychain.KeyAccessToken)
+		if access == "" {
+			// Registered but not authenticated.
+			cliOut(w,
+				cliDimS.Render("◎ Spotnik  ")+"not authenticated",
+				"",
+				cliKV([][2]string{{"Client ID", "present"}}),
+				"",
+				cliAccentS.Render("→")+" Run spotnik auth login to connect",
+			)
+			return nil
+		}
+
+		expiringSoon, expiryErr := store.IsExpiringSoon()
+		if expiryErr != nil {
+			// Cannot read token state — show warning, don't claim healthy.
+			cliOut(w,
+				cliWarnS.Render("⚠")+" Spotnik  session state unknown",
+				"",
+				cliDimS.Render("Could not read token state from keychain"),
+				"",
+				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate",
+			)
+			return nil
+		}
+		var expiry time.Time
+		expiry, expiryErr = store.GetExpiry()
+
+		var expiryVal string
+		if expiryErr == nil {
+			expiryVal = expiry.Format("Mon, 02 Jan 2006 15:04 UTC")
+		}
+		if expiringSoon {
+			expiryVal += "  ·  auto-refresh pending"
+		}
+
+		kvPairs := [][2]string{{"Client ID", "present"}}
+		if expiryVal != "" {
+			kvPairs = append(kvPairs, [2]string{"Expires", expiryVal})
+		}
+
+		if expiringSoon {
+			cliOut(w,
+				cliWarnS.Render("⚠")+" Spotnik  session expiring",
+				"",
+				cliKV(kvPairs),
+				"",
+				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate if auto-refresh fails",
+			)
+		} else {
+			cliOut(w,
+				cliAccentS.Render("◉")+" Spotnik  authenticated",
+				"",
+				cliKV(kvPairs),
+			)
+		}
+		return nil
 	}
-
-	_, _ = fmt.Fprintf(w, "%s  %s\n",
-		labelStyle.Render("Status:  "),
-		okStyle.Render("authenticated"),
-	)
-
-	expiry, err := store.GetExpiry()
-	if err == nil {
-		_, _ = fmt.Fprintf(w, "%s  %s\n",
-			labelStyle.Render("Expires: "),
-			labelStyle.Render(expiry.Format(time.RFC1123)),
-		)
-	}
-
-	expiringSoon, _ := store.IsExpiringSoon()
-	if expiringSoon {
-		_, _ = fmt.Fprintf(w, "%s\n",
-			warnStyle.Render("⚠  Token expiring soon — will refresh automatically"),
-		)
-	}
-
-	return nil
 }
 
 // CheckAuthState returns (needsRegister, needsAuth).
@@ -293,21 +375,22 @@ func loadConfigFromPath(path string) (*config.Config, error) {
 func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBaseURL string) error {
 	access, err := store.Get(keychain.KeyAccessToken)
 	if err != nil || access == "" {
-		// No token — start auth flow.
-		return RunAuthFlow(cfg, store, tokenBaseURL)
+		// No token — start auth flow. Output goes to io.Discard because
+		// EnsureAuthenticated is called from the TUI path, not the CLI path.
+		return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 	}
 
 	expiringSoon, err := store.IsExpiringSoon()
 	if err != nil {
 		// Cannot determine expiry — start fresh auth.
-		return RunAuthFlow(cfg, store, tokenBaseURL)
+		return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 	}
 
 	if expiringSoon {
 		// Proactively refresh the token before it expires.
 		refreshToken, err := store.Get(keychain.KeyRefreshToken)
 		if err != nil || refreshToken == "" {
-			return RunAuthFlow(cfg, store, tokenBaseURL)
+			return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 		}
 
 		// Refresh using the configured token endpoint.
@@ -316,7 +399,7 @@ func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBas
 				// Refresh token rejected — delete tokens and force re-auth.
 				fmt.Fprintln(os.Stderr, "Session expired. Please re-authenticate.")
 				_ = store.Delete()
-				return RunAuthFlow(cfg, store, tokenBaseURL)
+				return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 			}
 			return fmt.Errorf("refreshing token: %w", err)
 		}
@@ -329,8 +412,9 @@ func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBas
 // It generates PKCE credentials, starts the local callback server on cfg.CallbackPort,
 // opens the browser, waits for the callback, and exchanges the code for tokens.
 // The tokenBaseURL parameter allows tests to override the Spotify token endpoint.
+// w receives progress output (URL block, step confirmations). Pass io.Discard for silent operation.
 // Exported for testing.
-func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL string) error {
+func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL string, w io.Writer) error {
 	// Generate PKCE verifier and challenge.
 	verifier, err := api.GenerateCodeVerifier()
 	if err != nil {
@@ -351,7 +435,12 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	authURL := api.BuildAuthURL(cfg.ClientID, redirectURI, challenge, api.SpotifyScopes)
 
 	// Print auth URL for the CLI auth subcommand.
-	fmt.Printf("\nVisit this URL to authorize:\n  %s\n\nWaiting for authorization...\n", authURL)
+	cliOut(w,
+		cliDimS.Render("Visit this URL to authorize:"),
+		authURL,
+		"",
+		cliDimS.Render("Waiting for callback…"),
+	)
 
 	// Open browser (best-effort — failure does not abort auth).
 	if err := api.OpenBrowser(authURL); err != nil {
@@ -369,6 +458,8 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("authorization failed: %w", result.Err)
 		}
 
+		_, _ = fmt.Fprintln(w, cliWrap.Render(cliAccentS.Render("✓")+" Browser authentication complete"))
+
 		// Exchange code for tokens using the configured endpoint.
 		_, err := api.ExchangeCode(
 			context.Background(),
@@ -384,6 +475,8 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
 
+		_, _ = fmt.Fprintln(w, cliWrap.Render(cliAccentS.Render("✓")+" Token exchange successful"))
+
 		return nil
 
 	case <-ctx.Done():
@@ -396,18 +489,29 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 func runRegister(c *cobra.Command, r io.Reader) error {
 	w := c.OutOrStdout()
 
-	_, _ = fmt.Fprintln(w, "╭─────────────────────────────────────────────────────╮")
-	_, _ = fmt.Fprintln(w, "│  Spotnik — first-time setup                         │")
-	_, _ = fmt.Fprintln(w, "│                                                     │")
-	_, _ = fmt.Fprintln(w, "│  1. Go to https://developer.spotify.com/dashboard   │")
-	_, _ = fmt.Fprintln(w, "│  2. Create (or pick) a Spotify app.                 │")
-	_, _ = fmt.Fprintln(w, "│  3. In Redirect URIs, add:                          │")
-	_, _ = fmt.Fprintln(w, "│     http://127.0.0.1:8888/callback                  │")
-	_, _ = fmt.Fprintln(w, "│     (change the port if you set callback_port)      │")
-	_, _ = fmt.Fprintln(w, "╰─────────────────────────────────────────────────────╯")
-	_, _ = fmt.Fprintln(w, "")
+	// Load config first so we know the actual callback port to display.
+	configPath := config.DefaultConfigPath()
+	if err := config.Bootstrap(configPath); err != nil {
+		return fmt.Errorf("bootstrapping config: %w", err)
+	}
+	cfg, err := loadConfigFromPath(configPath)
+	if err != nil {
+		cfg = config.Default()
+	}
 
-	_, _ = fmt.Fprint(w, "Enter your Spotify client_id: ")
+	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", cfg.CallbackPort)
+
+	cliOut(w,
+		cliDimS.Render("◎ Spotnik  ")+"not registered",
+		"",
+		cliKV([][2]string{
+			{"1", "Go to developer.spotify.com/dashboard"},
+			{"2", "Create or select a Spotify app"},
+			{"3", "Add this redirect URI to your app:"},
+		}),
+		"   "+redirectURI,
+	)
+	_, _ = fmt.Fprint(w, "  Client ID: ")
 
 	scanner := bufio.NewScanner(r)
 	scanner.Scan()
@@ -419,45 +523,80 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 		return fmt.Errorf("client_id cannot be empty")
 	}
 
-	configPath := config.DefaultConfigPath()
-	if err := config.Bootstrap(configPath); err != nil {
-		return fmt.Errorf("bootstrapping config: %w", err)
-	}
 	if err := config.SetClientID(configPath, clientID); err != nil {
 		return fmt.Errorf("saving client_id to config: %w", err)
 	}
-	_, _ = fmt.Fprintln(w, "client_id saved to ~/.config/spotnik/config.toml")
+	_, _ = fmt.Fprintln(w, cliWrap.Render(cliAccentS.Render("✓")+" Client ID saved"))
 
-	cfg, err := loadConfigFromPath(configPath)
+	cfg, err = loadConfigFromPath(configPath)
 	if err != nil {
 		return err
 	}
 
 	store := keychain.NewKeychainTokenStore()
-	if err := RunAuthFlow(cfg, store, ""); err != nil {
-		return err
+	if err := RunAuthFlow(cfg, store, "", w); err != nil {
+		cliOut(c.ErrOrStderr(),
+			cliErrS.Render("✗")+" Authorization failed",
+			"",
+			cliKV([][2]string{
+				{"Reason", err.Error()},
+			}),
+			"",
+			cliAccentS.Render("→")+" Run spotnik auth register to try again",
+		)
+		return errAlreadyPrinted
 	}
-	// Authorization succeeded — launch the TUI immediately so the user lands in the app.
-	_, _ = fmt.Fprintln(w, "Authorization complete. Launching spotnik...")
+
+	// Authorization succeeded — print confirmation and launch the TUI.
+	cliOut(w,
+		cliAccentS.Render("◉")+" Signed in",
+		"",
+		cliAccentS.Render("→")+" Launching spotnik…",
+	)
 	return runApp(c, []string{})
 }
 
 // runAuthLogin forces a fresh re-authentication flow.
 // Errors if no client_id is set in config.
-func runAuthLogin(_ *cobra.Command, _ []string) error {
+func runAuthLogin(c *cobra.Command, _ []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 	if cfg.ClientID == "" {
-		return fmt.Errorf("no client_id in config — run: spotnik auth register")
+		cliOut(c.ErrOrStderr(),
+			cliErrS.Render("✗")+" Authentication failed",
+			"",
+			cliKV([][2]string{{"Reason", "no client_id configured"}}),
+			"",
+			cliAccentS.Render("→")+" Run spotnik auth register to set up your Spotify app",
+		)
+		return errAlreadyPrinted
 	}
 
 	store := keychain.NewKeychainTokenStore()
 	// Delete existing tokens to force a fresh login.
-	_ = store.Delete()
+	if err := store.Delete(); err != nil {
+		return fmt.Errorf("clearing existing tokens: %w", err)
+	}
 
-	return RunAuthFlow(cfg, store, "")
+	if err := RunAuthFlow(cfg, store, "", c.OutOrStdout()); err != nil {
+		cliOut(c.ErrOrStderr(),
+			cliErrS.Render("✗")+" Authentication failed",
+			"",
+			cliKV([][2]string{{"Reason", err.Error()}}),
+			"",
+			cliAccentS.Render("→")+" Run spotnik auth login to try again",
+		)
+		return errAlreadyPrinted
+	}
+
+	cliOut(c.OutOrStdout(),
+		cliAccentS.Render("◉")+" Signed in",
+		"",
+		cliAccentS.Render("→")+" Launching spotnik…",
+	)
+	return runApp(c, []string{})
 }
 
 // runApp is the main command handler. It loads config, checks auth state,
@@ -516,22 +655,16 @@ func loadConfig() (*config.Config, error) {
 // It directs the user to run `spotnik auth register`.
 // Exported for testing.
 func PrintMissingClientIDInstructions(w io.Writer) error {
-	lines := []string{
-		"╭─────────────────────────────────────────────────────╮",
-		"│  Spotnik setup required                             │",
-		"│                                                     │",
-		"│  1. Create a Spotify app:                           │",
-		"│     https://developer.spotify.com/dashboard         │",
-		"│                                                     │",
-		"│  2. Run: spotnik auth register                      │",
-		"│     Follow the prompts to set client_id and auth.   │",
-		"╰─────────────────────────────────────────────────────╯",
-	}
-	for _, line := range lines {
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			return err
-		}
-	}
+	cliOut(w,
+		cliDimS.Render("◎ Spotnik  ")+"not registered",
+		"",
+		cliKV([][2]string{
+			{"1", "Create a Spotify app at developer.spotify.com/dashboard"},
+			{"2", "Run: spotnik auth register"},
+		}),
+		"",
+		cliAccentS.Render("→")+" Follow the prompts to set client_id and authenticate",
+	)
 	return nil
 }
 

@@ -129,3 +129,15 @@ Items to log:
 
 Items to log:
 1. In `internal/app/routing.go` (and `auth.go`) copy handler: only set `onboardingCopied = true` on successful clipboard copy, show a different hint on failure.
+
+---
+
+## CLI auth UX — minor test and style gaps
+**Found:** 2026-04-22 | **Source:** PR #189 Review
+**Feature:** 09-auth-and-profile
+
+Items to log:
+1. `TestRunAuthFlow_writesURLToWriter` uses `time.Sleep(200ms)` to synchronize — fragile on slow CI; goroutine running RunAuthFlow is not terminated by the test. Consider a channel-based sync or accept as known pattern.
+2. No structural test verifying `rootCmd.SilenceErrors = true` and `SilenceUsage: true` on all five auth subcommands. A regression here would re-introduce double error printing.
+3. `fmt.Fprintln(os.Stderr, "Session expired. Please re-authenticate.")` in `EnsureAuthenticated` (cmd/root.go) is unstyled — inconsistent with the PR's styled CLI output system.
+4. `authLogoutCmd` and `authForgetCmd` styled success lines (`✓ Signed out`, `✓ Session ended`) are not captured by any test — the store is wired unconditionally inside the handler, making injection difficult without refactoring.
