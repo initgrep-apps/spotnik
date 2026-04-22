@@ -37,8 +37,10 @@ var (
 	cliDimS    = lipgloss.NewStyle().Foreground(cliDim)
 	cliErrS    = lipgloss.NewStyle().Foreground(cliRed).Bold(true)
 	cliWarnS   = lipgloss.NewStyle().Foreground(cliYellow)
-	// cliWrap pads every top-level CLI output block.
-	cliWrap = lipgloss.NewStyle().Padding(1, 2)
+	// cliWrap applies left+right indentation to all CLI output. No top/bottom
+	// padding — cliOut inserts a single leading blank line explicitly so that
+	// adjacent cliLine calls remain compact while cliOut sections are separated.
+	cliWrap = lipgloss.NewStyle().Padding(0, 2)
 )
 
 // errAlreadyPrinted is returned when a RunE handler has already printed a
@@ -46,19 +48,19 @@ var (
 // printing again.
 var errAlreadyPrinted = errors.New("")
 
-// cliOut writes lines joined vertically, wrapped in the standard CLI padding.
+// cliOut writes a blank line then the joined lines with standard left+right
+// indentation. The leading blank separates output sections without adding a
+// trailing blank that would double-space adjacent cliLine progress output.
 func cliOut(w io.Writer, lines ...string) {
 	block := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	_, _ = fmt.Fprintln(w, cliWrap.Render(block))
+	_, _ = fmt.Fprintln(w, "\n"+cliWrap.Render(block))
 }
 
-// cliLine writes a single inline progress line with left-only indentation.
-// Use this for sequential step output within a flow where top/bottom blank
-// lines from cliOut/cliWrap would break the compact sequence.
-var cliIndent = lipgloss.NewStyle().PaddingLeft(2)
-
+// cliLine writes a single inline progress line with the standard indentation
+// and no leading/trailing blank lines. Use for sequential step output where
+// top/bottom spacing from cliOut would break the compact sequence.
 func cliLine(w io.Writer, text string) {
-	_, _ = fmt.Fprintln(w, cliIndent.Render(text))
+	_, _ = fmt.Fprintln(w, cliWrap.Render(text))
 }
 
 // cliKV renders aligned key-value pairs. Labels are dim; values are default foreground.
@@ -105,7 +107,7 @@ func Execute(version string) {
 		// cobra is silenced (SilenceErrors=true); we print once, styled.
 		// errAlreadyPrinted means the handler already wrote a styled block to stderr.
 		if !errors.Is(err, errAlreadyPrinted) {
-			_, _ = fmt.Fprintln(os.Stderr, cliWrap.Render(cliErrS.Render("✗")+" "+err.Error()))
+			_, _ = fmt.Fprintln(os.Stderr, "\n"+cliWrap.Render(cliErrS.Render("✗")+" "+err.Error()))
 		}
 		os.Exit(1)
 	}
@@ -213,7 +215,7 @@ func PrintForgetSuccess(w io.Writer) {
 	cliOut(w,
 		cliAccentS.Render("✓")+" Session ended",
 		cliDimS.Render("Tokens and client ID removed"),
-		cliAccentS.Render("→")+" Run spotnik auth register to set up again",
+		cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to set up again",
 	)
 }
 
@@ -252,7 +254,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 		// Not registered — no client_id in config.
 		cliOut(w,
 			cliDimS.Render("◎ Spotnik  ")+"not registered",
-			cliAccentS.Render("→")+" Run spotnik auth register to connect your Spotify account",
+			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to connect your Spotify account",
 		)
 		return nil
 
@@ -263,7 +265,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 			cliOut(w,
 				cliDimS.Render("◎ Spotnik  ")+"not authenticated",
 				cliKV([][2]string{{"Client ID", "present"}}),
-				cliAccentS.Render("→")+" Run spotnik auth login to connect",
+				cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to connect",
 			)
 			return nil
 		}
@@ -274,7 +276,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 			cliOut(w,
 				cliWarnS.Render("⚠")+" Spotnik  session state unknown",
 				cliDimS.Render("Could not read token state from keychain"),
-				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate",
+				cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to re-authenticate",
 			)
 			return nil
 		}
@@ -298,7 +300,7 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 			cliOut(w,
 				cliWarnS.Render("⚠")+" Spotnik  session expiring",
 				cliKV(kvPairs),
-				cliAccentS.Render("→")+" Run spotnik auth login to re-authenticate if auto-refresh fails",
+				cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to re-authenticate if auto-refresh fails",
 			)
 		} else {
 			cliOut(w,
@@ -408,7 +410,7 @@ func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBas
 		if err := api.Refresh(context.Background(), http.DefaultClient, tokenBaseURL, refreshToken, cfg.ClientID, store); err != nil {
 			if errors.Is(err, api.ErrInvalidGrant) {
 				// Refresh token rejected — delete tokens and force re-auth.
-				_, _ = fmt.Fprintln(os.Stderr, cliWrap.Render(cliWarnS.Render("⚠")+" Session expired — please re-authenticate"))
+				_, _ = fmt.Fprintln(os.Stderr, "\n"+cliWrap.Render(cliWarnS.Render("⚠")+" Session expired — please re-authenticate"))
 				_ = store.Delete()
 				return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 			}
@@ -549,7 +551,7 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 			cliKV([][2]string{
 				{"Reason", err.Error()},
 			}),
-			cliAccentS.Render("→")+" Run spotnik auth register to try again",
+			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to try again",
 		)
 		return errAlreadyPrinted
 	}
@@ -573,7 +575,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authentication failed",
 			cliKV([][2]string{{"Reason", "no client_id configured"}}),
-			cliAccentS.Render("→")+" Run spotnik auth register to set up your Spotify app",
+			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to set up your Spotify app",
 		)
 		return errAlreadyPrinted
 	}
@@ -588,7 +590,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 		cliOut(c.ErrOrStderr(),
 			cliErrS.Render("✗")+" Authentication failed",
 			cliKV([][2]string{{"Reason", err.Error()}}),
-			cliAccentS.Render("→")+" Run spotnik auth login to try again",
+			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to try again",
 		)
 		return errAlreadyPrinted
 	}
