@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -60,6 +61,19 @@ func TestRootCmd_HasAuthSubcommand(t *testing.T) {
 		}
 	}
 	assert.True(t, authFound, "auth subcommand should be registered")
+}
+
+// TestSilenceFlags verifies that rootCmd.SilenceErrors=true and that every auth
+// subcommand has SilenceUsage=true. A regression here would re-introduce double
+// error printing (cobra's default + Execute's styled block).
+func TestSilenceFlags(t *testing.T) {
+	root := cmd.RootCommand()
+	assert.True(t, root.SilenceErrors, "rootCmd must have SilenceErrors=true to prevent double error printing")
+	authCmd, _, err := root.Find([]string{"auth"})
+	require.NoError(t, err)
+	for _, sub := range authCmd.Commands() {
+		assert.True(t, sub.SilenceUsage, "auth %s must have SilenceUsage=true", sub.Use)
+	}
 }
 
 // TestAuthLogout_ClearsTokens verifies that logout deletes all 3 keychain keys.
@@ -603,11 +617,27 @@ func TestAuthForgetCmd_noClientID_noError(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// notifyWriter wraps an io.Writer and signals written on the first Write call.
+// Used in TestRunAuthFlow_writesURLToWriter to avoid time.Sleep-based sync.
+type notifyWriter struct {
+	w       io.Writer
+	once    sync.Once
+	written chan struct{}
+}
+
+func (nw *notifyWriter) Write(p []byte) (int, error) {
+	n, err := nw.w.Write(p)
+	nw.once.Do(func() { close(nw.written) })
+	return n, err
+}
+
 // TestRunAuthFlow_writesURLToWriter verifies that RunAuthFlow writes the OAuth URL
-// to the provided io.Writer. We complete the full flow end-to-end using a real
-// callback server so the function returns and we can safely read the buffer.
+// to the provided io.Writer. RunAuthFlow blocks on the callback channel after printing
+// the URL block, so we use a channel-based signal instead of time.Sleep to detect
+// when the first write has completed before closing the pipe.
 func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
-	// Mock token exchange server.
+	// Mock token exchange server — not actually used here since we only read
+	// the URL block before RunAuthFlow blocks on the callback channel.
 	tokenResp := map[string]interface{}{
 		"access_token":  "tok",
 		"refresh_token": "ref",
@@ -623,23 +653,13 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
 	cfg := &config.Config{
 		ClientID:     "test-client",
-		CallbackPort: 0, // RunAuthFlow binds to this port; 0 is not valid — use a real port via listener
+		CallbackPort: 0,
 	}
 
-	// We run RunAuthFlow in a goroutine and deliver the callback ourselves so the
-	// function returns normally. Use a pipe so writes and reads don't race: reads
-	// happen only after RunAuthFlow returns (pipe closed).
 	pr, pw := io.Pipe()
+	nw := &notifyWriter{w: pw, written: make(chan struct{})}
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- cmd.RunAuthFlow(cfg, store, mockSrv.URL, pw)
-		_ = pw.Close()
-	}()
-
-	// RunAuthFlow will block waiting for callback. Give it a moment to print the URL
-	// then let it time out (5 min). We don't drive the full callback here — we just
-	// validate output up to the blocking wait. Drain the pipe.
+	// Drain the pipe into a buffer; stops when pr is closed.
 	outputCh := make(chan string, 1)
 	go func() {
 		var sb strings.Builder
@@ -656,15 +676,50 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 		outputCh <- sb.String()
 	}()
 
-	// Wait briefly — RunAuthFlow writes the URL block synchronously before blocking
-	// on the callback channel. After 300ms the goroutine is still blocked on callback;
-	// close the pipe to unblock the drain goroutine and collect what was written.
-	time.Sleep(200 * time.Millisecond)
+	// Run the auth flow; it writes the URL block then blocks on the callback channel.
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cmd.RunAuthFlow(cfg, store, mockSrv.URL, nw)
+		_ = pw.Close()
+	}()
+
+	// Block until RunAuthFlow has performed its first Write (the URL block), then
+	// close the read-end of the pipe to stop the drain goroutine cleanly.
+	select {
+	case <-nw.written:
+		// URL block written — collect output.
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for RunAuthFlow to write URL block")
+	}
 	pr.CloseWithError(io.EOF)
 
 	output := <-outputCh
 	assert.Contains(t, output, "Visit this URL to authorize", "RunAuthFlow must write URL prompt to writer")
 	assert.Contains(t, output, "Waiting for callback", "RunAuthFlow must write waiting message to writer")
+
+	// Drain errCh so the RunAuthFlow goroutine is not leaked in test output.
+	go func() { <-errCh }()
+}
+
+// TestPrintLogoutSuccess verifies that PrintLogoutSuccess writes the styled
+// "Signed out" confirmation to the provided writer.
+func TestPrintLogoutSuccess(t *testing.T) {
+	var buf strings.Builder
+	cmd.PrintLogoutSuccess(&buf)
+	output := buf.String()
+	assert.Contains(t, output, "✓")
+	assert.Contains(t, output, "Signed out")
+}
+
+// TestPrintForgetSuccess verifies that PrintForgetSuccess writes the styled
+// "Session ended" confirmation block with all key substrings to the provided writer.
+func TestPrintForgetSuccess(t *testing.T) {
+	var buf strings.Builder
+	cmd.PrintForgetSuccess(&buf)
+	output := buf.String()
+	assert.Contains(t, output, "✓")
+	assert.Contains(t, output, "Session ended")
+	assert.Contains(t, output, "→")
 }
 
 // TestPrintAuthStatus_fourStates exercises all four PrintAuthStatus states:

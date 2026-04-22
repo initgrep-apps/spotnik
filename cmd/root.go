@@ -161,7 +161,7 @@ var authLogoutCmd = &cobra.Command{
 		if err := LogoutTokens(store); err != nil {
 			return err
 		}
-		cliOut(c.OutOrStdout(), cliAccentS.Render("✓")+" Signed out")
+		PrintLogoutSuccess(c.OutOrStdout())
 		return nil
 	},
 }
@@ -176,13 +176,7 @@ var authForgetCmd = &cobra.Command{
 		if err := RunForget(store, config.DefaultConfigPath()); err != nil {
 			return err
 		}
-		cliOut(c.OutOrStdout(),
-			cliAccentS.Render("✓")+" Session ended",
-			"",
-			cliDimS.Render("Tokens and client ID removed"),
-			"",
-			cliAccentS.Render("→")+" Run spotnik auth register to set up again",
-		)
+		PrintForgetSuccess(c.OutOrStdout())
 		return nil
 	},
 }
@@ -196,6 +190,24 @@ var authStatusCmd = &cobra.Command{
 		store := keychain.NewKeychainTokenStore()
 		return PrintAuthStatus(store, config.DefaultConfigPath(), c.OutOrStdout())
 	},
+}
+
+// PrintLogoutSuccess writes the styled "Signed out" confirmation block to w.
+// Exported for testing.
+func PrintLogoutSuccess(w io.Writer) {
+	cliOut(w, cliAccentS.Render("✓")+" Signed out")
+}
+
+// PrintForgetSuccess writes the styled "Session ended" confirmation block to w.
+// Exported for testing.
+func PrintForgetSuccess(w io.Writer) {
+	cliOut(w,
+		cliAccentS.Render("✓")+" Session ended",
+		"",
+		cliDimS.Render("Tokens and client ID removed"),
+		"",
+		cliAccentS.Render("→")+" Run spotnik auth register to set up again",
+	)
 }
 
 // LogoutTokens removes all stored token keys from the token store.
@@ -397,7 +409,7 @@ func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBas
 		if err := api.Refresh(context.Background(), http.DefaultClient, tokenBaseURL, refreshToken, cfg.ClientID, store); err != nil {
 			if errors.Is(err, api.ErrInvalidGrant) {
 				// Refresh token rejected — delete tokens and force re-auth.
-				fmt.Fprintln(os.Stderr, "Session expired. Please re-authenticate.")
+				_, _ = fmt.Fprintln(os.Stderr, cliWrap.Render(cliWarnS.Render("⚠")+" Session expired — please re-authenticate"))
 				_ = store.Delete()
 				return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 			}
