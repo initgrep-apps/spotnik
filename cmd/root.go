@@ -448,11 +448,12 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	authURL := api.BuildAuthURL(cfg.ClientID, redirectURI, challenge, api.SpotifyScopes)
 
 	// Print auth URL for the CLI auth subcommand.
-	cliOut(w,
-		cliDimS.Render("Visit this URL to authorize:"),
-		authURL,
-		cliDimS.Render("Waiting for callback…"),
-	)
+	// cliOut provides the section-separating blank line via its leading \n;
+	// the URL and waiting line use cliLine so they stay compact with the
+	// step confirmations printed below.
+	cliOut(w, cliDimS.Render("Visit this URL to authorize:"))
+	cliLine(w, cliAccentS.Render(authURL))
+	cliLine(w, cliDimS.Render("Waiting for callback…"))
 
 	// Open browser (best-effort — failure does not abort auth).
 	if err := api.OpenBrowser(authURL); err != nil {
