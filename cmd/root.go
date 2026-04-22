@@ -557,11 +557,8 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	}
 
 	// Authorization succeeded — confirm sign-in and show a static indicator
-	// while the TUI initialises. A goroutine spinner cannot be used here:
-	// WithAltScreen() does not prevent the goroutine from writing into the
-	// TUI's alternate-screen buffer once Bubble Tea takes over stdout.
 	cliOut(w, cliAccentS.Render("◉")+" Signed in")
-	cliLine(w, cliDimS.Render("⠿ Launching spotnik…"))
+	cliLine(c.OutOrStdout(), cliAccentS.Render("→")+" Launching spotnik…")
 	return runApp(c, []string{})
 }
 
@@ -597,7 +594,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 	}
 
 	cliOut(c.OutOrStdout(), cliAccentS.Render("◉")+" Signed in")
-	cliLine(c.OutOrStdout(), cliDimS.Render("⠿ Launching spotnik…"))
+	cliLine(c.OutOrStdout(), cliAccentS.Render("→")+" Launching spotnik…")
 	return runApp(c, []string{})
 }
 
