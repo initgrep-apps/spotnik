@@ -230,6 +230,22 @@ func PrintAuthLoginNoClientID(w io.Writer) {
 	)
 }
 
+// PrintRegisterInstructions writes the setup instructions block for spotnik auth register.
+// redirectURI is the callback address derived from config (e.g. http://127.0.0.1:PORT/callback).
+// The redirect URI is displayed on its own accent-coloured line below the numbered steps.
+// Exported for testing.
+func PrintRegisterInstructions(w io.Writer, redirectURI string) {
+	cliout.Write(w,
+		cliout.Header{Status: cliout.Inactive, Subject: "Spotnik", State: "not registered"},
+		cliout.Steps{Items: []string{
+			"Go to developer.spotify.com/dashboard",
+			"Create or select a Spotify app",
+			"Add this redirect URI:",
+		}},
+		cliout.URL{Href: redirectURI},
+	)
+}
+
 // PrintSignedInLaunching writes the "Signed in → Launching spotnik…" success pair to w.
 // Exported for testing. Used by both runAuthLogin and runRegister.
 func PrintSignedInLaunching(w io.Writer) {
@@ -523,13 +539,17 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", cfg.CallbackPort)
 
-	cliOut(w,
-		cliDimS.Render("◎ Spotnik  ")+"not registered",
-		cliKV([][2]string{
-			{"1", "Go to developer.spotify.com/dashboard"},
-			{"2", "Create or select a Spotify app"},
-			{"3", "Add this redirect URI: " + cliAccentS.Render(redirectURI)},
-		}),
+	// NOTE: redirect URI is placed on its own line (URL message) for readability.
+	// This is a deliberate layout change from the previous version where the URI
+	// was inline in the Steps body with accent colour applied manually.
+	cliout.Write(w,
+		cliout.Header{Status: cliout.Inactive, Subject: "Spotnik", State: "not registered"},
+		cliout.Steps{Items: []string{
+			"Go to developer.spotify.com/dashboard",
+			"Create or select a Spotify app",
+			"Add this redirect URI:",
+		}},
+		cliout.URL{Href: redirectURI},
 	)
 	_, _ = fmt.Fprint(w, "  Client ID: ")
 
@@ -546,7 +566,7 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	if err := config.SetClientID(configPath, clientID); err != nil {
 		return fmt.Errorf("saving client_id to config: %w", err)
 	}
-	cliLine(w, cliAccentS.Render("✓")+" Client ID saved")
+	cliout.WriteInline(w, cliout.Step{Status: cliout.StatusSuccess, Text: "Client ID saved"})
 
 	cfg, err = loadConfigFromPath(configPath)
 	if err != nil {
@@ -555,19 +575,16 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	store := keychain.NewKeychainTokenStore()
 	if err := RunAuthFlow(cfg, store, "", w); err != nil {
-		cliOut(c.ErrOrStderr(),
-			cliErrS.Render("✗")+" Authorization failed",
-			cliKV([][2]string{
-				{"Reason", err.Error()},
-			}),
-			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to try again",
+		cliout.Write(c.ErrOrStderr(),
+			cliout.Step{Status: cliout.StatusFailure, Text: "Authorization failed"},
+			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", err.Error())}},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to try again"},
 		)
 		return errAlreadyPrinted
 	}
 
 	// Authorization succeeded — confirm sign-in and show a static indicator
-	cliOut(w, cliAccentS.Render("◉")+" Signed in")
-	cliLine(c.OutOrStdout(), cliAccentS.Render("→")+" Launching spotnik…")
+	PrintSignedInLaunching(c.OutOrStdout())
 	return runApp(c, []string{})
 }
 

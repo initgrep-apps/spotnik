@@ -915,3 +915,11 @@ func TestGolden_SignedInLaunching(t *testing.T) {
 	cmd.PrintSignedInLaunching(&buf)
 	assertGolden(t, "signed_in_launching", buf.String())
 }
+
+// TestGolden_AuthRegister_Instructions verifies the layout of the register instructions block.
+// The redirect URI is placed on its own line (URL message) as per the story's layout change.
+func TestGolden_AuthRegister_Instructions(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintRegisterInstructions(&buf, "http://127.0.0.1:8888/callback")
+	assertGolden(t, "auth_register_instructions", buf.String())
+}
