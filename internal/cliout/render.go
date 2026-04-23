@@ -9,7 +9,7 @@ import (
 )
 
 // wrap applies the standard 2-char left indent to every line of a block.
-var wrap = lipgloss.NewStyle().Padding(0, 2)
+var wrap = lipgloss.NewStyle().PaddingLeft(2)
 
 // Write renders each message with a leading blank line and standard padding.
 // Safe for any io.Writer. If a Recorder is active (see testing.go), writes

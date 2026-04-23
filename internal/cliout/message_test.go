@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,6 +14,24 @@ import (
 func stripAnsi(s string) string {
 	re := regexp.MustCompile("\x1b\\[[0-9;]*m")
 	return re.ReplaceAllString(s, "")
+}
+
+func TestStatusColor_allBranches(t *testing.T) {
+	cases := []struct {
+		s    Status
+		want lipgloss.TerminalColor
+	}{
+		{Active, Fixed.Accent},
+		{Inactive, Fixed.Muted},
+		{StatusSuccess, Fixed.Success},
+		{StatusFailure, Fixed.Error},
+		{StatusWarning, Fixed.Warning},
+		{Pending, Fixed.Muted},
+		{Status(99), Fixed.Plain},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, statusColor(c.s, Fixed), "statusColor(%v)", c.s)
+	}
 }
 
 func TestStatusGlyph(t *testing.T) {

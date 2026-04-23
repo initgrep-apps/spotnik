@@ -1,6 +1,7 @@
 package cliout
 
 import (
+	"bytes"
 	"io"
 )
 
@@ -66,8 +67,10 @@ func (b *Builder) Messages() []Message { return b.msgs }
 
 // WriteTo renders and flushes to w using Write. Implements io.WriterTo.
 func (b *Builder) WriteTo(w io.Writer) (int64, error) {
-	Write(w, b.msgs...)
-	return 0, nil
+	var buf bytes.Buffer
+	Write(&buf, b.msgs...)
+	n, err := w.Write(buf.Bytes())
+	return int64(n), err
 }
 
 // Pair is a shorthand constructor for KVPair with no caption.

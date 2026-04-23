@@ -28,10 +28,11 @@ func TestBuilder_Messages_accumulatesInOrder(t *testing.T) {
 
 func TestBuilder_WriteTo_rendersAndFlushes(t *testing.T) {
 	var buf bytes.Buffer
-	_, err := New().
+	n, err := New().
 		Header(Active, "Spotnik", "authenticated").
 		WriteTo(&buf)
 	require.NoError(t, err)
+	assert.Greater(t, n, int64(0), "WriteTo must return byte count > 0")
 	assert.Contains(t, buf.String(), "Spotnik")
 	assert.Contains(t, buf.String(), "authenticated")
 }
