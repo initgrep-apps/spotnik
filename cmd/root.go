@@ -14,7 +14,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/cliout"
 	"github.com/initgrep-apps/spotnik/internal/app"
@@ -24,61 +23,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// CLI output colours — fixed, not theme-dependent.
-// AdaptiveColor keeps output readable on light terminals.
-var (
-	cliGreen  = lipgloss.AdaptiveColor{Dark: "#1DB954", Light: "#1A8C41"}
-	cliRed    = lipgloss.AdaptiveColor{Dark: "#FF5555", Light: "#CC0000"}
-	cliYellow = lipgloss.AdaptiveColor{Dark: "#F1C40F", Light: "#B8860B"}
-	cliDim    = lipgloss.AdaptiveColor{Dark: "#6C7083", Light: "#888888"}
-)
-
-var (
-	cliAccentS = lipgloss.NewStyle().Foreground(cliGreen).Bold(true)
-	cliDimS    = lipgloss.NewStyle().Foreground(cliDim)
-	cliErrS    = lipgloss.NewStyle().Foreground(cliRed).Bold(true)
-	cliWarnS   = lipgloss.NewStyle().Foreground(cliYellow)
-	// cliWrap applies left+right indentation to all CLI output. No top/bottom
-	// padding — cliOut inserts a single leading blank line explicitly so that
-	// adjacent cliLine calls remain compact while cliOut sections are separated.
-	cliWrap = lipgloss.NewStyle().Padding(0, 2)
-)
-
 // errAlreadyPrinted is returned when a RunE handler has already printed a
 // styled error block to stderr. Execute() recognizes it and exits 1 without
 // printing again.
 var errAlreadyPrinted = errors.New("")
-
-// cliOut writes a blank line then the joined lines with standard left+right
-// indentation. The leading blank separates output sections without adding a
-// trailing blank that would double-space adjacent cliLine progress output.
-func cliOut(w io.Writer, lines ...string) {
-	block := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	_, _ = fmt.Fprintln(w, "\n"+cliWrap.Render(block))
-}
-
-// cliLine writes a single inline progress line with the standard indentation
-// and no leading/trailing blank lines. Use for sequential step output where
-// top/bottom spacing from cliOut would break the compact sequence.
-func cliLine(w io.Writer, text string) {
-	_, _ = fmt.Fprintln(w, cliWrap.Render(text))
-}
-
-// cliKV renders aligned key-value pairs. Labels are dim; values are default foreground.
-func cliKV(pairs [][2]string) string {
-	maxKey := 0
-	for _, p := range pairs {
-		if len(p[0]) > maxKey {
-			maxKey = len(p[0])
-		}
-	}
-	lines := make([]string, len(pairs))
-	for i, p := range pairs {
-		pad := strings.Repeat(" ", maxKey-len(p[0]))
-		lines[i] = cliDimS.Render(p[0]+pad) + "  " + p[1]
-	}
-	return strings.Join(lines, "\n")
-}
 
 var rootCmd = &cobra.Command{
 	Use:   "spotnik",
