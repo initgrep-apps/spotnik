@@ -22,6 +22,11 @@ func TestIsTTY_nonFileWriter_returnsFalse(t *testing.T) {
 	assert.False(t, isTTY(buf))
 }
 
+func TestIsTTY_exported_matchesInternal(t *testing.T) {
+	var buf nopWriter
+	assert.Equal(t, isTTY(buf), IsTTY(buf))
+}
+
 // nopWriter is an io.Writer that discards all bytes, used to test isTTY.
 type nopWriter struct{}
 

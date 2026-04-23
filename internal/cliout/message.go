@@ -229,9 +229,9 @@ type Spinner struct {
 
 func (Spinner) isMessage() {}
 
-// render panics until Story 149 implements the TTY spinner.
+// render panics because Spinner must be passed to StartSpinner, not Write.
 func (Spinner) render(_ Palette) string {
-	panic("cliout.Spinner.render: not yet implemented (Story 149)")
+	panic("cliout.Spinner: pass to cliout.StartSpinner, not cliout.Write")
 }
 
 // Prompt displays an interactive input prompt with validation.
@@ -243,7 +243,7 @@ type Prompt struct {
 
 func (Prompt) isMessage() {}
 
-// render panics until Story 149 implements the interactive prompt.
+// render panics because Prompt must be passed to Ask, not Write.
 func (Prompt) render(_ Palette) string {
-	panic("cliout.Prompt.render: not yet implemented (Story 149)")
+	panic("cliout.Prompt: pass to cliout.Ask, not cliout.Write")
 }

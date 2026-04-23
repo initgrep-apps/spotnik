@@ -1,7 +1,7 @@
 ---
 title: "Spinner + Prompt — dynamic message types and OAuth flow integration"
 feature: 12-cli-output
-status: open
+status: done
 ---
 
 ## Background

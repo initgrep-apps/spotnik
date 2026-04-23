@@ -3,8 +3,8 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -457,16 +457,13 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	authURL := api.BuildAuthURL(cfg.ClientID, redirectURI, challenge, api.SpotifyScopes)
 
 	// Print auth URL for the CLI auth subcommand.
-	// Write provides the section-separating blank line; WriteInline keeps the
-	// waiting-for-callback line compact with the step confirmations below.
 	cliout.Write(w, cliout.URL{Label: "Visit this URL to authorize:", Href: authURL})
-	cliout.WriteInline(w, cliout.Paragraph{Text: "Waiting for callback…", Dim: true})
 
-	// Open browser (best-effort — failure does not abort auth).
-	if err := api.OpenBrowser(authURL); err != nil {
-		// Browser open failed — user can still visit URL manually.
-		_ = err
-	}
+	// Open browser before the spinner so any browser-open output (if any)
+	// does not land on top of the spinner's \r-rewritten line.
+	_ = api.OpenBrowser(authURL)
+
+	spin := cliout.StartSpinner(w, "Waiting for authorization")
 
 	// Wait for callback with 5-minute timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -475,10 +472,11 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	select {
 	case result := <-codeCh:
 		if result.Err != nil {
+			spin.Fail(fmt.Sprintf("authorization denied: %s", result.Err))
 			return fmt.Errorf("authorization failed: %w", result.Err)
 		}
 
-		cliout.WriteInline(w, cliout.Step{Status: cliout.StatusSuccess, Text: "Browser authentication complete"})
+		spin.Done("Authorization received")
 
 		// Exchange code for tokens using the configured endpoint.
 		_, err := api.ExchangeCode(
@@ -492,6 +490,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			store,
 		)
 		if err != nil {
+			cliout.WriteInline(w, cliout.Step{Status: cliout.StatusFailure, Text: "Token exchange failed"})
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
 
@@ -500,6 +499,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 		return nil
 
 	case <-ctx.Done():
+		spin.Fail("Authorization timed out after 5 minutes")
 		return fmt.Errorf("authorization timed out after 5 minutes — please try again")
 	}
 }
@@ -522,16 +522,14 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", cfg.CallbackPort)
 
 	PrintRegisterInstructions(w, redirectURI)
-	_, _ = fmt.Fprint(w, "  Client ID: ")
 
-	scanner := bufio.NewScanner(r)
-	scanner.Scan()
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading client_id: %w", err)
-	}
-	clientID := strings.TrimSpace(scanner.Text())
-	if clientID == "" {
-		return fmt.Errorf("client_id cannot be empty")
+	clientID, err := cliout.Ask(r, w, cliout.Prompt{
+		Label:       "Client ID",
+		Placeholder: "32 hex characters from developer.spotify.com/dashboard",
+		Validate:    validateClientID,
+	})
+	if err != nil {
+		return errAlreadyPrinted
 	}
 
 	if err := config.SetClientID(configPath, clientID); err != nil {
@@ -553,6 +551,19 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	// Authorization succeeded — confirm sign-in and show a static indicator
 	PrintSignedInLaunching(c.OutOrStdout())
 	return runApp(c, []string{})
+}
+
+// validateClientID enforces the Spotify client-ID shape: 32 lowercase hex chars.
+// Returns a user-facing error on mismatch so cliout.Ask can display and retry.
+func validateClientID(s string) error {
+	s = strings.TrimSpace(s)
+	if len(s) != 32 {
+		return fmt.Errorf("client ID must be 32 characters (got %d)", len(s))
+	}
+	if _, err := hex.DecodeString(s); err != nil {
+		return fmt.Errorf("client ID must be hexadecimal")
+	}
+	return nil
 }
 
 // runAuthLogin forces a fresh re-authentication flow.
@@ -621,6 +632,12 @@ func runApp(_ *cobra.Command, _ []string) error {
 		accessToken, _ := store.Get(keychain.KeyAccessToken)
 		a.InitAPIClients(accessToken)
 	}
+
+	// Uninstall the CLI SIGINT handler before handing control to Bubble Tea.
+	// If left installed, a Ctrl-C during TUI mode triggers the cliout handler,
+	// which calls os.Exit(130) and bypasses Bubble Tea's deferred terminal
+	// cleanup — leaving the cursor hidden or altscreen active after exit.
+	cliout.UninstallSIGINTHandler()
 
 	// Start the Bubble Tea program.
 	// tea.WithMouseCellMotion() enables mouse wheel scroll events (Feature 52).

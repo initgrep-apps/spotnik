@@ -686,7 +686,7 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 	}
 
 	pr, pw := io.Pipe()
-	nw := &notifyWriter{w: pw, written: make(chan struct{}), trigger: []byte("Waiting for callback")}
+	nw := &notifyWriter{w: pw, written: make(chan struct{}), trigger: []byte("Waiting for authorization")}
 
 	// Drain the pipe into a buffer; stops when pr is closed.
 	outputCh := make(chan string, 1)
@@ -724,7 +724,7 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 
 	output := <-outputCh
 	assert.Contains(t, output, "Visit this URL to authorize", "RunAuthFlow must write URL prompt to writer")
-	assert.Contains(t, output, "Waiting for callback", "RunAuthFlow must write waiting message to writer")
+	assert.Contains(t, output, "Waiting for authorization", "RunAuthFlow must write waiting message to writer")
 
 	// Drain errCh so the RunAuthFlow goroutine is not leaked in test output.
 	go func() { <-errCh }()
@@ -956,4 +956,69 @@ func TestGolden_LoginAuthFailure(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.PrintLoginAuthFailure(&buf, fmt.Errorf("token exchange failed: 400 Bad Request"))
 	assertGolden(t, "login_auth_failure", buf.String())
+}
+
+// TestRunRegister_promptValidatesClientID verifies that runRegister wires
+// validateClientID into cliout.Ask: short and non-hex inputs are each rejected
+// with a ✗ step. Three invalid inputs exhaust maxPromptAttempts (3), causing
+// Ask to return ErrAborted and runRegister to return without ever starting the
+// OAuth callback server — so this test does not leak a port.
+func TestRunRegister_promptValidatesClientID(t *testing.T) {
+	// Three invalid inputs: short, 32 non-hex chars, short again.
+	nonHex32 := strings.Repeat("Z", 32)
+	input := "short\n" + nonHex32 + "\n" + "short2\n"
+
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	var buf bytes.Buffer
+	c := cmd.RootCommand()
+	c.SetOut(&buf)
+	c.SetErr(&buf)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cmd.RunRegister(c, strings.NewReader(input))
+	}()
+
+	var runErr error
+	select {
+	case runErr = <-errCh:
+		// runRegister completed as expected — 3 failures → ErrAborted → errAlreadyPrinted.
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out: runRegister should complete after 3 invalid inputs without starting OAuth flow")
+	}
+	assert.Error(t, runErr, "runRegister must return errAlreadyPrinted after prompt exhaustion")
+
+	out := buf.String()
+	assert.Contains(t, out, "Client ID:")
+	assert.Contains(t, out, "✗", "validation failure step must be printed")
+	assert.Contains(t, out, "client ID must be 32 characters", "short input must trigger length error")
+	assert.Contains(t, out, "client ID must be hexadecimal", "non-hex input must trigger hex error")
+}
+
+// TestValidateClientID exercises every branch of validateClientID.
+func TestValidateClientID(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{name: "valid 32-char hex", input: strings.Repeat("a", 32), wantErr: ""},
+		{name: "empty", input: "", wantErr: "must be 32 characters"},
+		{name: "too short", input: "abc", wantErr: "must be 32 characters"},
+		{name: "too long", input: strings.Repeat("a", 33), wantErr: "must be 32 characters"},
+		{name: "32 chars non-hex", input: strings.Repeat("Z", 32), wantErr: "must be hexadecimal"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := cmd.ValidateClientID(tt.input)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
 }

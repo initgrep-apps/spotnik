@@ -54,3 +54,18 @@ func TestUse_replacesActive(t *testing.T) {
 	Use(custom)
 	assert.Equal(t, custom, current())
 }
+
+func TestResolve_exported_delegatesToInternal(t *testing.T) {
+	// Exported Resolve must delegate to internal resolve with the same args.
+	th := theme.Load("black")
+	got := Resolve(ModeTheme, true, false, th)
+	want := resolve(ModeTheme, true, false, th)
+	assert.Equal(t, want, got)
+}
+
+func TestResolve_unknownMode_returnsFixed(t *testing.T) {
+	// An unknown PaletteMode value must fall through to the default case and
+	// return Fixed. This exercises the default branch in resolve's switch.
+	got := resolve(PaletteMode(-1), false, false, nil)
+	assert.Equal(t, Fixed, got)
+}
