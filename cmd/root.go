@@ -473,12 +473,10 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 	authURL := api.BuildAuthURL(cfg.ClientID, redirectURI, challenge, api.SpotifyScopes)
 
 	// Print auth URL for the CLI auth subcommand.
-	// cliOut provides the section-separating blank line via its leading \n;
-	// the URL and waiting line use cliLine so they stay compact with the
-	// step confirmations printed below.
-	cliOut(w, cliDimS.Render("Visit this URL to authorize:"))
-	cliLine(w, cliAccentS.Render(authURL))
-	cliLine(w, cliDimS.Render("Waiting for callback…"))
+	// Write provides the section-separating blank line; WriteInline keeps the
+	// waiting-for-callback line compact with the step confirmations below.
+	cliout.Write(w, cliout.URL{Label: "Visit this URL to authorize:", Href: authURL})
+	cliout.WriteInline(w, cliout.Paragraph{Text: "Waiting for callback…", Dim: true})
 
 	// Open browser (best-effort — failure does not abort auth).
 	if err := api.OpenBrowser(authURL); err != nil {
@@ -496,7 +494,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("authorization failed: %w", result.Err)
 		}
 
-		cliLine(w, cliAccentS.Render("✓")+" Browser authentication complete")
+		cliout.WriteInline(w, cliout.Step{Status: cliout.StatusSuccess, Text: "Browser authentication complete"})
 
 		// Exchange code for tokens using the configured endpoint.
 		_, err := api.ExchangeCode(
@@ -513,7 +511,7 @@ func RunAuthFlow(cfg *config.Config, store keychain.TokenStore, tokenBaseURL str
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
 
-		cliLine(w, cliAccentS.Render("✓")+" Token exchange successful")
+		cliout.WriteInline(w, cliout.Step{Status: cliout.StatusSuccess, Text: "Token exchange successful"})
 
 		return nil
 
