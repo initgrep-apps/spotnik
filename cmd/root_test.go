@@ -32,6 +32,9 @@ var updateGolden = flag.Bool("update", false, "update golden files")
 func TestMain(m *testing.M) {
 	api.OpenBrowser = func(string) error { return nil }
 	cliout.SetTestMode(true)
+	// Pin local timezone to UTC so golden files with formatted timestamps are
+	// deterministic regardless of the host machine's timezone.
+	time.Local = time.UTC
 	os.Exit(m.Run())
 }
 

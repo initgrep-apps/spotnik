@@ -1,4 +1,4 @@
 
   ◉  Spotnik  authenticated            
   Client ID  present                   
-  Expires    Thu, 01 Jan 2099 01:00 UTC
+  Expires    Thu, 01 Jan 2099 00:00 UTC
