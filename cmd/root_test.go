@@ -686,7 +686,7 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 	}
 
 	pr, pw := io.Pipe()
-	nw := &notifyWriter{w: pw, written: make(chan struct{}), trigger: []byte("Waiting for callback")}
+	nw := &notifyWriter{w: pw, written: make(chan struct{}), trigger: []byte("Waiting for authorization")}
 
 	// Drain the pipe into a buffer; stops when pr is closed.
 	outputCh := make(chan string, 1)
@@ -724,7 +724,7 @@ func TestRunAuthFlow_writesURLToWriter(t *testing.T) {
 
 	output := <-outputCh
 	assert.Contains(t, output, "Visit this URL to authorize", "RunAuthFlow must write URL prompt to writer")
-	assert.Contains(t, output, "Waiting for callback", "RunAuthFlow must write waiting message to writer")
+	assert.Contains(t, output, "Waiting for authorization", "RunAuthFlow must write waiting message to writer")
 
 	// Drain errCh so the RunAuthFlow goroutine is not leaked in test output.
 	go func() { <-errCh }()
@@ -956,4 +956,71 @@ func TestGolden_LoginAuthFailure(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.PrintLoginAuthFailure(&buf, fmt.Errorf("token exchange failed: 400 Bad Request"))
 	assertGolden(t, "login_auth_failure", buf.String())
+}
+
+// safeBuffer is a bytes.Buffer protected by a mutex for concurrent access in tests.
+type safeBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (sb *safeBuffer) Write(p []byte) (int, error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Write(p)
+}
+
+func (sb *safeBuffer) String() string {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.String()
+}
+
+// TestRunRegister_promptValidatesClientID verifies that runRegister uses
+// cliout.Ask with validateClientID: the first (short) input triggers a ✗
+// step, and the second (valid 32-char hex) passes validation. The test
+// terminates once it observes the validation error in the output — it does
+// not wait for the full OAuth flow (which would block for 5 minutes).
+func TestRunRegister_promptValidatesClientID(t *testing.T) {
+	validID := strings.Repeat("a", 32)
+	input := "short\n" + validID + "\n"
+
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	// Use a safeBuffer so the test goroutine and RunRegister goroutine can
+	// access the output buffer concurrently without a data race.
+	sb := &safeBuffer{}
+	nw := &notifyWriter{
+		w:       sb,
+		written: make(chan struct{}),
+		trigger: []byte("client ID must be 32 characters"),
+	}
+
+	cobra := cmd.RootCommand()
+	cobra.SetOut(nw)
+	cobra.SetErr(nw)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cmd.RunRegister(cobra, strings.NewReader(input))
+	}()
+
+	select {
+	case <-nw.written:
+		// Validation error was printed — test goal achieved.
+	case err := <-errCh:
+		// runRegister finished (e.g. early error) — still check output.
+		_ = err
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for prompt validation output")
+	}
+
+	out := sb.String()
+	assert.Contains(t, out, "Client ID:")
+	assert.Contains(t, out, "✗", "validation failure step must be printed")
+	assert.Contains(t, out, "client ID must be 32 characters")
+
+	// Drain errCh so the goroutine is not leaked in test output.
+	go func() { <-errCh }()
 }
