@@ -82,6 +82,13 @@ var (
 	activePalette = Fixed
 )
 
+// Resolve picks a Palette given mode, TTY status, NO_COLOR flag, and an optional
+// TUI theme. Exported so cmd/ can compose resolution without reimplementing it.
+// A nil theme falls back to Fixed.
+func Resolve(mode PaletteMode, tty bool, noColor bool, t theme.Theme) Palette {
+	return resolve(mode, tty, noColor, t)
+}
+
 // Use replaces the active palette. Called by cmd/root.go once config is loaded.
 // Safe to call more than once; safe to skip (default is Fixed).
 func Use(p Palette) {

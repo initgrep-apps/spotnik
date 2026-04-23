@@ -26,6 +26,10 @@ func isTTY(w io.Writer) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
+// IsTTY returns whether w is an *os.File pointing at a terminal.
+// Exported shim over isTTY for use by cmd/.
+func IsTTY(w io.Writer) bool { return isTTY(w) }
+
 // checkNoColor honours the NO_COLOR env var (any non-empty value disables colour).
 func checkNoColor() bool {
 	return os.Getenv("NO_COLOR") != ""

@@ -41,6 +41,10 @@ func activeRecorder() *Recorder {
 	return recorder
 }
 
+// CurrentForTest returns the currently active palette. Test-only helper that
+// allows cmd/ tests to assert on the palette installed by resolveCLIPalette.
+func CurrentForTest() Palette { return current() }
+
 // Capture runs fn with a package-level Recorder installed.
 // All Write/WriteInline calls during fn are captured and returned.
 // Spinner/Prompt dynamic types (Story 149) also append to the recorder

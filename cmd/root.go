@@ -52,6 +52,14 @@ var appVersion string
 func Execute(version string) {
 	appVersion = version
 	rootCmd.Version = version
+
+	// Resolve CLI palette once before any user-facing output.
+	// stderr is the TTY reference — error output always goes there.
+	// If config cannot be loaded, cliout defaults to Fixed (safe fallback).
+	if cfg, err := loadConfig(); err == nil {
+		resolveCLIPalette(cfg, os.Stderr)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		// cobra is silenced (SilenceErrors=true); we print once, styled.
 		// errAlreadyPrinted means the handler already wrote a styled block to stderr.
@@ -623,6 +631,32 @@ func runApp(_ *cobra.Command, _ []string) error {
 // loadConfig reads the config file from the default path and bootstraps it if missing.
 func loadConfig() (*config.Config, error) {
 	return loadConfigFromPath(config.DefaultConfigPath())
+}
+
+// resolveCLIPalette converts cfg.CLI.Palette + runtime environment into a
+// cliout.Palette and installs it via cliout.Use. Must be called once before any
+// user-facing output. w is used as the TTY reference (typically os.Stderr).
+func resolveCLIPalette(cfg *config.Config, w io.Writer) {
+	mode := cliout.ModeAuto
+	switch cfg.CLI.Palette {
+	case "fixed":
+		mode = cliout.ModeFixed
+	case "theme":
+		mode = cliout.ModeTheme
+	case "auto":
+		mode = cliout.ModeAuto
+	}
+
+	var activeTheme theme.Theme
+	if mode == cliout.ModeAuto || mode == cliout.ModeTheme {
+		// theme.Load never errors — it falls back to the default theme internally.
+		activeTheme = theme.Load(cfg.Preferences.Theme)
+	}
+
+	tty := cliout.IsTTY(w)
+	noColor := os.Getenv("NO_COLOR") != ""
+
+	cliout.Use(cliout.Resolve(mode, tty, noColor, activeTheme))
 }
 
 // PrintMissingClientIDInstructions writes setup instructions when client_id is missing.
