@@ -61,7 +61,7 @@ type themeColors struct {
 	ColumnSecondary  string `toml:"column_secondary"`
 	ColumnTertiary   string `toml:"column_tertiary"`
 	// Accent is optional — callers fall back to SeekBar when empty.
-	Accent           string `toml:"accent"`
+	Accent string `toml:"accent"`
 }
 
 // paneBorderColors holds per-pane border accent values from [pane_borders].

@@ -21,6 +21,9 @@ Read **this file** and **your feature spec**. That's it.
 `docs/ARCHITECTURE.md` and `docs/DESIGN.md` are reference docs — consult them only when
 the feature spec explicitly points you to a pattern or layout you need to look up.
 
+When writing or modifying CLI output, consult `docs/CLI-OUTPUT.md` — the canonical
+reference for message types, glyphs, palette, and interactive prompts.
+
 ---
 
 ## Tech Stack (Non-Negotiable)
@@ -224,6 +227,8 @@ Follow this sequence exactly for every feature — no shortcuts.
 15. Add, change, or remove a keybinding without updating all three locations in the
     same commit: `docs/keybinding.md`, `docs/DESIGN.md §17`, and the `helpContent` var in
     `internal/ui/panes/help_overlay.go`.
+16. Add a new message type or glyph to `internal/cliout` without updating
+    `docs/CLI-OUTPUT.md` in the same commit.
 
 ---
 
