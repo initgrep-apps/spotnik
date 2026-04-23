@@ -923,3 +923,10 @@ func TestGolden_AuthRegister_Instructions(t *testing.T) {
 	cmd.PrintRegisterInstructions(&buf, "http://127.0.0.1:8888/callback")
 	assertGolden(t, "auth_register_instructions", buf.String())
 }
+
+// TestGolden_ExecuteErrorFallback verifies the layout of the Execute() error fallback.
+func TestGolden_ExecuteErrorFallback(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintExecuteError(&buf, fmt.Errorf("something went wrong"))
+	assertGolden(t, "execute_error_fallback", buf.String())
+}

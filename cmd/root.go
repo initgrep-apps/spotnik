@@ -108,7 +108,7 @@ func Execute(version string) {
 		// cobra is silenced (SilenceErrors=true); we print once, styled.
 		// errAlreadyPrinted means the handler already wrote a styled block to stderr.
 		if !errors.Is(err, errAlreadyPrinted) {
-			_, _ = fmt.Fprintln(os.Stderr, "\n"+cliWrap.Render(cliErrS.Render("✗")+" "+err.Error()))
+			PrintExecuteError(os.Stderr, err)
 		}
 		os.Exit(1)
 	}
@@ -218,6 +218,13 @@ func PrintForgetSuccess(w io.Writer) {
 		cliout.Paragraph{Text: "Tokens and client ID removed", Dim: true},
 		cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to set up again"},
 	)
+}
+
+// PrintExecuteError writes the styled error fallback block to w.
+// Called by Execute() when a cobra subcommand returns an unhandled error.
+// Exported for testing.
+func PrintExecuteError(w io.Writer, err error) {
+	cliout.Write(w, cliout.Step{Status: cliout.StatusFailure, Text: err.Error()})
 }
 
 // PrintAuthLoginNoClientID writes the "no client_id configured" error block to w.
@@ -435,7 +442,7 @@ func EnsureAuthenticated(cfg *config.Config, store keychain.TokenStore, tokenBas
 		if err := api.Refresh(context.Background(), http.DefaultClient, tokenBaseURL, refreshToken, cfg.ClientID, store); err != nil {
 			if errors.Is(err, api.ErrInvalidGrant) {
 				// Refresh token rejected — delete tokens and force re-auth.
-				_, _ = fmt.Fprintln(os.Stderr, "\n"+cliWrap.Render(cliWarnS.Render("⚠")+" Session expired — please re-authenticate"))
+				cliout.Write(os.Stderr, cliout.Step{Status: cliout.StatusWarning, Text: "Session expired — please re-authenticate"})
 				_ = store.Delete()
 				return RunAuthFlow(cfg, store, tokenBaseURL, io.Discard)
 			}
