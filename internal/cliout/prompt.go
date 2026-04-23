@@ -44,9 +44,11 @@ func Ask(r io.Reader, w io.Writer, p Prompt) (string, error) {
 
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
+				Write(w, Step{Status: StatusFailure, Text: fmt.Sprintf("read error: %s", err)})
 				return "", err
 			}
-			// EOF reached.
+			// EOF reached — user closed stdin (e.g. Ctrl+D).
+			Write(w, Step{Status: StatusFailure, Text: "Aborted"})
 			return "", ErrAborted
 		}
 		value := strings.TrimSpace(scanner.Text())

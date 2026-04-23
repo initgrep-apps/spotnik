@@ -65,11 +65,15 @@ func TestAsk_threeValidationFailures_returnsErrAborted(t *testing.T) {
 	assert.Contains(t, buf.String(), "Giving up after 3 attempts")
 }
 
-// TestAsk_EOF_returnsErrAborted verifies that an empty reader (EOF) returns ErrAborted.
+// TestAsk_EOF_returnsErrAborted verifies that an empty reader (EOF) returns
+// ErrAborted and prints an "Aborted" failure step so the caller can safely
+// treat the error as already-printed.
 func TestAsk_EOF_returnsErrAborted(t *testing.T) {
 	r := strings.NewReader("")
-	_, err := Ask(r, &bytes.Buffer{}, Prompt{Label: "Name"})
+	var buf bytes.Buffer
+	_, err := Ask(r, &buf, Prompt{Label: "Name"})
 	require.ErrorIs(t, err, ErrAborted)
+	assert.Contains(t, buf.String(), "Aborted", "EOF must print an abort step")
 }
 
 // TestAsk_placeholderShownFirstAttemptOnly verifies that the placeholder text
@@ -102,12 +106,15 @@ func TestAsk_capture_recordsPromptMessage(t *testing.T) {
 }
 
 // TestAsk_scannerReadError_returnsError verifies that a read error from the
-// underlying io.Reader (not just EOF) propagates back from Ask.
+// underlying io.Reader (not just EOF) propagates back from Ask and prints a
+// failure step so the caller can safely treat the error as already-printed.
 func TestAsk_scannerReadError_returnsError(t *testing.T) {
 	sentErr := errors.New("disk error")
 	r := &errReader{err: sentErr}
-	_, err := Ask(r, &bytes.Buffer{}, Prompt{Label: "Name"})
+	var buf bytes.Buffer
+	_, err := Ask(r, &buf, Prompt{Label: "Name"})
 	assert.Error(t, err)
+	assert.Contains(t, buf.String(), "read error", "IO error must print a failure step")
 }
 
 // errReader is an io.Reader that always returns an error after emitting a

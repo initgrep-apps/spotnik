@@ -981,12 +981,14 @@ func TestRunRegister_promptValidatesClientID(t *testing.T) {
 		errCh <- cmd.RunRegister(c, strings.NewReader(input))
 	}()
 
+	var runErr error
 	select {
-	case <-errCh:
-		// runRegister completed as expected — 3 failures → ErrAborted.
+	case runErr = <-errCh:
+		// runRegister completed as expected — 3 failures → ErrAborted → errAlreadyPrinted.
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out: runRegister should complete after 3 invalid inputs without starting OAuth flow")
 	}
+	assert.Error(t, runErr, "runRegister must return errAlreadyPrinted after prompt exhaustion")
 
 	out := buf.String()
 	assert.Contains(t, out, "Client ID:")

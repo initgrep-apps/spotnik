@@ -157,25 +157,42 @@ func unregisterHandle(h *SpinnerHandle) {
 	delete(handles, h)
 }
 
-// cleanupAllHandles cancels all registered spinner goroutines and restores the
-// terminal cursor on any TTY writers. Called by the SIGINT handler.
+// cleanupAllHandles cancels all registered spinner goroutines, waits for them
+// to exit, then restores the terminal cursor. The drain step ensures the last
+// render frame does not overwrite the cursor-restore escape. Called by the
+// SIGINT handler.
 func cleanupAllHandles() {
+	// Snapshot handles and cancel under lock. Releasing the lock before
+	// draining lets resolve()/unregisterHandle() proceed concurrently.
 	handlesMu.Lock()
+	snapshot := make([]*SpinnerHandle, 0, len(handles))
 	for h := range handles {
+		snapshot = append(snapshot, h)
 		if h.cancel != nil {
 			h.cancel()
+		}
+	}
+	handlesMu.Unlock()
+
+	for _, h := range snapshot {
+		if h.done != nil {
+			<-h.done // wait for goroutine to stop writing before restoring cursor
 		}
 		if h.onTTY {
 			_, _ = fmt.Fprint(h.w, "\r\x1b[K\x1b[?25h")
 		}
 	}
-	handlesMu.Unlock()
 }
 
-// UninstallSIGINTHandler stops signal delivery to the handler installed by
-// installSIGINTHandler. Call this before starting any program that owns its
-// own terminal cleanup (e.g. Bubble Tea) so both handlers do not race to
-// restore cursor state on Ctrl-C.
+// UninstallSIGINTHandler stops signal delivery to the cliout SIGINT handler.
+// Call this before starting any program that owns its own terminal cleanup
+// (e.g. Bubble Tea) to prevent the cliout handler from calling os.Exit(130)
+// and bypassing the program's deferred terminal restore.
+//
+// This is a one-shot teardown: the underlying sync.Once is already consumed,
+// so SIGINT handling cannot be re-armed in the same process after this call.
+// The handler goroutine remains blocked on the now-silent channel until the
+// process exits.
 func UninstallSIGINTHandler() {
 	if sigCh != nil {
 		signal.Stop(sigCh)

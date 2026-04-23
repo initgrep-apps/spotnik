@@ -634,8 +634,9 @@ func runApp(_ *cobra.Command, _ []string) error {
 	}
 
 	// Uninstall the CLI SIGINT handler before handing control to Bubble Tea.
-	// Without this, both handlers race to restore the terminal on Ctrl-C,
-	// which can leave the cursor hidden or altscreen active after exit.
+	// If left installed, a Ctrl-C during TUI mode triggers the cliout handler,
+	// which calls os.Exit(130) and bypasses Bubble Tea's deferred terminal
+	// cleanup — leaving the cursor hidden or altscreen active after exit.
 	cliout.UninstallSIGINTHandler()
 
 	// Start the Bubble Tea program.
