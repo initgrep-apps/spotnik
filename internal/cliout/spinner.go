@@ -142,6 +142,7 @@ var (
 	handlesMu sync.Mutex
 	handles   = map[*SpinnerHandle]struct{}{}
 	sigOnce   sync.Once
+	sigCh     chan os.Signal // set once by installSIGINTHandler
 )
 
 func registerHandle(h *SpinnerHandle) {
@@ -156,6 +157,31 @@ func unregisterHandle(h *SpinnerHandle) {
 	delete(handles, h)
 }
 
+// cleanupAllHandles cancels all registered spinner goroutines and restores the
+// terminal cursor on any TTY writers. Called by the SIGINT handler.
+func cleanupAllHandles() {
+	handlesMu.Lock()
+	for h := range handles {
+		if h.cancel != nil {
+			h.cancel()
+		}
+		if h.onTTY {
+			_, _ = fmt.Fprint(h.w, "\r\x1b[K\x1b[?25h")
+		}
+	}
+	handlesMu.Unlock()
+}
+
+// UninstallSIGINTHandler stops signal delivery to the handler installed by
+// installSIGINTHandler. Call this before starting any program that owns its
+// own terminal cleanup (e.g. Bubble Tea) so both handlers do not race to
+// restore cursor state on Ctrl-C.
+func UninstallSIGINTHandler() {
+	if sigCh != nil {
+		signal.Stop(sigCh)
+	}
+}
+
 // installSIGINTHandler registers a one-time SIGINT/SIGTERM handler that
 // stops all active spinners, restores the cursor, and exits 130.
 // Skipped entirely in test mode.
@@ -166,18 +192,10 @@ func installSIGINTHandler() {
 		}
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+		sigCh = ch
 		go func() {
 			<-ch
-			handlesMu.Lock()
-			for h := range handles {
-				if h.cancel != nil {
-					h.cancel()
-				}
-				if h.onTTY {
-					_, _ = fmt.Fprint(h.w, "\r\x1b[K\x1b[?25h")
-				}
-			}
-			handlesMu.Unlock()
+			cleanupAllHandles()
 			os.Exit(130) // standard SIGINT exit code
 		}()
 	})

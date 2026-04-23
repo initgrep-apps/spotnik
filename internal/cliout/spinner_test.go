@@ -144,3 +144,28 @@ func TestInstallSIGINTHandler_testMode(t *testing.T) {
 	installSIGINTHandler()
 	installSIGINTHandler()
 }
+
+// TestCleanupAllHandles_restoresCursor verifies that cleanupAllHandles writes
+// the cursor-restore escape to the writer of any TTY handle in the registry.
+func TestCleanupAllHandles_restoresCursor(t *testing.T) {
+	var buf bytes.Buffer
+	h := &SpinnerHandle{
+		w:     &buf,
+		text:  "working",
+		onTTY: true,
+		done:  make(chan struct{}),
+	}
+	close(h.done)
+	registerHandle(h)
+	defer unregisterHandle(h)
+
+	cleanupAllHandles()
+	assert.Contains(t, buf.String(), "\x1b[?25h", "cursor-restore escape must be written")
+}
+
+// TestUninstallSIGINTHandler_nilSigCh verifies that UninstallSIGINTHandler is
+// safe to call when no handler has been installed (sigCh == nil in test mode).
+func TestUninstallSIGINTHandler_nilSigCh(t *testing.T) {
+	// Must not panic.
+	UninstallSIGINTHandler()
+}

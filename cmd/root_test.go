@@ -958,69 +958,65 @@ func TestGolden_LoginAuthFailure(t *testing.T) {
 	assertGolden(t, "login_auth_failure", buf.String())
 }
 
-// safeBuffer is a bytes.Buffer protected by a mutex for concurrent access in tests.
-type safeBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (sb *safeBuffer) Write(p []byte) (int, error) {
-	sb.mu.Lock()
-	defer sb.mu.Unlock()
-	return sb.buf.Write(p)
-}
-
-func (sb *safeBuffer) String() string {
-	sb.mu.Lock()
-	defer sb.mu.Unlock()
-	return sb.buf.String()
-}
-
-// TestRunRegister_promptValidatesClientID verifies that runRegister uses
-// cliout.Ask with validateClientID: the first (short) input triggers a ✗
-// step, and the second (valid 32-char hex) passes validation. The test
-// terminates once it observes the validation error in the output — it does
-// not wait for the full OAuth flow (which would block for 5 minutes).
+// TestRunRegister_promptValidatesClientID verifies that runRegister wires
+// validateClientID into cliout.Ask: short and non-hex inputs are each rejected
+// with a ✗ step. Three invalid inputs exhaust maxPromptAttempts (3), causing
+// Ask to return ErrAborted and runRegister to return without ever starting the
+// OAuth callback server — so this test does not leak a port.
 func TestRunRegister_promptValidatesClientID(t *testing.T) {
-	validID := strings.Repeat("a", 32)
-	input := "short\n" + validID + "\n"
+	// Three invalid inputs: short, 32 non-hex chars, short again.
+	nonHex32 := strings.Repeat("Z", 32)
+	input := "short\n" + nonHex32 + "\n" + "short2\n"
 
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
-	// Use a safeBuffer so the test goroutine and RunRegister goroutine can
-	// access the output buffer concurrently without a data race.
-	sb := &safeBuffer{}
-	nw := &notifyWriter{
-		w:       sb,
-		written: make(chan struct{}),
-		trigger: []byte("client ID must be 32 characters"),
-	}
-
-	cobra := cmd.RootCommand()
-	cobra.SetOut(nw)
-	cobra.SetErr(nw)
+	var buf bytes.Buffer
+	c := cmd.RootCommand()
+	c.SetOut(&buf)
+	c.SetErr(&buf)
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- cmd.RunRegister(cobra, strings.NewReader(input))
+		errCh <- cmd.RunRegister(c, strings.NewReader(input))
 	}()
 
 	select {
-	case <-nw.written:
-		// Validation error was printed — test goal achieved.
-	case err := <-errCh:
-		// runRegister finished (e.g. early error) — still check output.
-		_ = err
+	case <-errCh:
+		// runRegister completed as expected — 3 failures → ErrAborted.
 	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for prompt validation output")
+		t.Fatal("timed out: runRegister should complete after 3 invalid inputs without starting OAuth flow")
 	}
 
-	out := sb.String()
+	out := buf.String()
 	assert.Contains(t, out, "Client ID:")
 	assert.Contains(t, out, "✗", "validation failure step must be printed")
-	assert.Contains(t, out, "client ID must be 32 characters")
+	assert.Contains(t, out, "client ID must be 32 characters", "short input must trigger length error")
+	assert.Contains(t, out, "client ID must be hexadecimal", "non-hex input must trigger hex error")
+}
 
-	// Drain errCh so the goroutine is not leaked in test output.
-	go func() { <-errCh }()
+// TestValidateClientID exercises every branch of validateClientID.
+func TestValidateClientID(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{name: "valid 32-char hex", input: strings.Repeat("a", 32), wantErr: ""},
+		{name: "empty", input: "", wantErr: "must be 32 characters"},
+		{name: "too short", input: "abc", wantErr: "must be 32 characters"},
+		{name: "too long", input: strings.Repeat("a", 33), wantErr: "must be 32 characters"},
+		{name: "32 chars non-hex", input: strings.Repeat("Z", 32), wantErr: "must be hexadecimal"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := cmd.ValidateClientID(tt.input)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
 }

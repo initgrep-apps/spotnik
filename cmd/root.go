@@ -633,6 +633,11 @@ func runApp(_ *cobra.Command, _ []string) error {
 		a.InitAPIClients(accessToken)
 	}
 
+	// Uninstall the CLI SIGINT handler before handing control to Bubble Tea.
+	// Without this, both handlers race to restore the terminal on Ctrl-C,
+	// which can leave the cursor hidden or altscreen active after exit.
+	cliout.UninstallSIGINTHandler()
+
 	// Start the Bubble Tea program.
 	// tea.WithMouseCellMotion() enables mouse wheel scroll events (Feature 52).
 	p := tea.NewProgram(a, tea.WithAltScreen(), tea.WithMouseCellMotion())

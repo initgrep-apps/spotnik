@@ -12,3 +12,6 @@ import (
 func RunRegister(c *cobra.Command, r io.Reader) error {
 	return runRegister(c, r)
 }
+
+// ValidateClientID is a test-only shim that exposes validateClientID.
+var ValidateClientID = validateClientID
