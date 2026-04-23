@@ -1,0 +1,4 @@
+
+  ◎  Spotnik  not authenticated      
+  Client ID  present                 
+  → Run spotnik auth login to connect

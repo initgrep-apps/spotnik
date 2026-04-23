@@ -1,0 +1,4 @@
+
+  ⚠  Spotnik  session state unknown          
+  Could not read token state from keychain   
+  → Run spotnik auth login to re-authenticate

@@ -1,0 +1,5 @@
+
+  ⚠  Spotnik  session expiring                                     
+  Client ID  present                                               
+  Expires    Wed, 01 Jan 2025 00:00 UTC  ·  auto-refresh pending   
+  → Run spotnik auth login to re-authenticate if auto-refresh fails

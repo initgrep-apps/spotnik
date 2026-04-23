@@ -1,7 +1,7 @@
 ---
 title: "Migrate cmd/root.go auth subcommand output to internal/cliout"
 feature: 12-cli-output
-status: open
+status: done
 ---
 
 ## Background

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,16 +18,39 @@ import (
 
 	"github.com/initgrep-apps/spotnik/cmd"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/cliout"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestMain disables browser opening for all tests in this package.
+// updateGolden is set with -update to refresh all golden files.
+var updateGolden = flag.Bool("update", false, "update golden files")
+
+// TestMain disables browser opening and pins ASCII rendering for all tests in this package.
 func TestMain(m *testing.M) {
 	api.OpenBrowser = func(string) error { return nil }
+	cliout.SetTestMode(true)
+	// Pin local timezone to UTC so golden files with formatted timestamps are
+	// deterministic regardless of the host machine's timezone.
+	time.Local = time.UTC
 	os.Exit(m.Run())
+}
+
+// assertGolden reads the expected output from testdata/golden/<name>.txt and
+// compares it to got. Pass -update to refresh all golden files.
+func assertGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", "golden", name+".txt")
+	if *updateGolden {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(got), 0o644))
+		return
+	}
+	want, err := os.ReadFile(path)
+	require.NoError(t, err, "missing golden file %s — run with -update", path)
+	assert.Equal(t, string(want), got, "golden mismatch for %s", name)
 }
 
 // TestRootCmd_Executes verifies the root command runs without error.
@@ -788,4 +812,148 @@ func TestPrintAuthStatus_fourStates(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGolden_AuthLogout verifies the exact layout of the logout success output.
+func TestGolden_AuthLogout(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintLogoutSuccess(&buf)
+	assertGolden(t, "auth_logout", buf.String())
+}
+
+// TestGolden_AuthForget verifies the exact layout of the forget success output.
+func TestGolden_AuthForget(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintForgetSuccess(&buf)
+	assertGolden(t, "auth_forget", buf.String())
+}
+
+// TestGolden_AuthStatus_NotRegistered verifies the layout when no client_id is set.
+func TestGolden_AuthStatus_NotRegistered(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_not_registered", buf.String())
+}
+
+// TestGolden_AuthStatus_NotAuthenticated verifies the layout when client_id is set
+// but no access token is present.
+func TestGolden_AuthStatus_NotAuthenticated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_not_authenticated", buf.String())
+}
+
+// TestGolden_AuthStatus_Authenticated verifies the layout for a healthy authenticated session.
+// Uses a fixed far-future Unix timestamp (2099-01-01 00:00:00 UTC) so the session is
+// never expiring-soon regardless of when the test runs.
+func TestGolden_AuthStatus_Authenticated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	// Fixed far-future timestamp: Fri, 01 Jan 2099 00:00 UTC (never expires in tests).
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "4070908800"))
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_authenticated", buf.String())
+}
+
+// TestGolden_AuthStatus_Expiring verifies the layout for a session that has expired.
+// Uses a fixed past Unix timestamp (2025-01-01 00:00:00 UTC). IsExpiringSoon returns
+// true for already-expired tokens (negative time-until < 5-minute threshold), so this
+// consistently triggers the "session expiring" branch with deterministic output.
+func TestGolden_AuthStatus_Expiring(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	// Fixed past timestamp: Wed, 01 Jan 2025 00:00 UTC.
+	// IsExpiringSoon returns true for past expiry (time.Until < 5-min threshold).
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "1735689600"))
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_expiring", buf.String())
+}
+
+// TestGolden_AuthStatus_ExpiryUnreadable verifies the layout when the token expiry
+// key is present but not parseable (IsExpiringSoon returns error).
+func TestGolden_AuthStatus_ExpiryUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "not-a-number"))
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_expiry_unreadable", buf.String())
+}
+
+// TestGolden_AuthLogin_NoClientID verifies the layout for the "no client_id" auth login error.
+func TestGolden_AuthLogin_NoClientID(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintAuthLoginNoClientID(&buf)
+	assertGolden(t, "auth_login_no_clientid", buf.String())
+}
+
+// TestGolden_SignedInLaunching verifies the "Signed in → Launching spotnik…" output.
+// This block is shared by both runAuthLogin and runRegister.
+func TestGolden_SignedInLaunching(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintSignedInLaunching(&buf)
+	assertGolden(t, "signed_in_launching", buf.String())
+}
+
+// TestGolden_AuthRegister_Instructions verifies the layout of the register instructions block.
+// The redirect URI is placed on its own line (URL message) as per the story's layout change.
+func TestGolden_AuthRegister_Instructions(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintRegisterInstructions(&buf, "http://127.0.0.1:8888/callback")
+	assertGolden(t, "auth_register_instructions", buf.String())
+}
+
+// TestGolden_ExecuteErrorFallback verifies the layout of the Execute() error fallback.
+func TestGolden_ExecuteErrorFallback(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintExecuteError(&buf, fmt.Errorf("something went wrong"))
+	assertGolden(t, "execute_error_fallback", buf.String())
+}
+
+// TestGolden_MissingClientIDInstructions verifies the layout of the missing-client-id
+// instructions block.
+func TestGolden_MissingClientIDInstructions(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintMissingClientIDInstructions(&buf))
+	assertGolden(t, "missing_clientid_instructions", buf.String())
+}
+
+// TestGolden_RegisterAuthFailure verifies the layout of the auth failure output for
+// spotnik auth register.
+func TestGolden_RegisterAuthFailure(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintRegisterAuthFailure(&buf, fmt.Errorf("callback timeout after 120s"))
+	assertGolden(t, "register_auth_failure", buf.String())
+}
+
+// TestGolden_LoginAuthFailure verifies the layout of the auth failure output for
+// spotnik auth login.
+func TestGolden_LoginAuthFailure(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintLoginAuthFailure(&buf, fmt.Errorf("token exchange failed: 400 Bad Request"))
+	assertGolden(t, "login_auth_failure", buf.String())
 }
