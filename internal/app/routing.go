@@ -463,6 +463,7 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" && a.onboardingInput.Value() == "" {
 			_ = copyToClipboard(fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort))
 			a.onboardingCopied = true
+			a.onboardingInputError = ""
 			return a, tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 				return copiedFeedbackMsg{}
 			})
