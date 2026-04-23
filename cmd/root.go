@@ -20,6 +20,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 )
 
@@ -637,14 +638,19 @@ func loadConfig() (*config.Config, error) {
 // cliout.Palette and installs it via cliout.Use. Must be called once before any
 // user-facing output. w is used as the TTY reference (typically os.Stderr).
 func resolveCLIPalette(cfg *config.Config, w io.Writer) {
+	resolveCLIPaletteWith(cfg, cliout.IsTTY(w), os.Getenv("NO_COLOR") != "", termenv.HasDarkBackground)
+}
+
+// resolveCLIPaletteWith is the injectable core of resolveCLIPalette. It accepts
+// tty and noColor flags and a darkBg probe directly so tests can exercise every
+// resolution branch, including auto+TTY+dark, without a real terminal.
+func resolveCLIPaletteWith(cfg *config.Config, tty, noColor bool, darkBg func() bool) {
 	mode := cliout.ModeAuto
 	switch cfg.CLI.Palette {
 	case "fixed":
 		mode = cliout.ModeFixed
 	case "theme":
 		mode = cliout.ModeTheme
-	case "auto":
-		mode = cliout.ModeAuto
 	}
 
 	var activeTheme theme.Theme
@@ -653,8 +659,17 @@ func resolveCLIPalette(cfg *config.Config, w io.Writer) {
 		activeTheme = theme.Load(cfg.Preferences.Theme)
 	}
 
-	tty := cliout.IsTTY(w)
-	noColor := os.Getenv("NO_COLOR") != ""
+	// For ModeAuto the dark-background probe is injectable; handle it here so
+	// the inner cliout.Resolve path (which hard-codes termenv.HasDarkBackground)
+	// is bypassed when darkBg is overridden in tests.
+	if mode == cliout.ModeAuto {
+		if !noColor && tty && darkBg() && activeTheme != nil {
+			cliout.Use(cliout.Resolve(cliout.ModeTheme, tty, noColor, activeTheme))
+		} else {
+			cliout.Use(cliout.Fixed)
+		}
+		return
+	}
 
 	cliout.Use(cliout.Resolve(mode, tty, noColor, activeTheme))
 }

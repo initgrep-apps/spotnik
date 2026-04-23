@@ -1,10 +1,9 @@
 // Package cmd internal tests for palette resolution.
-// These tests are in the cmd package (not cmd_test) because resolveCLIPalette
+// These tests are in the cmd package (not cmd_test) because resolveCLIPaletteWith
 // is unexported.
 package cmd
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/cliout"
@@ -19,8 +18,7 @@ func TestResolveCLIPalette_fixedMode_usesFixed(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.CLI.Palette = "fixed"
-	var buf bytes.Buffer // not a TTY — buf is *bytes.Buffer, not *os.File
-	resolveCLIPalette(cfg, &buf)
+	resolveCLIPaletteWith(cfg, false, false, func() bool { return false })
 	assert.Equal(t, cliout.Fixed, cliout.CurrentForTest())
 }
 
@@ -31,10 +29,11 @@ func TestResolveCLIPalette_themeMode_usesThemeTokens(t *testing.T) {
 	cfg := config.Default()
 	cfg.Preferences.Theme = "black"
 	cfg.CLI.Palette = "theme"
-	var buf bytes.Buffer
-	resolveCLIPalette(cfg, &buf)
+	resolveCLIPaletteWith(cfg, false, false, func() bool { return false })
 	th := theme.Load("black")
-	assert.Equal(t, th.Accent(), cliout.CurrentForTest().Accent)
+	got := cliout.CurrentForTest()
+	assert.Equal(t, th.Accent(), got.Accent)
+	assert.Equal(t, th.TextMuted(), got.Muted)
 }
 
 func TestResolveCLIPalette_autoMode_nonTTY_usesFixed(t *testing.T) {
@@ -43,7 +42,31 @@ func TestResolveCLIPalette_autoMode_nonTTY_usesFixed(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.CLI.Palette = "auto"
-	var buf bytes.Buffer // non-TTY
-	resolveCLIPalette(cfg, &buf)
+	resolveCLIPaletteWith(cfg, false, false, func() bool { return true })
+	assert.Equal(t, cliout.Fixed, cliout.CurrentForTest())
+}
+
+func TestResolveCLIPalette_autoMode_ttyDark_usesTheme(t *testing.T) {
+	prev := cliout.CurrentForTest()
+	t.Cleanup(func() { cliout.Use(prev) })
+
+	cfg := config.Default()
+	cfg.Preferences.Theme = "black"
+	cfg.CLI.Palette = "auto"
+	resolveCLIPaletteWith(cfg, true, false, func() bool { return true })
+	th := theme.Load("black")
+	got := cliout.CurrentForTest()
+	assert.Equal(t, th.Accent(), got.Accent, "auto+TTY+dark must use theme accent token")
+	assert.Equal(t, th.TextMuted(), got.Muted, "auto+TTY+dark must use theme muted token")
+}
+
+func TestResolveCLIPalette_noColor_forcesFixed(t *testing.T) {
+	prev := cliout.CurrentForTest()
+	t.Cleanup(func() { cliout.Use(prev) })
+
+	cfg := config.Default()
+	cfg.Preferences.Theme = "black"
+	cfg.CLI.Palette = "theme" // would normally use theme, but NO_COLOR overrides
+	resolveCLIPaletteWith(cfg, false, true, func() bool { return true })
 	assert.Equal(t, cliout.Fixed, cliout.CurrentForTest())
 }
