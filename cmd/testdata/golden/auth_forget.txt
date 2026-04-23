@@ -1,0 +1,4 @@
+
+  ✓ Session ended                            
+  Tokens and client ID removed               
+  → Run spotnik auth register to set up again

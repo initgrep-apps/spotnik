@@ -817,3 +817,10 @@ func TestGolden_AuthLogout(t *testing.T) {
 	cmd.PrintLogoutSuccess(&buf)
 	assertGolden(t, "auth_logout", buf.String())
 }
+
+// TestGolden_AuthForget verifies the exact layout of the forget success output.
+func TestGolden_AuthForget(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintForgetSuccess(&buf)
+	assertGolden(t, "auth_forget", buf.String())
+}

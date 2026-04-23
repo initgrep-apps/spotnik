@@ -213,10 +213,10 @@ func PrintLogoutSuccess(w io.Writer) {
 // PrintForgetSuccess writes the styled "Session ended" confirmation block to w.
 // Exported for testing.
 func PrintForgetSuccess(w io.Writer) {
-	cliOut(w,
-		cliAccentS.Render("✓")+" Session ended",
-		cliDimS.Render("Tokens and client ID removed"),
-		cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to set up again",
+	cliout.Write(w,
+		cliout.Step{Status: cliout.StatusSuccess, Text: "Session ended"},
+		cliout.Paragraph{Text: "Tokens and client ID removed", Dim: true},
+		cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to set up again"},
 	)
 }
 
