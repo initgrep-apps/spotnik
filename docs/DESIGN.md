@@ -348,7 +348,7 @@ Every pane border shows the pane title and action shortcuts directly in the bord
 ### Border Anatomy
 
 ```
-╭─ ¹Playlists ──────────────────── ᐅfilter ─── ᐅnew ╮
+╭─ ¹Playlists ────────────────────╮filter ╭─── ᐅnew ╮
 │                                                   │
 │  (pane content)                                   │
 │                                                   │
