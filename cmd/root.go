@@ -228,6 +228,22 @@ func PrintRegisterInstructions(w io.Writer, redirectURI string) {
 	)
 }
 
+// PrintReRegisterInstructions writes setup instructions for a user who is already
+// registered (valid client_id present) but wants to register again with a new Client ID.
+// Exported for testing.
+func PrintReRegisterInstructions(w io.Writer, redirectURI string) {
+	cliout.Write(w,
+		cliout.Header{Status: cliout.Active, Subject: "Spotnik", State: "registered"},
+		cliout.Step{Status: cliout.StatusWarning, Text: "Re-registering — existing Client ID will be replaced"},
+		cliout.Steps{Items: []string{
+			"Go to developer.spotify.com/dashboard",
+			"Create or select a Spotify app",
+			"Add this redirect URI:",
+		}},
+		cliout.URL{Href: redirectURI},
+	)
+}
+
 // PrintSignedInLaunching writes the "Signed in → Launching spotnik…" success pair to w.
 // Exported for testing. Used by both runAuthLogin and runRegister.
 func PrintSignedInLaunching(w io.Writer) {
@@ -519,7 +535,13 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", cfg.CallbackPort)
 
-	PrintRegisterInstructions(w, redirectURI)
+	// Show instructions — if the user already has a valid registration, surface that
+	// clearly before asking them to replace the Client ID.
+	if config.ValidateClientID(cfg.ClientID) == nil {
+		PrintReRegisterInstructions(w, redirectURI)
+	} else {
+		PrintRegisterInstructions(w, redirectURI)
+	}
 
 	clientID, err := cliout.Ask(r, w, cliout.Prompt{
 		Label:       "Client ID",

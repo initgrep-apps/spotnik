@@ -1046,3 +1046,11 @@ func TestValidateClientID(t *testing.T) {
 		})
 	}
 }
+
+// TestPrintReRegisterInstructions_golden verifies the "already registered" header
+// in the re-registration flow against a golden file.
+func TestPrintReRegisterInstructions_golden(t *testing.T) {
+	var buf strings.Builder
+	cmd.PrintReRegisterInstructions(&buf, "http://127.0.0.1:8888/callback")
+	assertGolden(t, "auth_re_register_instructions", buf.String())
+}
