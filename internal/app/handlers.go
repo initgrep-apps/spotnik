@@ -120,6 +120,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case onboardingRetryMsg:
 		a.onboardingStep = stepRegister
 		a.onboardingError = ""
+		a.onboardingInputError = ""
 		a.onboardingInput.Reset()
 		a.onboardingInput.Focus()
 		return a, nil

@@ -208,6 +208,10 @@ type App struct {
 	// Cleared by copiedFeedbackMsg after 2 seconds.
 	onboardingCopied bool
 
+	// onboardingInputError holds a validation error from the last Enter attempt in
+	// stepRegister. Shown in the hint line; cleared on next keypress or retry.
+	onboardingInputError string
+
 	// onboardingSpinner is the spinner shown while waiting for the OAuth callback.
 	onboardingSpinner spinner.Model
 

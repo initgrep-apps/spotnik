@@ -467,15 +467,21 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return copiedFeedbackMsg{}
 			})
 		}
-		// Enter with non-empty input → save client ID.
+		// Enter with non-empty input → validate format then save.
 		if m.Type == tea.KeyEnter {
 			clientID := strings.TrimSpace(a.onboardingInput.Value())
 			if clientID == "" {
 				return a, nil
 			}
+			if err := config.ValidateClientID(clientID); err != nil {
+				a.onboardingInputError = err.Error()
+				return a, nil
+			}
+			a.onboardingInputError = ""
 			return a, saveClientIDCmd(config.DefaultConfigPath(), clientID)
 		}
-		// All other keys → delegate to the text input component.
+		// All other keys → clear any stale validation error and delegate to text input.
+		a.onboardingInputError = ""
 		var cmd tea.Cmd
 		a.onboardingInput, cmd = a.onboardingInput.Update(m)
 		return a, cmd
