@@ -220,13 +220,16 @@ func (a *App) renderOnboardingRegister() string {
 		Align(lipgloss.Center).
 		Render(a.onboardingTitle())
 
-	// Hint varies: copied confirmation, copy-URI when empty, or confirm-only when typing.
+	// Hint varies: validation error, copied confirmation, copy-URI when empty, or confirm-only when typing.
 	var hintLine string
-	if a.onboardingCopied {
+	switch {
+	case a.onboardingInputError != "":
+		hintLine = lipgloss.NewStyle().Foreground(t.Error()).Render("✗  " + a.onboardingInputError)
+	case a.onboardingCopied:
 		hintLine = lipgloss.NewStyle().Foreground(t.Success()).Render("✓  Copied!")
-	} else if a.onboardingInput.Value() == "" {
+	case a.onboardingInput.Value() == "":
 		hintLine = hintStyle.Render("c  copy URI  ·  Enter  confirm  ·  q  quit")
-	} else {
+	default:
 		hintLine = hintStyle.Render("Enter  confirm  ·  q  quit")
 	}
 

@@ -210,10 +210,34 @@ func TestCheckAuthState_noClientID_needsRegister(t *testing.T) {
 	assert.False(t, needsAuth, "no client_id should not separately need auth")
 }
 
-// TestCheckAuthState_clientIDNoToken_needsAuth verifies that when a client ID is set
+// TestCheckAuthState_invalidClientID_needsRegister verifies that a malformed
+// (non-hex or wrong-length) client ID is treated the same as a missing one.
+func TestCheckAuthState_invalidClientID_needsRegister(t *testing.T) {
+	tests := []struct {
+		name     string
+		clientID string
+	}{
+		{"placeholder text", "your-client-id-here"},
+		{"too short", "abc"},
+		{"non-hex 32 chars", strings.Repeat("g", 32)},
+		{"too long", strings.Repeat("a", 33)},
+	}
+	store := keychain.NewInMemoryTokenStore()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.ClientID = tc.clientID
+			needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
+			assert.True(t, needsRegister, "invalid client ID should trigger re-registration")
+			assert.False(t, needsAuth)
+		})
+	}
+}
+
+// TestCheckAuthState_clientIDNoToken_needsAuth verifies that when a valid client ID is set
 // but no token is present, needsRegister=false and needsAuth=true.
 func TestCheckAuthState_clientIDNoToken_needsAuth(t *testing.T) {
-	cfg := &config.Config{ClientID: "some-client-id"}
+	cfg := &config.Config{ClientID: strings.Repeat("a", 32)}
 	store := keychain.NewInMemoryTokenStore()
 
 	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
@@ -221,10 +245,10 @@ func TestCheckAuthState_clientIDNoToken_needsAuth(t *testing.T) {
 	assert.True(t, needsAuth, "no token should need auth")
 }
 
-// TestCheckAuthState_clientIDValidToken_noAuthNeeded verifies that when both client ID
-// and a valid non-expiring token are present, both return values are false.
+// TestCheckAuthState_clientIDValidToken_noAuthNeeded verifies that when both a valid
+// client ID and a valid non-expiring token are present, both return values are false.
 func TestCheckAuthState_clientIDValidToken_noAuthNeeded(t *testing.T) {
-	cfg := &config.Config{ClientID: "some-client-id"}
+	cfg := &config.Config{ClientID: strings.Repeat("a", 32)}
 	store := keychain.NewInMemoryTokenStore()
 	require.NoError(t, store.Set(keychain.KeyAccessToken, "valid-token"))
 	require.NoError(t, store.Set(keychain.KeyRefreshToken, "valid-refresh"))
@@ -570,18 +594,18 @@ func TestCheckAuthState_ValidToken(t *testing.T) {
 	expiry := time.Now().Add(1 * time.Hour)
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
 
-	cfg := &config.Config{ClientID: "test-client"}
+	cfg := &config.Config{ClientID: strings.Repeat("a", 32)}
 	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
-	assert.False(t, needsRegister, "has client_id should not need register")
+	assert.False(t, needsRegister, "has valid client_id should not need register")
 	assert.False(t, needsAuth, "valid token should not need auth")
 }
 
 // TestCheckAuthState_NoToken verifies that missing token returns needsAuth=true.
 func TestCheckAuthState_NoToken(t *testing.T) {
 	store := keychain.NewInMemoryTokenStore()
-	cfg := &config.Config{ClientID: "test-client"}
+	cfg := &config.Config{ClientID: strings.Repeat("a", 32)}
 	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
-	assert.False(t, needsRegister, "has client_id should not need register")
+	assert.False(t, needsRegister, "has valid client_id should not need register")
 	assert.True(t, needsAuth, "no token should need auth")
 }
 
@@ -595,10 +619,10 @@ func TestCheckAuthState_ExpiringSoon(t *testing.T) {
 	expiry := time.Now().Add(2 * time.Minute)
 	require.NoError(t, store.Set(keychain.KeyTokenExpiry, fmt.Sprintf("%d", expiry.Unix())))
 
-	cfg := &config.Config{ClientID: "test-client"}
+	cfg := &config.Config{ClientID: strings.Repeat("a", 32)}
 	// Refresh will fail (no server running) → should need auth.
 	needsRegister, needsAuth := cmd.CheckAuthState(cfg, store)
-	assert.False(t, needsRegister, "has client_id should not need register")
+	assert.False(t, needsRegister, "has valid client_id should not need register")
 	assert.True(t, needsAuth, "expiring token with failed refresh should need auth")
 }
 
@@ -1021,4 +1045,12 @@ func TestValidateClientID(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPrintReRegisterInstructions_golden verifies the "already registered" header
+// in the re-registration flow against a golden file.
+func TestPrintReRegisterInstructions_golden(t *testing.T) {
+	var buf strings.Builder
+	cmd.PrintReRegisterInstructions(&buf, "http://127.0.0.1:8888/callback")
+	assertGolden(t, "auth_re_register_instructions", buf.String())
 }

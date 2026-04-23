@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -555,4 +556,33 @@ func TestBootstrap_StatErrorPropagated(t *testing.T) {
 	err := config.Bootstrap(path)
 	require.Error(t, err, "Bootstrap should return an error when stat fails for non-ErrNotExist reason")
 	assert.Contains(t, err.Error(), "checking config file")
+}
+
+func TestValidateClientID(t *testing.T) {
+	valid := strings.Repeat("a", 32)
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{"valid 32 hex", valid, ""},
+		{"valid mixed case", strings.Repeat("A", 32), ""},
+		{"valid with spaces trimmed", "  " + valid + "  ", ""},
+		{"empty", "", "must be 32 characters"},
+		{"too short", "abc", "must be 32 characters"},
+		{"too long", strings.Repeat("a", 33), "must be 32 characters"},
+		{"non-hex chars", strings.Repeat("g", 32), "must be hexadecimal"},
+		{"mixed invalid", "gggggggggggggggggggggggggggggggg", "must be hexadecimal"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := config.ValidateClientID(tc.input)
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+			}
+		})
+	}
 }

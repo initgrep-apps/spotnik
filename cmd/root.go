@@ -4,13 +4,11 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -230,6 +228,22 @@ func PrintRegisterInstructions(w io.Writer, redirectURI string) {
 	)
 }
 
+// PrintReRegisterInstructions writes setup instructions for a user who is already
+// registered (valid client_id present) but wants to register again with a new Client ID.
+// Exported for testing.
+func PrintReRegisterInstructions(w io.Writer, redirectURI string) {
+	cliout.Write(w,
+		cliout.Header{Status: cliout.Active, Subject: "Spotnik", State: "registered"},
+		cliout.Step{Status: cliout.StatusWarning, Text: "Re-registering — existing Client ID will be replaced"},
+		cliout.Steps{Items: []string{
+			"Go to developer.spotify.com/dashboard",
+			"Create or select a Spotify app",
+			"Add this redirect URI:",
+		}},
+		cliout.URL{Href: redirectURI},
+	)
+}
+
 // PrintSignedInLaunching writes the "Signed in → Launching spotnik…" success pair to w.
 // Exported for testing. Used by both runAuthLogin and runRegister.
 func PrintSignedInLaunching(w io.Writer) {
@@ -322,12 +336,12 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 }
 
 // CheckAuthState returns (needsRegister, needsAuth).
-//   - needsRegister: no client_id in config.
-//   - needsAuth: client_id present but no valid token.
+//   - needsRegister: no client_id in config, or client_id fails format validation.
+//   - needsAuth: client_id is valid but no usable token is stored.
 //
 // Exported for testing.
 func CheckAuthState(cfg *config.Config, store keychain.TokenStore) (needsRegister, needsAuth bool) {
-	if cfg.ClientID == "" {
+	if cfg.ClientID == "" || config.ValidateClientID(cfg.ClientID) != nil {
 		return true, false
 	}
 
@@ -521,7 +535,13 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", cfg.CallbackPort)
 
-	PrintRegisterInstructions(w, redirectURI)
+	// Show instructions — if the user already has a valid registration, surface that
+	// clearly before asking them to replace the Client ID.
+	if config.ValidateClientID(cfg.ClientID) == nil {
+		PrintReRegisterInstructions(w, redirectURI)
+	} else {
+		PrintRegisterInstructions(w, redirectURI)
+	}
 
 	clientID, err := cliout.Ask(r, w, cliout.Prompt{
 		Label:       "Client ID",
@@ -553,17 +573,10 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	return runApp(c, []string{})
 }
 
-// validateClientID enforces the Spotify client-ID shape: 32 lowercase hex chars.
-// Returns a user-facing error on mismatch so cliout.Ask can display and retry.
+// validateClientID delegates to config.ValidateClientID so cliout.Ask can
+// display and retry on mismatch.
 func validateClientID(s string) error {
-	s = strings.TrimSpace(s)
-	if len(s) != 32 {
-		return fmt.Errorf("client ID must be 32 characters (got %d)", len(s))
-	}
-	if _, err := hex.DecodeString(s); err != nil {
-		return fmt.Errorf("client ID must be hexadecimal")
-	}
-	return nil
+	return config.ValidateClientID(s)
 }
 
 // runAuthLogin forces a fresh re-authentication flow.

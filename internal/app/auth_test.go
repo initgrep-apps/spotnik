@@ -3,8 +3,11 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -71,4 +74,58 @@ func TestSaveClientIDCmd_writeError_emitsErrorMsg(t *testing.T) {
 	// Assert: error message type.
 	_, ok := msg.(authErrorMsg)
 	assert.True(t, ok, "expected authErrorMsg, got %T", msg)
+}
+
+func TestHandleOnboardingKey_invalidClientID_setsError(t *testing.T) {
+	a := &App{
+		currentView:     viewOnboarding,
+		onboardingStep:  stepRegister,
+		onboardingClose: func() {},
+	}
+	a.onboardingInput = textinput.New()
+	a.onboardingInput.Focus()
+	a.onboardingInput.SetValue("tooshort12")
+
+	updatedModel, cmd := a.handleOnboardingKey(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := updatedModel.(*App)
+
+	assert.NotEmpty(t, updated.onboardingInputError, "should record validation error")
+	assert.Empty(t, updated.clientID, "should NOT save clientID on invalid input")
+	assert.Nil(t, cmd, "no command should be emitted on invalid input")
+}
+
+func TestHandleOnboardingKey_validClientID_clearsError(t *testing.T) {
+	a := &App{
+		currentView:          viewOnboarding,
+		onboardingStep:       stepRegister,
+		onboardingClose:      func() {},
+		onboardingInputError: "previous error",
+	}
+	a.onboardingInput = textinput.New()
+	a.onboardingInput.Focus()
+	a.onboardingInput.SetValue(strings.Repeat("a", 32))
+
+	updatedModel, emittedCmd := a.handleOnboardingKey(tea.KeyMsg{Type: tea.KeyEnter})
+	updated := updatedModel.(*App)
+
+	assert.Empty(t, updated.onboardingInputError, "error should clear on valid input")
+	assert.NotNil(t, emittedCmd, "should emit save command for valid input")
+}
+
+func TestHandleOnboardingKey_keypressClears_onboardingInputError(t *testing.T) {
+	a := &App{
+		currentView:          viewOnboarding,
+		onboardingStep:       stepRegister,
+		onboardingClose:      func() {},
+		onboardingInputError: "some error",
+	}
+	a.onboardingInput = textinput.New()
+	a.onboardingInput.Focus()
+
+	updatedModel, _ := a.handleOnboardingKey(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune("a"),
+	})
+	updated := updatedModel.(*App)
+	assert.Empty(t, updated.onboardingInputError, "any keypress should clear validation error")
 }
