@@ -684,15 +684,13 @@ func loadConfig() (*config.Config, error) {
 // It directs the user to run `spotnik auth register`.
 // Exported for testing.
 func PrintMissingClientIDInstructions(w io.Writer) error {
-	cliOut(w,
-		cliDimS.Render("◎ Spotnik  ")+"not registered",
-		"",
-		cliKV([][2]string{
-			{"1", "Create a Spotify app at developer.spotify.com/dashboard"},
-			{"2", "Run: spotnik auth register"},
-		}),
-		"",
-		cliAccentS.Render("→")+" Follow the prompts to set client_id and authenticate",
+	cliout.Write(w,
+		cliout.Header{Status: cliout.Inactive, Subject: "Spotnik", State: "not registered"},
+		cliout.Steps{Items: []string{
+			"Create a Spotify app at developer.spotify.com/dashboard",
+			"Run: spotnik auth register",
+		}},
+		cliout.Hint{Tail: "Follow the prompts to set client_id and authenticate"},
 	)
 	return nil
 }

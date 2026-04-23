@@ -930,3 +930,11 @@ func TestGolden_ExecuteErrorFallback(t *testing.T) {
 	cmd.PrintExecuteError(&buf, fmt.Errorf("something went wrong"))
 	assertGolden(t, "execute_error_fallback", buf.String())
 }
+
+// TestGolden_MissingClientIDInstructions verifies the layout of the missing-client-id
+// instructions block.
+func TestGolden_MissingClientIDInstructions(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintMissingClientIDInstructions(&buf))
+	assertGolden(t, "missing_clientid_instructions", buf.String())
+}
