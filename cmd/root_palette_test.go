@@ -14,6 +14,9 @@ import (
 )
 
 func TestResolveCLIPalette_fixedMode_usesFixed(t *testing.T) {
+	prev := cliout.CurrentForTest()
+	t.Cleanup(func() { cliout.Use(prev) })
+
 	cfg := config.Default()
 	cfg.CLI.Palette = "fixed"
 	var buf bytes.Buffer // not a TTY — buf is *bytes.Buffer, not *os.File
@@ -22,6 +25,9 @@ func TestResolveCLIPalette_fixedMode_usesFixed(t *testing.T) {
 }
 
 func TestResolveCLIPalette_themeMode_usesThemeTokens(t *testing.T) {
+	prev := cliout.CurrentForTest()
+	t.Cleanup(func() { cliout.Use(prev) })
+
 	cfg := config.Default()
 	cfg.Preferences.Theme = "black"
 	cfg.CLI.Palette = "theme"
@@ -32,6 +38,9 @@ func TestResolveCLIPalette_themeMode_usesThemeTokens(t *testing.T) {
 }
 
 func TestResolveCLIPalette_autoMode_nonTTY_usesFixed(t *testing.T) {
+	prev := cliout.CurrentForTest()
+	t.Cleanup(func() { cliout.Use(prev) })
+
 	cfg := config.Default()
 	cfg.CLI.Palette = "auto"
 	var buf bytes.Buffer // non-TTY
