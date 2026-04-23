@@ -60,6 +60,8 @@ type themeColors struct {
 	ColumnPrimary    string `toml:"column_primary"`
 	ColumnSecondary  string `toml:"column_secondary"`
 	ColumnTertiary   string `toml:"column_tertiary"`
+	// Accent is optional — callers fall back to SeekBar when empty.
+	Accent           string `toml:"accent"`
 }
 
 // paneBorderColors holds per-pane border accent values from [pane_borders].
@@ -104,15 +106,22 @@ func ParseTheme(data []byte) (*ConfigTheme, error) {
 	return &ConfigTheme{id: f.ID, name: f.Name, c: f.Colors, pb: f.PaneBorders}, nil
 }
 
+// optionalColorFields lists themeColors TOML keys that are not required.
+// Fields in this set are skipped during validation when their value is empty.
+var optionalColorFields = map[string]bool{
+	"accent": true, // CLI accent; falls back to seek_bar when absent (Story 146)
+}
+
 // validateColorFields checks that every string field in themeColors and
-// paneBorderColors is non-empty. Returns an error identifying the first
-// missing field found.
+// paneBorderColors is non-empty, skipping fields listed in optionalColorFields.
+// Returns an error identifying the first missing required field found.
 func validateColorFields(themeID string, c themeColors, pb paneBorderColors) error {
 	cv := reflect.ValueOf(c)
 	ct := cv.Type()
 	for i := 0; i < cv.NumField(); i++ {
-		if cv.Field(i).String() == "" {
-			return fmt.Errorf("theme %q: missing or empty color field %q", themeID, ct.Field(i).Tag.Get("toml"))
+		name := ct.Field(i).Tag.Get("toml")
+		if cv.Field(i).String() == "" && !optionalColorFields[name] {
+			return fmt.Errorf("theme %q: missing or empty color field %q", themeID, name)
 		}
 	}
 	pv := reflect.ValueOf(pb)
@@ -290,6 +299,15 @@ func (t *ConfigTheme) ColumnSecondary() lipgloss.Color { return lipgloss.Color(t
 
 // ColumnTertiary returns the metadata column color (duration, year, played time).
 func (t *ConfigTheme) ColumnTertiary() lipgloss.Color { return lipgloss.Color(t.c.ColumnTertiary) }
+
+// Accent returns the CLI accent color used by cliout palette resolution in "theme" mode.
+// When the TOML "accent" field is absent or empty, it falls back to SeekBar().
+func (t *ConfigTheme) Accent() lipgloss.Color {
+	if t.c.Accent != "" {
+		return lipgloss.Color(t.c.Accent)
+	}
+	return t.SeekBar()
+}
 
 // ---- Registry (lazy-loaded from embedded TOML files) ----
 

@@ -87,6 +87,10 @@ type Theme interface {
 	ColumnSecondary() lipgloss.Color // Supporting: artist, genre
 	ColumnTertiary() lipgloss.Color  // Metadata: duration, year, played time
 
+	// CLI accent — used by cliout palette resolution in "theme" mode (Story 146).
+	// Optional in TOML; implementations fall back to SeekBar() when "accent" is unset.
+	Accent() lipgloss.Color
+
 	// Metadata
 	ID() string   // Config key matching the TOML id field (e.g. "black", "dracula")
 	Name() string // Display name: "True Black", "Monokai", etc.
