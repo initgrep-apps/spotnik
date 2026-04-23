@@ -141,3 +141,15 @@ Items to log:
 2. No structural test verifying `rootCmd.SilenceErrors = true` and `SilenceUsage: true` on all five auth subcommands. A regression here would re-introduce double error printing.
 3. `fmt.Fprintln(os.Stderr, "Session expired. Please re-authenticate.")` in `EnsureAuthenticated` (cmd/root.go) is unstyled — inconsistent with the PR's styled CLI output system.
 4. `authLogoutCmd` and `authForgetCmd` styled success lines (`✓ Signed out`, `✓ Session ended`) are not captured by any test — the store is wired unconditionally inside the handler, making injection difficult without refactoring.
+
+---
+
+## cliout type design: encapsulation and invariant gaps
+**Found:** 2026-04-23 | **Source:** PR #191 Review (type-design-analyzer)
+**Feature:** 12-cli-output
+
+Items to log:
+1. `cliout.Fixed` is an exported mutable `var` — any import can overwrite the canonical fallback palette. Consider changing to an unexported `fixed` var plus exported `func Fixed() Palette` returning a copy.
+2. `Builder.Messages()` returns the live internal slice. External mutation silently corrupts builder state. Should return a copy (like `Recorder.Messages()` already does).
+3. `isMessage()` unexported marker method is redundant — `render(Palette) string` being unexported already seals the interface. The marker adds no additional enforcement.
+4. `Spinner` and `Prompt` satisfy `Message` but panic from `render()`. Any `[]Message` slice containing either becomes unsafe to pass to `Write`. Consider a narrower `RenderableMessage` interface or change stubs to return a sentinel string instead of panicking.

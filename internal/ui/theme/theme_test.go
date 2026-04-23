@@ -106,6 +106,8 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.ColumnTertiary()), "ColumnTertiary()")
 	// Story 79: Info token
 	assert.NotEmpty(t, string(th.Info()), "Info()")
+	// Story 146: Accent token (optional in TOML; falls back to SeekBar so always non-empty)
+	assert.NotEmpty(t, string(th.Accent()), "Accent()")
 }
 
 func TestAllThemes_ImplementInterface(t *testing.T) {
@@ -794,6 +796,80 @@ func TestRosePineTheme_Loads(t *testing.T) {
 func TestRosePineTheme_Base(t *testing.T) {
 	th := theme.Load("rosepine")
 	assert.Equal(t, "#191724", string(th.Base()))
+}
+
+// ---- Story 146: Accent() token ----
+
+// TestConfigTheme_Accent_fallsBackToSeekBarWhenUnset verifies that when a theme
+// has no explicit "accent" TOML field, Accent() returns the same value as SeekBar().
+func TestConfigTheme_Accent_fallsBackToSeekBarWhenUnset(t *testing.T) {
+	// minimalValidTOML has no "accent" field — fallback must kick in.
+	th, err := theme.ParseTheme([]byte(minimalValidTOML))
+	require.NoError(t, err)
+	// SeekBar is "#dddddd" in minimalValidTOML.
+	assert.Equal(t, th.SeekBar(), th.Accent(), "Accent() must fall back to SeekBar() when unset")
+}
+
+// TestConfigTheme_Accent_usesExplicitValueWhenSet verifies that when a theme
+// sets an explicit "accent" TOML field, Accent() returns that value, not SeekBar().
+func TestConfigTheme_Accent_usesExplicitValueWhenSet(t *testing.T) {
+	// accent must be inside [colors] section — insert before [pane_borders].
+	withAccent := `
+id = "test-accent"
+name = "Test Accent"
+
+[colors]
+base             = "#111111"
+surface          = "#222222"
+surface_alt      = "#333333"
+active_border    = "#444444"
+inactive_border  = "#555555"
+text_primary     = "#666666"
+text_secondary   = "#777777"
+text_muted       = "#888888"
+selected_bg      = "#999999"
+selected_fg      = "#aaaaaa"
+section_header   = "#bbbbbb"
+playing_indicator = "#cccccc"
+seek_bar         = "#dddddd"
+volume_bar       = "#eeeeee"
+success          = "#ff0000"
+warning          = "#00ff00"
+error            = "#0000ff"
+info             = "#00aaff"
+header_chip_fg   = "#112233"
+status_bar_bg    = "#223344"
+status_bar_fg    = "#334455"
+key_hint         = "#445566"
+gradient1        = "#556677"
+gradient2        = "#667788"
+gradient3        = "#778899"
+visualizer_fg    = "#889900"
+table_header     = "#990011"
+preset_indicator = "#001122"
+column_index     = "#aa1122"
+column_primary   = "#bb2233"
+column_secondary = "#cc3344"
+column_tertiary  = "#dd4455"
+accent           = "#00ff00"
+
+[pane_borders]
+now_playing     = "#ee5566"
+queue           = "#ff6677"
+playlists       = "#006677"
+albums          = "#007788"
+liked_songs     = "#008899"
+recently_played = "#009900"
+top_tracks      = "#00aa11"
+top_artists     = "#00bb22"
+request_flow    = "#00cc33"
+network_log     = "#00dd44"
+`
+	th, err := theme.ParseTheme([]byte(withAccent))
+	require.NoError(t, err)
+	assert.Equal(t, "#00ff00", string(th.Accent()), "Accent() must return explicit value when set")
+	// seek_bar is "#dddddd", accent is "#00ff00" — they must differ.
+	assert.NotEqual(t, th.SeekBar(), th.Accent(), "Accent() must not equal SeekBar() when explicitly set")
 }
 
 func TestSolarizedTheme_Loads(t *testing.T) {
