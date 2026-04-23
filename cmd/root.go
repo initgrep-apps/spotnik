@@ -175,6 +175,26 @@ func PrintExecuteError(w io.Writer, err error) {
 	cliout.Write(w, cliout.Step{Status: cliout.StatusFailure, Text: err.Error()})
 }
 
+// PrintRegisterAuthFailure writes the "Authorization failed" error block for
+// spotnik auth register to w. Exported for testing.
+func PrintRegisterAuthFailure(w io.Writer, err error) {
+	cliout.Write(w,
+		cliout.Step{Status: cliout.StatusFailure, Text: "Authorization failed"},
+		cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", err.Error())}},
+		cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to try again"},
+	)
+}
+
+// PrintLoginAuthFailure writes the "Authentication failed" error block for
+// spotnik auth login to w. Exported for testing.
+func PrintLoginAuthFailure(w io.Writer, err error) {
+	cliout.Write(w,
+		cliout.Step{Status: cliout.StatusFailure, Text: "Authentication failed"},
+		cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", err.Error())}},
+		cliout.Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to try again"},
+	)
+}
+
 // PrintAuthLoginNoClientID writes the "no client_id configured" error block to w.
 // Exported for testing.
 func PrintAuthLoginNoClientID(w io.Writer) {
@@ -517,11 +537,7 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	store := keychain.NewKeychainTokenStore()
 	if err := RunAuthFlow(cfg, store, "", w); err != nil {
-		cliout.Write(c.ErrOrStderr(),
-			cliout.Step{Status: cliout.StatusFailure, Text: "Authorization failed"},
-			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", err.Error())}},
-			cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to try again"},
-		)
+		PrintRegisterAuthFailure(c.ErrOrStderr(), err)
 		return errAlreadyPrinted
 	}
 
@@ -549,11 +565,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 	}
 
 	if err := RunAuthFlow(cfg, store, "", c.OutOrStdout()); err != nil {
-		cliout.Write(c.ErrOrStderr(),
-			cliout.Step{Status: cliout.StatusFailure, Text: "Authentication failed"},
-			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", err.Error())}},
-			cliout.Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to try again"},
-		)
+		PrintLoginAuthFailure(c.ErrOrStderr(), err)
 		return errAlreadyPrinted
 	}
 

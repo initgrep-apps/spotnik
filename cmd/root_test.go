@@ -941,3 +941,19 @@ func TestGolden_MissingClientIDInstructions(t *testing.T) {
 	require.NoError(t, cmd.PrintMissingClientIDInstructions(&buf))
 	assertGolden(t, "missing_clientid_instructions", buf.String())
 }
+
+// TestGolden_RegisterAuthFailure verifies the layout of the auth failure output for
+// spotnik auth register.
+func TestGolden_RegisterAuthFailure(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintRegisterAuthFailure(&buf, fmt.Errorf("callback timeout after 120s"))
+	assertGolden(t, "register_auth_failure", buf.String())
+}
+
+// TestGolden_LoginAuthFailure verifies the layout of the auth failure output for
+// spotnik auth login.
+func TestGolden_LoginAuthFailure(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintLoginAuthFailure(&buf, fmt.Errorf("token exchange failed: 400 Bad Request"))
+	assertGolden(t, "login_auth_failure", buf.String())
+}

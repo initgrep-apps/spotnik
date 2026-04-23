@@ -1,0 +1,4 @@
+
+  ✗ Authorization failed                  
+  Reason  callback timeout after 120s     
+  → Run spotnik auth register to try again
