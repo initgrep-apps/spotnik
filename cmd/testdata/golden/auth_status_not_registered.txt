@@ -1,0 +1,3 @@
+
+  ◎  Spotnik  not registered                                 
+  → Run spotnik auth register to connect your Spotify account

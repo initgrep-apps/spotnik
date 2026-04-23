@@ -241,8 +241,8 @@ func RunForget(store keychain.TokenStore, configPath string) error {
 	return nil
 }
 
-// PrintAuthStatus writes current auth + registration state to w using the shared CLI
-// style vars. Always uses the standard CLI colour palette (not theme-dependent).
+// PrintAuthStatus writes current auth + registration state to w.
+// Always uses the standard CLI colour palette (not theme-dependent).
 // Exported for testing.
 func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) error {
 	cfg, err := loadConfigFromPath(configPath)
@@ -250,67 +250,58 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 		cfg = config.Default()
 	}
 
-	switch cfg.ClientID {
-	case "":
+	if cfg.ClientID == "" {
 		// Not registered — no client_id in config.
-		cliOut(w,
-			cliDimS.Render("◎ Spotnik  ")+"not registered",
-			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to connect your Spotify account",
+		cliout.Write(w,
+			cliout.Header{Status: cliout.Inactive, Subject: "Spotnik", State: "not registered"},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to connect your Spotify account"},
 		)
 		return nil
+	}
 
-	default:
-		access, _ := store.Get(keychain.KeyAccessToken)
-		if access == "" {
-			// Registered but not authenticated.
-			cliOut(w,
-				cliDimS.Render("◎ Spotnik  ")+"not authenticated",
-				cliKV([][2]string{{"Client ID", "present"}}),
-				cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to connect",
-			)
-			return nil
-		}
-
-		expiringSoon, expiryErr := store.IsExpiringSoon()
-		if expiryErr != nil {
-			// Cannot read token state — show warning, don't claim healthy.
-			cliOut(w,
-				cliWarnS.Render("⚠")+" Spotnik  session state unknown",
-				cliDimS.Render("Could not read token state from keychain"),
-				cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to re-authenticate",
-			)
-			return nil
-		}
-		var expiry time.Time
-		expiry, expiryErr = store.GetExpiry()
-
-		var expiryVal string
-		if expiryErr == nil {
-			expiryVal = expiry.Format("Mon, 02 Jan 2006 15:04 UTC")
-		}
-		if expiringSoon {
-			expiryVal += "  ·  auto-refresh pending"
-		}
-
-		kvPairs := [][2]string{{"Client ID", "present"}}
-		if expiryVal != "" {
-			kvPairs = append(kvPairs, [2]string{"Expires", expiryVal})
-		}
-
-		if expiringSoon {
-			cliOut(w,
-				cliWarnS.Render("⚠")+" Spotnik  session expiring",
-				cliKV(kvPairs),
-				cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to re-authenticate if auto-refresh fails",
-			)
-		} else {
-			cliOut(w,
-				cliAccentS.Render("◉")+" Spotnik  authenticated",
-				cliKV(kvPairs),
-			)
-		}
+	access, _ := store.Get(keychain.KeyAccessToken)
+	if access == "" {
+		// Registered but not authenticated.
+		cliout.Write(w,
+			cliout.Header{Status: cliout.Inactive, Subject: "Spotnik", State: "not authenticated"},
+			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Client ID", "present")}},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to connect"},
+		)
 		return nil
 	}
+
+	expiringSoon, expiryErr := store.IsExpiringSoon()
+	if expiryErr != nil {
+		// Cannot read token state — show warning, don't claim healthy.
+		cliout.Write(w,
+			cliout.Header{Status: cliout.StatusWarning, Subject: "Spotnik", State: "session state unknown"},
+			cliout.Paragraph{Text: "Could not read token state from keychain", Dim: true},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to re-authenticate"},
+		)
+		return nil
+	}
+
+	expiry, _ := store.GetExpiry()
+	expiryVal := expiry.Format("Mon, 02 Jan 2006 15:04 UTC")
+	var pairs []cliout.KVPair
+	pairs = append(pairs, cliout.Pair("Client ID", "present"))
+
+	if expiringSoon {
+		pairs = append(pairs, cliout.PairWithCaption("Expires", expiryVal, "auto-refresh pending"))
+		cliout.Write(w,
+			cliout.Header{Status: cliout.StatusWarning, Subject: "Spotnik", State: "session expiring"},
+			cliout.KV{Pairs: pairs},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to re-authenticate if auto-refresh fails"},
+		)
+		return nil
+	}
+
+	pairs = append(pairs, cliout.Pair("Expires", expiryVal))
+	cliout.Write(w,
+		cliout.Header{Status: cliout.Active, Subject: "Spotnik", State: "authenticated"},
+		cliout.KV{Pairs: pairs},
+	)
+	return nil
 }
 
 // CheckAuthState returns (needsRegister, needsAuth).

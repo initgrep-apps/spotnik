@@ -824,3 +824,79 @@ func TestGolden_AuthForget(t *testing.T) {
 	cmd.PrintForgetSuccess(&buf)
 	assertGolden(t, "auth_forget", buf.String())
 }
+
+// TestGolden_AuthStatus_NotRegistered verifies the layout when no client_id is set.
+func TestGolden_AuthStatus_NotRegistered(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_not_registered", buf.String())
+}
+
+// TestGolden_AuthStatus_NotAuthenticated verifies the layout when client_id is set
+// but no access token is present.
+func TestGolden_AuthStatus_NotAuthenticated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_not_authenticated", buf.String())
+}
+
+// TestGolden_AuthStatus_Authenticated verifies the layout for a healthy authenticated session.
+// Uses a fixed far-future Unix timestamp (2099-01-01 00:00:00 UTC) so the session is
+// never expiring-soon regardless of when the test runs.
+func TestGolden_AuthStatus_Authenticated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	// Fixed far-future timestamp: Fri, 01 Jan 2099 00:00 UTC (never expires in tests).
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "4070908800"))
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_authenticated", buf.String())
+}
+
+// TestGolden_AuthStatus_Expiring verifies the layout for a session that has expired.
+// Uses a fixed past Unix timestamp (2025-01-01 00:00:00 UTC). IsExpiringSoon returns
+// true for already-expired tokens (negative time-until < 5-minute threshold), so this
+// consistently triggers the "session expiring" branch with deterministic output.
+func TestGolden_AuthStatus_Expiring(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	// Fixed past timestamp: Wed, 01 Jan 2025 00:00 UTC.
+	// IsExpiringSoon returns true for past expiry (time.Until < 5-min threshold).
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "1735689600"))
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_expiring", buf.String())
+}
+
+// TestGolden_AuthStatus_ExpiryUnreadable verifies the layout when the token expiry
+// key is present but not parseable (IsExpiringSoon returns error).
+func TestGolden_AuthStatus_ExpiryUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[spotify]\nclient_id = \"abc\"\n"), 0o600))
+	store := keychain.NewInMemoryTokenStore()
+	require.NoError(t, store.Set(keychain.KeyAccessToken, "tok"))
+	require.NoError(t, store.Set(keychain.KeyTokenExpiry, "not-a-number"))
+
+	var buf bytes.Buffer
+	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
+	assertGolden(t, "auth_status_expiry_unreadable", buf.String())
+}
