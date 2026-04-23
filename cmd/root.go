@@ -492,18 +492,7 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", cfg.CallbackPort)
 
-	// NOTE: redirect URI is placed on its own line (URL message) for readability.
-	// This is a deliberate layout change from the previous version where the URI
-	// was inline in the Steps body with accent colour applied manually.
-	cliout.Write(w,
-		cliout.Header{Status: cliout.Inactive, Subject: "Spotnik", State: "not registered"},
-		cliout.Steps{Items: []string{
-			"Go to developer.spotify.com/dashboard",
-			"Create or select a Spotify app",
-			"Add this redirect URI:",
-		}},
-		cliout.URL{Href: redirectURI},
-	)
+	PrintRegisterInstructions(w, redirectURI)
 	_, _ = fmt.Fprint(w, "  Client ID: ")
 
 	scanner := bufio.NewScanner(r)
@@ -549,11 +538,7 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 		return err
 	}
 	if cfg.ClientID == "" {
-		cliout.Write(c.ErrOrStderr(),
-			cliout.Step{Status: cliout.StatusFailure, Text: "Authentication failed"},
-			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", "no client_id configured")}},
-			cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to set up your Spotify app"},
-		)
+		PrintAuthLoginNoClientID(c.ErrOrStderr())
 		return errAlreadyPrinted
 	}
 
