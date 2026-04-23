@@ -220,6 +220,23 @@ func PrintForgetSuccess(w io.Writer) {
 	)
 }
 
+// PrintAuthLoginNoClientID writes the "no client_id configured" error block to w.
+// Exported for testing.
+func PrintAuthLoginNoClientID(w io.Writer) {
+	cliout.Write(w,
+		cliout.Step{Status: cliout.StatusFailure, Text: "Authentication failed"},
+		cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", "no client_id configured")}},
+		cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to set up your Spotify app"},
+	)
+}
+
+// PrintSignedInLaunching writes the "Signed in → Launching spotnik…" success pair to w.
+// Exported for testing. Used by both runAuthLogin and runRegister.
+func PrintSignedInLaunching(w io.Writer) {
+	cliout.Write(w, cliout.Header{Status: cliout.Active, Subject: "Signed in", State: ""})
+	cliout.WriteInline(w, cliout.Hint{Tail: "Launching spotnik…"})
+}
+
 // LogoutTokens removes all stored token keys from the token store.
 // Exported for testing.
 func LogoutTokens(store keychain.TokenStore) error {
@@ -562,10 +579,10 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 		return err
 	}
 	if cfg.ClientID == "" {
-		cliOut(c.ErrOrStderr(),
-			cliErrS.Render("✗")+" Authentication failed",
-			cliKV([][2]string{{"Reason", "no client_id configured"}}),
-			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth register")+" to set up your Spotify app",
+		cliout.Write(c.ErrOrStderr(),
+			cliout.Step{Status: cliout.StatusFailure, Text: "Authentication failed"},
+			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", "no client_id configured")}},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth register", Tail: "to set up your Spotify app"},
 		)
 		return errAlreadyPrinted
 	}
@@ -577,16 +594,15 @@ func runAuthLogin(c *cobra.Command, _ []string) error {
 	}
 
 	if err := RunAuthFlow(cfg, store, "", c.OutOrStdout()); err != nil {
-		cliOut(c.ErrOrStderr(),
-			cliErrS.Render("✗")+" Authentication failed",
-			cliKV([][2]string{{"Reason", err.Error()}}),
-			cliAccentS.Render("→")+" Run "+cliAccentS.Render("spotnik auth login")+" to try again",
+		cliout.Write(c.ErrOrStderr(),
+			cliout.Step{Status: cliout.StatusFailure, Text: "Authentication failed"},
+			cliout.KV{Pairs: []cliout.KVPair{cliout.Pair("Reason", err.Error())}},
+			cliout.Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to try again"},
 		)
 		return errAlreadyPrinted
 	}
 
-	cliOut(c.OutOrStdout(), cliAccentS.Render("◉")+" Signed in")
-	cliLine(c.OutOrStdout(), cliAccentS.Render("→")+" Launching spotnik…")
+	PrintSignedInLaunching(c.OutOrStdout())
 	return runApp(c, []string{})
 }
 

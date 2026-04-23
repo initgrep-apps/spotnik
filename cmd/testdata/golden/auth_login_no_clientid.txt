@@ -1,0 +1,4 @@
+
+  ✗ Authentication failed                               
+  Reason  no client_id configured                       
+  → Run spotnik auth register to set up your Spotify app

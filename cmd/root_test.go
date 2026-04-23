@@ -900,3 +900,18 @@ func TestGolden_AuthStatus_ExpiryUnreadable(t *testing.T) {
 	require.NoError(t, cmd.PrintAuthStatus(store, path, &buf))
 	assertGolden(t, "auth_status_expiry_unreadable", buf.String())
 }
+
+// TestGolden_AuthLogin_NoClientID verifies the layout for the "no client_id" auth login error.
+func TestGolden_AuthLogin_NoClientID(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintAuthLoginNoClientID(&buf)
+	assertGolden(t, "auth_login_no_clientid", buf.String())
+}
+
+// TestGolden_SignedInLaunching verifies the "Signed in → Launching spotnik…" output.
+// This block is shared by both runAuthLogin and runRegister.
+func TestGolden_SignedInLaunching(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintSignedInLaunching(&buf)
+	assertGolden(t, "signed_in_launching", buf.String())
+}
