@@ -320,12 +320,12 @@ func PrintAuthStatus(store keychain.TokenStore, configPath string, w io.Writer) 
 }
 
 // CheckAuthState returns (needsRegister, needsAuth).
-//   - needsRegister: no client_id in config.
-//   - needsAuth: client_id present but no valid token.
+//   - needsRegister: no client_id in config, or client_id fails format validation.
+//   - needsAuth: client_id is valid but no usable token is stored.
 //
 // Exported for testing.
 func CheckAuthState(cfg *config.Config, store keychain.TokenStore) (needsRegister, needsAuth bool) {
-	if cfg.ClientID == "" {
+	if cfg.ClientID == "" || config.ValidateClientID(cfg.ClientID) != nil {
 		return true, false
 	}
 
