@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/cliout"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
@@ -206,7 +207,7 @@ var authStatusCmd = &cobra.Command{
 // PrintLogoutSuccess writes the styled "Signed out" confirmation block to w.
 // Exported for testing.
 func PrintLogoutSuccess(w io.Writer) {
-	cliOut(w, cliAccentS.Render("✓")+" Signed out")
+	cliout.Write(w, cliout.Step{Status: cliout.StatusSuccess, Text: "Signed out"})
 }
 
 // PrintForgetSuccess writes the styled "Session ended" confirmation block to w.

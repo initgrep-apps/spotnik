@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,16 +18,36 @@ import (
 
 	"github.com/initgrep-apps/spotnik/cmd"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/cliout"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestMain disables browser opening for all tests in this package.
+// updateGolden is set with -update to refresh all golden files.
+var updateGolden = flag.Bool("update", false, "update golden files")
+
+// TestMain disables browser opening and pins ASCII rendering for all tests in this package.
 func TestMain(m *testing.M) {
 	api.OpenBrowser = func(string) error { return nil }
+	cliout.SetTestMode(true)
 	os.Exit(m.Run())
+}
+
+// assertGolden reads the expected output from testdata/golden/<name>.txt and
+// compares it to got. Pass -update to refresh all golden files.
+func assertGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", "golden", name+".txt")
+	if *updateGolden {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(got), 0o644))
+		return
+	}
+	want, err := os.ReadFile(path)
+	require.NoError(t, err, "missing golden file %s — run with -update", path)
+	assert.Equal(t, string(want), got, "golden mismatch for %s", name)
 }
 
 // TestRootCmd_Executes verifies the root command runs without error.
@@ -788,4 +809,11 @@ func TestPrintAuthStatus_fourStates(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGolden_AuthLogout verifies the exact layout of the logout success output.
+func TestGolden_AuthLogout(t *testing.T) {
+	var buf bytes.Buffer
+	cmd.PrintLogoutSuccess(&buf)
+	assertGolden(t, "auth_logout", buf.String())
 }
