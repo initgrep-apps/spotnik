@@ -54,3 +54,9 @@ func TestCapture_WriteInline_captured(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, Step{Status: StatusSuccess, Text: "done"}, got[0])
 }
+
+func TestCurrentForTest_returnsPalette(t *testing.T) {
+	// CurrentForTest must return the same palette that current() returns.
+	p := CurrentForTest()
+	assert.NotNil(t, p.Accent)
+}

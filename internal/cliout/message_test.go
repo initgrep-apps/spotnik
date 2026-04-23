@@ -182,3 +182,18 @@ var _ Message = URL{}
 var _ Message = Paragraph{}
 var _ Message = Spinner{}
 var _ Message = Prompt{}
+
+// TestIsMessage_markers calls every isMessage() method so that coverage counts
+// the no-op marker methods rather than leaving them at 0%. The methods exist
+// only to enforce the sealed Message interface within the package.
+func TestIsMessage_markers(t *testing.T) {
+	Header{}.isMessage()
+	Step{}.isMessage()
+	KV{}.isMessage()
+	Steps{}.isMessage()
+	Hint{}.isMessage()
+	URL{}.isMessage()
+	Paragraph{}.isMessage()
+	Spinner{}.isMessage()
+	Prompt{}.isMessage()
+}
