@@ -1,6 +1,6 @@
 ---
 title: "CLI Output Renderer"
-status: open
+status: done
 ---
 
 ## Description

@@ -153,3 +153,15 @@ Items to log:
 2. `Builder.Messages()` returns the live internal slice. External mutation silently corrupts builder state. Should return a copy (like `Recorder.Messages()` already does).
 3. `isMessage()` unexported marker method is redundant — `render(Palette) string` being unexported already seals the interface. The marker adds no additional enforcement.
 4. `Spinner` and `Prompt` satisfy `Message` but panic from `render()`. Any `[]Message` slice containing either becomes unsafe to pass to `Write`. Consider a narrower `RenderableMessage` interface or change stubs to return a sentinel string instead of panicking.
+
+---
+
+## cliout spinner/prompt: theoretical concurrency and UX gaps
+**Found:** 2026-04-23 | **Source:** PR #194 Review (silent-failure-hunter, test-analyzer)
+**Feature:** 12-cli-output
+
+Items to log:
+1. `sigCh` is written inside `sigOnce.Do` but read in `UninstallSIGINTHandler` without a synchronizing mutex. Sequential in practice (main goroutine), theoretical data race under concurrent use. Fix: protect `sigCh` reads/writes with a mutex or use `atomic.Pointer`.
+2. `UninstallSIGINTHandler` calls `signal.Stop(sigCh)` but does not unblock the goroutine blocked on `<-ch`. One goroutine leaks per process invocation (acceptable for CLI, invisible to users but shows in pprof). Fix: add a quit channel to the goroutine select so `UninstallSIGINTHandler` can unblock it cleanly.
+3. `validateClientID` uses `hex.DecodeString` which accepts uppercase A–F, but the doc comment says "32 lowercase hex chars". Spotify dashboard always emits lowercase but a mixed-case paste passes validation silently. Fix: add `strings.ToLower(s)` before the hex check (or document the permissive behavior).
+4. `TestUninstallSIGINTHandler_nilSigCh` only covers the no-op path (sigCh == nil). The production `signal.Stop(sigCh)` branch is never exercised by tests. Fix: add a test that sets `sigCh` directly and calls `UninstallSIGINTHandler`, asserting no panic.

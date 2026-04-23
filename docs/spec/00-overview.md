@@ -20,7 +20,7 @@
 | 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | done | 02, 17, 76, 79*, 80, 114–117, 134–140, 141–145 | PKCE OAuth, token refresh, config-first client ID, TUI onboarding flow, auth CLI subcommands, profile logout/forget, UX polish |
 | 10 | Developer Visibility (Page B) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
 | 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133 | GitHub Actions, GoReleaser, release-please, version injection, multi-platform distribution |
-| 12 | CLI Output Renderer | `features/12-cli-output/` | in-progress | 146–148(done) 149 | Reusable `internal/cliout` package, typed message taxonomy, `docs/CLI-OUTPUT.md` reference, palette config, TTY-guarded spinner, validated prompt |
+| 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | Reusable `internal/cliout` package, typed message taxonomy, `docs/CLI-OUTPUT.md` reference, palette config, TTY-guarded spinner, validated prompt |
 
 
 ---
