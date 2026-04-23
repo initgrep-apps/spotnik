@@ -42,6 +42,14 @@ type spotifyConfig struct {
 	CallbackPort int    `toml:"callback_port"`
 }
 
+// CLIConfig holds CLI-specific settings.
+type CLIConfig struct {
+	// Palette controls how CLI output colours are resolved.
+	// Valid values: "auto", "fixed", "theme".
+	// Empty or unrecognised values are clamped to "auto" on load.
+	Palette string `toml:"palette"`
+}
+
 // Config holds all application configuration.
 type Config struct {
 	// ClientID is the Spotify application client ID.
@@ -54,6 +62,14 @@ type Config struct {
 	CallbackPort int
 
 	Preferences PreferencesConfig `toml:"preferences"`
+	CLI         CLIConfig         `toml:"cli"`
+}
+
+// validPalettes is the set of accepted palette mode strings.
+var validPalettes = map[string]bool{
+	"auto":  true,
+	"fixed": true,
+	"theme": true,
 }
 
 // Default returns a Config populated with sensible defaults.
@@ -63,6 +79,7 @@ func Default() *Config {
 		Preferences: PreferencesConfig{
 			Theme: "black",
 		},
+		CLI: CLIConfig{Palette: "auto"},
 	}
 }
 
@@ -79,9 +96,11 @@ func Load(path string) (*Config, error) {
 	raw := struct {
 		Spotify     spotifyConfig     `toml:"spotify"`
 		Preferences PreferencesConfig `toml:"preferences"`
+		CLI         CLIConfig         `toml:"cli"`
 	}{
 		// Pre-populate Preferences with defaults so unset fields keep their defaults.
 		Preferences: cfg.Preferences,
+		CLI:         cfg.CLI,
 	}
 
 	_, err := toml.DecodeFile(path, &raw)
@@ -100,6 +119,7 @@ func Load(path string) (*Config, error) {
 		cfg.CallbackPort = raw.Spotify.CallbackPort
 	}
 	cfg.Preferences = raw.Preferences
+	cfg.CLI = raw.CLI
 
 	// Clamp theme: if empty or not recognised by the registry, fall back to default.
 	// ThemeValidator is registered by cmd/root.go at startup to avoid an import
@@ -123,6 +143,15 @@ func Load(path string) (*Config, error) {
 	if cfg.Preferences.Visualizer < 0 {
 		fmt.Fprintf(os.Stderr, "spotnik: warning: negative visualizer %d clamped to 0\n", cfg.Preferences.Visualizer)
 		cfg.Preferences.Visualizer = 0
+	}
+
+	// Clamp invalid CLI palette to "auto". Empty string (field absent) is silently
+	// set to "auto"; non-empty invalid values produce a stderr warning.
+	if cfg.CLI.Palette == "" {
+		cfg.CLI.Palette = "auto"
+	} else if !validPalettes[cfg.CLI.Palette] {
+		fmt.Fprintf(os.Stderr, "config: invalid cli.palette %q — using \"auto\"\n", cfg.CLI.Palette)
+		cfg.CLI.Palette = "auto"
 	}
 
 	return cfg, nil
@@ -152,6 +181,13 @@ const defaultTemplate = `# Spotnik configuration
 theme = "black"
 # preset = 0          # Page A layout preset index (0-based)
 # visualizer = 0      # Visualizer pattern index (0-6)
+
+[cli]
+# CLI palette: "auto" (default), "fixed", or "theme"
+# - auto:  theme colours on dark-bg terminals, fixed elsewhere
+# - fixed: always the built-in Spotnik palette
+# - theme: inherit the TUI theme (may be unreadable on light terminals)
+palette = "auto"
 `
 
 // Bootstrap creates the config file at path with a default template if it does

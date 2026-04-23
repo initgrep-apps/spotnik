@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -472,6 +473,69 @@ func TestSetClientID_fileNotExist(t *testing.T) {
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
 	assert.Equal(t, "brand-new-id", cfg.ClientID, "client_id should be set in newly created file")
+}
+
+// ---- CLIConfig tests ----
+
+// TestDefault_CLIPaletteAuto verifies that Default() sets CLI.Palette to "auto".
+func TestDefault_CLIPaletteAuto(t *testing.T) {
+	cfg := config.Default()
+	assert.Equal(t, "auto", cfg.CLI.Palette)
+}
+
+// TestLoad_defaultCLIPaletteIsAuto verifies that omitting [cli] from the config
+// results in cfg.CLI.Palette == "auto".
+func TestLoad_defaultCLIPaletteIsAuto(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[preferences]
+theme = "black"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "auto", cfg.CLI.Palette)
+}
+
+// TestLoad_validCLIPaletteValues verifies that all three valid palette values are
+// preserved as-is after Load.
+func TestLoad_validCLIPaletteValues(t *testing.T) {
+	for _, v := range []string{"auto", "fixed", "theme"} {
+		v := v
+		t.Run(v, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.toml")
+			content := fmt.Sprintf("[cli]\npalette = %q\n", v)
+			require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+			cfg, err := config.Load(path)
+			require.NoError(t, err)
+			assert.Equal(t, v, cfg.CLI.Palette)
+		})
+	}
+}
+
+// TestLoad_invalidCLIPaletteClampsToAuto verifies that an unrecognised palette
+// value is clamped to "auto" after Load.
+func TestLoad_invalidCLIPaletteClampsToAuto(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[cli]\npalette = \"neon\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "auto", cfg.CLI.Palette)
+}
+
+// TestBootstrap_writesCLISection verifies that Bootstrap writes a [cli] section
+// with palette = "auto" into a new config file.
+func TestBootstrap_writesCLISection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, config.Bootstrap(path))
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "[cli]")
+	assert.Contains(t, string(body), `palette = "auto"`)
 }
 
 // TestBootstrap_StatErrorPropagated verifies that Bootstrap returns an error when

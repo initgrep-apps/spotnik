@@ -1,7 +1,7 @@
 ---
 title: "[cli] palette config — auto/fixed/theme resolution at CLI startup"
 feature: 12-cli-output
-status: open
+status: done
 ---
 
 ## Background
