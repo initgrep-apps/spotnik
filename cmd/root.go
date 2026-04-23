@@ -4,13 +4,11 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -553,17 +551,10 @@ func runRegister(c *cobra.Command, r io.Reader) error {
 	return runApp(c, []string{})
 }
 
-// validateClientID enforces the Spotify client-ID shape: 32 lowercase hex chars.
-// Returns a user-facing error on mismatch so cliout.Ask can display and retry.
+// validateClientID delegates to config.ValidateClientID so cliout.Ask can
+// display and retry on mismatch.
 func validateClientID(s string) error {
-	s = strings.TrimSpace(s)
-	if len(s) != 32 {
-		return fmt.Errorf("client ID must be 32 characters (got %d)", len(s))
-	}
-	if _, err := hex.DecodeString(s); err != nil {
-		return fmt.Errorf("client ID must be hexadecimal")
-	}
-	return nil
+	return config.ValidateClientID(s)
 }
 
 // runAuthLogin forces a fresh re-authentication flow.

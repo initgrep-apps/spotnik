@@ -3,6 +3,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -166,6 +167,20 @@ func DefaultConfigPath() string {
 		return "config.toml"
 	}
 	return fmt.Sprintf("%s/.config/spotnik/config.toml", home)
+}
+
+// ValidateClientID enforces the Spotify client ID shape: exactly 32 hexadecimal
+// characters (after trimming whitespace). Used by both the CLI prompt and the
+// TUI onboarding step to reject malformed IDs before writing to config.
+func ValidateClientID(s string) error {
+	s = strings.TrimSpace(s)
+	if len(s) != 32 {
+		return fmt.Errorf("client ID must be 32 characters (got %d)", len(s))
+	}
+	if _, err := hex.DecodeString(s); err != nil {
+		return fmt.Errorf("client ID must be hexadecimal")
+	}
+	return nil
 }
 
 // defaultTemplate is the config file template written on first launch.
