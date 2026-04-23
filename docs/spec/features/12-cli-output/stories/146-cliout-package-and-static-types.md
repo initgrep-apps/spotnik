@@ -1,7 +1,7 @@
 ---
 title: "internal/cliout — package foundation, static message types, reference doc"
 feature: 12-cli-output
-status: open
+status: done
 ---
 
 ## Background
