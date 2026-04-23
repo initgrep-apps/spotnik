@@ -12,6 +12,3 @@ import (
 func RunRegister(c *cobra.Command, r io.Reader) error {
 	return runRegister(c, r)
 }
-
-// ValidateClientID is a test-only export of validateClientID.
-var ValidateClientID = validateClientID

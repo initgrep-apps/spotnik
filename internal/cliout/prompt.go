@@ -54,11 +54,11 @@ func Ask(r io.Reader, w io.Writer, p Prompt) (string, error) {
 		if p.Validate == nil {
 			return value, nil
 		}
-		if err := p.Validate(value); err == nil {
-			return value, nil
-		} else {
+		if err := p.Validate(value); err != nil {
 			WriteInline(w, Step{Status: StatusFailure, Text: err.Error()})
+			continue
 		}
+		return value, nil
 	}
 
 	Write(w, Step{Status: StatusFailure, Text: fmt.Sprintf("Giving up after %d attempts", maxPromptAttempts)})
