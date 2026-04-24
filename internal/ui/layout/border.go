@@ -5,7 +5,6 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
-	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // superscripts maps toggle key numbers 1-8 to their Unicode superscript equivalents.
@@ -38,20 +37,61 @@ type BorderConfig struct {
 	FilterQuery string
 	// Theme provides KeyHint() and TextMuted() colors for action rendering.
 	Theme theme.Theme
+
+	// Glyph overrides for the six structural border characters. When any field
+	// is empty, the unicode default is used. PaneChrome.Render populates these
+	// via uikit.GlyphFor so that the active GlyphMode is honoured without
+	// creating an import cycle (layout → uikit → layout).
+	//
+	// Direct callers of RenderPaneBorder that do not set these fields always
+	// receive unicode rounded corners — the existing behaviour before S2.
+	CornerTL string // top-left corner (default ╭, ascii +)
+	CornerTR string // top-right corner (default ╮, ascii +)
+	CornerBL string // bottom-left corner (default ╰, ascii +)
+	CornerBR string // bottom-right corner (default ╯, ascii +)
+	HRule    string // horizontal rule (default ─, ascii -)
+	VRule    string // vertical rule   (default │, ascii |)
+
+	// ToggleKeyStr overrides the auto-derived superscript for ToggleKey. When
+	// non-empty this string is used verbatim as the key prefix rendered before
+	// the title. PaneChrome.Render sets this to a plain "N " (digit + space) in
+	// ascii mode instead of the default unicode superscript. Direct callers that
+	// only set ToggleKey (int) continue to receive the unicode superscript.
+	ToggleKeyStr string
 }
 
-// corners returns the six border characters (tl, tr, bl, br, horizontal rule,
-// vertical rule) resolved from the active GlyphMode. In unicode mode the
-// standard rounded characters are returned; in ascii mode each is replaced by
-// its printable-ASCII equivalent so the renderer works in any terminal.
-func corners() (tl, tr, bl, br, h, v string) {
-	m := uikit.ActiveMode()
-	return uikit.GlyphFor(uikit.GlyphCornerTL, m),
-		uikit.GlyphFor(uikit.GlyphCornerTR, m),
-		uikit.GlyphFor(uikit.GlyphCornerBL, m),
-		uikit.GlyphFor(uikit.GlyphCornerBR, m),
-		uikit.GlyphFor(uikit.GlyphHRule, m),
-		uikit.GlyphFor(uikit.GlyphVRule, m)
+// resolveGlyphs returns the six border characters from the config overrides,
+// falling back to unicode rounded corners when a field is empty.
+//
+// NOTE: border.go must not import internal/uikit — doing so creates a cycle
+// (uikit/pane_chrome.go imports layout). Glyph resolution is the caller's
+// responsibility; PaneChrome.Render does it before forwarding here.
+func resolveGlyphs(cfg BorderConfig) (tl, tr, bl, br, h, v string) {
+	tl = cfg.CornerTL
+	if tl == "" {
+		tl = "╭"
+	}
+	tr = cfg.CornerTR
+	if tr == "" {
+		tr = "╮"
+	}
+	bl = cfg.CornerBL
+	if bl == "" {
+		bl = "╰"
+	}
+	br = cfg.CornerBR
+	if br == "" {
+		br = "╯"
+	}
+	h = cfg.HRule
+	if h == "" {
+		h = "─"
+	}
+	v = cfg.VRule
+	if v == "" {
+		v = "│"
+	}
+	return
 }
 
 // RenderPaneBorder wraps content in a btop-style border.
@@ -110,9 +150,10 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 
 	// ── Build top border ─────────────────────────────────────────────────────
 
-	// Resolve corner and rule glyphs from the active GlyphMode so ascii mode
-	// substitutes +/- for ╭╮╰╯─│ transparently.
-	cornerTL, cornerTR, cornerBL, cornerBR, hBar, vBar := corners()
+	// Resolve corner and rule glyphs. Callers that set BorderConfig.CornerTL
+	// etc. (e.g. PaneChrome.Render) get their chosen glyphs; callers that
+	// leave those fields empty fall back to unicode rounded corners.
+	cornerTL, cornerTR, cornerBL, cornerBR, hBar, vBar := resolveGlyphs(cfg)
 
 	// Build the right-side segment (actions or filter).
 	rightSegment := buildRightSegment(cfg, keyHintStyle, mutedStyle)
@@ -235,10 +276,13 @@ func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) s
 		return style.Render(s)
 	}
 
-	m := uikit.ActiveMode()
-	trCorner := uikit.GlyphFor(uikit.GlyphCornerTR, m)
-	tlCorner := uikit.GlyphFor(uikit.GlyphCornerTL, m)
-	hRule := uikit.GlyphFor(uikit.GlyphHRule, m)
+	// Resolve glyphs for notch characters from the config overrides. These are
+	// the same fields populated by PaneChrome.Render; direct callers that leave
+	// them empty fall back to unicode rounded corners.
+	rsTL, rsTR, _, _, rsH, _ := resolveGlyphs(cfg)
+	trCorner := rsTR
+	tlCorner := rsTL
+	hRule := rsH
 
 	if cfg.FilterQuery != "" {
 		// Filter mode — notch format matching actions mode.
@@ -268,9 +312,14 @@ func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) s
 // buildLeftInner builds the inner-left content of the top border:
 // superscript toggle key (if ToggleKey > 0) + title.
 // Colors are applied via the provided style functions.
+//
+// When cfg.ToggleKeyStr is non-empty it is used verbatim instead of the
+// auto-derived unicode superscript — PaneChrome sets this in ascii mode.
 func buildLeftInner(cfg BorderConfig, keyHintStyle, titleStyle func(string) string) string {
 	var b strings.Builder
-	if sup, ok := superscripts[cfg.ToggleKey]; ok {
+	if cfg.ToggleKeyStr != "" {
+		b.WriteString(keyHintStyle(cfg.ToggleKeyStr))
+	} else if sup, ok := superscripts[cfg.ToggleKey]; ok {
 		b.WriteString(keyHintStyle(sup))
 	}
 	b.WriteString(titleStyle(cfg.Title))
