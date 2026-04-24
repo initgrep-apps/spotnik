@@ -93,10 +93,48 @@ func TestStatusBar_PageAwareBindings(t *testing.T) {
 	assert.NotContains(t, resultB, "preset", "Page B must not show preset binding")
 }
 
-// TestStatusBar_RoleTokens verifies that StatusBar uses theme.TextMuted() for its border.
+// TestStatusBar_RoleTokens verifies that StatusBar uses theme.KeyHint() for key labels
+// and theme.TextMuted() for its border accent — NOT theme.Info(). Two themes where
+// KeyHint and Info diverge are used to prove the correct token is applied.
 func TestStatusBar_RoleTokens(t *testing.T) {
-	th := theme.Load("black")
-	// TextMuted must be non-empty — it drives AccentColor of the muted border.
-	assert.NotEmpty(t, string(th.TextMuted()), "theme must provide TextMuted colour for StatusBar border")
-	assert.NotEmpty(t, string(th.Info()), "theme must provide Info colour for StatusBar keys")
+	km := testKeyMap{bindings: []key.Binding{
+		key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}}
+
+	tests := []struct {
+		theme string
+		// ANSI TrueColor escape substrings: "38;2;R;G;B"
+		keyHintANSI string // must appear   in output (theme.KeyHint colour)
+		infoANSI    string // must NOT appear in output (theme.Info colour — wrong token)
+	}{
+		{
+			// dracula: KeyHint=#BD93F9 (189,147,249) vs Info=#8BE9FD (139,233,253)
+			theme:       "dracula",
+			keyHintANSI: "38;2;189;147;249",
+			infoANSI:    "38;2;139;233;253",
+		},
+		{
+			// gruvbox: KeyHint=#fe8019 (254,128,25) vs Info=#83A598 (131,165,152)
+			theme:       "gruvbox",
+			keyHintANSI: "38;2;254;128;25",
+			infoANSI:    "38;2;131;165;152",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.theme, func(t *testing.T) {
+			th := theme.Load(tt.theme)
+			// Sanity: ensure KeyHint and Info actually differ for this theme.
+			require.NotEqual(t, th.KeyHint(), th.Info(),
+				"test precondition: KeyHint and Info must differ for %s", tt.theme)
+
+			sb := uikit.StatusBar{Width: 160, Bindings: km, Theme: th}
+			result := sb.Render()
+
+			assert.Contains(t, result, tt.keyHintANSI,
+				"StatusBar must use theme.KeyHint() colour for key labels in %s", tt.theme)
+			assert.NotContains(t, result, tt.infoANSI,
+				"StatusBar must NOT use theme.Info() colour for key labels in %s — use KeyHint() instead", tt.theme)
+		})
+	}
 }

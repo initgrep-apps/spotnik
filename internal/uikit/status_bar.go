@@ -12,7 +12,10 @@ import (
 // rendering. Minimum effective width is 160 columns so all bindings are visible
 // on one row even when no terminal size has been set.
 //
-// Roles: Key → theme.Info(), Desc → theme.TextMuted(), border accent → theme.TextMuted().
+// Roles: Key → theme.KeyHint(), Desc → theme.TextMuted(), border accent → theme.TextMuted().
+// Body background is intentionally terminal-default (no StatusBarBg applied);
+// the muted-accent border distinguishes the bar from the grid, matching the
+// visual established before this uikit migration.
 type StatusBar struct {
 	Width    int
 	Bindings help.KeyMap
@@ -28,10 +31,10 @@ func (s StatusBar) Render() string {
 	}
 
 	h := help.New()
-	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(s.Theme.Info())
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(s.Theme.KeyHint())
 	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(s.Theme.TextMuted())
 	h.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(s.Theme.TextMuted())
-	h.Styles.FullKey = lipgloss.NewStyle().Foreground(s.Theme.Info())
+	h.Styles.FullKey = lipgloss.NewStyle().Foreground(s.Theme.KeyHint())
 	h.Styles.FullDesc = lipgloss.NewStyle().Foreground(s.Theme.TextMuted())
 	h.Styles.FullSeparator = lipgloss.NewStyle().Foreground(s.Theme.TextMuted())
 
