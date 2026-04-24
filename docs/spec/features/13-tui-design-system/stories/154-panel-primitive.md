@@ -1,7 +1,7 @@
 ---
 title: "Panel primitive — full-screen bordered panel with title in border"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
