@@ -395,23 +395,23 @@ func (a *App) buildView() string {
 	body := strings.Join([]string{header, gridContent, statusBar}, "\n")
 
 	if a.showThemeSwitcher && a.themeOverlay != nil {
-		return a.renderWithThemeOverlay(body)
+		return a.renderWithOverlayChrome(body, a.themeOverlay.View())
 	}
 
 	if a.deviceOverlayOpen {
-		return a.renderWithDeviceOverlay(body)
+		return a.renderWithOverlayChrome(body, a.devicePane.View())
 	}
 
 	if a.profileOverlayOpen {
-		return a.renderWithProfileOverlay(body)
+		return a.renderWithOverlayChrome(body, a.profilePane.View())
 	}
 
 	if a.searchOpen {
-		return a.renderWithSearchOverlay(body)
+		return a.renderWithOverlayChrome(body, a.searchPane.View())
 	}
 
 	if a.helpOpen && a.helpOverlay != nil {
-		return a.renderWithHelpOverlay(body)
+		return a.renderWithOverlayChrome(body, a.helpOverlay.View())
 	}
 
 	return body
@@ -499,63 +499,19 @@ func groupPanesByRow(paneIDs []layout.PaneID, mgr *layout.Manager) [][]layout.Pa
 	return rows
 }
 
-// renderWithThemeOverlay renders the grid dimmed and places the theme switcher
-// overlay in the top-right area using bubbletea-overlay Composite().
-func (a *App) renderWithThemeOverlay(background string) string {
-	fg := a.themeOverlay.View()
+// renderWithOverlayChrome renders the grid dimmed and composites an overlay view
+// centered on top using bubbletea-overlay Composite(). This is the single overlay
+// helper — it replaces the five former per-overlay helpers (renderWithThemeOverlay,
+// renderWithProfileOverlay, renderWithDeviceOverlay, renderWithSearchOverlay,
+// renderWithHelpOverlay). Callers pass a pre-rendered overlayView string (e.g.
+// a.searchPane.View()) so that the rendering strategy remains uniform across all
+// overlay states.
+func (a *App) renderWithOverlayChrome(background, overlayView string) string {
 	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
 	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + fg
+		return dimmed + "\n" + overlayView
 	}
-	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
-}
-
-// renderWithProfileOverlay renders the grid dimmed and places the profile overlay
-// in the top-right area using bubbletea-overlay Composite().
-func (a *App) renderWithProfileOverlay(background string) string {
-	fg := a.profilePane.View()
-	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
-	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + fg
-	}
-	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
-}
-
-// renderWithDeviceOverlay renders the grid dimmed and places the
-// device switcher overlay in the top-right area using bubbletea-overlay Composite().
-func (a *App) renderWithDeviceOverlay(background string) string {
-	fg := a.devicePane.View()
-	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
-	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + fg
-	}
-
-	// Position overlay in the top-right using bubbletea-overlay string-level compositing.
-	return btoverlay.Composite(fg, dimmed, btoverlay.Right, btoverlay.Top, 0, 0)
-}
-
-// renderWithSearchOverlay renders the grid dimmed and places the
-// search overlay centered on top using bubbletea-overlay Composite().
-func (a *App) renderWithSearchOverlay(background string) string {
-	fg := a.searchPane.View()
-	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
-	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + fg
-	}
-
-	// Center the search overlay using bubbletea-overlay string-level compositing.
-	return btoverlay.Composite(fg, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
-}
-
-// renderWithHelpOverlay renders the grid dimmed and places the help overlay
-// centered on screen using bubbletea-overlay Composite().
-func (a *App) renderWithHelpOverlay(background string) string {
-	fg := a.helpOverlay.View()
-	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
-	if a.width <= 0 || a.height <= 0 {
-		return dimmed + "\n" + fg
-	}
-	return btoverlay.Composite(fg, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
+	return btoverlay.Composite(overlayView, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
 }
 
 // renderSplash renders the startup splash screen with go-figure ASCII art.
