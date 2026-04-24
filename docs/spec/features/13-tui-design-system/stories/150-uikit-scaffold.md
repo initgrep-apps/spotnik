@@ -1,7 +1,7 @@
 ---
 title: "internal/uikit scaffold — glyph catalogue, role matrix, config, capture helper"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

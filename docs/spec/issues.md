@@ -165,3 +165,21 @@ Items to log:
 2. `UninstallSIGINTHandler` calls `signal.Stop(sigCh)` but does not unblock the goroutine blocked on `<-ch`. One goroutine leaks per process invocation (acceptable for CLI, invisible to users but shows in pprof). Fix: add a quit channel to the goroutine select so `UninstallSIGINTHandler` can unblock it cleanly.
 3. `validateClientID` uses `hex.DecodeString` which accepts uppercase A–F, but the doc comment says "32 lowercase hex chars". Spotify dashboard always emits lowercase but a mixed-case paste passes validation silently. Fix: add `strings.ToLower(s)` before the hex check (or document the permissive behavior).
 4. `TestUninstallSIGINTHandler_nilSigCh` only covers the no-op path (sigCh == nil). The production `signal.Stop(sigCh)` branch is never exercised by tests. Fix: add a test that sets `sigCh` directly and calls `UninstallSIGINTHandler`, asserting no panic.
+
+---
+
+## Story 150 — uikit scaffold minor polish items
+**Found:** 2026-04-24 | **Source:** PR #196 Review
+**Feature:** 13-tui-design-system
+
+Minor items surfaced in review that are safe to defer; none block the gate story.
+
+Items to log:
+1. `internal/uikit/config.go:ResolveMode` doc comment says "inspects LC_ALL then LANG" but the implementation actually checks `LC_ALL`, `LC_CTYPE`, then `LANG`. Align the comment with the code.
+2. `PaneBorderFor` keys in `internal/uikit/role.go` use no-underscore pane IDs (`nowplaying`, `likedsongs`, `recentlyplayed`, `toptracks`, `topartists`, `requestflow`, `networklog`) whereas `internal/ui/theme/config_theme.go` uses snake_case TOML keys (`now_playing`, `liked_songs`, …). When S3 (PaneChrome primitive) adds the first caller, introduce a `PaneID.String()` helper (or similar) so both surfaces use the same convention. Today there are no callers so it is not a live bug.
+3. `internal/uikit/capture.go` ANSI regex matches only simple CSI sequences (`\x1b\[[0-9;]*[a-zA-Z]`). Primitives that later emit OSC hyperlinks, cursor-visibility controls, 24-bit colon-colour, charset designators, or DCS will leak those bytes into `Capture` output. Broaden the regex (or switch to a dedicated stripansi import) when a primitive first exercises it.
+4. `internal/uikit/config.go:ActiveMode()` zero-value defaults to `GlyphUnicode` if `Use()` was never called at startup. Safe today because no production code path calls `ActiveMode()` yet. When S3+ primitives land, either require `Use()` to have been called (panic guard) or reserve a `GlyphUnset` sentinel so an unwired call site is loud, not silent.
+5. `internal/uikit/role.go:AllRoles()` is a hand-maintained slice parallel to the `Role*` constant block. Adding a new constant without updating `AllRoles()` silently skips every table-driven test. Consider deriving it from a single source (e.g. a package-private `var allRoles = []Role{...}` that the constants alias) or adding a reflection/count guard test.
+6. `internal/uikit/config.go:SetModeForTest` mutates package-global state without a `sync.Mutex`; not race-safe once any uikit test opts into `t.Parallel()`. Also callable from production code (no `testing.TB` parameter). Add a `t testing.TB` argument so misuse is a compile error outside tests.
+7. `internal/uikit/config.go:UIConfig.Validate` normalises with `strings.ToLower(strings.TrimSpace(...))` for the comparison but does not write the normalised value back to `c.Glyphs`. Anything that reads `cfg.UI.Glyphs` directly still sees the un-trimmed mixed-case value. Either write back or document "Glyphs is normalised at read-time only".
+8. No production call site of `uikit.Use()` yet — `cmd/root.go` wiring lands with the first primitive (S3). Until then `ActiveMode()` always returns the zero-value default. Ensure S3 adds the wiring and a test proves non-UTF-8 envs flip to ASCII end-to-end.
