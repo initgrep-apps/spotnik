@@ -1,7 +1,7 @@
 ---
 title: "StatusBar + KeyBar — bottom key bar with bubbles/help integration"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

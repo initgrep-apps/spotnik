@@ -241,3 +241,17 @@ Items to log:
 2. `TestRenderHeader_NoProfileChip_EmptyWhenNotLoaded` in `internal/app/render_test.go` uses `NotContains` for profile glyphs instead of the stronger `assert.Empty(chip)` the deleted direct test used. Tighten if a future regression sneaks another profile indicator in.
 3. `TestHeaderBar_ZeroWidth_FallsBack` asserts `NotEmpty` + "spotnik" present but does not pin the exact `"  "` double-space fallback documented in the doc comment.
 4. `renderHeader` doc comment no longer explains the role shift (page key now Accent, not KeyHint; device glyph now Info, not HeaderChipFg). Add a one-line note pointing at `header_bar.go` for future readers.
+
+---
+
+## Story 156 — StatusBar/KeyBar follow-ups
+**Found:** 2026-04-24 | **Source:** PR #202 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. `StatusBar` initially shipped with `theme.Info()` for key colour (confused with `KeyHint`) — caught in review round 1 and fixed. Add a uikit lint/test that asserts `Info()` is NEVER used for key-role styling in any primitive, so this class of mistake cannot recur.
+2. `StatusBarBg` role from design-record §6 is intentionally NOT applied in `StatusBar.Render()` to preserve the pre-migration visual (terminal-default body, muted accent border). If/when the design record switches to require a background fill, apply it in `StatusBar.Render()` and add a structural test.
+3. `TestStatusBar_RoleTokens` hex-to-RGB conversions are hardcoded in comments. Refactor to compute the ANSI escape from the theme hex at test time so theme TOML edits don't silently invalidate the anti-colour assertion.
+4. `newStatusHelp()` dead code was removed in the same PR. Audit `internal/app/app.go` and `handlers.go` for other `help.Model` usages that the bubbles/help refactor may have orphaned.
