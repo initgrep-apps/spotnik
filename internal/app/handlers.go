@@ -839,8 +839,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.helpOverlay != nil {
 			a.helpOverlay.SetTheme(newTheme)
 		}
-		// Re-style the status bar help component with the new theme colors.
-		a.statusHelp = newStatusHelp(newTheme)
 		// Close the overlay.
 		a.showThemeSwitcher = false
 		a.themeOverlay = nil
