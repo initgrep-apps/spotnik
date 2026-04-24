@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -720,9 +721,11 @@ func TestBuildRightSegment_CornerNotchFormat(t *testing.T) {
 	assert.NotContains(t, topLine, "ᐅ", "corner-notch format must not use ᐅ prefix for actions")
 }
 
-// TestBuildRightSegment_FilterMode_Unchanged verifies that the filter mode still uses
-// the ᐅEsc close format (unchanged by the corner-notch redesign).
-func TestBuildRightSegment_FilterMode_Unchanged(t *testing.T) {
+// TestRenderPaneBorder_FilterMode_UsesNotchNotArrow verifies that filter mode
+// uses the same corner-notch format as actions mode (╮ Esc close ╭) and does
+// NOT use the banned ᐅ prefix.
+func TestRenderPaneBorder_FilterMode_UsesNotchNotArrow(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
 	th := theme.Load("black")
 	cfg := layout.BorderConfig{
 		Width:       60,
@@ -739,10 +742,37 @@ func TestBuildRightSegment_FilterMode_Unchanged(t *testing.T) {
 	require.NotEmpty(t, lines)
 
 	topLine := stripANSI(lines[0])
-	assert.Contains(t, topLine, "ᐅ", "filter mode should still use ᐅ prefix")
-	assert.Contains(t, topLine, "Esc", "filter mode should show Esc key")
-	assert.Contains(t, topLine, "close", "filter mode should show 'close' label")
-	assert.Contains(t, topLine, "filtering:", "filter mode should show 'filtering:' prefix")
+	assert.NotContains(t, topLine, "ᐅ", "filter mode must not use ᐅ prefix")
+	assert.Contains(t, topLine, `filtering: "rock"`, "filter mode must show preamble")
+	assert.Contains(t, topLine, "╮ Esc close ╭", "filter mode must use corner-notch format")
+}
+
+// TestRenderPaneBorder_ASCIIMode_SwapsCorners verifies that when ascii mode is
+// active the border renderer emits + instead of ╭╮╰╯.
+func TestRenderPaneBorder_ASCIIMode_SwapsCorners(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	cfg := layout.BorderConfig{
+		Width:       40,
+		Height:      3,
+		Title:       "Test",
+		AccentColor: lipgloss.Color("#ffffff"),
+		Focused:     true,
+		Theme:       theme.Load("black"),
+	}
+	out := layout.RenderPaneBorder("", cfg)
+	lines := strings.Split(out, "\n")
+
+	topLine := stripANSI(lines[0])
+	bottomLine := stripANSI(lines[len(lines)-1])
+
+	assert.Contains(t, topLine, "+", "ascii top-left corner must be +")
+	assert.NotContains(t, topLine, "╭", "no unicode top-left corner in ascii mode")
+	assert.NotContains(t, topLine, "╮", "no unicode top-right corner in ascii mode")
+	assert.Contains(t, bottomLine, "+", "ascii bottom corners must be +")
+	assert.NotContains(t, bottomLine, "╰", "no unicode bottom-left corner in ascii mode")
+	assert.NotContains(t, bottomLine, "╯", "no unicode bottom-right corner in ascii mode")
 }
 
 // TestRenderPaneBorder_NotchActions_FitsWidth verifies that the total rendered
