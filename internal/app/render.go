@@ -14,6 +14,7 @@ import (
 
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // appKeyMap implements help.KeyMap for the app-level status bar.
@@ -571,40 +572,6 @@ func truncateProfileName(name string) string {
 	return name
 }
 
-// renderProfileChip renders the profile chip shown in the header right side.
-// Returns "" if the profile has not yet been loaded (graceful startup).
-// Format: "♛ DisplayName " (Premium) or "○ DisplayName " (Free) — badge precedes name.
-func (a *App) renderProfileChip() string {
-	profile := a.store.UserProfile()
-	if profile.ID == "" {
-		// Profile not yet loaded — render nothing so header is clean on startup.
-		return ""
-	}
-
-	bgStyle := lipgloss.NewStyle().Background(a.theme.StatusBarBg())
-
-	name := truncateProfileName(profile.DisplayName)
-
-	nameStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.HeaderChipFg())
-
-	var badge string
-	if a.store.IsPremium() {
-		badgeStyle := lipgloss.NewStyle().
-			Background(a.theme.StatusBarBg()).
-			Foreground(a.theme.Info())
-		badge = badgeStyle.Render("♛")
-	} else {
-		badgeStyle := lipgloss.NewStyle().
-			Background(a.theme.StatusBarBg()).
-			Foreground(a.theme.TextMuted())
-		badge = badgeStyle.Render("○")
-	}
-
-	return bgStyle.Render(" ") + badge + bgStyle.Render(" ") + nameStyle.Render(name) + bgStyle.Render(" ")
-}
-
 // renderHeader renders the btop-style header bar containing:
 // Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName   ♛ DisplayName
 // Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName   ♛ DisplayName
@@ -614,75 +581,54 @@ func (a *App) renderProfileChip() string {
 //
 // Shortcut hints (search, devices, preset key) are omitted from the header because
 // they already appear in the bottom status bar — the header is for contextual info only.
-// All separator dashes use "─" (U+2500). The app name uses TextPrimary()+Bold.
-// The background is StatusBarBg(). The line is padded to match a.width exactly.
+// Rendering is delegated to uikit.HeaderBar + uikit.Chip.
 func (a *App) renderHeader() string {
-	bgStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.StatusBarFg())
-
-	appNameStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.TextPrimary()).
-		Bold(true)
-
-	keyStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.KeyHint()).
-		Bold(true)
-
-	mutedStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.TextMuted())
-
-	sepStyle := lipgloss.NewStyle().
-		Background(a.theme.StatusBarBg()).
-		Foreground(a.theme.TextMuted())
-
-	sep := sepStyle.Render(" ─ ")
-
-	// App name segment.
-	appName := appNameStyle.Render(" spotnik ")
-
-	// Page indicator: "Page A" or "Page B"
-	page := mutedStyle.Render("Page ") + keyStyle.Render(pageLabel(a.layout.ActivePage()))
-
-	// Build left segment — Page A shows the active preset index as contextual info;
-	// Page B has a single fixed layout with no user-selectable presets, so it is omitted.
-	var left string
+	preset := a.layout.ActivePresetIndex()
 	if a.layout.ActivePage() == layout.PageB {
-		left = appName + sep + page
-	} else {
-		presetIdx := a.layout.ActivePresetIndex()
-		preset := mutedStyle.Render(fmt.Sprintf("preset %d", presetIdx))
-		left = appName + sep + page + sep + preset
+		// Page B has no user-selectable presets — hide the segment.
+		preset = -1
 	}
 
-	// Right side: device chip then profile chip (profile is rightmost).
-	device := a.store.ActiveDevice()
-	var deviceChip string
-	if device != nil {
-		name := truncateDeviceName(device.Name)
-		activeStyle := lipgloss.NewStyle().
-			Background(a.theme.StatusBarBg()).
-			Foreground(a.theme.HeaderChipFg())
-		deviceChip = activeStyle.Render("◉ " + name + " ")
+	// Build right-side chips: device chip first, then profile chip.
+	var chips []string
+	if dev := a.store.ActiveDevice(); dev != nil {
+		chips = append(chips, uikit.Chip{
+			Glyph:  uikit.GlyphActive,
+			Label:  truncateDeviceName(dev.Name),
+			Intent: uikit.RoleInfo,
+			Theme:  a.theme,
+		}.Render())
 	} else {
-		deviceChip = bgStyle.Render("○ No device ")
+		chips = append(chips, uikit.Chip{
+			Glyph:  uikit.GlyphAvailable,
+			Label:  "No device",
+			Intent: uikit.RoleMuted,
+			Theme:  a.theme,
+		}.Render())
 	}
-	right := deviceChip + a.renderProfileChip()
-
-	if a.width > 0 {
-		leftW := lipgloss.Width(left)
-		rightW := lipgloss.Width(right)
-		gap := a.width - leftW - rightW
-		if gap < 1 {
-			gap = 1
+	if profile := a.store.UserProfile(); profile.ID != "" {
+		g := uikit.GlyphAvailable
+		intent := uikit.RoleMuted
+		if a.store.IsPremium() {
+			g = uikit.GlyphPremium
+			intent = uikit.RoleInfo
 		}
-		fill := bgStyle.Render(strings.Repeat(" ", gap))
-		return left + fill + right
+		chips = append(chips, uikit.Chip{
+			Glyph:  g,
+			Label:  truncateProfileName(profile.DisplayName),
+			Intent: intent,
+			Theme:  a.theme,
+		}.Render())
 	}
-	return left + "  " + right
+
+	return uikit.HeaderBar{
+		Width:      a.width,
+		AppName:    "spotnik",
+		Page:       pageLabel(a.layout.ActivePage()),
+		Preset:     preset,
+		RightChips: chips,
+		Theme:      a.theme,
+	}.Render()
 }
 
 // renderStatusBar renders the global bottom status bar as a bubbles/help panel.

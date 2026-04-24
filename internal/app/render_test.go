@@ -548,19 +548,22 @@ func TestRenderStatusBar_ProfileAdjacentToDevices(t *testing.T) {
 	}
 }
 
-// --- Story 115: Profile chip tests ---
+// --- Story 115/155: Profile chip tests ---
+// renderProfileChip has been inlined into renderHeader via uikit.Chip — tests
+// now verify profile chip rendering through renderHeader.
 
-// TestRenderProfileChip_EmptyWhenNotLoaded verifies that renderProfileChip() returns ""
-// when the user profile has not yet been loaded (ID == "").
-func TestRenderProfileChip_EmptyWhenNotLoaded(t *testing.T) {
+// TestRenderHeader_NoProfileChip_EmptyWhenNotLoaded verifies that when the user
+// profile has not yet been loaded (ID == ""), no profile badge appears in the header.
+func TestRenderHeader_NoProfileChip_EmptyWhenNotLoaded(t *testing.T) {
 	a := newRenderTestApp()
-	// Store has zero-value profile (ID == "")
-	chip := a.renderProfileChip()
-	assert.Empty(t, chip, "profile chip should be empty when profile not loaded")
+	// Store has zero-value profile (ID == "") — profile chip must be absent.
+	result := a.renderHeader()
+	assert.NotContains(t, result, "♛", "header must not show premium badge when profile not loaded")
+	assert.NotContains(t, result, "premium", "header must not show premium label when profile not loaded")
 }
 
-// TestRenderProfileChip_PremiumBadge verifies that a premium user shows ♛.
-func TestRenderProfileChip_PremiumBadge(t *testing.T) {
+// TestRenderHeader_ProfileChip_PremiumBadge verifies that a premium user shows ♛.
+func TestRenderHeader_ProfileChip_PremiumBadge(t *testing.T) {
 	a := newRenderTestApp()
 	a.store.SetUserProfile(domain.UserProfile{
 		ID:          "user1",
@@ -568,13 +571,13 @@ func TestRenderProfileChip_PremiumBadge(t *testing.T) {
 		Product:     "premium",
 		Country:     "DE",
 	})
-	chip := a.renderProfileChip()
-	assert.Contains(t, chip, "♛", "premium profile chip should contain ♛")
-	assert.Contains(t, chip, "Irshad", "profile chip should contain display name")
+	result := a.renderHeader()
+	assert.Contains(t, result, "♛", "header should contain ♛ for premium profile chip")
+	assert.Contains(t, result, "Irshad", "header should contain profile display name")
 }
 
-// TestRenderProfileChip_FreeBadge verifies that a free user shows ○.
-func TestRenderProfileChip_FreeBadge(t *testing.T) {
+// TestRenderHeader_ProfileChip_FreeBadge verifies that a free user shows ○.
+func TestRenderHeader_ProfileChip_FreeBadge(t *testing.T) {
 	a := newRenderTestApp()
 	a.store.SetUserProfile(domain.UserProfile{
 		ID:          "user2",
@@ -582,9 +585,9 @@ func TestRenderProfileChip_FreeBadge(t *testing.T) {
 		Product:     "free",
 		Country:     "US",
 	})
-	chip := a.renderProfileChip()
-	assert.Contains(t, chip, "○", "free profile chip should contain ○")
-	assert.Contains(t, chip, "Free User", "profile chip should contain display name")
+	result := a.renderHeader()
+	assert.Contains(t, result, "○", "header should contain ○ glyph for free profile chip")
+	assert.Contains(t, result, "Free User", "header should contain profile display name")
 }
 
 // TestRenderHeader_WithProfile_ShowsProfileChip verifies that when a profile is loaded,
