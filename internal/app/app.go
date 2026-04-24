@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -82,9 +81,8 @@ type App struct {
 	// layout manages the grid, focus, preset, and page system.
 	layout *layout.Manager
 
-	// statusHelp renders the bottom keybinding bar using bubbles/help (ShowAll=true).
-	// statusKeyMap holds the bindings; activePage is set per render call.
-	statusHelp   help.Model
+	// statusKeyMap holds the keybindings for the bottom status bar.
+	// activePage is set per render call via a copy so renderStatusBar() stays pure.
 	statusKeyMap appKeyMap
 
 	// panes holds all 8 Page A panes (Page B panes added in Feature 51).
@@ -380,7 +378,6 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		searchPane:        searchPane,
 		devicePane:        devicePane,
 		profilePane:       profilePane,
-		statusHelp:        newStatusHelp(t),
 		statusKeyMap:      newAppKeyMap(),
 		currentView:       viewSplash,
 		volumeStep:        1,

@@ -7,13 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 	btoverlay "github.com/rmhubbert/bubbletea-overlay"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
-	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
@@ -79,21 +77,6 @@ func newAppKeyMap() appKeyMap {
 		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 	}
-}
-
-// newStatusHelp creates and styles a help.Model for the app status bar.
-// Uses ShortHelp (single-row) mode — ShowAll stays false so all bindings render
-// on one line, matching the flat single-row status bar aesthetic.
-// Keys use Info() color; descriptions and separators use TextMuted().
-func newStatusHelp(t theme.Theme) help.Model {
-	h := help.New()
-	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Info())
-	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
-	h.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
-	h.Styles.FullKey = lipgloss.NewStyle().Foreground(t.Info())
-	h.Styles.FullDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
-	h.Styles.FullSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
-	return h
 }
 
 // View renders the full terminal UI.
@@ -632,41 +615,16 @@ func (a *App) renderHeader() string {
 }
 
 // renderStatusBar renders the global bottom status bar as a bubbles/help panel.
-// Uses the same component and visual style as the search overlay's keybinding bar:
-// keys in Info() color, descriptions in TextMuted(), wrapped in RenderPaneBorder.
-//
-// The panel is always 3 lines tall (border + 1 content row + border).
-// Page A shows all 10 bindings in a single row; Page B omits preset/toggle.
+// Delegates to uikit.StatusBar which owns the layout: 3 lines tall (top border +
+// 1 content row + bottom border). Page A shows all 10 bindings; Page B omits preset/toggle.
 func (a *App) renderStatusBar() string {
-	const statusH = 3 // 1 content row + top/bottom border
-	// Use a minimum rendering width of 160 so all bindings are visible on one row
-	// even when no terminal size has been set (e.g. in unit tests that call
-	// renderStatusBar directly without first sending a tea.WindowSizeMsg).
-	w := a.width
-	if w < 160 {
-		w = 160
-	}
-	innerW := w - 2
-
 	// Copy the keymap so we can set activePage without mutating App state.
 	// renderStatusBar() must remain a pure render function.
 	km := a.statusKeyMap
 	km.activePage = a.layout.ActivePage()
-
-	helpContent := a.statusHelp.View(km)
-	inner := lipgloss.NewStyle().
-		Width(innerW).MaxWidth(innerW).
-		Height(statusH - 2).MaxHeight(statusH - 2).
-		Render(helpContent)
-
-	cfg := layout.BorderConfig{
-		Width:       w,
-		Height:      statusH,
-		Title:       "",
-		Actions:     []layout.Action{},
-		AccentColor: a.theme.TextMuted(),
-		Focused:     false,
-		Theme:       a.theme,
-	}
-	return layout.RenderPaneBorder(inner, cfg)
+	return uikit.StatusBar{
+		Width:    a.width,
+		Bindings: km,
+		Theme:    a.theme,
+	}.Render()
 }
