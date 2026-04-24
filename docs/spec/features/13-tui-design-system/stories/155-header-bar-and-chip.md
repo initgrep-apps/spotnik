@@ -1,7 +1,7 @@
 ---
 title: "HeaderBar + Chip — extract renderHeader from render.go"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

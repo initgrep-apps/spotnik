@@ -227,3 +227,17 @@ Items to log:
 3. No test asserts `Esc` key is rendered via `keyHintStyle` (Accent) vs `mutedStyle`. A future color-token swap could regress silently. Add structural ANSI-code assertion when visual-regression tooling lands.
 4. Redundant `uikit.ActiveMode()` calls: once in `corners()` and once in `buildRightSegment`. Harmless today (atomic read), but could be deduplicated by passing `mode GlyphMode` into `buildRightSegment` next time the function is touched.
 5. Stale test name `TestRenderPaneBorder_ActionPrefixCharacterWidth` in `border_test.go` references `ᐅ` as "action prefix"; the glyph is no longer rendered, so the test measures a banned-glyph width with no production tie. Rename or remove next cleanup pass.
+
+---
+
+## Story 155 — HeaderBar polish follow-ups
+**Found:** 2026-04-24 | **Source:** PR #201 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. `internal/uikit/header_bar.go` applies bold via raw `lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)` rather than `uikit.Apply(RoleStrong, ...)`. Functionally equivalent but breaks the Role abstraction. Harmonise when touching next.
+2. `TestRenderHeader_NoProfileChip_EmptyWhenNotLoaded` in `internal/app/render_test.go` uses `NotContains` for profile glyphs instead of the stronger `assert.Empty(chip)` the deleted direct test used. Tighten if a future regression sneaks another profile indicator in.
+3. `TestHeaderBar_ZeroWidth_FallsBack` asserts `NotEmpty` + "spotnik" present but does not pin the exact `"  "` double-space fallback documented in the doc comment.
+4. `renderHeader` doc comment no longer explains the role shift (page key now Accent, not KeyHint; device glyph now Info, not HeaderChipFg). Add a one-line note pointing at `header_bar.go` for future readers.
