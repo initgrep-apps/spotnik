@@ -432,10 +432,10 @@ func (p *PlaylistsPane) refreshPlaylistRows() {
 	for i, pl := range playlists {
 		var name string
 		if pl.Owner.ID == "spotify" {
-			// LockedRow signals the Spotify-curated playlist is read-only.
-			// Render with a generous width so the table truncates at its own column width.
-			locked := uikit.LockedRow{Label: pl.Name, Theme: p.theme}
-			name = strings.TrimRight(locked.Render(200), " ")
+			// Plain glyph+label so the table's column renderer can apply its own
+			// colour. Embedding ANSI from LockedRow.Render conflicts with bubble-table's
+			// per-column foreground pass (applyRows sets Foreground over the cell string).
+			name = uikit.GlyphFor(uikit.GlyphLocked, uikit.ActiveMode()) + " " + pl.Name
 		} else if !p.isOwnedByCurrentUser(pl) {
 			name = "~ " + pl.Name
 		} else {

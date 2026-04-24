@@ -187,8 +187,10 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 	}
 
 	// Apply cursor background to ListRow theme when the row is highlighted.
+	// Only override intent for non-active rows; the active row keeps RoleAccent
+	// so the ◉ glyph retains its accent colour even when the cursor is on it.
 	rowTheme := o.theme
-	if isCursor {
+	if isCursor && !isCurrent {
 		intent = uikit.RoleSelection
 	}
 
