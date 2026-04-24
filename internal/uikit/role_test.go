@@ -52,3 +52,21 @@ func TestRole_Apply_PlainDoesNotSetBold(t *testing.T) {
 	s := uikit.Apply(uikit.RolePlain, th)
 	assert.False(t, s.GetBold(), "Apply(RolePlain) must not set Bold")
 }
+
+func TestRole_PaneBorderFor_KnownPaneIDReturnsNonEmpty(t *testing.T) {
+	th := theme.Load("black")
+	knownIDs := []string{
+		"nowplaying", "queue", "playlists", "albums", "likedsongs",
+		"recentlyplayed", "toptracks", "topartists", "requestflow", "networklog",
+	}
+	for _, id := range knownIDs {
+		c := uikit.PaneBorderFor(id, th)
+		assert.NotEmpty(t, string(c), "PaneBorderFor(%q) returned empty colour", id)
+	}
+}
+
+func TestRole_PaneBorderFor_UnknownIDFallsBackToAccent(t *testing.T) {
+	th := theme.Load("black")
+	c := uikit.PaneBorderFor("unknown-pane", th)
+	assert.Equal(t, th.Accent(), c, "PaneBorderFor with unknown ID should fall back to Accent()")
+}

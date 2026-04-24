@@ -32,6 +32,10 @@ func TestResolve_ExplicitASCII_Honoured(t *testing.T) {
 func TestResolve_NO_COLOR_IsOrthogonal(t *testing.T) {
 	// NO_COLOR strips colour, not glyphs. Explicitly assert the same LANG
 	// still resolves to unicode when NO_COLOR is set.
+	// LC_ALL and LC_CTYPE are cleared so the test is not affected by the
+	// caller's shell locale (common CI hardening sets LC_ALL=C).
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_CTYPE", "")
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LANG", "en_US.UTF-8")
 	assert.Equal(t, uikit.GlyphUnicode, uikit.ResolveMode("auto"))
@@ -68,4 +72,17 @@ func TestResolve_Auto_AllLocaleVarsEmpty_ReturnsASCII(t *testing.T) {
 	t.Setenv("LC_CTYPE", "")
 	t.Setenv("LANG", "")
 	assert.Equal(t, uikit.GlyphASCII, uikit.ResolveMode("auto"))
+}
+
+func TestResolve_UnknownValue_FallsThroughToAutoDetect(t *testing.T) {
+	// Unknown config values (e.g. typos) fall through to auto-detect rather
+	// than silently defaulting to ASCII, so that users in UTF-8 locales still
+	// get unicode glyphs despite a misconfigured config value.
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_CTYPE", "")
+	t.Setenv("LANG", "en_US.UTF-8")
+	assert.Equal(t, uikit.GlyphUnicode, uikit.ResolveMode("garbage"))
+
+	t.Setenv("LANG", "C")
+	assert.Equal(t, uikit.GlyphASCII, uikit.ResolveMode("garbage"))
 }

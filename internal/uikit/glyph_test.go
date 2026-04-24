@@ -73,3 +73,14 @@ func TestGlyph_UnknownRoleReturnsEmpty(t *testing.T) {
 	assert.Empty(t, uikit.GlyphFor(unknown, uikit.GlyphUnicode))
 	assert.Empty(t, uikit.GlyphFor(unknown, uikit.GlyphASCII))
 }
+
+func TestGlyph_BannedGlyphsAbsentEverywhere(t *testing.T) {
+	banned := []string{"⚠", "┌", "┐", "└", "┘", "╔", "╗", "╚", "╝", "ᐅ", "✅", "❌", "❗"}
+	for _, role := range uikit.AllGlyphRoles() {
+		u := uikit.GlyphFor(role, uikit.GlyphUnicode)
+		for _, b := range banned {
+			assert.False(t, strings.Contains(u, b),
+				"role %q unicode form %q contains banned glyph %q", role, u, b)
+		}
+	}
+}

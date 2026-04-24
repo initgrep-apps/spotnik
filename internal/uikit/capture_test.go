@@ -22,5 +22,5 @@ func TestCapture_PreservesLeadingSpaces(t *testing.T) {
 
 func TestCapture_EmptyString_ReturnsEmptySlice(t *testing.T) {
 	got := uikit.Capture("")
-	assert.Equal(t, []string{""}, got)
+	assert.Empty(t, got)
 }

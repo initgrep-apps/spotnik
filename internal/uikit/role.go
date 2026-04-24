@@ -79,3 +79,35 @@ func Apply(r Role, th theme.Theme) lipgloss.Style {
 	}
 	return s
 }
+
+// PaneBorderFor returns the border colour for the given pane ID string.
+// Pane IDs correspond to the PaneID constants in internal/ui/layout:
+// "nowplaying", "queue", "playlists", "albums", "likedsongs",
+// "recentlyplayed", "toptracks", "topartists", "requestflow", "networklog".
+// Unknown pane IDs fall back to th.Accent().
+func PaneBorderFor(paneID string, th theme.Theme) lipgloss.Color {
+	switch paneID {
+	case "nowplaying":
+		return th.PaneBorderNowPlaying()
+	case "queue":
+		return th.PaneBorderQueue()
+	case "playlists":
+		return th.PaneBorderPlaylists()
+	case "albums":
+		return th.PaneBorderAlbums()
+	case "likedsongs":
+		return th.PaneBorderLikedSongs()
+	case "recentlyplayed":
+		return th.PaneBorderRecentlyPlayed()
+	case "toptracks":
+		return th.PaneBorderTopTracks()
+	case "topartists":
+		return th.PaneBorderTopArtists()
+	case "requestflow":
+		return th.PaneBorderRequestFlow()
+	case "networklog":
+		return th.PaneBorderNetworkLog()
+	default:
+		return th.Accent()
+	}
+}
