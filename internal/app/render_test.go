@@ -289,10 +289,7 @@ func TestRenderTooSmall_UsesRoundedBorder(t *testing.T) {
 }
 
 // TestRender_ThemeOverlay_Composited verifies that when showThemeSwitcher is true,
-// the theme overlay appears in the rendered output. We check for "Gruvbox" (a theme
-// name listed in the overlay body) rather than "Themes" (the border title), because
-// with Center/Center compositing over a short background the border row may land
-// outside the composited area while content rows remain visible.
+// the theme overlay appears in the rendered output.
 func TestRender_ThemeOverlay_Composited(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 160
@@ -304,9 +301,24 @@ func TestRender_ThemeOverlay_Composited(t *testing.T) {
 	a.themeOverlay = newThemeOverlayForTest(a)
 
 	result := a.buildView()
-	// "Gruvbox" appears as a theme name row inside the overlay body — confirms
-	// the overlay was composited into the view regardless of exact border position.
 	assert.Contains(t, result, "Gruvbox", "theme overlay content should appear when showThemeSwitcher is true")
+}
+
+// TestRenderWithOverlayChrome_Composited verifies that renderWithOverlayChrome correctly
+// centers the overlay over a full-height background so the titled border ("Themes") is
+// visible in the composite output.
+func TestRenderWithOverlayChrome_Composited(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+
+	// Build a full-height background (50 lines) so btoverlay.Center can position
+	// the overlay correctly and the top border containing "Themes" is visible.
+	bg := strings.Repeat(strings.Repeat(" ", 160)+"\n", 49) + strings.Repeat(" ", 160)
+
+	overlayView := newThemeOverlayForTest(a).View()
+	result := a.renderWithOverlayChrome(bg, overlayView)
+	assert.Contains(t, result, "Themes", "overlay border title must appear in composite output")
 }
 
 // TestRender_HelpOverlay_Composited verifies that when helpOpen is true,
