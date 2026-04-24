@@ -51,6 +51,25 @@ type CLIConfig struct {
 	Palette string `toml:"palette"`
 }
 
+// UIConfig holds TUI rendering preferences.
+type UIConfig struct {
+	// Glyphs controls whether unicode or ASCII glyphs are used in the TUI.
+	// Valid values: "auto" (default), "unicode", "ascii".
+	// "auto" inspects LC_ALL/LC_CTYPE/LANG for a UTF-8 marker.
+	Glyphs string `toml:"glyphs"`
+}
+
+// Validate returns an error if any UIConfig field contains an invalid value.
+func (c *UIConfig) Validate() error {
+	switch strings.ToLower(strings.TrimSpace(c.Glyphs)) {
+	case "", "auto", "unicode", "ascii":
+		// OK; empty defaults to auto at resolution time.
+	default:
+		return fmt.Errorf("ui.glyphs must be one of auto|unicode|ascii, got %q", c.Glyphs)
+	}
+	return nil
+}
+
 // Config holds all application configuration.
 type Config struct {
 	// ClientID is the Spotify application client ID.
@@ -64,6 +83,7 @@ type Config struct {
 
 	Preferences PreferencesConfig `toml:"preferences"`
 	CLI         CLIConfig         `toml:"cli"`
+	UI          UIConfig          `toml:"ui"`
 }
 
 // validPalettes is the set of accepted palette mode strings.
@@ -81,6 +101,7 @@ func Default() *Config {
 			Theme: "black",
 		},
 		CLI: CLIConfig{Palette: "auto"},
+		UI:  UIConfig{Glyphs: "auto"},
 	}
 }
 
@@ -98,10 +119,12 @@ func Load(path string) (*Config, error) {
 		Spotify     spotifyConfig     `toml:"spotify"`
 		Preferences PreferencesConfig `toml:"preferences"`
 		CLI         CLIConfig         `toml:"cli"`
+		UI          UIConfig          `toml:"ui"`
 	}{
-		// Pre-populate Preferences with defaults so unset fields keep their defaults.
+		// Pre-populate fields with defaults so unset fields keep their defaults.
 		Preferences: cfg.Preferences,
 		CLI:         cfg.CLI,
+		UI:          cfg.UI,
 	}
 
 	_, err := toml.DecodeFile(path, &raw)
@@ -121,6 +144,7 @@ func Load(path string) (*Config, error) {
 	}
 	cfg.Preferences = raw.Preferences
 	cfg.CLI = raw.CLI
+	cfg.UI = raw.UI
 
 	// Clamp theme: if empty or not recognised by the registry, fall back to default.
 	// ThemeValidator is registered by cmd/root.go at startup to avoid an import
@@ -153,6 +177,12 @@ func Load(path string) (*Config, error) {
 	} else if !validPalettes[cfg.CLI.Palette] {
 		fmt.Fprintf(os.Stderr, "config: invalid cli.palette %q — using \"auto\"\n", cfg.CLI.Palette)
 		cfg.CLI.Palette = "auto"
+	}
+
+	// Validate UI config — invalid glyphs value is a hard error (not silently
+	// clamped) so users discover typos immediately.
+	if err := cfg.UI.Validate(); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
@@ -203,6 +233,13 @@ theme = "black"
 # - fixed: always the built-in Spotnik palette
 # - theme: inherit the TUI theme (may be unreadable on light terminals)
 palette = "auto"
+
+[ui]
+# Glyph rendering mode: "auto" (default), "unicode", or "ascii"
+# - auto:    use unicode glyphs when LC_ALL/LANG contains UTF-8, else ASCII
+# - unicode: always use unicode glyphs (requires a UTF-8 capable terminal)
+# - ascii:   always use ASCII fallback glyphs (safe for all terminals)
+glyphs = "auto"
 `
 
 // Bootstrap creates the config file at path with a default template if it does

@@ -558,6 +558,72 @@ func TestBootstrap_StatErrorPropagated(t *testing.T) {
 	assert.Contains(t, err.Error(), "checking config file")
 }
 
+// ---- UIConfig tests ----
+
+// TestUIConfig_Glyphs_DefaultAllowedValues verifies that all legal glyph values
+// pass UIConfig.Validate and that illegal values return an error.
+func TestUIConfig_Glyphs_DefaultAllowedValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		ok    bool
+	}{
+		{"default empty", "", true},
+		{"auto", "auto", true},
+		{"unicode", "unicode", true},
+		{"ascii", "ascii", true},
+		{"uppercase", "ASCII", true},
+		{"invalid", "nerd", false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &config.UIConfig{Glyphs: tt.value}
+			err := c.Validate()
+			if tt.ok {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+// TestLoad_UIGlyphs_DefaultIsAuto verifies that omitting [ui] from the config
+// results in cfg.UI.Glyphs == "auto".
+func TestLoad_UIGlyphs_DefaultIsAuto(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[preferences]\ntheme = \"black\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "auto", cfg.UI.Glyphs)
+}
+
+// TestLoad_UIGlyphs_InvalidReturnsError verifies that an invalid glyph value
+// causes Load to return an error.
+func TestLoad_UIGlyphs_InvalidReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "[ui]\nglyphs = \"nerd\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	_, err := config.Load(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ui.glyphs")
+}
+
+// TestBootstrap_writesUISection verifies that Bootstrap writes a [ui] section
+// with glyphs = "auto" into a new config file.
+func TestBootstrap_writesUISection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	require.NoError(t, config.Bootstrap(path))
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "[ui]")
+	assert.Contains(t, string(body), `glyphs = "auto"`)
+}
+
 func TestValidateClientID(t *testing.T) {
 	valid := strings.Repeat("a", 32)
 	tests := []struct {
