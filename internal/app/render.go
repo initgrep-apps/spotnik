@@ -33,8 +33,8 @@ type appKeyMap struct {
 }
 
 // ShortHelp returns all applicable bindings for the active page.
-// Bypassed at runtime because the help model uses ShowAll=true, but kept
-// complete so callers inspecting the KeyMap programmatically see the full set.
+// StatusBar.Render() uses bubbles/help in short-help mode (ShowAll stays false)
+// so this method drives the single-row output seen at the bottom of the app.
 func (k appKeyMap) ShortHelp() []key.Binding {
 	if k.activePage == layout.PageA {
 		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
