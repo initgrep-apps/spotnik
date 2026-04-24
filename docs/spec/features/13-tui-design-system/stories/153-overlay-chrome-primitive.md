@@ -1,7 +1,7 @@
 ---
 title: "OverlayChrome primitive — consolidate the 5 renderWith*Overlay helpers"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
