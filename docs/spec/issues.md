@@ -186,6 +186,21 @@ Items to log:
 
 ---
 
+## Story 152 — PaneChrome polish follow-ups
+**Found:** 2026-04-24 | **Source:** PR #198 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking items surfaced during review.
+
+Items to log:
+1. `internal/uikit/pane_chrome.go` `Render()` doc comment says content is "pre-sized to (Width-2, Height-2) by the caller". In reality `layout.RenderPaneBorder` pads short content and truncates long content internally. Rewrite the comment to: "Content is padded or truncated to fit the interior dimensions (Width-2, Height-2); callers may pass content of any size."
+2. `internal/ui/layout/border.go` `buildRightSegment` rebinds `resolveGlyphs` results through intermediate variables `rsTL/rsTR/rsH` then reassigns to `trCorner/tlCorner/hRule`. Either use the results directly, or pass the already-resolved glyphs from `RenderPaneBorder` (resolved once at line 156) as parameters to `buildRightSegment` to avoid the second call.
+3. Filter-preamble *query* (the text inside quotes) is rendered `Muted` instead of `Accent` as the design record role matrix prescribes (spec §7.3). This is pre-existing on `main` (introduced in commit `82610aa`, before feature 13). Triage and fix when the filter UX gets its next polish pass.
+4. No PaneChrome test covers ASCII mode + `ToggleKey: 0`. Covered by statement via `WidthAndHeightMatch` but the "no numeric prefix" branch is not behaviourally asserted. Add when next touching the test.
+5. `PaneChrome` struct mirrors `BorderConfig` (minus glyph override fields). As S4 (`OverlayChrome`) and later primitives accumulate, consider embedding `layout.BorderConfig` or a shared config type.
+
+---
+
 ## Story 151 — border.go test fidelity follow-ups
 **Found:** 2026-04-24 | **Source:** PR #197 Review
 **Feature:** 13-tui-design-system

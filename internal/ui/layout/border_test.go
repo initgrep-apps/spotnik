@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
-	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -725,7 +724,6 @@ func TestBuildRightSegment_CornerNotchFormat(t *testing.T) {
 // uses the same corner-notch format as actions mode (╮ Esc close ╭) and does
 // NOT use the banned ᐅ prefix.
 func TestRenderPaneBorder_FilterMode_UsesNotchNotArrow(t *testing.T) {
-	uikit.SetModeForTest(uikit.GlyphUnicode)
 	th := theme.Load("black")
 	cfg := layout.BorderConfig{
 		Width:       60,
@@ -747,12 +745,11 @@ func TestRenderPaneBorder_FilterMode_UsesNotchNotArrow(t *testing.T) {
 	assert.Contains(t, topLine, "╮ Esc close ╭", "filter mode must use corner-notch format")
 }
 
-// TestRenderPaneBorder_ASCIIMode_SwapsCorners verifies that when ascii mode is
-// active the border renderer emits + instead of ╭╮╰╯.
+// TestRenderPaneBorder_ASCIIMode_SwapsCorners verifies that when ascii glyph
+// overrides are passed in BorderConfig the border renderer emits + instead of
+// ╭╮╰╯. Border.go does not call uikit.ActiveMode(); callers (e.g. PaneChrome)
+// resolve glyphs and pass them via the Glyph fields.
 func TestRenderPaneBorder_ASCIIMode_SwapsCorners(t *testing.T) {
-	uikit.SetModeForTest(uikit.GlyphASCII)
-	defer uikit.SetModeForTest(uikit.GlyphUnicode)
-
 	cfg := layout.BorderConfig{
 		Width:       40,
 		Height:      3,
@@ -760,6 +757,13 @@ func TestRenderPaneBorder_ASCIIMode_SwapsCorners(t *testing.T) {
 		AccentColor: lipgloss.Color("#ffffff"),
 		Focused:     true,
 		Theme:       theme.Load("black"),
+		// ASCII glyph overrides — normally set by uikit.PaneChrome.Render.
+		CornerTL: "+",
+		CornerTR: "+",
+		CornerBL: "+",
+		CornerBR: "+",
+		HRule:    "-",
+		VRule:    "|",
 	}
 	out := layout.RenderPaneBorder("", cfg)
 	lines := strings.Split(out, "\n")
