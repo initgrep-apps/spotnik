@@ -1,7 +1,7 @@
 ---
 title: "PaneChrome primitive — design-system wrapper over layout.RenderPaneBorder"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
