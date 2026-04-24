@@ -183,3 +183,18 @@ Items to log:
 6. `internal/uikit/config.go:SetModeForTest` mutates package-global state without a `sync.Mutex`; not race-safe once any uikit test opts into `t.Parallel()`. Also callable from production code (no `testing.TB` parameter). Add a `t testing.TB` argument so misuse is a compile error outside tests.
 7. `internal/uikit/config.go:UIConfig.Validate` normalises with `strings.ToLower(strings.TrimSpace(...))` for the comparison but does not write the normalised value back to `c.Glyphs`. Anything that reads `cfg.UI.Glyphs` directly still sees the un-trimmed mixed-case value. Either write back or document "Glyphs is normalised at read-time only".
 8. No production call site of `uikit.Use()` yet — `cmd/root.go` wiring lands with the first primitive (S3). Until then `ActiveMode()` always returns the zero-value default. Ensure S3 adds the wiring and a test proves non-UTF-8 envs flip to ASCII end-to-end.
+
+---
+
+## Story 151 — border.go test fidelity follow-ups
+**Found:** 2026-04-24 | **Source:** PR #197 Review
+**Feature:** 13-tui-design-system
+
+Minor polish surfaced in review; none block merge.
+
+Items to log:
+1. Filter-mode test in `internal/ui/layout/border_test.go` does not assert the `─` separator between preamble and notch (spec shows `filtering: "query" ─╮`). Add substring assertion for `─╮` when touching this test next.
+2. No ASCII-mode test exercises `buildRightSegment`'s filter or actions branches. When a primitive first integrates ASCII mode + filter notch, extend the ASCII test.
+3. No test asserts `Esc` key is rendered via `keyHintStyle` (Accent) vs `mutedStyle`. A future color-token swap could regress silently. Add structural ANSI-code assertion when visual-regression tooling lands.
+4. Redundant `uikit.ActiveMode()` calls: once in `corners()` and once in `buildRightSegment`. Harmless today (atomic read), but could be deduplicated by passing `mode GlyphMode` into `buildRightSegment` next time the function is touched.
+5. Stale test name `TestRenderPaneBorder_ActionPrefixCharacterWidth` in `border_test.go` references `ᐅ` as "action prefix"; the glyph is no longer rendered, so the test measures a banned-glyph width with no production tie. Rename or remove next cleanup pass.

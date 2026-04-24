@@ -1,7 +1,7 @@
 ---
 title: "layout/border.go — remove ᐅ from filter mode, ascii-mode corner lookup"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
