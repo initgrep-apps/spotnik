@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // superscripts maps toggle key numbers 1-8 to their Unicode superscript equivalents.
@@ -25,7 +26,7 @@ type BorderConfig struct {
 	// Pass 0 for panes that have no toggle key (e.g. Page B panes).
 	ToggleKey int
 	// Actions are pane-specific shortcuts shown in the top-right of the border.
-	// Displayed as: ᐅkey label, separated by ─── .
+	// Displayed in corner-notch format: ╮key label╭, separated by ─.
 	Actions []Action
 	// AccentColor is the per-pane border accent color (from Theme.PaneBorder*()).
 	AccentColor lipgloss.Color
@@ -33,10 +34,24 @@ type BorderConfig struct {
 	// Focused: full AccentColor + Bold title; unfocused: AccentColor + Faint (dimmed but colored).
 	Focused bool
 	// FilterQuery is non-empty when filter mode is active.
-	// When set, replaces the action shortcuts with: filtering: "query" ─── ᐅEsc close
+	// When set, replaces the action shortcuts with: filtering: "query" ─╮ Esc close ╭
 	FilterQuery string
 	// Theme provides KeyHint() and TextMuted() colors for action rendering.
 	Theme theme.Theme
+}
+
+// corners returns the six border characters (tl, tr, bl, br, horizontal rule,
+// vertical rule) resolved from the active GlyphMode. In unicode mode the
+// standard rounded characters are returned; in ascii mode each is replaced by
+// its printable-ASCII equivalent so the renderer works in any terminal.
+func corners() (tl, tr, bl, br, h, v string) {
+	m := uikit.ActiveMode()
+	return uikit.GlyphFor(uikit.GlyphCornerTL, m),
+		uikit.GlyphFor(uikit.GlyphCornerTR, m),
+		uikit.GlyphFor(uikit.GlyphCornerBL, m),
+		uikit.GlyphFor(uikit.GlyphCornerBR, m),
+		uikit.GlyphFor(uikit.GlyphHRule, m),
+		uikit.GlyphFor(uikit.GlyphVRule, m)
 }
 
 // RenderPaneBorder wraps content in a btop-style border.
@@ -95,15 +110,9 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 
 	// ── Build top border ─────────────────────────────────────────────────────
 
-	// Fixed prefix: ╭─ (corner + dash + space = 3 columns)
-	const (
-		cornerTL = "╭"
-		cornerTR = "╮"
-		cornerBL = "╰"
-		cornerBR = "╯"
-		hBar     = "─"
-		vBar     = "│"
-	)
+	// Resolve corner and rule glyphs from the active GlyphMode so ascii mode
+	// substitutes +/- for ╭╮╰╯─│ transparently.
+	cornerTL, cornerTR, cornerBL, cornerBR, hBar, vBar := corners()
 
 	// Build the right-side segment (actions or filter).
 	rightSegment := buildRightSegment(cfg, keyHintStyle, mutedStyle)
@@ -122,9 +131,9 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	// When leftInner is empty the space would create a visible gap in the border line.
 	var leftPrefix string
 	if lipgloss.Width(leftInner) == 0 {
-		leftPrefix = "─" // no gap: ╭──────╮
+		leftPrefix = hBar // no gap: ╭──────╮
 	} else {
-		leftPrefix = "─ " // space before title: ╭─ Title ──╮
+		leftPrefix = hBar + " " // space before title: ╭─ Title ──╮
 	}
 
 	// Total non-dash columns in the top border:
@@ -210,24 +219,12 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 // either filter mode text or action shortcuts.
 // Returns an empty string if there are no actions and no filter.
 //
-// Filter mode is unchanged: "filtering: "query" ─── ᐅEsc close".
+// Filter mode: "filtering: "query" ─╮ Esc close ╭" — same notch format as actions.
 // Action mode uses the corner-notch format: each action is rendered as
 // "╮ key label ╭" with a single "─" between consecutive notches.
 // The ╮ and ╭ characters use the pane's accent color (faint when unfocused)
 // so they visually blend into the border dashes as notch cutouts.
 func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) string) string {
-	if cfg.FilterQuery != "" {
-		// Filter mode: "filtering: "query" ─── ᐅEsc close"
-		filtering := mutedStyle(`filtering: "` + cfg.FilterQuery + `"`)
-		sep := mutedStyle(" ─── ")
-		escAction := keyHintStyle("Esc") + " " + mutedStyle("close")
-		prefix := mutedStyle("ᐅ")
-		return filtering + sep + prefix + escAction
-	}
-	if len(cfg.Actions) == 0 {
-		return ""
-	}
-
 	// borderChar renders a single character in the pane accent color (faint if unfocused).
 	// Used for the ╮ and ╭ notch characters so they blend into the border line.
 	borderChar := func(s string) string {
@@ -238,14 +235,34 @@ func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) s
 		return style.Render(s)
 	}
 
+	m := uikit.ActiveMode()
+	trCorner := uikit.GlyphFor(uikit.GlyphCornerTR, m)
+	tlCorner := uikit.GlyphFor(uikit.GlyphCornerTL, m)
+	hRule := uikit.GlyphFor(uikit.GlyphHRule, m)
+
+	if cfg.FilterQuery != "" {
+		// Filter mode — notch format matching actions mode.
+		// Output: filtering: "query" ─╮ Esc close ╭
+		preamble := mutedStyle(`filtering: "` + cfg.FilterQuery + `"`)
+		sep := mutedStyle(" " + hRule)
+		notch := borderChar(trCorner) + " " +
+			keyHintStyle("Esc") + " " + mutedStyle("close") + " " +
+			borderChar(tlCorner)
+		return preamble + sep + notch
+	}
+
+	if len(cfg.Actions) == 0 {
+		return ""
+	}
+
 	// Corner-notch format: ╮ key label ╭ with ─ between consecutive notches.
 	parts := make([]string, len(cfg.Actions))
 	for i, a := range cfg.Actions {
-		parts[i] = borderChar("╮") + " " +
+		parts[i] = borderChar(trCorner) + " " +
 			keyHintStyle(a.Key) + " " + mutedStyle(a.Label) + " " +
-			borderChar("╭")
+			borderChar(tlCorner)
 	}
-	return strings.Join(parts, borderChar("─"))
+	return strings.Join(parts, borderChar(hRule))
 }
 
 // buildLeftInner builds the inner-left content of the top border:
