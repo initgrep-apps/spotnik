@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // ThemeSwitchMsg is emitted when the user selects a theme in the ThemeOverlay.
@@ -160,47 +161,45 @@ func (o *ThemeOverlay) View() string {
 }
 
 // renderRow renders a single theme row with indicator and color swatches.
+// ListRow handles the indicator glyph, theme name, and optional "active" caption.
+// Swatches and cursor-highlight background are applied outside ListRow so they
+// remain independent of the primitive's internal layout.
 func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int) string {
 	isCursor := idx == o.cursor
 	isCurrent := th.ID() == o.currentID
 
-	// Indicator: ◉ for current theme (in Success color), ○ for others (in TextMuted).
-	// Only cursor rows receive Background(SelectedBg()); non-cursor rows have NO explicit
-	// background so they blend with the overlay's composited background instead of
-	// rendering as opaque colored rectangles over the dimmed grid.
-	var indicator string
-	var indicatorStyle lipgloss.Style
-	if isCurrent {
-		indicatorStyle = lipgloss.NewStyle().Foreground(o.theme.Success())
-		indicator = "◉"
-	} else {
-		indicatorStyle = lipgloss.NewStyle().Foreground(o.theme.TextMuted())
-		indicator = "○"
-	}
-
-	// Theme name style: cursor uses SelectedFg+SelectedBg; non-cursor uses TextPrimary only.
-	var nameStyle lipgloss.Style
-	if isCursor {
-		nameStyle = lipgloss.NewStyle().
-			Foreground(o.theme.SelectedFg()).
-			Background(o.theme.SelectedBg())
-	} else {
-		nameStyle = lipgloss.NewStyle().Foreground(o.theme.TextPrimary())
-	}
-
-	// Apply SelectedBg() to all cursor row elements.
-	if isCursor {
-		bg := o.theme.SelectedBg()
-		indicatorStyle = indicatorStyle.Background(bg)
-	}
-
-	// Color swatches — 5 colored █ chars using the target theme's colors (not current).
+	// Swatches take fixed space; reserve that to give ListRow the remaining width.
 	swatches := renderSwatches(th)
+	swatchWidth := lipgloss.Width(swatches) + 2 // +2 for the leading "  " gap
+	rowWidth := innerWidth - swatchWidth
+	if rowWidth < 1 {
+		rowWidth = 1
+	}
 
-	row := indicatorStyle.Render(indicator) + " " +
-		nameStyle.Render(th.Name()) +
-		"  " +
-		swatches
+	// Choose glyph and role based on whether this is the current theme.
+	glyph := uikit.GlyphAvailable
+	intent := uikit.RoleMuted
+	caption := ""
+	if isCurrent {
+		glyph = uikit.GlyphActive
+		intent = uikit.RoleAccent
+		caption = "active"
+	}
+
+	// Apply cursor background to ListRow theme when the row is highlighted.
+	rowTheme := o.theme
+	if isCursor {
+		intent = uikit.RoleSelection
+	}
+
+	listRow := uikit.ListRow{
+		Glyph:   glyph,
+		Label:   th.Name(),
+		Caption: caption,
+		Intent:  intent,
+		Theme:   rowTheme,
+	}
+	rowContent := listRow.Render(rowWidth) + "  " + swatches
 
 	// Cursor row: pad with SelectedBg so the entire row is highlighted.
 	// Non-cursor row: no explicit background — blends with overlay composite background.
@@ -210,11 +209,11 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 		return rowStyle.Render(lipgloss.NewStyle().
 			Width(innerWidth).MaxWidth(innerWidth).
 			Background(bg).
-			Render(row))
+			Render(rowContent))
 	}
 	return lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
-		Render(row)
+		Render(rowContent)
 }
 
 // overlayWidth computes the overlay width based on the longest theme name plus swatch space.

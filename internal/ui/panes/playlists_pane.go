@@ -15,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: PlaylistsPane implements layout.Pane.
@@ -422,15 +423,23 @@ func (p *PlaylistsPane) RefreshRows() {
 }
 
 // refreshPlaylistRows re-reads the store and applies filtered playlist rows.
-// Non-owned (followed) playlists are prefixed with "~ " to signal that
-// track drill-down is unavailable (Spotify API restriction).
+// Spotify-curated playlists (Owner.ID == "spotify") render via LockedRow to
+// signal they are read-only and cannot be drill-downed into. Other non-owned
+// (followed) playlists are prefixed with "~ " to signal restricted access.
 func (p *PlaylistsPane) refreshPlaylistRows() {
 	playlists := p.filteredPlaylist()
 	rows := make([]map[string]string, len(playlists))
 	for i, pl := range playlists {
-		name := pl.Name
-		if !p.isOwnedByCurrentUser(pl) {
-			name = "~ " + name
+		var name string
+		if pl.Owner.ID == "spotify" {
+			// LockedRow signals the Spotify-curated playlist is read-only.
+			// Render with a generous width so the table truncates at its own column width.
+			locked := uikit.LockedRow{Label: pl.Name, Theme: p.theme}
+			name = strings.TrimRight(locked.Render(200), " ")
+		} else if !p.isOwnedByCurrentUser(pl) {
+			name = "~ " + pl.Name
+		} else {
+			name = pl.Name
 		}
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
