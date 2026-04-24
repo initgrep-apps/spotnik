@@ -201,6 +201,20 @@ Items to log:
 
 ---
 
+## Story 153 — OverlayChrome polish follow-ups
+**Found:** 2026-04-24 | **Source:** PR #199 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking items.
+
+Items to log:
+1. Two stale references to the deleted `renderWith{Theme,Device,Profile,Search,Help}Overlay` helper names remain in `internal/app/app_test.go` comments (~lines 1081, 1095). Comment-only, non-load-bearing; rename to `renderWithOverlayChrome` next time that file is touched.
+2. `internal/uikit/overlay_chrome_test.go` uses `uikit.Capture` + `len([]rune(...))` to measure visible width while `pane_chrome_test.go` uses `lipgloss.Width(l)` directly. Both correct, but harmonise once a helper like `uikit.VisibleWidth` lands.
+3. `TestRender_ThemeOverlay_Composited` assertion was adapted from `"Themes"` → `"Gruvbox"` because the default test-app height truncates the title row after overlay composition. The parallel `TestRenderWithOverlayChrome_Composited` restores the title assertion with a full-height background. Consolidate both when visual-regression tooling lands.
+4. Spec §"Rendering" says "The individual overlay panes (SearchOverlay, DeviceOverlay, etc.) compose their own bodies and pass them into OverlayChrome.Render(content)." This PR creates the primitive + consolidates the render helpers but does not wire overlay panes to use OverlayChrome for their bodies. Handle in a later story when each overlay pane is migrated.
+
+---
+
 ## Story 151 — border.go test fidelity follow-ups
 **Found:** 2026-04-24 | **Source:** PR #197 Review
 **Feature:** 13-tui-design-system

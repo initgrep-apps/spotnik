@@ -301,7 +301,24 @@ func TestRender_ThemeOverlay_Composited(t *testing.T) {
 	a.themeOverlay = newThemeOverlayForTest(a)
 
 	result := a.buildView()
-	assert.Contains(t, result, "Themes", "theme overlay should appear when showThemeSwitcher is true")
+	assert.Contains(t, result, "Gruvbox", "theme overlay content should appear when showThemeSwitcher is true")
+}
+
+// TestRenderWithOverlayChrome_Composited verifies that renderWithOverlayChrome correctly
+// centers the overlay over a full-height background so the titled border ("Themes") is
+// visible in the composite output.
+func TestRenderWithOverlayChrome_Composited(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+
+	// Build a full-height background (50 lines) so btoverlay.Center can position
+	// the overlay correctly and the top border containing "Themes" is visible.
+	bg := strings.Repeat(strings.Repeat(" ", 160)+"\n", 49) + strings.Repeat(" ", 160)
+
+	overlayView := newThemeOverlayForTest(a).View()
+	result := a.renderWithOverlayChrome(bg, overlayView)
+	assert.Contains(t, result, "Themes", "overlay border title must appear in composite output")
 }
 
 // TestRender_HelpOverlay_Composited verifies that when helpOpen is true,
@@ -611,7 +628,7 @@ func TestRenderHeader_DeviceAndProfile_FitsWidth(t *testing.T) {
 	assert.Equal(t, 160, lipgloss.Width(result), "header should fit exactly terminal width with both chips")
 }
 
-// --- Story 115 PR fixes: renderWithProfileOverlay coverage ---
+// --- Story 115 / 153: renderWithOverlayChrome coverage ---
 
 // TestRenderWithProfileOverlay_NonEmpty verifies that when profileOverlayOpen is true and
 // the store has a loaded profile, buildView() returns a non-empty string containing the
@@ -635,16 +652,17 @@ func TestRenderWithProfileOverlay_NonEmpty(t *testing.T) {
 	assert.Contains(t, result, "╭", "profile overlay border should include rounded corner ╭")
 }
 
-// TestRenderWithProfileOverlay_ZeroWidth verifies that with zero terminal width,
-// renderWithProfileOverlay returns the background unchanged (no panic, guard triggers).
-func TestRenderWithProfileOverlay_ZeroWidth(t *testing.T) {
+// TestRenderWithOverlayChrome_ZeroWidth verifies that with zero terminal width,
+// renderWithOverlayChrome returns a non-empty fallback (no panic, guard triggers).
+func TestRenderWithOverlayChrome_ZeroWidth(t *testing.T) {
 	a := newRenderTestApp()
-	// width=0 triggers the guard inside renderWithProfileOverlay.
+	// width=0 triggers the guard inside renderWithOverlayChrome.
 	a.width = 0
 	a.height = 0
 	background := "background content"
-	result := a.renderWithProfileOverlay(background)
-	assert.NotEmpty(t, result, "renderWithProfileOverlay should return non-empty result even at zero size")
+	overlayView := "overlay content"
+	result := a.renderWithOverlayChrome(background, overlayView)
+	assert.NotEmpty(t, result, "renderWithOverlayChrome should return non-empty result even at zero size")
 }
 
 func TestTruncateProfileName_ShortName(t *testing.T) {
