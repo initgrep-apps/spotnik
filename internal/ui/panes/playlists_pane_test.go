@@ -748,12 +748,13 @@ func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewPlaylistsPane(state.New(), th, false)
 
-	// List view: # → ColumnIndex, Name → ColumnPrimary, Tracks → ColumnTertiary
+	// List view: access (blank header) → ColumnSecondary, # → ColumnIndex, Name → ColumnPrimary, Tracks → ColumnTertiary
 	listCols := p.table.Columns()
-	require.Len(t, listCols, 3, "PlaylistsPane list table should have 3 columns")
-	assert.Equal(t, th.ColumnIndex(), listCols[0].Color, "# column should use ColumnIndex()")
-	assert.Equal(t, th.ColumnPrimary(), listCols[1].Color, "Name column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnTertiary(), listCols[2].Color, "Tracks column should use ColumnTertiary()")
+	require.Len(t, listCols, 4, "PlaylistsPane list table should have 4 columns")
+	assert.Equal(t, th.ColumnSecondary(), listCols[0].Color, "access column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnIndex(), listCols[1].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), listCols[2].Color, "Name column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnTertiary(), listCols[3].Color, "Tracks column should use ColumnTertiary()")
 
 	// Track sub-view: # → ColumnIndex, Track → ColumnPrimary, Artist → ColumnSecondary, Duration → ColumnTertiary
 	trackCols := p.trackTable.Columns()
@@ -786,8 +787,7 @@ func TestPlaylistsPane_Actions_ListView_NoNOrR(t *testing.T) {
 
 // TestPlaylistsPane_SpotifyOwnedRow_HasLockedGlyph verifies that a playlist with
 // Owner.ID == "spotify" renders with the locked glyph (◌ in unicode mode) in the
-// name column. PlainText() is used so the cell carries no ANSI — the table's
-// column colour applies the foreground.
+// dedicated access column, and that the name column contains only the plain name.
 func TestPlaylistsPane_SpotifyOwnedRow_HasLockedGlyph(t *testing.T) {
 	s := state.New()
 	s.SetPlaylists([]domain.SimplePlaylist{
@@ -817,15 +817,81 @@ func TestPlaylistsPane_SpotifyOwnedRow_HasLockedGlyph(t *testing.T) {
 	require.Len(t, rows, 2, "expected 2 rows")
 
 	spotifyRow := rows[0]
-	assert.True(t, strings.HasPrefix(spotifyRow["name"], lockedGlyph+" "),
-		"Spotify-owned playlist name must start with locked glyph %q, got %q",
-		lockedGlyph+" ", spotifyRow["name"])
-	assert.Contains(t, spotifyRow["name"], "Today's Top Hits",
-		"locked row must include the playlist name")
+	assert.True(t, strings.HasPrefix(spotifyRow["access"], lockedGlyph),
+		"Spotify-owned playlist access column must start with locked glyph %q, got %q",
+		lockedGlyph, spotifyRow["access"])
+	assert.Equal(t, "Today's Top Hits", spotifyRow["name"],
+		"name column must contain only the plain playlist name, no glyph prefix")
 
-	// The user-owned playlist must NOT have the locked glyph.
+	// The user-owned playlist must NOT have the locked glyph in access.
 	userRow := rows[1]
-	assert.False(t, strings.HasPrefix(userRow["name"], lockedGlyph+" "),
-		"user-owned playlist must not start with locked glyph, got %q", userRow["name"])
+	assert.False(t, strings.HasPrefix(userRow["access"], lockedGlyph),
+		"user-owned playlist access must not be locked glyph, got %q", userRow["access"])
 	assert.Equal(t, "My Playlist", userRow["name"])
+}
+
+// TestPlaylistsPane_AccessColumn_GlyphsPerOwnerType verifies that the dedicated
+// access column shows the correct glyph for each ownership type, and that the
+// name column is clean (no glyph prefix, no "~ " prefix).
+func TestPlaylistsPane_AccessColumn_GlyphsPerOwnerType(t *testing.T) {
+	const userID = "user123"
+	s := state.New()
+	s.SetUserProfile(domain.UserProfile{ID: userID})
+	s.SetPlaylists([]domain.SimplePlaylist{
+		{
+			ID:         "owned",
+			Name:       "My Playlist",
+			URI:        "spotify:playlist:owned",
+			TrackCount: 10,
+			Owner:      domain.SimplePlaylistOwner{ID: userID},
+		},
+		{
+			ID:         "followed",
+			Name:       "Someone Else's Playlist",
+			URI:        "spotify:playlist:followed",
+			TrackCount: 20,
+			Owner:      domain.SimplePlaylistOwner{ID: "other_user"},
+		},
+		{
+			ID:         "spotify_curated",
+			Name:       "Today's Top Hits",
+			URI:        "spotify:playlist:spotify_curated",
+			TrackCount: 50,
+			Owner:      domain.SimplePlaylistOwner{ID: "spotify"},
+		},
+	})
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, false)
+	pane.SetSize(80, 20)
+
+	activeGlyph := uikit.GlyphFor(uikit.GlyphActive, uikit.GlyphUnicode)   // ◉
+	availGlyph := uikit.GlyphFor(uikit.GlyphAvailable, uikit.GlyphUnicode) // ○
+	lockedGlyph := uikit.GlyphFor(uikit.GlyphLocked, uikit.GlyphUnicode)   // ◌
+
+	rows := pane.table.Rows()
+	require.Len(t, rows, 3, "expected 3 rows")
+
+	// Row 0: user-owned → ◉
+	assert.Equal(t, activeGlyph, rows[0]["access"],
+		"user-owned row access must be GlyphActive (%q)", activeGlyph)
+	assert.Equal(t, "My Playlist", rows[0]["name"], "user-owned name must be plain")
+
+	// Row 1: followed (non-owned, non-Spotify) → ○
+	assert.Equal(t, availGlyph, rows[1]["access"],
+		"followed row access must be GlyphAvailable (%q)", availGlyph)
+	assert.Equal(t, "Someone Else's Playlist", rows[1]["name"], "followed name must be plain")
+
+	// Row 2: Spotify-curated → ◌
+	assert.Equal(t, lockedGlyph, rows[2]["access"],
+		"Spotify-curated row access must be GlyphLocked (%q)", lockedGlyph)
+	assert.Equal(t, "Today's Top Hits", rows[2]["name"], "Spotify-curated name must be plain")
+
+	// Verify no name cell starts with a glyph character.
+	glyphs := []string{activeGlyph, availGlyph, lockedGlyph, "~ "}
+	for i, row := range rows {
+		for _, g := range glyphs {
+			assert.False(t, strings.HasPrefix(row["name"], g),
+				"row %d name must not start with glyph/prefix %q, got %q", i, g, row["name"])
+		}
+	}
 }
