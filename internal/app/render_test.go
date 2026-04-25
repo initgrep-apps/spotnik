@@ -10,9 +10,9 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	btoverlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	btoverlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 // newThemeOverlayForTest creates a ThemeOverlay for use in render tests.

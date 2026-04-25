@@ -3,6 +3,7 @@ package panes_test
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -507,17 +508,22 @@ func TestRequestFlowPane_View_BoxedLayout_ThreeColumns(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(80, 20)
 	v := pane.View()
-	// SectionLabel renders label + rule; check labels are present.
+	// PaneChrome renders ╭─ LABEL─╮ borders — check labels are present via
+	// viewContainsLabel which searches for " LABEL" (space before title).
 	assert.True(t, viewContainsLabel(v, "APP"))
-	assert.True(t, viewContainsLabel(v, "GATEWAY"))
+	assert.True(t, viewContainsLabel(v, "GATEWAY LOG"))
 	assert.True(t, viewContainsLabel(v, "SPOTIFY"))
+	// Bordered column boxes: top-border ╭, content │, bottom-border ╰ must appear.
+	assert.Contains(t, v, "╭", "column boxes must have top border glyph ╭")
+	assert.Contains(t, v, "│", "column boxes must have side border glyph │")
+	assert.Contains(t, v, "╰", "column boxes must have bottom border glyph ╰")
 }
 
 func TestRequestFlowPane_View_BoxedLayout_SectionRules(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(80, 20)
 	v := pane.View()
-	// SectionLabel emits horizontal rule lines — at least one ─ must be present.
+	// PaneChrome renders horizontal border rules — at least one ─ must be present.
 	assert.Contains(t, v, "─")
 }
 
@@ -865,13 +871,22 @@ func TestRequestFlowPane_View_AutoTrafficStrip_StalePlaylist(t *testing.T) {
 
 // --- Helper functions ---
 
-// viewContainsLabel returns true if any line in the output is a SectionLabel
-// label line (i.e., contains the given title surrounded by spaces: " TITLE ").
-// Used to verify that the boxed layout emits SectionLabel headers.
+// ansiRE matches ANSI escape sequences for stripping.
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripANSI removes ANSI colour/style escape sequences from s.
+func stripANSI(s string) string {
+	return ansiRE.ReplaceAllString(s, "")
+}
+
+// viewContainsLabel returns true if any ANSI-stripped line in the output contains
+// a space-prefixed title. PaneChrome renders borders as ╭─ TITLE─╮, so after
+// ANSI stripping the border line contains " TITLE". In the flat layout the column
+// header "APP" starts at position 0 with no leading space, so it does not match.
 func viewContainsLabel(output, title string) bool {
-	needle := " " + title + " "
+	needle := " " + title
 	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, needle) {
+		if strings.Contains(stripANSI(line), needle) {
 			return true
 		}
 	}

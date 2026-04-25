@@ -210,24 +210,26 @@ func (p *RequestFlowPane) viewBoxed() string {
 	return banner + "\n" + columns + "\n" + autoTraffic
 }
 
-// renderSectionColumn renders a labelled column: a SectionLabel header (2 lines)
-// followed by content lines, padded to fill width. Used for the APP, GATEWAY LOG,
-// and SPOTIFY column areas in viewBoxed().
+// renderSectionColumn renders a labelled column as a fully bordered PaneChrome box.
+// Used for the APP, GATEWAY LOG, and SPOTIFY column areas in viewBoxed(). The
+// inner content width is width-2 to account for the left and right border glyphs.
 func renderSectionColumn(label string, lines []string, width int, accent lipgloss.Color, th theme.Theme) string {
-	header := uikit.SectionLabel{
-		Label:       label,
-		Width:       width,
-		AccentColor: accent,
-		Theme:       th,
-	}.Render()
-
+	innerW := width - 2
 	var sb strings.Builder
-	sb.WriteString(header)
-	for _, line := range lines {
-		sb.WriteString("\n")
-		sb.WriteString(layout.TruncateOrPad(line, width))
+	for i, line := range lines {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(layout.TruncateOrPad(line, innerW))
 	}
-	return sb.String()
+	return uikit.PaneChrome{
+		Width:       width,
+		Height:      len(lines) + 2, // +2 for top/bottom border rows
+		Title:       label,
+		AccentColor: accent,
+		Focused:     false,
+		Theme:       th,
+	}.Render(sb.String())
 }
 
 // buildGapBlock returns a blank-space block for use as a gap column
