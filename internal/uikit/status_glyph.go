@@ -1,6 +1,8 @@
 package uikit
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
@@ -28,9 +30,15 @@ type StatusGlyph struct {
 	Text string
 	// Theme provides the colour token for the role.
 	Theme theme.Theme
+	// Gap is the number of extra spaces to insert between the glyph and the text,
+	// in addition to the mandatory single space. Default 0 produces "◬ text";
+	// Gap: 1 produces "◬  text" (two spaces) which aligns with adjacent lines
+	// that were rendered with the legacy two-space padding (e.g. "✓  text").
+	Gap int
 }
 
-// Render returns the ANSI-styled string "<glyph> <text>".
+// Render returns the ANSI-styled string "<glyph><sep><text>" where sep is one
+// space plus Gap additional spaces (Gap == 0 → single space, Gap == 1 → two spaces).
 // The glyph is resolved via the frozen glyph catalogue (glyph.go) so the
 // active GlyphMode (unicode/ascii) is respected automatically.
 func (sg StatusGlyph) Render() string {
@@ -38,11 +46,12 @@ func (sg StatusGlyph) Render() string {
 	if !ok {
 		gr = GlyphInfo
 	}
+	sep := " " + strings.Repeat(" ", sg.Gap)
 	glyph := lipgloss.NewStyle().
 		Foreground(ColourFor(sg.Role, sg.Theme)).
 		Render(GlyphFor(gr, ActiveMode()))
 	text := lipgloss.NewStyle().
 		Foreground(ColourFor(sg.Role, sg.Theme)).
 		Render(sg.Text)
-	return glyph + " " + text
+	return glyph + sep + text
 }

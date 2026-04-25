@@ -187,7 +187,7 @@ func (a *App) renderOnboardingRegister() string {
 		"",
 		uriBox,
 		"",
-		uikit.StatusGlyph{Role: uikit.RoleWarning, Text: "Spotify Premium is required for playback controls", Theme: t}.Render(),
+		uikit.StatusGlyph{Role: uikit.RoleWarning, Text: "Spotify Premium is required for playback controls", Theme: t, Gap: 1}.Render(),
 		successStyle.Render("✓  Your Client ID will be saved to ~/.config/spotnik/config.toml"),
 	)
 

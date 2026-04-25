@@ -38,6 +38,7 @@ func renderSplashView(t theme.Theme, version string, width, height int) string {
 		Role:  uikit.RoleWarning,
 		Text:  "Playback controls require Spotify Premium",
 		Theme: t,
+		Gap:   1,
 	}.Render()
 
 	infoPanel := infoPanelStyle.Render(
