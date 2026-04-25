@@ -44,6 +44,11 @@ func NewFormField(cfg FormFieldConfig) *FormField {
 	ti.Width = 60
 	ti.CharLimit = 256
 
+	// Wire theme roles so the colours follow the active theme when rendered.
+	// Input.Text = Plain (TextPrimary); Input.Cursor = Accent.
+	ti.TextStyle = lipgloss.NewStyle().Foreground(cfg.Theme.TextPrimary())
+	ti.Cursor.Style = lipgloss.NewStyle().Foreground(cfg.Theme.Accent())
+
 	return &FormField{cfg: cfg, input: ti}
 }
 
@@ -85,8 +90,11 @@ func (f *FormField) Render() string {
 	}
 
 	errGlyph := GlyphFor(GlyphError, ActiveMode())
-	errStyle := lipgloss.NewStyle().Foreground(t.Error())
-	errLine := errStyle.Render(errGlyph + " " + f.errMsg)
+	// ValidationError role: glyph in Error colour, message text in Plain (TextPrimary).
+	// The two distinct foreground colours allow visual hierarchy without an icon library.
+	glyphStyle := lipgloss.NewStyle().Foreground(t.Error())
+	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
+	errLine := glyphStyle.Render(errGlyph) + " " + textStyle.Render(f.errMsg)
 
 	return lipgloss.JoinVertical(lipgloss.Left, label, inputBox, errLine)
 }
@@ -125,4 +133,18 @@ func (f *FormField) Validate() error {
 // Validate() call. Returns "" when no error is cached.
 func (f *FormField) ValidationError() string {
 	return f.errMsg
+}
+
+// InputTextStyle returns the lipgloss.Style applied to typed text inside the
+// embedded textinput. Exposed so tests can assert that Input.Text is wired to
+// the Plain (TextPrimary) role without relying on rendered ANSI output.
+func (f *FormField) InputTextStyle() lipgloss.Style {
+	return f.input.TextStyle
+}
+
+// InputCursorStyle returns the lipgloss.Style applied to the cursor inside the
+// embedded textinput. Exposed so tests can assert that Input.Cursor is wired to
+// the Accent role without relying on rendered ANSI output.
+func (f *FormField) InputCursorStyle() lipgloss.Style {
+	return f.input.Cursor.Style
 }

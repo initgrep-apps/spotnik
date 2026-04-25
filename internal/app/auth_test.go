@@ -126,7 +126,7 @@ func TestHandleOnboardingKey_validClientID_clearsError(t *testing.T) {
 	assert.NotNil(t, emittedCmd, "should emit save command for valid input")
 }
 
-func TestHandleOnboardingKey_keypressClears_onboardingInputError(t *testing.T) {
+func TestHandleOnboardingKey_keypress_forwardsToField(t *testing.T) {
 	th := theme.Load("black")
 	a := &App{
 		currentView:     viewOnboarding,

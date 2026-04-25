@@ -2,10 +2,12 @@ package uikit_test
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -202,4 +204,80 @@ func TestFormField_Validate_ClearsErrorOnRetry(t *testing.T) {
 	err := f.Validate()
 	require.NoError(t, err)
 	assert.Empty(t, f.ValidationError(), "ValidationError() should be cleared after successful retry")
+}
+
+// ansiEscapeRe matches ANSI SGR foreground colour sequences.
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[\d;]+m`)
+
+// TestFormField_Render_ValidationError_TwoDistinctColours is a regression test
+// for the role wiring of FormField.ValidationError. The spec mandates
+// "Error glyph + Plain text" — two distinct foreground colours. Before the fix,
+// the entire line was painted in a single Error foreground, so this test would
+// have found only one unique sequence for the error segment.
+func TestFormField_Render_ValidationError_TwoDistinctColours(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	th := newTestTheme()
+	f := uikit.NewFormField(uikit.FormFieldConfig{
+		Label:    "Client ID",
+		Validate: validHexValidator,
+		Theme:    th,
+	})
+
+	f.SetValue("bad")
+	_ = f.Validate()
+
+	rendered := f.Render()
+
+	// Find the error line — it is the last line of the rendered output.
+	lines := strings.Split(rendered, "\n")
+	var errLine string
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(stripANSI(lines[i])) != "" {
+			errLine = lines[i]
+			break
+		}
+	}
+	require.NotEmpty(t, errLine, "error line must be present after Validate failure")
+
+	// Collect unique ANSI sequences that open a new foreground colour.
+	// We look for SGR sequences that contain a colour code (38;2; or simple colour digits).
+	matches := ansiEscapeRe.FindAllString(errLine, -1)
+	// Filter out reset sequences (\x1b[0m or \x1b[m) to focus on colour openers.
+	var colourOpeners []string
+	for _, m := range matches {
+		if m != "\x1b[0m" && m != "\x1b[m" {
+			colourOpeners = append(colourOpeners, m)
+		}
+	}
+
+	// Deduplicate.
+	seen := map[string]struct{}{}
+	for _, s := range colourOpeners {
+		seen[s] = struct{}{}
+	}
+
+	assert.GreaterOrEqual(t, len(seen), 2,
+		"error line must contain at least two distinct ANSI colour sequences (Error glyph + Plain text), got: %v", colourOpeners)
+}
+
+// TestFormField_NewFormField_TextStyleAndCursorStyleSet is a regression test for
+// Input.Text = Plain and Input.Cursor = Accent role wiring. It verifies that the
+// TextStyle carries the TextPrimary foreground and the Cursor.Style carries the
+// Accent foreground so theme switching propagates correctly.
+func TestFormField_NewFormField_TextStyleAndCursorStyleSet(t *testing.T) {
+	th := newTestTheme()
+	f := uikit.NewFormField(uikit.FormFieldConfig{
+		Label: "Client ID",
+		Theme: th,
+	})
+
+	// TextStyle must be non-zero (carries TextPrimary foreground).
+	wantTextStyle := lipgloss.NewStyle().Foreground(th.TextPrimary())
+	assert.Equal(t, wantTextStyle, f.InputTextStyle(),
+		"Input.Text role must be wired to TextPrimary via TextStyle")
+
+	// Cursor.Style must be non-zero (carries Accent foreground).
+	wantCursorStyle := lipgloss.NewStyle().Foreground(th.Accent())
+	assert.Equal(t, wantCursorStyle, f.InputCursorStyle(),
+		"Input.Cursor role must be wired to Accent via Cursor.Style")
 }
