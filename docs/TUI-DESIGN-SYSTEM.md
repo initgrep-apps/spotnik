@@ -422,7 +422,7 @@ GATEWAY
 | Field | Role |
 |---|---|
 | Label | Parent pane's border token (via AccentColor) |
-| Rule | Muted |
+| Rule | Parent pane's border token (via AccentColor) |
 
 **Glyphs:** horizontal rule `─` / `-`.
 
@@ -578,7 +578,8 @@ ascii mode.
 ### 3.11 StatusBar
 
 **Purpose:** Bottom global key bar, three lines tall. Composition over `KeyBar` using
-`bubbles/help` `ShortHelp()` / `FullHelp()`. Shares `StatusBarBg()` with `HeaderBar`.
+`bubbles/help` `ShortHelp()` / `FullHelp()`. Body background is terminal-default (no
+`StatusBarBg()` applied); a muted-accent border distinguishes the bar from the grid.
 
 **Fields:**
 
@@ -602,7 +603,7 @@ type StatusBar struct {
 
 | Field | Role |
 |---|---|
-| Background | `theme.StatusBarBg()` |
+| Body background | terminal default (no fill) |
 | Key label | `theme.KeyHint()` |
 | Description | Muted |
 
@@ -634,7 +635,7 @@ type KeyBar struct {
 f filter · n new · Esc close
 ```
 
-**Rendering (ascii):** identical; no unicode-specific separator characters.
+**Rendering (ascii):** identical; separator becomes ` | ` in ascii mode.
 
 **Roles:**
 
@@ -642,9 +643,9 @@ f filter · n new · Esc close
 |---|---|
 | Key | `theme.KeyHint()` |
 | Description | Muted |
-| Separator ` · ` | Muted |
+| Separator ` · ` (unicode) / ` | ` (ascii) | Muted |
 
-**Glyphs:** none.
+**Glyphs:** `·` (unicode) / `|` (ascii) separator.
 
 **Lifecycle:** stateless.
 
@@ -750,7 +751,7 @@ x Must be 32 characters
 | ValidationError glyph | Error |
 | ValidationError text | Plain |
 
-**Glyphs:** `✗` / `x` failure; `✓` / `+` success (validation pass state).
+**Glyphs:** `✗` / `x` failure (no success glyph rendered in current implementation).
 
 **Lifecycle:** owns-state (wraps `textinput.Model`).
 
@@ -788,29 +789,26 @@ type Toast struct {
 **Rendering (unicode, Error intent):**
 
 ```
-╭──────────────────────────╮
-│ ✗  Spotify unreachable   │
-│    Retrying in 3s.       │
-╰──────────────────────────╯
+✗ Spotify unreachable
+  Retrying in 3s.
 ```
 
-**Rendering (ascii):**
+Note: bubbleup renders the combined `Title + "\n" + Body` string in a single intent foreground
+colour. The bordered box style above is for illustration only; the current implementation does
+not draw a per-toast border (future revision may add per-line styling).
 
-```
-+--------------------------+
-| x  Spotify unreachable   |
-|    Retrying in 3s.       |
-+--------------------------+
-```
+**Rendering (ascii):** same layout; `✗` → `x`.
 
 **Roles:**
 
 | Field | Role |
 |---|---|
-| Border | intent role |
 | Glyph | intent role |
-| Title | Strong |
-| Body | Plain |
+| Title + Body | intent role |
+
+Note: Internal Title/Body split is for content-rule purposes (sentence case, length limits).
+bubbleup renders the combined string in a single foreground colour — there is no Strong/Plain
+split at render time.
 
 **Glyphs by intent:** `✓`/`+` Success · `✗`/`x` Error · `◬`/`!` Warning · `→`/`>` Info ·
 `⧖`/`~` RateLimit.
@@ -847,7 +845,7 @@ type StatusGlyph struct {
     Role  Role
     Text  string
     Theme theme.Theme
-    Gap   int   // spaces between glyph and text (default 1)
+    Gap   int   // extra spaces beyond the mandatory single separator; default 0 = 1 space, 1 = 2 spaces
 }
 ```
 
@@ -874,7 +872,7 @@ type StatusGlyph struct {
 
 **Lifecycle:** stateless.
 
-**Tests:** glyph is intent colour; text is Plain; Gap inserts correct spaces; ascii mode.
+**Tests:** glyph is intent colour; text is intent role; Gap inserts correct spaces; ascii mode.
 
 ---
 
@@ -914,10 +912,13 @@ partial-block character for the fractional remainder (1/8 resolution).
 
 | Field | Role |
 |---|---|
-| Fill (`█` and partials) | `theme.Gradient1/2/3()` per position |
+| Fill (`█` and partials) | `theme.Gradient1()` |
 | Empty (`░`) | Muted |
 
 **Glyphs:** `█ ▉ ▊ ▋ ▌ ▍ ▎ ▏ ░` / `# = - .` (see §4.7).
+
+**Note:** Callers wanting per-position gradient compose via `uikit.PartialGlyph` +
+`GlyphFor` directly (see `internal/ui/components/gradient.go`).
 
 **Lifecycle:** stateless.
 
@@ -1223,7 +1224,7 @@ Call sites set a **role**, never a raw colour.
 | `HeaderBar.Separator` | Muted |
 | `HeaderBar.PageKey` (A/B) | Accent |
 | `HeaderBar.PresetLabel` | Muted |
-| `StatusBar.Bg` | `theme.StatusBarBg()` |
+| `StatusBar.Bg` | terminal default (no fill) |
 | `StatusBar.Key` | `theme.KeyHint()` |
 | `StatusBar.Desc` | Muted |
 | `KeyBar.Key` | `theme.KeyHint()` |
@@ -1237,10 +1238,10 @@ Call sites set a **role**, never a raw colour.
 | `FormField.Input.Cursor` | Accent |
 | `FormField.ValidationError` | Error glyph + Plain text |
 | `Toast.Glyph` | intent role |
-| `Toast.Title` | Strong |
-| `Toast.Body` | Plain |
+| `Toast.Title` | intent role |
+| `Toast.Body` | intent role |
 | `StatusGlyph` | intent role |
-| `ProgressBar.Fill` | `theme.Gradient1/2/3()` per position |
+| `ProgressBar.Fill` | `theme.Gradient1()` |
 | `ProgressBar.Empty` | Muted |
 | `Spinner.Frame` | Accent |
 | `Spinner.Text` | Muted |
@@ -1252,7 +1253,7 @@ Call sites set a **role**, never a raw colour.
 - **Strong** is bold, not bright — contrast through weight.
 - One Accent per call-to-action — an action key OR an action URL, never both wrapped
   into the same span.
-- `HeaderBar` and `StatusBar` share `StatusBarBg()` to visually bracket the grid.
+- `HeaderBar` uses `StatusBarBg()` to bracket the grid; `StatusBar` uses a muted-accent border on a terminal-default body.
 
 ---
 
