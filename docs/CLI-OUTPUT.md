@@ -209,7 +209,7 @@ colour directly.
 | `◎` | Inactive | `Header{Inactive}`, `Step{Inactive}` |
 | `✓` | Success | `Header{StatusSuccess}`, `Step{StatusSuccess}` |
 | `✗` | Failure | `Header{StatusFailure}`, `Step{StatusFailure}` |
-| `⚠` | Warning | `Header{StatusWarning}`, `Step{StatusWarning}` |
+| `◬` | Warning | `Header{StatusWarning}`, `Step{StatusWarning}` |
 | `◌` | Pending | `Header{Pending}`, `Step{Pending}`, Spinner non-TTY |
 | `→` | Action | `Hint.Arrow` |
 | `⣾⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` | Spinning | `Spinner` TTY animation frames |

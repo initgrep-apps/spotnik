@@ -37,7 +37,7 @@ func NewNotifications(t theme.Theme) *bubbleup.AlertModel {
 	warningAlert := bubbleup.AlertDefinition{
 		Key:       "warning",
 		ForeColor: string(t.Warning()),
-		Prefix:    "!",
+		Prefix:    "◬",
 	}
 	infoAlert := bubbleup.AlertDefinition{
 		Key:       "info",

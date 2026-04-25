@@ -358,7 +358,7 @@ func (p *RequestFlowPane) renderFlatSpotifyEntry(a *requestAnimation) string {
 		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Success())
 	case a.statusCode == 429:
 		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Warning())
-		suffix = " ⚠"
+		suffix = " ◬"
 	case a.statusCode >= 500:
 		statusStyle = lipgloss.NewStyle().Foreground(p.theme.Error())
 	default:
@@ -476,9 +476,9 @@ func (p *RequestFlowPane) renderAutoTrafficStrip(width int) string {
 			}
 			age := humanAge(e.fa)
 			if time.Since(e.fa) >= time.Hour {
-				segments = append(segments, errorStyle.Render(fmt.Sprintf("⚠ %s  %s", e.name, age)))
+				segments = append(segments, errorStyle.Render(fmt.Sprintf("◬ %s  %s", e.name, age)))
 			} else {
-				segments = append(segments, warnStyle.Render(fmt.Sprintf("⚠ %s  %s", e.name, age)))
+				segments = append(segments, warnStyle.Render(fmt.Sprintf("◬ %s  %s", e.name, age)))
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	figure "github.com/common-nighthawk/go-figure"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // renderSplashView builds the splash screen using go-figure ASCII art.
@@ -33,9 +34,11 @@ func renderSplashView(t theme.Theme, version string, width, height int) string {
 		Foreground(t.TextPrimary()).
 		Render("Version " + version)
 
-	premiumLine := lipgloss.NewStyle().
-		Foreground(t.Warning()).
-		Render("⚠  Playback controls require Spotify Premium")
+	premiumLine := uikit.StatusGlyph{
+		Role:  uikit.RoleWarning,
+		Text:  "Playback controls require Spotify Premium",
+		Theme: t,
+	}.Render()
 
 	infoPanel := infoPanelStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, versionLine, premiumLine),
