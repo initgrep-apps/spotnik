@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // SearchTab identifies the active category tab in the search overlay.
@@ -915,7 +916,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 			Height(resultsAreaH).MaxHeight(resultsAreaH).
 			Render(centered)
 	} else {
-		resultsContent := o.renderResults(innerWidth)
+		resultsContent := o.renderResults(innerWidth, resultsAreaH)
 		resultsArea = lipgloss.NewStyle().
 			Width(innerWidth).MaxWidth(innerWidth).
 			Height(resultsAreaH).MaxHeight(resultsAreaH).
@@ -1042,14 +1043,17 @@ func (o *SearchOverlay) renderPaginationBar(w int) string {
 
 // renderResults builds the results area content inside Panel 2.
 // When results are loaded, delegates to resultList.View() for scrollable rendering.
-// Falls back to hint text when no results are present.
+// Falls back to an EmptyState primitive when no results are present.
 // NOTE: Loading states (loadingFirstPage / loadingNextPage) are handled by the
 // caller renderResultsPanel, which renders the appropriate spinner before calling here.
-func (o *SearchOverlay) renderResults(_ int) string {
+func (o *SearchOverlay) renderResults(w, h int) string {
 	if len(o.resultList.Items()) == 0 {
-		return lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render("Type to search tracks, artists, albums...")
+		return uikit.EmptyState{
+			Text:   "Type to search tracks, artists, albums...",
+			Width:  w,
+			Height: h,
+			Theme:  o.theme,
+		}.Render()
 	}
 
 	// Render the list component — it handles scrolling and selection highlighting.

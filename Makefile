@@ -91,9 +91,11 @@ fmt:
 	@echo "✓ Formatted"
 
 ## Verify formatting (for CI — fails if files would change)
+## Uses git ls-files so only tracked source files are checked; local caches
+## (.gocache/, .gomodcache/) that may live inside the repo root are excluded.
 fmt-check:
 	@echo "→ Checking formatting..."
-	@UNFORMATTED=$$(gofmt -l .); \
+	@UNFORMATTED=$$(git ls-files '*.go' | xargs gofmt -l); \
 		if [ -n "$$UNFORMATTED" ]; then \
 			echo "✗ Unformatted files:"; \
 			echo "$$UNFORMATTED"; \

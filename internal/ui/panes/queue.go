@@ -13,6 +13,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: QueuePane implements layout.Pane.
@@ -159,6 +160,17 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the queue pane content. It is pure — reads store and returns a string.
 func (q *QueuePane) View() string {
+	rows := q.filteredQueue()
+	if len(rows) == 0 {
+		return uikit.EmptyState{
+			Text:   "Empty queue",
+			Hint:   "Press / to search for tracks to add",
+			Width:  q.width,
+			Height: q.height,
+			Theme:  q.theme,
+		}.Render()
+	}
+
 	var parts []string
 
 	// If filter is active, prepend the filter bar and shrink the table.
