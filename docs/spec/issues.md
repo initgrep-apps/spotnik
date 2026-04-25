@@ -396,3 +396,17 @@ Items to log:
 2. `InputTextStyle()` / `InputCursorStyle()` accessors were added to support testing role wiring without parsing ANSI. Consider whether other primitives (Chip, ListRow, StatusGlyph) need similar accessors so role contracts are unit-testable instead of asserted via raw bytes.
 3. Behaviour change: pressing a key (other than Enter) no longer clears the cached validation error; only `SetValue` or `Validate` does. Spec is the source of truth, but a stale `✗` glyph can persist while the user backspaces. Consider clearing the cached error on every `Update()` keypress in a follow-up if it surfaces in QA.
 4. Visible label changed from "Paste your Client ID here:" to "Client ID:". Border colour shifted from `ActiveBorder()` to `Accent()`. Both intentional; document the visual change in S168 onboarding screenshots.
+
+---
+
+## Story 167 — Onboarding rewrite follow-ups
+**Found:** 2026-04-25 | **Source:** PR #213 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Initial assertion pattern for "Step 1 of 2" matched both old and new implementations. Round 1 strengthened to assert `╭─ Step 1 of 2` (border-glyph prefix) so tests detect Panel composition vs raw lipgloss border. Apply same pattern at any future Panel-based render assertions.
+2. `wrapURL` helper still used by `auth.go:renderAuthPanel`. When the re-auth flow migrates to URLBox in a follow-up, drop `wrapURL`.
+3. `panelInnerWidth=72` and `panelW=max(width-4, 80)` floors paired correctly. Document in S168 the rationale so future panel callers can derive widths consistently.
+4. Manual visual smoke test (spec lines 71-76 — copy toast, spinner Done hold, error panel intent) should be performed before the next user-facing release.
