@@ -429,7 +429,7 @@ func (p *RequestFlowPane) renderGatewayBanner(width int) string {
 		AccentColor: p.theme.PaneBorderRequestFlow(),
 		Theme:       p.theme,
 	}.Render()
-	return header + "\n" + content
+	return header + "\n" + layout.TruncateOrPad(content, width)
 }
 
 // renderAutoTrafficStrip renders a full-width AUTO-TRAFFIC box explaining why
@@ -490,7 +490,7 @@ func (p *RequestFlowPane) renderAutoTrafficStrip(width int) string {
 		AccentColor: p.theme.ColumnPrimary(),
 		Theme:       p.theme,
 	}.Render()
-	return header + "\n" + content
+	return header + "\n" + layout.TruncateOrPad(content, width)
 }
 
 // --- Replay engine ---
