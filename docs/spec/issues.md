@@ -275,6 +275,20 @@ Items to log:
 
 ---
 
+---
+
+## Story 159 — SectionLabel follow-ups
+**Found:** 2026-04-25 | **Source:** PR #205 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Spec line 43 says SectionLabel inherits parent pane's border token. Implementation only uses `PaneBorderRequestFlow()` for GATEWAY and GATEWAY LOG; APP/AUTO-TRAFFIC keep `ColumnPrimary()`, SPOTIFY keeps `Success()`. Preserves pre-PR colour assignments. Update spec or refactor when call site colour rules are revisited.
+2. `renderSectionColumn` content lines and the GATEWAY banner / AUTO-TRAFFIC strip both rely on `layout.TruncateOrPad` to enforce width. Consider lifting that pad logic into the SectionLabel primitive (`SectionLabel.RenderWithContent(lines []string)`) so callers don't repeat width handling.
+
+---
+
 ## Story 158 — ListRow/LockedRow follow-ups
 **Found:** 2026-04-25 | **Source:** PR #204 Review (3 rounds)
 **Feature:** 13-tui-design-system
