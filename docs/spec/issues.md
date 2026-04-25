@@ -340,3 +340,16 @@ Items to log:
 1. `internal/app/app_test.go:1993` retains lowercase `"resuming in"` in an `assert.NotContains`. Migrated body uses capital `"Resuming in"`. Substring is case-sensitive — even if the toast erroneously rendered the assertion would not catch it. Tighten or `strings.ToLower` the comparison next time the test is touched.
 2. `internal/uikit/toast_test.go:209-213` hardcodes hex values (`#1db954` etc.) when constructing `bubbleup.AlertDefinition` for unit tests. Acceptable in test-only code but consider exposing a `uikit.IntentColor(intent, theme)` helper so the same colours come from the theme rather than literals.
 3. `bubbleup` style mapping happens inside `ToastManager.Cmd`. When the bubbleup library exposes per-intent style hooks more directly, simplify the manager.
+
+---
+
+## Story 163 — StatusGlyph follow-ups
+**Found:** 2026-04-25 | **Source:** PR #209 Review (2 rounds)
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Initial PR shipped with single-space separator that broke alignment with adjacent `✓  ` rows in onboarding/splash. Fixed via `Gap` field in round 2. Watch for similar spacing assumptions when migrating future call sites — visual diffs > textual contains-checks.
+2. `StatusGlyph.Render()` unknown-role fallback uses `GlyphInfo` for the glyph but the colour resolves via `ColourFor(role)` which falls back to `TextPrimary` (NOT `RoleInfo` colour). Doc comment says "Unknown roles fall back to RoleInfo" — semantically inconsistent. Either change the colour fallback to `RoleInfo` or update the doc comment to say "glyph falls back to GlyphInfo; colour falls back to TextPrimary".
+3. `internal/uikit/main_test.go` `stripANSI` helper is now reused across multiple test files. Promote to a uikit-internal test util when next touched.
