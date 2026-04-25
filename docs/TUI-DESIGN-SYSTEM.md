@@ -354,9 +354,11 @@ Spotify-owned playlists and read-only items.
 type LockedRow struct {
     Label  string
     Theme  theme.Theme
-    Width  int
 }
 ```
+
+Width is not stored on the struct; `Render(width int)` and `PlainText(width int)` accept it
+at call time, matching the `ListRow` pattern.
 
 **Rendering (unicode):**
 
@@ -714,7 +716,9 @@ func NewFormField(cfg FormFieldConfig) *FormField
 ```
 
 **Key methods:** `Focus()`, `Blur()`, `Update(tea.Msg) (*FormField, tea.Cmd)`,
-`View() string`, `Validate() error`, `SetWidth(int)`, `Value() string`, `SetValue(string)`.
+`Render() string`, `Value() string`, `SetValue(string)`, `Validate() error`,
+`ValidationError() string`, `InputTextStyle() lipgloss.Style`,
+`InputCursorStyle() lipgloss.Style`.
 
 **Rendering (unicode, validation error):**
 
@@ -864,7 +868,7 @@ type StatusGlyph struct {
 | Field | Role |
 |---|---|
 | Glyph | intent role |
-| Text | Plain |
+| Text | intent role |
 
 **Glyphs:** intent-matched (see §4.2).
 
@@ -934,13 +938,13 @@ Wires the onboarding OAuth wait. TUI peer to `cliout.Spinner`.
 func NewSpinner(text string, th theme.Theme) *Spinner
 func (s *Spinner) Init() tea.Cmd
 func (s *Spinner) Update(msg tea.Msg) (*Spinner, tea.Cmd)
-func (s *Spinner) Done(text string)
-func (s *Spinner) Fail(text string, err error)
-func (s *Spinner) Cancel()
+func (s *Spinner) Done(text string) (*Spinner, tea.Cmd)
+func (s *Spinner) Fail(text string) (*Spinner, tea.Cmd)
+func (s *Spinner) Cancel() (*Spinner, tea.Cmd)
 func (s *Spinner) View() string
 ```
 
-**Terminal-state messages:** `SpinnerDoneMsg{Text string}`, `SpinnerFailMsg{Err error}`,
+**Terminal-state messages:** `SpinnerDoneMsg{Text string}`, `SpinnerFailMsg{Err string}`,
 `SpinnerCancelledMsg{}`.
 
 **Terminal states:**
@@ -948,7 +952,7 @@ func (s *Spinner) View() string
 | Call | Behaviour |
 |---|---|
 | `Done(text)` | Frame becomes `✓` (Success); held ~1.2s; emits `SpinnerDoneMsg`; clears. |
-| `Fail(text, err)` | Frame becomes `✗` (Error); held ~2s; emits `SpinnerFailMsg`; clears. |
+| `Fail(text)` | Frame becomes `✗` (Error); held ~2s; emits `SpinnerFailMsg`; clears. |
 | `Cancel()` | Clears immediately, no final line; emits `SpinnerCancelledMsg`. |
 
 **Rendering (unicode, animated):**
