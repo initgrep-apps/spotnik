@@ -1,3 +1,20 @@
+## Story 158 — LockedRow in bubble-table cells: per-row foreground not supported
+**Found:** 2026-04-24 | **Source:** PR #204 Review
+**Feature:** 13-tui-design-system
+
+`LockedRow.Render()` embeds full ANSI styling (Muted foreground for glyph and label).
+In bubble-table cell context, the per-column foreground pass (`applyRows`) overwrites ANSI
+colour applied inside the cell string, so the Muted role is effectively discarded. `LockedRow`
+therefore uses `PlainText()` for table-cell contexts, which emits no ANSI, letting bubble-table's
+column colour apply normally. The locked glyph (`◌`) is still visible; the entire-row Muted
+foreground styling cannot be applied without per-row foreground support in bubble-table.
+
+Fix (future): If bubble-table adds per-row foreground (via `WithRowStyleFunc` keyed on cell data,
+or a dedicated row metadata field), wire Spotify-owned playlist rows through that API and restore
+the full Muted role. Until then, the glyph-only distinction is the documented constraint.
+
+---
+
 ## App-layer priority wiring untested — stale-reconcile regression risk
 **Found:** 2026-04-15 | **Source:** PR #163 External Review (pr-test-analyzer)
 **Feature:** 26-playback-correctness

@@ -189,10 +189,12 @@ func (p *ProfileOverlay) SetTheme(t theme.Theme) {
 // renderActions returns lines for the logout/forget action section of the overlay.
 // When pendingAction is set, the armed action shows a warning prompt instead of
 // the normal label; the other action is shown as normal.
-// Each normal action collapses to a single ListRow (label + caption on one line).
+// Each normal action uses two lines: the label on line 1 and the description on
+// line 2 (indented), matching the pre-PR two-line layout at the fixed card width.
 func (p *ProfileOverlay) renderActions() []string {
 	const actionWidth = 34 // matches the inner content width used in View()
 	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	descStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
 	var lines []string
 
@@ -201,12 +203,12 @@ func (p *ProfileOverlay) renderActions() []string {
 		lines = append(lines, warnStyle.Render("  Press l again to confirm logout"))
 	} else {
 		row := uikit.ListRow{
-			Label:   "l  Logout",
-			Caption: "ends session · keeps Client ID",
-			Intent:  uikit.RolePlain,
-			Theme:   p.theme,
+			Label:  "l  Logout",
+			Intent: uikit.RolePlain,
+			Theme:  p.theme,
 		}
 		lines = append(lines, row.Render(actionWidth))
+		lines = append(lines, descStyle.Render("   ends session · keeps Client ID"))
 	}
 
 	lines = append(lines, "")
@@ -216,12 +218,12 @@ func (p *ProfileOverlay) renderActions() []string {
 		lines = append(lines, warnStyle.Render("  Press f again to confirm forget"))
 	} else {
 		row := uikit.ListRow{
-			Label:   "f  Forget",
-			Caption: "removes session + Client ID",
-			Intent:  uikit.RolePlain,
-			Theme:   p.theme,
+			Label:  "f  Forget",
+			Intent: uikit.RolePlain,
+			Theme:  p.theme,
 		}
 		lines = append(lines, row.Render(actionWidth))
+		lines = append(lines, descStyle.Render("   removes session + Client ID"))
 	}
 
 	return lines

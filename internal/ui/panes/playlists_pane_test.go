@@ -2,6 +2,7 @@ package panes
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -778,4 +780,52 @@ func TestPlaylistsPane_Actions_ListView_NoNOrR(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "Actions() must still include 'f' (filter)")
+}
+
+// ── Story 158: LockedRow for Spotify-owned playlists ─────────────────────────
+
+// TestPlaylistsPane_SpotifyOwnedRow_HasLockedGlyph verifies that a playlist with
+// Owner.ID == "spotify" renders with the locked glyph (◌ in unicode mode) in the
+// name column. PlainText() is used so the cell carries no ANSI — the table's
+// column colour applies the foreground.
+func TestPlaylistsPane_SpotifyOwnedRow_HasLockedGlyph(t *testing.T) {
+	s := state.New()
+	s.SetPlaylists([]domain.SimplePlaylist{
+		{
+			ID:         "sp1",
+			Name:       "Today's Top Hits",
+			URI:        "spotify:playlist:sp1",
+			TrackCount: 50,
+			Owner:      domain.SimplePlaylistOwner{ID: "spotify"},
+		},
+		{
+			ID:         "pl2",
+			Name:       "My Playlist",
+			URI:        "spotify:playlist:pl2",
+			TrackCount: 10,
+			Owner:      domain.SimplePlaylistOwner{ID: "user123"},
+		},
+	})
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, false)
+	pane.SetSize(80, 20)
+
+	// In unicode mode, ◌ is the locked glyph.
+	lockedGlyph := uikit.GlyphFor(uikit.GlyphLocked, uikit.GlyphUnicode)
+
+	rows := pane.table.Rows()
+	require.Len(t, rows, 2, "expected 2 rows")
+
+	spotifyRow := rows[0]
+	assert.True(t, strings.HasPrefix(spotifyRow["name"], lockedGlyph+" "),
+		"Spotify-owned playlist name must start with locked glyph %q, got %q",
+		lockedGlyph+" ", spotifyRow["name"])
+	assert.Contains(t, spotifyRow["name"], "Today's Top Hits",
+		"locked row must include the playlist name")
+
+	// The user-owned playlist must NOT have the locked glyph.
+	userRow := rows[1]
+	assert.False(t, strings.HasPrefix(userRow["name"], lockedGlyph+" "),
+		"user-owned playlist must not start with locked glyph, got %q", userRow["name"])
+	assert.Equal(t, "My Playlist", userRow["name"])
 }

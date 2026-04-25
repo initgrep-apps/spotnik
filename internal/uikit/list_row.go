@@ -56,7 +56,7 @@ func PadOrTruncate(s string, width int) string {
 
 // ListRow renders a single-line list item with an optional leading glyph, a
 // label, and an optional trailing caption. The glyph colour is determined by
-// the Intent role; the label colour uses the same role; the caption uses Muted.
+// the Intent role; the label colour uses Plain (TextPrimary); the caption uses Muted.
 // The total output fits within width terminal columns.
 type ListRow struct {
 	// Glyph is optional. Zero value ("") means no glyph is rendered.
@@ -65,7 +65,7 @@ type ListRow struct {
 	Label string
 	// Caption is optional secondary text shown at the right side of the row.
 	Caption string
-	// Intent controls the colour of the glyph and label.
+	// Intent controls the colour of the glyph only. The label always renders Plain.
 	Intent Role
 	// Theme provides colour tokens.
 	Theme theme.Theme
@@ -111,7 +111,7 @@ func (r ListRow) Render(width int) string {
 		labelWidth = 0
 	}
 
-	labelStr := Apply(r.Intent, th).Render(PadOrTruncate(r.Label, labelWidth))
+	labelStr := Apply(RolePlain, th).Render(PadOrTruncate(r.Label, labelWidth))
 
 	// Assemble with plain spaces between segments.
 	parts := []string{}
@@ -152,4 +152,23 @@ func (r LockedRow) Render(width int) string {
 
 	labelStr := muted.Render(PadOrTruncate(r.Label, labelWidth))
 	return glyphStr + " " + labelStr
+}
+
+// PlainText returns a plain-text (no ANSI) representation of the locked row:
+// "<glyph> <label>" truncated to width terminal columns. It is intended for
+// contexts where the surrounding renderer (e.g. bubble-table) applies its own
+// colouring — embedding ANSI from Render would conflict with the per-column or
+// per-cell foreground pass performed by the table renderer.
+func (r LockedRow) PlainText(width int) string {
+	mode := ActiveMode()
+	glyph := GlyphFor(GlyphLocked, mode)
+	glyphWidth := lipgloss.Width(glyph)
+
+	// 1-space gap between glyph and label.
+	labelWidth := width - glyphWidth - 1
+	if labelWidth < 0 {
+		labelWidth = 0
+	}
+
+	return glyph + " " + PadOrTruncate(r.Label, labelWidth)
 }

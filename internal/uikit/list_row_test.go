@@ -4,8 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -82,8 +84,13 @@ func TestPad_ReturnsNSpaces(t *testing.T) {
 
 // TestListRow_Unicode_WithGlyphAndCaption is the required acceptance-criteria test.
 // It verifies that a ListRow with GlyphActive + label "Monokai" + caption "active"
-// renders a line containing "◉ Monokai" and "active".
+// renders a line containing "◉ Monokai" and "active". It also asserts that the label
+// uses the Plain (TextPrimary) colour regardless of Intent, per the role matrix.
 func TestListRow_Unicode_WithGlyphAndCaption(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
 	th := theme.Load("black")
 	row := uikit.ListRow{
 		Glyph:   uikit.GlyphActive,
@@ -100,6 +107,89 @@ func TestListRow_Unicode_WithGlyphAndCaption(t *testing.T) {
 		"expected ◉ Monokai in output, got: %q", plain)
 	assert.True(t, strings.Contains(plain, "active"),
 		"expected caption 'active' in output, got: %q", plain)
+
+	// The label MUST use the Plain role (TextPrimary colour), not the Intent colour.
+	// Extract the ANSI escape that immediately precedes "Monokai" in the raw output.
+	plainEscape := uikit.Apply(uikit.RolePlain, th).Render("X")
+	plainColor := extractForegroundANSI(plainEscape)
+	accentEscape := uikit.Apply(uikit.RoleAccent, th).Render("X")
+	accentColor := extractForegroundANSI(accentEscape)
+	assert.NotEqual(t, plainColor, accentColor,
+		"sanity: Plain and Accent must have different ANSI colours")
+	assert.True(t, strings.Contains(out, plainColor),
+		"label must use Plain (TextPrimary) ANSI colour %q in raw output", plainColor)
+	assert.False(t, isLabelColoredWith(out, "Monokai", accentColor),
+		"label must NOT use Accent ANSI colour for its text")
+}
+
+// TestListRow_LabelAlwaysPlain is a regression test verifying that two rows with
+// different intents (Accent and Muted) both render the label in the Plain colour
+// while their glyphs differ.
+func TestListRow_LabelAlwaysPlain(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	th := theme.Load("black")
+
+	rowAccent := uikit.ListRow{
+		Glyph: uikit.GlyphActive, Label: "Theme", Intent: uikit.RoleAccent, Theme: th,
+	}
+	rowMuted := uikit.ListRow{
+		Glyph: uikit.GlyphAvailable, Label: "Theme", Intent: uikit.RoleMuted, Theme: th,
+	}
+	outAccent := rowAccent.Render(40)
+	outMuted := rowMuted.Render(40)
+
+	plainColor := extractForegroundANSI(uikit.Apply(uikit.RolePlain, th).Render("X"))
+	accentColor := extractForegroundANSI(uikit.Apply(uikit.RoleAccent, th).Render("X"))
+	mutedColor := extractForegroundANSI(uikit.Apply(uikit.RoleMuted, th).Render("X"))
+
+	// Both rows must have the Plain colour present for the label.
+	assert.Contains(t, outAccent, plainColor,
+		"Accent-intent row: label must use Plain colour")
+	assert.Contains(t, outMuted, plainColor,
+		"Muted-intent row: label must use Plain colour")
+
+	// The glyphs must differ: Accent row's glyph uses Accent colour; Muted uses Muted colour.
+	assert.Contains(t, outAccent, accentColor,
+		"Accent-intent row: glyph must use Accent colour")
+	assert.Contains(t, outMuted, mutedColor,
+		"Muted-intent row: glyph must use Muted colour")
+}
+
+// extractForegroundANSI extracts the "38;2;R;G;B" portion from a rendered string.
+func extractForegroundANSI(s string) string {
+	const fg = "38;2;"
+	idx := strings.Index(s, fg)
+	if idx < 0 {
+		return ""
+	}
+	end := strings.Index(s[idx:], "m")
+	if end < 0 {
+		return ""
+	}
+	return s[idx : idx+end]
+}
+
+// isLabelColoredWith returns true when the ANSI escape immediately before label in s
+// matches the given color sequence.
+func isLabelColoredWith(s, label, colorSeq string) bool {
+	idx := strings.Index(s, label)
+	if idx < 0 {
+		return false
+	}
+	sub := s[:idx]
+	lastEsc := strings.LastIndex(sub, "\x1b[")
+	if lastEsc < 0 {
+		return false
+	}
+	end := strings.Index(s[lastEsc:], "m")
+	if end < 0 {
+		return false
+	}
+	esc := s[lastEsc : lastEsc+end+1]
+	return strings.Contains(esc, colorSeq)
 }
 
 // TestListRow_NoGlyph renders a row without a glyph — label should appear without a
@@ -247,4 +337,60 @@ func TestListRow_TinyWidth(t *testing.T) {
 	// Very narrow width forces labelWidth < 0.
 	out := row.Render(2)
 	_ = out // must not panic
+}
+
+// ---------------------------------------------------------------------------
+// LockedRow.PlainText
+// ---------------------------------------------------------------------------
+
+// TestLockedRow_PlainText_Unicode verifies that PlainText emits no ANSI and
+// starts with the locked glyph followed by the label.
+func TestLockedRow_PlainText_Unicode(t *testing.T) {
+	th := theme.Load("black")
+	row := uikit.LockedRow{Label: "Today's Top Hits", Theme: th}
+	out := row.PlainText(40)
+
+	// Must contain no ANSI escape sequences.
+	assert.NotContains(t, out, "\x1b[", "PlainText must not contain ANSI escapes")
+	// Must start with the locked glyph.
+	assert.True(t, strings.HasPrefix(out, "◌ "),
+		"PlainText must start with '◌ ', got %q", out)
+	assert.Contains(t, out, "Today's Top Hits")
+}
+
+// TestLockedRow_PlainText_ASCII verifies the ASCII fallback glyph in PlainText.
+func TestLockedRow_PlainText_ASCII(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	row := uikit.LockedRow{Label: "Spotify Playlist", Theme: th}
+	out := row.PlainText(40)
+
+	assert.NotContains(t, out, "\x1b[", "PlainText must not contain ANSI escapes")
+	assert.True(t, strings.HasPrefix(out, "(r) "),
+		"PlainText ASCII must start with '(r) ', got %q", out)
+	assert.Contains(t, out, "Spotify Playlist")
+}
+
+// TestLockedRow_PlainText_Truncation verifies that PlainText truncates long labels.
+func TestLockedRow_PlainText_Truncation(t *testing.T) {
+	th := theme.Load("black")
+	row := uikit.LockedRow{
+		Label: "A very long Spotify-curated playlist name that exceeds width",
+		Theme: th,
+	}
+	out := row.PlainText(20)
+	assert.NotContains(t, out, "\x1b[", "PlainText must not contain ANSI escapes after truncation")
+	// The glyph+space takes 2 columns; label must be truncated with ellipsis.
+	assert.True(t, strings.HasSuffix(strings.TrimRight(out, " "), "…"),
+		"truncated PlainText must end with …, got %q", out)
+}
+
+// TestLockedRow_PlainText_TinyWidth verifies PlainText does not panic on very small widths.
+func TestLockedRow_PlainText_TinyWidth(t *testing.T) {
+	th := theme.Load("black")
+	row := uikit.LockedRow{Label: "Hi", Theme: th}
+	out := row.PlainText(1) // width smaller than glyph+gap
+	_ = out                 // must not panic
 }
