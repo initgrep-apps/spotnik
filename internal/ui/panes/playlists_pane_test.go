@@ -895,3 +895,27 @@ func TestPlaylistsPane_AccessColumn_GlyphsPerOwnerType(t *testing.T) {
 		}
 	}
 }
+
+// TestPlaylistsPane_AccessColumn_ASCIIFallbacks verifies that ASCII mode glyphs
+// are used when uikit is in ASCII mode.
+func TestPlaylistsPane_AccessColumn_ASCIIFallbacks(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	const userID = "user123"
+	s := state.New()
+	s.SetUserProfile(domain.UserProfile{ID: userID})
+	s.SetPlaylists([]domain.SimplePlaylist{
+		{ID: "owned", Name: "My Playlist", TrackCount: 5, Owner: domain.SimplePlaylistOwner{ID: userID}},
+		{ID: "followed", Name: "Other Playlist", TrackCount: 5, Owner: domain.SimplePlaylistOwner{ID: "other"}},
+		{ID: "sp", Name: "Top Hits", TrackCount: 5, Owner: domain.SimplePlaylistOwner{ID: "spotify"}},
+	})
+	pane := NewPlaylistsPane(s, theme.Load("black"), false)
+	pane.SetSize(80, 20)
+
+	rows := pane.table.Rows()
+	require.Len(t, rows, 3)
+	assert.Equal(t, uikit.GlyphFor(uikit.GlyphActive, uikit.GlyphASCII), rows[0]["access"], "user-owned ASCII glyph")
+	assert.Equal(t, uikit.GlyphFor(uikit.GlyphAvailable, uikit.GlyphASCII), rows[1]["access"], "followed ASCII glyph")
+	assert.Equal(t, uikit.GlyphFor(uikit.GlyphLocked, uikit.GlyphASCII), rows[2]["access"], "Spotify-curated ASCII glyph")
+}
