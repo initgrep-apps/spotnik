@@ -1,6 +1,6 @@
 ---
 title: "TUI Design System"
-status: open
+status: done
 ---
 
 ## Description

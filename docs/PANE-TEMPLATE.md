@@ -56,10 +56,13 @@ Use this scaffold (adapt types and API calls to your pane):
 package panes
 
 import (
+    "strconv"
+
     tea "github.com/charmbracelet/bubbletea"
     "github.com/initgrep-apps/spotnik/internal/state"
     "github.com/initgrep-apps/spotnik/internal/ui/layout"
     "github.com/initgrep-apps/spotnik/internal/ui/theme"
+    "github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // ListenCountPane displays the user's listening count statistics.
@@ -108,8 +111,14 @@ func (p *ListenCountPane) View() string {
     if p.width == 0 || p.height == 0 {
         return ""
     }
-    // Render pane content within p.width x p.height
-    return ""
+    content := "  " + strconv.Itoa(p.count) + " listens"
+    return uikit.PaneChrome{
+        Width: p.width, Height: p.height,
+        Title: p.Title(), ToggleKey: p.ToggleKey(),
+        Actions:     p.Actions(),
+        AccentColor: layout.PaneBorderColor(p.ID(), p.theme),
+        Focused:     p.focused, Theme: p.theme,
+    }.Render(content)
 }
 
 // SetSize sets the content area dimensions (inside border).
@@ -145,7 +154,9 @@ func (p *ListenCountPane) SetTheme(th theme.Theme) { p.theme = th }
 func (p *ListenCountPane) CountForTest() int { return p.count }
 ```
 
-**Verification:** `go build ./internal/ui/panes/...` — must compile.
+**Verification:** `go build ./internal/ui/panes/...` — must compile. The `View()` method
+delegates chrome rendering to `uikit.PaneChrome`; do not compose raw `lipgloss.NewStyle()`
+border strings at this call site.
 
 ---
 
