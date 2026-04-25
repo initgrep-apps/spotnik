@@ -191,6 +191,14 @@ func TestToast_GlyphByIntent_InvalidIntent(t *testing.T) {
 	assert.Equal(t, expected, got, "out-of-range intent should fall back to info glyph")
 }
 
+// TestToastManager_Cmd_InvalidIntent verifies Cmd returns nil for out-of-range ToastIntent.
+func TestToastManager_Cmd_InvalidIntent(t *testing.T) {
+	model := makeTestAlertModel()
+	mgr := uikit.NewToastManager(model)
+	cmd := mgr.Cmd(uikit.Toast{Intent: uikit.ToastIntent(999), Title: "oops"})
+	assert.Nil(t, cmd, "out-of-range intent should return nil cmd (bounds guard)")
+}
+
 // makeTestAlertModel creates a minimal bubbleup.AlertModel with all five Spotnik
 // alert types registered so ToastManager.Cmd can be exercised without importing
 // the components package (which imports theme, etc.).

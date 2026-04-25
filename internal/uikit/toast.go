@@ -130,9 +130,12 @@ func NewToastManager(model *bubbleup.AlertModel) *ToastManager {
 // key, composes the message string (Title + optional "\n" + Body), and
 // returns a tea.Cmd via model.NewAlertCmd.
 //
-// Returns nil if model is nil.
+// Returns nil if model is nil or if the intent is out of range.
 func (tm *ToastManager) Cmd(t Toast) tea.Cmd {
 	if tm.model == nil {
+		return nil
+	}
+	if int(t.Intent) < 0 || int(t.Intent) >= len(intentKey) {
 		return nil
 	}
 	t = t.Normalize()
