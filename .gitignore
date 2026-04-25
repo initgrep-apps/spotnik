@@ -39,3 +39,4 @@ Thumbs.db
 .firecrawl/
 .superpowers/
 .gocache/
+.gomodcache
