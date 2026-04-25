@@ -1,31 +1,30 @@
-package uikit
+package components
 
 import (
-	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
-// TableChrome wraps components.Table. The primitive's role is to standardise
+// TableChrome wraps Table. The primitive's role is to standardise
 // construction — column tokens, header colour, playing-indicator colour — so
 // that panes no longer build TableConfig literals inline.
 //
 // Call sites are not changed in this story; panes continue to call
-// components.NewTable directly. TableChrome is the canonical wrapping pattern
+// NewTable directly. TableChrome is the canonical wrapping pattern
 // for future migrations.
 type TableChrome struct {
 	// Columns defines the column layout and per-column colour tokens.
-	Columns []components.ColumnDef
+	Columns []ColumnDef
 	// Theme provides colour tokens for header, selection, and playing indicator.
 	Theme theme.Theme
-	inner *components.Table
+	inner *Table
 }
 
-// Inner returns the wrapped *components.Table, constructing it on first call.
+// Inner returns the wrapped *Table, constructing it on first call.
 // The inner table owns all interactive state (scroll position, selection, etc.);
 // TableChrome is effectively stateless from the caller's perspective.
-func (t *TableChrome) Inner() *components.Table {
+func (t *TableChrome) Inner() *Table {
 	if t.inner == nil {
-		t.inner = components.NewTable(components.TableConfig{
+		t.inner = NewTable(TableConfig{
 			Columns:      t.Columns,
 			Theme:        t.Theme,
 			PlayingIndex: -1,
