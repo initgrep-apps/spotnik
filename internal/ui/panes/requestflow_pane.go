@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // PollingSnapshotMsg carries app-level polling state to the RequestFlowPane.
@@ -192,10 +193,10 @@ func (p *RequestFlowPane) viewBoxed() string {
 	gwLines := p.buildGatewayBoxLines(innerRows)
 	spotifyLines := p.buildSpotifyBoxLines(innerRows)
 
-	// Render the three column boxes with distinct border colors.
-	appBox := p.renderSubBox("APP", appLines, appW, p.theme.ColumnPrimary())
-	gwBox := p.renderSubBox("GATEWAY LOG", gwLines, gwW, p.theme.PaneBorderRequestFlow())
-	spotifyBox := p.renderSubBox("SPOTIFY", spotifyLines, spotifyW, p.theme.Success())
+	// Render each column as a SectionLabel header (2 lines) + content lines.
+	appBox := renderSectionColumn("APP", appLines, appW, p.theme.ColumnPrimary(), p.theme)
+	gwBox := renderSectionColumn("GATEWAY LOG", gwLines, gwW, p.theme.PaneBorderRequestFlow(), p.theme)
+	spotifyBox := renderSectionColumn("SPOTIFY", spotifyLines, spotifyW, p.theme.Success(), p.theme)
 
 	// Gap blocks spanning the full column box area height (boxAreaHeight rows).
 	leftGap := buildGapBlock(leftGapW, boxAreaHeight)
@@ -207,6 +208,26 @@ func (p *RequestFlowPane) viewBoxed() string {
 	autoTraffic := p.renderAutoTrafficStrip(p.width)
 
 	return banner + "\n" + columns + "\n" + autoTraffic
+}
+
+// renderSectionColumn renders a labelled column: a SectionLabel header (2 lines)
+// followed by content lines, padded to fill width. Used for the APP, GATEWAY LOG,
+// and SPOTIFY column areas in viewBoxed().
+func renderSectionColumn(label string, lines []string, width int, accent lipgloss.Color, th theme.Theme) string {
+	header := uikit.SectionLabel{
+		Label:       label,
+		Width:       width,
+		AccentColor: accent,
+		Theme:       th,
+	}.Render()
+
+	var sb strings.Builder
+	sb.WriteString(header)
+	for _, line := range lines {
+		sb.WriteString("\n")
+		sb.WriteString(layout.TruncateOrPad(line, width))
+	}
+	return sb.String()
 }
 
 // buildGapBlock returns a blank-space block for use as a gap column
@@ -402,7 +423,13 @@ func (p *RequestFlowPane) renderGatewayBanner(width int) string {
 	sep := mutedStyle.Render("  ·  ")
 	content := tokenSeg + sep + slotSeg + sep + backoffSeg + sep + dedupSeg
 
-	return p.renderSubBox("GATEWAY", []string{content}, width, p.theme.PaneBorderRequestFlow())
+	header := uikit.SectionLabel{
+		Label:       "GATEWAY",
+		Width:       width,
+		AccentColor: p.theme.PaneBorderRequestFlow(),
+		Theme:       p.theme,
+	}.Render()
+	return header + "\n" + content
 }
 
 // renderAutoTrafficStrip renders a full-width AUTO-TRAFFIC box explaining why
@@ -457,7 +484,13 @@ func (p *RequestFlowPane) renderAutoTrafficStrip(width int) string {
 	}
 
 	content := strings.Join(segments, sep)
-	return p.renderSubBox("AUTO-TRAFFIC", []string{content}, width, p.theme.ColumnPrimary())
+	header := uikit.SectionLabel{
+		Label:       "AUTO-TRAFFIC",
+		Width:       width,
+		AccentColor: p.theme.ColumnPrimary(),
+		Theme:       p.theme,
+	}.Render()
+	return header + "\n" + content
 }
 
 // --- Replay engine ---

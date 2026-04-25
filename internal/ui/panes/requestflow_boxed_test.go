@@ -1,6 +1,6 @@
 package panes
 
-// renderSubBox_test.go — internal tests for the boxed layout helpers.
+// requestflow_boxed_test.go — internal tests for the boxed layout helpers.
 // These tests are in the `panes` package (not `panes_test`) so they can
 // directly call unexported methods on *RequestFlowPane.
 
@@ -33,56 +33,6 @@ func newInternalTestPaneWithStore(s *state.Store) *RequestFlowPane {
 func injectEventInternal(p *RequestFlowPane, s *state.Store, event domain.GatewayEvent) {
 	s.RecordEvent(event)
 	_, _ = p.Update(viz.TickMsg(time.Now()))
-}
-
-// --- Task 1: renderSubBox ---
-
-func TestRenderSubBox_ContainsRoundedCorners(t *testing.T) {
-	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"line1", "line2"}, 20, p.theme.PaneBorderRequestFlow())
-	assert.Contains(t, out, "╭")
-	assert.Contains(t, out, "╮")
-	assert.Contains(t, out, "╰")
-	assert.Contains(t, out, "╯")
-}
-
-func TestRenderSubBox_ContainsTitle(t *testing.T) {
-	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"line1"}, 20, p.theme.PaneBorderRequestFlow())
-	assert.Contains(t, out, "APP")
-}
-
-func TestRenderSubBox_ContainsSideBorders(t *testing.T) {
-	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"line1", "line2"}, 20, p.theme.PaneBorderRequestFlow())
-	assert.Contains(t, out, "│")
-}
-
-func TestRenderSubBox_ContentLinesPresent(t *testing.T) {
-	p := newInternalTestPane()
-	out := p.renderSubBox("GW", []string{"hello", "world"}, 20, p.theme.PaneBorderRequestFlow())
-	assert.Contains(t, out, "hello")
-	assert.Contains(t, out, "world")
-}
-
-func TestRenderSubBox_LongLineTruncated(t *testing.T) {
-	p := newInternalTestPane()
-	longLine := strings.Repeat("x", 50)
-	out := p.renderSubBox("T", []string{longLine}, 20, p.theme.PaneBorderRequestFlow())
-	assert.Contains(t, out, "…")
-}
-
-func TestRenderSubBox_TooNarrowReturnsEmpty(t *testing.T) {
-	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{"hi"}, 7, p.theme.PaneBorderRequestFlow())
-	assert.Empty(t, out)
-}
-
-func TestRenderSubBox_EmptyLinesSlice(t *testing.T) {
-	p := newInternalTestPane()
-	out := p.renderSubBox("APP", []string{}, 20, p.theme.PaneBorderRequestFlow())
-	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	assert.Len(t, lines, 2, "empty content slice should produce 2-line box")
 }
 
 // --- Task 3: buildAppBoxLines ---
@@ -322,23 +272,24 @@ func TestRenderGatewayBanner_DedupWaiters(t *testing.T) {
 	assert.Contains(t, out, "3 waiting")
 }
 
-func TestRenderGatewayBanner_HasBorders(t *testing.T) {
+func TestRenderGatewayBanner_HasSectionLabel(t *testing.T) {
 	p := newInternalTestPane()
 	p.displayState.snapshot = domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5}
 	out := p.renderGatewayBanner(80)
-	assert.Contains(t, out, "╭")
-	assert.Contains(t, out, "╰")
+	// renderGatewayBanner now uses SectionLabel: label line + rule line.
+	assert.Contains(t, out, "GATEWAY")
+	assert.Contains(t, out, "─")
 }
 
 // --- Task 8: renderAutoTrafficStrip ---
 
-func TestRenderAutoTrafficStrip_HasBorders(t *testing.T) {
+func TestRenderAutoTrafficStrip_HasSectionLabel(t *testing.T) {
 	s := state.New()
 	p := newInternalTestPaneWithStore(s)
 	out := p.renderAutoTrafficStrip(120)
+	// renderAutoTrafficStrip now uses SectionLabel: label line + rule line.
 	assert.Contains(t, out, "AUTO-TRAFFIC")
-	assert.Contains(t, out, "╭")
-	assert.Contains(t, out, "╰")
+	assert.Contains(t, out, "─")
 }
 
 func TestRenderAutoTrafficStrip_ShowsPollingRunning(t *testing.T) {
@@ -392,30 +343,31 @@ func TestRenderAutoTrafficStrip_NilStore_NoPanic(t *testing.T) {
 	})
 }
 
-// --- Story 74 Task 1: renderSubBox uses accent color ---
+// --- Story 159: renderSectionColumn uses accent color ---
 
-// TestRenderSubBox_UsesAccentColor verifies that renderSubBox() uses
+// TestRenderSectionColumn_UsesAccentColor verifies that renderSectionColumn() uses
 // PaneBorderRequestFlow() (orange accent) rather than TextSecondary() (grey)
-// for border color and title styling.
+// for the SectionLabel header.
 //
 // The black theme maps:
 //
 //	PaneBorderRequestFlow() → #ffb86c → ANSI "38;2;255;184;108"
 //	TextSecondary()         → #888888 → ANSI "38;2;136;136;136"
-func TestRenderSubBox_UsesAccentColor(t *testing.T) {
+func TestRenderSectionColumn_UsesAccentColor(t *testing.T) {
 	p := newInternalTestPane()
 
 	// Rendered ANSI RGB codes for the black theme.
 	const accentANSI = "38;2;255;184;108" // #ffb86c — PaneBorderRequestFlow
 	const greyANSI = "38;2;136;136;136"   // #888888 — TextSecondary
 
-	out := p.renderSubBox("APP", []string{"line1", "line2"}, 30, p.theme.PaneBorderRequestFlow())
+	out := renderSectionColumn("APP", []string{"line1", "line2"}, 30,
+		p.theme.PaneBorderRequestFlow(), p.theme)
 
 	// Output must contain the accent color ANSI escape.
 	assert.Contains(t, out, accentANSI,
-		"renderSubBox should use PaneBorderRequestFlow() accent color for borders/title")
+		"renderSectionColumn should use PaneBorderRequestFlow() accent color for label")
 
-	// Output must NOT contain TextSecondary color code anywhere in the box.
+	// Output must NOT contain TextSecondary color code anywhere.
 	assert.NotContains(t, out, greyANSI,
-		"renderSubBox should NOT use TextSecondary() for borders/title")
+		"renderSectionColumn should NOT use TextSecondary() for label")
 }

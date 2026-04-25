@@ -6,68 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 )
-
-// renderSubBox renders a small bordered box with a title label.
-// lines are the content lines (already styled). The box is sized to exactly
-// width columns × (len(lines) + 2) rows (content + top/bottom border).
-// Inner content is padded with one space on each side.
-// If width < 8, returns empty string (too narrow for a meaningful box).
-// NOTE: viewBoxed() guarantees width >= 10 for all boxes via minimum clamps
-// and falls back to viewFlat() if totals exceed pane width, so the empty-string
-// path is a safety net rather than a normal render path.
-func (p *RequestFlowPane) renderSubBox(title string, lines []string, width int, borderColor lipgloss.Color) string {
-	if width < 8 {
-		return ""
-	}
-
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-	borderChar := borderStyle.Render("│")
-
-	innerW := width - 2 // subtract left/right border chars
-
-	// Build top border: ╭─ TITLE ──────╮
-	titleStyled := lipgloss.NewStyle().Foreground(borderColor).Bold(true).Render(title)
-	titleVisible := lipgloss.Width(titleStyled)
-
-	// Fill pattern: "─ <title> " then pad to innerW
-	prefixPlain := "─ "
-	suffixPlain := " "
-	prefixWidth := 2 + titleVisible + 1 // "─ " + title + " "
-	remaining := innerW - prefixWidth
-	if remaining < 0 {
-		remaining = 0
-	}
-	topBorder := borderStyle.Render("╭"+prefixPlain) +
-		titleStyled +
-		borderStyle.Render(suffixPlain+strings.Repeat("─", remaining)+"╮")
-
-	// Build bottom border: ╰──────────╯
-	bottomBorder := borderStyle.Render("╰" + strings.Repeat("─", innerW) + "╯")
-
-	if len(lines) == 0 {
-		return topBorder + "\n" + bottomBorder
-	}
-
-	var sb strings.Builder
-	sb.WriteString(topBorder)
-	sb.WriteString("\n")
-
-	for _, line := range lines {
-		// Pad/truncate each line to innerW - 2 (1 space padding each side).
-		cell := layout.TruncateOrPad(line, innerW-2)
-		sb.WriteString(borderChar)
-		sb.WriteString(" ")
-		sb.WriteString(cell)
-		sb.WriteString(" ")
-		sb.WriteString(borderChar)
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString(bottomBorder)
-	return sb.String()
-}
 
 // buildAppBoxLines returns styled content lines for the APP sub-box.
 // Lines show endpoint paths for active requests (newest first), up to maxRows.

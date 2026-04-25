@@ -503,23 +503,22 @@ func TestRequestFlowPane_Integration_PollingSnapshot_IdleReturn(t *testing.T) {
 
 // --- Boxed layout tests ---
 
-func TestRequestFlowPane_View_BoxedLayout_ThreeBoxes(t *testing.T) {
+func TestRequestFlowPane_View_BoxedLayout_ThreeColumns(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(80, 20)
 	v := pane.View()
-	assert.True(t, viewContainsBox(v, "APP"))
-	assert.True(t, viewContainsBox(v, "GATEWAY"))
-	assert.True(t, viewContainsBox(v, "SPOTIFY"))
+	// SectionLabel renders label + rule; check labels are present.
+	assert.True(t, viewContainsLabel(v, "APP"))
+	assert.True(t, viewContainsLabel(v, "GATEWAY"))
+	assert.True(t, viewContainsLabel(v, "SPOTIFY"))
 }
 
-func TestRequestFlowPane_View_BoxedLayout_RoundedCorners(t *testing.T) {
+func TestRequestFlowPane_View_BoxedLayout_SectionRules(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(80, 20)
 	v := pane.View()
-	assert.Contains(t, v, "╭")
-	assert.Contains(t, v, "╮")
-	assert.Contains(t, v, "╰")
-	assert.Contains(t, v, "╯")
+	// SectionLabel emits horizontal rule lines — at least one ─ must be present.
+	assert.Contains(t, v, "─")
 }
 
 func TestRequestFlowPane_View_BoxedLayout_GatewayMetricsInCenter(t *testing.T) {
@@ -564,7 +563,8 @@ func TestRequestFlowPane_View_FlatFallback_NarrowWidth(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(40, 20)
 	v := pane.View()
-	assert.False(t, viewContainsBox(v, "APP"), "width=40 should use flat layout")
+	// Flat layout does not emit SectionLabel rule lines for column headers.
+	assert.False(t, viewContainsLabel(v, "APP"), "width=40 should use flat layout")
 }
 
 func TestRequestFlowPane_View_FlatFallback_ShowsColumnHeaders(t *testing.T) {
@@ -580,7 +580,7 @@ func TestRequestFlowPane_View_ShortHeightFallback(t *testing.T) {
 	pane := newTestRequestFlowPane()
 	pane.SetSize(80, 4)
 	v := pane.View()
-	assert.False(t, viewContainsBox(v, "APP"), "height=4 should trigger flat fallback")
+	assert.False(t, viewContainsLabel(v, "APP"), "height=4 should trigger flat fallback")
 }
 
 // --- Replay View: requests in APP box and responses in SPOTIFY box ---
@@ -865,9 +865,13 @@ func TestRequestFlowPane_View_AutoTrafficStrip_StalePlaylist(t *testing.T) {
 
 // --- Helper functions ---
 
-func viewContainsBox(output, title string) bool {
+// viewContainsLabel returns true if any line in the output is a SectionLabel
+// label line (i.e., contains the given title surrounded by spaces: " TITLE ").
+// Used to verify that the boxed layout emits SectionLabel headers.
+func viewContainsLabel(output, title string) bool {
+	needle := " " + title + " "
 	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, "╭") && strings.Contains(line, title) {
+		if strings.Contains(line, needle) {
 			return true
 		}
 	}

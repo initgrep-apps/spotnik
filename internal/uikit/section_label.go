@@ -36,11 +36,9 @@ func (s SectionLabel) Render() string {
 	// Line 1: " <Label> " styled in bold accent.
 	labelLine := accentStyle.Render(" " + s.Label + " ")
 
-	// Line 2: horizontal rule of Width characters.
-	ruleChar := "─"
-	if mode == GlyphASCII {
-		ruleChar = "-"
-	}
+	// Line 2: horizontal rule of Width characters using the canonical HRule glyph
+	// (─ in unicode mode, - in ascii mode).
+	ruleChar := GlyphFor(GlyphHRule, mode)
 
 	w := s.Width
 	if w <= 0 {
