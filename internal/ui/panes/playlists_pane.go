@@ -72,11 +72,12 @@ type PlaylistsPane struct {
 
 // NewPlaylistsPane creates a PlaylistsPane with the given store, theme, and focus state.
 func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *PlaylistsPane {
-	// Playlist list columns: # 5% | Name 70% | Tracks 25%
-	// Using flex factors: 1 : 14 : 5 ≈ 5% / 70% / 25%
+	// Playlist list columns: # 5% | access (blank header) 5% | Name 65% | Tracks 25%
+	// Using flex factors: 1 : 1 : 13 : 5 ≈ 5% / 5% / 65% / 25%
 	listColumns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.ColumnPrimary()},
+		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
+		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
 	t := components.NewTable(components.TableConfig{
@@ -181,8 +182,8 @@ func (p *PlaylistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 
 	case UserProfileReadyMsg:
-		// User ID is now available in the store — refresh rows so the ~ prefix
-		// appears on followed playlists without waiting for a library reload.
+		// User ID is now available in the store — refresh rows so the access glyph
+		// reflects ownership correctly without waiting for a library reload.
 		p.refreshPlaylistRows()
 		return p, nil
 
@@ -423,33 +424,30 @@ func (p *PlaylistsPane) RefreshRows() {
 }
 
 // refreshPlaylistRows re-reads the store and applies filtered playlist rows.
-// Spotify-curated playlists (Owner.ID == "spotify") render via LockedRow to
-// signal they are read-only and cannot be drilled down into. Other non-owned
-// (followed) playlists are prefixed with "~ " to signal restricted access.
+// Each row has a dedicated "access" column that shows an ownership glyph:
+//   - User-owned: ◉ (GlyphActive) — full access
+//   - Followed (non-owned, non-Spotify): ○ (GlyphAvailable) — read-only
+//   - Spotify-curated: ◌ (GlyphLocked) — read-only, Spotify managed
+//
+// The "name" column contains only the plain playlist name — no prefixes, no ANSI.
 func (p *PlaylistsPane) refreshPlaylistRows() {
 	playlists := p.filteredPlaylist()
 	rows := make([]map[string]string, len(playlists))
+	mode := uikit.ActiveMode()
 	for i, pl := range playlists {
-		var name string
-		if pl.Owner.ID == "spotify" {
-			// PlainText emits no ANSI so the table's column renderer can apply its own
-			// foreground colour. Embedding ANSI from LockedRow.Render would conflict with
-			// bubble-table's per-column foreground pass (applyRows sets Foreground over
-			// the cell string). The actual column width truncation is handled by bubble-table;
-			// we pass p.width as a generous upper bound so PlainText never under-truncates.
-			nameWidth := p.width
-			if nameWidth <= 0 {
-				nameWidth = 80 // safe default before first resize
-			}
-			name = uikit.LockedRow{Label: pl.Name, Theme: p.theme}.PlainText(nameWidth)
-		} else if !p.isOwnedByCurrentUser(pl) {
-			name = "~ " + pl.Name
-		} else {
-			name = pl.Name
+		var accessGlyph string
+		switch {
+		case pl.Owner.ID == "spotify":
+			accessGlyph = uikit.GlyphFor(uikit.GlyphLocked, mode)
+		case !p.isOwnedByCurrentUser(pl):
+			accessGlyph = uikit.GlyphFor(uikit.GlyphAvailable, mode)
+		default:
+			accessGlyph = uikit.GlyphFor(uikit.GlyphActive, mode)
 		}
 		rows[i] = map[string]string{
+			"access": accessGlyph,
 			"index":  fmt.Sprintf("%d", i+1),
-			"name":   name,
+			"name":   pl.Name,
 			"tracks": fmt.Sprintf("%d", pl.TrackCount),
 		}
 	}
@@ -506,7 +504,8 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	listCols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "name", Header: "Name", FlexFactor: 14, Color: th.ColumnPrimary()},
+		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
+		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
 	p.table, p.filter = components.RebuildTableTheme(th, listCols, p.table.Rows(), p.focused && !p.inTrackView)
