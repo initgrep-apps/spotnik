@@ -13,6 +13,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // maxProfileNameLen is the maximum number of runes shown for the display name.
@@ -188,10 +189,12 @@ func (p *ProfileOverlay) SetTheme(t theme.Theme) {
 // renderActions returns lines for the logout/forget action section of the overlay.
 // When pendingAction is set, the armed action shows a warning prompt instead of
 // the normal label; the other action is shown as normal.
+// Each normal action uses two lines: the label on line 1 and the description on
+// line 2 (indented), matching the pre-PR two-line layout at the fixed card width.
 func (p *ProfileOverlay) renderActions() []string {
-	keyStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
-	subStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+	const actionWidth = 34 // matches the inner content width used in View()
 	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
+	descStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
 	var lines []string
 
@@ -199,8 +202,13 @@ func (p *ProfileOverlay) renderActions() []string {
 	if p.pendingAction == profileActionLogout {
 		lines = append(lines, warnStyle.Render("  Press l again to confirm logout"))
 	} else {
-		lines = append(lines, keyStyle.Render("  l  ")+"Logout")
-		lines = append(lines, subStyle.Render("     ends session · keeps Client ID"))
+		row := uikit.ListRow{
+			Label:  "l  Logout",
+			Intent: uikit.RolePlain,
+			Theme:  p.theme,
+		}
+		lines = append(lines, row.Render(actionWidth))
+		lines = append(lines, descStyle.Render("   ends session · keeps Client ID"))
 	}
 
 	lines = append(lines, "")
@@ -209,8 +217,13 @@ func (p *ProfileOverlay) renderActions() []string {
 	if p.pendingAction == profileActionForget {
 		lines = append(lines, warnStyle.Render("  Press f again to confirm forget"))
 	} else {
-		lines = append(lines, keyStyle.Render("  f  ")+"Forget")
-		lines = append(lines, subStyle.Render("     removes session + Client ID"))
+		row := uikit.ListRow{
+			Label:  "f  Forget",
+			Intent: uikit.RolePlain,
+			Theme:  p.theme,
+		}
+		lines = append(lines, row.Render(actionWidth))
+		lines = append(lines, descStyle.Render("   removes session + Client ID"))
 	}
 
 	return lines

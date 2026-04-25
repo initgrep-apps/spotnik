@@ -15,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: PlaylistsPane implements layout.Pane.
@@ -422,15 +423,29 @@ func (p *PlaylistsPane) RefreshRows() {
 }
 
 // refreshPlaylistRows re-reads the store and applies filtered playlist rows.
-// Non-owned (followed) playlists are prefixed with "~ " to signal that
-// track drill-down is unavailable (Spotify API restriction).
+// Spotify-curated playlists (Owner.ID == "spotify") render via LockedRow to
+// signal they are read-only and cannot be drilled down into. Other non-owned
+// (followed) playlists are prefixed with "~ " to signal restricted access.
 func (p *PlaylistsPane) refreshPlaylistRows() {
 	playlists := p.filteredPlaylist()
 	rows := make([]map[string]string, len(playlists))
 	for i, pl := range playlists {
-		name := pl.Name
-		if !p.isOwnedByCurrentUser(pl) {
-			name = "~ " + name
+		var name string
+		if pl.Owner.ID == "spotify" {
+			// PlainText emits no ANSI so the table's column renderer can apply its own
+			// foreground colour. Embedding ANSI from LockedRow.Render would conflict with
+			// bubble-table's per-column foreground pass (applyRows sets Foreground over
+			// the cell string). The actual column width truncation is handled by bubble-table;
+			// we pass p.width as a generous upper bound so PlainText never under-truncates.
+			nameWidth := p.width
+			if nameWidth <= 0 {
+				nameWidth = 80 // safe default before first resize
+			}
+			name = uikit.LockedRow{Label: pl.Name, Theme: p.theme}.PlainText(nameWidth)
+		} else if !p.isOwnedByCurrentUser(pl) {
+			name = "~ " + pl.Name
+		} else {
+			name = pl.Name
 		}
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
