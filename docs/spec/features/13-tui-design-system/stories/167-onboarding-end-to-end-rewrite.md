@@ -1,7 +1,7 @@
 ---
 title: "Onboarding end-to-end rewrite — compose Panel + FormField + URLBox + Spinner + Toast"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

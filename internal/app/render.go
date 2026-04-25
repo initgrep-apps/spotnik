@@ -158,23 +158,17 @@ func (a *App) renderOnboarding() string {
 func (a *App) renderOnboardingRegister() string {
 	t := a.theme
 
-	outerBorder := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.ActiveBorder()).
-		Padding(1, 2)
-
-	uriBoxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.TextMuted()).
-		Padding(0, 1)
-
-	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
-	successStyle := lipgloss.NewStyle().Foreground(t.Success())
-	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort)
-	uriBox := uriBoxStyle.Render(textStyle.Render(redirectURI))
+
+	// URLBox wraps the redirect URI inside a muted rounded box.
+	// Minimum box width of 50 ensures the URI is readable even at zero terminal width (tests).
+	uriBoxW := a.width - 12
+	if uriBoxW < 50 {
+		uriBoxW = 50
+	}
+	uriBox := uikit.URLBox{URL: redirectURI, Width: uriBoxW, Theme: t}.Render()
 
 	instructions := lipgloss.JoinVertical(lipgloss.Left,
 		textStyle.Render("1. Go to https://developer.spotify.com/dashboard and create an app."),
@@ -183,10 +177,10 @@ func (a *App) renderOnboardingRegister() string {
 		uriBox,
 		"",
 		uikit.StatusGlyph{Role: uikit.RoleWarning, Text: "Spotify Premium is required for playback controls", Theme: t, Gap: 1}.Render(),
-		successStyle.Render("✓  Your Client ID will be saved to ~/.config/spotnik/config.toml"),
+		uikit.StatusGlyph{Role: uikit.RoleSuccess, Text: "Your Client ID will be saved to ~/.config/spotnik/config.toml", Theme: t, Gap: 1}.Render(),
 	)
 
-	// Center the title block within the panel. panelInnerWidth matches the border width.
+	// Center the title block within the panel inner area.
 	panelInnerWidth := a.width - 8
 	if panelInnerWidth < 72 {
 		panelInnerWidth = 72
@@ -196,66 +190,68 @@ func (a *App) renderOnboardingRegister() string {
 		Align(lipgloss.Center).
 		Render(a.onboardingTitle())
 
-	// Hint varies: copied confirmation, copy-URI hint when empty, or confirm-only when typing.
-	// Validation errors are rendered by the FormField itself beneath the input box.
-	var hintLine string
-	switch {
-	case a.onboardingCopied:
-		hintLine = lipgloss.NewStyle().Foreground(t.Success()).Render("✓  Copied!")
-	case a.onboardingField.Value() == "":
-		hintLine = hintStyle.Render("c  copy URI  ·  Enter  confirm  ·  q  quit")
-	default:
-		hintLine = hintStyle.Render("Enter  confirm  ·  q  quit")
+	// KeyBar hints: copy-URI hint when empty, confirm-only when typing.
+	// Copying is confirmed via toast notification — no inline flash needed.
+	var hintBar string
+	if a.onboardingField.Value() == "" {
+		copyBinding := key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy URI"))
+		enterBinding := key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "confirm"))
+		quitBinding := key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
+		hintBar = uikit.KeyBar{Bindings: []key.Binding{copyBinding, enterBinding, quitBinding}, Theme: t}.Render()
+	} else {
+		enterBinding := key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "confirm"))
+		quitBinding := key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
+		hintBar = uikit.KeyBar{Bindings: []key.Binding{enterBinding, quitBinding}, Theme: t}.Render()
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		centeredTitle,
-		"",
-		stepStyle.Render("Step 1 of 2 — Set up your Spotify Developer App"),
 		"",
 		instructions,
 		"",
 		a.onboardingField.Render(),
 		"",
-		hintLine,
+		hintBar,
 	)
 
-	return outerBorder.Render(body)
+	// Panel wraps body with a titled border; padding is added by caller before passing body.
+	panelW := a.width - 4
+	if panelW < 80 {
+		panelW = 80
+	}
+	panelH := a.height - 4
+	if panelH < 20 {
+		panelH = 20
+	}
+	paddedBody := lipgloss.NewStyle().Padding(1, 2).Render(body)
+	return uikit.Panel{
+		Width:  panelW,
+		Height: panelH,
+		Title:  "Step 1 of 2 — Set up your Spotify Developer App",
+		Intent: uikit.PanelIntentDefault,
+		Theme:  t,
+	}.Render(paddedBody)
 }
 
 // renderOnboardingOAuth renders Step 2: the full auth URL, spinner, and copy hint.
-// The URL is never truncated — wrapURL breaks it across lines to fit the panel.
+// The URL is never truncated — URLBox handles wrapping at '&' boundaries.
 func (a *App) renderOnboardingOAuth() string {
 	t := a.theme
 
-	outerBorder := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.ActiveBorder()).
-		Padding(1, 2)
-
-	urlBoxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.TextMuted()).
-		Padding(0, 1)
-
-	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
-	urlStyle := lipgloss.NewStyle().Foreground(t.ActiveBorder())
-	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 
-	// Use a sensible inner width for URL wrapping; 60 gives readable line lengths.
-	innerW := 60
-	if a.width > 20 {
-		innerW = a.width - 20
+	// URLBox wraps the auth URL inside a muted rounded box.
+	// Minimum box width of 50 ensures the URL is readable even at zero terminal width (tests).
+	urlBoxW := a.width - 12
+	if urlBoxW < 50 {
+		urlBoxW = 50
 	}
-
-	wrappedURL := wrapURL(a.onboardingAuthURL, innerW)
-	urlBox := urlBoxStyle.Render(urlStyle.Render(wrappedURL))
+	urlBox := uikit.URLBox{URL: a.onboardingAuthURL, Width: urlBoxW, Theme: t}.Render()
 
 	// uikit.Spinner.View() already renders "frame  muted(text)" — no manual join needed.
 	spinnerText := a.onboardingSpinner.View()
 
-	// Center the title block within the panel. panelInnerWidth matches the border width.
+	// Center the title block within the panel inner area.
 	panelInnerWidth := a.width - 8
 	if panelInnerWidth < 72 {
 		panelInnerWidth = 72
@@ -265,18 +261,12 @@ func (a *App) renderOnboardingOAuth() string {
 		Align(lipgloss.Center).
 		Render(a.onboardingTitle())
 
-	// Hint shows copy confirmation for 2 seconds after pressing 'c', then normal hint.
-	var hintLine string
-	if a.onboardingCopied {
-		hintLine = lipgloss.NewStyle().Foreground(t.Success()).Render("✓  Copied!")
-	} else {
-		hintLine = hintStyle.Render("c  copy URL  ·  q  quit")
-	}
+	copyBinding := key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy URL"))
+	quitBinding := key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
+	hintBar := uikit.KeyBar{Bindings: []key.Binding{copyBinding, quitBinding}, Theme: t}.Render()
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		centeredTitle,
-		"",
-		stepStyle.Render("Step 2 of 2 — Authorize Spotnik with Spotify"),
 		"",
 		textStyle.Render("A browser window has been opened. Log in and click Agree."),
 		"",
@@ -285,48 +275,81 @@ func (a *App) renderOnboardingOAuth() string {
 		"",
 		spinnerText,
 		"",
-		hintLine,
+		hintBar,
 	)
 
-	return outerBorder.Render(body)
+	panelW := a.width - 4
+	if panelW < 80 {
+		panelW = 80
+	}
+	panelH := a.height - 4
+	if panelH < 20 {
+		panelH = 20
+	}
+	paddedBody := lipgloss.NewStyle().Padding(1, 2).Render(body)
+	return uikit.Panel{
+		Width:  panelW,
+		Height: panelH,
+		Title:  "Step 2 of 2 — Authorize Spotnik with Spotify",
+		Intent: uikit.PanelIntentDefault,
+		Theme:  t,
+	}.Render(paddedBody)
 }
 
 // renderOnboardingError renders the Step 2 error screen with common causes and
-// retry/quit options. The outer border uses the Error() theme colour.
+// retry/quit options. The Panel uses PanelIntentError for a red border.
 func (a *App) renderOnboardingError() string {
 	t := a.theme
 
-	outerBorder := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Error()).
-		Padding(1, 2)
-
-	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
-	errStyle := lipgloss.NewStyle().Foreground(t.Error())
 	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
-	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort)
 
+	// Center the title block within the panel inner area.
+	panelInnerWidth := a.width - 8
+	if panelInnerWidth < 72 {
+		panelInnerWidth = 72
+	}
+	centeredTitle := lipgloss.NewStyle().
+		Width(panelInnerWidth).
+		Align(lipgloss.Center).
+		Render(a.onboardingTitle())
+
+	retryBinding := key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-enter Client ID"))
+	retryOAuthBinding := key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "try again"))
+	quitBinding := key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
+	hintBar := uikit.KeyBar{Bindings: []key.Binding{retryBinding, retryOAuthBinding, quitBinding}, Theme: t}.Render()
+
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		a.onboardingTitle(),
+		centeredTitle,
 		"",
-		stepStyle.Render("Step 2 of 2 — Authorization Failed"),
-		"",
-		errStyle.Render("✗  Authorization failed"),
-		errStyle.Render("Error: "+a.onboardingError),
+		uikit.StatusGlyph{Role: uikit.RoleError, Text: "Authorization failed", Theme: t, Gap: 1}.Render(),
+		uikit.StatusGlyph{Role: uikit.RoleError, Text: "Error: " + a.onboardingError, Theme: t, Gap: 1}.Render(),
 		"",
 		textStyle.Render("Common causes:"),
 		textStyle.Render("  •  Client ID mistyped or truncated"),
 		textStyle.Render("  •  Redirect URI does not match: "+redirectURI),
 		textStyle.Render("  •  Spotify app deleted or suspended"),
 		"",
-		hintStyle.Render("r  Re-enter Client ID  (go back to Step 1)"),
-		hintStyle.Render("l  Try again           (keep current Client ID, retry OAuth)"),
-		hintStyle.Render("q  Quit"),
+		hintBar,
 	)
 
-	return outerBorder.Render(body)
+	panelW := a.width - 4
+	if panelW < 80 {
+		panelW = 80
+	}
+	panelH := a.height - 4
+	if panelH < 20 {
+		panelH = 20
+	}
+	paddedBody := lipgloss.NewStyle().Padding(1, 2).Render(body)
+	return uikit.Panel{
+		Width:  panelW,
+		Height: panelH,
+		Title:  "Step 2 of 2 — Authorization Failed",
+		Intent: uikit.PanelIntentError,
+		Theme:  t,
+	}.Render(paddedBody)
 }
 
 // buildView renders the full terminal UI content without the alert overlay.
