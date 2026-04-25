@@ -1,7 +1,7 @@
 ---
 title: "SectionLabel — caps label + rule for Page B sub-sections"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
