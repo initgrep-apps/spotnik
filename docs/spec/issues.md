@@ -301,3 +301,16 @@ Items to log:
 3. `profile.go renderActions` doc comment claims it matches the pre-PR layout exactly. Pre-PR started at column 2 (`"  l  Logout"`); the new layout starts at column 0. Visually fine but the comment overstates equivalence.
 4. `RowBackground` exists on ListRow. Consider extending it to LockedRow for symmetry, in case a future call site renders LockedRow inside a hover/selection context.
 5. `TestThemeOverlay_CursorRow_UsesSelectedBg` was tightened to assert bg appears in the SGR run immediately before the label. Consider extracting that assertion as a uikit test helper (`uikit.AssertBgImmediatelyBeforeText(t, raw, label, bg)`) so other primitive tests can reuse it.
+
+---
+
+## Story 160 — EmptyState follow-ups
+**Found:** 2026-04-25 | **Source:** PR #206 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. `EmptyState` hardcodes `e.Theme.TextMuted()` instead of going through `uikit.Apply(RoleMuted, theme)`. Other primitives use the Role abstraction. Harmonise when next touching this file.
+2. Role assertions in `empty_state_test.go` only check ANSI presence, not the specific TextMuted colour. ListRow tests use a stronger pattern (extract foreground ANSI, compare to theme colour). Tighten when next extending these tests.
+3. The PR added a Makefile fix to exclude `.gocache/` and `.gomodcache/` from `fmt-check`. Document in CONTRIBUTING or developer notes if not already covered.
