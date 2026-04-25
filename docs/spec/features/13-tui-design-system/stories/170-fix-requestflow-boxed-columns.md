@@ -1,7 +1,7 @@
 ---
 title: "Fix: RequestFlow sub-columns — restore bordered boxes via PaneChrome"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
