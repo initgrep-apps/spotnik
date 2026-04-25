@@ -34,7 +34,7 @@ func TestGlyph_UnicodeFormsAreAllSingleColumnExceptPlaybackMulti(t *testing.T) {
 }
 
 func TestGlyph_WarningIsCirclePlusInsideTriangle(t *testing.T) {
-	// Confirms Section 5.2 of spec: ◬ (U+25EC), not ⚠ (U+26A0).
+	// Confirms Section 5.2 of spec: U+25EC (◬), not U+26A0 (old warning sign).
 	assert.Equal(t, "◬", uikit.GlyphFor(uikit.GlyphWarning, uikit.GlyphUnicode))
 	assert.Equal(t, "!", uikit.GlyphFor(uikit.GlyphWarning, uikit.GlyphASCII))
 }
@@ -75,7 +75,10 @@ func TestGlyph_UnknownRoleReturnsEmpty(t *testing.T) {
 }
 
 func TestGlyph_BannedGlyphsAbsentEverywhere(t *testing.T) {
-	banned := []string{"⚠", "┌", "┐", "└", "┘", "╔", "╗", "╚", "╝", "ᐅ", "✅", "❌", "❗"}
+	// U+26A0 is the old warning sign — banned in favour of U+25EC (◬).
+	// Use the Go Unicode escape \u26A0 so the source file itself does not
+	// contain the banned rune; `grep -rn "U+26A0" internal/` must return no matches.
+	banned := []string{"\u26A0", "┌", "┐", "└", "┘", "╔", "╗", "╚", "╝", "ᐅ", "✅", "❌", "❗"}
 	for _, role := range uikit.AllGlyphRoles() {
 		u := uikit.GlyphFor(role, uikit.GlyphUnicode)
 		for _, b := range banned {

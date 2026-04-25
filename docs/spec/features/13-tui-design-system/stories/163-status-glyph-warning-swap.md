@@ -1,7 +1,7 @@
 ---
 title: "StatusGlyph + swap ⚠ → ◬ across cliout, notifications, onboarding"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

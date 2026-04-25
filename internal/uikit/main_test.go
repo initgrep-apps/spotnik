@@ -2,6 +2,7 @@ package uikit_test
 
 import (
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -15,4 +16,11 @@ import (
 func TestMain(m *testing.M) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	os.Exit(m.Run())
+}
+
+// stripANSI removes ANSI escape sequences so tests can assert on visible text only.
+var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+func stripANSI(s string) string {
+	return ansiRe.ReplaceAllString(s, "")
 }

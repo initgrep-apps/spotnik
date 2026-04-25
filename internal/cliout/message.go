@@ -44,7 +44,7 @@ func statusGlyph(s Status) string {
 	case StatusFailure:
 		return "✗"
 	case StatusWarning:
-		return "⚠"
+		return "◬"
 	case Pending:
 		return "◌"
 	default:

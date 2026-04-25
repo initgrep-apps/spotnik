@@ -331,7 +331,7 @@ func TestRenderAutoTrafficStrip_StaleCache(t *testing.T) {
 	s.SetPlaylistsFetchedAt(time.Now().Add(-10 * time.Minute))
 	p := newInternalTestPaneWithStore(s)
 	out := p.renderAutoTrafficStrip(120)
-	assert.Contains(t, out, "⚠")
+	assert.Contains(t, out, "◬")
 	assert.Contains(t, out, "playlists")
 }
 

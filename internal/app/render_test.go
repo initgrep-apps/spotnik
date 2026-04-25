@@ -709,7 +709,7 @@ func TestRenderOnboardingRegister_ContainsExpectedContent(t *testing.T) {
 	assert.Contains(t, result, "Set up your Spotify Developer App", "register screen must contain step title")
 	assert.Contains(t, result, "8888", "register screen must include the callback port")
 	assert.Contains(t, result, "http://127.0.0.1:8888/callback", "register screen must show full redirect URI")
-	assert.Contains(t, result, "⚠", "register screen must contain Premium warning icon")
+	assert.Contains(t, result, "◬", "register screen must contain Premium warning icon")
 	assert.Contains(t, result, "Spotify Premium", "register screen must contain Premium warning text")
 	assert.Contains(t, result, "✓", "register screen must contain config path notice icon")
 	assert.Contains(t, result, "config.toml", "register screen must mention config.toml path")

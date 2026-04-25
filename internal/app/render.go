@@ -175,7 +175,6 @@ func (a *App) renderOnboardingRegister() string {
 
 	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
-	warnStyle := lipgloss.NewStyle().Foreground(t.Warning())
 	successStyle := lipgloss.NewStyle().Foreground(t.Success())
 	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 
@@ -188,7 +187,7 @@ func (a *App) renderOnboardingRegister() string {
 		"",
 		uriBox,
 		"",
-		warnStyle.Render("⚠  Spotify Premium is required for playback controls"),
+		uikit.StatusGlyph{Role: uikit.RoleWarning, Text: "Spotify Premium is required for playback controls", Theme: t, Gap: 1}.Render(),
 		successStyle.Render("✓  Your Client ID will be saved to ~/.config/spotnik/config.toml"),
 	)
 

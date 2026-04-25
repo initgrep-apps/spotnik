@@ -181,6 +181,34 @@ func TestNewNotifications_InfoUsesInfoToken(t *testing.T) {
 	assert.NotNil(t, cmd, "info alert must be registered and usable after Info() wiring")
 }
 
+// TestNewNotifications_WarningPrefixIsCircleTriangle verifies that the warning alert
+// prefix is ◬ (U+25EC), not the old U+26A0 glyph, per §5.2 of the design record.
+// Content must be tall enough for the bottom-right positioned alert to be visible.
+func TestNewNotifications_WarningPrefixIsCircleTriangle(t *testing.T) {
+	th := theme.Load(theme.DefaultThemeID)
+	model := NewNotifications(th)
+
+	// Activate a warning alert and verify ◬ appears in the rendered output.
+	cmd := model.NewAlertCmd("warning", "Premium required")
+	require.NotNil(t, cmd)
+	msg := cmd()
+	updated, _ := model.Update(msg)
+	am, ok := updated.(bubbleup.AlertModel)
+	require.True(t, ok)
+
+	// Use 20 lines of content so the bottom-right positioned alert is visible.
+	var contentLines []string
+	for i := 0; i < 20; i++ {
+		contentLines = append(contentLines, strings.Repeat(" ", 70))
+	}
+	content := strings.Join(contentLines, "\n")
+	rendered := am.Render(content)
+	assert.Contains(t, rendered, "◬",
+		"warning toast must use ◬ (U+25EC) prefix, not U+26A0")
+	assert.NotContains(t, rendered, "\u26A0",
+		"warning toast must not use old U+26A0 glyph")
+}
+
 // TestNewNotifications_PositionBottomRight verifies the position constant used is BottomRight.
 // This is an indirect test: we verify that the constructed model uses BottomRightPosition
 // by checking the rendered output's line distribution.

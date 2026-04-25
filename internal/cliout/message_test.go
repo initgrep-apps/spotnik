@@ -43,7 +43,7 @@ func TestStatusGlyph(t *testing.T) {
 		{Inactive, "◎"},
 		{StatusSuccess, "✓"},
 		{StatusFailure, "✗"},
-		{StatusWarning, "⚠"},
+		{StatusWarning, "◬"},
 		{Pending, "◌"},
 	}
 	for _, c := range cases {

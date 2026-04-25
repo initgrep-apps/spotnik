@@ -700,7 +700,7 @@ func TestRequestFlowPane_View_StalenessDisplay_StalePlaylist(t *testing.T) {
 	p.SetSize(100, 20)
 	v := p.View()
 	// In the four-zone boxed layout, staleness is shown via AUTO-TRAFFIC strip (not "stale:").
-	// The AUTO-TRAFFIC strip renders "⚠ playlists  Xm ago" for stale cache entries.
+	// The AUTO-TRAFFIC strip renders "◬ playlists  Xm ago" for stale cache entries.
 	assert.Contains(t, v, "playlists")
 }
 
@@ -860,7 +860,7 @@ func TestRequestFlowPane_View_AutoTrafficStrip_StalePlaylist(t *testing.T) {
 	v := p.View()
 	assert.Contains(t, v, "AUTO-TRAFFIC")
 	assert.Contains(t, v, "playlists")
-	assert.Contains(t, v, "⚠")
+	assert.Contains(t, v, "◬")
 }
 
 // --- Helper functions ---
