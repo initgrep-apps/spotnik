@@ -1,7 +1,7 @@
 ---
 title: "Fix: overlay positioning — restore Right/Top for theme, device, profile overlays"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
