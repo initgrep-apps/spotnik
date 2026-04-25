@@ -347,7 +347,7 @@ func TestRenderAutoTrafficStrip_NilStore_NoPanic(t *testing.T) {
 
 // TestRenderSectionColumn_UsesAccentColor verifies that renderSectionColumn() uses
 // PaneBorderRequestFlow() (orange accent) rather than TextSecondary() (grey)
-// for the SectionLabel header.
+// for the PaneChrome border.
 //
 // The black theme maps:
 //
@@ -370,4 +370,21 @@ func TestRenderSectionColumn_UsesAccentColor(t *testing.T) {
 	// Output must NOT contain TextSecondary color code anywhere.
 	assert.NotContains(t, out, greyANSI,
 		"renderSectionColumn should NOT use TextSecondary() for label")
+}
+
+// --- Story 170: renderSectionColumn renders bordered boxes ---
+
+// TestRenderSectionColumn_BorderedOutput verifies that renderSectionColumn() now
+// produces a fully bordered PaneChrome box (╭ top border, │ side borders, ╰ bottom
+// border) instead of the former SectionLabel header-only output.
+func TestRenderSectionColumn_BorderedOutput(t *testing.T) {
+	p := newInternalTestPane()
+
+	out := renderSectionColumn("APP", []string{"line1", "line2"}, 30,
+		p.theme.PaneBorderRequestFlow(), p.theme)
+
+	assert.Contains(t, out, "╭", "top border glyph ╭ must be present")
+	assert.Contains(t, out, "│", "side border glyph │ must be present")
+	assert.Contains(t, out, "╰", "bottom border glyph ╰ must be present")
+	assert.Contains(t, out, "APP", "label must appear in the border title")
 }
