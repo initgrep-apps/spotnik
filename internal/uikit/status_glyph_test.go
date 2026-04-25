@@ -96,6 +96,25 @@ func TestStatusGlyph_EmptyText(t *testing.T) {
 	assert.NotPanics(t, func() { _ = sg.Render() }, "empty text must not panic")
 }
 
+// TestStatusGlyph_UnknownRoleFallsBackToInfo verifies that an unrecognised Role
+// falls back to the info glyph (→) rather than panicking or returning empty.
+func TestStatusGlyph_UnknownRoleFallsBackToInfo(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load(theme.DefaultThemeID)
+	sg := uikit.StatusGlyph{
+		Role:  uikit.Role("unknown-role"),
+		Text:  "fallback",
+		Theme: th,
+	}
+	out := sg.Render()
+	stripped := stripANSI(out)
+	assert.True(t, strings.HasPrefix(stripped, "→"),
+		"unknown role must fall back to info glyph →, got: %q", stripped)
+	assert.Contains(t, out, "fallback", "unknown role must still include text")
+}
+
 // TestStatusGlyph_GapAddsExtraSpaces verifies that Gap > 0 inserts extra spaces
 // between the glyph and the text, preserving alignment with adjacent two-space
 // padded lines (e.g. "✓  text").

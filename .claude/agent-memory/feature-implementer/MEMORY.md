@@ -33,3 +33,4 @@
 - [project_spotnik_feature77_complete.md](project_spotnik_feature77_complete.md) — Story 77 (Overlay Backgrounds, Border Corner, Network Log Colors, Status Bar Pills): TOML collision gotcha (8/11 themes collided), saturation test pattern, ANSI background test strategies
 - [project_spotnik_feature114_complete.md](project_spotnik_feature114_complete.md) — Story 114 (UserProfile Data Layer): domain expansion, store methods, app pipeline, IsPremium(), delegation shim for UserID()
 - [project_spotnik_feature116_complete.md](project_spotnik_feature116_complete.md) — Story 116 (Subscription Gating): premium gate patterns, visualizer exemption, test update pattern for gated handlers
+- [project_spotnik_feature164_complete.md](project_spotnik_feature164_complete.md) — Story 164 (ProgressBar primitive + seek/volume migration): import cycle fix via TableChrome move, PartialGlyph export, dead zone removal, □→░ ASCII mode collision gotcha

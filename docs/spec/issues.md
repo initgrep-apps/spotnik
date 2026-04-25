@@ -353,3 +353,17 @@ Items to log:
 1. Initial PR shipped with single-space separator that broke alignment with adjacent `✓  ` rows in onboarding/splash. Fixed via `Gap` field in round 2. Watch for similar spacing assumptions when migrating future call sites — visual diffs > textual contains-checks.
 2. `StatusGlyph.Render()` unknown-role fallback uses `GlyphInfo` for the glyph but the colour resolves via `ColourFor(role)` which falls back to `TextPrimary` (NOT `RoleInfo` colour). Doc comment says "Unknown roles fall back to RoleInfo" — semantically inconsistent. Either change the colour fallback to `RoleInfo` or update the doc comment to say "glyph falls back to GlyphInfo; colour falls back to TextPrimary".
 3. `internal/uikit/main_test.go` `stripANSI` helper is now reused across multiple test files. Promote to a uikit-internal test util when next touched.
+
+---
+
+## Story 164 — ProgressBar follow-ups
+**Found:** 2026-04-25 | **Source:** PR #210 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Story spec line 51-52, 72-74 reference `internal/ui/components/controls.go`. Actual seek/volume rendering lives in `internal/ui/components/gradient.go`. Code migrated `gradient.go` correctly. Fix spec text in S168 docs rewrite.
+2. `TableChrome` (added by S157 in `internal/uikit/`) was relocated to `internal/ui/components/` to break a planned import cycle when `components → uikit` was introduced for ProgressBar. Had no external callers — no-op for users. Document the package boundary rule (`uikit` cannot import `components`; `components` may import `uikit`) in S168.
+3. `ProgressBar.Render()` paints empty cells with `Theme.TextMuted()`. Existing `GradientSeekBar`/`GradientVolumeBar` paint empty cells with `Theme.Surface()`. Bars currently only borrow `PartialGlyph`/`GlyphFor` helpers, not `ProgressBar.Render()`, so no regression today. When a future migration swaps in `ProgressBar.Render()`, decide which colour wins and harmonise.
+4. Volume-bar dead-zone (vol=0) was removed in this PR. Verify no UX regression once playback ships under non-trivial use.
