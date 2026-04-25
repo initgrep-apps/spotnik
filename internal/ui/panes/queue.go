@@ -160,8 +160,10 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the queue pane content. It is pure — reads store and returns a string.
 func (q *QueuePane) View() string {
-	rows := q.filteredQueue()
-	if len(rows) == 0 {
+	// Show EmptyState only when the queue is truly empty (no filter active).
+	// When the filter is active but yields no results, the filter bar is shown so the
+	// user can see and edit their query — the empty table is the correct feedback.
+	if len(q.store.Queue()) == 0 && !q.filter.IsActive() {
 		return uikit.EmptyState{
 			Text:   "Empty queue",
 			Hint:   "Press / to search for tracks to add",
