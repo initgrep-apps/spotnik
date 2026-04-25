@@ -234,7 +234,10 @@ func TestThemeOverlay_NonCursorRow_NoExplicitBackground(t *testing.T) {
 }
 
 // TestThemeOverlay_CursorRow_UsesSelectedBg verifies that the cursor row uses
-// SelectedBg() so it clearly stands out from non-cursor rows.
+// SelectedBg() so it clearly stands out from non-cursor rows, and that the bg
+// appears in the same SGR run that opens immediately before the theme label text
+// (not merely somewhere in the row). This ensures the cursor highlight is
+// visually continuous rather than a discontiguous rectangle.
 func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
 	prev := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
@@ -256,6 +259,25 @@ func TestThemeOverlay_CursorRow_UsesSelectedBg(t *testing.T) {
 	require.NotEmpty(t, selectedBg, "sanity: SelectedBg must produce 48;2; in TrueColor")
 	assert.Contains(t, row, selectedBg,
 		"cursor row should use SelectedBg() background")
+
+	// Stronger assertion: the bg MUST appear in the same SGR run immediately
+	// before the theme label text — not just somewhere in the row. This verifies
+	// the highlight is continuous across the label, not just on trailing padding.
+	themeName := themes[0].Name()
+	labelPos := strings.Index(row, themeName)
+	require.GreaterOrEqual(t, labelPos, 0, "theme name %q not found in row output", themeName)
+
+	preLabel := row[:labelPos]
+	lastEsc := strings.LastIndex(preLabel, "\x1b[")
+	require.GreaterOrEqual(t, lastEsc, 0, "no ANSI escape found before label in cursor row")
+
+	mPos := strings.Index(row[lastEsc:], "m")
+	require.GreaterOrEqual(t, mPos, 0, "malformed ANSI escape before label in cursor row")
+
+	sgrBeforeLabel := row[lastEsc : lastEsc+mPos+1]
+	assert.Contains(t, sgrBeforeLabel, selectedBg,
+		"SelectedBg must appear in the SGR run immediately before theme label %q; got: %q\nfull row: %q",
+		themeName, sgrBeforeLabel, row)
 }
 
 // extractBackgroundANSI extracts the "48;2;R;G;B" portion of an ANSI string if present.

@@ -69,6 +69,12 @@ type ListRow struct {
 	Intent Role
 	// Theme provides colour tokens.
 	Theme theme.Theme
+	// RowBackground, when non-nil, overrides the background of every segment
+	// (glyph, label, caption) and of the inter-segment spaces. This is used by
+	// the theme overlay cursor row so the highlight is visually continuous — each
+	// segment's terminal reset (\x1b[0m) would otherwise wipe the background that
+	// an outer wrapper applies, leaving gaps between segments.
+	RowBackground lipgloss.TerminalColor
 }
 
 // Render returns the styled, width-constrained string for this row.
@@ -76,17 +82,29 @@ func (r ListRow) Render(width int) string {
 	mode := ActiveMode()
 	th := r.Theme
 
+	// Build segment styles, optionally merging RowBackground so the cursor
+	// highlight is continuous. Each segment closes with \x1b[0m; without a
+	// background in the same SGR run, an outer Background wrapper would show
+	// gaps between segments.
+	hasBg := r.RowBackground != nil
+	withBg := func(s lipgloss.Style) lipgloss.Style {
+		if hasBg {
+			return s.Background(r.RowBackground)
+		}
+		return s
+	}
+
 	// Render glyph (empty string if no glyph role set).
 	glyphStr := ""
 	if r.Glyph != "" {
 		raw := GlyphFor(r.Glyph, mode)
-		glyphStr = Apply(r.Intent, th).Render(raw)
+		glyphStr = withBg(Apply(r.Intent, th)).Render(raw)
 	}
 
 	// Caption part — rendered in Muted.
 	captionStr := ""
 	if r.Caption != "" {
-		captionStr = Apply(RoleMuted, th).Render(r.Caption)
+		captionStr = withBg(Apply(RoleMuted, th)).Render(r.Caption)
 	}
 
 	// Reserve space for caption (plain width, no ANSI).
@@ -111,9 +129,17 @@ func (r ListRow) Render(width int) string {
 		labelWidth = 0
 	}
 
-	labelStr := Apply(RolePlain, th).Render(PadOrTruncate(r.Label, labelWidth))
+	labelStr := withBg(Apply(RolePlain, th)).Render(PadOrTruncate(r.Label, labelWidth))
 
-	// Assemble with plain spaces between segments.
+	// Inter-segment spaces must also carry the background when RowBackground is
+	// set; otherwise the \x1b[0m from the preceding segment closes the bg before
+	// the next segment opens it again, producing a visible gap.
+	space := " "
+	if hasBg {
+		space = lipgloss.NewStyle().Background(r.RowBackground).Render(" ")
+	}
+
+	// Assemble segments with the (possibly styled) space between each.
 	parts := []string{}
 	if glyphStr != "" {
 		parts = append(parts, glyphStr)
@@ -122,7 +148,7 @@ func (r ListRow) Render(width int) string {
 	if captionStr != "" {
 		parts = append(parts, captionStr)
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, space)
 }
 
 // LockedRow renders a read-only list item using the ◌ glyph in Muted colour.

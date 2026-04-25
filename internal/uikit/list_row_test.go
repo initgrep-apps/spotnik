@@ -394,3 +394,82 @@ func TestLockedRow_PlainText_TinyWidth(t *testing.T) {
 	out := row.PlainText(1) // width smaller than glyph+gap
 	_ = out                 // must not panic
 }
+
+// ---------------------------------------------------------------------------
+// ListRow.RowBackground (story 158 round 2)
+// ---------------------------------------------------------------------------
+
+// TestListRow_RowBackground_BgInSameRunAsLabel verifies that when RowBackground is set,
+// the bg ANSI escape (48;2;R;G;B) appears in the same SGR run that opens immediately
+// before the label characters. This ensures the cursor-highlight background is continuous
+// and does not gap out between glyph, label, and caption.
+func TestListRow_RowBackground_BgInSameRunAsLabel(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	th := theme.Load("black")
+	// Use a distinctive color (magenta) that is easy to identify in ANSI output.
+	bg := lipgloss.Color("#ff00ff")
+	row := uikit.ListRow{
+		Glyph:         uikit.GlyphActive,
+		Label:         "LabelText",
+		Caption:       "cap",
+		Intent:        uikit.RoleAccent,
+		Theme:         th,
+		RowBackground: bg,
+	}
+	out := row.Render(40)
+
+	// The bg escape for #ff00ff is 48;2;255;0;255.
+	const wantBg = "48;2;255;0;255"
+
+	// Sanity: bg sequence must appear somewhere in the output.
+	if !strings.Contains(out, wantBg) {
+		t.Fatalf("bg escape %q not found anywhere in output %q", wantBg, out)
+	}
+
+	// Critical: the SGR run that opens immediately before "LabelText" must contain
+	// the bg escape. Walk backwards from the label's position.
+	labelPos := strings.Index(out, "LabelText")
+	if labelPos < 0 {
+		t.Fatalf("label %q not found in output %q", "LabelText", out)
+	}
+	preLabel := out[:labelPos]
+	lastEsc := strings.LastIndex(preLabel, "\x1b[")
+	if lastEsc < 0 {
+		t.Fatalf("no ANSI escape found before label in %q", preLabel)
+	}
+	mPos := strings.Index(out[lastEsc:], "m")
+	if mPos < 0 {
+		t.Fatalf("malformed ANSI escape before label")
+	}
+	sgrRun := out[lastEsc : lastEsc+mPos+1]
+	if !strings.Contains(sgrRun, wantBg) {
+		t.Errorf("bg escape %q not found in the SGR run before label %q; got SGR run: %q\nfull output: %q",
+			wantBg, "LabelText", sgrRun, out)
+	}
+}
+
+// TestListRow_RowBackground_NilNoOp verifies that a zero RowBackground (nil interface)
+// produces the same output as a plain ListRow — no background escape is emitted.
+func TestListRow_RowBackground_NilNoOp(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	th := theme.Load("black")
+	row := uikit.ListRow{
+		Glyph:  uikit.GlyphAvailable,
+		Label:  "NoBackground",
+		Intent: uikit.RoleMuted,
+		Theme:  th,
+		// RowBackground is zero (nil) — no background should be applied.
+	}
+	out := row.Render(40)
+	// Background ANSI sequence must NOT appear when RowBackground is unset.
+	const bgEscape = "48;2;"
+	if strings.Contains(out, bgEscape) {
+		t.Errorf("expected no background escape when RowBackground is nil, but found %q in %q", bgEscape, out)
+	}
+}

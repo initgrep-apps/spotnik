@@ -194,24 +194,34 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 		intent = uikit.RoleSelection
 	}
 
+	// For the cursor row, propagate SelectedBg into each ListRow segment so the
+	// highlight is visually continuous. Each segment closes with \x1b[0m; without
+	// the bg baked into the segment style an outer wrapper shows gaps between the
+	// glyph, label, and caption.
+	var rowBg lipgloss.TerminalColor
+	if isCursor {
+		rowBg = o.theme.SelectedBg()
+	}
+
 	listRow := uikit.ListRow{
-		Glyph:   glyph,
-		Label:   th.Name(),
-		Caption: caption,
-		Intent:  intent,
-		Theme:   rowTheme,
+		Glyph:         glyph,
+		Label:         th.Name(),
+		Caption:       caption,
+		Intent:        intent,
+		Theme:         rowTheme,
+		RowBackground: rowBg,
 	}
 	rowContent := listRow.Render(rowWidth) + "  " + swatches
 
-	// Cursor row: pad with SelectedBg so the entire row is highlighted.
-	// Non-cursor row: no explicit background — blends with overlay composite background.
+	// Cursor row: pad to innerWidth with SelectedBg so trailing space is also
+	// highlighted. The "  " + swatches area after ListRow still has no explicit
+	// bg; the width-enforcing wrapper fills the remaining columns with the bg.
 	if isCursor {
 		bg := o.theme.SelectedBg()
-		rowStyle := lipgloss.NewStyle().Background(bg)
-		return rowStyle.Render(lipgloss.NewStyle().
+		return lipgloss.NewStyle().
 			Width(innerWidth).MaxWidth(innerWidth).
 			Background(bg).
-			Render(rowContent))
+			Render(rowContent)
 	}
 	return lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
