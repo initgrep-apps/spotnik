@@ -728,7 +728,7 @@ func TestRenderOnboardingOAuth_ContainsExpectedContent(t *testing.T) {
 	assert.Contains(t, result, "Authorize Spotnik with Spotify", "OAuth screen must contain step title")
 	assert.Contains(t, result, "https://accounts.spotify.com/authorize", "OAuth screen must show the auth URL")
 	assert.Contains(t, result, "Waiting for authorization", "OAuth screen must show spinner status text")
-	assert.Contains(t, result, "c  copy URL", "OAuth screen must show copy URL hint")
+	assert.Contains(t, result, "copy URL", "OAuth screen must show copy URL hint")
 	assert.Contains(t, result, "╭", "OAuth screen must use rounded borders")
 }
 
@@ -763,9 +763,9 @@ func TestRenderOnboardingError_ContainsExpectedContent(t *testing.T) {
 	assert.Contains(t, result, "authorization code not received", "error screen must show the error message")
 	assert.Contains(t, result, "Common causes", "error screen must list common causes")
 	assert.Contains(t, result, "http://127.0.0.1:8888/callback", "error screen must show redirect URI with port")
-	assert.Contains(t, result, "r  Re-enter Client ID", "error screen must show retry option r")
-	assert.Contains(t, result, "l  Try again", "error screen must show retry option l")
-	assert.Contains(t, result, "q  Quit", "error screen must show quit option")
+	assert.Contains(t, result, "re-enter Client ID", "error screen must show retry option r")
+	assert.Contains(t, result, "try again", "error screen must show retry option l")
+	assert.Contains(t, result, "quit", "error screen must show quit option")
 }
 
 // TestRenderOnboarding_StepRegister_Centered verifies that with known dimensions,
@@ -879,26 +879,34 @@ func TestRenderOnboardingRegister_copyHint_hiddenWhenTyping(t *testing.T) {
 	assert.NotContains(t, view, "copy URI")
 }
 
-// TestRenderOnboardingRegister_copiedFeedback verifies the success checkmark and
-// "Copied" text appear on screen 1 when onboardingCopied is true.
-func TestRenderOnboardingRegister_copiedFeedback(t *testing.T) {
+// TestRenderOnboardingRegister_panelTitle verifies Step 1 title appears inside
+// the Panel border (via uikit.Panel composition, not a raw lipgloss border).
+func TestRenderOnboardingRegister_panelTitle(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 120
 	a.height = 40
-	a.onboardingCopied = true
 	view := a.renderOnboardingRegister()
-	assert.Contains(t, view, "✓")
-	assert.Contains(t, view, "Copied")
+	assert.Contains(t, view, "Step 1 of 2")
 }
 
-// TestRenderOnboardingOAuth_copiedFeedback verifies the success checkmark and
-// "Copied" text appear on screen 2 when onboardingCopied is true.
-func TestRenderOnboardingOAuth_copiedFeedback(t *testing.T) {
+// TestRenderOnboardingOAuth_panelTitle verifies Step 2 title appears inside
+// the Panel border.
+func TestRenderOnboardingOAuth_panelTitle(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 120
 	a.height = 40
-	a.onboardingCopied = true
+	a.onboardingAuthURL = "https://accounts.spotify.com/authorize?client_id=test"
 	view := a.renderOnboardingOAuth()
-	assert.Contains(t, view, "✓")
-	assert.Contains(t, view, "Copied")
+	assert.Contains(t, view, "Step 2 of 2")
+}
+
+// TestRenderOnboardingError_panelTitle verifies the error panel uses PanelIntentError
+// and contains the error step title.
+func TestRenderOnboardingError_panelTitle(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 120
+	a.height = 40
+	a.onboardingError = "token exchange failed"
+	view := a.renderOnboardingError()
+	assert.Contains(t, view, "Authorization Failed")
 }
