@@ -153,8 +153,8 @@ func (a *App) renderOnboarding() string {
 }
 
 // renderOnboardingRegister renders Step 1: instructions, redirect URI box, and
-// the client ID text input. No network I/O — reads only app.onboardingPort and
-// app.onboardingInput.
+// the client ID FormField. No network I/O — reads only app.onboardingPort and
+// app.onboardingField.
 func (a *App) renderOnboardingRegister() string {
 	t := a.theme
 
@@ -166,11 +166,6 @@ func (a *App) renderOnboardingRegister() string {
 	uriBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.TextMuted()).
-		Padding(0, 1)
-
-	inputBoxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.ActiveBorder()).
 		Padding(0, 1)
 
 	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
@@ -191,8 +186,6 @@ func (a *App) renderOnboardingRegister() string {
 		successStyle.Render("✓  Your Client ID will be saved to ~/.config/spotnik/config.toml"),
 	)
 
-	inputBox := inputBoxStyle.Render(a.onboardingInput.View())
-
 	// Center the title block within the panel. panelInnerWidth matches the border width.
 	panelInnerWidth := a.width - 8
 	if panelInnerWidth < 72 {
@@ -203,14 +196,13 @@ func (a *App) renderOnboardingRegister() string {
 		Align(lipgloss.Center).
 		Render(a.onboardingTitle())
 
-	// Hint varies: validation error, copied confirmation, copy-URI when empty, or confirm-only when typing.
+	// Hint varies: copied confirmation, copy-URI hint when empty, or confirm-only when typing.
+	// Validation errors are rendered by the FormField itself beneath the input box.
 	var hintLine string
 	switch {
-	case a.onboardingInputError != "":
-		hintLine = lipgloss.NewStyle().Foreground(t.Error()).Render("✗  " + a.onboardingInputError)
 	case a.onboardingCopied:
 		hintLine = lipgloss.NewStyle().Foreground(t.Success()).Render("✓  Copied!")
-	case a.onboardingInput.Value() == "":
+	case a.onboardingField.Value() == "":
 		hintLine = hintStyle.Render("c  copy URI  ·  Enter  confirm  ·  q  quit")
 	default:
 		hintLine = hintStyle.Render("Enter  confirm  ·  q  quit")
@@ -223,10 +215,7 @@ func (a *App) renderOnboardingRegister() string {
 		"",
 		instructions,
 		"",
-		lipgloss.JoinVertical(lipgloss.Left,
-			textStyle.Render("Paste your Client ID here:"),
-			inputBox,
-		),
+		a.onboardingField.Render(),
 		"",
 		hintLine,
 	)

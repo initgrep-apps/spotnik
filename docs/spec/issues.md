@@ -382,3 +382,17 @@ Items to log:
 3. Spinner success-path tests (`TestSpinner_Done_EmitsMsgAfterTTL` etc.) execute `tea.Tick` cmds directly, blocking ~6.7s total. Consider asserting cmd-type-with-payload via synthetic msgs for faster tests.
 4. `Spinner.Fail("Authorization failed")` puts the hold-text into `SpinnerFailMsg.Err`, not an underlying error string. Field name suggests error. Either rename `Err` to `Text` or have `Fail` accept a separate error string.
 5. `authSuccessMsg` resolves `onboardingSpinner.Done` unconditionally — adds a 1.2s hold to the legacy `viewAuth` path too (where the spinner isn't rendered). Toast still fires on `SpinnerDoneMsg`. Acceptable but worth documenting.
+
+---
+
+## Story 166 — FormField follow-ups
+**Found:** 2026-04-25 | **Source:** PR #212 Review (2 rounds)
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Initial PR painted the validation error message in `Error()` colour; round 1 fixed to glyph=Error, text=TextPrimary per spec. Add a uikit test helper that asserts a rendered field contains exactly N distinct foreground escapes — promotes the regression-detection pattern across primitives.
+2. `InputTextStyle()` / `InputCursorStyle()` accessors were added to support testing role wiring without parsing ANSI. Consider whether other primitives (Chip, ListRow, StatusGlyph) need similar accessors so role contracts are unit-testable instead of asserted via raw bytes.
+3. Behaviour change: pressing a key (other than Enter) no longer clears the cached validation error; only `SetValue` or `Validate` does. Spec is the source of truth, but a stale `✗` glyph can persist while the user backspaces. Consider clearing the cached error on every `Update()` keypress in a follow-up if it surfaces in QA.
+4. Visible label changed from "Paste your Client ID here:" to "Client ID:". Border colour shifted from `ActiveBorder()` to `Accent()`. Both intentional; document the visual change in S168 onboarding screenshots.

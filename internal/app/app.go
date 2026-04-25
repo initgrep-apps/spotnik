@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -187,8 +186,10 @@ type App struct {
 	// onboardingStep tracks the active sub-step within viewOnboarding.
 	onboardingStep int
 
-	// onboardingInput is the text input component for the client ID entry field.
-	onboardingInput textinput.Model
+	// onboardingField is the FormField primitive for the client ID entry field.
+	// It wraps bubbles/textinput with an intrinsic 32-char hex validator and an
+	// error slot that is rendered beneath the input.
+	onboardingField *uikit.FormField
 
 	// onboardingError is the error message shown on the onboarding error screen (stepError).
 	onboardingError string
@@ -208,10 +209,6 @@ type App struct {
 	// onboardingCopied is set true briefly after 'c' copies a URL or URI.
 	// Cleared by copiedFeedbackMsg after 2 seconds.
 	onboardingCopied bool
-
-	// onboardingInputError holds a validation error from the last Enter attempt in
-	// stepRegister. Shown in the hint line; cleared on next keypress or retry.
-	onboardingInputError string
 
 	// onboardingSpinner is the TUI spinner shown while waiting for the OAuth callback.
 	// Using *uikit.Spinner so Done/Fail/Cancel terminal states are available.
@@ -355,11 +352,15 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		ver = "dev"
 	}
 
-	// Initialise the client ID text input for the onboarding registration step.
-	ti := textinput.New()
-	ti.Placeholder = "your-client-id-here"
-	ti.CharLimit = 64
-	ti.Width = 60
+	// Initialise the FormField for the onboarding client ID registration step.
+	// The intrinsic validator enforces the 32-char hex Spotify Client ID shape.
+	ff := uikit.NewFormField(uikit.FormFieldConfig{
+		Label:       "Client ID",
+		Placeholder: "your-client-id-here",
+		Validate:    config.ValidateClientID,
+		Theme:       t,
+	})
+	ff.Focus()
 
 	// Initialise the spinner shown while waiting for OAuth callback on stepOAuth.
 	sp := uikit.NewSpinner("Waiting for authorization...  (times out in 5 minutes)", t)
@@ -387,7 +388,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		volumeStep:        1,
 		needsAuth:         opts.NeedsAuth,
 		needsRegister:     opts.NeedsRegister,
-		onboardingInput:   ti,
+		onboardingField:   ff,
 		onboardingSpinner: sp,
 		onboardingPort:    opts.CallbackPort,
 		onboardingCodeCh:  opts.CallbackCodeCh,

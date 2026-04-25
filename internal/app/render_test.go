@@ -874,7 +874,7 @@ func TestRenderOnboardingRegister_copyHint_hiddenWhenTyping(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 120
 	a.height = 40
-	a.onboardingInput.SetValue("abc")
+	a.onboardingField.SetValue("abc")
 	view := a.renderOnboardingRegister()
 	assert.NotContains(t, view, "copy URI")
 }

@@ -496,31 +496,29 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case stepRegister:
 		// 'c' copies the redirect URI — only when the input field is empty.
 		// Once the user starts typing, 'c' is a valid hex character and must pass through.
-		if m.Type == tea.KeyRunes && string(m.Runes) == "c" && a.onboardingInput.Value() == "" {
+		if m.Type == tea.KeyRunes && string(m.Runes) == "c" && a.onboardingField.Value() == "" {
 			_ = copyToClipboard(fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort))
 			a.onboardingCopied = true
-			a.onboardingInputError = ""
 			return a, tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 				return copiedFeedbackMsg{}
 			})
 		}
-		// Enter with non-empty input → validate format then save.
+		// Enter with non-empty input → validate via FormField then save.
 		if m.Type == tea.KeyEnter {
-			clientID := strings.TrimSpace(a.onboardingInput.Value())
+			clientID := strings.TrimSpace(a.onboardingField.Value())
 			if clientID == "" {
 				return a, nil
 			}
-			if err := config.ValidateClientID(clientID); err != nil {
-				a.onboardingInputError = err.Error()
+			if err := a.onboardingField.Validate(); err != nil {
+				// Error is now cached in the field; Render() will display it.
 				return a, nil
 			}
-			a.onboardingInputError = ""
 			return a, saveClientIDCmd(config.DefaultConfigPath(), clientID)
 		}
-		// All other keys → clear any stale validation error and delegate to text input.
-		a.onboardingInputError = ""
+		// All other keys → delegate to the FormField (clears stale error on SetValue,
+		// but here we let the field process the key event directly).
 		var cmd tea.Cmd
-		a.onboardingInput, cmd = a.onboardingInput.Update(m)
+		a.onboardingField, cmd = a.onboardingField.Update(m)
 		return a, cmd
 
 	case stepOAuth:
