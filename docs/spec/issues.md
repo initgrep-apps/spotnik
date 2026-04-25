@@ -314,3 +314,16 @@ Items to log:
 1. `EmptyState` hardcodes `e.Theme.TextMuted()` instead of going through `uikit.Apply(RoleMuted, theme)`. Other primitives use the Role abstraction. Harmonise when next touching this file.
 2. Role assertions in `empty_state_test.go` only check ANSI presence, not the specific TextMuted colour. ListRow tests use a stronger pattern (extract foreground ANSI, compare to theme colour). Tighten when next extending these tests.
 3. The PR added a Makefile fix to exclude `.gocache/` and `.gomodcache/` from `fmt-check`. Document in CONTRIBUTING or developer notes if not already covered.
+
+---
+
+## Story 161 — URLBox follow-ups
+**Found:** 2026-04-25 | **Source:** PR #207 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Story spec line 40 says wrap at "the last `&` in the first half" — actual implementation (and the existing `wrapURL` helper at `internal/app/render.go:98-120`) cuts when `i > width/2` (the second half). The code is correct; the spec wording is a typo. Fix the spec text in the docs rewrite (S168) at `docs/superpowers/specs/2026-04-24-tui-design-system-design.md` §7.6 and the story spec.
+2. `TestURLBox_AmpersandInFirstHalf` in `internal/uikit/url_box_test.go` has a self-contradictory inline comment ("i=3 <= 8 is true, but 3 > 8 is false"). Assertions are correct; only the comment is muddled. Tidy when next touching.
+3. Three role/ANSI tests (`TestURLBox_AccentAnsiPresent`, `TestURLBox_RoleBorderMuted`, `TestURLBox_RoleContentAccent`) all assert the same `\x1b[` substring. Strengthen to assert exact `string(th.Accent())` / `string(th.TextMuted())` colour tokens — apply the same pattern across other primitives (EmptyState, Chip, etc.) when next extended.
