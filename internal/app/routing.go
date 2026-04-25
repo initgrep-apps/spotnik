@@ -17,6 +17,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // toggleKeyMap maps rune keys '1'-'8' to their corresponding PaneID.
@@ -222,7 +223,10 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Gate: free-tier users are blocked from Premium-only API operations.
 		// 'v' (visualizer cycle) is exempt — it is a local UI action, not an API call.
 		if isPremiumOnlyPlaybackKey(m) && !a.store.IsPremium() {
-			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
 		}
 		np := a.nowPlayingPane()
 		if np == nil {
@@ -329,12 +333,20 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					a.forwardToPane(layout.PanePlaylists, m),
-					a.alerts.NewAlertCmd("warning", "Spotify Premium required or playlist access denied"),
+					a.toasts.Cmd(uikit.Toast{
+						Intent: uikit.ToastWarning,
+						Title:  "Playlist access denied",
+						Body:   "Spotify Premium required or playlist access denied.",
+					}),
 				), true
 			}
 			return a, tea.Batch(
 				a.forwardToPane(layout.PanePlaylists, m),
-				a.alerts.NewAlertCmd("error", "Failed to load playlist tracks. Press Enter to retry"),
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load playlist tracks",
+					Body:   "Press Enter to retry.",
+				}),
 			), true
 		}
 		// Forward to pane — pane owns the data, not the store.
@@ -356,11 +368,17 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.err, &forbiddenErr) {
-				return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required"), true
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastWarning,
+					Title:  "Spotify Premium required",
+				}), true
 			}
 			// Surface the failure so the user knows ownership detection is degraded.
-			return a, a.alerts.NewAlertCmd("warning",
-				"Could not load your Spotify profile. Playlist ownership markers may be incorrect."), true
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Profile load failed",
+				Body:   "Playlist ownership markers may be incorrect.",
+			}), true
 		}
 		if m.profile.ID != "" {
 			a.store.SetUserProfile(m.profile)
@@ -368,11 +386,18 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return a, a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{}), true
 		}
 		fmt.Fprintf(os.Stderr, "spotnik: userProfileLoadedMsg: profile loaded with empty ID (unexpected)\n")
-		return a, a.alerts.NewAlertCmd("warning",
-			"Could not load your Spotify profile. Playlist ownership markers may be incorrect."), true
+		return a, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastWarning,
+			Title:  "Profile load failed",
+			Body:   "Playlist ownership markers may be incorrect.",
+		}), true
 
 	case panes.PlaylistAccessDeniedMsg:
-		return a, a.alerts.NewAlertCmd("warning", "Track access limited to playlists you own or collaborate on"), true
+		return a, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastWarning,
+			Title:  "Playlist access denied",
+			Body:   "Track access limited to playlists you own or collaborate on.",
+		}), true
 
 	case panes.PlaylistRemoveRequestMsg:
 		return a, a.buildRemovePlaylistTrackCmd(m.PlaylistID, m.TrackURI), true
@@ -387,7 +412,11 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				a.panes[layout.PanePlaylists] = ppu
 			}
 			if m.Err != nil {
-				return a, tea.Batch(cmd, a.alerts.NewAlertCmd("error", m.Err.Error())), true
+				return a, tea.Batch(cmd, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Remove track failed",
+					Body:   m.Err.Error(),
+				})), true
 			}
 			return a, cmd, true
 		}
@@ -424,12 +453,19 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					a.forwardToPane(layout.PaneAlbums, m),
-					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+					a.toasts.Cmd(uikit.Toast{
+						Intent: uikit.ToastWarning,
+						Title:  "Spotify Premium required",
+					}),
 				), true
 			}
 			return a, tea.Batch(
 				a.forwardToPane(layout.PaneAlbums, m),
-				a.alerts.NewAlertCmd("error", "Failed to load album tracks. Press Enter to retry"),
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load album tracks",
+					Body:   "Press Enter to retry.",
+				}),
 			), true
 		}
 		// Forward to pane — pane owns the data, not the store.
