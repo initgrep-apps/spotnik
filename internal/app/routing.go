@@ -545,7 +545,7 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.onboardingStep = stepOAuth
 				return a, tea.Batch(
 					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
-					a.onboardingSpinner.Tick,
+					a.onboardingSpinner.Init(),
 				)
 			}
 		}
