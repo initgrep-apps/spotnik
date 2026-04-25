@@ -659,7 +659,7 @@ func TestPlaylistsPane_CheckPrefetch_FiresWhenNear(t *testing.T) {
 	pane.trackTable.SetFocused(true)
 
 	// Navigate to index 5 (within 10 of end)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		pane.trackTable.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}) //nolint:errcheck
 	}
 
@@ -748,11 +748,11 @@ func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewPlaylistsPane(state.New(), th, false)
 
-	// List view: access (blank header) → ColumnSecondary, # → ColumnIndex, Name → ColumnPrimary, Tracks → ColumnTertiary
+	// List view: # → ColumnIndex, access (blank header) → ColumnSecondary, Name → ColumnPrimary, Tracks → ColumnTertiary
 	listCols := p.table.Columns()
 	require.Len(t, listCols, 4, "PlaylistsPane list table should have 4 columns")
-	assert.Equal(t, th.ColumnSecondary(), listCols[0].Color, "access column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnIndex(), listCols[1].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnIndex(), listCols[0].Color, "# column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnSecondary(), listCols[1].Color, "access column should use ColumnSecondary()")
 	assert.Equal(t, th.ColumnPrimary(), listCols[2].Color, "Name column should use ColumnPrimary()")
 	assert.Equal(t, th.ColumnTertiary(), listCols[3].Color, "Tracks column should use ColumnTertiary()")
 

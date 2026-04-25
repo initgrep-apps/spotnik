@@ -72,11 +72,11 @@ type PlaylistsPane struct {
 
 // NewPlaylistsPane creates a PlaylistsPane with the given store, theme, and focus state.
 func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *PlaylistsPane {
-	// Playlist list columns: access (blank header) 5% | # 5% | Name 65% | Tracks 25%
+	// Playlist list columns: # 5% | access (blank header) 5% | Name 65% | Tracks 25%
 	// Using flex factors: 1 : 1 : 13 : 5 ≈ 5% / 5% / 65% / 25%
 	listColumns := []components.ColumnDef{
-		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
@@ -503,8 +503,8 @@ func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	listCols := []components.ColumnDef{
-		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
