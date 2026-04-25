@@ -1,7 +1,7 @@
 ---
 title: "ProgressBar — seek and volume bars with unicode partial blocks, ascii fallback"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
