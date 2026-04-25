@@ -879,34 +879,40 @@ func TestRenderOnboardingRegister_copyHint_hiddenWhenTyping(t *testing.T) {
 	assert.NotContains(t, view, "copy URI")
 }
 
-// TestRenderOnboardingRegister_panelTitle verifies Step 1 title appears inside
-// the Panel border (via uikit.Panel composition, not a raw lipgloss border).
+// TestRenderOnboardingRegister_panelTitle verifies the step header lives in the
+// Panel top border line (alongside the ╭ glyph), not as a separate body line.
+// This pins the uikit.Panel composition — the old raw lipgloss border never placed
+// text inside the border glyph row.
 func TestRenderOnboardingRegister_panelTitle(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 120
 	a.height = 40
 	view := a.renderOnboardingRegister()
-	assert.Contains(t, view, "Step 1 of 2")
+	// The Panel title is embedded in the top border row: "╭─ Step 1 of 2 — ..."
+	assert.Contains(t, view, "╭─ Step 1 of 2")
 }
 
-// TestRenderOnboardingOAuth_panelTitle verifies Step 2 title appears inside
-// the Panel border.
+// TestRenderOnboardingOAuth_panelTitle verifies the step header is embedded in
+// the Panel top border line (not rendered as a body line).
 func TestRenderOnboardingOAuth_panelTitle(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 120
 	a.height = 40
 	a.onboardingAuthURL = "https://accounts.spotify.com/authorize?client_id=test"
 	view := a.renderOnboardingOAuth()
-	assert.Contains(t, view, "Step 2 of 2")
+	// Panel title embedded in border: "╭─ Step 2 of 2 — ..."
+	assert.Contains(t, view, "╭─ Step 2 of 2")
 }
 
-// TestRenderOnboardingError_panelTitle verifies the error panel uses PanelIntentError
-// and contains the error step title.
+// TestRenderOnboardingError_panelTitle verifies PanelIntentError is used: the
+// step header is in the Panel top border row, and the error title is present.
 func TestRenderOnboardingError_panelTitle(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 120
 	a.height = 40
 	a.onboardingError = "token exchange failed"
 	view := a.renderOnboardingError()
+	// Panel title embedded in border: "╭─ Step 2 of 2 — Authorization Failed..."
+	assert.Contains(t, view, "╭─ Step 2 of 2")
 	assert.Contains(t, view, "Authorization Failed")
 }
