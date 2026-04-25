@@ -272,3 +272,18 @@ Items to log:
 2. `StatusBarBg` role from design-record §6 is intentionally NOT applied in `StatusBar.Render()` to preserve the pre-migration visual (terminal-default body, muted accent border). If/when the design record switches to require a background fill, apply it in `StatusBar.Render()` and add a structural test.
 3. `TestStatusBar_RoleTokens` hex-to-RGB conversions are hardcoded in comments. Refactor to compute the ANSI escape from the theme hex at test time so theme TOML edits don't silently invalidate the anti-colour assertion.
 4. `newStatusHelp()` dead code was removed in the same PR. Audit `internal/app/app.go` and `handlers.go` for other `help.Model` usages that the bubbles/help refactor may have orphaned.
+
+---
+
+## Story 158 — ListRow/LockedRow follow-ups
+**Found:** 2026-04-25 | **Source:** PR #204 Review (3 rounds)
+**Feature:** 13-tui-design-system
+
+Non-blocking; surfaced during round-1/2/3 review.
+
+Items to log:
+1. `LockedRow.PlainText(width)` exists as a no-ANSI variant for bubble-table cell content because the table column foreground overwrites our ANSI. Document the constraint in the design record §6.2 + `docs/TUI-DESIGN-SYSTEM.md` (S168) so future readers know full-row Muted is reserved for non-table contexts.
+2. `playlists_pane.refreshPlaylistRows` passes `p.width` (pane width) as `nameWidth` to `LockedRow.PlainText`, padding well beyond the actual column. Bubble-table truncates so it's benign, but pass the actual column width when convenient.
+3. `profile.go renderActions` doc comment claims it matches the pre-PR layout exactly. Pre-PR started at column 2 (`"  l  Logout"`); the new layout starts at column 0. Visually fine but the comment overstates equivalence.
+4. `RowBackground` exists on ListRow. Consider extending it to LockedRow for symmetry, in case a future call site renders LockedRow inside a hover/selection context.
+5. `TestThemeOverlay_CursorRow_UsesSelectedBg` was tightened to assert bg appears in the SGR run immediately before the label. Consider extracting that assertion as a uikit test helper (`uikit.AssertBgImmediatelyBeforeText(t, raw, label, bg)`) so other primitive tests can reuse it.

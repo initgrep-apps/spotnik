@@ -1,7 +1,7 @@
 ---
 title: "ListRow + LockedRow — migrate theme, profile, playlists rows"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
