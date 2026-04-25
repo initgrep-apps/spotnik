@@ -303,14 +303,14 @@ theme overlay, profile overlay, and playlist read-only rows.
 
 ```go
 type ListRow struct {
-    Glyph   GlyphRole   // empty = no glyph
-    Label   string
-    Caption string      // "" = no caption
-    Intent  Role
-    Theme   theme.Theme
-    Width   int
-    Focused bool
+    Glyph          GlyphRole             // empty = no glyph
+    Label          string
+    Caption        string                // "" = no caption
+    Intent         Role
+    Theme          theme.Theme
+    RowBackground  lipgloss.TerminalColor // nil = default; set for cursor-highlight continuity
 }
+// Render(width int) string — width passed at call time, not stored
 ```
 
 **Rendering (unicode, focused):**
@@ -338,8 +338,8 @@ inactive).
 
 **Lifecycle:** stateless.
 
-**Tests:** glyph matches intent; label is Plain; caption is Muted; focused row applies
-Selection role; ascii mode.
+**Tests:** glyph matches intent; label is Plain; caption is Muted; RowBackground is
+propagated to all segments (no visible gaps); ascii mode.
 
 ---
 
@@ -534,9 +534,9 @@ Extracts `renderHeader` from `internal/app/render.go`. Shares `StatusBarBg()` wi
 type HeaderBar struct {
     Width      int
     AppName    string
-    Page       string     // "Page A" | "Page B"
-    Preset     int        // preset index (0-based)
-    RightChips []string   // pre-rendered chip strings
+    Page       string     // "A" or "B"
+    Preset     int        // -1 hides preset segment (Page B); >= 0 shows preset N
+    RightChips []string   // pre-rendered chip strings from Chip.Render()
     Theme      theme.Theme
 }
 ```
