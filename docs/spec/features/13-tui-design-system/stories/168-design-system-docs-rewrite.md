@@ -1,7 +1,7 @@
 ---
 title: "Docs rewrite — DESIGN.md, TUI-DESIGN-SYSTEM.md, PANE-TEMPLATE.md, CLAUDE.md"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

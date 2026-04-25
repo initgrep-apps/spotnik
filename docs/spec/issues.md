@@ -410,3 +410,18 @@ Items to log:
 2. `wrapURL` helper still used by `auth.go:renderAuthPanel`. When the re-auth flow migrates to URLBox in a follow-up, drop `wrapURL`.
 3. `panelInnerWidth=72` and `panelW=max(width-4, 80)` floors paired correctly. Document in S168 the rationale so future panel callers can derive widths consistently.
 4. Manual visual smoke test (spec lines 71-76 — copy toast, spinner Done hold, error panel intent) should be performed before the next user-facing release.
+
+---
+
+## Story 168 — Design system docs rewrite follow-ups
+**Found:** 2026-04-25 | **Source:** PR #214 Review (3 rounds)
+**Feature:** 13-tui-design-system
+
+Non-blocking; design + implementation gaps surfaced during review.
+
+Items to log:
+1. `internal/ui/components/notifications.go` registers bubbleup alerts with hardcoded unicode prefixes (`✓ ✗ ◬ → ⧖`) — they do NOT switch to ASCII when `uikit.ActiveMode() == GlyphASCII`. Toast.go's `ToastGlyph(intent, mode)` API does honour mode, so the inconsistency is at the bubbleup registration layer. Wire bubbleup prefixes via `ToastGlyph(intent, ActiveMode())` next time the notification model is touched.
+2. `bubbleup` renders the toast as a plain prefix + colored text — there's no bordered toast box. The TUI-DESIGN-SYSTEM.md examples were softened in round 2 to acknowledge this. If a future revision adds a true bordered toast (per the original §7.4 design intent), update the doc again.
+3. ProgressBar primitive uses Gradient1() only. `internal/ui/components/gradient.go` keeps its own per-position gradient via `PartialGlyph + GlyphFor`. Either expand ProgressBar to natively support per-position gradient, or keep the two surfaces as documented.
+4. SectionLabel rule line uses AccentColor (parent pane's border). The role row in §3.7 was Muted; corrected in round 2. If/when SectionLabel gets a stand-alone use outside Page B sub-sections, confirm the AccentColor parameter still makes sense.
+5. StatusBar intentionally omits `StatusBarBg()` — body is terminal-default. If a future visual revision wants a fill, apply it in `status_bar.go` AND update §3.11 / §5.2 / §5.3 in the same commit.
