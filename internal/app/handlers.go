@@ -19,6 +19,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
@@ -199,7 +200,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp
 			}
-			return a, a.alerts.NewAlertCmd("warning", "Search failed: "+m.Err.Error())
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Search failed",
+				Body:   m.Err.Error(),
+			})
 		}
 		a.searchLoading = false
 		// Forward to the search pane so it can update its local display state.
@@ -223,8 +228,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.backoffTicks > 0 {
 				// Active 429 backoff prevents any fetches after idle return.
 				// Emit a ratelimit toast so the user knows data is stale and why.
-				toastCmd = a.alerts.NewAlertCmd("ratelimit",
-					fmt.Sprintf("Rate limited — resuming in %ds", a.backoffTicks))
+				toastCmd = a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastRateLimit,
+					Title:  "Rate-limited",
+					Body:   fmt.Sprintf("Resuming in %ds.", a.backoffTicks),
+				})
 			}
 		}
 		a.width = m.Width
@@ -280,7 +288,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetStatsError(m.Err)
-			return a, a.alerts.NewAlertCmd("error", "Failed to load stats. Press f to retry")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load stats",
+				Body:   "Press f to retry.",
+			})
 		}
 		a.store.ClearStatsError()
 		if m.TimeRange != "" {
@@ -325,8 +337,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.backoffTicks > 0 {
 				// Active 429 backoff prevents any fetches after idle return.
 				// Emit a ratelimit toast so the user knows data is stale and why.
-				toastCmd := a.alerts.NewAlertCmd("ratelimit",
-					fmt.Sprintf("Rate limited — resuming in %ds", a.backoffTicks))
+				toastCmd := a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastRateLimit,
+					Title:  "Rate-limited",
+					Body:   fmt.Sprintf("Resuming in %ds.", a.backoffTicks),
+				})
 				updated, keyCmd := a.handleKeyMsg(m)
 				return updated, tea.Batch(toastCmd, keyCmd)
 			}
@@ -458,7 +473,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// permanently blocked from fetching again.
 		a.clearAllFetchingSentinels()
 		return a, tea.Batch(
-			a.alerts.NewAlertCmd("ratelimit", fmt.Sprintf("Rate limited, retrying in %ds", backoff)),
+			a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastRateLimit,
+				Title:  "Rate-limited",
+				Body:   fmt.Sprintf("Retrying in %ds.", backoff),
+			}),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
 		)
 
@@ -473,7 +492,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tokenRefreshedMsg:
 		if m.err != nil {
 			// Refresh failed — user must re-authenticate manually.
-			return a, a.alerts.NewAlertCmd("error", "Session expired. Run: spotnik auth")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Session expired",
+				Body:   "Run: spotnik auth.",
+			})
 		}
 		// Refresh succeeded — re-initialize all API clients with the new token.
 		a.initAPIClients(m.newToken)
@@ -486,7 +509,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetQueueError(m.Err)
-			return a, a.alerts.NewAlertCmd("error", "Queue update failed")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Queue update failed",
+			})
 		}
 		a.store.ClearQueueError()
 		a.store.SetQueue(m.Tracks)
@@ -512,7 +538,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// flooding the user with toasts at 1-3s polling intervals. The counter
 			// continues to increment after 5 so subsequent errors don't re-toast.
 			if a.consecutivePlaybackErrors == 5 {
-				return a, a.alerts.NewAlertCmd("warning", "Playback updates failing — check connection")
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastWarning,
+					Title:  "Playback updates failing",
+					Body:   "Check your connection.",
+				})
 			}
 			return a, nil
 		}
@@ -528,7 +558,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Warn once at exactly the 30th tick (~30-90s depending on polling interval).
 			// Avoids flooding toasts on startup; only fires once since the counter is not reset here.
 			if a.nilPlaybackStateTicks == 30 {
-				return a, a.alerts.NewAlertCmd("warning", "No playback state received — check Spotify connection")
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastWarning,
+					Title:  "No playback state received",
+					Body:   "Check your Spotify connection.",
+				})
 			}
 		}
 		// Data fetched during splash is stored but splash stays visible
@@ -556,19 +590,29 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// so there is no state change to reconcile. Dispatching a Background
 				// fetch here would itself be rejected (backoff still active), producing
 				// a second toast and noise in the request-flow pane.
-				return a, a.alerts.NewAlertCmd("warning",
-					fmt.Sprintf("Rate limited — wait %ds before retrying", rateLimitErr.RetryAfter))
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastWarning,
+					Title:  "Rate-limited",
+					Body:   fmt.Sprintf("Wait %ds before retrying.", rateLimitErr.RetryAfter),
+				})
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
 				return a, tea.Batch(
 					fetchPlaybackStateCmd(a.player, api.Background),
-					a.alerts.NewAlertCmd("warning", "Spotify Premium required"),
+					a.toasts.Cmd(uikit.Toast{
+						Intent: uikit.ToastWarning,
+						Title:  "Spotify Premium required",
+					}),
 				)
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, api.Background),
-				a.alerts.NewAlertCmd("error", m.Err.Error()),
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Playback command failed",
+					Body:   m.Err.Error(),
+				}),
 			)
 		}
 		// User command succeeded — use Interactive priority so the reconcile GET
@@ -594,7 +638,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.AddToQueueMsg:
 		// Gate: free-tier users cannot add to queue — block before any API call.
 		if !a.store.IsPremium() {
-			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
 		}
 		return a, a.buildAddToQueueCmd(m.TrackURI, m.TrackName)
 
@@ -605,14 +652,29 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
-				return a, a.alerts.NewAlertCmd("error", forbiddenErr.Message)
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Add to queue failed",
+					Body:   forbiddenErr.Message,
+				})
 			}
-			return a, a.alerts.NewAlertCmd("error", m.Err.Error())
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Add to queue failed",
+				Body:   m.Err.Error(),
+			})
 		}
 		if m.TrackName != "" {
-			return a, a.alerts.NewAlertCmd("success", fmt.Sprintf("Added to queue: %s", m.TrackName))
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastSuccess,
+				Title:  "Added to queue",
+				Body:   m.TrackName,
+			})
 		}
-		return a, a.alerts.NewAlertCmd("success", "Added to queue")
+		return a, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastSuccess,
+			Title:  "Added to queue",
+		})
 
 	case panes.FetchPlaylistsRequestMsg:
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
@@ -649,7 +711,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.panes[layout.PanePlaylists] = ppu
 				}
 			}
-			return a, a.alerts.NewAlertCmd("error", "Failed to load playlists. Press Tab to retry")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load playlists",
+				Body:   "Press Tab to retry.",
+			})
 		}
 		a.store.ClearPlaylistsFetchError()
 		if m.Offset == 0 {
@@ -701,7 +767,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.panes[layout.PaneAlbums] = apu
 				}
 			}
-			return a, a.alerts.NewAlertCmd("error", "Failed to load albums. Press Tab to retry")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load albums",
+				Body:   "Press Tab to retry.",
+			})
 		}
 		a.store.ClearAlbumsFetchError()
 		if m.Offset == 0 {
@@ -745,7 +815,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetLikedTracksFetchError(m.Err)
-			return a, a.alerts.NewAlertCmd("error", "Failed to load liked tracks. Press Tab to retry")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load liked tracks",
+				Body:   "Press Tab to retry.",
+			})
 		}
 		a.store.ClearLikedTracksFetchError()
 		a.store.SetLikedTracks(m.Items)
@@ -783,7 +857,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.store.SetRecentPlayedFetchError(m.Err)
-			return a, a.alerts.NewAlertCmd("error", "Failed to load recently played. Press Tab to retry")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load recently played",
+				Body:   "Press Tab to retry.",
+			})
 		}
 		a.store.ClearRecentPlayedFetchError()
 		a.store.SetRecentlyPlayed(m.Items)
@@ -808,7 +886,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.ProfileConfirmToastMsg:
 		// User armed a logout or forget action — emit a warning toast as confirmation reminder.
-		return a, a.alerts.NewAlertCmd("warning", m.Text)
+		return a, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastWarning,
+			Title:  m.Text,
+		})
 
 	case panes.ProfileLogoutMsg:
 		// User confirmed logout — clear tokens and quit.
@@ -843,17 +924,22 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.showThemeSwitcher = false
 		a.themeOverlay = nil
 		// Recreate alerts so new toasts use the new theme's colors.
-		// This must happen before the NewAlertCmd call below so the success
+		// This must happen before the a.toasts.Cmd call below so the success
 		// toast itself renders with the new theme's success color.
 		// NOTE: Any in-flight toast is intentionally dropped — theme switch is
 		// user-initiated and the success toast fires immediately after.
+		// ToastManager holds &a.alerts so it automatically reflects this reassignment.
 		a.alerts = *components.NewNotifications(newTheme)
 		// Queue the theme preference and schedule a debounced flush.
 		a.prefs.Set("theme", m.ThemeID)
 		alertInitCmd := a.alerts.Init()
 		return a, tea.Batch(
 			alertInitCmd,
-			a.alerts.NewAlertCmd("success", "Theme: "+newTheme.Name()),
+			a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastSuccess,
+				Title:  "Theme changed",
+				Body:   newTheme.Name(),
+			}),
 			a.schedulePrefsFlush(),
 		)
 
@@ -906,7 +992,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.devicePane = dp
 				}
 			}
-			return a, a.alerts.NewAlertCmd("error", fmt.Sprintf("Failed to load devices: %s", m.Err.Error()))
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load devices",
+				Body:   m.Err.Error(),
+			})
 		}
 		a.store.ClearDevicesError()
 		a.store.SetDevicesFetchedAt(time.Now())
@@ -936,11 +1026,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.deviceOverlayOpen = false
 		// Gate: free-tier users cannot transfer playback — block before any API call.
 		if !a.store.IsPremium() {
-			return a, a.alerts.NewAlertCmd("warning", "Spotify Premium required")
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
 		}
 		return a, tea.Batch(
 			a.buildTransferPlaybackCmd(m.DeviceID),
-			a.alerts.NewAlertCmd("info", fmt.Sprintf("Switching to %s...", m.DeviceName)),
+			a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Device switching",
+				Body:   m.DeviceName,
+			}),
 		)
 
 	case panes.DeviceTransferredMsg:
@@ -950,7 +1047,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, api.Background),
-				a.alerts.NewAlertCmd("error", m.Err.Error()),
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Device transfer failed",
+					Body:   m.Err.Error(),
+				}),
 			)
 		}
 		// Transfer succeeded — use Interactive priority so the reconcile GET fires

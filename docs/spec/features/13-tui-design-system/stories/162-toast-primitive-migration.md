@@ -1,7 +1,7 @@
 ---
 title: "Toast — typed API wrapping bubbleup; migrate all a.alerts.NewAlertCmd sites"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

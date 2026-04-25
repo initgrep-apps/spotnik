@@ -1031,7 +1031,8 @@ func TestApp_DeviceTransfer_ShowsStatusMessage(t *testing.T) {
 	} else if batchMsg != nil {
 		a.Update(batchMsg)
 	}
-	assert.Contains(t, a.View(), "Switching to iPhone 14", "info toast should name the target device")
+	// Toast now uses Title="Device switching" + Body="iPhone 14" per §7.4 content rules.
+	assert.Contains(t, a.View(), "iPhone 14", "info toast body should name the target device")
 }
 
 // TestApp_DeviceTransferredMsg_ErrorEmitsToast verifies transfer errors emit an error toast.
@@ -1923,8 +1924,9 @@ func TestApp_WindowSizeMsg_ReturnFromIdleDuringBackoff_EmitsToast(t *testing.T) 
 		}
 	}
 	view := a.View()
-	assert.Contains(t, view, "Rate limited", "toast should mention rate limiting")
-	assert.Contains(t, view, "resuming in", "toast should show countdown")
+	// Toast title is "Rate-limited" (noun+state per §7.4); body contains the countdown.
+	assert.Contains(t, view, "Rate-limited", "toast should mention rate limiting")
+	assert.Contains(t, view, "Resuming in", "toast should show countdown")
 }
 
 // TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast verifies that
@@ -1958,8 +1960,9 @@ func TestApp_KeyMsg_ReturnFromIdleDuringBackoff_EmitsRatelimitToast(t *testing.T
 		}
 	}
 	view := a.View()
-	assert.Contains(t, view, "Rate limited", "toast should mention rate limiting")
-	assert.Contains(t, view, "resuming in", "toast should show countdown")
+	// Toast title is "Rate-limited" (noun+state per §7.4); body contains the countdown.
+	assert.Contains(t, view, "Rate-limited", "toast should mention rate limiting")
+	assert.Contains(t, view, "Resuming in", "toast should show countdown")
 }
 
 // TestApp_KeyMsg_ReturnFromIdleWithoutBackoff_NoToast verifies that returning from

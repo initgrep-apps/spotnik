@@ -327,3 +327,16 @@ Items to log:
 1. Story spec line 40 says wrap at "the last `&` in the first half" — actual implementation (and the existing `wrapURL` helper at `internal/app/render.go:98-120`) cuts when `i > width/2` (the second half). The code is correct; the spec wording is a typo. Fix the spec text in the docs rewrite (S168) at `docs/superpowers/specs/2026-04-24-tui-design-system-design.md` §7.6 and the story spec.
 2. `TestURLBox_AmpersandInFirstHalf` in `internal/uikit/url_box_test.go` has a self-contradictory inline comment ("i=3 <= 8 is true, but 3 > 8 is false"). Assertions are correct; only the comment is muddled. Tidy when next touching.
 3. Three role/ANSI tests (`TestURLBox_AccentAnsiPresent`, `TestURLBox_RoleBorderMuted`, `TestURLBox_RoleContentAccent`) all assert the same `\x1b[` substring. Strengthen to assert exact `string(th.Accent())` / `string(th.TextMuted())` colour tokens — apply the same pattern across other primitives (EmptyState, Chip, etc.) when next extended.
+
+---
+
+## Story 162 — Toast follow-ups
+**Found:** 2026-04-25 | **Source:** PR #208 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. `internal/app/app_test.go:1993` retains lowercase `"resuming in"` in an `assert.NotContains`. Migrated body uses capital `"Resuming in"`. Substring is case-sensitive — even if the toast erroneously rendered the assertion would not catch it. Tighten or `strings.ToLower` the comparison next time the test is touched.
+2. `internal/uikit/toast_test.go:209-213` hardcodes hex values (`#1db954` etc.) when constructing `bubbleup.AlertDefinition` for unit tests. Acceptable in test-only code but consider exposing a `uikit.IntentColor(intent, theme)` helper so the same colours come from the theme rather than literals.
+3. `bubbleup` style mapping happens inside `ToastManager.Cmd`. When the bubbleup library exposes per-intent style hooks more directly, simplify the manager.

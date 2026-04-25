@@ -22,6 +22,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"go.dalton.dog/bubbleup"
 )
 
@@ -71,6 +72,9 @@ type App struct {
 	alerts bubbleup.AlertModel // BubbleUp toast notification model
 	// NOTE: alerts.Render(content) must be called in View() — never alerts.View().
 	// BubbleUp's View() returns empty string by design; Render() overlays alerts.
+	// toasts wraps alerts to provide the typed Toast API. It holds a pointer to the
+	// alerts field so it automatically reflects theme-switch re-assignments.
+	toasts  *uikit.ToastManager
 	gateway *api.Gateway // centralized HTTP gateway shared across all API clients
 	player  api.PlayerAPI
 	library api.LibraryAPI
@@ -368,10 +372,11 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		callbackClose = func() {}
 	}
 
+	alertModel := *components.NewNotifications(t)
 	a := &App{
 		theme:             t,
 		store:             s,
-		alerts:            *components.NewNotifications(t),
+		alerts:            alertModel,
 		gateway:           gw,
 		layout:            mgr,
 		panes:             panesMap,
@@ -402,6 +407,10 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		// albumTracksCancel must never be nil; initialize to a no-op.
 		albumTracksCancel: func() {},
 	}
+
+	// Wire the typed Toast API. ToastManager holds &a.alerts so theme-switch
+	// re-assignments to a.alerts are automatically reflected.
+	a.toasts = uikit.NewToastManager(&a.alerts)
 
 	// Apply saved layout preset (Page A only).
 	// SetPreset is a no-op for out-of-range indices; log a warning when it doesn't take.
