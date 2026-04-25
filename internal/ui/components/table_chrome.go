@@ -8,9 +8,8 @@ import (
 // construction — column tokens, header colour, playing-indicator colour — so
 // that panes no longer build TableConfig literals inline.
 //
-// Call sites are not changed in this story; panes continue to call
-// NewTable directly. TableChrome is the canonical wrapping pattern
-// for future migrations.
+// Call sites are not changed; panes continue to call NewTable directly.
+// TableChrome is the canonical wrapping pattern for future migrations.
 type TableChrome struct {
 	// Columns defines the column layout and per-column colour tokens.
 	Columns []ColumnDef
