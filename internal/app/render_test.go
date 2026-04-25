@@ -342,13 +342,12 @@ func TestRenderWithOverlayChrome_TopRight_ThemeOverlay(t *testing.T) {
 	assert.Contains(t, lines[0], "╭", "overlay top border must be on the first line when vPos=Top")
 
 	// Right: the overlay must start in the right half of the terminal.
-	// Strip ANSI to count visible column of the first ╭.
-	stripped := lipgloss.NewStyle().Render(lines[0]) // no-op; use raw for column measurement
-	col := strings.Index(stripped, "╭")
-	if col >= 0 {
-		assert.Greater(t, col, a.width/2,
-			"theme overlay ╭ should be in the right half of the terminal when hPos=Right")
-	}
+	// btoverlay pads with spaces before fgLine, so strings.Index on the raw line gives
+	// a valid column count (the background is ANSI-free spaces, so byte offset == column).
+	col := strings.Index(lines[0], "╭")
+	require.Greater(t, col, -1, "╭ must be present in line 0 for horizontal position check")
+	assert.Greater(t, col, a.width/2,
+		"theme overlay ╭ should be in the right half of the terminal when hPos=Right")
 }
 
 // TestRender_HelpOverlay_Composited verifies that when helpOpen is true,
