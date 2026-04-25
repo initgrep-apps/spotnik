@@ -7,6 +7,16 @@
 
 ---
 
+## 0. Authority
+
+**Authority.** Layout mechanics (grid, pages, presets, keys 1–8, page switch) live in
+this document. Primitive rendering (PaneChrome, Toast, Panel, HeaderBar, StatusBar,
+overlay chrome, onboarding panels) lives in `docs/TUI-DESIGN-SYSTEM.md`. Where both
+apply — e.g. pane borders — this document describes the pane identity (colour token,
+toggle key, pane ID); the design-system doc describes the exact rendering contract.
+
+---
+
 ## Overview
 
 Spotnik's current UI mimics the Spotify web player: three fixed columns (Library | Player | Queue).
@@ -187,7 +197,7 @@ Keys `1`-`8` toggle the corresponding pane's visibility on Page A:
 All 8 panes visible across 3 rows. NowPlaying spans full width.
 
 ```
-╭─ ¹Now Playing ───────────────── ᐅs shfl ─ ᐅr rpt ─ ᐅspace play ─ ᐅ+/- vol ─ ᐅv viz ─╮  Row 1 (weight 2)
+╭─ ¹Now Playing ──────────────────╮ s shfl ╭─╮ r rpt ╭─╮ space play ╭─╮ +/- vol ╭─╮ v viz ╮  Row 1 (weight 2)
 │ ╭─ Track Info ──────╮ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ │ Martbaan          │ ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿              │
 │ │ Samar Mehdi       │ ─── 1:41 ████████████████░░░░░░░░░░░░░░░  5:30 ──       │
@@ -224,7 +234,7 @@ Note: Row 3 has 4 panes. TopTracks and TopArtists share the rightmost region —
 NowPlaying expanded with large visualizer. Queue and RecentlyPlayed below. All other panes hidden.
 
 ```
-╭─ ¹Now Playing ─────────── ᐅs shfl ─ ᐅr rpt ─ ᐅspace play ─ ᐅ+/- vol ─ ᐅv viz ─╮  Row 1 (weight 3)
+╭─ ¹Now Playing ───────────────╮ s shfl ╭─╮ r rpt ╭─╮ space play ╭─╮ +/- vol ╭─╮ v viz ╮  Row 1 (weight 3)
 │                                                                                  │
 │ ╭─ Track Info ──────────────╮  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
 │ │                           │  ⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿⣿⣷⣿⣷⣿    │
@@ -341,42 +351,11 @@ When switching presets:
 
 ---
 
-## 5. Embedded Shortcut Borders (btop-style)
+## 5. Pane Border Chrome
 
-Every pane border shows the pane title and action shortcuts directly in the border line.
-
-### Border Anatomy
-
-```
-╭─ ¹Playlists ────────────────────╮filter ╭─── ᐅnew ╮
-│                                                   │
-│  (pane content)                                   │
-│                                                   │
-╰───────────────────────────────────────────────────╯
-```
-
-**Top border components:**
-1. `╭─ ` — rounded corner + dash + space
-2. `¹` — superscript pane number (toggle key 1-8) in `KeyHint()` color
-3. `Playlists` — pane title in `SectionHeader()` color (bold when focused)
-4. ` ─────── ` — dash fill
-5. `ᐅfilter ─ ᐅnew` — action shortcuts: `ᐅ` prefix, key in `KeyHint()`, label in `TextMuted()`
-6. ` ╮` — space + rounded corner
-
-**Border colors:**
-- Each pane has its own accent color (see Pane Definitions table)
-- Focused pane: full accent color for border characters
-- Unfocused pane: dimmed/muted version of accent color
-
-**Custom rendering:** This replaces `lipgloss.RoundedBorder()`. The `RenderPaneBorder()` function builds the border string manually to embed title and action text.
-
-### Filter Mode in Border
-
-When a pane's filter is active, the border shows the filter query:
-
-```
-╭─ ¹Queue ────────── filtering: "rock" ─── ᐅEsc close ╮
-```
+See `docs/TUI-DESIGN-SYSTEM.md §3.1` (PaneChrome) for the full rendering contract:
+border anatomy, action-notch format, filter-mode preamble, glyph choices, roles, and
+ascii fallback.
 
 ---
 
@@ -606,8 +585,6 @@ The visualizer supports 3 animation patterns, cycled manually via the `v` key:
 
 Pattern state is local to the pane (not stored in the Store). `v` key always routes to NowPlaying via `isPlaybackKey()`.
 
-**Unicode note:** The `ᐅ` character (U+1405, Canadian Syllabics PA) is used for border action labels. Terminals must support this Unicode block. Fallback: `›` (U+203A, Single Right-Pointing Angle Quotation Mark) for environments without full Unicode support.
-
 **Implementation:** Component in `internal/ui/components/visualizer.go`.
 
 ### Gradient-Colored Bars
@@ -664,86 +641,45 @@ The NowPlaying pane uses a horizontal split layout inspired by btop's CPU pane:
 
 ## 12. Notifications
 
-Toast notifications use `go.dalton.dog/bubbleup` (existing dependency).
-
-**Position change:** Toasts render at **bottom-right** instead of the current top-left default.
-
-**Implementation:** If bubbleup supports position configuration, use it. Otherwise, the `View()` function repositions the toast overlay:
-1. Call `alerts.Render(content)` as before
-2. If toast is active, use `lipgloss.Place()` to reposition to bottom-right
-
-**Styling:** Toast notifications retain their current look (rounded corners, theme colors, auto-dismiss after 4 seconds). They should feel consistent with the pane aesthetic.
+See `docs/TUI-DESIGN-SYSTEM.md §3.15` (Toast) for the full rendering contract: intent
+types, default TTLs, glyph table, positioning per view-mode, and content rules.
 
 ---
 
 ## 13. Search Overlay
 
-The search overlay remains a floating modal above the grid. Its styling updates to match the new pane aesthetic.
-Note: https://github.com/rmhubbert/bubbletea-overlay must be used in overlays if the current look is not possible with it. then fallback to custom but take inspiration from it
-### Visual Treatment
+The search overlay remains a floating modal above the grid.
 
-```
-╭─ Search ────────────────────────── ᐅEnter play ─ ᐅTab section ╮
-│  > blinding lig█                                              │
-│  ──────────────────────────────────────────────────────────── │
-│  TRACKS                                                       │
-│  ▶ Blinding Lights          The Weeknd         3:22           │
-│    Blinding Lights (Remix)  Sunday Service     4:15           │
-│  ARTISTS                                                      │
-│    The Weeknd                                                 │
-│  ALBUMS                                                       │
-│    After Hours              The Weeknd                        │
-╰───────────────────────────────────────────────────────────────╯
-```
+See `docs/TUI-DESIGN-SYSTEM.md §3.2` (OverlayChrome) for the border rendering contract.
+The search overlay uses `OverlayChrome` with Accent border and notch-format action hints.
+Results use the dense table column format documented in §9 of this document.
 
-- Uses `RenderPaneBorder()` with `Search` title and action shortcuts
-- Rounded corners, `ActiveBorder()` color (always focused)
-- Centered on screen via `lipgloss.Place()`
-- Background dimmed with `.Faint(true)`
-- Results use the dense table column format with multi-color columns
+Implementation note: use `github.com/rmhubbert/bubbletea-overlay` for compositing;
+fall back to custom if required, taking inspiration from it.
 
 ---
 
 ## 14. Device Switcher Overlay
 
-Same border treatment as search:
+Uses `OverlayChrome` with `Devices` title. Positioned top-right via `btoverlay.Composite()`.
+Active device row uses `ListRow` with `◉` glyph (Success role); inactive rows use `○`.
 
-```
-╭─ Devices ──────────────────────────── ᐅEnter select ╮
-│  ◉  MacBook Pro Speakers     [active]               │
-│  ○  iPhone 14                                       │
-│  ○  Kitchen Speaker                                 │
-│  ○  Living Room TV                                  │
-╰─────────────────────────────────────────────────────╯
-```
-
-- Uses `RenderPaneBorder()` with `Devices` title
-- Positioned top-right via `btoverlay.Composite()`
-- Active device: `◉` in `DeviceActive()`, `[active]` badge
+See `docs/TUI-DESIGN-SYSTEM.md §3.2` (OverlayChrome) and `§3.5` (ListRow) for rendering
+contracts.
 
 ---
 
 ## 15. Global Header & Status Bar
 
-### Header (Top Line)
+See `docs/TUI-DESIGN-SYSTEM.md §3.10` (HeaderBar) and `§3.11` (StatusBar) for the
+rendering contracts: field roles, glyph choices, background token, and ascii fallback.
 
-```
- spotnik ─ Page A ─ ᐅp preset 0 ─ ᐅ/ search ─ ᐅd devices ──────── ◉ iPhone
-```
+**Header (top line):** app name · page indicator · preset info · right-side device and
+profile chips. Uses `uikit.HeaderBar`.
 
-btop-style top bar with:
-- Left: app name + current page (A/B) + global action shortcuts (`preset`, `search`, `devices`) with highlighted key
-- Right: device indicator (`◉ DeviceName` or `○ No device`)
-
-### Status Bar (Bottom Line)
-
-Only **global** shortcuts. Pane-specific shortcuts live in pane borders.
-
-```
- /search   0 page   p preset   1-8 toggle   Tab pane   d devices   ? help   q quit
-```
-
-Key labels in `KeyHint()`, descriptions in `StatusBarFg()`.
+**Status bar (bottom line):** global shortcuts only. Pane-specific shortcuts live in pane
+border notches. Uses `uikit.StatusBar` over `uikit.KeyBar`. Key labels in `KeyHint()`,
+descriptions in Muted role.
 
 ---
 
@@ -1175,12 +1111,12 @@ POLLING  tick: 1000ms  state: active|idle  idle: 0s|45s    STORE  fetching: [pla
 Scrollable reverse-chronological log of all API requests, sourced from `store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer):
 
 ```
-╭─ Network Log ──────────────────────────────────── ᐅf filter ─────────╮
+╭─ Network Log ──────────────────────────────────╮ f filter ╮
 │  TIME      METHOD  ENDPOINT                STATUS  LATENCY  NOTES   │
 │  12:03:45  GET     /me/player              200     45ms     ██      │
 │  12:03:45  GET     /me/player/queue        200     62ms     ███     │
 │  12:03:44  GET     /me/playlists           200     128ms    ██████  │
-│  12:03:43  GET     /me/player              429     12ms     █  ⚠    │
+│  12:03:43  GET     /me/player              429     12ms     █  ◬    │
 │  12:03:42  GET     /me/top/tracks          200     95ms     ████    │
 │  12:03:41  PUT     /me/player/play         204     34ms     ██      │
 │  12:03:40  GET     /me/player              200     51ms     ██      │
@@ -1194,7 +1130,7 @@ Scrollable reverse-chronological log of all API requests, sourced from `store.Re
 - **Filterable**: `f` opens inline filter (by endpoint, status code)
 - **Color coding**: `Success()` for 2xx, `Warning()` for 429, `TextMuted()` for other 4xx, `Error()` for 5xx
 - **Latency bar**: Inline `█` chars (1–10) proportional to response time
-- **429 marker**: `⚠` appended to rate-limited rows
+- **429 marker**: `◬` appended to rate-limited rows (Warning role; ascii `!`)
 - **Newest at top**: Reverse chronological order
 - **Data source**: `store.ReadEventsFrom(cursor)` — each `domain.GatewayEvent` has `Timestamp`, `Method`, `Path`, `StatusCode`, `DurationMs`
 

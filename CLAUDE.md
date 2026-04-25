@@ -24,6 +24,9 @@ the feature spec explicitly points you to a pattern or layout you need to look u
 When writing or modifying CLI output, consult `docs/CLI-OUTPUT.md` — the canonical
 reference for message types, glyphs, palette, and interactive prompts.
 
+When writing or modifying TUI primitives, consult `docs/TUI-DESIGN-SYSTEM.md` — the
+canonical reference for primitives, glyph catalogue, and role matrix.
+
 ---
 
 ## Tech Stack (Non-Negotiable)
@@ -229,6 +232,8 @@ Follow this sequence exactly for every feature — no shortcuts.
     `internal/ui/panes/help_overlay.go`.
 16. Add a new message type or glyph to `internal/cliout` without updating
     `docs/CLI-OUTPUT.md` in the same commit.
+17. Add a new primitive, glyph, or role to `internal/uikit` without updating
+    `docs/TUI-DESIGN-SYSTEM.md` in the same commit.
 
 ---
 
