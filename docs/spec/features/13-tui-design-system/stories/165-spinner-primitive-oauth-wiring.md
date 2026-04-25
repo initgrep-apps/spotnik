@@ -1,7 +1,7 @@
 ---
 title: "Spinner — Done/Fail/Cancel contract; wire onboarding OAuth wait"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
