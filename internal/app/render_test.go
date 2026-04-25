@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	btoverlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 // newThemeOverlayForTest creates a ThemeOverlay for use in render tests.
@@ -305,8 +306,8 @@ func TestRender_ThemeOverlay_Composited(t *testing.T) {
 }
 
 // TestRenderWithOverlayChrome_Composited verifies that renderWithOverlayChrome correctly
-// centers the overlay over a full-height background so the titled border ("Themes") is
-// visible in the composite output.
+// composites the overlay over a full-height background so the titled border ("Themes") is
+// visible in the composite output when positioned at Center/Center.
 func TestRenderWithOverlayChrome_Composited(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 160
@@ -317,8 +318,37 @@ func TestRenderWithOverlayChrome_Composited(t *testing.T) {
 	bg := strings.Repeat(strings.Repeat(" ", 160)+"\n", 49) + strings.Repeat(" ", 160)
 
 	overlayView := newThemeOverlayForTest(a).View()
-	result := a.renderWithOverlayChrome(bg, overlayView)
+	result := a.renderWithOverlayChrome(bg, overlayView, btoverlay.Center, btoverlay.Center)
 	assert.Contains(t, result, "Themes", "overlay border title must appear in composite output")
+}
+
+// TestRenderWithOverlayChrome_TopRight_ThemeOverlay verifies that when positioned at
+// Right/Top the theme overlay content appears in the first rendered line (y=0 → Top)
+// and in the right half of the terminal (x ≈ bg width − fg width → Right).
+func TestRenderWithOverlayChrome_TopRight_ThemeOverlay(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+
+	// Build a full-height background (50 lines).
+	bg := strings.Repeat(strings.Repeat(" ", 160)+"\n", 49) + strings.Repeat(" ", 160)
+
+	overlayView := newThemeOverlayForTest(a).View()
+	result := a.renderWithOverlayChrome(bg, overlayView, btoverlay.Right, btoverlay.Top)
+
+	// Top: the overlay top border (╭) must appear on line 0.
+	lines := strings.Split(result, "\n")
+	require.NotEmpty(t, lines, "result must have at least one line")
+	assert.Contains(t, lines[0], "╭", "overlay top border must be on the first line when vPos=Top")
+
+	// Right: the overlay must start in the right half of the terminal.
+	// Strip ANSI to count visible column of the first ╭.
+	stripped := lipgloss.NewStyle().Render(lines[0]) // no-op; use raw for column measurement
+	col := strings.Index(stripped, "╭")
+	if col >= 0 {
+		assert.Greater(t, col, a.width/2,
+			"theme overlay ╭ should be in the right half of the terminal when hPos=Right")
+	}
 }
 
 // TestRender_HelpOverlay_Composited verifies that when helpOpen is true,
@@ -664,7 +694,7 @@ func TestRenderWithOverlayChrome_ZeroWidth(t *testing.T) {
 	a.height = 0
 	background := "background content"
 	overlayView := "overlay content"
-	result := a.renderWithOverlayChrome(background, overlayView)
+	result := a.renderWithOverlayChrome(background, overlayView, btoverlay.Center, btoverlay.Center)
 	assert.NotEmpty(t, result, "renderWithOverlayChrome should return non-empty result even at zero size")
 }
 
