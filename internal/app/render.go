@@ -385,24 +385,26 @@ func (a *App) buildView() string {
 	statusBar := a.renderStatusBar()
 	body := strings.Join([]string{header, gridContent, statusBar}, "\n")
 
+	// Compact corner overlays — positioned at top-right.
 	if a.showThemeSwitcher && a.themeOverlay != nil {
-		return a.renderWithOverlayChrome(body, a.themeOverlay.View())
+		return a.renderWithOverlayChrome(body, a.themeOverlay.View(), btoverlay.Right, btoverlay.Top)
 	}
 
 	if a.deviceOverlayOpen {
-		return a.renderWithOverlayChrome(body, a.devicePane.View())
+		return a.renderWithOverlayChrome(body, a.devicePane.View(), btoverlay.Right, btoverlay.Top)
 	}
 
 	if a.profileOverlayOpen {
-		return a.renderWithOverlayChrome(body, a.profilePane.View())
+		return a.renderWithOverlayChrome(body, a.profilePane.View(), btoverlay.Right, btoverlay.Top)
 	}
 
+	// Full-screen overlays — centered.
 	if a.searchOpen {
-		return a.renderWithOverlayChrome(body, a.searchPane.View())
+		return a.renderWithOverlayChrome(body, a.searchPane.View(), btoverlay.Center, btoverlay.Center)
 	}
 
 	if a.helpOpen && a.helpOverlay != nil {
-		return a.renderWithOverlayChrome(body, a.helpOverlay.View())
+		return a.renderWithOverlayChrome(body, a.helpOverlay.View(), btoverlay.Center, btoverlay.Center)
 	}
 
 	return body
@@ -490,19 +492,22 @@ func groupPanesByRow(paneIDs []layout.PaneID, mgr *layout.Manager) [][]layout.Pa
 	return rows
 }
 
-// renderWithOverlayChrome renders the grid dimmed and composites an overlay view
-// centered on top using bubbletea-overlay Composite(). This is the single overlay
-// helper — it replaces the five former per-overlay helpers (renderWithThemeOverlay,
-// renderWithProfileOverlay, renderWithDeviceOverlay, renderWithSearchOverlay,
-// renderWithHelpOverlay). Callers pass a pre-rendered overlayView string (e.g.
-// a.searchPane.View()) so that the rendering strategy remains uniform across all
-// overlay states.
-func (a *App) renderWithOverlayChrome(background, overlayView string) string {
+// renderWithOverlayChrome renders the grid dimmed and composites an overlay view on top
+// using bubbletea-overlay Composite(). hPos and vPos control placement — callers use
+// btoverlay.Right/Top for compact corner overlays (theme, profile, device) and
+// btoverlay.Center/Center for full-screen overlays (search, help).
+//
+// This is the single overlay helper — it replaces the five former per-overlay helpers
+// (renderWithThemeOverlay, renderWithProfileOverlay, renderWithDeviceOverlay,
+// renderWithSearchOverlay, renderWithHelpOverlay). Callers pass a pre-rendered
+// overlayView string (e.g. a.searchPane.View()) so that the rendering strategy remains
+// uniform across all overlay states.
+func (a *App) renderWithOverlayChrome(background, overlayView string, hPos, vPos btoverlay.Position) string {
 	dimmed := lipgloss.NewStyle().Faint(true).Render(background)
 	if a.width <= 0 || a.height <= 0 {
 		return dimmed + "\n" + overlayView
 	}
-	return btoverlay.Composite(overlayView, dimmed, btoverlay.Center, btoverlay.Center, 0, 0)
+	return btoverlay.Composite(overlayView, dimmed, hPos, vPos, 0, 0)
 }
 
 // renderSplash renders the startup splash screen with go-figure ASCII art.
