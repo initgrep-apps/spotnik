@@ -193,7 +193,7 @@ func (p *RequestFlowPane) viewBoxed() string {
 	gwLines := p.buildGatewayBoxLines(innerRows)
 	spotifyLines := p.buildSpotifyBoxLines(innerRows)
 
-	// Render each column as a SectionLabel header (2 lines) + content lines.
+	// Render each column as a fully bordered PaneChrome box (top + content + bottom).
 	appBox := renderSectionColumn("APP", appLines, appW, p.theme.ColumnPrimary(), p.theme)
 	gwBox := renderSectionColumn("GATEWAY LOG", gwLines, gwW, p.theme.PaneBorderRequestFlow(), p.theme)
 	spotifyBox := renderSectionColumn("SPOTIFY", spotifyLines, spotifyW, p.theme.Success(), p.theme)
