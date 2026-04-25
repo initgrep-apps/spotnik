@@ -57,7 +57,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case a.needsRegister:
 				a.currentView = viewOnboarding
 				a.onboardingStep = stepRegister
-				a.onboardingInput.Focus()
+				a.onboardingField.Focus()
 			case a.needsAuth:
 				a.currentView = viewAuth
 				a.authStatus = "Opening browser for authorization..."
@@ -141,9 +141,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case onboardingRetryMsg:
 		a.onboardingStep = stepRegister
 		a.onboardingError = ""
-		a.onboardingInputError = ""
-		a.onboardingInput.Reset()
-		a.onboardingInput.Focus()
+		a.onboardingField.SetValue("")
+		a.onboardingField.Focus()
 		return a, nil
 
 	case copiedFeedbackMsg:
