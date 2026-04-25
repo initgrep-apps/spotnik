@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -214,8 +213,9 @@ type App struct {
 	// stepRegister. Shown in the hint line; cleared on next keypress or retry.
 	onboardingInputError string
 
-	// onboardingSpinner is the spinner shown while waiting for the OAuth callback.
-	onboardingSpinner spinner.Model
+	// onboardingSpinner is the TUI spinner shown while waiting for the OAuth callback.
+	// Using *uikit.Spinner so Done/Fail/Cancel terminal states are available.
+	onboardingSpinner *uikit.Spinner
 
 	// clientID is the Spotify OAuth client ID, needed for the TUI auth flow.
 	clientID string
@@ -362,8 +362,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	ti.Width = 60
 
 	// Initialise the spinner shown while waiting for OAuth callback on stepOAuth.
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
+	sp := uikit.NewSpinner("Waiting for authorization...  (times out in 5 minutes)", t)
 
 	// Default onboardingClose to a no-op so it is always safe to call,
 	// even when no callback server was started (e.g. in tests).

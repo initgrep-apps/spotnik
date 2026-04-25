@@ -7,6 +7,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,18 +48,31 @@ func TestAuthSuccess_TransitionsToMain(t *testing.T) {
 	a := newTestApp(true)
 	a.currentView = viewAuth
 
+	// Step 1: authSuccessMsg wires up clients and resolves the spinner to Done.
+	// The view stays at viewAuth during the 1.2 s hold; only SpinnerDoneMsg
+	// triggers the grid transition.
 	model, cmd := a.Update(authSuccessMsg{accessToken: "test-token"})
 	updated := model.(*App)
 
-	assert.Equal(t, viewGrid, updated.currentView)
-	assert.False(t, updated.needsAuth)
+	assert.False(t, updated.needsAuth, "needsAuth must be cleared immediately")
 	assert.NotNil(t, updated.player, "player should be injected")
 	assert.NotNil(t, updated.library, "library should be injected")
 	assert.NotNil(t, updated.search, "search should be injected")
 	assert.NotNil(t, updated.devices, "devices should be injected")
 	assert.NotNil(t, updated.userAPI, "userAPI should be injected")
 	assert.NotNil(t, updated.playlistsAPI, "playlistsAPI should be injected")
-	assert.NotNil(t, cmd, "should start data fetching batch")
+	require.NotNil(t, cmd, "should return SpinnerDone tick cmd")
+
+	// Step 2: execute the hold-timer cmd — it must produce SpinnerDoneMsg.
+	doneMsg := cmd()
+	require.IsType(t, uikit.SpinnerDoneMsg{}, doneMsg, "cmd must fire SpinnerDoneMsg")
+
+	// Step 3: SpinnerDoneMsg triggers the grid transition and data-fetch batch.
+	model2, cmd2 := updated.Update(doneMsg)
+	final := model2.(*App)
+
+	assert.Equal(t, viewGrid, final.currentView, "SpinnerDoneMsg must transition to viewGrid")
+	assert.NotNil(t, cmd2, "should start data fetching batch")
 }
 
 func TestAuthError_ShowsMessage(t *testing.T) {

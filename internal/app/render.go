@@ -252,7 +252,6 @@ func (a *App) renderOnboardingOAuth() string {
 	stepStyle := lipgloss.NewStyle().Foreground(t.TextPrimary()).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
 	urlStyle := lipgloss.NewStyle().Foreground(t.ActiveBorder())
-	muteStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 	hintStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 
 	// Use a sensible inner width for URL wrapping; 60 gives readable line lengths.
@@ -264,11 +263,8 @@ func (a *App) renderOnboardingOAuth() string {
 	wrappedURL := wrapURL(a.onboardingAuthURL, innerW)
 	urlBox := urlBoxStyle.Render(urlStyle.Render(wrappedURL))
 
-	spinnerText := lipgloss.JoinHorizontal(lipgloss.Left,
-		a.onboardingSpinner.View(),
-		" ",
-		muteStyle.Render("Waiting for authorization...  (times out in 5 minutes)"),
-	)
+	// uikit.Spinner.View() already renders "frame  muted(text)" — no manual join needed.
+	spinnerText := a.onboardingSpinner.View()
 
 	// Center the title block within the panel. panelInnerWidth matches the border width.
 	panelInnerWidth := a.width - 8

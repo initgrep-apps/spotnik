@@ -367,3 +367,18 @@ Items to log:
 2. `TableChrome` (added by S157 in `internal/uikit/`) was relocated to `internal/ui/components/` to break a planned import cycle when `components → uikit` was introduced for ProgressBar. Had no external callers — no-op for users. Document the package boundary rule (`uikit` cannot import `components`; `components` may import `uikit`) in S168.
 3. `ProgressBar.Render()` paints empty cells with `Theme.TextMuted()`. Existing `GradientSeekBar`/`GradientVolumeBar` paint empty cells with `Theme.Surface()`. Bars currently only borrow `PartialGlyph`/`GlyphFor` helpers, not `ProgressBar.Render()`, so no regression today. When a future migration swaps in `ProgressBar.Render()`, decide which colour wins and harmonise.
 4. Volume-bar dead-zone (vol=0) was removed in this PR. Verify no UX regression once playback ships under non-trivial use.
+
+---
+
+## Story 165 — Spinner follow-ups
+**Found:** 2026-04-25 | **Source:** PR #211 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. Spec line 50 says wiring lives in `internal/app/auth.go`, but actual OAuth handlers live in `internal/app/handlers.go`. Implementation correctly follows the real handler location. Fix spec wording during S168 docs rewrite.
+2. Spec Background lines 17-19 mention an error toast on failure; explicit Design block (lines 74-77) returns `a, nil` with no toast. Reconcile during S168 — pick one and update both.
+3. Spinner success-path tests (`TestSpinner_Done_EmitsMsgAfterTTL` etc.) execute `tea.Tick` cmds directly, blocking ~6.7s total. Consider asserting cmd-type-with-payload via synthetic msgs for faster tests.
+4. `Spinner.Fail("Authorization failed")` puts the hold-text into `SpinnerFailMsg.Err`, not an underlying error string. Field name suggests error. Either rename `Err` to `Text` or have `Fail` accept a separate error string.
+5. `authSuccessMsg` resolves `onboardingSpinner.Done` unconditionally — adds a 1.2s hold to the legacy `viewAuth` path too (where the spinner isn't rendered). Toast still fires on `SpinnerDoneMsg`. Acceptable but worth documenting.

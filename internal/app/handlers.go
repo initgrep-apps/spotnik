@@ -79,16 +79,24 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh)
 
 	case authSuccessMsg:
-		// Close the callback server — OAuth completed successfully, no retries needed.
+		// OAuth code exchange succeeded. Store the token and initialise clients so they
+		// are ready when SpinnerDoneMsg arrives and viewGrid is entered.
 		a.onboardingClose()
 		a.needsAuth = false
-		a.currentView = viewGrid
 		a.initAPIClients(m.accessToken)
-		// Start data fetching and tick loop.
+		// Resolve the spinner to ✓; after 1.2 s SpinnerDoneMsg fires the grid transition.
+		sp, cmd := a.onboardingSpinner.Done("Authorized")
+		a.onboardingSpinner = sp
+		return a, cmd
+
+	case uikit.SpinnerDoneMsg:
+		// 1.2 s hold expired — switch to grid view and announce success.
+		a.currentView = viewGrid
+		// Start data fetching and tick loop now that the view is live.
 		var paneCmds []tea.Cmd
 		for _, pane := range a.panes {
-			if cmd := pane.Init(); cmd != nil {
-				paneCmds = append(paneCmds, cmd)
+			if c := pane.Init(); c != nil {
+				paneCmds = append(paneCmds, c)
 			}
 		}
 		authCmds := append(paneCmds,
@@ -98,15 +106,27 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}),
 		)
 		authCmds = append(authCmds, a.initialFetchCmds()...)
+		authCmds = append(authCmds, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastSuccess,
+			Title:  "Signed in",
+			Body:   "Welcome back to Spotnik.",
+		}))
 		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
 		if a.currentView == viewOnboarding {
-			a.onboardingStep = stepError
+			// Resolve spinner to ✗; after 2 s SpinnerFailMsg transitions to stepError.
 			a.onboardingError = m.err.Error()
-			return a, nil
+			sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
+			a.onboardingSpinner = sp
+			return a, cmd
 		}
 		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
+		return a, nil
+
+	case uikit.SpinnerFailMsg:
+		// 2 s hold expired — show the error panel so the user can retry.
+		a.onboardingStep = stepError
 		return a, nil
 
 	case onboardingClientIDSavedMsg:
@@ -115,7 +135,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.authStatus = "Opening browser for authorization..."
 		return a, tea.Batch(
 			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
-			a.onboardingSpinner.Tick,
+			a.onboardingSpinner.Init(),
 		)
 
 	case onboardingRetryMsg:
