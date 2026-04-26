@@ -68,8 +68,6 @@ All new panes follow `docs/PANE-TEMPLATE.md` scaffold:
 - Status indicators use `uikit.StatusGlyph` where a single intent-coloured glyph + text suffices
 - All glyphs referenced by role constant (`GlyphPlaying`, `GlyphWarning`, etc.) — never raw rune literals in render code
 
-**Exception:** `GatewayHealthPane` renders a **3-column fixed-width grid** (icon · label · value) rather than `uikit.ListRow`, because the icon column contains a multi-character bar string (e.g., `●●●●●●●●○○`) that cannot be expressed as a single `GlyphRole` constant. Content coloring uses per-segment `lipgloss` styles, which is acceptable for non-border content rendering.
-
 All gateway events map to existing catalogue roles — no new glyph roles are required.
 
 ---
