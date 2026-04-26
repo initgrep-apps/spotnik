@@ -81,24 +81,33 @@ All gateway events map to existing catalogue roles — no new glyph roles are re
 **Scroll:** no · **Filter:** no
 
 ```
-╭─ ²Gateway Health ────────────────────────────╮
-│  ●●●●●●●●○○  Tokens  8/10                    │
-│  ■■■■□□□□□□   Slots   3/5                    │
-│  ◷  Backoff  none                            │
-│  ⧖  Dedup    none                            │
-╰──────────────────────────────────────────────╯
+╭─ ²Gateway Health ─────────────────────────────╮
+│  ●●●●●●●●○○  Tokens   8/10                    │
+│  ■■■■□□□□□□  Slots    3/5                     │
+│  ◷            Backoff  none                    │
+│  ⧖            Dedup    none                    │
+╰────────────────────────────────────────────────╯
 ```
 
-Each metric is a `uikit.ListRow`:
+All four rows share the same **3-column fixed-width grid**: icon · label · value.
+Not a scrollable table — rendered as aligned strings via per-segment `lipgloss` coloring.
 
-| Metric | Glyph | Label | Caption | Intent |
-|--------|-------|-------|---------|--------|
-| Tokens | `""` (no glyph) | dot-bar string built from `GlyphFilledDot`/`GlyphAvailable` | `"8/10"` | `RoleWarning` when ≤ 2 remain, else `RolePlain` |
-| Slots | `""` (no glyph) | square-bar string built from `GlyphFilledSquare`/`GlyphEmptySquare` | `"3/5"` | `RoleWarning` when all slots full, else `RolePlain` |
-| Backoff | `GlyphDeadline` (◷) | `"Backoff"` | `"none"` or `"2.1s"` | `RoleMuted` when clear, `RoleError` when active |
-| Dedup | `GlyphRateLimit` (⧖) | `"Dedup"` | `"none"` or `"2 waiters"` | `RoleMuted` when clear, `RoleInfo` when active |
+| Col | Width | Content |
+|-----|-------|---------|
+| Icon | `capacity` chars (e.g., 10 for Tokens/Slots) | Bar string or single glyph padded to col width |
+| Label | 8 chars, padded | `"Tokens"`, `"Slots"`, `"Backoff"`, `"Dedup"` |
+| Value | remaining | `"8/10"`, `"3/5"`, `"none"`, `"2 waiters"`, `"2.1s"` |
 
-For Tokens and Slots the bar is a string assembled at render time using `uikit.GlyphFor(GlyphFilledDot, mode)` / `GlyphFor(GlyphAvailable, mode)` repeated for capacity. The assembled string becomes the ListRow `Label`; the `n/max` count is `Caption`.
+Icon column detail per row:
+
+| Metric | Icon content | Color |
+|--------|-------------|-------|
+| Tokens | `GlyphFilledDot` (●) × available + `GlyphAvailable` (○) × consumed | `Warning()` when ≤ 2 available, else `TextSecondary()` |
+| Slots | `GlyphFilledSquare` (■) × in-flight + `GlyphEmptySquare` (□) × free | `Warning()` when all full, else `TextSecondary()` |
+| Backoff | `GlyphDeadline` (◷) padded to icon col width | `TextMuted()` when clear, `Error()` when active |
+| Dedup | `GlyphRateLimit` (⧖) padded to icon col width | `TextMuted()` when clear, `TextSecondary()` when active |
+
+Value column colors: `TextMuted()` for `"none"` / `"fresh"`; `Error()` for active backoff countdown; `TextSecondary()` for active dedup count.
 
 ---
 
@@ -111,9 +120,8 @@ For Tokens and Slots the bar is a string assembled at render time using `uikit.G
 ```
 ╭─ ³Polling Traffic ────────────────────────────╮
 │  ▶  Playback   1s · running                   │
-│                                               │
-│  ◬  Playlists  2h 55m stale                   │
-│  ◬  Albums     2h 55m stale                   │
+│  ◬  Playlists  2h 55m . stale                 │
+│  ◬  Albums     2h 55m . stale                 │
 │  ○  Liked      fresh                          │
 │  ○  Recent     fresh                          │
 ╰───────────────────────────────────────────────╯
@@ -284,6 +292,31 @@ This behavior applies to **every scrollable or filterable pane across Page A and
 
 If both filter and scroll are active, `Esc` clears filter first, then on next `Esc` resets scroll.
 
+### Scroll Indicator (Common Table Behavior)
+
+Every table-based pane (both Page A and B) renders a **scroll-aware indicator** at the
+bottom-right of its content area. The indicator is direction-sensitive:
+
+| State | Indicator | Condition |
+|-------|-----------|-----------|
+| No scroll | `""` (nothing) | `totalPages <= 1` |
+| Can scroll down | `▼ 1/20` | at page 1, more pages follow |
+| Can scroll both | `▲▼ 10/20` | between first and last page |
+| Can scroll up | `▲ 20/20` | at last page |
+
+Glyphs used: `GlyphScrollDown` (▼) · `GlyphScrollUp` (▲). Both are existing catalogue entries.
+
+**Implementation:** Add a shared `ScrollIndicator(page, totalPages int, th theme.Theme) string`
+function in `internal/ui/panes/scroll_indicator.go`. Each table pane's `View()` appends the result
+right-aligned on the last content line.
+
+**Table component change:** Add `CurrentPage() int` and `TotalPages() int` accessor methods to
+`internal/ui/components/table.go` by delegating to `t.inner.GetCurrentPage()` and
+`t.inner.GetTotalPages()`. Panes call these to get the values to pass to `ScrollIndicator`.
+
+Applies to: `NetworkLogPane`, `GatewayLivePane`, `QueuePane`, `LikedSongsPane`,
+`RecentlyPlayedPane`, `PlaylistsPane`, `AlbumsPane`, `TopTracksPane`, `TopArtistsPane`.
+
 ### Help Overlay Additions
 
 Add to `helpContent` in `internal/ui/panes/help_overlay.go`:
@@ -302,12 +335,13 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 
 | Item | Detail |
 |------|--------|
-| `GatewayHealthPane` | New file `gateway_health_pane.go` |
+| `GatewayHealthPane` | New file `gateway_health_pane.go`. 3-column fixed grid, no scroll |
 | `PollingTrafficPane` | New file `polling_traffic_pane.go`. Receives `PollingSnapshotMsg` (rerouted from `RequestFlowPane`) |
 | `GatewayLivePane` | New file `gateway_live_pane.go`. Scrollable + filterable event stream |
 | Page B grid | 4 panes, toggle keys `2`–`5` |
 | Universal Esc reset | All panes — scroll reset + filter clear |
 | Help overlay keybindings | `↑/k`, `↓/j`, `Esc reset` |
+| Scroll indicator | Common direction-aware `▼`/`▲▼`/`▲ P/N` indicator on all table panes |
 
 ## What Changes
 
@@ -353,5 +387,7 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `internal/ui/panes/help_overlay.go` | Add scroll + Esc keybindings |
 | `internal/ui/layout/` | Update Page B grid preset |
 | `internal/app/app.go` | Reroute `PollingSnapshotMsg`, wire new panes |
+| `internal/ui/components/table.go` | Add `CurrentPage()` and `TotalPages()` accessors |
+| `internal/ui/panes/scroll_indicator.go` | **Create** — shared `ScrollIndicator(page, total, theme)` helper |
 | `docs/DESIGN.md §17` | Update Page B spec, add keybindings |
 | `docs/keybinding.md` | Add scroll + Esc entries |
