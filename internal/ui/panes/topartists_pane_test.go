@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -8,6 +9,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,10 +81,13 @@ func TestTopArtistsPane_RendersArtistNames(t *testing.T) {
 func TestTopArtistsPane_RendersPopularityDots(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	view := pane.View()
-	// The Weeknd pop=95 → ●●●●●
-	assert.Contains(t, view, "●●●●●")
-	// Niche Artist pop=15 → ○○○○○
-	assert.Contains(t, view, "○○○○○")
+	m := uikit.ActiveMode()
+	on := uikit.GlyphFor(uikit.GlyphPinned, m)
+	off := uikit.GlyphFor(uikit.GlyphUnpinned, m)
+	// The Weeknd pop=95 → 5 filled stars
+	assert.Contains(t, view, strings.Repeat(on, 5))
+	// Niche Artist pop=15 → 5 empty stars
+	assert.Contains(t, view, strings.Repeat(off, 5))
 }
 
 func TestTopArtistsPane_RendersFollowers(t *testing.T) {
@@ -92,6 +97,20 @@ func TestTopArtistsPane_RendersFollowers(t *testing.T) {
 	assert.Contains(t, view, "35M")
 	// Niche Artist 800 → "800"
 	assert.Contains(t, view, "800")
+}
+
+func TestTopArtistsPane_ZeroFollowersShowsDash(t *testing.T) {
+	st := state.New()
+	th := theme.Load("black")
+	st.SetTopArtists("short_term", []domain.FullArtist{
+		{ID: "a1", Name: "Unknown Artist", URI: "spotify:artist:a1", Popularity: 10, Followers: domain.ArtistFollowers{Total: 0}},
+	})
+	st.SetTopTracks("short_term", []domain.Track{})
+	st.StampStatsFetchedAt("short_term")
+	pane := NewTopArtistsPane(st, th, false)
+	pane.SetSize(120, 20)
+	view := pane.View()
+	assert.Contains(t, view, "—")
 }
 
 func TestTopArtistsPane_TimeRangeCycles(t *testing.T) {

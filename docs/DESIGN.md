@@ -292,7 +292,7 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 │  (height < 8: track info in title bar — see compact title mode)       │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭─ ⁷Top Tracks ────────────────╮╭─ ⁸Top Artists ───────────────────────╮  Row 2 (weight 2)
-│  #  Track          Duration  ││  #  Artist          Pop    Flw       │
+│  #  Track          Duration  ││  #  Artist          Popularity Flw   │
 │  1  Blinding Ligh  4:12      ││  1  The Weeknd      ●●●●●  35M       │
 │  2  Martbaan       5:30      ││  2  Drake           ●●●●○  22M       │
 │  3  Save Your Te   3:35      ││  3  Dua Lipa        ●●●●○  12.5M     │
@@ -500,7 +500,7 @@ Each column uses a different theme color for visual separation without explicit 
 | Albums | `#` 5% | Name 50% | Artist 30% | Year 15% |
 | Liked Songs | `#` 5% | Track 45% | Artist 35% | Duration 15% |
 | Top Tracks | `#` 5% | Track 45% | Artist 35% | Duration 15% |
-| Top Artists | `#` 5% | Name 55% | Pop 20% | Flw 20% |
+| Top Artists | `#` 5% | Name 55% | Popularity 20% | Flw 20% |
 | Recently Played | `#` 5% | Track 45% | Artist 35% | Played 15% |
 
 Column header row: `TableHeader()` color, not bold.

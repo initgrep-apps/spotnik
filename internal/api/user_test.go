@@ -80,6 +80,7 @@ func TestGetTopArtists_Success(t *testing.T) {
 	assert.Equal(t, "The Weeknd", artists[0].Name)
 	assert.Contains(t, artists[0].Genres, "pop")
 	assert.Equal(t, 95, artists[0].Popularity)
+	assert.Equal(t, 35000000, artists[0].Followers.Total)
 }
 
 // TestGetTopArtists_EmptyResults verifies that an empty items array returns an empty slice, not nil.

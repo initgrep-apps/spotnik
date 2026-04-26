@@ -157,7 +157,8 @@ func TestPlaybackState_Fields(t *testing.T) {
 	assert.Equal(t, 70, ps.Device.VolumePercent)
 }
 
-// TestFullArtist_Fields verifies FullArtist fields marshal/unmarshal correctly.
+// TestFullArtist_Fields verifies FullArtist fields marshal/unmarshal correctly,
+// including the nested followers object that Spotify returns as {"href":null,"total":N}.
 func TestFullArtist_Fields(t *testing.T) {
 	raw := `{
 		"id": "a1",
@@ -165,6 +166,7 @@ func TestFullArtist_Fields(t *testing.T) {
 		"uri": "spotify:artist:a1",
 		"genres": ["pop", "r&b"],
 		"popularity": 95,
+		"followers": {"href": null, "total": 35000000},
 		"external_urls": {"spotify": "https://open.spotify.com/artist/a1"}
 	}`
 
@@ -174,6 +176,7 @@ func TestFullArtist_Fields(t *testing.T) {
 	assert.Equal(t, "The Weeknd", fa.Name)
 	assert.Equal(t, []string{"pop", "r&b"}, fa.Genres)
 	assert.Equal(t, 95, fa.Popularity)
+	assert.Equal(t, 35000000, fa.Followers.Total)
 	assert.Equal(t, "https://open.spotify.com/artist/a1", fa.ExternalURLs["spotify"])
 }
 

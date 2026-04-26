@@ -14,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: TopArtistsPane implements layout.Pane.
@@ -54,7 +55,7 @@ func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *T
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary()},
-		{Key: "pop", Header: "Pop", FlexFactor: 4, Color: th.ColumnSecondary()},
+		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},
 	}
 
@@ -223,7 +224,7 @@ func (a *TopArtistsPane) refreshRows() {
 		rows[i] = map[string]string{
 			"index": fmt.Sprintf("%d", i+1),
 			"name":  artist.Name,
-			"pop":   artistPopDots(artist.Popularity),
+			"pop":   artistPopStars(artist.Popularity),
 			"flw":   formatArtistFollowers(artist.Followers.Total),
 		}
 	}
@@ -252,7 +253,7 @@ func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary()},
-		{Key: "pop", Header: "Pop", FlexFactor: 4, Color: th.ColumnSecondary()},
+		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},
 	}
 	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused)
@@ -272,16 +273,17 @@ func (a *TopArtistsPane) resizeTable() {
 	a.table.SetSize(a.width, tableHeight)
 }
 
-// artistPopDots converts a Spotify popularity score (0–100) to a 5-dot visual grade.
+// artistPopStars converts a Spotify popularity score (0–100) to a 5-star visual grade
+// using GlyphPinned (★/*) and GlyphUnpinned (☆/-) — single-char in both glyph modes.
 // Thresholds are tuned for Spotify's distribution where most artists score 50+:
 //
-//	< 30   → ○○○○○   (niche / unknown)
-//	30–49  → ●○○○○
-//	50–64  → ●●○○○
-//	65–79  → ●●●○○
-//	80–89  → ●●●●○
-//	90–100 → ●●●●●  (superstar)
-func artistPopDots(p int) string {
+//	< 30   → ☆☆☆☆☆  (niche / unknown)
+//	30–49  → ★☆☆☆☆
+//	50–64  → ★★☆☆☆
+//	65–79  → ★★★☆☆
+//	80–89  → ★★★★☆
+//	90–100 → ★★★★★  (superstar)
+func artistPopStars(p int) string {
 	var filled int
 	switch {
 	case p >= 90:
@@ -297,14 +299,21 @@ func artistPopDots(p int) string {
 	default:
 		filled = 0
 	}
-	return strings.Repeat("●", filled) + strings.Repeat("○", 5-filled)
+	m := uikit.ActiveMode()
+	on := uikit.GlyphFor(uikit.GlyphPinned, m)
+	off := uikit.GlyphFor(uikit.GlyphUnpinned, m)
+	return strings.Repeat(on, filled) + strings.Repeat(off, 5-filled)
 }
 
-// formatArtistFollowers formats a follower count as a compact human-readable string:
+// formatArtistFollowers formats a follower count as a compact human-readable string.
+// Returns "—" when n is 0 (not returned by this Spotify endpoint for some artists).
 //
 //	35 000 000 → "35M"   |   1 200 000 → "1.2M"
 //	450 000    → "450K"  |   1 500 → "1.5K"   |   999 → "999"
 func formatArtistFollowers(n int) string {
+	if n == 0 {
+		return "—"
+	}
 	switch {
 	case n >= 10_000_000:
 		return fmt.Sprintf("%dM", n/1_000_000)
