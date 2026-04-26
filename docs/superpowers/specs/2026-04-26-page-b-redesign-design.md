@@ -119,23 +119,32 @@ Icon glyph color matches its row's data color — muted when normal, active colo
 
 ```
 ╭─ ³Polling Traffic ────────────────────────────╮
-│  ▶  Playback   1s · running                   │
-│  ◬  Playlists  2h 55m . stale                 │
-│  ◬  Albums     2h 55m . stale                 │
-│  ○  Liked      fresh                          │
-│  ○  Recent     fresh                          │
+│  ♪  Playback   ▶ 1s · running                 │
+│  ≡  Playlists  ◬ 2h 55m stale                 │
+│  ♫  Albums     ◬ 2h 55m stale                 │
+│  ★  Liked      ○ fresh                        │
+│  ◷  Recent     ○ fresh                        │
 ╰───────────────────────────────────────────────╯
 ```
 
-Each row is a `uikit.ListRow`:
+Same **3-column fixed-width grid** as Gateway Health: type icon · label · status.
+Not a scrollable table — rendered as aligned strings via per-segment `lipgloss` coloring.
 
-| Row | Glyph | Label | Caption | Intent |
-|-----|-------|-------|---------|--------|
-| Playback | `GlyphPlaying` (▶) running / `GlyphPaused` (⏸) idle | `"Playback"` | `"1s · running"` | `RoleSuccess` running, `RoleWarning` idle |
-| Playlists | `GlyphWarning` (◬) stale / `GlyphAvailable` (○) fresh | `"Playlists"` | `"2h 55m stale"` or `"fresh"` | `RoleWarning` < 1h stale, `RoleError` ≥ 1h, `RoleMuted` fresh |
-| Albums | same pattern | `"Albums"` | staleness age or `"fresh"` | same |
-| Liked | same pattern | `"Liked"` | same | same |
-| Recent | same pattern | `"Recent"` | same | same |
+| Col | Width | Content |
+|-----|-------|---------|
+| Type icon | 1 glyph, fixed | Category glyph — always `TextMuted()`, identifies what the row represents |
+| Label | 10 chars, padded | Row name |
+| Status | remaining | `<statusGlyph> <value>` with conditional coloring |
+
+Row detail:
+
+| Row | Type glyph | Status glyph | Value | Status color |
+|-----|-----------|-------------|-------|-------------|
+| Playback | `GlyphMusicNote` (♪) | `GlyphPlaying` (▶) running / `GlyphPaused` (⏸) idle | `"1s · running"` or `"idle"` | `Success()` running, `Warning()` idle |
+| Playlists | `GlyphQueue` (≡) | `GlyphWarning` (◬) stale / `GlyphAvailable` (○) fresh | staleness age or `"fresh"` | `Warning()` < 1h, `Error()` ≥ 1h, `TextMuted()` fresh |
+| Albums | `GlyphDoubleNote` (♫) | same pattern | same | same |
+| Liked | `GlyphPinned` (★) | same pattern | same | same |
+| Recent | `GlyphDeadline` (◷) | same pattern | same | same |
 
 Sources: `store.PlaylistsFetchedAt()`, `store.AlbumsFetchedAt()`,
 `store.LikedTracksFetchedAt()`, `store.RecentPlayedFetchedAt()`
