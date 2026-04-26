@@ -49,13 +49,13 @@ type TopTracksPane struct {
 // NewTopTracksPane creates a TopTracksPane with the given store, theme, and focus state.
 // Default time range is short_term (4 weeks).
 func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *TopTracksPane {
-	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Pop 15%
+	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Dur 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
-		{Key: "pop", Header: "Pop", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -233,7 +233,7 @@ func (p *TopTracksPane) refreshRows() {
 			"index":  fmt.Sprintf("%d", i+1),
 			"track":  track.Name,
 			"artist": artistName,
-			"pop":    "—",
+			"dur":    trackDuration(track.DurationMs),
 		}
 	}
 	p.table.SetRows(rows)
@@ -267,7 +267,7 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
-		{Key: "pop", Header: "Pop", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	p.table, p.filter = components.RebuildTableTheme(th, cols, p.table.Rows(), p.focused)
 	p.resizeTable()
@@ -284,4 +284,10 @@ func (p *TopTracksPane) resizeTable() {
 		tableHeight = 0
 	}
 	p.table.SetSize(p.width, tableHeight)
+}
+
+// trackDuration converts milliseconds to "m:ss" (e.g. 252000 → "4:12").
+func trackDuration(ms int) string {
+	secs := ms / 1000
+	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
 }

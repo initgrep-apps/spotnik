@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -8,6 +9,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,10 +20,10 @@ var _ layout.Pane = &TopArtistsPane{}
 // populateStoreTopArtists loads test top-artists data into the store for the given time range.
 func populateStoreTopArtists(st *state.Store, timeRange string) {
 	artists := []domain.FullArtist{
-		{ID: "a1", Name: "The Weeknd", URI: "spotify:artist:a1", Genres: []string{"pop", "r&b"}},
-		{ID: "a2", Name: "Drake", URI: "spotify:artist:a2", Genres: []string{"hip-hop", "rap"}},
-		{ID: "a3", Name: "Dua Lipa", URI: "spotify:artist:a3", Genres: []string{"dance pop", "pop"}},
-		{ID: "a4", Name: "Artist No Genre", URI: "spotify:artist:a4", Genres: []string{}},
+		{ID: "a1", Name: "The Weeknd", URI: "spotify:artist:a1", Genres: []string{"pop", "r&b"}, Popularity: 95, Followers: domain.ArtistFollowers{Total: 35000000}},
+		{ID: "a2", Name: "Drake", URI: "spotify:artist:a2", Genres: []string{"hip-hop", "rap"}, Popularity: 82, Followers: domain.ArtistFollowers{Total: 22000000}},
+		{ID: "a3", Name: "Dua Lipa", URI: "spotify:artist:a3", Genres: []string{"dance pop", "pop"}, Popularity: 88, Followers: domain.ArtistFollowers{Total: 12500000}},
+		{ID: "a4", Name: "Niche Artist", URI: "spotify:artist:a4", Genres: []string{}, Popularity: 15, Followers: domain.ArtistFollowers{Total: 800}},
 	}
 	st.SetTopArtists(timeRange, artists)
 	st.SetTopTracks(timeRange, []domain.Track{})
@@ -76,19 +78,38 @@ func TestTopArtistsPane_RendersArtistNames(t *testing.T) {
 	assert.Contains(t, view, "Dua Lipa")
 }
 
-func TestTopArtistsPane_RendersGenreColumn(t *testing.T) {
+func TestTopArtistsPane_RendersPopularityDots(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	view := pane.View()
-	// First genre of The Weeknd is "pop"
-	assert.Contains(t, view, "pop")
-	// First genre of Drake is "hip-hop"
-	assert.Contains(t, view, "hip-hop")
+	m := uikit.ActiveMode()
+	on := uikit.GlyphFor(uikit.GlyphPinned, m)
+	off := uikit.GlyphFor(uikit.GlyphUnpinned, m)
+	// The Weeknd pop=95 → 5 filled stars
+	assert.Contains(t, view, strings.Repeat(on, 5))
+	// Niche Artist pop=15 → 5 empty stars
+	assert.Contains(t, view, strings.Repeat(off, 5))
 }
 
-func TestTopArtistsPane_ArtistNoGenreShowsDash(t *testing.T) {
+func TestTopArtistsPane_RendersFollowers(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	view := pane.View()
-	// Artist with no genres should render "—"
+	// The Weeknd 35000000 → "35M"
+	assert.Contains(t, view, "35M")
+	// Niche Artist 800 → "800"
+	assert.Contains(t, view, "800")
+}
+
+func TestTopArtistsPane_ZeroFollowersShowsDash(t *testing.T) {
+	st := state.New()
+	th := theme.Load("black")
+	st.SetTopArtists("short_term", []domain.FullArtist{
+		{ID: "a1", Name: "Unknown Artist", URI: "spotify:artist:a1", Popularity: 10, Followers: domain.ArtistFollowers{Total: 0}},
+	})
+	st.SetTopTracks("short_term", []domain.Track{})
+	st.StampStatsFetchedAt("short_term")
+	pane := NewTopArtistsPane(st, th, false)
+	pane.SetSize(120, 20)
+	view := pane.View()
 	assert.Contains(t, view, "—")
 }
 
@@ -156,12 +177,12 @@ func TestTopArtistsPane_FilterByArtistName(t *testing.T) {
 	assert.NotContains(t, view, "Drake")
 }
 
-func TestTopArtistsPane_FilterByGenre(t *testing.T) {
+func TestTopArtistsPane_FilterByArtistNameExcludes(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	pane.SetFocused(true)
 
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
-	for _, r := range "hip-hop" {
+	for _, r := range "drake" {
 		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) //nolint:errcheck
 	}
 
@@ -182,7 +203,7 @@ func TestTopArtistsPane_EmptyData(t *testing.T) {
 func TestTopArtistsPane_StatsLoadedMsg(t *testing.T) {
 	pane, st := newTestTopArtistsPane()
 	st.SetTopArtists("short_term", []domain.FullArtist{
-		{ID: "a99", Name: "New Artist", URI: "spotify:artist:a99", Genres: []string{"jazz"}},
+		{ID: "a99", Name: "New Artist", URI: "spotify:artist:a99", Genres: []string{"jazz"}, Popularity: 70, Followers: domain.ArtistFollowers{Total: 500000}},
 	})
 	st.SetTopTracks("short_term", []domain.Track{})
 	st.StampStatsFetchedAt("short_term")
@@ -195,7 +216,7 @@ func TestTopArtistsPane_StatsLoadedMsgWrongRange(t *testing.T) {
 	pane, st := newTestTopArtistsPane()
 	// Load new data for medium_term but pane is on short_term
 	st.SetTopArtists("medium_term", []domain.FullArtist{
-		{ID: "a88", Name: "Medium Artist", URI: "spotify:artist:a88", Genres: []string{"indie"}},
+		{ID: "a88", Name: "Medium Artist", URI: "spotify:artist:a88", Genres: []string{"indie"}, Popularity: 60, Followers: domain.ArtistFollowers{Total: 250000}},
 	})
 	st.SetTopTracks("medium_term", []domain.Track{})
 	st.StampStatsFetchedAt("medium_term")
@@ -230,7 +251,7 @@ func TestTopArtistsPane_SetFocused(t *testing.T) {
 func TestTopArtistsPane_RefreshRows(t *testing.T) {
 	pane, st := newTestTopArtistsPane()
 	st.SetTopArtists("short_term", []domain.FullArtist{
-		{ID: "a77", Name: "Refreshed Artist", URI: "spotify:artist:a77", Genres: []string{"ambient"}},
+		{ID: "a77", Name: "Refreshed Artist", URI: "spotify:artist:a77", Genres: []string{"ambient"}, Popularity: 55, Followers: domain.ArtistFollowers{Total: 120000}},
 	})
 	st.SetTopTracks("short_term", []domain.Track{})
 	st.StampStatsFetchedAt("short_term")
@@ -247,11 +268,12 @@ func TestTopArtistsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewTopArtistsPane(state.New(), th, false)
 	cols := p.table.Columns()
-	require.Len(t, cols, 3, "TopArtistsPane should have 3 columns")
+	require.Len(t, cols, 4, "TopArtistsPane should have 4 columns")
 
 	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
 	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Artist column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Genre column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Pop column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Flw column should use ColumnTertiary()")
 }
 
 // ── Story 119: t→g rebind and Enter to play artist ──────────────────────────

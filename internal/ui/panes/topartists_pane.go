@@ -1,7 +1,6 @@
 // Package panes — TopArtistsPane displays the user's top artists in a dense
 // bubble-table with in-pane filtering and time range cycling via the g key.
 // Enter on a row emits PlayContextMsg to play the selected artist.
-// The genre column shows the first genre from each artist's genre list.
 // Implements layout.Pane (toggle key 8).
 package panes
 
@@ -15,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: TopArtistsPane implements layout.Pane.
@@ -32,8 +32,8 @@ var topArtistsRangeLabels = map[string]string{
 
 // TopArtistsPane is the Bubble Tea model for the Top Artists pane (toggle key 8).
 // It renders a dense bubble-table of the user's top artists with columns for index,
-// name, and genre (first genre from each artist's genre list). It supports in-pane
-// filtering by artist name and genre, and per-pane time range cycling via the g key.
+// name, popularity (star-graded), and follower count. It supports in-pane filtering
+// by artist name and per-pane time range cycling via the g key.
 // Enter on a selected row emits PlayContextMsg to start playback of that artist.
 type TopArtistsPane struct {
 	BasePane
@@ -43,19 +43,20 @@ type TopArtistsPane struct {
 
 	// table renders the top artists list.
 	table *components.Table
-	// filter provides in-pane text filtering by artist name and genre.
+	// filter provides in-pane text filtering by artist name.
 	filter *components.Filter
 }
 
 // NewTopArtistsPane creates a TopArtistsPane with the given store, theme, and focus state.
 // Default time range is short_term (4 weeks).
 func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *TopArtistsPane {
-	// Column widths per DESIGN.md §9: # 5% | Name 70% | Genre 25%
-	// Flex factors: 1 : 14 : 5 ≈ 5% / 70% / 25%
+	// Column widths per DESIGN.md §9: # 5% | Name 55% | Pop 20% | Flw 20%
+	// Flex factors: 1 : 11 : 4 : 4 ≈ 5% / 55% / 20% / 20%
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.ColumnPrimary()},
-		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.ColumnSecondary()},
+		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary()},
+		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
+		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -220,21 +221,17 @@ func (a *TopArtistsPane) refreshRows() {
 	artists := a.filteredArtists()
 	rows := make([]map[string]string, len(artists))
 	for i, artist := range artists {
-		genre := "—"
-		if len(artist.Genres) > 0 {
-			genre = artist.Genres[0]
-		}
 		rows[i] = map[string]string{
 			"index": fmt.Sprintf("%d", i+1),
 			"name":  artist.Name,
-			"genre": genre,
+			"pop":   artistPopStars(artist.Popularity),
+			"flw":   formatArtistFollowers(artist.Followers.Total),
 		}
 	}
 	a.table.SetRows(rows)
 }
 
 // filteredArtists returns the top artists for the current time range, filtered by query.
-// Filter matches on artist name OR first genre.
 func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 	all := a.store.TopArtists(a.timeRange)
 	if a.filter.Query() == "" {
@@ -242,11 +239,7 @@ func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 	}
 	result := make([]domain.FullArtist, 0, len(all))
 	for _, artist := range all {
-		genre := ""
-		if len(artist.Genres) > 0 {
-			genre = artist.Genres[0]
-		}
-		if a.filter.MatchesAny(artist.Name, genre) {
+		if a.filter.MatchesAny(artist.Name) {
 			result = append(result, artist)
 		}
 	}
@@ -259,8 +252,9 @@ func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "name", Header: "Artist", FlexFactor: 14, Color: th.ColumnPrimary()},
-		{Key: "genre", Header: "Genre", FlexFactor: 5, Color: th.ColumnSecondary()},
+		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary()},
+		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
+		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},
 	}
 	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused)
 	a.resizeTable()
@@ -277,4 +271,59 @@ func (a *TopArtistsPane) resizeTable() {
 		tableHeight = 0
 	}
 	a.table.SetSize(a.width, tableHeight)
+}
+
+// artistPopStars converts a Spotify popularity score (0–100) to a 5-star visual grade
+// using GlyphPinned (★/*) and GlyphUnpinned (☆/-) — single-char in both glyph modes.
+// Thresholds are tuned for Spotify's distribution where most artists score 50+:
+//
+//	< 30   → ☆☆☆☆☆  (niche / unknown)
+//	30–49  → ★☆☆☆☆
+//	50–64  → ★★☆☆☆
+//	65–79  → ★★★☆☆
+//	80–89  → ★★★★☆
+//	90–100 → ★★★★★  (superstar)
+func artistPopStars(p int) string {
+	var filled int
+	switch {
+	case p >= 90:
+		filled = 5
+	case p >= 80:
+		filled = 4
+	case p >= 65:
+		filled = 3
+	case p >= 50:
+		filled = 2
+	case p >= 30:
+		filled = 1
+	default:
+		filled = 0
+	}
+	m := uikit.ActiveMode()
+	on := uikit.GlyphFor(uikit.GlyphPinned, m)
+	off := uikit.GlyphFor(uikit.GlyphUnpinned, m)
+	return strings.Repeat(on, filled) + strings.Repeat(off, 5-filled)
+}
+
+// formatArtistFollowers formats a follower count as a compact human-readable string.
+// Returns "—" when n is 0 (not returned by this Spotify endpoint for some artists).
+//
+//	35 000 000 → "35M"   |   1 200 000 → "1.2M"
+//	450 000    → "450K"  |   1 500 → "1.5K"   |   999 → "999"
+func formatArtistFollowers(n int) string {
+	if n == 0 {
+		return "—"
+	}
+	switch {
+	case n >= 10_000_000:
+		return fmt.Sprintf("%dM", n/1_000_000)
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 10_000:
+		return fmt.Sprintf("%dK", n/1_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fK", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }

@@ -255,9 +255,15 @@ type PlayOptions struct {
 	Offset *PlayOffset `json:"offset,omitempty"`
 }
 
+// ArtistFollowers holds the follower count from Spotify's nested followers object.
+type ArtistFollowers struct {
+	// Total is the number of Spotify followers for this artist.
+	Total int `json:"total"`
+}
+
 // FullArtist represents a Spotify artist with full details, as returned by
 // the top-artists and search endpoints. It extends the basic Artist struct
-// with genre, popularity, and external URL fields.
+// with genre, popularity, followers, and external URL fields.
 type FullArtist struct {
 	// ID is the Spotify artist ID.
 	ID string `json:"id"`
@@ -273,6 +279,9 @@ type FullArtist struct {
 
 	// Popularity is the artist's popularity score (0–100).
 	Popularity int `json:"popularity"`
+
+	// Followers holds the total follower count.
+	Followers ArtistFollowers `json:"followers"`
 
 	// ExternalURLs maps service name to external URL (e.g. "spotify" → URL).
 	ExternalURLs map[string]string `json:"external_urls"`
