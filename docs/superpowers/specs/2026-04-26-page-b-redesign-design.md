@@ -68,18 +68,7 @@ All new panes follow `docs/PANE-TEMPLATE.md` scaffold:
 - Status indicators use `uikit.StatusGlyph` where a single intent-coloured glyph + text suffices
 - All glyphs referenced by role constant (`GlyphPlaying`, `GlyphWarning`, etc.) — never raw rune literals in render code
 
-### New Glyph Roles Required
-
-The following gateway-domain glyphs are absent from the current catalogue in `internal/uikit/glyph.go` and `docs/TUI-DESIGN-SYSTEM.md §4`. They **must be added in the same PR** as the new pane files:
-
-| Role constant | Category | Unicode | ASCII | Usage |
-|---|---|---|---|---|
-| `GlyphGatewayTokenOut` | `gateway.token.out` | `⊖` | `(-)` | Token consumed |
-| `GlyphGatewaySemIn` | `gateway.sem.in` | `⊞` | `[+]` | Semaphore acquired |
-| `GlyphGatewaySemOut` | `gateway.sem.out` | `⊟` | `[-]` | Semaphore released |
-| `GlyphGatewayBackoff` | `gateway.backoff` | `⏳` | `(t)` | Backoff started |
-
-Update both `glyphTable` in `glyph.go` and the catalogue table in `docs/TUI-DESIGN-SYSTEM.md §4`.
+All gateway events map to existing catalogue roles — no new glyph roles are required.
 
 ---
 
@@ -157,21 +146,22 @@ Auto-scrolling reverse-chronological event stream. New events prepend at top on 
 ```
 ╭─ ⁴Gateway Live ──────────────────────────────────────────────── f filter ────────────╮
 │  ⚡  15:52:10  GET /v1/me/player                                                      │
-│  ⊖  15:52:10  Token consumed → 9/10                                                  │
-│  ⊞  15:52:10  Semaphore acquired  3/5                                                │
+│  ◬  15:52:10  Token consumed → 9/10                                                  │
+│  ■  15:52:10  Semaphore acquired  3/5                                                │
 │  ✓  15:52:10  Request allowed                                                        │
 │  ◷  15:52:09  GET /v1/me/player/queue                                                │
 │  ⧖  15:52:09  Dedup joined                                                           │
 │  ✓  15:52:09  Dedup resolved  200                                                    │
 │  ↻  15:52:08  Tokens refilled → 10                                                   │
-│  ✗  15:52:05  Request blocked  (backoff active)                                      │
+│  ⊘  15:52:05  Backoff started  (retry in 4.2s)                                       │
+│  ✗  15:52:05  Request blocked                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 When filter is active, border shows `filter(query)`:
 
 ```
-╭─ ⁴Gateway Live ──────────────────────────────────────── filter(blocked) ─────────────╮
+╭─ ⁴Gateway Live ──────────────────────────────────────── filter(Request) ─────────────╮
 ```
 
 Each event is a `uikit.ListRow`. Field mapping:
@@ -185,21 +175,20 @@ Each event is a `uikit.ListRow`. Field mapping:
 
 #### Event Glyph and Color Map
 
+All roles are existing catalogue entries — no new glyphs required.
+
 | Glyph role | Unicode | Event | Intent (Role) |
 |---|---|---|---|
 | `GlyphRunning` | `⚡` | Interactive request entered | `RolePlain` |
 | `GlyphDeadline` | `◷` | Background request entered | `RoleMuted` |
-| `GlyphGatewayTokenOut` | `⊖` | Token consumed | `RoleWarning` |
+| `GlyphWarning` | `◬` | Token consumed | `RoleWarning` |
 | `GlyphRepeatAll` | `↻` | Tokens refilled | `RoleSuccess` |
-| `GlyphGatewaySemIn` | `⊞` | Semaphore acquired | `RoleInfo` |
-| `GlyphGatewaySemOut` | `⊟` | Semaphore released | `RoleMuted` |
+| `GlyphFilledSquare` | `■` | Semaphore acquired (slot taken) | `RoleInfo` |
+| `GlyphEmptySquare` | `□` | Semaphore released (slot freed) | `RoleMuted` |
 | `GlyphSuccess` | `✓` | Request allowed / dedup resolved | `RoleSuccess` |
 | `GlyphError` | `✗` | Request blocked | `RoleError` |
 | `GlyphRateLimit` | `⧖` | Dedup joined | `RoleInfo` |
-| `GlyphGatewayBackoff` | `⏳` | Backoff started | `RoleError` |
-
-`GlyphGatewayTokenOut`, `GlyphGatewaySemIn`, `GlyphGatewaySemOut`, `GlyphGatewayBackoff`
-are new catalogue entries — see **New Glyph Roles Required** above.
+| `GlyphBlocked` | `⊘` | Backoff started | `RoleError` |
 
 #### Filter Matches On
 Endpoint path · event type keyword (allowed, blocked, dedup, backoff, token) · priority (interactive, background)
@@ -332,8 +321,6 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `NetworkLogPane` Decision column | `decisions` local map → `pendingDecisions` persistent struct field |
 | All panes | `Esc` standardized: clears filter / resets scroll |
 | `docs/keybinding.md`, `docs/DESIGN.md §17`, `help_overlay.go` | New entries for scroll + Esc reset |
-| `internal/uikit/glyph.go` | Add 4 new gateway glyph roles |
-| `docs/TUI-DESIGN-SYSTEM.md §4` | Add 4 new gateway glyph entries to catalogue |
 
 ## What Stays Unchanged
 
@@ -366,7 +353,5 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `internal/ui/panes/help_overlay.go` | Add scroll + Esc keybindings |
 | `internal/ui/layout/` | Update Page B grid preset |
 | `internal/app/app.go` | Reroute `PollingSnapshotMsg`, wire new panes |
-| `internal/uikit/glyph.go` | Add 4 gateway glyph roles + table entries |
-| `docs/TUI-DESIGN-SYSTEM.md §4` | Add 4 gateway glyph entries to catalogue |
 | `docs/DESIGN.md §17` | Update Page B spec, add keybindings |
 | `docs/keybinding.md` | Add scroll + Esc entries |
