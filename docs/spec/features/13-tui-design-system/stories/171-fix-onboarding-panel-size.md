@@ -1,7 +1,7 @@
 ---
 title: "Fix: onboarding panel — replace full-screen sizing with proportional PanelSize"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

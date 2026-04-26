@@ -425,3 +425,15 @@ Items to log:
 3. ProgressBar primitive uses Gradient1() only. `internal/ui/components/gradient.go` keeps its own per-position gradient via `PartialGlyph + GlyphFor`. Either expand ProgressBar to natively support per-position gradient, or keep the two surfaces as documented.
 4. SectionLabel rule line uses AccentColor (parent pane's border). The role row in §3.7 was Muted; corrected in round 2. If/when SectionLabel gets a stand-alone use outside Page B sub-sections, confirm the AccentColor parameter still makes sense.
 5. StatusBar intentionally omits `StatusBarBg()` — body is terminal-default. If a future visual revision wants a fill, apply it in `status_bar.go` AND update §3.11 / §5.2 / §5.3 in the same commit.
+
+---
+
+## Story 171 — PanelSize sizing helper follow-ups
+**Found:** 2026-04-26 | **Source:** PR #218 Review
+**Feature:** 13-tui-design-system
+
+Non-blocking.
+
+Items to log:
+1. `docs/TUI-DESIGN-SYSTEM.md §3.3` Panel section could optionally cross-reference `PanelSize` as the canonical sizing policy for Panel callers, so future readers know where to find the 70%/65% policy.
+2. No test in `render_test.go` asserts the rendered panel's actual width at a known terminal size. A future regression reverting to `a.width - 4` would not be caught by content-string assertions alone. Add a test asserting `lipgloss.Width(borderLine) == panelW` at a known terminal width (e.g. 200 → 140) when next touching render_test.go.
