@@ -242,26 +242,70 @@ palette = "auto"
 glyphs = "auto"
 `
 
+// sectionPatches lists sections that Bootstrap ensures are present in the config.
+// When the file exists but is missing a section, Bootstrap appends the patch block.
+// Add new entries here whenever a future feature introduces a new config section.
+var sectionPatches = []struct {
+	header string
+	block  string
+}{
+	{
+		header: "[ui]",
+		block: `
+[ui]
+# Glyph rendering mode: "auto" (default), "unicode", or "ascii"
+# - auto:    use unicode glyphs when LC_ALL/LANG contains UTF-8, else ASCII
+# - unicode: always use unicode glyphs (requires a UTF-8 capable terminal)
+# - ascii:   always use ASCII fallback glyphs (safe for all terminals)
+glyphs = "auto"
+`,
+	},
+}
+
 // Bootstrap creates the config file at path with a default template if it does
-// not already exist. Creates the parent directory if needed. If the file already
-// exists, Bootstrap is a no-op.
+// not already exist. Creates the parent directory if needed.
+// If the file already exists, Bootstrap appends any missing config sections so
+// that pre-feature-13 users always have every required section after upgrade.
 func Bootstrap(path string) error {
-	if _, err := os.Stat(path); err == nil {
-		return nil // file exists, nothing to do
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("checking config file: %w", err)
+	_, statErr := os.Stat(path)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("checking config file: %w", statErr)
 	}
 
-	// Create directory: owner gets rwx, group gets r-x, others none.
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
+	if errors.Is(statErr, os.ErrNotExist) {
+		// New file — write the full template (existing behaviour).
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			return fmt.Errorf("creating config directory: %w", err)
+		}
+		if err := os.WriteFile(path, []byte(defaultTemplate), 0o600); err != nil {
+			return fmt.Errorf("writing config template: %w", err)
+		}
+		return nil
 	}
 
-	// Write template with owner-only read/write permissions (no group access).
-	if err := os.WriteFile(path, []byte(defaultTemplate), 0o600); err != nil {
-		return fmt.Errorf("writing config template: %w", err)
+	// File exists — append any missing sections.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading config for patch: %w", err)
 	}
-	return nil
+	content := string(data)
+
+	var additions strings.Builder
+	for _, patch := range sectionPatches {
+		if !strings.Contains(content, patch.header) {
+			additions.WriteString(patch.block)
+		}
+	}
+	if additions.Len() == 0 {
+		return nil // nothing missing
+	}
+
+	patched := content
+	if len(patched) > 0 && patched[len(patched)-1] != '\n' {
+		patched += "\n"
+	}
+	patched += additions.String()
+	return os.WriteFile(path, []byte(patched), 0o600)
 }
 
 // ClearClientID removes any line whose trimmed content starts with "client_id"

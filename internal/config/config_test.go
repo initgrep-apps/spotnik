@@ -232,23 +232,73 @@ func TestBootstrap_CreatesFileWhenMissing(t *testing.T) {
 	require.NoError(t, err, "config file should exist after Bootstrap")
 }
 
-// TestBootstrap_NoopWhenExists verifies that Bootstrap does not modify an existing
-// config file.
-func TestBootstrap_NoopWhenExists(t *testing.T) {
+// TestBootstrap_NoopWhenAllSectionsPresent verifies that Bootstrap does not modify
+// an existing config file that already contains all known sections.
+func TestBootstrap_NoopWhenAllSectionsPresent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 
-	// Write a known initial file.
-	original := "# my config\n"
+	// Write a file that already has every section Bootstrap watches for.
+	original := "# my config\n[ui]\nglyphs = \"unicode\"\n"
 	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
 
 	err := config.Bootstrap(path)
 	require.NoError(t, err)
 
-	// File should be unchanged.
+	// File should be byte-for-byte unchanged.
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, original, string(data), "Bootstrap should not modify an existing file")
+	assert.Equal(t, original, string(data), "Bootstrap should not modify a file that already has all sections")
+}
+
+// TestBootstrap_AppendsUISectionToExistingFile verifies that Bootstrap appends a
+// [ui] block with glyphs = "auto" when the file exists but lacks the [ui] section.
+// Pre-feature-13 users who already had config.toml must not lose their settings.
+func TestBootstrap_AppendsUISectionToExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	// A minimal pre-feature-13 config with no [ui] section.
+	original := "[spotify]\n# client_id = \"...\"\n\n[preferences]\ntheme = \"black\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
+
+	err := config.Bootstrap(path)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	patched := string(data)
+
+	// The [ui] section and glyphs default must be present.
+	assert.Contains(t, patched, "[ui]", "Bootstrap should append the [ui] section header")
+	assert.Contains(t, patched, `glyphs = "auto"`, "Bootstrap should append glyphs = \"auto\"")
+
+	// Original content must be preserved.
+	assert.Contains(t, patched, "[preferences]", "original [preferences] section must be preserved")
+	assert.Contains(t, patched, "theme = \"black\"", "original theme value must be preserved")
+
+	// A subsequent config.Load must return glyphs = "auto".
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "auto", cfg.UI.Glyphs, "config.Load must return glyphs = \"auto\" after Bootstrap patch")
+}
+
+// TestBootstrap_NoopWhenUISectionPresent verifies that Bootstrap does not modify
+// a file that already contains the [ui] section (byte-for-byte unchanged).
+func TestBootstrap_NoopWhenUISectionPresent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	// File already has [ui] — Bootstrap must not touch it.
+	original := "[preferences]\ntheme = \"black\"\n\n[ui]\nglyphs = \"ascii\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
+
+	err := config.Bootstrap(path)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, original, string(data), "Bootstrap must not modify a file that already has [ui]")
 }
 
 // TestBootstrap_CreatesDirectory verifies that Bootstrap creates parent directories
@@ -573,7 +623,8 @@ func TestUIConfig_Glyphs_DefaultAllowedValues(t *testing.T) {
 		{"unicode", "unicode", true},
 		{"ascii", "ascii", true},
 		{"uppercase", "ASCII", true},
-		{"invalid", "nerd", false},
+		{"invalid nerd", "nerd", false},
+		{"invalid emoji", "emoji", false},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
