@@ -40,3 +40,4 @@ Thumbs.db
 .superpowers/
 .gocache/
 .gomodcache
+.claude/worktrees
