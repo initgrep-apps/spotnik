@@ -312,46 +312,6 @@ This behavior applies to **every scrollable or filterable pane across Page A and
 
 If both filter and scroll are active, `Esc` clears filter first, then on next `Esc` resets scroll.
 
-### Scroll Indicator (Common Table Behavior)
-
-Every table-based pane (both Page A and B) renders a **scroll-aware indicator** at the
-bottom-right of its content area. The indicator is direction-sensitive:
-
-| State | Indicator | Condition |
-|-------|-----------|-----------|
-| No scroll | `""` (nothing) | `totalPages <= 1` |
-| Can scroll down | `▼ 1/20` | at page 1, more pages follow |
-| Can scroll both | `▲▼ 10/20` | between first and last page |
-| Can scroll up | `▲ 20/20` | at last page |
-
-Glyphs used: `GlyphScrollDown` (▼) · `GlyphScrollUp` (▲). Both are existing catalogue entries.
-
-**Implementation:**
-
-1. **Suppress built-in footer** — In `Table.rebuild()`, chain `.WithFooterVisibility(false)` on the inner model. This removes bubble-table's native `1/20` footer line. The freed line is where the custom indicator renders. `pageSize` math is unchanged (one line is swapped, not freed).
-
-2. **Add accessors to `internal/ui/components/table.go`:**
-
-```go
-func (t *Table) CurrentPage() int { return t.inner.CurrentPage() }
-func (t *Table) TotalPages() int  { return t.inner.MaxPages() }
-```
-
-   Note: the correct bubble-table v0.19.2 method names are `CurrentPage()` and `MaxPages()` (not `GetCurrentPage`/`GetTotalPages`).
-
-3. **Shared helper** `internal/ui/panes/scroll_indicator.go`:
-
-```go
-func ScrollIndicator(page, totalPages int, th theme.Theme) string
-```
-
-   Returns `""` when `totalPages <= 1`; otherwise returns the appropriate glyph(s) + `"P/N"` string, right-aligned to the pane's content width.
-
-4. Each table pane's `View()` calls `ScrollIndicator(t.CurrentPage(), t.TotalPages(), p.theme)` and appends the result as the last line of content, in the line freed by disabling the footer.
-
-Applies to: `NetworkLogPane`, `GatewayLivePane`, `QueuePane`, `LikedSongsPane`,
-`RecentlyPlayedPane`, `PlaylistsPane`, `AlbumsPane`, `TopTracksPane`, `TopArtistsPane`.
-
 ### Help Overlay Additions
 
 Add to `helpContent` in `internal/ui/panes/help_overlay.go`:
@@ -376,7 +336,6 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | Page B grid | 4 panes, toggle keys `2`–`5` |
 | Universal Esc reset | All panes — scroll reset + filter clear |
 | Help overlay keybindings | `↑/k`, `↓/j`, `Esc reset` |
-| Scroll indicator | Common direction-aware `▼`/`▲▼`/`▲ P/N` indicator on all table panes |
 
 ## What Changes
 
@@ -424,7 +383,5 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `internal/ui/panes/help_overlay.go` | Add scroll + Esc keybindings |
 | `internal/ui/layout/` | Update Page B grid preset |
 | `internal/app/app.go` | Reroute `PollingSnapshotMsg`, wire new panes |
-| `internal/ui/components/table.go` | Add `CurrentPage()` and `TotalPages()` accessors |
-| `internal/ui/panes/scroll_indicator.go` | **Create** — shared `ScrollIndicator(page, total, theme)` helper |
 | `docs/DESIGN.md §17` | Update Page B spec, add keybindings |
 | `docs/keybinding.md` | Add scroll + Esc entries |
