@@ -18,6 +18,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 )
@@ -613,6 +614,10 @@ func runApp(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+
+	// Activate glyph mode before any TUI rendering so every primitive picks up
+	// the user's config value. uikit.Use is a sync.Once — safe to call here.
+	uikit.Use(cfg.UI.Glyphs)
 
 	store := keychain.NewKeychainTokenStore()
 	needsRegister, needsAuth := CheckAuthState(cfg, store)
