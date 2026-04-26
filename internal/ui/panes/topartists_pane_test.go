@@ -354,3 +354,30 @@ func TestTopArtistsPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	pane = m.(*TopArtistsPane)
 	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }
+
+// ── Story 174: Filter_EscCloses ───────────────────────────────────────────────
+
+// TestTopArtistsPane_Filter_EscCloses verifies that Esc while the filter is active
+// closes the filter and restores the full list — it does NOT reset scroll position.
+func TestTopArtistsPane_Filter_EscCloses(t *testing.T) {
+	pane, _ := newTestTopArtistsPane()
+	pane.SetFocused(true)
+
+	// Activate filter and type a query that narrows to one row.
+	updated, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pp := updated.(*TopArtistsPane)
+	require.True(t, pp.filter.IsActive(), "filter should be active after pressing f")
+
+	for _, r := range "dua" {
+		u, _ := pp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pp = u.(*TopArtistsPane)
+	}
+
+	// Press Esc — filter should close.
+	updated2, _ := pp.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pp2 := updated2.(*TopArtistsPane)
+	assert.False(t, pp2.filter.IsActive(), "Esc should close the filter")
+	// Full list should be restored.
+	output := pp2.View()
+	assert.Contains(t, output, "The Weeknd", "full list should be visible after filter close")
+}

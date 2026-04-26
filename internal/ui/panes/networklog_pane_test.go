@@ -641,3 +641,40 @@ func TestNetworkLogPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	pane = m.(*panes.NetworkLogPane)
 	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }
+
+// ── Story 174: Filter_EscCloses ───────────────────────────────────────────────
+
+// TestNetworkLogPane_Filter_EscCloses verifies that Esc while the filter is active
+// closes the filter and restores the full log — it does NOT reset scroll position.
+func TestNetworkLogPane_Filter_EscCloses(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetSize(160, 20)
+	pane.SetFocused(true)
+
+	recordHttpCompleted(s, 1, "GET", "/me/player", 200, 45, domain.PriorityBackground)
+	recordHttpCompleted(s, 2, "GET", "/me/playlists", 200, 88, domain.PriorityBackground)
+
+	// Trigger tick to load rows.
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// Activate filter and narrow to one row.
+	m, _ = pane.Update(tea_keyMsg("f"))
+	pane = m.(*panes.NetworkLogPane)
+	require.True(t, pane.HasActiveFilter(), "filter should be active after pressing f")
+
+	for _, ch := range "playlists" {
+		m, _ = pane.Update(tea_keyMsgRune(ch))
+		pane = m.(*panes.NetworkLogPane)
+	}
+
+	// Press Esc — filter should close.
+	m, _ = pane.Update(tea_keyMsg("Esc"))
+	pane = m.(*panes.NetworkLogPane)
+	assert.False(t, pane.HasActiveFilter(), "Esc should close the filter")
+	// Full log should be restored.
+	output := pane.View()
+	assert.Contains(t, output, "/me/player", "full log should be visible after filter close")
+}
