@@ -68,6 +68,8 @@ All new panes follow `docs/PANE-TEMPLATE.md` scaffold:
 - Status indicators use `uikit.StatusGlyph` where a single intent-coloured glyph + text suffices
 - All glyphs referenced by role constant (`GlyphPlaying`, `GlyphWarning`, etc.) — never raw rune literals in render code
 
+**Exception:** `GatewayHealthPane` renders a **3-column fixed-width grid** (icon · label · value) rather than `uikit.ListRow`, because the icon column contains a multi-character bar string (e.g., `●●●●●●●●○○`) that cannot be expressed as a single `GlyphRole` constant. Content coloring uses per-segment `lipgloss` styles, which is acceptable for non-border content rendering.
+
 All gateway events map to existing catalogue roles — no new glyph roles are required.
 
 ---
@@ -77,16 +79,16 @@ All gateway events map to existing catalogue roles — no new glyph roles are re
 ### ²Gateway Health
 
 **File:** `internal/ui/panes/gateway_health_pane.go`
-**Data source:** `store.GatewayStateSnapshot()` — refreshed on 1s `TickMsg`
+**Data source:** `store.ReadEventsFrom(cursor)` — extract `event.Snapshot` from the most recent event returned; maintain a per-pane cursor. `domain.GatewayEvent.Snapshot` is a `domain.GatewayStateSnapshot` embedded in every gateway event, so no new Store method is required.
 **Scroll:** no · **Filter:** no
 
 ```
 ╭─ ²Gateway Health ─────────────────────────────╮
 │  ●●●●●●●●○○  Tokens   8/10                    │
-│  ■■■■□□□□□□  Slots    3/5                     │
-│  ◷            Backoff  none                    │
-│  ⧖            Dedup    none                    │
-╰────────────────────────────────────────────────╯
+│  ■■■■□□      Slots    3/5                     │
+│  ◷           Backoff  none                    │
+│  ⧖           Dedup    none                    │
+╰───────────────────────────────────────────────╯
 ```
 
 All four rows share the same **3-column fixed-width grid**: icon · label · value.
@@ -151,6 +153,8 @@ Sources: `store.PlaylistsFetchedAt()`, `store.AlbumsFetchedAt()`,
 Auto-scrolling reverse-chronological event stream. New events prepend at top on each
 1s tick. Scrolling lets you read history while new events continue to arrive silently.
 
+**Buffer cap:** 500 entries maximum. When a new batch arrives and would exceed 500, trim the oldest entries first (same pattern as `maxNetworkLogRows` in `networklog_pane.go`).
+
 ```
 ╭─ ⁴Gateway Live ──────────────────────────────────────────────── f filter ────────────╮
 │  ⚡  15:52:10  GET /v1/me/player                                                      │
@@ -198,8 +202,24 @@ All roles are existing catalogue entries — no new glyphs required.
 | `GlyphRateLimit` | `⧖` | Dedup joined | `RoleInfo` |
 | `GlyphBlocked` | `⊘` | Backoff started | `RoleError` |
 
-#### Filter Matches On
-Endpoint path · event type keyword (allowed, blocked, dedup, backoff, token) · priority (interactive, background)
+#### Filter Match Strings
+
+Each event row is matched against a pre-built string using `components.Filter.MatchesAny`. The match string for each event is:
+
+| Event | Match string |
+|-------|-------------|
+| Interactive request | `"<endpoint> interactive"` |
+| Background request | `"<endpoint> background"` |
+| Token consumed | `"token consumed"` |
+| Tokens refilled | `"token refilled"` |
+| Semaphore acquired | `"semaphore acquired"` |
+| Semaphore released | `"semaphore released"` |
+| Request allowed | `"<endpoint> allowed"` |
+| Request blocked | `"<endpoint> blocked"` |
+| Dedup joined | `"<endpoint> dedup"` |
+| Backoff started | `"backoff"` |
+
+Filter UI note: GatewayLive uses `f → type → Enter` (commit on Enter, shows `filter(query)` in border). NetworkLogPane keeps real-time filtering unchanged. The difference is intentional — GatewayLive is a new pane designed with explicit commit semantics; changing NetworkLogPane's existing behavior would be scope creep and could break existing muscle memory.
 
 ---
 
@@ -306,13 +326,28 @@ bottom-right of its content area. The indicator is direction-sensitive:
 
 Glyphs used: `GlyphScrollDown` (▼) · `GlyphScrollUp` (▲). Both are existing catalogue entries.
 
-**Implementation:** Add a shared `ScrollIndicator(page, totalPages int, th theme.Theme) string`
-function in `internal/ui/panes/scroll_indicator.go`. Each table pane's `View()` appends the result
-right-aligned on the last content line.
+**Implementation:**
 
-**Table component change:** Add `CurrentPage() int` and `TotalPages() int` accessor methods to
-`internal/ui/components/table.go` by delegating to `t.inner.GetCurrentPage()` and
-`t.inner.GetTotalPages()`. Panes call these to get the values to pass to `ScrollIndicator`.
+1. **Suppress built-in footer** — In `Table.rebuild()`, chain `.WithFooterVisibility(false)` on the inner model. This removes bubble-table's native `1/20` footer line. The freed line is where the custom indicator renders. `pageSize` math is unchanged (one line is swapped, not freed).
+
+2. **Add accessors to `internal/ui/components/table.go`:**
+
+```go
+func (t *Table) CurrentPage() int { return t.inner.CurrentPage() }
+func (t *Table) TotalPages() int  { return t.inner.MaxPages() }
+```
+
+   Note: the correct bubble-table v0.19.2 method names are `CurrentPage()` and `MaxPages()` (not `GetCurrentPage`/`GetTotalPages`).
+
+3. **Shared helper** `internal/ui/panes/scroll_indicator.go`:
+
+```go
+func ScrollIndicator(page, totalPages int, th theme.Theme) string
+```
+
+   Returns `""` when `totalPages <= 1`; otherwise returns the appropriate glyph(s) + `"P/N"` string, right-aligned to the pane's content width.
+
+4. Each table pane's `View()` calls `ScrollIndicator(t.CurrentPage(), t.TotalPages(), p.theme)` and appends the result as the last line of content, in the line freed by disabling the footer.
 
 Applies to: `NetworkLogPane`, `GatewayLivePane`, `QueuePane`, `LikedSongsPane`,
 `RecentlyPlayedPane`, `PlaylistsPane`, `AlbumsPane`, `TopTracksPane`, `TopArtistsPane`.
@@ -348,6 +383,7 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | Item | Change |
 |------|--------|
 | `RequestFlowPane` | **Retired and deleted** — logic split into 3 new panes |
+| `PollingSnapshotMsg` | Moved from `requestflow_pane.go` to `internal/ui/panes/messages.go` before deletion |
 | Page B grid definition | 2 panes → 4 panes |
 | `PollingSnapshotMsg` routing in `app.go` | `RequestFlowPane` → `PollingTrafficPane` |
 | All uppercase labels in Page B panes | Title Case — matches Page A style |
@@ -377,7 +413,8 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `internal/ui/panes/gateway_live_pane_test.go` | **Create** |
 | `internal/ui/panes/polling_traffic_pane.go` | **Create** |
 | `internal/ui/panes/polling_traffic_pane_test.go` | **Create** |
-| `internal/ui/panes/requestflow_pane.go` | **Delete** |
+| `internal/ui/panes/messages.go` | Move `PollingSnapshotMsg` here from `requestflow_pane.go` |
+| `internal/ui/panes/requestflow_pane.go` | **Delete** (after moving `PollingSnapshotMsg`) |
 | `internal/ui/panes/requestflow_pane_test.go` | **Delete** |
 | `internal/ui/panes/requestflow_boxed.go` | **Delete** |
 | `internal/ui/panes/requestflow_boxed_test.go` | **Delete** |
