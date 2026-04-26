@@ -303,8 +303,8 @@ func TestTopTracksPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	tracks := make([]domain.Track, 20)
 	for i := range tracks {
 		tracks[i] = domain.Track{
-			ID:   fmt.Sprintf("tt%d", i),
-			Name: fmt.Sprintf("Track %d", i+1),
+			ID:      fmt.Sprintf("tt%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
 			Artists: []domain.Artist{{Name: "Artist"}},
 		}
 	}
