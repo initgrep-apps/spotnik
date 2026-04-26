@@ -18,9 +18,9 @@ var _ layout.Pane = &TopTracksPane{}
 // populateStoreTopTracks loads test top-tracks data into the store for the given time range.
 func populateStoreTopTracks(st *state.Store, timeRange string) {
 	tracks := []domain.Track{
-		{ID: "tt1", Name: "Blinding Lights", URI: "spotify:track:tt1", Artists: []domain.Artist{{Name: "The Weeknd"}}, Album: domain.Album{Name: "After Hours"}},
-		{ID: "tt2", Name: "Martbaan", URI: "spotify:track:tt2", Artists: []domain.Artist{{Name: "Samar Mehdi"}}, Album: domain.Album{Name: "Album X"}},
-		{ID: "tt3", Name: "Save Your Tears", URI: "spotify:track:tt3", Artists: []domain.Artist{{Name: "The Weeknd"}}, Album: domain.Album{Name: "After Hours"}},
+		{ID: "tt1", Name: "Blinding Lights", URI: "spotify:track:tt1", DurationMs: 252000, Artists: []domain.Artist{{Name: "The Weeknd"}}, Album: domain.Album{Name: "After Hours"}},
+		{ID: "tt2", Name: "Martbaan", URI: "spotify:track:tt2", DurationMs: 330000, Artists: []domain.Artist{{Name: "Samar Mehdi"}}, Album: domain.Album{Name: "Album X"}},
+		{ID: "tt3", Name: "Save Your Tears", URI: "spotify:track:tt3", DurationMs: 215000, Artists: []domain.Artist{{Name: "The Weeknd"}}, Album: domain.Album{Name: "After Hours"}},
 	}
 	st.SetTopTracks(timeRange, tracks)
 	st.SetTopArtists(timeRange, []domain.FullArtist{})
@@ -75,19 +75,13 @@ func TestTopTracksPane_RendersTrackNames(t *testing.T) {
 	assert.Contains(t, view, "Martbaan")
 }
 
-func TestTopTracksPane_RendersPopularity(t *testing.T) {
-	// Popularity is on domain.Track — but the Track type doesn't have Popularity.
-	// TopTracksPane renders a "#" column and a Track column. Spec says popularity column.
-	// We use index column (# 5%), track (45%), artist (35%), popularity placeholder (15%).
-	// domain.Track doesn't carry Popularity — spec says show it but Spotify's track object
-	// in the top-tracks response may not include it in our domain.Track type.
-	// Looking at domain.Track: it has no Popularity field. We'll use empty string or "—".
-	// This test just verifies the column header renders without panic.
+func TestTopTracksPane_RendersDuration(t *testing.T) {
 	pane, _ := newTestTopTracksPane()
 	view := pane.View()
-	assert.NotEmpty(t, view)
-	// At a minimum, track names should be visible.
-	assert.Contains(t, view, "Blinding Lights")
+	// 252000ms → "4:12"
+	assert.Contains(t, view, "4:12")
+	// 330000ms → "5:30"
+	assert.Contains(t, view, "5:30")
 }
 
 func TestTopTracksPane_TimeRangeCycles(t *testing.T) {
@@ -278,7 +272,7 @@ func TestTopTracksPane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
 	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
 	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Pop column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
 }
 
 // ── Story 119: t→g rebind ────────────────────────────────────────────────────

@@ -292,10 +292,10 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 │  (height < 8: track info in title bar — see compact title mode)       │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭─ ⁷Top Tracks ────────────────╮╭─ ⁸Top Artists ───────────────────────╮  Row 2 (weight 2)
-│  #  Track          Pop       ││  #  Artist          Genre            │
-│  1  Blinding Ligh  85        ││  1  The Weeknd      pop              │
-│  2  Martbaan       72        ││  2  Drake           hip-hop          │
-│  3  Save Your Te   80        ││  3  Dua Lipa        dance pop        │
+│  #  Track          Duration  ││  #  Artist          Pop    Flw       │
+│  1  Blinding Ligh  4:12      ││  1  The Weeknd      ●●●●●  35M       │
+│  2  Martbaan       5:30      ││  2  Drake           ●●●●○  22M       │
+│  3  Save Your Te   3:35      ││  3  Dua Lipa        ●●●●○  12.5M     │
 │  ▼ more below                ││  ▼ more below                        │
 ╰──────────────────────────────╯╰──────────────────────────────────────╯
 ╭─ ⁶Recently Played ──────────────────────────────────────────────────╮  Row 3 (weight 2)
@@ -434,7 +434,7 @@ Every pane with a scrollable list supports real-time filtering, inspired by btop
 | Queue | Track name, artist name |
 | Recently Played | Track name, artist name |
 | Top Tracks | Track name, artist name |
-| Top Artists | Artist name, genre |
+| Top Artists | Artist name |
 
 ### Visual Treatment
 
@@ -499,8 +499,8 @@ Each column uses a different theme color for visual separation without explicit 
 | Playlists | `#` 5% | Name 70% | Tracks 25% | — |
 | Albums | `#` 5% | Name 50% | Artist 30% | Year 15% |
 | Liked Songs | `#` 5% | Track 45% | Artist 35% | Duration 15% |
-| Top Tracks | `#` 5% | Track 45% | Artist 35% | Pop 15% |
-| Top Artists | `#` 5% | Name 70% | Genre 25% | — |
+| Top Tracks | `#` 5% | Track 45% | Artist 35% | Duration 15% |
+| Top Artists | `#` 5% | Name 55% | Pop 20% | Flw 20% |
 | Recently Played | `#` 5% | Track 45% | Artist 35% | Played 15% |
 
 Column header row: `TableHeader()` color, not bold.

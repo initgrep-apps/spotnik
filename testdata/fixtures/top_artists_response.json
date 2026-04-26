@@ -6,6 +6,7 @@
       "uri": "spotify:artist:artist-weeknd",
       "genres": ["canadian pop", "pop", "r&b"],
       "popularity": 95,
+      "followers": { "total": 35000000 },
       "external_urls": {
         "spotify": "https://open.spotify.com/artist/artist-weeknd"
       }
@@ -15,7 +16,8 @@
       "name": "Dua Lipa",
       "uri": "spotify:artist:artist-dua",
       "genres": ["dance pop", "pop"],
-      "popularity": 92,
+      "popularity": 88,
+      "followers": { "total": 12500000 },
       "external_urls": {
         "spotify": "https://open.spotify.com/artist/artist-dua"
       }
