@@ -1,6 +1,7 @@
 package components_test
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -216,6 +217,37 @@ func TestTable_SetFocused(t *testing.T) {
 	// SetFocused should not panic
 	tbl.SetFocused(true)
 	tbl.SetFocused(false)
+}
+
+func TestTable_GotoTop_ResetsToFirstPage(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:      makeColumns(),
+		Theme:        testTheme(),
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	}
+	tbl := components.NewTable(cfg)
+	// pageSize = height - 6 (header + borders + padding) with ShowHeader=true.
+	// height=11 → pageSize=5; 20 rows across 5-row pages = 4 pages.
+	tbl.SetSize(80, 11)
+	tbl.SetFocused(true)
+
+	rows := make([]map[string]string, 20)
+	for i := range rows {
+		rows[i] = map[string]string{
+			"index": fmt.Sprintf("%d", i+1), "track": "T", "artist": "A", "duration": "1:00",
+		}
+	}
+	tbl.SetRows(rows)
+
+	// Scroll 8 rows down to move onto page 2+.
+	for i := 0; i < 8; i++ {
+		tbl.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	require.Greater(t, tbl.CurrentPage(), 1, "should have scrolled past page 1")
+
+	tbl.GotoTop()
+	assert.Equal(t, 1, tbl.CurrentPage(), "GotoTop should reset to page 1")
 }
 
 func TestTable_ViewRendersHeader(t *testing.T) {

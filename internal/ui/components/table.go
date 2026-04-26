@@ -229,3 +229,15 @@ func (t *Table) Columns() []ColumnDef {
 func (t *Table) View() string {
 	return t.inner.View()
 }
+
+// GotoTop resets the table scroll position to the first page.
+// Used by panes to implement the universal Esc scroll-reset behaviour.
+func (t *Table) GotoTop() {
+	t.inner = t.inner.PageFirst()
+}
+
+// CurrentPage returns the current page number (1-indexed).
+// Delegates to the inner model's pointer-receiver method.
+func (t *Table) CurrentPage() int {
+	return (&t.inner).CurrentPage()
+}
