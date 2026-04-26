@@ -406,14 +406,14 @@ type SectionLabel struct {
 **Rendering (unicode):**
 
 ```
-GATEWAY
+Section
 ───────
 ```
 
 **Rendering (ascii):**
 
 ```
-GATEWAY
+Section
 -------
 ```
 
