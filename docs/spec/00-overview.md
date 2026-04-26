@@ -21,7 +21,7 @@
 | 10 | Developer Visibility (Page B) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
 | 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133 | GitHub Actions, GoReleaser, release-please, version injection, multi-platform distribution |
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | Reusable `internal/cliout` package, typed message taxonomy, `docs/CLI-OUTPUT.md` reference, palette config, TTY-guarded spinner, validated prompt |
-| 13 | TUI Design System | `features/13-tui-design-system/` | in-progress | 150–172 | `internal/uikit` package (18 primitives: PaneChrome, OverlayChrome, Panel, TableChrome, ListRow, LockedRow, SectionLabel, EmptyState, URLBox, HeaderBar, StatusBar, KeyBar, Chip, FormField, Toast, StatusGlyph, ProgressBar, Spinner), frozen glyph catalogue with ascii fallback, role-to-token matrix, `docs/TUI-DESIGN-SYSTEM.md` reference, `⚠`→`◬` swap across cliout + TUI, `ᐅ` removal; 169–172 are post-testing regression fixes |
+| 13 | TUI Design System | `features/13-tui-design-system/` | done | 150–172 | `internal/uikit` package (18 primitives: PaneChrome, OverlayChrome, Panel, TableChrome, ListRow, LockedRow, SectionLabel, EmptyState, URLBox, HeaderBar, StatusBar, KeyBar, Chip, FormField, Toast, StatusGlyph, ProgressBar, Spinner), frozen glyph catalogue with ascii fallback, role-to-token matrix, `docs/TUI-DESIGN-SYSTEM.md` reference, `⚠`→`◬` swap across cliout + TUI, `ᐅ` removal; 169–172 post-testing regression fixes all merged |
 
 
 ---
@@ -32,5 +32,5 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-24* (added feature 13: TUI design system)
+*Last updated: 2026-04-26* (feature 13 done: all 23 stories 150–172 merged)
 
