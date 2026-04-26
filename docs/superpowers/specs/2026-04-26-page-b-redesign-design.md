@@ -82,32 +82,32 @@ All gateway events map to existing catalogue roles — no new glyph roles are re
 
 ```
 ╭─ ²Gateway Health ─────────────────────────────╮
-│  ●●●●●●●●○○  Tokens   8/10                    │
-│  ■■■■□□      Slots    3/5                     │
-│  ◷           Backoff  none                    │
-│  ⧖           Dedup    none                    │
+│  ●  Tokens   ●●●●●●●●○○                       │
+│  ■  Slots    ■■■■□□□□□□                       │
+│  ◷  Backoff  none                             │
+│  ⧖  Dedup    none                             │
 ╰───────────────────────────────────────────────╯
 ```
 
-All four rows share the same **3-column fixed-width grid**: icon · label · value.
+All four rows share the same **3-column fixed-width grid**: icon · label · data.
 Not a scrollable table — rendered as aligned strings via per-segment `lipgloss` coloring.
 
 | Col | Width | Content |
 |-----|-------|---------|
-| Icon | `capacity` chars (e.g., 10 for Tokens/Slots) | Bar string or single glyph padded to col width |
+| Icon | 1 glyph, fixed | Single `GlyphRole` — same width for every row |
 | Label | 8 chars, padded | `"Tokens"`, `"Slots"`, `"Backoff"`, `"Dedup"` |
-| Value | remaining | `"8/10"`, `"3/5"`, `"none"`, `"2 waiters"`, `"2.1s"` |
+| Data | remaining | Bar string or text value |
 
-Icon column detail per row:
+Row detail:
 
-| Metric | Icon content | Color |
-|--------|-------------|-------|
-| Tokens | `GlyphFilledDot` (●) × available + `GlyphAvailable` (○) × consumed | `Warning()` when ≤ 2 available, else `TextSecondary()` |
-| Slots | `GlyphFilledSquare` (■) × in-flight + `GlyphEmptySquare` (□) × free | `Warning()` when all full, else `TextSecondary()` |
-| Backoff | `GlyphDeadline` (◷) padded to icon col width | `TextMuted()` when clear, `Error()` when active |
-| Dedup | `GlyphRateLimit` (⧖) padded to icon col width | `TextMuted()` when clear, `TextSecondary()` when active |
+| Metric | Icon glyph | Data content | Data color |
+|--------|-----------|--------------|-----------|
+| Tokens | `GlyphFilledDot` (●) | `GlyphFilledDot` × available + `GlyphAvailable` (○) × consumed | `Warning()` when ≤ 2 available, else `TextSecondary()` |
+| Slots | `GlyphFilledSquare` (■) | `GlyphFilledSquare` × in-flight + `GlyphEmptySquare` (□) × free | `Warning()` when all full, else `TextSecondary()` |
+| Backoff | `GlyphDeadline` (◷) | `"none"` or countdown `"2.1s"` | `TextMuted()` when clear, `Error()` when active |
+| Dedup | `GlyphRateLimit` (⧖) | `"none"` or `"2 waiters"` | `TextMuted()` when clear, `TextSecondary()` when active |
 
-Value column colors: `TextMuted()` for `"none"` / `"fresh"`; `Error()` for active backoff countdown; `TextSecondary()` for active dedup count.
+Icon glyph color matches its row's data color — muted when normal, active color when state is noteworthy.
 
 ---
 
