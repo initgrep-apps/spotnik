@@ -54,8 +54,10 @@ Gateway Live gets double weight — event lines need width to avoid truncation.
 | `4` | Gateway Live |
 | `5` | Network Log |
 
-Focus rotation: `Tab` cycles through visible panes left-to-right, top-to-bottom.
-Hidden panes (toggled off) are skipped. Same behavior as Page A.
+Focus: on Page B, number keys **focus** the pane directly (not toggle visibility).
+`TogglePane` is blocked on Page B by the layout manager — Page B panes are always
+visible and cannot be individually hidden. `Tab` cycles focus left-to-right,
+top-to-bottom through all Page B panes.
 
 ---
 
@@ -196,6 +198,8 @@ Each event is a `uikit.ListRow`. Field mapping:
 
 All roles are existing catalogue entries — no new glyphs required.
 
+`EventBackoffExpired` (domain value 6, between `EventBackoffStarted` and `EventRequestAllowed`) is intentionally not displayed — it is an internal housekeeping event with no user-facing meaning. The switch returns `false` for it and it is silently skipped.
+
 | Glyph role | Unicode | Event | Intent (Role) |
 |---|---|---|---|
 | `GlyphRunning` | `⚡` | Interactive request entered | `RolePlain` |
@@ -208,6 +212,7 @@ All roles are existing catalogue entries — no new glyphs required.
 | `GlyphError` | `✗` | Request blocked | `RoleError` |
 | `GlyphRateLimit` | `⧖` | Dedup joined | `RoleInfo` |
 | `GlyphBlocked` | `⊘` | Backoff started | `RoleError` |
+| `GlyphSuccess` | `✓` | HTTP completed | `RoleSuccess` |
 
 #### Filter Match Strings
 
@@ -225,6 +230,7 @@ Each event row is matched against a pre-built string using `components.Filter.Ma
 | Request blocked | `"<endpoint> blocked"` |
 | Dedup joined | `"<endpoint> dedup"` |
 | Backoff started | `"backoff"` |
+| HTTP completed | `"<status_code>"` (e.g. `"200"`, `"429"`) |
 
 Filter UI note: GatewayLive uses `f → type → Enter` (commit on Enter, shows `filter(query)` in border). NetworkLogPane keeps real-time filtering unchanged. The difference is intentional — GatewayLive is a new pane designed with explicit commit semantics; changing NetworkLogPane's existing behavior would be scope creep and could break existing muscle memory.
 
