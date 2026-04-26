@@ -437,3 +437,12 @@ Non-blocking.
 Items to log:
 1. `docs/TUI-DESIGN-SYSTEM.md §3.3` Panel section could optionally cross-reference `PanelSize` as the canonical sizing policy for Panel callers, so future readers know where to find the 70%/65% policy.
 2. No test in `render_test.go` asserts the rendered panel's actual width at a known terminal size. A future regression reverting to `a.width - 4` would not be caught by content-string assertions alone. Add a test asserting `lipgloss.Width(borderLine) == panelW` at a known terminal width (e.g. 200 → 140) when next touching render_test.go.
+
+---
+
+## Story 173 — Esc scroll-reset: filter-close tests missing in 5 panes
+**Found:** 2026-04-26 | **Source:** PR #221 Review
+**Feature:** 14-page-b-redesign
+
+Items to log:
+1. TopTracks, TopArtists, LikedSongs, RecentlyPlayed, and NetworkLog panes each lack an explicit `Filter_EscCloses` test asserting that pressing Esc while the filter is active closes the filter only and does NOT reset scroll. QueuePane has `TestQueuePane_Filter_EscCloses` covering the pattern. The implementation is correct (the `GotoTop()` call sits after the filter-active early-return branch), but an ordering regression (moving `GotoTop()` above the guard) would not be caught by CI in those 5 panes. Add one test per pane following the QueuePane pattern.

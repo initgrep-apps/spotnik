@@ -38,7 +38,9 @@ Playback keys are always active regardless of which pane has focus.
 |-----|--------|
 | `Tab` | Next pane focus |
 | `Shift+Tab` | Previous pane focus |
-| `Esc` | Close overlay or filter |
+| `↑` / `k` | Scroll up |
+| `↓` / `j` | Scroll down |
+| `Esc` | Close overlay · clear filter · scroll top |
 
 ## Pane Actions
 

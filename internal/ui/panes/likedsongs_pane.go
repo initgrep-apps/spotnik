@@ -149,6 +149,12 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	}
 
+	// Esc with no active filter: reset scroll to page 1.
+	if keyMsg.Type == tea.KeyEscape {
+		l.table.GotoTop()
+		return l, nil
+	}
+
 	// Forward navigation to the table.
 	cmd := l.table.Update(keyMsg)
 	return l, cmd

@@ -260,6 +260,11 @@ func (a *AlbumsPane) handleListViewKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		intent := albumDebounceIntent{albumID: alb.ID, offset: 0}
 		a.albumIntent = intent
 		return a.scheduleAlbumDebounce(intent)
+
+	// Esc with no active filter: reset scroll to page 1.
+	case keyMsg.Type == tea.KeyEscape:
+		a.table.GotoTop()
+		return a, nil
 	}
 
 	// Forward navigation to the table.

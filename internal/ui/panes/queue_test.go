@@ -701,3 +701,40 @@ func TestQueuePane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
 	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
 }
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TableCurrentPage returns the current page of the queue pane's inner table.
+// White-box accessor for testing Esc scroll-reset (story 173).
+func (q *QueuePane) TableCurrentPage() int { return q.table.CurrentPage() }
+
+// TestQueuePane_Esc_ResetsScrollToPage1 verifies that pressing Esc when no filter
+// is active resets the table scroll position back to page 1.
+func TestQueuePane_Esc_ResetsScrollToPage1(t *testing.T) {
+	s := state.New()
+	tracks := make([]api.Track, 20)
+	for i := range tracks {
+		tracks[i] = api.Track{
+			ID:      fmt.Sprintf("q%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			Artists: []api.Artist{{Name: "Artist"}},
+		}
+	}
+	s.SetQueue(tracks)
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		pane = m.(*QueuePane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc with no active filter — should reset to page 1.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pane = m.(*QueuePane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
+}

@@ -919,3 +919,45 @@ func TestPlaylistsPane_AccessColumn_ASCIIFallbacks(t *testing.T) {
 	assert.Equal(t, uikit.GlyphFor(uikit.GlyphAvailable, uikit.GlyphASCII), rows[1]["access"], "followed ASCII glyph")
 	assert.Equal(t, uikit.GlyphFor(uikit.GlyphLocked, uikit.GlyphASCII), rows[2]["access"], "Spotify-curated ASCII glyph")
 }
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TableCurrentPage returns the current page of the playlists pane's main list table.
+// White-box accessor for testing Esc scroll-reset (story 173).
+func (p *PlaylistsPane) TableCurrentPage() int { return p.table.CurrentPage() }
+
+// TestPlaylistsPane_Esc_ResetsScrollInMainListView verifies that pressing Esc in
+// the main playlist list view (not in track sub-view, no active filter) resets the
+// table scroll position to page 1.
+func TestPlaylistsPane_Esc_ResetsScrollInMainListView(t *testing.T) {
+	const userID = "testuser"
+	s := state.New()
+	s.SetUserProfile(domain.UserProfile{ID: userID})
+	playlists := make([]domain.SimplePlaylist, 20)
+	for i := range playlists {
+		playlists[i] = domain.SimplePlaylist{
+			ID:         fmt.Sprintf("pl%d", i),
+			Name:       fmt.Sprintf("Playlist %d", i+1),
+			URI:        fmt.Sprintf("spotify:playlist:pl%d", i),
+			TrackCount: 5,
+			Owner:      domain.SimplePlaylistOwner{ID: userID},
+		}
+	}
+	s.SetPlaylists(playlists)
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
+		pane = m.(*PlaylistsPane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc in the main list view with no active filter — should reset to page 1.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pane = m.(*PlaylistsPane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
+}

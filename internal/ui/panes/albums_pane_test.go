@@ -598,3 +598,45 @@ func TestAlbumsPane_CheckPrefetch_CursorNearEnd_EmitsRequest(t *testing.T) {
 	assert.Equal(t, "al1", fetchReq.AlbumID)
 	assert.Equal(t, 50, fetchReq.Offset, "offset should equal the number of already loaded tracks")
 }
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TableCurrentPage returns the current page of the albums pane's main list table.
+// White-box accessor for testing Esc scroll-reset (story 173).
+func (a *AlbumsPane) TableCurrentPage() int { return a.table.CurrentPage() }
+
+// TestAlbumsPane_Esc_ResetsScrollInMainListView verifies that pressing Esc in the
+// main album list view (not in the track sub-view, no active filter) resets the
+// table scroll position to page 1.
+func TestAlbumsPane_Esc_ResetsScrollInMainListView(t *testing.T) {
+	s := state.New()
+	albums := make([]domain.SavedAlbum, 20)
+	for i := range albums {
+		albums[i] = domain.SavedAlbum{
+			Album: domain.FullAlbum{
+				ID:          fmt.Sprintf("al%d", i),
+				Name:        fmt.Sprintf("Album %d", i+1),
+				URI:         fmt.Sprintf("spotify:album:al%d", i),
+				ReleaseDate: "2020-01-01",
+				Artists:     []domain.Artist{{Name: "Artist"}},
+			},
+		}
+	}
+	s.SetSavedAlbums(albums)
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
+		pane = m.(*AlbumsPane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc in the main list view with no active filter — should reset to page 1.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pane = m.(*AlbumsPane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
+}

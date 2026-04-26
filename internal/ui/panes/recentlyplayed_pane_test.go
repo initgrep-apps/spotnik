@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -222,4 +223,41 @@ func TestRecentlyPlayedPane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
 	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
 	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Played column should use ColumnTertiary()")
+}
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TableCurrentPage returns the current page of the recently played pane's inner table.
+// White-box accessor for testing Esc scroll-reset (story 173).
+func (p *RecentlyPlayedPane) TableCurrentPage() int { return p.table.CurrentPage() }
+
+// TestRecentlyPlayedPane_Esc_ResetsScrollToPage1 verifies that pressing Esc when no
+// filter is active resets the table scroll position back to page 1.
+func TestRecentlyPlayedPane_Esc_ResetsScrollToPage1(t *testing.T) {
+	st := state.New()
+	now := time.Now()
+	histories := make([]domain.PlayHistory, 20)
+	for i := range histories {
+		histories[i] = domain.PlayHistory{
+			Track:    domain.Track{ID: fmt.Sprintf("t%d", i), Name: fmt.Sprintf("Track %d", i+1), URI: fmt.Sprintf("spotify:track:t%d", i), Artists: []domain.Artist{{Name: "Artist"}}},
+			PlayedAt: now.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339),
+		}
+	}
+	st.SetRecentlyPlayed(histories)
+	th := theme.Load("black")
+	pane := NewRecentlyPlayedPane(st, th, true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
+		pane = m.(*RecentlyPlayedPane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc with no active filter — should reset to page 1.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pane = m.(*RecentlyPlayedPane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }

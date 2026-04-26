@@ -175,6 +175,12 @@ func (p *TopTracksPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 
+	// Esc with no active filter: reset scroll to page 1.
+	if keyMsg.Type == tea.KeyEscape {
+		p.table.GotoTop()
+		return p, nil
+	}
+
 	// Forward navigation to the table.
 	cmd := p.table.Update(keyMsg)
 	return p, cmd

@@ -295,6 +295,10 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return p, nil
 
+	// Esc with no active filter: reset scroll to page 1.
+	case key.Type == tea.KeyEscape:
+		p.table.GotoTop()
+		return p, nil
 	}
 
 	// Forward navigation to the table.

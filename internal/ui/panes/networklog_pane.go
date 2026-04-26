@@ -120,6 +120,10 @@ func (p *NetworkLogPane) HasActiveFilter() bool { return p.filter.IsActive() }
 // Exported for testing.
 func (p *NetworkLogPane) SelectedIndex() int { return p.table.SelectedIndex() }
 
+// TableCurrentPage returns the current page number (1-indexed) of the inner table.
+// Exported for testing the Esc scroll-reset behaviour (story 173).
+func (p *NetworkLogPane) TableCurrentPage() int { return p.table.CurrentPage() }
+
 // EventCursor returns the current event cursor position.
 // Exported for testing.
 func (p *NetworkLogPane) EventCursor() uint64 { return p.eventCursor }
@@ -166,6 +170,12 @@ func (p *NetworkLogPane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.filter.Toggle()
 		p.table.SetFocused(false)
 		p.resizeTable()
+		return p, nil
+	}
+
+	// Esc with no active filter: reset scroll to page 1.
+	if m.Type == tea.KeyEscape {
+		p.table.GotoTop()
 		return p, nil
 	}
 
