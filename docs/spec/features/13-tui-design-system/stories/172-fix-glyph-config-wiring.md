@@ -1,7 +1,7 @@
 ---
 title: "Fix: glyph config — additive Bootstrap + wire uikit.Use at startup"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
