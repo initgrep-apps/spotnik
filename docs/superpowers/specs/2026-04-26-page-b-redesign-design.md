@@ -59,6 +59,30 @@ Hidden panes (toggled off) are skipped. Same behavior as Page A.
 
 ---
 
+## Primitive Compliance
+
+All new panes follow `docs/PANE-TEMPLATE.md` scaffold:
+
+- `View()` delegates chrome to `uikit.PaneChrome{...}.Render(content)` — no raw `lipgloss.NewStyle()` borders at call sites
+- Content rows use `uikit.ListRow` — the same primitive used by profile overlay and search overlay
+- Status indicators use `uikit.StatusGlyph` where a single intent-coloured glyph + text suffices
+- All glyphs referenced by role constant (`GlyphPlaying`, `GlyphWarning`, etc.) — never raw rune literals in render code
+
+### New Glyph Roles Required
+
+The following gateway-domain glyphs are absent from the current catalogue in `internal/uikit/glyph.go` and `docs/TUI-DESIGN-SYSTEM.md §4`. They **must be added in the same PR** as the new pane files:
+
+| Role constant | Category | Unicode | ASCII | Usage |
+|---|---|---|---|---|
+| `GlyphGatewayTokenOut` | `gateway.token.out` | `⊖` | `(-)` | Token consumed |
+| `GlyphGatewaySemIn` | `gateway.sem.in` | `⊞` | `[+]` | Semaphore acquired |
+| `GlyphGatewaySemOut` | `gateway.sem.out` | `⊟` | `[-]` | Semaphore released |
+| `GlyphGatewayBackoff` | `gateway.backoff` | `⏳` | `(t)` | Backoff started |
+
+Update both `glyphTable` in `glyph.go` and the catalogue table in `docs/TUI-DESIGN-SYSTEM.md §4`.
+
+---
+
 ## Pane Specs
 
 ### ²Gateway Health
@@ -69,17 +93,23 @@ Hidden panes (toggled off) are skipped. Same behavior as Page A.
 
 ```
 ╭─ ²Gateway Health ────────────────────────────╮
-│  Tokens   ●●●●●●●●○○  8/10                   │
-│  Slots    ■■■■□□□□□□   3/5                   │
-│  Backoff  none                               │
-│  Dedup    none                               │
+│  ●●●●●●●●○○  Tokens  8/10                    │
+│  ■■■■□□□□□□   Slots   3/5                    │
+│  ◷  Backoff  none                            │
+│  ⧖  Dedup    none                            │
 ╰──────────────────────────────────────────────╯
 ```
 
-- `Tokens` — filled dots = available, empty = consumed. `Warning()` color when ≤ 2 remain
-- `Slots` — filled = in-flight, empty = free. `Warning()` color when all slots full
-- `Backoff` — `none` (`TextMuted()`) when clear; countdown `2.1s` in `Error()` when active
-- `Dedup` — `none` (`TextMuted()`) normally; `2 waiters` in `TextSecondary()` when active
+Each metric is a `uikit.ListRow`:
+
+| Metric | Glyph | Label | Caption | Intent |
+|--------|-------|-------|---------|--------|
+| Tokens | `""` (no glyph) | dot-bar string built from `GlyphFilledDot`/`GlyphAvailable` | `"8/10"` | `RoleWarning` when ≤ 2 remain, else `RolePlain` |
+| Slots | `""` (no glyph) | square-bar string built from `GlyphFilledSquare`/`GlyphEmptySquare` | `"3/5"` | `RoleWarning` when all slots full, else `RolePlain` |
+| Backoff | `GlyphDeadline` (◷) | `"Backoff"` | `"none"` or `"2.1s"` | `RoleMuted` when clear, `RoleError` when active |
+| Dedup | `GlyphRateLimit` (⧖) | `"Dedup"` | `"none"` or `"2 waiters"` | `RoleMuted` when clear, `RoleInfo` when active |
+
+For Tokens and Slots the bar is a string assembled at render time using `uikit.GlyphFor(GlyphFilledDot, mode)` / `GlyphFor(GlyphAvailable, mode)` repeated for capacity. The assembled string becomes the ListRow `Label`; the `n/max` count is `Caption`.
 
 ---
 
@@ -93,17 +123,25 @@ Hidden panes (toggled off) are skipped. Same behavior as Page A.
 ╭─ ³Polling Traffic ────────────────────────────╮
 │  ▶  Playback   1s · running                   │
 │                                               │
-│  Playlists  ◬  2h 55m stale                   │
-│  Albums     ◬  2h 55m stale                   │
-│  Liked      ○  fresh                          │
-│  Recent     ○  fresh                          │
+│  ◬  Playlists  2h 55m stale                   │
+│  ◬  Albums     2h 55m stale                   │
+│  ○  Liked      fresh                          │
+│  ○  Recent     fresh                          │
 ╰───────────────────────────────────────────────╯
 ```
 
-- Polling row: `▶` running (`Success()`) or `⏸` idle (`Warning()`) · interval · state
-- Cache rows: `○` fresh (`TextMuted()`) · `◬` stale with age (`Warning()` < 1h, `Error()` ≥ 1h)
-- Sources: `store.PlaylistsFetchedAt()`, `store.AlbumsFetchedAt()`,
-  `store.LikedTracksFetchedAt()`, `store.RecentPlayedFetchedAt()`
+Each row is a `uikit.ListRow`:
+
+| Row | Glyph | Label | Caption | Intent |
+|-----|-------|-------|---------|--------|
+| Playback | `GlyphPlaying` (▶) running / `GlyphPaused` (⏸) idle | `"Playback"` | `"1s · running"` | `RoleSuccess` running, `RoleWarning` idle |
+| Playlists | `GlyphWarning` (◬) stale / `GlyphAvailable` (○) fresh | `"Playlists"` | `"2h 55m stale"` or `"fresh"` | `RoleWarning` < 1h stale, `RoleError` ≥ 1h, `RoleMuted` fresh |
+| Albums | same pattern | `"Albums"` | staleness age or `"fresh"` | same |
+| Liked | same pattern | `"Liked"` | same | same |
+| Recent | same pattern | `"Recent"` | same | same |
+
+Sources: `store.PlaylistsFetchedAt()`, `store.AlbumsFetchedAt()`,
+`store.LikedTracksFetchedAt()`, `store.RecentPlayedFetchedAt()`
 
 ---
 
@@ -118,15 +156,15 @@ Auto-scrolling reverse-chronological event stream. New events prepend at top on 
 
 ```
 ╭─ ⁴Gateway Live ──────────────────────────────────────────────── f filter ────────────╮
-│  15:52:10  ⚡  GET /v1/me/player                                                      │
-│  15:52:10  ⊖   Token consumed → 9/10                                                 │
-│  15:52:10  ⊞   Semaphore acquired  3/5                                               │
-│  15:52:10  ✓   Request allowed                                                       │
-│  15:52:09  ◷   GET /v1/me/player/queue                                               │
-│  15:52:09  ⧖   Dedup joined                                                          │
-│  15:52:09  ✓   Dedup resolved  200                                                   │
-│  15:52:08  ↻   Tokens refilled → 10                                                  │
-│  15:52:05  ✗   Request blocked  (backoff active)                                     │
+│  ⚡  15:52:10  GET /v1/me/player                                                      │
+│  ⊖  15:52:10  Token consumed → 9/10                                                  │
+│  ⊞  15:52:10  Semaphore acquired  3/5                                                │
+│  ✓  15:52:10  Request allowed                                                        │
+│  ◷  15:52:09  GET /v1/me/player/queue                                                │
+│  ⧖  15:52:09  Dedup joined                                                           │
+│  ✓  15:52:09  Dedup resolved  200                                                    │
+│  ↻  15:52:08  Tokens refilled → 10                                                   │
+│  ✗  15:52:05  Request blocked  (backoff active)                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -136,20 +174,32 @@ When filter is active, border shows `filter(query)`:
 ╭─ ⁴Gateway Live ──────────────────────────────────────── filter(blocked) ─────────────╮
 ```
 
-#### Event Color Map
+Each event is a `uikit.ListRow`. Field mapping:
 
-| Glyph | Event | Color token |
-|-------|-------|-------------|
-| `⚡` | Interactive request entered | `TextPrimary()` |
-| `◷` | Background request entered | `TextMuted()` |
-| `⊖` | Token consumed | `Warning()` |
-| `↻` | Tokens refilled | `Success()` |
-| `⊞` | Semaphore acquired | `TextSecondary()` |
-| `⊟` | Semaphore released | `TextMuted()` |
-| `✓` | Request allowed / dedup resolved | `Success()` |
-| `✗` | Request blocked | `Error()` |
-| `⧖` | Dedup joined | `TextSecondary()` |
-| `⏳` | Backoff started | `Error()` |
+| Field | Value |
+|-------|-------|
+| `Glyph` | Event-type glyph role from the table below |
+| `Label` | `"HH:MM:SS  <event description>"` (timestamp + text combined) |
+| `Caption` | `""` (empty) |
+| `Intent` | Role from the colour map below |
+
+#### Event Glyph and Color Map
+
+| Glyph role | Unicode | Event | Intent (Role) |
+|---|---|---|---|
+| `GlyphRunning` | `⚡` | Interactive request entered | `RolePlain` |
+| `GlyphDeadline` | `◷` | Background request entered | `RoleMuted` |
+| `GlyphGatewayTokenOut` | `⊖` | Token consumed | `RoleWarning` |
+| `GlyphRepeatAll` | `↻` | Tokens refilled | `RoleSuccess` |
+| `GlyphGatewaySemIn` | `⊞` | Semaphore acquired | `RoleInfo` |
+| `GlyphGatewaySemOut` | `⊟` | Semaphore released | `RoleMuted` |
+| `GlyphSuccess` | `✓` | Request allowed / dedup resolved | `RoleSuccess` |
+| `GlyphError` | `✗` | Request blocked | `RoleError` |
+| `GlyphRateLimit` | `⧖` | Dedup joined | `RoleInfo` |
+| `GlyphGatewayBackoff` | `⏳` | Backoff started | `RoleError` |
+
+`GlyphGatewayTokenOut`, `GlyphGatewaySemIn`, `GlyphGatewaySemOut`, `GlyphGatewayBackoff`
+are new catalogue entries — see **New Glyph Roles Required** above.
 
 #### Filter Matches On
 Endpoint path · event type keyword (allowed, blocked, dedup, backoff, token) · priority (interactive, background)
@@ -172,7 +222,7 @@ Unified reverse-chronological HTTP request table. Newest row at top.
 │  15:51:59    GET       /v1/me/player                 204      33ms      Allowed    bg   │
 │  15:51:49    GET       /v1/me/player                 204      39ms      Allowed    bg   │
 │  15:51:15    PUT       /v1/me/player/play            204      18ms      Allowed    ⚡   │
-│  15:51:00    GET       /v1/me/player                 429      12ms      Allowed    bg   │
+│  15:51:00    GET       /v1/me/player                 429      12ms      Blocked    bg   │
 │  ▼ 1/20                                                                                │
 ╰────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -190,6 +240,34 @@ Unified reverse-chronological HTTP request table. Newest row at top.
 | Priority | 8% | `ColumnIndex()` | `bg` (◷) · `⚡` interactive |
 
 Filter matches on: endpoint, status, decision, priority.
+
+#### Decision Column Bug Fix
+
+The current `refreshRows()` rebuilds `decisions := make(map[uint64]domain.EventKind)` on every
+tick. If `EventRequestAllowed` / `EventRequestBlocked` / `EventDedupJoined` arrives in tick N
+and its paired `EventHttpCompleted` arrives in tick N+1, the decision is lost — every row shows
+empty/Allowed regardless.
+
+**Fix:** promote `decisions` to a persistent struct field:
+
+```go
+type NetworkLogPane struct {
+    // ... existing fields ...
+    pendingDecisions map[uint64]domain.EventKind  // persists across tick cycles
+}
+
+func NewNetworkLogPane(...) *NetworkLogPane {
+    return &NetworkLogPane{
+        // ...
+        pendingDecisions: make(map[uint64]domain.EventKind),
+    }
+}
+```
+
+In `refreshRows()`:
+1. Use `p.pendingDecisions` (the struct field) instead of the local `decisions` variable.
+2. After recording a decision for an `EventHttpCompleted` row, call `delete(p.pendingDecisions, e.RequestID)` to avoid unbounded growth.
+3. Accumulate new decision events into `p.pendingDecisions` before the HTTP-completed pass.
 
 ---
 
@@ -251,8 +329,11 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `PollingSnapshotMsg` routing in `app.go` | `RequestFlowPane` → `PollingTrafficPane` |
 | All uppercase labels in Page B panes | Title Case — matches Page A style |
 | `NetworkLogPane` column headers | Uppercase → Title Case |
+| `NetworkLogPane` Decision column | `decisions` local map → `pendingDecisions` persistent struct field |
 | All panes | `Esc` standardized: clears filter / resets scroll |
 | `docs/keybinding.md`, `docs/DESIGN.md §17`, `help_overlay.go` | New entries for scroll + Esc reset |
+| `internal/uikit/glyph.go` | Add 4 new gateway glyph roles |
+| `docs/TUI-DESIGN-SYSTEM.md §4` | Add 4 new gateway glyph entries to catalogue |
 
 ## What Stays Unchanged
 
@@ -281,9 +362,11 @@ Same entries added to `docs/keybinding.md` and `docs/DESIGN.md §17` in the same
 | `internal/ui/panes/requestflow_boxed_test.go` | **Delete** |
 | `internal/ui/panes/requestflow_replay.go` | **Delete** |
 | `internal/ui/panes/requestflow_replay_test.go` | **Delete** |
-| `internal/ui/panes/networklog_pane.go` | Update column headers to Title Case |
+| `internal/ui/panes/networklog_pane.go` | Update column headers to Title Case; fix `pendingDecisions` persistent field |
 | `internal/ui/panes/help_overlay.go` | Add scroll + Esc keybindings |
 | `internal/ui/layout/` | Update Page B grid preset |
 | `internal/app/app.go` | Reroute `PollingSnapshotMsg`, wire new panes |
+| `internal/uikit/glyph.go` | Add 4 gateway glyph roles + table entries |
+| `docs/TUI-DESIGN-SYSTEM.md §4` | Add 4 gateway glyph entries to catalogue |
 | `docs/DESIGN.md §17` | Update Page B spec, add keybindings |
 | `docs/keybinding.md` | Add scroll + Esc entries |
