@@ -1,7 +1,7 @@
 ---
 title: "Universal Esc Scroll Reset"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
