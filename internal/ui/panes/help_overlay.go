@@ -44,7 +44,8 @@ var helpContent = [2][]helpSection{
 		}},
 		{title: "Navigation", bindings: []helpBinding{
 			{"Tab", "Next pane"}, {"Shift+Tab", "Prev pane"},
-			{"Esc", "Close overlay"},
+			{"↑ / k", "Scroll up"}, {"↓ / j", "Scroll down"},
+			{"Esc", "Close overlay · clear filter · scroll top"},
 		}},
 	},
 	{

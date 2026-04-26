@@ -740,8 +740,10 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | **Navigation** | | |
 | `Tab` | Next pane focus | Visible panes |
 | `Shift+Tab` | Previous pane focus | Visible panes |
+| `↑` / `k` | Scroll up | Focused pane |
+| `↓` / `j` | Scroll down | Focused pane |
 | `Enter` | Select/play item | Focused pane |
-| `Esc` | Close overlay/filter | Context |
+| `Esc` | Close overlay · clear filter · scroll top | Context |
 | **Pane Actions** | | |
 | `f` | Toggle filter in focused pane | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
