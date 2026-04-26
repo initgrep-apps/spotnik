@@ -322,3 +322,43 @@ func TestLikedSongsPane_UsesColumnColors(t *testing.T) {
 	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
 	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
 }
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TableCurrentPage returns the current page of the liked songs pane's inner table.
+// White-box accessor for testing Esc scroll-reset (story 173).
+func (l *LikedSongsPane) TableCurrentPage() int { return l.table.CurrentPage() }
+
+// TestLikedSongsPane_Esc_ResetsScrollToPage1 verifies that pressing Esc when no
+// filter is active resets the table scroll position back to page 1.
+func TestLikedSongsPane_Esc_ResetsScrollToPage1(t *testing.T) {
+	st := state.New()
+	tracks := make([]domain.SavedTrack, 20)
+	for i := range tracks {
+		tracks[i] = domain.SavedTrack{
+			Track: domain.Track{
+				ID:      fmt.Sprintf("t%d", i),
+				Name:    fmt.Sprintf("Track %d", i+1),
+				URI:     fmt.Sprintf("spotify:track:t%d", i),
+				Artists: []domain.Artist{{Name: "Artist"}},
+			},
+		}
+	}
+	st.SetLikedTracks(tracks)
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(st, th, true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
+		pane = m.(*LikedSongsPane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc with no active filter — should reset to page 1.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pane = m.(*LikedSongsPane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
+}

@@ -153,6 +153,12 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return q, nil
 	}
 
+	// Esc with no active filter: reset scroll to page 1.
+	if keyMsg.Type == tea.KeyEscape {
+		q.table.GotoTop()
+		return q, nil
+	}
+
 	// Forward j/k and other navigation to the table.
 	cmd := q.table.Update(msg)
 	return q, cmd

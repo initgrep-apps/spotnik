@@ -147,6 +147,12 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, nil
 	}
 
+	// Esc with no active filter: reset scroll to page 1.
+	if keyMsg.Type == tea.KeyEscape {
+		r.table.GotoTop()
+		return r, nil
+	}
+
 	// Forward navigation to the table.
 	cmd := r.table.Update(keyMsg)
 	return r, cmd

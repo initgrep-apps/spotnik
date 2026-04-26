@@ -173,6 +173,12 @@ func (a *TopArtistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Esc with no active filter: reset scroll to page 1.
+	if keyMsg.Type == tea.KeyEscape {
+		a.table.GotoTop()
+		return a, nil
+	}
+
 	// Forward navigation to the table.
 	cmd := a.table.Update(keyMsg)
 	return a, cmd

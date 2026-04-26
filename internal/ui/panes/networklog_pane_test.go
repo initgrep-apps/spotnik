@@ -1,6 +1,7 @@
 package panes_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -606,4 +607,37 @@ func indexInStr(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TestNetworkLogPane_Esc_ResetsScrollToPage1 verifies that pressing Esc when no
+// filter is active resets the table scroll position back to page 1.
+func TestNetworkLogPane_Esc_ResetsScrollToPage1(t *testing.T) {
+	s := state.New()
+	// Record 20 completed requests to fill multiple pages.
+	for i := 0; i < 20; i++ {
+		recordHttpCompleted(s, uint64(i+1), "GET", fmt.Sprintf("/v1/track/%d", i), 200, 50, domain.PriorityBackground)
+	}
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetFocused(true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Trigger a tick to load events into the pane.
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ = pane.Update(tea_keyMsg("j"))
+		pane = m.(*panes.NetworkLogPane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc with no active filter — should reset to page 1.
+	m, _ = pane.Update(tea_keyMsg("Esc"))
+	pane = m.(*panes.NetworkLogPane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }

@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -287,4 +288,42 @@ func TestTopTracksPane_TKey_DoesNotCycle(t *testing.T) {
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) //nolint:errcheck
 	// Time range must be unchanged — t no longer cycles range in the pane.
 	assert.Equal(t, initial, pane.TimeRange())
+}
+
+// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+
+// TableCurrentPage returns the current page of the top tracks pane's inner table.
+// White-box accessor for testing Esc scroll-reset (story 173).
+func (p *TopTracksPane) TableCurrentPage() int { return p.table.CurrentPage() }
+
+// TestTopTracksPane_Esc_ResetsScrollToPage1 verifies that pressing Esc when no
+// filter is active resets the table scroll position back to page 1.
+func TestTopTracksPane_Esc_ResetsScrollToPage1(t *testing.T) {
+	st := state.New()
+	tracks := make([]domain.Track, 20)
+	for i := range tracks {
+		tracks[i] = domain.Track{
+			ID:   fmt.Sprintf("tt%d", i),
+			Name: fmt.Sprintf("Track %d", i+1),
+			Artists: []domain.Artist{{Name: "Artist"}},
+		}
+	}
+	st.SetTopTracks("short_term", tracks)
+	st.StampStatsFetchedAt("short_term")
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	pane.SetSize(80, 11)
+
+	// Scroll 8 rows down to advance past page 1.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
+		pane = m.(*TopTracksPane)
+	}
+	require.Greater(t, pane.TableCurrentPage(), 1, "should have scrolled past page 1")
+
+	// Press Esc with no active filter — should reset to page 1.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pane = m.(*TopTracksPane)
+	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }
