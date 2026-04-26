@@ -279,7 +279,7 @@ func (m *Manager) TogglePane(id PaneID) {
 	}
 
 	// Only Page A panes (0-7) are toggleable
-	if id >= PaneRequestFlow {
+	if id >= PaneNetworkLog {
 		return
 	}
 

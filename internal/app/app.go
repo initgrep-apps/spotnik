@@ -333,7 +333,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		layout.PaneRecentlyPlayed: recentlyPlayedPane,
 		layout.PaneTopTracks:      topTracksPane,
 		layout.PaneTopArtists:     topArtistsPane,
-		layout.PaneRequestFlow:    requestFlowPane,
+		layout.PaneGatewayHealth:  requestFlowPane,
 		layout.PaneNetworkLog:     networkLogPane,
 	}
 
@@ -801,7 +801,7 @@ func (a *App) ActivePresetIndex() int {
 
 // RequestFlowPane returns the RequestFlowPane from the panes map (exported for testing).
 func (a *App) RequestFlowPane() *panes.RequestFlowPane {
-	p, ok := a.panes[layout.PaneRequestFlow]
+	p, ok := a.panes[layout.PaneGatewayHealth]
 	if !ok {
 		return nil
 	}

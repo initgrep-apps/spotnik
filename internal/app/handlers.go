@@ -376,7 +376,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if rfp := a.RequestFlowPane(); rfp != nil {
 			updated, _ := rfp.Update(m)
 			if p, ok := updated.(*panes.RequestFlowPane); ok {
-				a.panes[layout.PaneRequestFlow] = p
+				a.panes[layout.PaneGatewayHealth] = p
 			}
 		}
 		if nlp := a.NetworkLogPane(); nlp != nil {
@@ -402,7 +402,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if rfp := a.RequestFlowPane(); rfp != nil {
 			updated, _ := rfp.Update(pollingSnapshot)
 			if p, ok := updated.(*panes.RequestFlowPane); ok {
-				a.panes[layout.PaneRequestFlow] = p
+				a.panes[layout.PaneGatewayHealth] = p
 			}
 		}
 
@@ -461,7 +461,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if rfp := a.RequestFlowPane(); rfp != nil {
 			updated, rfpCmd := rfp.Update(m)
 			if p, ok := updated.(*panes.RequestFlowPane); ok {
-				a.panes[layout.PaneRequestFlow] = p
+				a.panes[layout.PaneGatewayHealth] = p
 			}
 			if rfpCmd != nil {
 				visCmds = append(visCmds, rfpCmd)

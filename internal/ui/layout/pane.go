@@ -21,8 +21,10 @@ const (
 	PaneRecentlyPlayed               // Page A pane 6 (toggle key 6)
 	PaneTopTracks                    // Page A pane 7 (toggle key 7)
 	PaneTopArtists                   // Page A pane 8 (toggle key 8)
-	PaneRequestFlow                  // Page B — not toggleable via number keys
 	PaneNetworkLog                   // Page B — not toggleable via number keys
+	PaneGatewayHealth                // Page B — not toggleable via number keys
+	PanePollingTraffic               // Page B — not toggleable via number keys
+	PaneGatewayLive                  // Page B — not toggleable via number keys
 )
 
 // PageID identifies a page (group of panes).

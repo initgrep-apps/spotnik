@@ -47,7 +47,7 @@ func TestRequestFlowPane_ImplementsLayoutPane(t *testing.T) {
 
 func TestRequestFlowPane_ID(t *testing.T) {
 	pane := newTestRequestFlowPane()
-	assert.Equal(t, layout.PaneRequestFlow, pane.ID())
+	assert.Equal(t, layout.PaneGatewayHealth, pane.ID())
 }
 
 func TestRequestFlowPane_Title(t *testing.T) {
