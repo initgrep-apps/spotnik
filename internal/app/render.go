@@ -162,9 +162,11 @@ func (a *App) renderOnboardingRegister() string {
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort)
 
+	panelW, panelH := uikit.PanelSize(a.width, a.height)
+
 	// URLBox wraps the redirect URI inside a muted rounded box.
 	// Minimum box width of 50 ensures the URI is readable even at zero terminal width (tests).
-	uriBoxW := a.width - 12
+	uriBoxW := panelW - 12
 	if uriBoxW < 50 {
 		uriBoxW = 50
 	}
@@ -181,7 +183,7 @@ func (a *App) renderOnboardingRegister() string {
 	)
 
 	// Center the title block within the panel inner area.
-	panelInnerWidth := a.width - 8
+	panelInnerWidth := panelW - 8
 	if panelInnerWidth < 72 {
 		panelInnerWidth = 72
 	}
@@ -215,14 +217,6 @@ func (a *App) renderOnboardingRegister() string {
 	)
 
 	// Panel wraps body with a titled border; padding is added by caller before passing body.
-	panelW := a.width - 4
-	if panelW < 80 {
-		panelW = 80
-	}
-	panelH := a.height - 4
-	if panelH < 20 {
-		panelH = 20
-	}
 	paddedBody := lipgloss.NewStyle().Padding(1, 2).Render(body)
 	return uikit.Panel{
 		Width:  panelW,
@@ -240,9 +234,11 @@ func (a *App) renderOnboardingOAuth() string {
 
 	textStyle := lipgloss.NewStyle().Foreground(t.TextPrimary())
 
+	panelW, panelH := uikit.PanelSize(a.width, a.height)
+
 	// URLBox wraps the auth URL inside a muted rounded box.
 	// Minimum box width of 50 ensures the URL is readable even at zero terminal width (tests).
-	urlBoxW := a.width - 12
+	urlBoxW := panelW - 12
 	if urlBoxW < 50 {
 		urlBoxW = 50
 	}
@@ -252,7 +248,7 @@ func (a *App) renderOnboardingOAuth() string {
 	spinnerText := a.onboardingSpinner.View()
 
 	// Center the title block within the panel inner area.
-	panelInnerWidth := a.width - 8
+	panelInnerWidth := panelW - 8
 	if panelInnerWidth < 72 {
 		panelInnerWidth = 72
 	}
@@ -278,14 +274,6 @@ func (a *App) renderOnboardingOAuth() string {
 		hintBar,
 	)
 
-	panelW := a.width - 4
-	if panelW < 80 {
-		panelW = 80
-	}
-	panelH := a.height - 4
-	if panelH < 20 {
-		panelH = 20
-	}
 	paddedBody := lipgloss.NewStyle().Padding(1, 2).Render(body)
 	return uikit.Panel{
 		Width:  panelW,
@@ -305,8 +293,10 @@ func (a *App) renderOnboardingError() string {
 
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort)
 
+	panelW, panelH := uikit.PanelSize(a.width, a.height)
+
 	// Center the title block within the panel inner area.
-	panelInnerWidth := a.width - 8
+	panelInnerWidth := panelW - 8
 	if panelInnerWidth < 72 {
 		panelInnerWidth = 72
 	}
@@ -334,14 +324,6 @@ func (a *App) renderOnboardingError() string {
 		hintBar,
 	)
 
-	panelW := a.width - 4
-	if panelW < 80 {
-		panelW = 80
-	}
-	panelH := a.height - 4
-	if panelH < 20 {
-		panelH = 20
-	}
 	paddedBody := lipgloss.NewStyle().Padding(1, 2).Render(body)
 	return uikit.Panel{
 		Width:  panelW,
