@@ -21,6 +21,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/cliout"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1053,4 +1054,32 @@ func TestPrintReRegisterInstructions_golden(t *testing.T) {
 	var buf strings.Builder
 	cmd.PrintReRegisterInstructions(&buf, "http://127.0.0.1:8888/callback")
 	assertGolden(t, "auth_re_register_instructions", buf.String())
+}
+
+// TestLoadConfig_GlyphsASCII_ActivatesASCIIMode pins the wiring between
+// loadConfigFromPath and uikit.Use: a config with glyphs="ascii" must
+// result in GlyphASCII mode when the value is passed to uikit.Use.
+// This guards against accidental deletion of the uikit.Use call in runApp.
+func TestLoadConfig_GlyphsASCII_ActivatesASCIIMode(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`
+[auth]
+client_id = "aabbccddeeff00112233445566778899"
+
+[ui]
+glyphs = "ascii"
+`), 0o600))
+
+	cfg, err := cmd.LoadConfigFromPath(cfgPath)
+	require.NoError(t, err)
+	assert.Equal(t, "ascii", cfg.UI.Glyphs)
+
+	// Reset the sync.Once so this test is hermetic regardless of execution order.
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	t.Cleanup(func() { uikit.SetModeForTest(uikit.GlyphUnicode) })
+
+	uikit.Use(cfg.UI.Glyphs)
+	assert.Equal(t, uikit.GlyphASCII, uikit.ActiveMode(),
+		"glyphs=ascii in config must activate GlyphASCII mode via uikit.Use")
 }

@@ -301,6 +301,30 @@ func TestBootstrap_NoopWhenUISectionPresent(t *testing.T) {
 	assert.Equal(t, original, string(data), "Bootstrap must not modify a file that already has [ui]")
 }
 
+// TestBootstrap_AppendsUISectionToExistingFile_NoTrailingNewline verifies that
+// Bootstrap correctly separates the new [ui] block from a file that does not
+// end with a newline, preventing the section header from being concatenated onto
+// the last line of existing content.
+func TestBootstrap_AppendsUISectionToExistingFile_NoTrailingNewline(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	// Deliberately omit the trailing newline.
+	original := "[preferences]\ntheme = \"black\""
+	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
+
+	err := config.Bootstrap(path)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(data)
+
+	// The [ui] header must appear on its own line, not concatenated with the last key.
+	assert.Contains(t, content, "\n[ui]", "Bootstrap must start [ui] on a new line even when original has no trailing newline")
+	assert.Contains(t, content, "[preferences]", "original content must be preserved")
+}
+
 // TestBootstrap_CreatesDirectory verifies that Bootstrap creates parent directories
 // when they do not exist.
 func TestBootstrap_CreatesDirectory(t *testing.T) {

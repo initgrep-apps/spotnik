@@ -15,3 +15,8 @@ func RunRegister(c *cobra.Command, r io.Reader) error {
 
 // ValidateClientID is a test-only shim that exposes validateClientID.
 var ValidateClientID = validateClientID
+
+// LoadConfigFromPath is a test-only shim that exposes loadConfigFromPath
+// so tests can verify config loading behaviour without going through the
+// full runApp path.
+var LoadConfigFromPath = loadConfigFromPath
