@@ -32,7 +32,7 @@ var topArtistsRangeLabels = map[string]string{
 
 // TopArtistsPane is the Bubble Tea model for the Top Artists pane (toggle key 8).
 // It renders a dense bubble-table of the user's top artists with columns for index,
-// name, popularity (dot-graded), and follower count. It supports in-pane filtering
+// name, popularity (star-graded), and follower count. It supports in-pane filtering
 // by artist name and per-pane time range cycling via the g key.
 // Enter on a selected row emits PlayContextMsg to start playback of that artist.
 type TopArtistsPane struct {

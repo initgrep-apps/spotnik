@@ -257,6 +257,7 @@ type PlayOptions struct {
 
 // ArtistFollowers holds the follower count from Spotify's nested followers object.
 type ArtistFollowers struct {
+	// Total is the number of Spotify followers for this artist.
 	Total int `json:"total"`
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 func TestTopArtistsPipeline_PopularityAndFollowers(t *testing.T) {
@@ -43,7 +44,9 @@ func TestTopArtistsPipeline_PopularityAndFollowers(t *testing.T) {
 	pane.SetSize(120, 20)
 	view := pane.View()
 
-	if !strings.Contains(view, "★") {
+	m := uikit.ActiveMode()
+	on := uikit.GlyphFor(uikit.GlyphPinned, m)
+	if !strings.Contains(view, on) {
 		t.Errorf("expected filled stars in view, got:\n%s", view)
 	}
 	if !strings.Contains(view, "10M") {
