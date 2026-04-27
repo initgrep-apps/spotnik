@@ -163,8 +163,11 @@ func (p *GatewayLivePane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.filter.IsActive() {
 		switch m.Type {
 		case tea.KeyEnter:
-			// Commit: read query BEFORE Toggle() which clears it.
-			p.activeQuery = p.filter.Query()
+			// Commit: only update activeQuery if the user typed something.
+			// Enter on an empty input preserves the prior committed query.
+			if q := p.filter.Query(); q != "" {
+				p.activeQuery = q
+			}
 			p.filter.Toggle() // deactivates and clears filter input
 			p.table.SetFocused(true)
 			p.resizeTable()
@@ -178,8 +181,9 @@ func (p *GatewayLivePane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			p.buildTableRows()
 			return p, nil
 		default:
+			// Forward keystroke to filter input. buildTableRows is intentionally
+			// omitted here — filter query changes only take effect on Enter (Enter-to-apply).
 			cmd := p.filter.Update(m)
-			p.buildTableRows()
 			return p, cmd
 		}
 	}
