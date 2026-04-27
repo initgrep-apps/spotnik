@@ -428,6 +428,10 @@ func (a *App) renderGrid() string {
 				Focused:     pane.IsFocused(),
 				Theme:       a.theme,
 			}
+			// Populate FilterQuery when the pane exposes a committed filter query.
+			if fqp, ok := pane.(layout.FilterQueryPane); ok {
+				cfg.FilterQuery = fqp.ActiveFilterQuery()
+			}
 			bordered := layout.RenderPaneBorder(content, cfg)
 
 			// Ensure exact width/height via lipgloss (safety cap against oversized pane output).
