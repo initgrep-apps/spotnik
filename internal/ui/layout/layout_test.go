@@ -326,6 +326,23 @@ func TestTogglePane_PageA_IgnoresPageBPanes(t *testing.T) {
 	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
 }
 
+func TestTogglePane_PageB_CannotHideLastPane(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(200, 50)
+	m.TogglePage() // Page B — PresetNerdStatus has 5 panes
+
+	// Hide 4 of 5 panes — only NowPlaying remains
+	m.TogglePane(layout.PaneGatewayHealth)
+	m.TogglePane(layout.PanePollingTraffic)
+	m.TogglePane(layout.PaneGatewayLive)
+	m.TogglePane(layout.PaneNetworkLog)
+
+	require.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must be the last visible pane")
+	// Attempt to hide the last pane must be rejected
+	m.TogglePane(layout.PaneNowPlaying)
+	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "cannot-hide-last guard must reject on Page B")
+}
+
 func TestIsPaneVisible_ReflectsToggleState(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
