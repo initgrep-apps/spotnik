@@ -15,17 +15,6 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// PollingSnapshotMsg carries app-level polling state to the RequestFlowPane.
-// The app sends this on each TickMsg so the pane can display polling diagnostics.
-type PollingSnapshotMsg struct {
-	// TickIntervalMs is the current playback polling interval in milliseconds.
-	TickIntervalMs int
-	// IsIdle is true when the user has not pressed a key for idleThresholdSecs.
-	IsIdle bool
-	// IdleSecs is how long the user has been idle (0 when not idle).
-	IdleSecs int
-}
-
 // RequestFlowPane visualizes the live APP → GATEWAY → SPOTIFY request pipeline.
 // It reads gateway lifecycle events from the store's event journal and replays
 // them at human-observable speed (one event per viz.TickMsg, 200ms minimum visibility).
