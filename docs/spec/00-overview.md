@@ -22,7 +22,7 @@
 | 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133 | GitHub Actions, GoReleaser, release-please, version injection, multi-platform distribution |
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | Reusable `internal/cliout` package, typed message taxonomy, `docs/CLI-OUTPUT.md` reference, palette config, TTY-guarded spinner, validated prompt |
 | 13 | TUI Design System | `features/13-tui-design-system/` | done | 150–172 | `internal/uikit` package (18 primitives: PaneChrome, OverlayChrome, Panel, TableChrome, ListRow, LockedRow, SectionLabel, EmptyState, URLBox, HeaderBar, StatusBar, KeyBar, Chip, FormField, Toast, StatusGlyph, ProgressBar, Spinner), frozen glyph catalogue with ascii fallback, role-to-token matrix, `docs/TUI-DESIGN-SYSTEM.md` reference, `⚠`→`◬` swap across cliout + TUI, `ᐅ` removal; 169–172 post-testing regression fixes all merged |
-| 14 | Page B Redesign (Nerd Status) | `features/14-page-b-redesign/` | open | 173–177 | Universal Esc scroll-reset across all table panes; replace RequestFlowPane with GatewayHealthPane, PollingTrafficPane, GatewayLivePane; fix NetworkLog decision cross-tick bug; update Page B preset grid |
+| 14 | Page B Redesign (Nerd Status) | `features/14-page-b-redesign/` | done | 173–177 | Universal Esc scroll-reset across all table panes; replace RequestFlowPane with GatewayHealthPane, PollingTrafficPane, GatewayLivePane; fix NetworkLog decision cross-tick bug; update Page B preset grid |
 
 
 ---
@@ -33,5 +33,5 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-04-26* (feature 14 open: stories 173–177, Page B redesign)
+*Last updated: 2026-04-27* (feature 14 done: stories 173–177, Page B Redesign complete)
 
