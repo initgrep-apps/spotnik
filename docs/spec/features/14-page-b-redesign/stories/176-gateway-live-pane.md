@@ -1,7 +1,7 @@
 ---
 title: "GatewayLivePane"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background

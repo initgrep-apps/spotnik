@@ -456,3 +456,12 @@ Items to log:
 Items to log:
 1. `TestGatewayHealthPane_Threshold_Tokens`, `_Threshold_Slots`, `_Threshold_Backoff`, `_FreshPane_NotWarningColor`, and `TestPollingTrafficPane_CacheStale_WarningVsError` use `assert.NotEqual` between two `View()` outputs whose visible content (bar-fill counts, text strings) differs in addition to color. Empirically verified: deleting the warning-threshold block in `gateway_health_pane.go` still leaves these tests passing. A regression that drops a warning color while leaving the data correct would slip through. Fix: extract a `resolveTokenColor`-style helper that returns the resolved color for a snapshot and unit-test that helper directly, OR assert specific ANSI escape sequences (e.g., `strings.Contains(view, warningANSI)` for the warning view but NOT the healthy view).
 2. `TestGatewayHealthPane_Update_DrainsCursor` is misnamed — it verifies "the latest event's snapshot wins after each tick" (which users care about) but does not actually prove cursor advancement. Mutating `drainEvents` to read from cursor 0 every tick would not break this test. To actually catch a cursor bug, add a test that records 3 events between two ticks to verify no events are dropped and that re-reading at the same cursor yields no events.
+
+---
+
+## Story 176 — GatewayLivePane SetTheme has 0% test coverage
+**Found:** 2026-04-27 | **Source:** PR #224 Review (round 2)
+**Feature:** 14-page-b-redesign
+
+Items to log:
+1. `GatewayLivePane.SetTheme()` rebuilds the table, recreates the filter, and re-renders rows — non-trivial logic at 0% line coverage. Add a smoke test that calls `SetTheme(theme.Load("midnight"))` after seeding events and asserts the buffer count survives and `View()` still renders rows. Theme switching is a runtime feature (Feature 16) so this matters.
