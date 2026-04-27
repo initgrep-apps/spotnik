@@ -68,3 +68,13 @@ TDD guide for every story. Each story cross-references the matching `## Task N` 
 - [ ] Six `requestflow_*` files deleted; `humanAge` / `humanInterval` removed with them;
       `cacheAge` and `pollingHumanInterval` live in their respective new pane files
 - [ ] `make ci` passes after every story
+
+## Post-implementation fixes
+
+- **PR #229 (2026-04-27):** Story 180 RowSpan rendering bug. `renderGrid()` used
+  `lipgloss.JoinHorizontal/JoinVertical` flow composition that ignored `Rect.X`/`Rect.Y`,
+  so on Page B the spanner's height bloated its logical row, hiding NowPlaying and
+  rendering PollingTraffic in a separate vertical block. Replaced with an absolute-position
+  line-by-line compositor and corrected `focusOrder` so spanners are appended after their
+  origin-row siblings (Tab now walks left-to-right). Regression tests pin both the
+  Page B `VisiblePanes()` order and the rendered output's column alignment.
