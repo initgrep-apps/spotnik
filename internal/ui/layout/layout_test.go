@@ -588,7 +588,6 @@ func TestEdge_VerySmallTerminal(t *testing.T) {
 	})
 }
 
-
 func TestPresetCycleFullLoop(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
