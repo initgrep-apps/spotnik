@@ -393,89 +393,89 @@ func (a *App) buildView() string {
 }
 
 // renderGrid assembles all visible panes into the full grid using LayoutManager.
-// Panes are grouped by row (using Rect.Y), rendered with btop-style borders,
-// and joined horizontally per row, then vertically across rows.
+// Each pane is rendered independently and placed at its absolute Rect position,
+// composing the grid line by line. This handles RowSpan geometry correctly.
 func (a *App) renderGrid() string {
 	visiblePanes := a.layout.VisiblePanes()
 	if len(visiblePanes) == 0 {
 		return ""
 	}
 
-	// Group panes by row (panes with the same Rect.Y belong to the same row).
-	rows := groupPanesByRow(visiblePanes, a.layout)
+	// Render each pane to a bordered, size-capped string and split into lines.
+	type renderedPane struct {
+		rect  layout.Rect
+		lines []string
+	}
+	rendered := make([]renderedPane, 0, len(visiblePanes))
+	maxBottom := 0
+	for _, paneID := range visiblePanes {
+		rect := a.layout.PaneRect(paneID)
+		pane, ok := a.panes[paneID]
+		if !ok || rect.Width == 0 || rect.Height == 0 {
+			continue
+		}
+		cfg := layout.BorderConfig{
+			Width:       rect.Width,
+			Height:      rect.Height,
+			Title:       pane.Title(),
+			ToggleKey:   pane.ToggleKey(),
+			Actions:     pane.Actions(),
+			AccentColor: layout.PaneBorderColor(paneID, a.theme),
+			Focused:     pane.IsFocused(),
+			Theme:       a.theme,
+		}
+		if fqp, ok := pane.(layout.FilterQueryPane); ok {
+			cfg.FilterQuery = fqp.ActiveFilterQuery()
+		}
+		bordered := layout.RenderPaneBorder(pane.View(), cfg)
+		capped := lipgloss.NewStyle().
+			Width(rect.Width).MaxWidth(rect.Width).
+			Height(rect.Height).MaxHeight(rect.Height).
+			Render(bordered)
+		lines := strings.Split(capped, "\n")
+		rendered = append(rendered, renderedPane{rect: rect, lines: lines})
+		if bottom := rect.Y + rect.Height; bottom > maxBottom {
+			maxBottom = bottom
+		}
+	}
 
-	var rowStrings []string
-	for _, row := range rows {
-		var cellStrings []string
-		for _, paneID := range row {
-			rect := a.layout.PaneRect(paneID)
-			pane, ok := a.panes[paneID]
-			if !ok {
+	// Compose grid line by line using absolute Rect positions.
+	// Non-overlapping panes are concatenated left-to-right within each terminal row.
+	outputLines := make([]string, maxBottom)
+	for y := 0; y < maxBottom; y++ {
+		type segment struct {
+			x     int
+			width int
+			line  string
+		}
+		var segs []segment
+		for _, rp := range rendered {
+			lineIdx := y - rp.rect.Y
+			if lineIdx < 0 || lineIdx >= len(rp.lines) {
 				continue
 			}
-
-			// Get pane content (sized to content area).
-			content := pane.View()
-
-			// Wrap in btop-style border.
-			cfg := layout.BorderConfig{
-				Width:       rect.Width,
-				Height:      rect.Height,
-				Title:       pane.Title(),
-				ToggleKey:   pane.ToggleKey(),
-				Actions:     pane.Actions(),
-				AccentColor: layout.PaneBorderColor(paneID, a.theme),
-				Focused:     pane.IsFocused(),
-				Theme:       a.theme,
+			segs = append(segs, segment{x: rp.rect.X, width: rp.rect.Width, line: rp.lines[lineIdx]})
+		}
+		// Sort segments left-to-right by X for deterministic composition.
+		for i := 1; i < len(segs); i++ {
+			for j := i; j > 0 && segs[j].x < segs[j-1].x; j-- {
+				segs[j], segs[j-1] = segs[j-1], segs[j]
 			}
-			// Populate FilterQuery when the pane exposes a committed filter query.
-			if fqp, ok := pane.(layout.FilterQueryPane); ok {
-				cfg.FilterQuery = fqp.ActiveFilterQuery()
+		}
+		var sb strings.Builder
+		curX := 0
+		for _, seg := range segs {
+			if seg.x > curX {
+				sb.WriteString(strings.Repeat(" ", seg.x-curX))
+				curX = seg.x
 			}
-			bordered := layout.RenderPaneBorder(content, cfg)
-
-			// Ensure exact width/height via lipgloss (safety cap against oversized pane output).
-			capped := lipgloss.NewStyle().
-				Width(rect.Width).MaxWidth(rect.Width).
-				Height(rect.Height).MaxHeight(rect.Height).
-				Render(bordered)
-			cellStrings = append(cellStrings, capped)
+			sb.WriteString(seg.line)
+			curX += seg.width
 		}
-		if len(cellStrings) > 0 {
-			rowStr := lipgloss.JoinHorizontal(lipgloss.Top, cellStrings...)
-			rowStrings = append(rowStrings, rowStr)
-		}
+		outputLines[y] = sb.String()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, rowStrings...)
-}
-
-// groupPanesByRow groups visible PaneIDs into rows based on their Y coordinate.
-// Returns a slice of rows, each row being a slice of PaneIDs in left-to-right order.
-func groupPanesByRow(paneIDs []layout.PaneID, mgr *layout.Manager) [][]layout.PaneID {
-	if len(paneIDs) == 0 {
-		return nil
-	}
-
-	// Track which Y values we've seen, in order.
-	seen := make(map[int]bool)
-	var yOrder []int
-	rowMap := make(map[int][]layout.PaneID)
-
-	for _, id := range paneIDs {
-		rect := mgr.PaneRect(id)
-		if !seen[rect.Y] {
-			seen[rect.Y] = true
-			yOrder = append(yOrder, rect.Y)
-		}
-		rowMap[rect.Y] = append(rowMap[rect.Y], id)
-	}
-
-	rows := make([][]layout.PaneID, len(yOrder))
-	for i, y := range yOrder {
-		rows[i] = rowMap[y]
-	}
-	return rows
+	return strings.Join(outputLines, "\n")
 }
 
 // renderWithOverlayChrome renders the grid dimmed and composites an overlay view on top

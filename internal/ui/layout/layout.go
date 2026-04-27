@@ -328,15 +328,14 @@ func (m *Manager) recompute() {
 			available -= iv.w
 		}
 
-		// Separate own cells: add spanners to focus order at origin, non-spanners get placed.
+		// Separate own cells into non-spanners (placed this row) and spanners
+		// (placed in step 3; added to focus order after non-spanners so that
+		// Tab navigates left-to-right: left-column panes before the spanner).
 		var nonSpanCells []cellSpec
+		var spanCells []cellSpec
 		for _, c := range rl.ownCells {
 			if c.rowSpan > 1 {
-				// Spanner — add to focus order at origin row only.
-				if !spannerInFocusOrder[c.paneID] {
-					newFocusOrder = append(newFocusOrder, c.paneID)
-					spannerInFocusOrder[c.paneID] = true
-				}
+				spanCells = append(spanCells, c)
 			} else {
 				nonSpanCells = append(nonSpanCells, c)
 			}
@@ -372,6 +371,15 @@ func (m *Manager) recompute() {
 			m.rects[c.paneID] = Rect{X: cx, Y: rl.y, Width: w, Height: rl.height}
 			newFocusOrder = append(newFocusOrder, c.paneID)
 			cx += w
+		}
+
+		// Add spanners to focus order after non-spanners so Tab follows
+		// left-to-right visual order (left-column panes before the spanner).
+		for _, c := range spanCells {
+			if !spannerInFocusOrder[c.paneID] {
+				newFocusOrder = append(newFocusOrder, c.paneID)
+				spannerInFocusOrder[c.paneID] = true
+			}
 		}
 	}
 
