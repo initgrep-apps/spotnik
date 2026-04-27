@@ -75,15 +75,21 @@ var PresetDiscovery = Preset{
 
 // Page B preset
 
-// PresetNerdStatus shows NowPlaying compact strip + Request Flow + Network Log.
+// PresetNerdStatus shows NowPlaying compact strip + three diagnostic panes + NetworkLog.
+// Layout: NowPlaying strip (row 1), GatewayHealth/PollingTraffic/GatewayLive side-by-side
+// (row 2), NetworkLog full-width (row 3).
 var PresetNerdStatus = Preset{
 	Name: "Nerd Status",
 	Visible: map[PaneID]bool{
-		PaneNowPlaying: true, PaneRequestFlow: true, PaneNetworkLog: true,
+		PaneNowPlaying:     true,
+		PaneGatewayHealth:  true,
+		PanePollingTraffic: true,
+		PaneGatewayLive:    true,
+		PaneNetworkLog:     true,
 	},
 	Grid: []Row{
 		{HeightWeight: 1, Cells: []Cell{{PaneNowPlaying, 1}}},
-		{HeightWeight: 3, Cells: []Cell{{PaneRequestFlow, 1}}},
+		{HeightWeight: 3, Cells: []Cell{{PaneGatewayHealth, 1}, {PanePollingTraffic, 1}, {PaneGatewayLive, 1}}},
 		{HeightWeight: 2, Cells: []Cell{{PaneNetworkLog, 1}}},
 	},
 }

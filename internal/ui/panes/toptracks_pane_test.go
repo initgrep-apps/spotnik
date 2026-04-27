@@ -327,3 +327,44 @@ func TestTopTracksPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	pane = m.(*TopTracksPane)
 	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }
+
+// ── Story 174: Filter_EscCloses ───────────────────────────────────────────────
+
+// TestTopTracksPane_Filter_EscCloses verifies that Esc while the filter is active
+// closes the filter and does NOT reset scroll position.
+func TestTopTracksPane_Filter_EscCloses(t *testing.T) {
+	st := state.New()
+	tracks := make([]domain.Track, 20)
+	for i := range tracks {
+		tracks[i] = domain.Track{
+			ID:      fmt.Sprintf("tt%d", i),
+			Name:    fmt.Sprintf("Track %d", i+1),
+			Artists: []domain.Artist{{Name: "Artist"}},
+		}
+	}
+	st.SetTopTracks("short_term", tracks)
+	st.StampStatsFetchedAt("short_term")
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	pane.SetSize(80, 11) // pageSize=5
+
+	// Scroll to page 2 before activating the filter.
+	for i := 0; i < 8; i++ {
+		m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyDown})
+		pane = m.(*TopTracksPane)
+	}
+	pageBeforeFilter := pane.TableCurrentPage()
+	require.Greater(t, pageBeforeFilter, 1, "pre-condition: should be past page 1")
+
+	// Activate filter.
+	updated, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pp := updated.(*TopTracksPane)
+	require.True(t, pp.filter.IsActive(), "filter should be active after pressing f")
+
+	// Press Esc — filter should close without resetting scroll.
+	updated2, _ := pp.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	pp2 := updated2.(*TopTracksPane)
+	assert.False(t, pp2.filter.IsActive(), "Esc should close the filter")
+	assert.Equal(t, pageBeforeFilter, pp2.TableCurrentPage(), "Esc should NOT reset scroll when closing the filter")
+	assert.Contains(t, pp2.View(), "Track", "full list should be visible after filter close")
+}

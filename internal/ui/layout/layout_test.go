@@ -285,9 +285,9 @@ func TestTogglePane_DoesNothingOnPageB(t *testing.T) {
 	m.TogglePage() // Go to Page B
 
 	// Page B panes are not toggleable
-	assert.True(t, m.IsPaneVisible(layout.PaneRequestFlow))
-	m.TogglePane(layout.PaneRequestFlow)
-	assert.True(t, m.IsPaneVisible(layout.PaneRequestFlow), "Page B panes should not be toggleable")
+	assert.True(t, m.IsPaneVisible(layout.PaneNetworkLog))
+	m.TogglePane(layout.PaneNetworkLog)
+	assert.True(t, m.IsPaneVisible(layout.PaneNetworkLog), "Page B panes should not be toggleable")
 }
 
 func TestIsPaneVisible_ReflectsToggleState(t *testing.T) {
@@ -491,7 +491,7 @@ func TestFullLifecycle(t *testing.T) {
 	// Switch page
 	m.TogglePage()
 	assert.Equal(t, layout.PageB, m.ActivePage())
-	assert.Len(t, m.VisiblePanes(), 3)
+	assert.Len(t, m.VisiblePanes(), 5) // PresetNerdStatus has 5 panes
 
 	// Switch back
 	m.TogglePage()
@@ -540,12 +540,12 @@ func TestPageB_NoPanesToggleable(t *testing.T) {
 	m.Resize(120, 30)
 	m.TogglePage() // Page B
 
-	// RequestFlow and NetworkLog are Page B — not toggleable
-	m.TogglePane(layout.PaneRequestFlow)
+	// NetworkLog and GatewayHealth are Page B — not toggleable
 	m.TogglePane(layout.PaneNetworkLog)
+	m.TogglePane(layout.PaneGatewayHealth)
 
-	assert.True(t, m.IsPaneVisible(layout.PaneRequestFlow))
 	assert.True(t, m.IsPaneVisible(layout.PaneNetworkLog))
+	assert.True(t, m.IsPaneVisible(layout.PaneGatewayHealth))
 }
 
 func TestPresetCycleFullLoop(t *testing.T) {

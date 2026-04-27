@@ -72,8 +72,8 @@ func NewRequestFlowPane(s state.StateReader, t theme.Theme) *RequestFlowPane {
 	}
 }
 
-// ID returns the PaneID for the RequestFlow slot.
-func (p *RequestFlowPane) ID() layout.PaneID { return layout.PaneRequestFlow }
+// ID returns the PaneID for the GatewayHealth slot (formerly RequestFlow).
+func (p *RequestFlowPane) ID() layout.PaneID { return layout.PaneGatewayHealth }
 
 // Title returns the display title shown in the pane border.
 func (p *RequestFlowPane) Title() string { return "Request Flow" }
