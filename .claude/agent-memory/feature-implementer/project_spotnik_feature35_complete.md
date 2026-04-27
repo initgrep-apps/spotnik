@@ -7,35 +7,35 @@ type: project
 ## Feature 35 — Type Design Alignment
 
 **What was built:**
-- Moved `StatsLoadedMsg` from `stats.go` to `messages.go` (all shared messages now in one file)
-- Added `Offset int` to `AlbumsLoadedMsg` + append/replace handler in app.go (matches LibraryLoadedMsg pattern)
-- Exported `devicesLoadedMsg` → `DevicesLoadedMsg`, removed `NewDevicesLoadedMsg` constructor
-- Moved store mutations (`SetDevicesError`, `ClearDevicesError`, `SetDevicesFetchedAt`) from `DeviceOverlay.Update()` to root `app.Update()` (Elm purity fix)
-- Created `internal/domain/search.go` with all search types (SearchResult, SearchArtist, SearchAlbum, SearchPlaylist, Search*Result)
-- Added 8 type aliases in `api/models.go` for backward compat
-- Removed `api/` import from `state/store.go`
-- Fixed stale store.go comment ("Set by build*Cmd" → "Set by Update() handlers") and removed orphaned TODO
+- Move `StatsLoadedMsg` from `stats.go` → `messages.go`. Shared msgs consolidated.
+- Add `Offset int` to `AlbumsLoadedMsg` + append/replace handler in app.go. Matches LibraryLoadedMsg pattern.
+- Export `devicesLoadedMsg` → `DevicesLoadedMsg`. Drop `NewDevicesLoadedMsg` constructor.
+- Move store mutations (`SetDevicesError`, `ClearDevicesError`, `SetDevicesFetchedAt`) from `DeviceOverlay.Update()` → `app.Update()`. Elm purity fix.
+- Create `internal/domain/search.go` w/ all search types (SearchResult, SearchArtist, SearchAlbum, SearchPlaylist, Search*Result).
+- Add 8 type aliases in `api/models.go` for back-compat.
+- Drop `api/` import from `state/store.go`.
+- Fix stale store.go comment ("Set by build*Cmd" → "Set by Update() handlers"). Drop orphaned TODO.
 
 **Key files:**
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/domain/search.go` — search result types moved from api/search.go; NO package-level doc comment (see gotcha)
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/api/models.go` — 8 type aliases at end of file for SearchXxx types
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/ui/panes/messages.go` — StatsLoadedMsg and DevicesLoadedMsg added here; AlbumsLoadedMsg updated with Offset field
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/app.go` — new `case panes.DevicesLoadedMsg:` handler with store mutations + conditional overlay forward
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/domain/search.go` — search result types moved from api/search.go. NO package-level doc comment (see gotcha).
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/api/models.go` — 8 type aliases at EOF for SearchXxx types.
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/ui/panes/messages.go` — StatsLoadedMsg + DevicesLoadedMsg added. AlbumsLoadedMsg gained Offset field.
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/app.go` — new `case panes.DevicesLoadedMsg:` handler w/ store mutations + conditional overlay forward.
 
 **Patterns established:**
-- When moving store mutations from a pane to root app.Update(): the pane still gets `DevicesLoadedMsg` forwarded so it can update its local render state (devices list). The pane's handler returns `nil` command, no store writes.
-- `DevicesLoadErrorMsg` is now effectively dead code (no producer), but kept alive because `toast_routing_test.go` tests it directly. Do not remove until that test is updated.
-- AlbumsLoadedMsg.Offset=0 → replace, Offset>0 → append. Same as LibraryLoadedMsg and LikedTracksLoadedMsg.
-- Only forward `DevicesLoadedMsg` to `devicePane` when `a.deviceOverlayOpen` — this is correct (same pre-PR behavior via catch-all); if closed, store is updated but overlay render list stays stale until next open triggers re-fetch (staleness TTL handles this).
+- Moving store mutations from pane → root app.Update(): pane still gets `DevicesLoadedMsg` forwarded for local render state (devices list). Pane handler returns `nil` cmd, no store writes.
+- `DevicesLoadErrorMsg` now dead code (no producer), kept because `toast_routing_test.go` tests it directly. Don't remove until test updated.
+- AlbumsLoadedMsg.Offset=0 → replace, Offset>0 → append. Same as LibraryLoadedMsg + LikedTracksLoadedMsg.
+- Forward `DevicesLoadedMsg` to `devicePane` only when `a.deviceOverlayOpen` — correct (matches pre-PR catch-all). If closed, store updates but overlay list stays stale until next open re-fetch (staleness TTL handles).
 
 **Gotchas:**
-- **Package doc shadowing**: Adding a file with `// Package domain ...` immediately before `package domain` in a file that is NOT the primary package doc file shadows the canonical doc in `types.go`. `go doc` picks the last one alphabetically. Fix: remove the comment block entirely from the secondary file (don't add any comment between the comment block and `package domain`). This was caught in PR review and fixed in a follow-up commit.
-- **stats.go `domain` import went unused** after removing StatsLoadedMsg (which referenced `domain.Track` and `domain.FullArtist`). Must remove the import from stats.go or the build fails.
-- **devices_test.go** tests that previously tested store mutations (`StampsFetchedAt`, `ErrorDoesNotStampFetchedAt`) must be deleted — those behaviors moved to app_test.go. The overlay-level tests now only verify device list population/no-change behavior.
-- When `DevicesLoadedMsg` is handled with an error, the overlay receives the message but does NOT update its `d.devices` field — the `if m.Err == nil` guard ensures this. On error path, devices list is preserved as-is.
+- **Package doc shadowing**: file w/ `// Package domain ...` right before `package domain` in non-primary doc file shadows canonical doc in `types.go`. `go doc` picks last alphabetically. Fix: drop comment block entirely from secondary file (no comment between block and `package domain`). Caught in PR review, fixed in follow-up commit.
+- **stats.go `domain` import unused** after removing StatsLoadedMsg (referenced `domain.Track` + `domain.FullArtist`). Drop import or build fails.
+- **devices_test.go** tests for store mutations (`StampsFetchedAt`, `ErrorDoesNotStampFetchedAt`) must be deleted — behavior moved to app_test.go. Overlay tests now only verify device list population/no-change.
+- `DevicesLoadedMsg` w/ error: overlay receives msg but does NOT update `d.devices` — `if m.Err == nil` guard. Error path preserves devices list as-is.
 
 **Testing notes:**
-- 4 new tests in `app_test.go`: DevicesLoadedMsg nil error, DevicesLoadedMsg with error, AlbumsLoadedMsg Offset=0, AlbumsLoadedMsg Offset>0
-- `errMake` helper added to `devices_test.go` to avoid `fmt.Errorf` where only `errors.New` is needed
-- Coverage: 82.6% (well above 80% threshold)
+- 4 new tests in `app_test.go`: DevicesLoadedMsg nil err, DevicesLoadedMsg w/ err, AlbumsLoadedMsg Offset=0, AlbumsLoadedMsg Offset>0.
+- `errMake` helper in `devices_test.go` avoids `fmt.Errorf` where `errors.New` suffices.
+- Coverage: 82.6% (above 80% threshold).
 - PR: https://github.com/initgrep-apps/spotnik/pull/40

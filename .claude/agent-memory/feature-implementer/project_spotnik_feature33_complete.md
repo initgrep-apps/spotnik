@@ -6,21 +6,21 @@ type: project
 
 ## Feature 33 — Idle Polling Backoff
 
-**What was built:**
-- `lastInteraction time.Time` and `idleThreshold time.Duration` fields in `App` struct
+**Built:**
+- `lastInteraction time.Time`, `idleThreshold time.Duration` fields on `App` struct
 - `isIdle()` unexported helper: `time.Since(lastInteraction) > idleThreshold`
 - `pollIntervals()` method: 4-state matrix (active/idle x playing/paused) → (playbackInterval, queueInterval int)
-- Exported wrappers for testing: `IsIdle()`, `SetLastInteraction()`, `PollIntervals()`
+- Test wrappers exported: `IsIdle()`, `SetLastInteraction()`, `PollIntervals()`
 - `idleThresholdSecs = 60` constant
-- 6 interval constants replacing old hardcoded `playbackFetchInterval/queueFetchInterval`
-- Tick handler updated to call `a.pollIntervals()` instead of hardcoded constants
-- Idle-to-active reset: KeyMsg after idle sets `tickCount = 0` for immediate next-tick fetch
-- `internal/app/idle_test.go` with 12 tests
-- `docs/ARCHITECTURE.md` updated with "Idle Polling Backoff (Feature 33)" subsection
+- 6 interval constants replace old `playbackFetchInterval/queueFetchInterval`
+- Tick handler calls `a.pollIntervals()` not hardcoded constants
+- Idle→active reset: KeyMsg post-idle sets `tickCount = 0` for immediate fetch next tick
+- `internal/app/idle_test.go` — 12 tests
+- `docs/ARCHITECTURE.md` adds "Idle Polling Backoff (Feature 33)" subsection
 
 **Key files:**
-- `internal/app/app.go` — all idle polling infrastructure (constants, fields, methods, KeyMsg handler, tick handler)
-- `internal/app/idle_test.go` — 12 TDD tests for all 4 states and edge cases
+- `internal/app/app.go` — all idle polling (constants, fields, methods, KeyMsg + tick handlers)
+- `internal/app/idle_test.go` — 12 TDD tests, all 4 states + edges
 
 **4-state matrix:**
 ```
@@ -30,21 +30,21 @@ Idle   + Playing  → 10s / 30s  (reduced)
 Idle   + Paused   → 30s / 60s  (slowest)
 ```
 
-**Patterns established:**
-- Exported wrapper pattern for test helpers: `func (a *App) IsIdle() bool { return a.isIdle() }`
-- `SetLastInteraction(t time.Time)` injected for test time control (avoids real sleep)
-- Idle-to-active reset in `tea.KeyMsg` handler: `wasIdle := a.isIdle(); a.lastInteraction = time.Now(); if wasIdle { a.tickCount = 0 }`
-- `pollIntervals()` uses `switch` with explicit `!idle && playing` etc. branches (not nested if)
+**Patterns:**
+- Exported test wrapper: `func (a *App) IsIdle() bool { return a.isIdle() }`
+- `SetLastInteraction(t time.Time)` injects time, avoids real sleep
+- Idle→active reset in `tea.KeyMsg`: `wasIdle := a.isIdle(); a.lastInteraction = time.Now(); if wasIdle { a.tickCount = 0 }`
+- `pollIntervals()` uses `switch` with explicit `!idle && playing` branches, not nested if
 
 **Gotchas:**
-- Do NOT call `cmd()` on the result of a tick update in tests — it executes `tea.Tick(time.Second, ...)` which BLOCKS for 1 second
-- To verify tick handler behavior without blocking: use `PollIntervals()` directly (which is what the tick handler calls), rather than inspecting `cmd()` output
-- `tea.Batch(nextTick)` creates a BatchMsg with 1 item. Inspecting batch length works but requires calling `cmd()` (which blocks). Avoid this pattern.
-- The `isIdle()` method uses strict `>` not `>=`, so at exactly 60s the app is NOT yet idle
+- Don't call `cmd()` on tick update result in tests — runs `tea.Tick(time.Second, ...)`, BLOCKS 1s
+- Verify tick handler without blocking: call `PollIntervals()` directly (what handler uses); don't inspect `cmd()` output
+- `tea.Batch(nextTick)` makes BatchMsg with 1 item. Length check works but needs `cmd()` (blocks). Avoid.
+- `isIdle()` uses strict `>` not `>=`; at exactly 60s, NOT idle
 
-**Testing notes:**
-- Coverage: 82.9% total (above 80% threshold)
-- TDD: 12 tests written before implementation
-- `SetLastInteraction(time.Now().Add(-61 * time.Second))` simulates idle without sleep
-- The `TestTickHandler_IdlePaused_LongerIntervals` test should verify `PollIntervals()` returns slow intervals (30/60) rather than inspecting batch output — avoids the 1s blocking gotcha
-- The `for range 3` syntax (Go 1.22+) works cleanly for advancing tick count
+**Testing:**
+- Coverage: 82.9% total (>80% threshold)
+- TDD: 12 tests pre-implementation
+- `SetLastInteraction(time.Now().Add(-61 * time.Second))` fakes idle, no sleep
+- `TestTickHandler_IdlePaused_LongerIntervals` checks `PollIntervals()` returns 30/60 vs inspecting batch — dodges 1s block
+- `for range 3` (Go 1.22+) advances tick count cleanly

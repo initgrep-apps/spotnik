@@ -6,16 +6,16 @@ type: project
 
 ## Feature 30 — API Gateway
 
-**What was built:**
-- `internal/api/gateway.go` — complete Gateway infrastructure (tokenBucket, Gateway struct, Priority type, context helpers)
-- `internal/api/gateway_test.go` — 19 tests covering all gateway behaviors
-- BaseClient gains optional `*Gateway` field, `SetGateway()` method, `doJSON`/`doNoContent` route through it
-- All 6 API clients get `SetGateway(a.gateway)` in `initAPIClients()`
-- `App.New()` creates a single shared `*Gateway`
-- Store gains throttle observability: `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `ThrottleLast429At()`
-- `throttleExpiredMsg` in app.go clears store throttle state after backoff expires
-- `RateLimitedMsg` handler updated to also call `store.SetThrottle()`
-- Interactive priority set on all user-triggered commands via `api.WithPriority(ctx, api.Interactive)`
+**Built:**
+- `internal/api/gateway.go` — Gateway infra (tokenBucket, Gateway struct, Priority type, context helpers)
+- `internal/api/gateway_test.go` — 19 tests, all gateway behaviors
+- BaseClient: optional `*Gateway` field, `SetGateway()` method, `doJSON`/`doNoContent` route thru it
+- 6 API clients get `SetGateway(a.gateway)` in `initAPIClients()`
+- `App.New()` creates single shared `*Gateway`
+- Store throttle observability: `SetThrottle()`, `IsThrottled()`, `ThrottleRetryAfterSecs()`, `ThrottleLast429At()`
+- `throttleExpiredMsg` in app.go clears store throttle post-backoff
+- `RateLimitedMsg` handler also calls `store.SetThrottle()`
+- Interactive priority on user cmds via `api.WithPriority(ctx, api.Interactive)`
 
 **Key files:**
 - `internal/api/gateway.go` — tokenBucket, RequestKey, inflightEntry, Gateway, Priority, WithPriority, PriorityFromContext
@@ -25,22 +25,22 @@ type: project
 - `internal/app/commands.go` — Interactive priority on play/pause/search/queue/like/playlist cmds
 - `internal/state/store.go` — throttle struct field + 4 accessor methods
 
-**Patterns established:**
-- Gateway is created once in `App.New()`, shared across all clients
-- `SetGateway()` is a pointer method on `*BaseClient`, promoted automatically through embedding to `*Player`, `*LibraryClient`, etc. — no need for explicit forwarding methods
-- Priority context: `api.WithPriority(context.Background(), api.Interactive)` in command closures
-- Store throttle state updated in app.go `RateLimitedMsg` handler + cleared by `throttleExpiredMsg`
-- 429 from gateway: returned as `*RateLimitError` from `gateway.Do()`, wrapped in "sending request: %w" by doJSON/doNoContent — `errors.As` in `parse429RetryAfter` unwraps correctly
+**Patterns:**
+- Gateway created once in `App.New()`, shared across clients
+- `SetGateway()` pointer method on `*BaseClient`, promoted via embedding to `*Player`, `*LibraryClient`, etc. — no explicit forwarders
+- Priority context: `api.WithPriority(context.Background(), api.Interactive)` in cmd closures
+- Store throttle state set in app.go `RateLimitedMsg` handler + cleared by `throttleExpiredMsg`
+- 429 from gateway: returned as `*RateLimitError` from `gateway.Do()`, wrapped "sending request: %w" by doJSON/doNoContent — `errors.As` in `parse429RetryAfter` unwraps fine
 
 **Gotchas:**
-- Double body reading concern: gateway buffers body, replaces resp.Body with NopCloser(bytes.NewReader(body)). doJSON then reads from the NopCloser — no double-read problem
-- Semaphore + dedup interaction: a dedup-waiting goroutine holds a semaphore slot. This is bounded (resolves when primary completes) and doesn't deadlock
-- `WithPriority` had 0% coverage in initial implementation — caught in self-review, added test
-- Store throttle methods had 0% coverage — caught in self-review, added tests (state coverage 93.7% → 99.6%)
-- Tests using `time.Sleep(20ms)` for goroutine scheduling are necessary for dedup and semaphore concurrency tests — tolerable given the short duration
+- Double body read worry: gateway buffers body, swaps resp.Body w/ NopCloser(bytes.NewReader(body)). doJSON reads NopCloser — no double-read
+- Semaphore + dedup: dedup-waiting goroutine holds semaphore slot. Bounded (resolves when primary done), no deadlock
+- `WithPriority` 0% coverage initially — self-review caught, test added
+- Store throttle methods 0% coverage — self-review caught, tests added (state 93.7% → 99.6%)
+- `time.Sleep(20ms)` for goroutine scheduling needed for dedup/semaphore concurrency tests — tolerable, short
 
-**Testing notes:**
-- 19 new tests in gateway_test.go + 3 in base_test.go + 3 in store_test.go
-- Total coverage: 82.1% (api 83.9%, state 99.6%)
-- Concurrency tests use channels and release patterns — avoid shared mutable callCount without wg.Wait synchronization
-- `TestGateway_MaxConcurrentRequests` had a bug initially: all 5 goroutines used same key "/hold" causing dedup to merge them — fixed by using unique "/hold/i" keys
+**Testing:**
+- 19 new tests gateway_test.go + 3 base_test.go + 3 store_test.go
+- Coverage: 82.1% (api 83.9%, state 99.6%)
+- Concurrency tests: channels + release patterns — no shared mutable callCount sans wg.Wait sync
+- `TestGateway_MaxConcurrentRequests` bug initially: 5 goroutines shared key "/hold", dedup merged them — fixed w/ unique "/hold/i" keys

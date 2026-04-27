@@ -6,33 +6,33 @@ type: project
 
 ## Feature 65 — Gateway-Internal Watermarks
 
-**What was built:**
-- `tokenBucket.minTokens` field tracked inside `tokenBucket` struct (float64), updated under `tb.mu` at the exact moment of `tb.tokens--` in `wait()`
-- `Gateway.peakConcurrent` field tracked in `Gateway` struct (int), updated under `g.mu` after semaphore acquisition in `Do()`
-- `GatewayState.PeakConcurrent` and `GatewayState.MinTokens` added to domain struct
+**Built:**
+- `tokenBucket.minTokens` field in `tokenBucket` struct (float64), updated under `tb.mu` at moment of `tb.tokens--` in `wait()`
+- `Gateway.peakConcurrent` field in `Gateway` struct (int), updated under `g.mu` after semaphore acquisition in `Do()`
+- `GatewayState.PeakConcurrent`/`GatewayState.MinTokens` added to domain struct
 - `GatewaySnapshotter.ResetWatermarks()` added to interface — called by `RequestFlowPane.Update(TickMsg)` after `Snapshot()`
-- `RequestFlowPane` lost its local `minTokens`/`peakConcurrent` fields and `MinTokens()`/`PeakConcurrent()` accessors
-- `gatewayStateLines()` now reads `snap.MinTokens`/`snap.PeakConcurrent` from snapshot
+- `RequestFlowPane` lost local `minTokens`/`peakConcurrent` fields + `MinTokens()`/`PeakConcurrent()` accessors
+- `gatewayStateLines()` reads `snap.MinTokens`/`snap.PeakConcurrent` from snapshot
 
-**Key files:**
+**Files:**
 - `internal/domain/gateway.go` — `GatewayState` got `PeakConcurrent`/`MinTokens`; `GatewaySnapshotter` got `ResetWatermarks()`
 - `internal/api/gateway.go` — `tokenBucket.minTokens`, `Gateway.peakConcurrent`, updated `Snapshot()`, new `ResetWatermarks()`
 - `internal/ui/panes/requestflow_pane.go` — removed local watermark fields/accessors, updated handlers
-- `internal/ui/panes/requestflow_boxed.go` — reads from `snap.MinTokens`/`snap.PeakConcurrent`
+- `internal/ui/panes/requestflow_boxed.go` — reads `snap.MinTokens`/`snap.PeakConcurrent`
 
-**Patterns established:**
-- When adding a field to a watermark-tracking system, apply refill in the reset function too, otherwise the baseline can be set below the refilled value that `Snapshot()` returns, causing false annotations
-- `tokenBucket` struct is the right place to track `minTokens` (not `Gateway`) since it has its own mutex covering `tb.tokens--`
-- `GatewaySnapshotter` interface additions break all test mocks — search all test files for `Snapshot() domain.GatewayState` to find affected mocks
+**Patterns:**
+- Adding field to watermark system → apply refill in reset func too, else baseline set below refilled value `Snapshot()` returns → false annotations
+- `tokenBucket` struct = right place for `minTokens` (not `Gateway`) — has own mutex covering `tb.tokens--`
+- `GatewaySnapshotter` interface adds break all test mocks — grep all tests for `Snapshot() domain.GatewayState`
 
 **Gotchas:**
-- `ResetWatermarks()` MUST apply token refill (same as `Snapshot()`) before setting `minTokens`. Without this, after a 1s reset, the baseline gets set to the unfilled token level (e.g. 5.0 when 100ms has passed and tokens are at 5.3). The subsequent `Snapshot()` returns `TokensAvailable = 5` but `MinTokens = 5` set without refill, causing a false `(min: 5)` annotation. Fixed by computing `tokens + elapsed*rate` in `ResetWatermarks()` like `Snapshot()` does.
-- `ResetWatermarks()` must NOT update `lastFill` — it only reads the current level, does not consume tokens
-- `peakConcurrent` in `Do()` reads `len(g.semaphore)` under `g.mu`. This is safe because `semaphore <- struct{}{}` already happened — `len(g.semaphore)` gives the post-acquisition count including the current slot
-- `mockGateway` in `requestflow_pane_test.go` needed a no-op `ResetWatermarks()` added to satisfy the updated interface
+- `ResetWatermarks()` MUST apply token refill (like `Snapshot()`) before setting `minTokens`. Without: after 1s reset, baseline = unfilled level (e.g. 5.0 when 100ms passed, tokens at 5.3). Next `Snapshot()` returns `TokensAvailable = 5` but `MinTokens = 5` set without refill → false `(min: 5)` annotation. Fix: compute `tokens + elapsed*rate` in `ResetWatermarks()` like `Snapshot()`.
+- `ResetWatermarks()` must NOT update `lastFill` — reads current level only, no consume
+- `peakConcurrent` in `Do()` reads `len(g.semaphore)` under `g.mu`. Safe: `semaphore <- struct{}{}` already happened → `len(g.semaphore)` = post-acquisition count incl. current slot
+- `mockGateway` in `requestflow_pane_test.go` needed no-op `ResetWatermarks()` for updated interface
 
-**Testing notes:**
+**Tests:**
 - 6 new gateway watermark tests in `internal/api/gateway_test.go`
-- 3 updated annotation tests in `requestflow_boxed_test.go` — now set `MinTokens`/`PeakConcurrent` directly on `p.lastSnapshot` (internal package test can set struct fields directly)
-- External package tests in `requestflow_pane_test.go` were rewritten from pane accessor assertions to snapshot-value verification
+- 3 updated annotation tests in `requestflow_boxed_test.go` — set `MinTokens`/`PeakConcurrent` directly on `p.lastSnapshot` (internal pkg test sets struct fields directly)
+- External pkg tests in `requestflow_pane_test.go` rewritten from pane accessor assertions → snapshot-value verification
 - Coverage: 86.5% overall, api: 85.8%, ui/panes: 90.1%

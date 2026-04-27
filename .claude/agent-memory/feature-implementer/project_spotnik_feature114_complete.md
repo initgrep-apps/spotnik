@@ -6,36 +6,36 @@ type: project
 
 ## Story 114 — UserProfile Data Layer Expansion
 
-**What was built:**
-- Expanded `domain.UserProfile` with `DisplayName`, `Product`, `Country` fields + doc comments
-- Replaced `userID string` in `Store` with `userProfile domain.UserProfile`
-- Added `UserProfile()`, `SetUserProfile()`, `IsPremium()` to Store; preserved `UserID()` via delegation
-- Updated `userProfileLoadedMsg` to carry `profile domain.UserProfile` instead of `userID string`
-- Updated `buildFetchCurrentUserCmd` to return full profile
-- Updated routing.go handler to call `SetUserProfile` instead of `SetUserID`
+**Built:**
+- Expanded `domain.UserProfile` w/ `DisplayName`, `Product`, `Country` fields + doc comments
+- Replaced `userID string` in `Store` w/ `userProfile domain.UserProfile`
+- Added `UserProfile()`, `SetUserProfile()`, `IsPremium()` to Store; kept `UserID()` via delegation
+- Updated `userProfileLoadedMsg` carry `profile domain.UserProfile` not `userID string`
+- Updated `buildFetchCurrentUserCmd` return full profile
+- Updated routing.go handler call `SetUserProfile` not `SetUserID`
 - Created `testdata/fixtures/me_profile.json`
 
 **Key files:**
 - `/Users/irshadsheikh/dev/github/apps/spotnik/internal/domain/types.go` — UserProfile struct (lines 18-30)
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/state/store.go` — new methods at lines 159-187
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/app.go` — userProfileLoadedMsg definition (line 215)
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/state/store.go` — new methods lines 159-187
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/app.go` — userProfileLoadedMsg def (line 215)
 - `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/commands.go` — buildFetchCurrentUserCmd (line 640)
-- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/routing.go` — handler at line 297
-- `/Users/irshadsheikh/dev/github/apps/spotnik/testdata/fixtures/me_profile.json` — fixture for GET /me
+- `/Users/irshadsheikh/dev/github/apps/spotnik/internal/app/routing.go` — handler line 297
+- `/Users/irshadsheikh/dev/github/apps/spotnik/testdata/fixtures/me_profile.json` — fixture GET /me
 
-**Patterns established:**
-- `api.UserProfile` is a type alias for `domain.UserProfile` (in api/models.go) — assignable directly
-- Store methods return UserProfile by value (not pointer) — consistent with other store accessors
-- IsPremium() defaults to false for zero-value (before profile loads) — safe default pattern
-- The `UserID()` method is preserved as a delegation shim for call-site compatibility
+**Patterns:**
+- `api.UserProfile` = type alias for `domain.UserProfile` (api/models.go) — assignable direct
+- Store methods return UserProfile by value not pointer — matches other store accessors
+- IsPremium() defaults false for zero-value (pre-load) — safe default
+- `UserID()` kept as delegation shim for call-site compat
 
 **Gotchas:**
-- The existing `TestStore_SetGetUserID` test called `SetUserID()` directly — needed updating to `SetUserProfile(domain.UserProfile{ID: "..."})`
-- `buildFetchCurrentUserCmd` doc comment still said "carries the user's Spotify ID" after the change — caught in review, fixed
-- `domain` import needed to be added to app.go when userProfileLoadedMsg type changed
+- Existing `TestStore_SetGetUserID` test called `SetUserID()` direct — needed update to `SetUserProfile(domain.UserProfile{ID: "..."})`
+- `buildFetchCurrentUserCmd` doc still said "carries the user's Spotify ID" post-change — caught review, fixed
+- `domain` import needed in app.go when userProfileLoadedMsg type changed
 
-**Testing notes:**
-- Store tests use `domain.UserProfile{}` zero-value comparison for initial state check
+**Testing:**
+- Store tests use `domain.UserProfile{}` zero-value compare for initial state
 - API test uses `os.ReadFile("../../testdata/fixtures/me_profile.json")` relative path (test runs from package dir)
 - IsPremium table test: 4 cases (premium, free, empty, unexpected)
-- App routing tests (in package `app` not `app_test`) use unexported `userProfileLoadedMsg` directly
+- App routing tests (package `app` not `app_test`) use unexported `userProfileLoadedMsg` direct

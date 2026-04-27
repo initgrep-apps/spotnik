@@ -6,31 +6,31 @@ type: project
 
 ## Feature 53 — Cleanup (Final UI Redesign Feature)
 
-**What was built:**
-- Deleted old pane files: library.go, stats.go, playlists.go + their test files
-- Deleted netlog_test.go (tested StatsView's old NetLog section; NetworkLogPane has its own tests)
-- Deleted unused old components: progress.go, volume.go, errorview.go + their tests
-- Moved FetchStatsMsg from deleted stats.go into messages.go (still emitted by TopTracksPane/TopArtistsPane)
-- Moved formatDuration helper from deleted progress.go into gradient.go (its only remaining user)
+**Built:**
+- Deleted old pane files: library.go, stats.go, playlists.go + test files
+- Deleted netlog_test.go (tested StatsView old NetLog section; NetworkLogPane has own tests)
+- Deleted unused old components: progress.go, volume.go, errorview.go + tests
+- Moved FetchStatsMsg from deleted stats.go to messages.go (still emitted by TopTracksPane/TopArtistsPane)
+- Moved formatDuration helper from deleted progress.go to gradient.go (only remaining user)
 - Updated stale viewGrid comment in app.go
-- Deleted docs/DESIGN_OLD.md, updated DESIGN.md references
-- Updated CLAUDE.md: added bubble-table/bubbletea-overlay to tech stack, updated layout tree and design rules
-- Marked features 40-53 as ✅ Complete in 00-overview.md
+- Deleted docs/DESIGN_OLD.md, updated DESIGN.md refs
+- Updated CLAUDE.md: added bubble-table/bubbletea-overlay to tech stack, updated layout tree + design rules
+- Marked features 40-53 ✅ Complete in 00-overview.md
 
 **Key files:**
-- `internal/ui/panes/messages.go` — FetchStatsMsg now lives here (was in stats.go)
-- `internal/ui/components/gradient.go` — formatDuration helper added here (was in progress.go)
+- `internal/ui/panes/messages.go` — FetchStatsMsg lives here (was stats.go)
+- `internal/ui/components/gradient.go` — formatDuration helper added here (was progress.go)
 
-**Patterns established:**
-- When deleting a file that contains types used elsewhere, always grep for all usages before deleting and relocate types to appropriate files (messages.go for message types, the primary user file for helpers)
-- netlog_test.go tested StatsView integration — was properly deleted since NetworkLogPane has its own comprehensive tests in networklog_pane_test.go
+**Patterns:**
+- Deleting file with types used elsewhere: grep all usages first, relocate types (messages.go for message types, primary user file for helpers)
+- netlog_test.go tested StatsView integration — properly deleted; NetworkLogPane has comprehensive tests in networklog_pane_test.go
 
 **Gotchas:**
-- `FetchStatsMsg` was defined in stats.go but also used by TopTracksPane, TopArtistsPane, and many app tests — must be moved to messages.go, not just deleted
-- `formatDuration` was in progress.go but also used by gradient.go's GradientSeekBar.Render() — must be moved to gradient.go before deleting progress.go
-- gofmt aligns comment spacing in const blocks — after editing a const block comment, gofmt may reformat the alignment of all sibling constants' comments
+- `FetchStatsMsg` defined in stats.go but used by TopTracksPane, TopArtistsPane, many app tests — move to messages.go, don't delete
+- `formatDuration` in progress.go but used by gradient.go GradientSeekBar.Render() — move to gradient.go before deleting progress.go
+- gofmt aligns comment spacing in const blocks — editing const block comment may reformat sibling constant comment alignment
 
-**Testing notes:**
-- Coverage: 86.1% overall (was 86.2% before deletions — essentially stable)
-- All packages passed; deleting old test files did not drop coverage below threshold because the new pane implementations (F45-F48) already had thorough test coverage
+**Testing:**
+- Coverage: 86.1% overall (was 86.2% pre-deletion — stable)
+- All packages passed; new pane implementations (F45-F48) already had thorough coverage, held threshold
 - PR #58
