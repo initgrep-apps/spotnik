@@ -318,10 +318,11 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	topTracksPane := panes.NewTopTracksPane(s, t, false)
 	topArtistsPane := panes.NewTopArtistsPane(s, t, false)
 
-	// Create Page B panes.
-	// RequestFlowPane reads gateway events from the store's event journal,
-	// preserving the ui/ → state/ dependency direction (no gateway reference).
-	requestFlowPane := panes.NewRequestFlowPane(s, t)
+	// Create Page B panes. All three read gateway events from the store's event
+	// journal, preserving the ui/ → state/ dependency direction (no gateway reference).
+	gatewayHealthPane := panes.NewGatewayHealthPane(s, t)
+	pollingTrafficPane := panes.NewPollingTrafficPane(s, t)
+	gatewayLivePane := panes.NewGatewayLivePane(s, t)
 	networkLogPane := panes.NewNetworkLogPane(s, t)
 
 	panesMap := map[layout.PaneID]layout.Pane{
@@ -333,7 +334,9 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		layout.PaneRecentlyPlayed: recentlyPlayedPane,
 		layout.PaneTopTracks:      topTracksPane,
 		layout.PaneTopArtists:     topArtistsPane,
-		layout.PaneGatewayHealth:  requestFlowPane,
+		layout.PaneGatewayHealth:  gatewayHealthPane,
+		layout.PanePollingTraffic: pollingTrafficPane,
+		layout.PaneGatewayLive:    gatewayLivePane,
 		layout.PaneNetworkLog:     networkLogPane,
 	}
 
@@ -799,14 +802,38 @@ func (a *App) ActivePresetIndex() int {
 	return a.layout.ActivePresetIndex()
 }
 
-// RequestFlowPane returns the RequestFlowPane from the panes map (exported for testing).
-func (a *App) RequestFlowPane() *panes.RequestFlowPane {
+// GatewayHealthPane returns the GatewayHealthPane from the panes map (exported for testing).
+func (a *App) GatewayHealthPane() *panes.GatewayHealthPane {
 	p, ok := a.panes[layout.PaneGatewayHealth]
 	if !ok {
 		return nil
 	}
-	if rfp, ok := p.(*panes.RequestFlowPane); ok {
-		return rfp
+	if ghp, ok := p.(*panes.GatewayHealthPane); ok {
+		return ghp
+	}
+	return nil
+}
+
+// PollingTrafficPane returns the PollingTrafficPane from the panes map (exported for testing).
+func (a *App) PollingTrafficPane() *panes.PollingTrafficPane {
+	p, ok := a.panes[layout.PanePollingTraffic]
+	if !ok {
+		return nil
+	}
+	if ptp, ok := p.(*panes.PollingTrafficPane); ok {
+		return ptp
+	}
+	return nil
+}
+
+// GatewayLivePane returns the GatewayLivePane from the panes map (exported for testing).
+func (a *App) GatewayLivePane() *panes.GatewayLivePane {
+	p, ok := a.panes[layout.PaneGatewayLive]
+	if !ok {
+		return nil
+	}
+	if glp, ok := p.(*panes.GatewayLivePane); ok {
+		return glp
 	}
 	return nil
 }

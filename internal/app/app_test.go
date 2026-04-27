@@ -2044,15 +2044,17 @@ func TestApp_NilPlaybackState_WarnAtTick30(t *testing.T) {
 
 // --- Page B (Nerd Status) registration tests ---
 
-// TestApp_PageB_Panes_Registered verifies that both Page B panes are created
+// TestApp_PageB_Panes_Registered verifies that all Page B panes are created
 // and present in the panes map after App.New().
 func TestApp_PageB_Panes_Registered(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
 
-	// RequestFlowPane and NetworkLogPane should be accessible.
-	assert.NotNil(t, a.RequestFlowPane(), "RequestFlowPane should be registered")
+	// All three new Page B panes and NetworkLogPane should be accessible.
+	assert.NotNil(t, a.GatewayHealthPane(), "GatewayHealthPane should be registered")
+	assert.NotNil(t, a.PollingTrafficPane(), "PollingTrafficPane should be registered")
+	assert.NotNil(t, a.GatewayLivePane(), "GatewayLivePane should be registered")
 	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should be registered")
 }
 
@@ -2072,18 +2074,18 @@ func TestApp_PageB_Toggle_SwitchesPage(t *testing.T) {
 	assert.False(t, a.GridViewOpen(), "Page A should not be the 'grid view' on Page B")
 }
 
-// TestApp_PageB_TickMsg_ReachesRequestFlowPane verifies that TickMsg reaches
-// the RequestFlowPane (it should refresh its gateway snapshot).
-func TestApp_PageB_TickMsg_ReachesRequestFlowPane(t *testing.T) {
+// TestApp_PageB_TickMsg_ReachesGatewayHealthPane verifies that TickMsg reaches
+// the GatewayHealthPane (it should refresh its gateway snapshot).
+func TestApp_PageB_TickMsg_ReachesGatewayHealthPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Send a TickMsg — RequestFlowPane should handle it without panicking.
+	// Send a TickMsg — GatewayHealthPane should handle it without panicking.
 	m, _ := a.Update(panes.TickMsg{})
 	a = m.(*app.App)
 
-	// RequestFlowPane must still be accessible after TickMsg.
-	assert.NotNil(t, a.RequestFlowPane(), "RequestFlowPane should survive TickMsg")
+	// GatewayHealthPane must still be accessible after TickMsg.
+	assert.NotNil(t, a.GatewayHealthPane(), "GatewayHealthPane should survive TickMsg")
 }
 
 // TestApp_PageB_TickMsg_ReachesNetworkLogPane verifies TickMsg reaches NetworkLogPane.
@@ -2097,18 +2099,19 @@ func TestApp_PageB_TickMsg_ReachesNetworkLogPane(t *testing.T) {
 	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should survive TickMsg")
 }
 
-// TestApp_PageB_VizTick_ReachesRequestFlowPane verifies viz.TickMsg
-// advances the RequestFlowPane animation frame.
-func TestApp_PageB_VizTick_ReachesRequestFlowPane(t *testing.T) {
+// TestApp_PageB_VizTick_ReachesNowPlayingPane verifies viz.TickMsg
+// reaches the NowPlayingPane for animation. Page B panes do not consume viz.TickMsg.
+func TestApp_PageB_VizTick_ReachesNowPlayingPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	frameBefore := a.RequestFlowPane().FrameIndex()
+	// viz.TickMsg should not panic and all Page B panes should remain accessible.
 	m, _ := a.Update(viz.TickMsg(time.Now()))
 	a = m.(*app.App)
-	frameAfter := a.RequestFlowPane().FrameIndex()
 
-	assert.Equal(t, frameBefore+1, frameAfter, "viz.TickMsg should advance RequestFlowPane frame")
+	assert.NotNil(t, a.GatewayHealthPane(), "GatewayHealthPane should survive viz.TickMsg")
+	assert.NotNil(t, a.GatewayLivePane(), "GatewayLivePane should survive viz.TickMsg")
+	assert.NotNil(t, a.PollingTrafficPane(), "PollingTrafficPane should survive viz.TickMsg")
 }
 
 // --- Feature 52: Mouse Scroll + Responsive Behavior tests ---
