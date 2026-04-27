@@ -20,13 +20,17 @@ const maxNetworkLogRows = 200
 // networkLogRow holds the display data extracted from gateway events for a single
 // completed or blocked request.
 type networkLogRow struct {
+	requestID  uint64
 	timestamp  time.Time
 	method     string
 	path       string
 	statusCode int
 	durationMs int64
 	priority   domain.RequestPriority
-	decision   domain.EventKind
+	// decision is zero when EventHttpCompleted arrives before EventRequestAllowed
+	// (production order). The backfill sweep in refreshRows updates it once the
+	// decision event arrives on a later tick.
+	decision domain.EventKind
 }
 
 // NetworkLogPane displays a scrollable, filterable reverse-chronological log of
@@ -138,6 +142,10 @@ func (p *NetworkLogPane) EventCursor() uint64 { return p.eventCursor }
 // Exported for testing.
 func (p *NetworkLogPane) CompletedRequestsLen() int { return len(p.completedRequests) }
 
+// PendingDecisionsLen returns the number of entries in the pendingDecisions map.
+// Exported for testing to verify the map stays bounded.
+func (p *NetworkLogPane) PendingDecisionsLen() int { return len(p.pendingDecisions) }
+
 // Init returns nil — the NetworkLogPane reacts to TickMsg from the app.
 func (p *NetworkLogPane) Init() tea.Cmd { return nil }
 
@@ -202,30 +210,51 @@ func (p *NetworkLogPane) View() string {
 
 // refreshRows drains new events from the GatewayEventLog since the last cursor
 // position, extracts completed and blocked requests, and rebuilds the table.
+//
+// Gateway emission order for primary callers: EventHttpCompleted fires FIRST,
+// then EventRequestAllowed fires. This means EventHttpCompleted can arrive on
+// the same tick before EventRequestAllowed is in the map. To handle this,
+// completed rows store their requestID and a backfill sweep at the end of each
+// tick fills in any decision that arrived in the same batch but was processed
+// after the row was created.
+//
+// Dedup waiters emit EventDedupJoined then EventDedupResolved; they never emit
+// EventHttpCompleted. Clearing the pendingDecisions entry on EventDedupResolved
+// prevents unbounded map growth for waiter request IDs.
 func (p *NetworkLogPane) refreshRows() {
 	// Drain new events since last cursor.
 	newCursor, events := p.store.ReadEventsFrom(p.eventCursor)
 	p.eventCursor = newCursor
 
-	// Accumulate decision events into the persistent map. Decision events
+	// First pass: accumulate decision events into the persistent map. Decision events
 	// (allowed/blocked/dedupJoined) may arrive on a different tick than the
 	// corresponding EventHttpCompleted, so we keep pendingDecisions across ticks.
+	// EventDedupResolved clears the waiter's entry — dedup waiters never emit
+	// EventHttpCompleted, so without this the map would grow without bound.
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventRequestAllowed, domain.EventRequestBlocked,
 			domain.EventDedupJoined:
 			p.pendingDecisions[e.RequestID] = e.Kind
+		case domain.EventDedupResolved:
+			// Waiter's lifecycle is complete — clear its pendingDecisions entry.
+			delete(p.pendingDecisions, e.RequestID)
 		}
 	}
 
+	// Second pass: build rows for completed and blocked events.
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventHttpCompleted:
 			// Consume and delete the decision to prevent unbounded map growth.
+			// If EventRequestAllowed has not arrived yet (production order: HttpCompleted
+			// first, then Allowed), decision will be zero and the backfill sweep below
+			// will fill it in once the Allowed event is processed in this same batch.
 			decision := p.pendingDecisions[e.RequestID]
 			delete(p.pendingDecisions, e.RequestID)
 
 			row := networkLogRow{
+				requestID:  e.RequestID,
 				timestamp:  e.Timestamp,
 				method:     e.Method,
 				path:       e.Path,
@@ -241,6 +270,7 @@ func (p *NetworkLogPane) refreshRows() {
 			// The decision is already known (EventRequestBlocked implies blocked).
 			delete(p.pendingDecisions, e.RequestID)
 			row := networkLogRow{
+				requestID:  e.RequestID,
 				timestamp:  e.Timestamp,
 				method:     e.Method,
 				path:       e.Path,
@@ -250,6 +280,22 @@ func (p *NetworkLogPane) refreshRows() {
 				decision:   domain.EventRequestBlocked,
 			}
 			p.completedRequests = append(p.completedRequests, row)
+		}
+	}
+
+	// Backfill sweep: when EventHttpCompleted arrived before EventRequestAllowed in
+	// the same batch (production order), the row was created with decision==0. Now
+	// that all decision events have been added to pendingDecisions, fill in any rows
+	// that still have a zero decision. This covers the same-tick (in-batch) ordering
+	// case where Allowed is processed in the first pass after the row was created in
+	// the second pass. We also handle cross-tick backfill: if a row carries a zero
+	// decision from a previous tick and its Allowed event arrives now, fill it in.
+	for i := range p.completedRequests {
+		if p.completedRequests[i].decision == 0 {
+			if d, ok := p.pendingDecisions[p.completedRequests[i].requestID]; ok {
+				p.completedRequests[i].decision = d
+				delete(p.pendingDecisions, p.completedRequests[i].requestID)
+			}
 		}
 	}
 

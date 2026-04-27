@@ -42,17 +42,11 @@ func newTestNetworkLogPane() *panes.NetworkLogPane {
 	return panes.NewNetworkLogPane(s, t)
 }
 
-// recordHttpCompleted adds an EventHttpCompleted event to the store, with an
-// accompanying EventRequestAllowed decision event (same RequestID).
+// recordHttpCompleted adds gateway events to the store in production emission order:
+// EventHttpCompleted fires FIRST (gateway.go line 513), then EventRequestAllowed
+// (gateway.go line 524). Using production order here ensures tests match real
+// gateway behavior and validate the backfill sweep in refreshRows.
 func recordHttpCompleted(s *state.Store, requestID uint64, method, path string, statusCode int, durationMs int64, priority domain.RequestPriority) {
-	s.RecordEvent(domain.GatewayEvent{
-		Kind:      domain.EventRequestAllowed,
-		RequestID: requestID,
-		Method:    method,
-		Path:      path,
-		Priority:  priority,
-		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
-	})
 	s.RecordEvent(domain.GatewayEvent{
 		Timestamp:  time.Now(),
 		Kind:       domain.EventHttpCompleted,
@@ -63,6 +57,14 @@ func recordHttpCompleted(s *state.Store, requestID uint64, method, path string, 
 		DurationMs: durationMs,
 		Priority:   priority,
 		Snapshot:   domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventRequestAllowed,
+		RequestID: requestID,
+		Method:    method,
+		Path:      path,
+		Priority:  priority,
+		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
 	})
 }
 
@@ -155,6 +157,7 @@ func TestNetworkLogPane_View_ShowsAllColumns(t *testing.T) {
 	pane := newTestNetworkLogPane()
 	pane.SetSize(160, 20)
 	v := pane.View()
+	// Title Case headers (not all-caps).
 	assert.Contains(t, v, "Time", "Time column header")
 	assert.Contains(t, v, "Method", "Method column header")
 	assert.Contains(t, v, "Endpoint", "Endpoint column header")
@@ -162,6 +165,13 @@ func TestNetworkLogPane_View_ShowsAllColumns(t *testing.T) {
 	assert.Contains(t, v, "Latency", "Latency column header")
 	assert.Contains(t, v, "Priority", "Priority column header")
 	assert.Contains(t, v, "Decision", "Decision column header")
+	// Verify old all-caps headers are gone.
+	assert.NotContains(t, v, "TIME", "TIME header must not appear — Title Case required")
+	assert.NotContains(t, v, "METHOD", "METHOD header must not appear — Title Case required")
+	assert.NotContains(t, v, "STATUS", "STATUS header must not appear — Title Case required")
+	assert.NotContains(t, v, "LATENCY", "LATENCY header must not appear — Title Case required")
+	assert.NotContains(t, v, "PRIORITY", "PRIORITY header must not appear — Title Case required")
+	assert.NotContains(t, v, "DECISION", "DECISION header must not appear — Title Case required")
 }
 
 // --- Cursor-based reads ---
@@ -689,6 +699,164 @@ func TestNetworkLogPane_Decision_PersistedAcrossTicks(t *testing.T) {
 	v2 := pane.View()
 	assert.Contains(t, v2, "/cross-tick/path", "completed row must appear after tick 2")
 	assert.Contains(t, v2, "allowed", "Decision column must show 'allowed' — decision from tick 1 must persist into tick 2")
+}
+
+// TestNetworkLogPane_Decision_ProductionOrder_CrossTick verifies the Decision column
+// shows "allowed" when EventHttpCompleted arrives BEFORE EventRequestAllowed (the
+// real gateway emission order: HttpCompleted on line 513, Allowed on line 524).
+// Split across ticks:
+//
+//	Tick N: EventHttpCompleted arrives (row created with zero decision)
+//	Tick N+1: EventRequestAllowed arrives (backfill sweep fills in the decision)
+func TestNetworkLogPane_Decision_ProductionOrder_CrossTick(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetSize(160, 20)
+
+	// Tick 1: only EventHttpCompleted is recorded (production order: HttpCompleted first).
+	s.RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       domain.EventHttpCompleted,
+		RequestID:  99,
+		Method:     "GET",
+		Path:       "/production-order/path",
+		StatusCode: 200,
+		DurationMs: 30,
+		Priority:   domain.PriorityBackground,
+		Snapshot:   domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// Row should appear with blank decision (Allowed not yet received).
+	v1 := pane.View()
+	assert.Contains(t, v1, "/production-order/path", "row must appear after HttpCompleted")
+
+	// Tick 2: EventRequestAllowed arrives for the SAME RequestID.
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventRequestAllowed,
+		RequestID: 99,
+		Method:    "GET",
+		Path:      "/production-order/path",
+		Priority:  domain.PriorityBackground,
+		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	m, _ = pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	v2 := pane.View()
+	assert.Contains(t, v2, "/production-order/path", "row still present after tick 2")
+	assert.Contains(t, v2, "allowed", "Decision column must show 'allowed' after backfill sweep")
+}
+
+// TestNetworkLogPane_DedupJoined_NoPendingDecisionsLeak verifies that
+// EventDedupJoined entries do not accumulate indefinitely in pendingDecisions.
+// Dedup waiters emit EventDedupJoined then EventDedupResolved and never emit
+// EventHttpCompleted. Without handling EventDedupResolved the map grows without bound.
+func TestNetworkLogPane_DedupJoined_NoPendingDecisionsLeak(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetSize(160, 20)
+
+	// Emit 250 DedupJoined+DedupResolved pairs (simulating 250 background waiter requests).
+	for i := uint64(1); i <= 250; i++ {
+		s.RecordEvent(domain.GatewayEvent{
+			Kind:      domain.EventDedupJoined,
+			RequestID: i,
+			Method:    "GET",
+			Path:      "/me/player",
+			Priority:  domain.PriorityBackground,
+		})
+		s.RecordEvent(domain.GatewayEvent{
+			Kind:      domain.EventDedupResolved,
+			RequestID: i,
+			Method:    "GET",
+			Path:      "/me/player",
+			Priority:  domain.PriorityBackground,
+		})
+	}
+
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// pendingDecisions must not grow — DedupResolved should clear each entry.
+	assert.Equal(t, 0, pane.PendingDecisionsLen(),
+		"pendingDecisions must be empty after DedupResolved clears each DedupJoined entry")
+}
+
+// TestNetworkLogPane_Decision_DedupJoined_PersistedAcrossTicks verifies the Decision
+// column shows "dedup" for a request that joined a dedup group, even when
+// EventDedupJoined arrives on tick N and EventHttpCompleted (for the primary's ID, not
+// used here) arrives separately. This test drives via the primary path to confirm the
+// dedup waiter row (EventDedupJoined → EventDedupResolved) does not show in the log
+// (only primary's HttpCompleted rows appear). The key regression guard is that a
+// hypothetical dedup-primary row created with a pending DedupJoined decision is backfilled.
+//
+// Concretely: emit EventDedupJoined for request X on tick N, then emit EventHttpCompleted
+// for a SEPARATE primary requestID Y on the same tick (so the primary gets a row). The
+// primary's pending decision should come from EventRequestAllowed on tick N+1.
+// Meanwhile request X (the waiter) never creates a row (no HttpCompleted for it).
+// Emit EventDedupResolved for X on tick N+1 to clear the map entry.
+func TestNetworkLogPane_Decision_DedupJoined_PersistedAcrossTicks(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetSize(160, 20)
+
+	// Tick 1: primary's HttpCompleted (ID=10) and waiter's DedupJoined (ID=11).
+	s.RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       domain.EventHttpCompleted,
+		RequestID:  10,
+		Method:     "GET",
+		Path:       "/dedup-primary/path",
+		StatusCode: 200,
+		DurationMs: 40,
+		Priority:   domain.PriorityBackground,
+		Snapshot:   domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventDedupJoined,
+		RequestID: 11,
+		Method:    "GET",
+		Path:      "/dedup-primary/path",
+		Priority:  domain.PriorityBackground,
+	})
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// Primary row appears with blank decision (Allowed not yet received).
+	v1 := pane.View()
+	assert.Contains(t, v1, "/dedup-primary/path", "primary row must appear")
+	// Waiter has no HttpCompleted so no second row.
+	assert.Equal(t, 1, pane.CompletedRequestsLen(), "only one row — the primary")
+
+	// Tick 2: Allowed arrives for primary (ID=10) and DedupResolved for waiter (ID=11).
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventRequestAllowed,
+		RequestID: 10,
+		Method:    "GET",
+		Path:      "/dedup-primary/path",
+		Priority:  domain.PriorityBackground,
+		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventDedupResolved,
+		RequestID: 11,
+		Method:    "GET",
+		Path:      "/dedup-primary/path",
+		Priority:  domain.PriorityBackground,
+	})
+	m, _ = pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	v2 := pane.View()
+	assert.Contains(t, v2, "/dedup-primary/path", "row still present")
+	assert.Contains(t, v2, "allowed", "Decision column must show 'allowed' after backfill on tick 2")
+	assert.Equal(t, 0, pane.PendingDecisionsLen(),
+		"pendingDecisions must be empty — DedupResolved clears waiter, Allowed consumed by backfill")
 }
 
 // ── Story 174: Filter_EscCloses ───────────────────────────────────────────────
