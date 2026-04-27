@@ -1,6 +1,6 @@
 ---
 title: "Page B Redesign (Nerd Status)"
-status: done
+status: in-progress
 ---
 
 ## Description
