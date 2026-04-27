@@ -39,7 +39,7 @@ func NewGatewayHealthPane(s state.StateReader, th theme.Theme) *GatewayHealthPan
 	return &GatewayHealthPane{
 		store:    s,
 		theme:    th,
-		snapshot: domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+		snapshot: domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10, ConcurrentMax: 5},
 	}
 }
 
