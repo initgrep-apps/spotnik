@@ -2151,8 +2151,36 @@ func TestApp_PageB_TickMsg_DispatchesPollingSnapshot(t *testing.T) {
 	require.NotNil(t, ptp)
 	ptp.SetSize(120, 10)
 	v := ptp.View()
-	// In idle state the polling interval is longer; the view must render content.
-	assert.NotEmpty(t, v, "PollingTrafficPane must render non-empty view after TickMsg with snapshot")
+	// With IsIdle:true the playback row renders "idle · …" — proves PollingSnapshotMsg
+	// was dispatched. Without dispatch the row shows "? · running" (zero-value snapshot).
+	assert.Contains(t, v, "idle",
+		"Playback row must show idle status — proves PollingSnapshotMsg{IsIdle:true} was dispatched")
+}
+
+// TestApp_PageB_TickMsg_ReachesGatewayLivePane verifies that TickMsg is dispatched to
+// GatewayLivePane and that the pane absorbs recorded gateway events into its buffer.
+// Without the dispatch block in handlers.go the buffer stays empty.
+func TestApp_PageB_TickMsg_ReachesGatewayLivePane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Record a gateway event so GatewayLivePane has something to drain on TickMsg.
+	a.Store().RecordEvent(domain.GatewayEvent{
+		Timestamp: time.Now(),
+		Kind:      domain.EventRequestAllowed,
+		RequestID: 1,
+		Method:    "GET",
+		Path:      "/me/player",
+		Priority:  domain.PriorityBackground,
+		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+
+	m, _ := a.Update(panes.TickMsg{})
+	a = m.(*app.App)
+
+	// GatewayLivePane must have drained the event — BufferedEventCount > 0.
+	assert.Greater(t, a.GatewayLivePane().BufferedEventCount(), 0,
+		"GatewayLivePane must absorb gateway events on TickMsg (BufferedEventCount must be > 0)")
 }
 
 // TestApp_PageB_VizTick_ReachesNowPlayingPane verifies viz.TickMsg
