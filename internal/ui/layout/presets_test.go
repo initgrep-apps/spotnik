@@ -109,28 +109,35 @@ func TestPresetNerdStatus_HasFivePanes(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneNetworkLog])
 }
 
-// TestPresetNerdStatus_GridHasThreeRows verifies the grid structure: NowPlaying strip,
-// 3-pane diagnostic row, NetworkLog full-width row.
-func TestPresetNerdStatus_GridHasThreeRows(t *testing.T) {
-	p := layout.PresetNerdStatus
-	assert.Len(t, p.Grid, 3, "should have 3 rows")
+// TestPresetNerdStatus_GridHasFourRows verifies the stacked grid structure:
+// NowPlaying strip, GatewayHealth+GatewayLive(span=2) row, PollingTraffic continuation row,
+// NetworkLog full-width row.
+func TestPresetNerdStatus_GridHasFourRows(t *testing.T) {
+	require.Len(t, layout.PresetNerdStatus.Grid, 4)
 
 	// Row 0: NowPlaying strip
+	p := layout.PresetNerdStatus
 	assert.Equal(t, 1, p.Grid[0].HeightWeight)
 	assert.Len(t, p.Grid[0].Cells, 1)
 	assert.Equal(t, layout.PaneNowPlaying, p.Grid[0].Cells[0].PaneID)
 
-	// Row 1: diagnostic trio — GatewayHealth, PollingTraffic, GatewayLive
-	assert.Equal(t, 3, p.Grid[1].HeightWeight)
-	assert.Len(t, p.Grid[1].Cells, 3)
-	assert.Equal(t, layout.PaneGatewayHealth, p.Grid[1].Cells[0].PaneID)
-	assert.Equal(t, layout.PanePollingTraffic, p.Grid[1].Cells[1].PaneID)
-	assert.Equal(t, layout.PaneGatewayLive, p.Grid[1].Cells[2].PaneID)
+	// Row 1: GatewayHealth (left) + GatewayLive (right, spans 2 rows)
+	row2 := p.Grid[1]
+	require.Len(t, row2.Cells, 2)
+	assert.Equal(t, layout.PaneGatewayHealth, row2.Cells[0].PaneID)
+	assert.Equal(t, layout.PaneGatewayLive, row2.Cells[1].PaneID)
+	assert.Equal(t, 2, row2.Cells[1].RowSpan, "GatewayLive must span 2 rows")
+	assert.Equal(t, 3, row2.Cells[1].WidthWeight, "GatewayLive must have weight 3 (70%)")
 
-	// Row 2: NetworkLog full-width
-	assert.Equal(t, 2, p.Grid[2].HeightWeight)
-	assert.Len(t, p.Grid[2].Cells, 1)
-	assert.Equal(t, layout.PaneNetworkLog, p.Grid[2].Cells[0].PaneID)
+	// Row 2: PollingTraffic continuation (GatewayLive occupies the right side)
+	row3 := p.Grid[2]
+	require.Len(t, row3.Cells, 1)
+	assert.Equal(t, layout.PanePollingTraffic, row3.Cells[0].PaneID)
+
+	// Row 3: NetworkLog full-width
+	assert.Equal(t, 2, p.Grid[3].HeightWeight)
+	assert.Len(t, p.Grid[3].Cells, 1)
+	assert.Equal(t, layout.PaneNetworkLog, p.Grid[3].Cells[0].PaneID)
 }
 
 func TestPagePresets_Counts(t *testing.T) {
