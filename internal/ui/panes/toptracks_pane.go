@@ -20,6 +20,9 @@ import (
 // Compile-time check: TopTracksPane implements layout.Pane.
 var _ layout.Pane = &TopTracksPane{}
 
+// Compile-time check: TopTracksPane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &TopTracksPane{}
+
 // topTracksTimeRanges is the cycle order for the g key.
 var topTracksTimeRanges = []string{"short_term", "medium_term", "long_term"}
 
@@ -108,6 +111,10 @@ func (p *TopTracksPane) Init() tea.Cmd { return nil }
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (p *TopTracksPane) HasActiveFilter() bool { return p.filter.IsActive() }
 
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (p *TopTracksPane) ActiveFilterQuery() string { return p.filter.Query() }
+
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (p *TopTracksPane) SetFocused(focused bool) {
 	p.BasePane.SetFocused(focused)
@@ -175,8 +182,13 @@ func (p *TopTracksPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	if keyMsg.Type == tea.KeyEscape {
+		if p.filter.Query() != "" {
+			p.filter.ClearQuery()
+			p.refreshRows()
+			return p, nil
+		}
 		p.table.GotoTop()
 		return p, nil
 	}

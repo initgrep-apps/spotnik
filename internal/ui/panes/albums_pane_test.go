@@ -640,3 +640,47 @@ func TestAlbumsPane_Esc_ResetsScrollInMainListView(t *testing.T) {
 	pane = m.(*AlbumsPane)
 	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
 }
+
+// TestAlbumsPane_ActiveFilterQuery_ReturnsCommittedQuery verifies that
+// ActiveFilterQuery() reflects the committed query after f → type → Enter.
+func TestAlbumsPane_ActiveFilterQuery_ReturnsCommittedQuery(t *testing.T) {
+	s := state.New()
+	s.SetSavedAlbums([]domain.SavedAlbum{{Album: domain.FullAlbum{
+		ID: "al1", Name: "Rock Album", URI: "spotify:album:al1",
+		ReleaseDate: "2020-01-01", Artists: []domain.Artist{{Name: "Artist"}},
+	}}})
+	pane := NewAlbumsPane(s, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+
+	assert.Equal(t, "", pane.ActiveFilterQuery(), "empty before filter applied")
+
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	for _, r := range "rock" {
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	assert.Equal(t, "rock", pane.ActiveFilterQuery())
+}
+
+// TestAlbumsPane_Esc_ClearsCommittedFilter verifies that Esc in the main list view
+// clears a committed filter query before falling back to scroll-reset.
+func TestAlbumsPane_Esc_ClearsCommittedFilter(t *testing.T) {
+	s := state.New()
+	s.SetSavedAlbums([]domain.SavedAlbum{
+		{Album: domain.FullAlbum{ID: "al1", Name: "Rock Album", URI: "spotify:album:al1", ReleaseDate: "2020-01-01", Artists: []domain.Artist{{Name: "Artist"}}}},
+		{Album: domain.FullAlbum{ID: "al2", Name: "Jazz Album", URI: "spotify:album:al2", ReleaseDate: "2021-01-01", Artists: []domain.Artist{{Name: "Artist"}}}},
+	})
+	pane := NewAlbumsPane(s, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	for _, r := range "rock" {
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, "rock", pane.ActiveFilterQuery(), "filter must be committed")
+
+	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}

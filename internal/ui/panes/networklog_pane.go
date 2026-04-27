@@ -56,6 +56,9 @@ type NetworkLogPane struct {
 // Compile-time check: NetworkLogPane implements layout.Pane.
 var _ layout.Pane = &NetworkLogPane{}
 
+// Compile-time check: NetworkLogPane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &NetworkLogPane{}
+
 // NewNetworkLogPane creates a NetworkLogPane with the given store and theme.
 func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	columns := []components.ColumnDef{
@@ -126,6 +129,10 @@ func (p *NetworkLogPane) IsFocused() bool { return p.focused }
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (p *NetworkLogPane) HasActiveFilter() bool { return p.filter.IsActive() }
 
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (p *NetworkLogPane) ActiveFilterQuery() string { return p.filter.Query() }
+
 // SelectedIndex returns the current table cursor row (0-based).
 // Exported for testing.
 func (p *NetworkLogPane) SelectedIndex() int { return p.table.SelectedIndex() }
@@ -187,8 +194,13 @@ func (p *NetworkLogPane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	if m.Type == tea.KeyEscape {
+		if p.filter.Query() != "" {
+			p.filter.ClearQuery()
+			p.refreshRows()
+			return p, nil
+		}
 		p.table.GotoTop()
 		return p, nil
 	}

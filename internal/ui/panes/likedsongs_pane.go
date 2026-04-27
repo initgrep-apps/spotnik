@@ -18,6 +18,9 @@ import (
 // Compile-time check: LikedSongsPane implements layout.Pane.
 var _ layout.Pane = &LikedSongsPane{}
 
+// Compile-time check: LikedSongsPane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &LikedSongsPane{}
+
 // LikedSongsPane is the Bubble Tea model for the Liked Songs pane (toggle key 5).
 // It renders a dense bubble-table of the user's liked tracks with columns for index,
 // track name, artist, and duration. It supports in-pane filtering by track name and
@@ -84,6 +87,10 @@ func (l *LikedSongsPane) Init() tea.Cmd { return nil }
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (l *LikedSongsPane) HasActiveFilter() bool { return l.filter.IsActive() }
 
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (l *LikedSongsPane) ActiveFilterQuery() string { return l.filter.Query() }
+
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (l *LikedSongsPane) SetFocused(focused bool) {
 	l.BasePane.SetFocused(focused)
@@ -149,8 +156,13 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	}
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	if keyMsg.Type == tea.KeyEscape {
+		if l.filter.Query() != "" {
+			l.filter.ClearQuery()
+			l.refreshRows()
+			return l, nil
+		}
 		l.table.GotoTop()
 		return l, nil
 	}
