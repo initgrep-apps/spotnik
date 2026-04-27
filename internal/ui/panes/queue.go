@@ -26,13 +26,7 @@ var _ layout.FilterQueryPane = &QueuePane{}
 // as a dense bubble-table with optional in-pane filtering. It reads all data from
 // the central Store — it never imports api/ directly.
 type QueuePane struct {
-	BasePane
-
-	// table is the bubble-table wrapper for dense queue rendering.
-	table *components.Table
-
-	// filter provides in-pane filtering by track name and artist.
-	filter *components.Filter
+	*TableBasedPane
 }
 
 // NewQueuePane creates a new QueuePane with the given store, theme, and focus state.
@@ -52,9 +46,7 @@ func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueueP
 	})
 
 	q := &QueuePane{
-		BasePane: BasePane{store: store, theme: th, focused: focused},
-		table:    t,
-		filter:   components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, components.NewFilter(th)),
 	}
 	// Sync table focus state with initial focused parameter.
 	t.SetFocused(focused)
@@ -71,50 +63,28 @@ func (q *QueuePane) Title() string { return "Queue" }
 // ToggleKey returns 2 — the number key for btop-style pane toggling.
 func (q *QueuePane) ToggleKey() int { return 2 }
 
-// Actions returns the pane-specific shortcut hints displayed in the border.
-// Returns close action when filter is active; otherwise filter action.
-func (q *QueuePane) Actions() []layout.Action {
-	if q.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
-	return []layout.Action{
-		{Key: "f", Label: "filter"},
-	}
-}
-
 // Init satisfies tea.Model. The queue pane has no startup command of its own —
 // the root app's tick loop drives queue refreshes.
 func (q *QueuePane) Init() tea.Cmd {
 	return nil
 }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (q *QueuePane) HasActiveFilter() bool {
-	return q.filter.IsActive()
-}
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (q *QueuePane) ActiveFilterQuery() string {
-	return q.filter.Query()
-}
-
 // SetFocused sets the keyboard focus state and propagates it to the table.
 func (q *QueuePane) SetFocused(focused bool) {
-	q.BasePane.SetFocused(focused)
-	q.table.SetFocused(focused && !q.filter.IsActive())
+	q.TableBasedPane.SetFocused(focused)
+	q.Table().SetFocused(focused && !q.Filter().IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (q *QueuePane) SetSize(width, height int) {
-	q.BasePane.SetSize(width, height)
-	q.filter.SetWidth(width)
+	q.TableBasedPane.SetSize(width, height)
+	q.Filter().SetWidth(width)
 	q.resizeTable()
 }
 
 // SetPlayingIndex marks which row shows the ▶ indicator. Pass -1 to clear.
 func (q *QueuePane) SetPlayingIndex(index int) {
-	q.table.SetPlayingIndex(index)
+	q.Table().SetPlayingIndex(index)
 }
 
 // Update handles key events when the pane is focused.
@@ -128,31 +98,15 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return q, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if q.filter.IsActive() {
-		cmd := q.filter.Update(msg)
-		// If the filter just closed (Esc/Enter consumed it), re-focus the table and resize.
-		if !q.filter.IsActive() {
-			q.table.SetFocused(true)
-			q.resizeTable()
-		}
-		// Refresh rows regardless — query may have changed or filter may have closed.
-		q.refreshRows()
+	// Delegate filter-key routing to the base.
+	if consumed, cmd := q.HandleFilterKey(keyMsg, q.refreshRows, q.resizeTable); consumed {
 		return q, cmd
-	}
-
-	// f key: activate filter.
-	if keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f" {
-		q.filter.Toggle()
-		q.table.SetFocused(false)
-		q.resizeTable()
-		return q, nil
 	}
 
 	// Enter: play the selected track.
 	if keyMsg.Type == tea.KeyEnter {
 		queue := q.filteredQueue()
-		idx := q.table.SelectedIndex()
+		idx := q.Table().SelectedIndex()
 		if idx >= 0 && idx < len(queue) {
 			uri := queue[idx].URI
 			return q, func() tea.Msg {
@@ -162,19 +116,8 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return q, nil
 	}
 
-	// Esc: first clear a committed filter query; second press resets scroll.
-	if keyMsg.Type == tea.KeyEscape {
-		if q.filter.Query() != "" {
-			q.filter.ClearQuery()
-			q.refreshRows()
-			return q, nil
-		}
-		q.table.GotoTop()
-		return q, nil
-	}
-
 	// Forward j/k and other navigation to the table.
-	cmd := q.table.Update(msg)
+	cmd := q.Table().Update(msg)
 	return q, cmd
 }
 
@@ -183,7 +126,7 @@ func (q *QueuePane) View() string {
 	// Show EmptyState only when the queue is truly empty (no filter active).
 	// When the filter is active but yields no results, the filter bar is shown so the
 	// user can see and edit their query — the empty table is the correct feedback.
-	if len(q.store.Queue()) == 0 && !q.filter.IsActive() {
+	if len(q.store.Queue()) == 0 && !q.Filter().IsActive() {
 		return uikit.EmptyState{
 			Text:   "Empty queue",
 			Hint:   "Press / to search for tracks to add",
@@ -196,11 +139,11 @@ func (q *QueuePane) View() string {
 	var parts []string
 
 	// If filter is active, prepend the filter bar and shrink the table.
-	if q.filter.IsActive() {
-		parts = append(parts, q.filter.View(q.width))
+	if q.Filter().IsActive() {
+		parts = append(parts, q.Filter().View(q.width))
 	}
 
-	parts = append(parts, q.table.View())
+	parts = append(parts, q.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -224,13 +167,13 @@ func (q *QueuePane) refreshRows() {
 			"duration": formatDurationMs(track.DurationMs),
 		}
 	}
-	q.table.SetRows(rows)
+	q.Table().SetRows(rows)
 }
 
 // filteredQueue returns the queue tracks filtered by the current filter query.
 func (q *QueuePane) filteredQueue() []domain.Track {
 	all := q.store.Queue()
-	if q.filter.Query() == "" {
+	if q.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.Track, 0, len(all))
@@ -239,7 +182,7 @@ func (q *QueuePane) filteredQueue() []domain.Track {
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
 		}
-		if q.filter.MatchesAny(track.Name, artistName) {
+		if q.Filter().MatchesAny(track.Name, artistName) {
 			result = append(result, track)
 		}
 	}
@@ -249,17 +192,19 @@ func (q *QueuePane) filteredQueue() []domain.Track {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (q *QueuePane) resizeTable() {
 	tableHeight := q.height
-	if q.filter.IsActive() {
+	if q.Filter().IsActive() {
 		tableHeight -= 1 // one line for the filter bar
 	}
 	if tableHeight < 0 {
 		tableHeight = 0
 	}
-	q.table.SetSize(q.width, tableHeight)
+	q.Table().SetSize(q.width, tableHeight)
 }
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — this is the existing
+// behaviour; preserving filter state across theme switches is out of scope.
 func (q *QueuePane) SetTheme(th theme.Theme) {
 	q.theme = th
 	cols := []components.ColumnDef{
@@ -268,7 +213,8 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	q.table, q.filter = components.RebuildTableTheme(th, cols, q.table.Rows(), q.focused)
+	newTable, newFilter := components.RebuildTableTheme(th, cols, q.Table().Rows(), q.focused)
+	q.SwapTableAndFilter(newTable, newFilter)
 	q.resizeTable()
 	q.refreshRows()
 }
@@ -276,5 +222,5 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 // Cursor returns the currently selected row index (0-based) in the table.
 // NOTE: kept for backward compatibility with tests.
 func (q *QueuePane) Cursor() int {
-	return q.table.SelectedIndex()
+	return q.Table().SelectedIndex()
 }

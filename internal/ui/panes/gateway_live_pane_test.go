@@ -405,8 +405,8 @@ func TestGatewayLivePane_ReverseChronological(t *testing.T) {
 	}
 }
 
-// TestGatewayLivePane_Actions_FilterActive verifies Actions() returns cancel shortcut
-// when filter is active and filter shortcut otherwise.
+// TestGatewayLivePane_Actions_FilterActive verifies Actions() always returns the
+// filter shortcut regardless of active filter state (consistent with TableBasedPane default).
 func TestGatewayLivePane_Actions_FilterActive(t *testing.T) {
 	p, _ := newTestGatewayLivePane(t)
 	p.SetSize(80, 20)
@@ -420,10 +420,10 @@ func TestGatewayLivePane_Actions_FilterActive(t *testing.T) {
 
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
 
-	// After filter opens: should show "Esc cancel".
+	// After filter opens: still shows "f filter" (no Esc-cancel variant in the actions bar).
 	actions = p.Actions()
-	if len(actions) != 1 || actions[0].Key != "Esc" {
-		t.Errorf("Actions() with active filter = %v, want [{Esc cancel}]", actions)
+	if len(actions) != 1 || actions[0].Key != "f" {
+		t.Errorf("Actions() with active filter = %v, want [{f filter}]", actions)
 	}
 }
 

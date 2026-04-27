@@ -66,9 +66,11 @@ func TestTopArtistsPane_Actions_FilterActive(t *testing.T) {
 	pane, _ := newTestTopArtistsPane()
 	pane.SetFocused(true)
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
+	// Actions() always returns {f, filter} + {g, rangeLabel} — close-notch retired.
 	actions := pane.Actions()
-	require.Len(t, actions, 1)
-	assert.Equal(t, "Esc", actions[0].Key)
+	require.Len(t, actions, 2)
+	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "g", actions[1].Key)
 }
 
 func TestTopArtistsPane_RendersArtistNames(t *testing.T) {

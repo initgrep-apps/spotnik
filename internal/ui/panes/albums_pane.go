@@ -45,12 +45,8 @@ type albumDebounceMsg struct {
 // sub-view. Album tracks are interactive (user-session) data — they are stored
 // in pane fields (loadedTracks), not in the global store.
 type AlbumsPane struct {
-	BasePane
+	*TableBasedPane
 
-	// table renders the album list.
-	table *components.Table
-	// filter provides in-pane text filtering by album name and artist.
-	filter *components.Filter
 	// trackTable renders the track list when inTrackView is true.
 	trackTable *components.Table
 
@@ -106,10 +102,8 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	})
 
 	a := &AlbumsPane{
-		BasePane:   BasePane{store: store, theme: th, focused: focused},
-		table:      t,
-		trackTable: tt,
-		filter:     components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, components.NewFilter(th)),
+		trackTable:     tt,
 	}
 	t.SetFocused(focused)
 	a.refreshRows()
@@ -132,43 +126,38 @@ func (a *AlbumsPane) Title() string {
 func (a *AlbumsPane) ToggleKey() int { return 4 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
+// In track sub-view shows {Esc, back}. In list view always shows {f, filter} +
+// {Enter, open} — the close-notch is retired; the border uses FilterQuery instead.
 func (a *AlbumsPane) Actions() []layout.Action {
 	if a.inTrackView {
 		return []layout.Action{{Key: "Esc", Label: "back"}}
 	}
-	if a.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
+	return []layout.Action{
+		a.BaseFilterAction(),
+		{Key: "Enter", Label: "open"},
 	}
-	return []layout.Action{{Key: "f", Label: "filter"}}
 }
 
 // Init satisfies tea.Model. AlbumsPane has no startup command.
 func (a *AlbumsPane) Init() tea.Cmd { return nil }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (a *AlbumsPane) HasActiveFilter() bool { return a.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (a *AlbumsPane) ActiveFilterQuery() string { return a.filter.Query() }
-
 // SetFocused updates the keyboard focus state. Routes focus to the correct table
 // based on whether the track sub-view is active.
 func (a *AlbumsPane) SetFocused(focused bool) {
-	a.BasePane.SetFocused(focused)
+	a.TableBasedPane.SetFocused(focused)
 	if a.inTrackView {
 		a.trackTable.SetFocused(focused)
-		a.table.SetFocused(false)
+		a.Table().SetFocused(false)
 	} else {
-		a.table.SetFocused(focused && !a.filter.IsActive())
+		a.Table().SetFocused(focused && !a.Filter().IsActive())
 		a.trackTable.SetFocused(false)
 	}
 }
 
 // SetSize updates the render dimensions and propagates them to both tables and the filter.
 func (a *AlbumsPane) SetSize(width, height int) {
-	a.BasePane.SetSize(width, height)
-	a.filter.SetWidth(width)
+	a.TableBasedPane.SetSize(width, height)
+	a.Filter().SetWidth(width)
 	a.trackTable.SetSize(width, height)
 	a.resizeTable()
 }
@@ -215,17 +204,6 @@ func (a *AlbumsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if a.filter.IsActive() {
-		cmd := a.filter.Update(msg)
-		if !a.filter.IsActive() {
-			a.table.SetFocused(true)
-			a.resizeTable()
-		}
-		a.refreshRows()
-		return a, cmd
-	}
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return a, nil
@@ -240,16 +218,14 @@ func (a *AlbumsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleListViewKey handles key events in the album list view.
 func (a *AlbumsPane) handleListViewKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f":
-		a.filter.Toggle()
-		a.table.SetFocused(false)
-		a.resizeTable()
-		return a, nil
+	// Delegate filter-key routing to the base (f, Esc, forwarding to filter).
+	if consumed, cmd := a.HandleFilterKey(keyMsg, a.refreshRows, a.resizeTable); consumed {
+		return a, cmd
+	}
 
-	case keyMsg.Type == tea.KeyEnter:
+	if keyMsg.Type == tea.KeyEnter {
 		albums := a.filteredAlbums()
-		idx := a.table.SelectedIndex()
+		idx := a.Table().SelectedIndex()
 		if idx < 0 || idx >= len(albums) {
 			return a, nil
 		}
@@ -262,25 +238,15 @@ func (a *AlbumsPane) handleListViewKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.hasMoreTracks = false
 		a.tracksFetching = false
 		a.inTrackView = true
-		a.table.SetFocused(false)
+		a.Table().SetFocused(false)
 		a.trackTable.SetFocused(true)
 		intent := albumDebounceIntent{albumID: alb.ID, offset: 0}
 		a.albumIntent = intent
 		return a.scheduleAlbumDebounce(intent)
-
-	// Esc: first clear a committed filter query; second press resets scroll.
-	case keyMsg.Type == tea.KeyEscape:
-		if a.filter.Query() != "" {
-			a.filter.ClearQuery()
-			a.refreshRows()
-			return a, nil
-		}
-		a.table.GotoTop()
-		return a, nil
 	}
 
 	// Forward navigation to the table.
-	cmd := a.table.Update(keyMsg)
+	cmd := a.Table().Update(keyMsg)
 	return a, cmd
 }
 
@@ -296,7 +262,7 @@ func (a *AlbumsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Clear albumIntent so any in-flight debounce tick is discarded as stale.
 		a.albumIntent = albumDebounceIntent{}
 		a.trackTable.SetFocused(false)
-		a.table.SetFocused(true)
+		a.Table().SetFocused(true)
 		return a, func() tea.Msg { return AlbumTrackViewClosedMsg{} }
 
 	case tea.KeyEnter:
@@ -370,10 +336,10 @@ func (a *AlbumsPane) View() string {
 		return a.trackTable.View()
 	}
 	var parts []string
-	if a.filter.IsActive() {
-		parts = append(parts, a.filter.View(a.width))
+	if a.Filter().IsActive() {
+		parts = append(parts, a.Filter().View(a.width))
 	}
-	parts = append(parts, a.table.View())
+	parts = append(parts, a.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -398,14 +364,14 @@ func (a *AlbumsPane) refreshRows() {
 			"year":   year,
 		}
 	}
-	a.table.SetRows(rows)
+	a.Table().SetRows(rows)
 }
 
 // filteredAlbums returns the albums filtered by the current filter query.
 // Filter matches on album name OR artist name.
 func (a *AlbumsPane) filteredAlbums() []domain.SavedAlbum {
 	all := a.store.SavedAlbums()
-	if a.filter.Query() == "" {
+	if a.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.SavedAlbum, 0, len(all))
@@ -414,7 +380,7 @@ func (a *AlbumsPane) filteredAlbums() []domain.SavedAlbum {
 		if len(sa.Album.Artists) > 0 {
 			artistName = sa.Album.Artists[0].Name
 		}
-		if a.filter.MatchesAny(sa.Album.Name, artistName) {
+		if a.Filter().MatchesAny(sa.Album.Name, artistName) {
 			result = append(result, sa)
 		}
 	}
@@ -424,17 +390,18 @@ func (a *AlbumsPane) filteredAlbums() []domain.SavedAlbum {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (a *AlbumsPane) resizeTable() {
 	tableHeight := a.height
-	if a.filter.IsActive() {
+	if a.Filter().IsActive() {
 		tableHeight--
 	}
 	if tableHeight < 0 {
 		tableHeight = 0
 	}
-	a.table.SetSize(a.width, tableHeight)
+	a.Table().SetSize(a.width, tableHeight)
 }
 
 // SetTheme updates the theme reference and rebuilds both tables with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — existing behaviour.
 func (a *AlbumsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
@@ -443,7 +410,8 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused && !a.inTrackView)
+	newTable, newFilter := components.RebuildTableTheme(th, cols, a.Table().Rows(), a.focused && !a.inTrackView)
+	a.SwapTableAndFilter(newTable, newFilter)
 	a.resizeTable()
 	a.refreshRows()
 
@@ -469,7 +437,7 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 
 // Cursor returns the currently selected row index (0-based).
 func (a *AlbumsPane) Cursor() int {
-	return a.table.SelectedIndex()
+	return a.Table().SelectedIndex()
 }
 
 // extractYear extracts the 4-digit year from a Spotify release date string.

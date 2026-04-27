@@ -121,11 +121,13 @@ func TestNetworkLogPane_Actions_WithFilter(t *testing.T) {
 	pane := newTestNetworkLogPane()
 	pane.SetFocused(true)
 	pane.SetSize(80, 20)
-	// Activate filter via 'f' key.
+	// Activate filter via 'f' key — Actions() must still return {f, filter}.
 	_, _ = pane.Update(tea_keyMsg("f"))
 	actions := pane.Actions()
 	require.NotNil(t, actions)
-	assert.Equal(t, "Esc", actions[0].Key, "Esc should be the only action when filter is open")
+	require.Len(t, actions, 1)
+	assert.Equal(t, "f", actions[0].Key, "Actions() always returns {f, filter} — close-notch retired")
+	assert.Equal(t, "filter", actions[0].Label)
 }
 
 // --- SetSize / SetFocused / IsFocused ---

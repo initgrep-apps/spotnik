@@ -38,15 +38,10 @@ var topTracksRangeLabels = map[string]string{
 // track name, artist, and popularity. It supports in-pane filtering and per-pane
 // time range cycling via the g key (short_term → medium_term → long_term → short_term).
 type TopTracksPane struct {
-	BasePane
+	*TableBasedPane
 
 	// timeRange is the currently active Spotify time range for top tracks.
 	timeRange string
-
-	// table renders the top tracks list.
-	table *components.Table
-	// filter provides in-pane text filtering by track name and artist.
-	filter *components.Filter
 }
 
 // NewTopTracksPane creates a TopTracksPane with the given store, theme, and focus state.
@@ -69,10 +64,8 @@ func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *To
 	})
 
 	p := &TopTracksPane{
-		BasePane:  BasePane{store: store, theme: th, focused: focused},
-		timeRange: "short_term",
-		table:     t,
-		filter:    components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, components.NewFilter(th)),
+		timeRange:      "short_term",
 	}
 	t.SetFocused(focused)
 	p.refreshRows()
@@ -92,15 +85,12 @@ func (p *TopTracksPane) ToggleKey() int { return 7 }
 func (p *TopTracksPane) TimeRange() string { return p.timeRange }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// When the filter is active, only shows the Esc/close hint.
-// Otherwise shows filter (f) and time range cycle (g) with the current range as label.
+// Shows filter (f) and time range cycle (g) with the current range as label.
+// The close-notch is retired — the border renderer uses FilterQuery instead.
 func (p *TopTracksPane) Actions() []layout.Action {
-	if p.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
 	rangeLabel := topTracksRangeLabels[p.timeRange]
 	return []layout.Action{
-		{Key: "f", Label: "filter"},
+		p.BaseFilterAction(),
 		{Key: "g", Label: rangeLabel},
 	}
 }
@@ -108,23 +98,16 @@ func (p *TopTracksPane) Actions() []layout.Action {
 // Init satisfies tea.Model. TopTracksPane has no startup command.
 func (p *TopTracksPane) Init() tea.Cmd { return nil }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (p *TopTracksPane) HasActiveFilter() bool { return p.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (p *TopTracksPane) ActiveFilterQuery() string { return p.filter.Query() }
-
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (p *TopTracksPane) SetFocused(focused bool) {
-	p.BasePane.SetFocused(focused)
-	p.table.SetFocused(focused && !p.filter.IsActive())
+	p.TableBasedPane.SetFocused(focused)
+	p.Table().SetFocused(focused && !p.Filter().IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (p *TopTracksPane) SetSize(width, height int) {
-	p.BasePane.SetSize(width, height)
-	p.filter.SetWidth(width)
+	p.TableBasedPane.SetSize(width, height)
+	p.Filter().SetWidth(width)
 	p.resizeTable()
 }
 
@@ -143,35 +126,23 @@ func (p *TopTracksPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if p.filter.IsActive() {
-		cmd := p.filter.Update(msg)
-		if !p.filter.IsActive() {
-			p.table.SetFocused(true)
-			p.resizeTable()
-		}
-		p.refreshRows()
-		return p, cmd
-	}
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return p, nil
 	}
 
-	switch {
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f":
-		p.filter.Toggle()
-		p.table.SetFocused(false)
-		p.resizeTable()
-		return p, nil
+	// Delegate filter-key routing to the base.
+	if consumed, cmd := p.HandleFilterKey(keyMsg, p.refreshRows, p.resizeTable); consumed {
+		return p, cmd
+	}
 
+	switch {
 	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "g":
 		return p.cycleTimeRange()
 
 	case keyMsg.Type == tea.KeyEnter:
 		tracks := p.filteredTracks()
-		idx := p.table.SelectedIndex()
+		idx := p.Table().SelectedIndex()
 		if idx >= 0 && idx < len(tracks) {
 			uris := make([]string, 0, len(tracks)-idx)
 			for _, tr := range tracks[idx:] {
@@ -182,19 +153,8 @@ func (p *TopTracksPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 
-	// Esc: first clear a committed filter query; second press resets scroll.
-	if keyMsg.Type == tea.KeyEscape {
-		if p.filter.Query() != "" {
-			p.filter.ClearQuery()
-			p.refreshRows()
-			return p, nil
-		}
-		p.table.GotoTop()
-		return p, nil
-	}
-
 	// Forward navigation to the table.
-	cmd := p.table.Update(keyMsg)
+	cmd := p.Table().Update(keyMsg)
 	return p, cmd
 }
 
@@ -227,10 +187,10 @@ func (p *TopTracksPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 // View renders the top tracks pane content. Pure — reads state, returns string.
 func (p *TopTracksPane) View() string {
 	var parts []string
-	if p.filter.IsActive() {
-		parts = append(parts, p.filter.View(p.width))
+	if p.Filter().IsActive() {
+		parts = append(parts, p.Filter().View(p.width))
 	}
-	parts = append(parts, p.table.View())
+	parts = append(parts, p.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -254,14 +214,14 @@ func (p *TopTracksPane) refreshRows() {
 			"dur":    trackDuration(track.DurationMs),
 		}
 	}
-	p.table.SetRows(rows)
+	p.Table().SetRows(rows)
 }
 
 // filteredTracks returns the top tracks for the current time range, filtered by query.
 // Filter matches on track name OR artist name.
 func (p *TopTracksPane) filteredTracks() []domain.Track {
 	all := p.store.TopTracks(p.timeRange)
-	if p.filter.Query() == "" {
+	if p.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.Track, 0, len(all))
@@ -270,7 +230,7 @@ func (p *TopTracksPane) filteredTracks() []domain.Track {
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
 		}
-		if p.filter.MatchesAny(track.Name, artistName) {
+		if p.Filter().MatchesAny(track.Name, artistName) {
 			result = append(result, track)
 		}
 	}
@@ -279,6 +239,7 @@ func (p *TopTracksPane) filteredTracks() []domain.Track {
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — existing behaviour.
 func (p *TopTracksPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
@@ -287,7 +248,8 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	p.table, p.filter = components.RebuildTableTheme(th, cols, p.table.Rows(), p.focused)
+	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
+	p.SwapTableAndFilter(newTable, newFilter)
 	p.resizeTable()
 	p.refreshRows()
 }
@@ -295,13 +257,13 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (p *TopTracksPane) resizeTable() {
 	tableHeight := p.height
-	if p.filter.IsActive() {
+	if p.Filter().IsActive() {
 		tableHeight--
 	}
 	if tableHeight < 0 {
 		tableHeight = 0
 	}
-	p.table.SetSize(p.width, tableHeight)
+	p.Table().SetSize(p.width, tableHeight)
 }
 
 // trackDuration converts milliseconds to "m:ss" (e.g. 252000 → "4:12").

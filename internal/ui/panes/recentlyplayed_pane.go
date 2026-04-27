@@ -29,12 +29,7 @@ var _ layout.FilterQueryPane = &RecentlyPlayedPane{}
 // track name, artist, and relative play time. It supports in-pane filtering by track
 // name and artist name.
 type RecentlyPlayedPane struct {
-	BasePane
-
-	// table renders the recently played track list.
-	table *components.Table
-	// filter provides in-pane text filtering by track name and artist.
-	filter *components.Filter
+	*TableBasedPane
 }
 
 // NewRecentlyPlayedPane creates a RecentlyPlayedPane with the given store, theme, and focus state.
@@ -56,9 +51,7 @@ func NewRecentlyPlayedPane(store state.StateReader, th theme.Theme, focused bool
 	})
 
 	r := &RecentlyPlayedPane{
-		BasePane: BasePane{store: store, theme: th, focused: focused},
-		table:    t,
-		filter:   components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, components.NewFilter(th)),
 	}
 	t.SetFocused(focused)
 	r.refreshRows()
@@ -74,34 +67,19 @@ func (r *RecentlyPlayedPane) Title() string { return "Recently Played" }
 // ToggleKey returns 6 — the number key for btop-style pane toggling.
 func (r *RecentlyPlayedPane) ToggleKey() int { return 6 }
 
-// Actions returns the pane-specific shortcut hints displayed in the border.
-func (r *RecentlyPlayedPane) Actions() []layout.Action {
-	if r.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
-	return []layout.Action{{Key: "f", Label: "filter"}}
-}
-
 // Init satisfies tea.Model. RecentlyPlayedPane has no startup command.
 func (r *RecentlyPlayedPane) Init() tea.Cmd { return nil }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (r *RecentlyPlayedPane) HasActiveFilter() bool { return r.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (r *RecentlyPlayedPane) ActiveFilterQuery() string { return r.filter.Query() }
-
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (r *RecentlyPlayedPane) SetFocused(focused bool) {
-	r.BasePane.SetFocused(focused)
-	r.table.SetFocused(focused && !r.filter.IsActive())
+	r.TableBasedPane.SetFocused(focused)
+	r.Table().SetFocused(focused && !r.Filter().IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (r *RecentlyPlayedPane) SetSize(width, height int) {
-	r.BasePane.SetSize(width, height)
-	r.filter.SetWidth(width)
+	r.TableBasedPane.SetSize(width, height)
+	r.Filter().SetWidth(width)
 	r.resizeTable()
 }
 
@@ -118,32 +96,19 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if r.filter.IsActive() {
-		cmd := r.filter.Update(msg)
-		if !r.filter.IsActive() {
-			r.table.SetFocused(true)
-			r.resizeTable()
-		}
-		r.refreshRows()
-		return r, cmd
-	}
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return r, nil
 	}
 
-	switch {
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f":
-		r.filter.Toggle()
-		r.table.SetFocused(false)
-		r.resizeTable()
-		return r, nil
+	// Delegate filter-key routing to the base.
+	if consumed, cmd := r.HandleFilterKey(keyMsg, r.refreshRows, r.resizeTable); consumed {
+		return r, cmd
+	}
 
-	case keyMsg.Type == tea.KeyEnter:
+	if keyMsg.Type == tea.KeyEnter {
 		items := r.filteredItems()
-		idx := r.table.SelectedIndex()
+		idx := r.Table().SelectedIndex()
 		if idx >= 0 && idx < len(items) {
 			uris := make([]string, 0, len(items)-idx)
 			for _, item := range items[idx:] {
@@ -154,32 +119,21 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, nil
 	}
 
-	// Esc: first clear a committed filter query; second press resets scroll.
-	if keyMsg.Type == tea.KeyEscape {
-		if r.filter.Query() != "" {
-			r.filter.ClearQuery()
-			r.refreshRows()
-			return r, nil
-		}
-		r.table.GotoTop()
-		return r, nil
-	}
-
 	// Forward navigation to the table.
-	cmd := r.table.Update(keyMsg)
+	cmd := r.Table().Update(keyMsg)
 	return r, cmd
 }
 
 // View renders the recently played pane content. Pure — reads state, returns string.
 func (r *RecentlyPlayedPane) View() string {
 	var parts []string
-	if r.filter.IsActive() {
-		parts = append(parts, r.filter.View(r.width))
+	if r.Filter().IsActive() {
+		parts = append(parts, r.Filter().View(r.width))
 	}
-	if len(r.store.RecentlyPlayed()) == 0 && !r.filter.IsActive() {
+	if len(r.store.RecentlyPlayed()) == 0 && !r.Filter().IsActive() {
 		parts = append(parts, "  No recently played tracks")
 	} else {
-		parts = append(parts, r.table.View())
+		parts = append(parts, r.Table().View())
 	}
 	return strings.Join(parts, "\n")
 }
@@ -205,14 +159,14 @@ func (r *RecentlyPlayedPane) refreshRows() {
 			"played": playedAt,
 		}
 	}
-	r.table.SetRows(rows)
+	r.Table().SetRows(rows)
 }
 
 // filteredItems returns the recently played items filtered by the current filter query.
 // Filter matches on track name OR artist name.
 func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 	all := r.store.RecentlyPlayed()
-	if r.filter.Query() == "" {
+	if r.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.PlayHistory, 0, len(all))
@@ -221,7 +175,7 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 		if len(item.Track.Artists) > 0 {
 			artistName = item.Track.Artists[0].Name
 		}
-		if r.filter.MatchesAny(item.Track.Name, artistName) {
+		if r.Filter().MatchesAny(item.Track.Name, artistName) {
 			result = append(result, item)
 		}
 	}
@@ -230,6 +184,7 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — existing behaviour.
 func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 	r.theme = th
 	cols := []components.ColumnDef{
@@ -238,7 +193,8 @@ func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	r.table, r.filter = components.RebuildTableTheme(th, cols, r.table.Rows(), r.focused)
+	newTable, newFilter := components.RebuildTableTheme(th, cols, r.Table().Rows(), r.focused)
+	r.SwapTableAndFilter(newTable, newFilter)
 	r.resizeTable()
 	r.refreshRows()
 }
@@ -246,13 +202,13 @@ func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (r *RecentlyPlayedPane) resizeTable() {
 	tableHeight := r.height
-	if r.filter.IsActive() {
+	if r.Filter().IsActive() {
 		tableHeight--
 	}
 	if tableHeight < 0 {
 		tableHeight = 0
 	}
-	r.table.SetSize(r.width, tableHeight)
+	r.Table().SetSize(r.width, tableHeight)
 }
 
 // formatPlayedAtFromHistory parses an ISO 8601 played_at timestamp and returns

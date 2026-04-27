@@ -96,14 +96,16 @@ func TestLikedSongsPane_Actions_Default(t *testing.T) {
 	assert.NotContains(t, keys, "i", "i (like/unlike) must be absent")
 }
 
-// TestLikedSongsPane_Actions_FilterActive returns close action when filter is active.
+// TestLikedSongsPane_Actions_FilterActive verifies Actions() always returns {f, filter}.
+// The close-notch is retired — Esc is a global key; the border shows f(query) instead.
 func TestLikedSongsPane_Actions_FilterActive(t *testing.T) {
 	pane := newTestLikedSongsPane(true)
 	pane.SetSize(80, 20)
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
-	assert.Equal(t, "Esc", actions[0].Key)
+	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "filter", actions[0].Label)
 }
 
 // TestLikedSongsPane_View_Empty verifies clean render on empty data.
