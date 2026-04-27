@@ -97,9 +97,11 @@ type FilterablePane interface {
 	HasActiveFilter() bool
 }
 
-// FilterQueryPane is implemented by panes that expose a committed filter query
+// FilterQueryPane is implemented by panes that expose the live filter query
 // for display in the pane border. When ActiveFilterQuery() returns a non-empty
-// string, the border renderer shows filtering: "query" in the top-right corner.
+// string, the border renderer shows f(query) in the top-right corner using the
+// graded-shrink helper (FormatFilterLabel). No close-notch is rendered — Esc
+// is a global key documented in the help overlay.
 type FilterQueryPane interface {
 	ActiveFilterQuery() string
 }
