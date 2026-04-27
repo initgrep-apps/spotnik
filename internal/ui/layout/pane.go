@@ -95,3 +95,10 @@ type Pane interface {
 type FilterablePane interface {
 	HasActiveFilter() bool
 }
+
+// FilterQueryPane is implemented by panes that expose a committed filter query
+// for display in the pane border. When ActiveFilterQuery() returns a non-empty
+// string, the border renderer shows filtering: "query" in the top-right corner.
+type FilterQueryPane interface {
+	ActiveFilterQuery() string
+}
