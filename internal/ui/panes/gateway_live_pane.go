@@ -247,6 +247,7 @@ func (p *GatewayLivePane) drainEvents() {
 	}
 
 	if len(newRows) == 0 {
+		// All new events were skipped (e.g. all EventBackoffExpired); table unchanged.
 		return
 	}
 
@@ -360,7 +361,11 @@ func buildGatewayLiveRow(e domain.GatewayEvent) (gatewayLiveRow, bool) {
 }
 
 // buildTableRows converts the buffer to table rows, applying the committed filter.
+// No-ops when width is zero to avoid rendering rows with negative label width.
 func (p *GatewayLivePane) buildTableRows() {
+	if p.width == 0 {
+		return
+	}
 	query := strings.ToLower(p.activeQuery)
 	rows := make([]map[string]string, 0, len(p.buffer))
 

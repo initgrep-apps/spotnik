@@ -113,11 +113,11 @@ func TestGatewayLivePane_Buffer_CapsAt500(t *testing.T) {
 	}
 }
 
-// TestGatewayLivePane_Esc_ResetsScrollWhenFilterInactive verifies the three-mode
-// Esc state machine:
-//   - Esc with filter active → cancel without committing
-//   - Esc with committed filter → clear committed filter
-//   - Esc with no committed filter → GotoTop (reset scroll)
+// TestGatewayLivePane_Esc_ResetsScrollWhenFilterInactive verifies Esc mode 3:
+// when the filter is not open and no committed query is set, Esc resets scroll
+// to the first page. Mode 1 (cancel active filter) and Mode 2 (clear committed
+// query) are covered by TestGatewayLivePane_CommittedFilter_ClearedByEsc and
+// TestGatewayLivePane_HasActiveFilter.
 func TestGatewayLivePane_Esc_ResetsScrollWhenFilterInactive(t *testing.T) {
 	p, store := newTestGatewayLivePane(t)
 	p.SetSize(80, 20)
@@ -205,12 +205,10 @@ func TestGatewayLivePane_CommittedFilter_ClearedByEsc(t *testing.T) {
 		t.Fatal("filter still active after Enter, expected committed (inactive)")
 	}
 
-	// The view should contain the committed filter indicator.
-	// We test this via View() output which includes "GET" in the rows.
+	// With active query "GET", only rows containing "GET" should be visible.
 	view := p.View()
 	if !strings.Contains(view, "GET") {
-		// This is fine — rows with GET would match. Just ensure no panic.
-		_ = view
+		t.Errorf("View() after committing filter 'GET' does not contain 'GET' rows; view = %q", view)
 	}
 
 	// Esc should clear committed filter (not reset scroll).
