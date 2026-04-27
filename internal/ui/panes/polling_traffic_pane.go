@@ -157,9 +157,9 @@ func pollingHumanInterval(ms int) string {
 	return fmt.Sprintf("%dms", ms)
 }
 
-// cacheAge returns a human-readable duration since t (e.g. "3m", "2h 15m").
-// Unlike humanAge (requestflow_pane.go), this omits the "ago" suffix so the
-// caller can append context-specific text such as " stale".
+// cacheAge returns a human-readable duration since t (e.g. "3m", "2h 15m"),
+// without an "ago" suffix so the caller can append context-specific text
+// such as " stale".
 func cacheAge(t time.Time) string {
 	d := time.Since(t)
 	if d < time.Minute {

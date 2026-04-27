@@ -373,10 +373,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Forward TickMsg to Page B panes so they refresh their data.
-		if rfp := a.RequestFlowPane(); rfp != nil {
-			updated, _ := rfp.Update(m)
-			if p, ok := updated.(*panes.RequestFlowPane); ok {
+		if ghp := a.GatewayHealthPane(); ghp != nil {
+			updated, _ := ghp.Update(m)
+			if p, ok := updated.(*panes.GatewayHealthPane); ok {
 				a.panes[layout.PaneGatewayHealth] = p
+			}
+		}
+		if glp := a.GatewayLivePane(); glp != nil {
+			updated, _ := glp.Update(m)
+			if p, ok := updated.(*panes.GatewayLivePane); ok {
+				a.panes[layout.PaneGatewayLive] = p
 			}
 		}
 		if nlp := a.NetworkLogPane(); nlp != nil {
@@ -386,8 +392,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Send current polling snapshot to RequestFlowPane for the status strip.
-		// This is done by sending a PollingSnapshotMsg after the TickMsg.
+		// Send current polling snapshot to PollingTrafficPane for the status strip.
 		idle := a.isIdle()
 		var idleSecs int
 		if idle {
@@ -399,10 +404,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			IsIdle:         idle,
 			IdleSecs:       idleSecs,
 		}
-		if rfp := a.RequestFlowPane(); rfp != nil {
-			updated, _ := rfp.Update(pollingSnapshot)
-			if p, ok := updated.(*panes.RequestFlowPane); ok {
-				a.panes[layout.PaneGatewayHealth] = p
+		if ptp := a.PollingTrafficPane(); ptp != nil {
+			updated, _ := ptp.Update(pollingSnapshot)
+			if p, ok := updated.(*panes.PollingTrafficPane); ok {
+				a.panes[layout.PanePollingTraffic] = p
 			}
 		}
 
@@ -446,8 +451,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// without requiring the gateway hot-path to perform periodic work.
 		a.gateway.CheckAndEmitRefill()
 		a.gateway.CheckAndEmitBackoffExpiry()
-		// Forward viz.TickMsg to NowPlaying pane and Page B RequestFlowPane.
-		// Both panes share the 200ms animation tick for visual consistency.
+		// Forward viz.TickMsg to NowPlayingPane for animation.
+		// The new Page B panes (GatewayHealth, GatewayLive, PollingTraffic) do not
+		// consume viz.TickMsg — they react to the 1s TickMsg instead.
 		var visCmds []tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {
 			updated, cmd := np.Update(m)
@@ -456,15 +462,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if cmd != nil {
 				visCmds = append(visCmds, cmd)
-			}
-		}
-		if rfp := a.RequestFlowPane(); rfp != nil {
-			updated, rfpCmd := rfp.Update(m)
-			if p, ok := updated.(*panes.RequestFlowPane); ok {
-				a.panes[layout.PaneGatewayHealth] = p
-			}
-			if rfpCmd != nil {
-				visCmds = append(visCmds, rfpCmd)
 			}
 		}
 		if len(visCmds) > 0 {

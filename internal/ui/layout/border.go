@@ -393,7 +393,7 @@ func PaneBorderColor(id PaneID, t theme.Theme) lipgloss.Color {
 		return t.PaneBorderTopTracks()
 	case PaneTopArtists:
 		return t.PaneBorderTopArtists()
-	case PaneGatewayHealth:
+	case PaneGatewayHealth, PanePollingTraffic, PaneGatewayLive:
 		return t.PaneBorderRequestFlow()
 	case PaneNetworkLog:
 		return t.PaneBorderNetworkLog()

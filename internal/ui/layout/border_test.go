@@ -365,6 +365,8 @@ func TestPaneBorderColor_ReturnsCorrectColorPerPane(t *testing.T) {
 		{layout.PaneTopTracks, th.PaneBorderTopTracks()},
 		{layout.PaneTopArtists, th.PaneBorderTopArtists()},
 		{layout.PaneGatewayHealth, th.PaneBorderRequestFlow()},
+		{layout.PanePollingTraffic, th.PaneBorderRequestFlow()},
+		{layout.PaneGatewayLive, th.PaneBorderRequestFlow()},
 		{layout.PaneNetworkLog, th.PaneBorderNetworkLog()},
 	}
 	for _, tt := range tests {

@@ -70,6 +70,10 @@ func (p *GatewayHealthPane) SetSize(w, h int) { p.width = w; p.height = h }
 // SetTheme updates the theme reference for runtime theme switching.
 func (p *GatewayHealthPane) SetTheme(th theme.Theme) { p.theme = th }
 
+// EventCursor returns the current event cursor position.
+// Exported for testing to verify TickMsg dispatch reaches this pane.
+func (p *GatewayHealthPane) EventCursor() uint64 { return p.eventCursor }
+
 // Update handles TickMsg to drain gateway events and update the snapshot.
 func (p *GatewayHealthPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(TickMsg); ok {

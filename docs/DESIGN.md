@@ -90,14 +90,17 @@ Note: for these features and existing featues a lot of componetns are available 
 | 7 | Top Tracks | `PaneTopTracks` | `GET /me/top/tracks` | `7` | `KeyHint()` purple |
 | 8 | Top Artists | `PaneTopArtists` | `GET /me/top/artists` | `8` | `Error()` pink/red |
 
-### Page B — Nerd Status (2 panes)
+### Page B — Nerd Status (4 panes)
 
-| # | Pane | ID | Data Source | Border Accent |
-|---|------|----|-------------|---------------|
-| — | Request Flow | `PaneRequestFlow` | Gateway state, inflight map, Store sentinels | `PaneBorderRequestFlow()` orange/amber |
-| — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer) | `PaneBorderNetworkLog()` warm grey |
+| # | Pane | ID | Data Source | Toggle Key | Border Accent |
+|---|------|----|-------------|------------|---------------|
+| — | Gateway Health | `PaneGatewayHealth` | `store.ReadEventsFrom(cursor)` — token bucket, slots, backoff, dedup | `2` | `PaneBorderRequestFlow()` orange/amber |
+| — | Polling Traffic | `PanePollingTraffic` | `PollingSnapshotMsg` + store TTL sentinels | `3` | `PaneBorderRequestFlow()` orange/amber |
+| — | Gateway Live | `PaneGatewayLive` | `store.ReadEventsFrom(cursor)` — 500-entry event stream | `4` | `PaneBorderRequestFlow()` orange/amber |
+| — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (200-entry buffer) | `5` | `PaneBorderNetworkLog()` warm grey |
 
-Page B panes are not toggleable with number keys (those control Page A only).
+Toggle keys `2`–`5` are only active on Page B. Page B panes are not toggleable via the
+standard Page A number keys (`1`–`8`).
 
 ### Key Notes
 
@@ -320,25 +323,32 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 
 ### Page B Layout
 
-Three-row layout: NowPlaying small strip (weight 1, height < 8 triggers title-bar-embedded track info) + Request Flow visualization (weight 3) + Network Log table (weight 2).
+Four-pane, three-row layout: NowPlaying compact strip (row 1) + three diagnostic panes
+side-by-side (row 2) + Network Log full-width (row 3).
 
 ```
 ╭─ ¹Now Playing ── Martbaan · Samar Mehdi ── ▶ 1:41/5:30 ──────────────╮  Row 1 (weight 1)
 │  (height < 8: track info in title bar — see compact title mode)       │
 ╰──────────────────────────────────────────────────────────────────────╯
-╭─ Request Flow ───────────────────────────────────────────────────────╮  Row 2 (weight 3)
-│  (live flow visualization — see Section 19)                          │
-╰──────────────────────────────────────────────────────────────────────╯
-╭─ Network Log ────────────────────────────────────────────────────────╮  Row 3 (weight 2)
-│  (scrollable table log — see Section 19)                             │
-╰──────────────────────────────────────────────────────────────────────╯
+╭─ ²Gateway Health ──────────╮╭─ ³Polling Traffic ──────────╮╭─ ⁴Gateway Live ──────────╮  Row 2 (weight 3)
+│  Tokens  ●●●●●●●●●●  10/10 ││  Playback  ▶ 1s · running  ││  event stream            │
+│  Slots   ■□□□□  1/5        ││  Playlists  ◦ fresh        ││  (scrollable, filterable)│
+│  Backoff none              ││  Albums     ⚠ 3m stale     ││                          │
+│  Dedup   none              ││  Liked      ◦ fresh        ││                          │
+│                            ││  Recent     ◦ fresh        ││                          │
+╰────────────────────────────╯╰────────────────────────────╯╰──────────────────────────╯
+╭─ ⁵Network Log ──────────────────────────────────────────────────────╮  Row 3 (weight 2)
+│  Time      Method  Endpoint              Status  Latency  Priority  Decision │
+│  12:03:45  GET     /me/player            200     45ms     ◷ bkgd    allowed │
+│  (scrollable, filterable)                                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 **Grid definition:**
 ```
-Row 1 (weight 1): [{NowPlaying, weight=1}]       ← compact strip
-Row 2 (weight 3): [{RequestFlow, weight=1}]       ← live flow visualization
-Row 3 (weight 2): [{NetworkLog, weight=1}]        ← scrollable API log
+Row 1 (weight 1): [{NowPlaying, weight=1}]                                  ← compact strip
+Row 2 (weight 3): [{GatewayHealth, weight=1}, {PollingTraffic, weight=1}, {GatewayLive, weight=1}]
+Row 3 (weight 2): [{NetworkLog, weight=1}]                                  ← scrollable API log
 ```
 
 ### Preset/Toggle Behavior
@@ -542,7 +552,9 @@ Like btop, each pane has a distinct border color that provides visual identity w
 | Recently Played | `PaneBorderRecentlyPlayed()` (teal accent) | Dimmed teal |
 | Top Tracks | `PaneBorderTopTracks()` (purple accent) | Dimmed purple |
 | Top Artists | `PaneBorderTopArtists()` (pink/red accent) | Dimmed pink |
-| Request Flow | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
+| Gateway Health | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
+| Polling Traffic | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
+| Gateway Live | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
 | Network Log | `PaneBorderNetworkLog()` (warm grey accent) | Dimmed grey |
 
 **Dimming strategy:** Unfocused borders use the same hue at ~40% brightness. This can be achieved by:
@@ -1040,137 +1052,114 @@ solarized, synthwave, tokyonight) implement these tokens.
 
 Page B provides live visibility into Spotnik's internal request pipeline. No Spotify API calls needed — all data is read from existing internal structures (`*Gateway`, `*Store`).
 
-Page B has **two panes** below the NowPlaying compact strip:
+Page B has **four panes** below the NowPlaying compact strip: three diagnostic panes in a side-by-side row (GatewayHealth, PollingTraffic, GatewayLive) and a full-width NetworkLog row.
 
-### Pane 1: Request Flow (live graphic visualization)
+### Toggle Key Table (Page B)
 
-Three columns connected by animated request arrows, showing the full request lifecycle:
+| Key | Pane |
+|-----|------|
+| `2` | Gateway Health |
+| `3` | Polling Traffic |
+| `4` | Gateway Live |
+| `5` | Network Log |
 
-```
-╭─ Request Flow ───────────────────────────────────────────────────────────────────────╮
-│                                                                                      │
-│   APP                          GATEWAY                          SPOTIFY              │
-│  ╭──────────────╮           ╭──────────────────╮           ╭──────────────╮          │
-│  │ ▶ /player    │───────→───│ ●●●●●●●●○○ 8/10  │───────→───│  200  45ms   │          │
-│  │   /queue     │───→ dedup │ ■■■■■□□□□□  3/5  │    ╳      │  200  62ms   │          │
-│  │   /playlists │─── wait ──│ ⏳ backoff  2.1s |───────→───│  429  12ms   │          │
-│  │              │           │                  |           │  200  95ms   │          │
-│  ╰──────────────╯           ╰──────────────────╯           ╰──────────────╯          │
-│                                                                                      │
-│  POLLING  tick: 1s  state: active  idle: 0s    STORE  fetching: [playlists, queue]   │
-╰──────────────────────────────────────────────────────────────────────────────────────╯
-```
+### Pane 1: Gateway Health (toggle key 2)
 
-#### Left Column — APP (request origin)
-
-- Shows the last N commands dispatched (newest at top)
-- Each line: `▶ /endpoint` for active, dimmed for completed
-- Color: `Interactive` priority requests in bright text, `Background` in `TextMuted()`
-- Animated: new requests slide in from left edge
-
-#### Center Column — GATEWAY (decision engine)
-
-| Element | Visual | Data Source |
-|---------|--------|-------------|
-| Token bucket | `●●●●●●●●○○` bar (10 dots, filled = available) | `Gateway.bucket` |
-| Semaphore | `■■■■■□□□□□` bar (5 squares, filled = in-flight) | `Gateway.concurrent` |
-| Backoff timer | `⏳ backoff 2.1s` countdown, hidden when clear | `Store.ThrottleRetryAfterSecs()` |
-| Dedup indicator | `N waiters` when GET dedup is active | `Gateway.inflight` map |
-
-- Token bucket refills left-to-right (live animation)
-- Backoff timer decrements every tick, flashes `Error()` when > 5s
-- Semaphore full → new requests show `wait` on their connecting arrow
-
-#### Right Column — SPOTIFY (responses)
-
-- Shows response status code + latency for recent requests
-- Color-coded: `Success()` for 2xx, `Warning()` for 429, `Error()` for 5xx
-- Responses appear and fade after 3 seconds
-
-#### Connecting Arrows
-
-| Arrow | Meaning |
-|-------|---------|
-| `───────→───` | Request flowing through successfully |
-| `─── wait ──` | Request queued at semaphore (slot full) |
-| `───→ dedup` | Request hit GET dedup (shares response with earlier identical GET) |
-| `╳` | Request blocked by backoff (Background priority dropped) |
-
-Arrows animate: characters shift right over successive frames (`─→─` → `──→` → `→──`), creating a motion effect on the 200ms animation tick.
-
-#### Bottom Status Strip (inside the pane)
+4-row fixed grid showing the real-time state of the request gateway:
 
 ```
-POLLING  tick: 1000ms  state: active|idle  idle: 0s|45s    STORE  fetching: [playlists, queue]  stale: albums(12s)
+╭─ ²Gateway Health ─────────────────────────╮
+│  ●  Tokens    ●●●●●●●●●●  10/10           │
+│  ■  Slots     ■□□□□  1/5                  │
+│  ⏱  Backoff   none                        │
+│  ≋  Dedup     none                        │
+╰───────────────────────────────────────────╯
 ```
 
-- **Left**: Polling state — tick interval, active/idle state, idle duration
-- **Right**: Store state — which data is currently in-flight, which is stale (with TTL remaining)
-- Data sources: `tickCount`, `backoffTicks`, `isIdle()`, `pollIntervals()`, `Store.*Fetching()`, `Store.*FetchedAt()`
+| Row | Data | Warning trigger |
+|-----|------|-----------------|
+| Tokens | Token bucket fill level (dot bar) | `Warning()` when ≤ 2 remaining |
+| Slots | Concurrent semaphore (square bar) | `Warning()` when all slots full |
+| Backoff | Countdown seconds (`Error()` colour) | Always `Error()` when > 0 |
+| Dedup | Number of GET waiters | `TextSecondary()` when > 0 |
 
-### Pane 2: Network Log (scrollable table)
+- **Data source**: `store.ReadEventsFrom(cursor)` — reads `GatewayStateSnapshot` from each event
+- **Update trigger**: Every 1s app tick
 
-Scrollable reverse-chronological log of all API requests, sourced from `store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer):
+### Pane 2: Polling Traffic (toggle key 3)
+
+5-row fixed grid showing playback poll cadence and library cache freshness:
 
 ```
-╭─ Network Log ──────────────────────────────────╮ f filter ╮
-│  TIME      METHOD  ENDPOINT                STATUS  LATENCY  NOTES   │
-│  12:03:45  GET     /me/player              200     45ms     ██      │
-│  12:03:45  GET     /me/player/queue        200     62ms     ███     │
-│  12:03:44  GET     /me/playlists           200     128ms    ██████  │
-│  12:03:43  GET     /me/player              429     12ms     █  ◬    │
-│  12:03:42  GET     /me/top/tracks          200     95ms     ████    │
-│  12:03:41  PUT     /me/player/play         204     34ms     ██      │
-│  12:03:40  GET     /me/player              200     51ms     ██      │
-│  ▼ more below (500-entry ring buffer)                                │
-╰──────────────────────────────────────────────────────────────────────╯
+╭─ ³Polling Traffic ────────────────────────╮
+│  ♫  Playback    ▶ 1s · running            │
+│  ☰  Playlists   ◦ fresh                   │
+│  ♫♫ Albums      ⚠ 3m stale               │
+│  📌 Liked       ◦ fresh                   │
+│  ⏱  Recent      ◦ fresh                   │
+╰───────────────────────────────────────────╯
 ```
 
-#### Features
+- **Playback row**: Driven by `PollingSnapshotMsg` (tick interval + idle state)
+- **Library rows**: Read `store.PlaylistsFetchedAt()`, `store.AlbumsFetchedAt()`, etc. + TTL constants
+- **Stale colours**: `Warning()` for < 1h stale, `Error()` for ≥ 1h stale
 
-- **Scrollable**: `j`/`k` when focused
-- **Filterable**: `f` opens inline filter (by endpoint, status code)
+### Pane 3: Gateway Live (toggle key 4)
+
+500-entry reverse-chronological gateway event stream, scrollable and filterable:
+
+```
+╭─ ⁴Gateway Live ──────────────────────────── f filter ╭
+│  12:03:45  → /me/player            allowed  200  45ms │
+│  12:03:44  → /me/playlists         allowed  200 128ms │
+│  12:03:43  ✗ /me/player            blocked            │
+│  (scrollable with j/k; f opens filter; Enter commits) │
+╰───────────────────────────────────────────────────────╯
+```
+
+- **Buffer**: 500 entries, newest at top
+- **Filter**: `f` opens inline filter input; `Enter` commits the query (shown in border);
+  `Esc` clears committed query first, then resets scroll on second press
+- **Data source**: `store.ReadEventsFrom(cursor)` — every `domain.GatewayEvent`
+
+### Pane 4: Network Log (toggle key 5)
+
+Scrollable reverse-chronological log of completed API requests (200-entry buffer):
+
+```
+╭─ ⁵Network Log ──────────────────────────────────── f filter ╭
+│  Time      Method  Endpoint           Status  Latency  Priority      Decision │
+│  12:03:45  GET     /me/player         200     45ms     ◷ background  allowed  │
+│  12:03:44  GET     /me/playlists      200     128ms    ◷ background  allowed  │
+│  12:03:43  GET     /me/player         429     12ms     ⚡ interactive allowed  │
+│  12:03:42  GET     /me/player/queue   0       —        ◷ background  blocked  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+- **Scrollable**: `j`/`k` when focused; `Esc` resets scroll to page 1
+- **Filterable**: `f` opens inline filter (by endpoint, status, priority, decision)
 - **Color coding**: `Success()` for 2xx, `Warning()` for 429, `TextMuted()` for other 4xx, `Error()` for 5xx
-- **Latency bar**: Inline `█` chars (1–10) proportional to response time
-- **429 marker**: `◬` appended to rate-limited rows (Warning role; ascii `!`)
-- **Newest at top**: Reverse chronological order
-- **Data source**: `store.ReadEventsFrom(cursor)` — each `domain.GatewayEvent` has `Timestamp`, `Method`, `Path`, `StatusCode`, `DurationMs`
+- **Decision cross-tick**: `pendingDecisions` map persists decision events across ticks so the
+  Decision column is populated correctly when `EventHttpCompleted` arrives on a later tick
+- **Data source**: `store.ReadEventsFrom(cursor)` — `EventHttpCompleted` and `EventRequestBlocked`
 
-### Animation Design
-
-#### Tick Rates
+### Tick Architecture
 
 | Tick | Rate | Purpose |
 |------|------|---------|
-| App tick | 1000ms | Gateway state refresh, polling state, store sentinels |
-| Animation tick | 200ms | Arrow frame cycling, token bucket refill animation (shared with NowPlaying visualizer) |
-
-#### Request Lifecycle in Flow View
-
-1. Request appears in APP column (bright text)
-2. Arrow animates toward GATEWAY column
-3. Gateway column shows decision: bucket decrement, semaphore acquire, dedup match, or backoff block
-4. If passed: arrow animates toward SPOTIFY column
-5. Response appears in SPOTIFY column (color-coded by status)
-6. After 3s: request dims in APP column, fades from SPOTIFY column
-7. If blocked by backoff: `╳` stays visible until backoff clears
-
-#### State Transition Visual Cues
-
-- **Token bucket refill**: Dots fill left-to-right as tokens replenish (10/s)
-- **Backoff countdown**: Timer decrements every 1s tick, color flashes `Error()` when > 5s
-- **Semaphore full**: New requests show `wait` on their connecting arrow until a slot opens
-- **Dedup active**: Matching GET requests share a single arrow with "N waiters" label
+| App tick | 1000ms | All four Page B panes refresh via `TickMsg`; `PollingSnapshotMsg` sent to PollingTrafficPane |
+| Animation tick | 200ms | NowPlaying visualizer only — Page B panes do not consume `viz.TickMsg` |
 
 ### Data Sources (all internal — no new API calls)
 
 | Data | Source | Update Trigger |
 |------|--------|---------------|
-| Token bucket state | `Gateway.bucket` (tokens remaining, capacity 10) | Every app tick |
-| Concurrent requests | `Gateway.concurrent` (semaphore, max 5) | Every app tick |
-| Backoff timer | `Store.IsThrottled()`, `Store.ThrottleRetryAfterSecs()` | Every app tick |
-| Inflight/dedup | `Gateway.inflight` map (GET key → waiters) | Every app tick |
-| Request log | `Store.ReadEventsFrom(cursor)` — GatewayEventLog (500-entry ring buffer) | On each API response |
+| Token bucket state | `store.ReadEventsFrom` → `GatewayStateSnapshot` | Every app tick |
+| Concurrent requests | `store.ReadEventsFrom` → `GatewayStateSnapshot` | Every app tick |
+| Backoff / dedup | `store.ReadEventsFrom` → `GatewayStateSnapshot` | Every app tick |
+| Polling state | `PollingSnapshotMsg` (tick interval + idle flag) | Every app tick |
+| Library cache freshness | `store.*FetchedAt()` + TTL constants | Every app tick |
+| Request log | `store.ReadEventsFrom(cursor)` — `EventHttpCompleted`, `EventRequestBlocked` | On each API response |
 | Polling state | `tickCount`, `backoffTicks`, `isIdle()`, `pollIntervals()` | Every app tick |
 | Store fetching | `Store.*Fetching()` sentinels | Every app tick |
 | Store staleness | `Store.*FetchedAt()` + TTL constants | Every app tick |
@@ -1229,9 +1218,8 @@ Not in initial implementation. Future enhancement: automatically hide lower-prio
 | File | Purpose |
 |------|---------|
 | `layout.go` | `Manager` struct, `Resize()`, `recompute()`, `PaneRect()`, `PaneAt()`, `SetPreset()`, `CyclePreset()`, `TogglePage()`, `TogglePane()`, `RotateFocus()`, `FocusedPane()` |
-| `pane.go` | `Pane` interface, `PaneID` enum (`PaneRequestFlow`, `PaneNetworkLog`), `PageID` enum, `Action` struct |
-| `presets.go` | `PresetDashboard`, `PresetListening`, `PresetLibrary`, `PresetDiscovery` definitions |
-| `flowviz.go` | `FlowViz` component — animated request flow renderer (APP → GATEWAY → SPOTIFY columns) |
+| `pane.go` | `Pane` interface, `PaneID` enum (`PaneGatewayHealth`, `PanePollingTraffic`, `PaneGatewayLive`, `PaneNetworkLog`), `PageID` enum, `Action` struct |
+| `presets.go` | `PresetDashboard`, `PresetListening`, `PresetLibrary`, `PresetDiscovery`, `PresetNerdStatus` definitions |
 | `border.go` | `RenderPaneBorder()` — custom border with btop-style title + actions |
 | `truncate.go` | `Truncate()`, `PadRight()`, `TruncateOrPad()` — rune-aware text utilities |
 | `*_test.go` | Full table-driven test coverage |
@@ -1285,7 +1273,9 @@ type App struct {
 | `QueuePane` | `QueuePane` (add Pane interface, dense table) |
 | `StatsView` | Split into `TopTracksPane` + `TopArtistsPane` (separate panes). RecentlyPlayed section → `RecentlyPlayedPane` |
 | `PlaylistManager` | Merged into `PlaylistsPane` (Enter=track sub-view, n=new, r=rename, x=delete, Shift+arrow=reorder as border actions) |
-| — (new) | `RequestFlowPane` (Page B, reads from Gateway/Store — live flow visualization) |
+| — (new) | `GatewayHealthPane` (Page B, token/slot/backoff/dedup grid from `store.ReadEventsFrom`) |
+| — (new) | `PollingTrafficPane` (Page B, poll cadence + library cache freshness from store sentinels) |
+| — (new) | `GatewayLivePane` (Page B, 500-entry gateway event stream, scrollable + filterable) |
 | — (new) | `NetworkLogPane` (Page B, reads from `store.ReadEventsFrom(cursor)` — scrollable API log) |
 
 ### Pane Interface Migration Checklist
@@ -1305,8 +1295,10 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 | → `TopTracksPane` | `PaneTopTracks` | "Top Tracks" | `7` | filter, 4wk/6mo/all | Top tracks extracted |
 | → `TopArtistsPane` | `PaneTopArtists` | "Top Artists" | `8` | filter, 4wk/6mo/all | Top artists extracted |
 | `PlaylistManager` | — | — | — | — | Merge into PlaylistsPane |
-| — (new) | `PaneRequestFlow` | "Request Flow" | — | — | Page B, live flow visualization (APP → GATEWAY → SPOTIFY) |
-| — (new) | `PaneNetworkLog` | "Network Log" | — | f filter | Page B, scrollable API request history |
+| — (new) | `PaneGatewayHealth` | "Gateway Health" | `2` | — | Page B, token/slot/backoff/dedup grid |
+| — (new) | `PanePollingTraffic` | "Polling Traffic" | `3` | — | Page B, playback poll cadence + library cache freshness |
+| — (new) | `PaneGatewayLive` | "Gateway Live" | `4` | f filter | Page B, scrollable 500-entry gateway event stream |
+| — (new) | `PaneNetworkLog` | "Network Log" | `5` | f filter | Page B, scrollable API request history (200-entry buffer) |
 
 ### Code Migration Notes
 

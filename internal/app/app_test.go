@@ -2044,15 +2044,17 @@ func TestApp_NilPlaybackState_WarnAtTick30(t *testing.T) {
 
 // --- Page B (Nerd Status) registration tests ---
 
-// TestApp_PageB_Panes_Registered verifies that both Page B panes are created
+// TestApp_PageB_Panes_Registered verifies that all Page B panes are created
 // and present in the panes map after App.New().
 func TestApp_PageB_Panes_Registered(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
 
-	// RequestFlowPane and NetworkLogPane should be accessible.
-	assert.NotNil(t, a.RequestFlowPane(), "RequestFlowPane should be registered")
+	// All three new Page B panes and NetworkLogPane should be accessible.
+	assert.NotNil(t, a.GatewayHealthPane(), "GatewayHealthPane should be registered")
+	assert.NotNil(t, a.PollingTrafficPane(), "PollingTrafficPane should be registered")
+	assert.NotNil(t, a.GatewayLivePane(), "GatewayLivePane should be registered")
 	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should be registered")
 }
 
@@ -2072,43 +2074,128 @@ func TestApp_PageB_Toggle_SwitchesPage(t *testing.T) {
 	assert.False(t, a.GridViewOpen(), "Page A should not be the 'grid view' on Page B")
 }
 
-// TestApp_PageB_TickMsg_ReachesRequestFlowPane verifies that TickMsg reaches
-// the RequestFlowPane (it should refresh its gateway snapshot).
-func TestApp_PageB_TickMsg_ReachesRequestFlowPane(t *testing.T) {
+// TestApp_PageB_TickMsg_ReachesGatewayHealthPane verifies that TickMsg is dispatched
+// to GatewayHealthPane and that the pane actually drains gateway events (behavioral,
+// not just a nil-check).
+func TestApp_PageB_TickMsg_ReachesGatewayHealthPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// Send a TickMsg — RequestFlowPane should handle it without panicking.
+	// Record a gateway event in the store before sending TickMsg.
+	a.Store().RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventRequestAllowed,
+		RequestID: 1,
+		Method:    "GET",
+		Path:      "/me/player",
+		Priority:  domain.PriorityBackground,
+		Snapshot:  domain.GatewayStateSnapshot{TokensAvailable: 8, TokensMax: 10, ConcurrentMax: 5},
+	})
+
+	cursorBefore := a.GatewayHealthPane().EventCursor()
+
 	m, _ := a.Update(panes.TickMsg{})
 	a = m.(*app.App)
 
-	// RequestFlowPane must still be accessible after TickMsg.
-	assert.NotNil(t, a.RequestFlowPane(), "RequestFlowPane should survive TickMsg")
+	// GatewayHealthPane must have advanced its cursor — proving it processed TickMsg.
+	cursorAfter := a.GatewayHealthPane().EventCursor()
+	assert.Greater(t, cursorAfter, cursorBefore,
+		"GatewayHealthPane must drain events on TickMsg (cursor must advance)")
 }
 
-// TestApp_PageB_TickMsg_ReachesNetworkLogPane verifies TickMsg reaches NetworkLogPane.
+// TestApp_PageB_TickMsg_ReachesNetworkLogPane verifies TickMsg is dispatched to
+// NetworkLogPane and that the pane actually drains gateway events (behavioral).
 func TestApp_PageB_TickMsg_ReachesNetworkLogPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
+	// Record an HttpCompleted event so the NetworkLogPane has something to drain.
+	a.Store().RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       domain.EventHttpCompleted,
+		RequestID:  1,
+		Method:     "GET",
+		Path:       "/me/player",
+		StatusCode: 200,
+		DurationMs: 40,
+		Priority:   domain.PriorityBackground,
+		Snapshot:   domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+
 	m, _ := a.Update(panes.TickMsg{})
 	a = m.(*app.App)
 
-	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should survive TickMsg")
+	// NetworkLogPane must have drained the event — CompletedRequestsLen > 0.
+	assert.Greater(t, a.NetworkLogPane().CompletedRequestsLen(), 0,
+		"NetworkLogPane must process HttpCompleted events on TickMsg")
 }
 
-// TestApp_PageB_VizTick_ReachesRequestFlowPane verifies viz.TickMsg
-// advances the RequestFlowPane animation frame.
-func TestApp_PageB_VizTick_ReachesRequestFlowPane(t *testing.T) {
+// TestApp_PageB_TickMsg_DispatchesPollingSnapshot verifies that TickMsg causes the
+// handler to build and forward a PollingSnapshotMsg to PollingTrafficPane. Driving
+// the app to idle state ensures IsIdle is set in the snapshot.
+func TestApp_PageB_TickMsg_DispatchesPollingSnapshot(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	frameBefore := a.RequestFlowPane().FrameIndex()
+	// Resize so the layout initializes (View needs non-zero dimensions).
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	a = m.(*app.App)
+
+	// Drive app to idle by backdating lastInteraction beyond the idle threshold.
+	a.SetLastInteraction(time.Now().Add(-2 * time.Minute))
+
+	// Send TickMsg — the handler builds PollingSnapshotMsg{IsIdle: true} and forwards it.
+	m, _ = a.Update(panes.TickMsg{})
+	a = m.(*app.App)
+
+	ptp := a.PollingTrafficPane()
+	require.NotNil(t, ptp)
+	ptp.SetSize(120, 10)
+	v := ptp.View()
+	// With IsIdle:true the playback row renders "idle · …" — proves PollingSnapshotMsg
+	// was dispatched. Without dispatch the row shows "? · running" (zero-value snapshot).
+	assert.Contains(t, v, "idle",
+		"Playback row must show idle status — proves PollingSnapshotMsg{IsIdle:true} was dispatched")
+}
+
+// TestApp_PageB_TickMsg_ReachesGatewayLivePane verifies that TickMsg is dispatched to
+// GatewayLivePane and that the pane absorbs recorded gateway events into its buffer.
+// Without the dispatch block in handlers.go the buffer stays empty.
+func TestApp_PageB_TickMsg_ReachesGatewayLivePane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Record a gateway event so GatewayLivePane has something to drain on TickMsg.
+	a.Store().RecordEvent(domain.GatewayEvent{
+		Timestamp: time.Now(),
+		Kind:      domain.EventRequestAllowed,
+		RequestID: 1,
+		Method:    "GET",
+		Path:      "/me/player",
+		Priority:  domain.PriorityBackground,
+		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+
+	m, _ := a.Update(panes.TickMsg{})
+	a = m.(*app.App)
+
+	// GatewayLivePane must have drained the event — BufferedEventCount > 0.
+	assert.Greater(t, a.GatewayLivePane().BufferedEventCount(), 0,
+		"GatewayLivePane must absorb gateway events on TickMsg (BufferedEventCount must be > 0)")
+}
+
+// TestApp_PageB_VizTick_ReachesNowPlayingPane verifies viz.TickMsg
+// reaches the NowPlayingPane for animation. Page B panes do not consume viz.TickMsg.
+func TestApp_PageB_VizTick_ReachesNowPlayingPane(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// viz.TickMsg should not panic and all Page B panes should remain accessible.
 	m, _ := a.Update(viz.TickMsg(time.Now()))
 	a = m.(*app.App)
-	frameAfter := a.RequestFlowPane().FrameIndex()
 
-	assert.Equal(t, frameBefore+1, frameAfter, "viz.TickMsg should advance RequestFlowPane frame")
+	assert.NotNil(t, a.GatewayHealthPane(), "GatewayHealthPane should survive viz.TickMsg")
+	assert.NotNil(t, a.GatewayLivePane(), "GatewayLivePane should survive viz.TickMsg")
+	assert.NotNil(t, a.PollingTrafficPane(), "PollingTrafficPane should survive viz.TickMsg")
 }
 
 // --- Feature 52: Mouse Scroll + Responsive Behavior tests ---

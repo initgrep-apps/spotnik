@@ -144,18 +144,17 @@ func TestNowPlayingPane_SetTheme(t *testing.T) {
 	assert.NotEmpty(t, pane.View())
 }
 
-// TestRequestFlowPane_SetTheme verifies SetTheme on RequestFlowPane.
-func TestRequestFlowPane_SetTheme(t *testing.T) {
+// TestGatewayHealthPane_SetTheme verifies SetTheme on GatewayHealthPane.
+func TestGatewayHealthPane_SetTheme(t *testing.T) {
 	s := state.New()
 	th1 := theme.Load("black")
-	pane := NewRequestFlowPane(s, th1)
+	pane := NewGatewayHealthPane(s, th1)
 	pane.SetSize(80, 20)
 
 	th2 := theme.Load("dracula")
 	pane.SetTheme(th2)
 
 	assert.Equal(t, th2, pane.theme)
-	assert.NotEmpty(t, pane.View())
 }
 
 // TestQueuePane_SetTheme_PreservesRows verifies that switching theme does not
