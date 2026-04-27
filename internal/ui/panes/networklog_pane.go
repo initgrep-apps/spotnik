@@ -42,6 +42,11 @@ type NetworkLogPane struct {
 	height            int
 	eventCursor       uint64
 	completedRequests []networkLogRow
+	// pendingDecisions accumulates decision events (allowed/blocked/dedupJoined)
+	// across ticks so the Decision column is correctly populated when
+	// EventHttpCompleted arrives on a later tick than the decision event.
+	// Entries are consumed (and deleted) when EventHttpCompleted is processed.
+	pendingDecisions map[uint64]domain.EventKind
 }
 
 // Compile-time check: NetworkLogPane implements layout.Pane.
@@ -50,13 +55,13 @@ var _ layout.Pane = &NetworkLogPane{}
 // NewNetworkLogPane creates a NetworkLogPane with the given store and theme.
 func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	columns := []components.ColumnDef{
-		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.ColumnSecondary()},
-		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.ColumnPrimary()},
-		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "priority", Header: "PRIORITY", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.ColumnSecondary()},
+		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary()},
+		{Key: "endpoint", Header: "Endpoint", FlexFactor: 7, Color: th.ColumnPrimary()},
+		{Key: "status", Header: "Status", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "latency", Header: "Latency", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -67,10 +72,11 @@ func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	})
 
 	p := &NetworkLogPane{
-		store:  s,
-		theme:  th,
-		table:  t,
-		filter: components.NewFilter(th),
+		store:            s,
+		theme:            th,
+		table:            t,
+		filter:           components.NewFilter(th),
+		pendingDecisions: make(map[uint64]domain.EventKind),
 	}
 	t.SetFocused(false)
 	p.refreshRows()
@@ -83,8 +89,8 @@ func (p *NetworkLogPane) ID() layout.PaneID { return layout.PaneNetworkLog }
 // Title returns the display title shown in the pane border.
 func (p *NetworkLogPane) Title() string { return "Network Log" }
 
-// ToggleKey returns 0 — Page B panes are not individually toggleable.
-func (p *NetworkLogPane) ToggleKey() int { return 0 }
+// ToggleKey returns 5 — the Page B toggle key for the Network Log pane.
+func (p *NetworkLogPane) ToggleKey() int { return 5 }
 
 // Actions returns shortcut hints based on filter state.
 func (p *NetworkLogPane) Actions() []layout.Action {
@@ -201,21 +207,24 @@ func (p *NetworkLogPane) refreshRows() {
 	newCursor, events := p.store.ReadEventsFrom(p.eventCursor)
 	p.eventCursor = newCursor
 
-	// Build a map of RequestID → decision kind for lookups.
-	// Decision events (allowed/blocked/dedupJoined) precede EventHttpCompleted
-	// in the event stream for the same request.
-	decisions := make(map[uint64]domain.EventKind)
+	// Accumulate decision events into the persistent map. Decision events
+	// (allowed/blocked/dedupJoined) may arrive on a different tick than the
+	// corresponding EventHttpCompleted, so we keep pendingDecisions across ticks.
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventRequestAllowed, domain.EventRequestBlocked,
 			domain.EventDedupJoined:
-			decisions[e.RequestID] = e.Kind
+			p.pendingDecisions[e.RequestID] = e.Kind
 		}
 	}
 
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventHttpCompleted:
+			// Consume and delete the decision to prevent unbounded map growth.
+			decision := p.pendingDecisions[e.RequestID]
+			delete(p.pendingDecisions, e.RequestID)
+
 			row := networkLogRow{
 				timestamp:  e.Timestamp,
 				method:     e.Method,
@@ -223,12 +232,14 @@ func (p *NetworkLogPane) refreshRows() {
 				statusCode: e.StatusCode,
 				durationMs: e.DurationMs,
 				priority:   e.Priority,
-				decision:   decisions[e.RequestID],
+				decision:   decision,
 			}
 			p.completedRequests = append(p.completedRequests, row)
 
 		case domain.EventRequestBlocked:
 			// Blocked requests never reach HTTP — show them with status 0.
+			// The decision is already known (EventRequestBlocked implies blocked).
+			delete(p.pendingDecisions, e.RequestID)
 			row := networkLogRow{
 				timestamp:  e.Timestamp,
 				method:     e.Method,
@@ -304,13 +315,13 @@ func (p *NetworkLogPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	p.filter = components.NewFilter(th)
 	columns := []components.ColumnDef{
-		{Key: "time", Header: "TIME", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "method", Header: "METHOD", FlexFactor: 2, Color: th.ColumnSecondary()},
-		{Key: "endpoint", Header: "ENDPOINT", FlexFactor: 7, Color: th.ColumnPrimary()},
-		{Key: "status", Header: "STATUS", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "latency", Header: "LATENCY", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "priority", Header: "PRIORITY", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "decision", Header: "DECISION", FlexFactor: 3, Color: th.ColumnSecondary()},
+		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary()},
+		{Key: "endpoint", Header: "Endpoint", FlexFactor: 7, Color: th.ColumnPrimary()},
+		{Key: "status", Header: "Status", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "latency", Header: "Latency", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex()},
+		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary()},
 	}
 	p.table = components.NewTable(components.TableConfig{
 		Columns:      columns,

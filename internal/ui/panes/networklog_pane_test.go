@@ -99,7 +99,7 @@ func TestNetworkLogPane_Title(t *testing.T) {
 
 func TestNetworkLogPane_ToggleKey(t *testing.T) {
 	pane := newTestNetworkLogPane()
-	assert.Equal(t, 0, pane.ToggleKey())
+	assert.Equal(t, 5, pane.ToggleKey())
 }
 
 func TestNetworkLogPane_Actions_NoFilter(t *testing.T) {
@@ -155,13 +155,13 @@ func TestNetworkLogPane_View_ShowsAllColumns(t *testing.T) {
 	pane := newTestNetworkLogPane()
 	pane.SetSize(160, 20)
 	v := pane.View()
-	assert.Contains(t, v, "TIME", "TIME column header")
-	assert.Contains(t, v, "METHOD", "METHOD column header")
-	assert.Contains(t, v, "ENDPOINT", "ENDPOINT column header")
-	assert.Contains(t, v, "STATUS", "STATUS column header")
-	assert.Contains(t, v, "LATENCY", "LATENCY column header")
-	assert.Contains(t, v, "PRIORITY", "PRIORITY column header")
-	assert.Contains(t, v, "DECISION", "DECISION column header")
+	assert.Contains(t, v, "Time", "Time column header")
+	assert.Contains(t, v, "Method", "Method column header")
+	assert.Contains(t, v, "Endpoint", "Endpoint column header")
+	assert.Contains(t, v, "Status", "Status column header")
+	assert.Contains(t, v, "Latency", "Latency column header")
+	assert.Contains(t, v, "Priority", "Priority column header")
+	assert.Contains(t, v, "Decision", "Decision column header")
 }
 
 // --- Cursor-based reads ---
@@ -551,8 +551,8 @@ func TestNetworkLogPane_EmptyLog_CleanState(t *testing.T) {
 	pane := newTestNetworkLogPane()
 	pane.SetSize(160, 20)
 	v := pane.View()
-	// Should not panic and should show the header columns.
-	assert.Contains(t, v, "TIME", "empty log should still show column headers")
+	// Should not panic and should show the header columns (Title Case since story 177).
+	assert.Contains(t, v, "Time", "empty log should still show column headers")
 }
 
 // --- Full 200-entry buffer ---
@@ -640,6 +640,55 @@ func TestNetworkLogPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	m, _ = pane.Update(tea_keyMsg("Esc"))
 	pane = m.(*panes.NetworkLogPane)
 	assert.Equal(t, 1, pane.TableCurrentPage(), "Esc should reset table to page 1")
+}
+
+// ── Story 177: Decision persisted across ticks ────────────────────────────────
+
+// TestNetworkLogPane_Decision_PersistedAcrossTicks verifies that the Decision
+// column shows the correct value when EventRequestAllowed arrives on tick N and
+// EventHttpCompleted arrives on tick N+1 for the same RequestID.
+//
+// With the old method-local decisions map this fails: the allowed decision from
+// tick N is lost, and the row built on tick N+1 shows an empty Decision cell.
+func TestNetworkLogPane_Decision_PersistedAcrossTicks(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetSize(160, 20)
+
+	// Tick 1: only EventRequestAllowed is recorded.
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:      domain.EventRequestAllowed,
+		RequestID: 42,
+		Method:    "GET",
+		Path:      "/cross-tick/path",
+		Priority:  domain.PriorityBackground,
+		Snapshot:  domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// No completed event yet — pane should show nothing for this request.
+	v1 := pane.View()
+	assert.NotContains(t, v1, "/cross-tick/path", "no completed row yet on tick 1")
+
+	// Tick 2: EventHttpCompleted arrives for the SAME RequestID.
+	s.RecordEvent(domain.GatewayEvent{
+		Kind:       domain.EventHttpCompleted,
+		RequestID:  42,
+		Method:     "GET",
+		Path:       "/cross-tick/path",
+		StatusCode: 200,
+		DurationMs: 55,
+		Priority:   domain.PriorityBackground,
+		Snapshot:   domain.GatewayStateSnapshot{TokensMax: 10, ConcurrentMax: 5},
+	})
+	m, _ = pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	v2 := pane.View()
+	assert.Contains(t, v2, "/cross-tick/path", "completed row must appear after tick 2")
+	assert.Contains(t, v2, "allowed", "Decision column must show 'allowed' — decision from tick 1 must persist into tick 2")
 }
 
 // ── Story 174: Filter_EscCloses ───────────────────────────────────────────────
