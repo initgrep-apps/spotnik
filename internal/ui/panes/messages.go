@@ -359,3 +359,14 @@ type SearchPageLoadedMsg struct {
 	// Err is non-nil if the fetch failed.
 	Err error
 }
+
+// PollingSnapshotMsg carries app-level polling state to the PollingTrafficPane.
+// The app sends this on each TickMsg so the pane can display polling diagnostics.
+type PollingSnapshotMsg struct {
+	// TickIntervalMs is the current playback polling interval in milliseconds.
+	TickIntervalMs int
+	// IsIdle is true when the user has not pressed a key for idleThresholdSecs.
+	IsIdle bool
+	// IdleSecs is how long the user has been idle (0 when not idle).
+	IdleSecs int
+}

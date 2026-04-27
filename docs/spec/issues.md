@@ -446,3 +446,13 @@ Items to log:
 
 Items to log:
 1. TopTracks, TopArtists, LikedSongs, RecentlyPlayed, and NetworkLog panes each lack an explicit `Filter_EscCloses` test asserting that pressing Esc while the filter is active closes the filter only and does NOT reset scroll. QueuePane has `TestQueuePane_Filter_EscCloses` covering the pattern. The implementation is correct (the `GotoTop()` call sits after the filter-active early-return branch), but an ordering regression (moving `GotoTop()` above the guard) would not be caught by CI in those 5 panes. Add one test per pane following the QueuePane pattern.
+
+---
+
+## Story 175 — Gateway/Polling pane threshold tests don't isolate color logic
+**Found:** 2026-04-27 | **Source:** PR #223 Review (round 2)
+**Feature:** 14-page-b-redesign
+
+Items to log:
+1. `TestGatewayHealthPane_Threshold_Tokens`, `_Threshold_Slots`, `_Threshold_Backoff`, `_FreshPane_NotWarningColor`, and `TestPollingTrafficPane_CacheStale_WarningVsError` use `assert.NotEqual` between two `View()` outputs whose visible content (bar-fill counts, text strings) differs in addition to color. Empirically verified: deleting the warning-threshold block in `gateway_health_pane.go` still leaves these tests passing. A regression that drops a warning color while leaving the data correct would slip through. Fix: extract a `resolveTokenColor`-style helper that returns the resolved color for a snapshot and unit-test that helper directly, OR assert specific ANSI escape sequences (e.g., `strings.Contains(view, warningANSI)` for the warning view but NOT the healthy view).
+2. `TestGatewayHealthPane_Update_DrainsCursor` is misnamed — it verifies "the latest event's snapshot wins after each tick" (which users care about) but does not actually prove cursor advancement. Mutating `drainEvents` to read from cursor 0 every tick would not break this test. To actually catch a cursor bug, add a test that records 3 events between two ticks to verify no events are dropped and that re-reading at the same cursor yields no events.
