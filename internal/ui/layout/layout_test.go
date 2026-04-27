@@ -747,6 +747,37 @@ func TestRecompute_RowSpan_ToggleHidingOriginSibling(t *testing.T) {
 	assert.False(t, overlap, "PollingTraffic must not overlap GatewayLive")
 }
 
+func TestRecompute_RowSpan_PageB_FocusOrderSpannerLast(t *testing.T) {
+	// VisiblePanes() on Page B must list panes in left-to-right, top-to-bottom
+	// reading order. The spanner (GatewayLive) sits to the right of GatewayHealth
+	// in row 1, so focus order must be:
+	//   NowPlaying → GatewayHealth → GatewayLive → PollingTraffic → NetworkLog
+	// Reverting Step 4 to add spanners BEFORE non-spanners would invert the
+	// Health/Live pair and make Tab jump to the right column first.
+	m := layout.NewManager()
+	m.Resize(200, 80)
+	m.TogglePage()
+
+	expected := []layout.PaneID{
+		layout.PaneNowPlaying,
+		layout.PaneGatewayHealth,
+		layout.PaneGatewayLive,
+		layout.PanePollingTraffic,
+		layout.PaneNetworkLog,
+	}
+	assert.Equal(t, expected, m.VisiblePanes(),
+		"Page B focus order: spanner must come after origin-row siblings")
+
+	// RotateFocus must walk the same sequence.
+	for i, want := range expected {
+		assert.Equal(t, want, m.FocusedPane(),
+			"step %d: focused pane mismatch", i)
+		m.RotateFocus(true)
+	}
+	// After 5 forward rotations we wrap back to the first.
+	assert.Equal(t, expected[0], m.FocusedPane(), "rotation must wrap to first pane")
+}
+
 func TestRecompute_RowSpan_PageB_RectsNonOverlapping(t *testing.T) {
 	// Use odd dimensions to exercise rounding-remainder paths.
 	m := layout.NewManager()

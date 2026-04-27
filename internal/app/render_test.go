@@ -231,6 +231,56 @@ func TestRenderGrid_AfterResize(t *testing.T) {
 	assert.NotEmpty(t, result, "grid should render after resize")
 }
 
+// TestRenderGrid_PageB_RowSpanAbsolutePlacement verifies the absolute-position
+// compositor places RowSpan panes correctly. On Page B, GatewayLive spans two
+// rows (origin row with GatewayHealth, continuation row with PollingTraffic).
+// Lines inside the continuation row must contain BOTH PollingTraffic content
+// (left column) AND GatewayLive content (right column) — the old flow
+// compositor rendered them as separate vertical blocks.
+func TestRenderGrid_PageB_RowSpanAbsolutePlacement(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewGrid
+	a.width = 200
+	a.height = 80
+	a.layout.Resize(200, 80)
+	a.layout.TogglePage() // switch to Page B (Nerd Status)
+	a.propagateSizes()
+	a.syncFocus()
+
+	healthRect := a.layout.PaneRect(layout.PaneGatewayHealth)
+	trafficRect := a.layout.PaneRect(layout.PanePollingTraffic)
+	liveRect := a.layout.PaneRect(layout.PaneGatewayLive)
+
+	require.Greater(t, liveRect.Width, 0, "GatewayLive must be visible")
+	require.Greater(t, trafficRect.Y, healthRect.Y+healthRect.Height-1,
+		"PollingTraffic must start in the continuation row, below GatewayHealth")
+
+	result := a.renderGrid()
+	require.NotEmpty(t, result)
+	lines := strings.Split(result, "\n")
+
+	// Pick a y inside PollingTraffic's vertical extent — this row must hold
+	// both PollingTraffic (left) AND GatewayLive (right). With the old flow
+	// compositor PollingTraffic ended up in a separate row, so this line
+	// would be empty or contain only one pane's content.
+	y := trafficRect.Y + 1
+	require.Less(t, y, len(lines), "rendered grid must reach continuation row")
+	line := lines[y]
+
+	// The line must extend to or past the right column's start.
+	// lipgloss.Width measures visible width ignoring ANSI escapes.
+	assert.GreaterOrEqual(t, lipgloss.Width(line), liveRect.X+1,
+		"continuation-row line must extend into GatewayLive's column at x=%d, got width=%d",
+		liveRect.X, lipgloss.Width(line))
+
+	// The full grid output must be at least as tall as the bottom of GatewayLive.
+	// If the old flow compositor were still in use, GatewayLive's height would
+	// bloat its row and push later rows off the visible area or into the wrong y.
+	netRect := a.layout.PaneRect(layout.PaneNetworkLog)
+	assert.GreaterOrEqual(t, len(lines), netRect.Y+netRect.Height,
+		"rendered grid must contain NetworkLog rows below the spanner")
+}
+
 // --- Feature 52 Task 3: Responsive behavior tests ---
 
 // TestBuildView_TooSmall_120x29 verifies terminal height below 30 shows too-small message.
