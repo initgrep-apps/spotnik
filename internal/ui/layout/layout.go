@@ -7,7 +7,7 @@ type Manager struct {
 	activePage   PageID
 	presets      map[PageID][]Preset
 	activePreset map[PageID]int  // index into presets slice per page
-	hidden       map[PaneID]bool // manual toggles (Page A only)
+	hidden       map[PaneID]bool // manual toggles (per-page; reset on page switch)
 	rects        map[PaneID]Rect // computed positions
 	focusOrder   []PaneID        // visible panes in grid order (row-by-row, left-to-right)
 	focusIndex   int
@@ -269,20 +269,14 @@ func (m *Manager) SetPreset(index int) {
 	m.recompute()
 }
 
-// TogglePane toggles visibility of a pane (Page A only, keys 1-8).
-// Does nothing if on Page B or if the pane is not part of the current preset.
+// TogglePane toggles visibility of a pane (keys 1-8 on Page A, 1-5 on Page B).
+// Does nothing if the pane is not part of the current preset.
 // If toggling would hide ALL panes, the toggle is rejected.
+// NOTE: Preset membership is the sole authority for whether a pane is toggleable.
+// This naturally handles cross-page safety: panes not in the active preset are rejected,
+// including Page A panes on Page B and vice versa (with the exception of PaneNowPlaying
+// which appears in both pages' presets and is intentionally toggleable on both).
 func (m *Manager) TogglePane(id PaneID) {
-	// Page B panes are not individually toggleable
-	if m.activePage == PageB {
-		return
-	}
-
-	// Only Page A panes (0-7) are toggleable
-	if id >= PaneNetworkLog {
-		return
-	}
-
 	// Check that the pane is in the current preset
 	preset := m.presets[m.activePage][m.activePreset[m.activePage]]
 	if !preset.Visible[id] {

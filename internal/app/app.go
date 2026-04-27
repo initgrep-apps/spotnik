@@ -443,6 +443,11 @@ func (a *App) Store() *state.Store {
 	return a.store
 }
 
+// Layout returns the layout manager, exposed for testing.
+func (a *App) Layout() *layout.Manager {
+	return a.layout
+}
+
 // SetPlayer injects the Spotify API player client into the app.
 func (a *App) SetPlayer(player api.PlayerAPI) {
 	a.player = player

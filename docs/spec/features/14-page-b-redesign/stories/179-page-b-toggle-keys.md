@@ -1,7 +1,7 @@
 ---
 title: "Fix: Page B toggle keys — number keys 1–5 toggle pane visibility on Page B"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
