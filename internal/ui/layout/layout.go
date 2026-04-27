@@ -7,7 +7,7 @@ type Manager struct {
 	activePage   PageID
 	presets      map[PageID][]Preset
 	activePreset map[PageID]int  // index into presets slice per page
-	hidden       map[PaneID]bool // manual toggles (Page A only)
+	hidden       map[PaneID]bool // manual toggles (per-page; reset on page switch)
 	rects        map[PaneID]Rect // computed positions
 	focusOrder   []PaneID        // visible panes in grid order (row-by-row, left-to-right)
 	focusIndex   int

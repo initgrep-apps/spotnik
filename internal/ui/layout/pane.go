@@ -79,8 +79,9 @@ type Pane interface {
 	ID() PaneID
 	// Title returns the display title shown in the pane border.
 	Title() string
-	// ToggleKey returns the number key (1-8) for btop-style pane toggling on Page A.
-	// Returns 0 for panes that are not individually toggleable (Page B panes).
+	// ToggleKey returns the number key for btop-style pane toggling
+	// (1-8 on Page A, 1-5 on Page B). Returns 0 for panes that are not
+	// individually toggleable.
 	ToggleKey() int
 	// Actions returns pane-specific shortcut hints displayed in the border.
 	Actions() []Action
