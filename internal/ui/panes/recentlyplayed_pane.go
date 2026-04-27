@@ -21,6 +21,9 @@ import (
 // Compile-time check: RecentlyPlayedPane implements layout.Pane.
 var _ layout.Pane = &RecentlyPlayedPane{}
 
+// Compile-time check: RecentlyPlayedPane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &RecentlyPlayedPane{}
+
 // RecentlyPlayedPane is the Bubble Tea model for the Recently Played pane (toggle key 6).
 // It renders a dense bubble-table of recently played tracks with columns for index,
 // track name, artist, and relative play time. It supports in-pane filtering by track
@@ -85,6 +88,10 @@ func (r *RecentlyPlayedPane) Init() tea.Cmd { return nil }
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (r *RecentlyPlayedPane) HasActiveFilter() bool { return r.filter.IsActive() }
 
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (r *RecentlyPlayedPane) ActiveFilterQuery() string { return r.filter.Query() }
+
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (r *RecentlyPlayedPane) SetFocused(focused bool) {
 	r.BasePane.SetFocused(focused)
@@ -147,8 +154,13 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, nil
 	}
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	if keyMsg.Type == tea.KeyEscape {
+		if r.filter.Query() != "" {
+			r.filter.ClearQuery()
+			r.refreshRows()
+			return r, nil
+		}
 		r.table.GotoTop()
 		return r, nil
 	}

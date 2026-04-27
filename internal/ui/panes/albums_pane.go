@@ -19,6 +19,9 @@ import (
 // Compile-time check: AlbumsPane implements layout.Pane.
 var _ layout.Pane = &AlbumsPane{}
 
+// Compile-time check: AlbumsPane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &AlbumsPane{}
+
 // albumDebounceIntent is a snapshot of the user's desired album at the moment of
 // pressing Enter. The debounce tick carries this snapshot; if the current intent
 // has changed by the time the tick fires, the tick is discarded.
@@ -145,6 +148,10 @@ func (a *AlbumsPane) Init() tea.Cmd { return nil }
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (a *AlbumsPane) HasActiveFilter() bool { return a.filter.IsActive() }
 
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (a *AlbumsPane) ActiveFilterQuery() string { return a.filter.Query() }
+
 // SetFocused updates the keyboard focus state. Routes focus to the correct table
 // based on whether the track sub-view is active.
 func (a *AlbumsPane) SetFocused(focused bool) {
@@ -261,8 +268,13 @@ func (a *AlbumsPane) handleListViewKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.albumIntent = intent
 		return a.scheduleAlbumDebounce(intent)
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	case keyMsg.Type == tea.KeyEscape:
+		if a.filter.Query() != "" {
+			a.filter.ClearQuery()
+			a.refreshRows()
+			return a, nil
+		}
 		a.table.GotoTop()
 		return a, nil
 	}

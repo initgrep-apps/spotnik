@@ -19,6 +19,9 @@ import (
 // Compile-time check: QueuePane implements layout.Pane.
 var _ layout.Pane = &QueuePane{}
 
+// Compile-time check: QueuePane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &QueuePane{}
+
 // QueuePane is the right-pane Bubble Tea model that shows the upcoming play queue
 // as a dense bubble-table with optional in-pane filtering. It reads all data from
 // the central Store — it never imports api/ directly.
@@ -90,6 +93,12 @@ func (q *QueuePane) HasActiveFilter() bool {
 	return q.filter.IsActive()
 }
 
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (q *QueuePane) ActiveFilterQuery() string {
+	return q.filter.Query()
+}
+
 // SetFocused sets the keyboard focus state and propagates it to the table.
 func (q *QueuePane) SetFocused(focused bool) {
 	q.BasePane.SetFocused(focused)
@@ -153,8 +162,13 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return q, nil
 	}
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	if keyMsg.Type == tea.KeyEscape {
+		if q.filter.Query() != "" {
+			q.filter.ClearQuery()
+			q.refreshRows()
+			return q, nil
+		}
 		q.table.GotoTop()
 		return q, nil
 	}

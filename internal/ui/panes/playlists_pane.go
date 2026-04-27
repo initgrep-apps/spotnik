@@ -21,6 +21,9 @@ import (
 // Compile-time check: PlaylistsPane implements layout.Pane.
 var _ layout.Pane = &PlaylistsPane{}
 
+// Compile-time check: PlaylistsPane implements layout.FilterQueryPane.
+var _ layout.FilterQueryPane = &PlaylistsPane{}
+
 // playlistDebounceIntent is a snapshot of the user's desired playlist at the
 // moment of pressing Enter. The debounce tick carries this snapshot; if the
 // current intent has changed by the time the tick fires, the tick is discarded.
@@ -146,6 +149,10 @@ func (p *PlaylistsPane) Init() tea.Cmd { return nil }
 
 // HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
 func (p *PlaylistsPane) HasActiveFilter() bool { return p.filter.IsActive() }
+
+// ActiveFilterQuery returns the committed filter query for border display.
+// Satisfies layout.FilterQueryPane.
+func (p *PlaylistsPane) ActiveFilterQuery() string { return p.filter.Query() }
 
 // SetFocused updates the keyboard focus state, routing focus to the correct table
 // based on whether the track sub-view is active.
@@ -295,8 +302,13 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return p, nil
 
-	// Esc with no active filter: reset scroll to page 1.
+	// Esc: first clear a committed filter query; second press resets scroll.
 	case key.Type == tea.KeyEscape:
+		if p.filter.Query() != "" {
+			p.filter.ClearQuery()
+			p.refreshPlaylistRows()
+			return p, nil
+		}
 		p.table.GotoTop()
 		return p, nil
 	}

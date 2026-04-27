@@ -405,3 +405,44 @@ func TestLikedSongsPane_Filter_EscCloses(t *testing.T) {
 	assert.Equal(t, pageBeforeFilter, pp2.TableCurrentPage(), "Esc should NOT reset scroll when closing the filter")
 	assert.Contains(t, pp2.View(), "Track", "full list should be visible after filter close")
 }
+
+// TestLikedSongsPane_ActiveFilterQuery_ReturnsCommittedQuery verifies that
+// ActiveFilterQuery() reflects the committed query after f → type → Enter.
+func TestLikedSongsPane_ActiveFilterQuery_ReturnsCommittedQuery(t *testing.T) {
+	st := state.New()
+	st.SetLikedTracks([]domain.SavedTrack{{Track: domain.Track{Name: "Rock Track", URI: "uri:1"}}})
+	pane := NewLikedSongsPane(st, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+
+	assert.Equal(t, "", pane.ActiveFilterQuery(), "empty before filter applied")
+
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	for _, r := range "rock" {
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	assert.Equal(t, "rock", pane.ActiveFilterQuery())
+}
+
+// TestLikedSongsPane_Esc_ClearsCommittedFilter verifies that Esc clears a committed
+// filter query before falling back to scroll-reset.
+func TestLikedSongsPane_Esc_ClearsCommittedFilter(t *testing.T) {
+	st := state.New()
+	st.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{Name: "Rock Track", URI: "uri:1"}},
+		{Track: domain.Track{Name: "Jazz Track", URI: "uri:2"}},
+	})
+	pane := NewLikedSongsPane(st, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	for _, r := range "rock" {
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, "rock", pane.ActiveFilterQuery(), "filter must be committed")
+
+	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}

@@ -897,3 +897,55 @@ func TestNetworkLogPane_Filter_EscCloses(t *testing.T) {
 	assert.Equal(t, pageBeforeFilter, pane.TableCurrentPage(), "Esc should NOT reset scroll when closing the filter")
 	assert.Contains(t, pane.View(), "/v1/track/", "full log should be visible after filter close")
 }
+
+// ── Story 178: ActiveFilterQuery + Esc_ClearsCommittedFilter ─────────────────
+
+// TestNetworkLogPane_ActiveFilterQuery_ReturnsCommittedQuery verifies that
+// ActiveFilterQuery() reflects the committed query after f → type → Enter.
+func TestNetworkLogPane_ActiveFilterQuery_ReturnsCommittedQuery(t *testing.T) {
+	s := state.New()
+	recordHttpCompleted(s, 1, "GET", "/v1/track/rock", 200, 50, domain.PriorityBackground)
+	pane := panes.NewNetworkLogPane(s, theme.Load("black"))
+	pane.SetSize(160, 20)
+	pane.SetFocused(true)
+
+	// Trigger tick to load rows.
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	assert.Equal(t, "", pane.ActiveFilterQuery(), "empty before filter applied")
+
+	pane.Update(tea_keyMsg("f"))
+	for _, r := range "rock" {
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	assert.Equal(t, "rock", pane.ActiveFilterQuery())
+}
+
+// TestNetworkLogPane_Esc_ClearsCommittedFilter verifies that Esc clears a committed
+// filter query before falling back to scroll-reset.
+func TestNetworkLogPane_Esc_ClearsCommittedFilter(t *testing.T) {
+	s := state.New()
+	recordHttpCompleted(s, 1, "GET", "/v1/track/rock", 200, 50, domain.PriorityBackground)
+	recordHttpCompleted(s, 2, "GET", "/v1/jazz/album", 200, 50, domain.PriorityBackground)
+	pane := panes.NewNetworkLogPane(s, theme.Load("black"))
+	pane.SetSize(160, 20)
+	pane.SetFocused(true)
+
+	m, _ := pane.Update(panes.TickMsg{})
+	pane = m.(*panes.NetworkLogPane)
+
+	// Apply filter: f → "rock" → Enter
+	pane.Update(tea_keyMsg("f"))
+	for _, r := range "rock" {
+		pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, "rock", pane.ActiveFilterQuery(), "filter must be committed")
+
+	// Esc → clears filter
+	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}

@@ -465,3 +465,14 @@ Items to log:
 
 Items to log:
 1. `GatewayLivePane.SetTheme()` rebuilds the table, recreates the filter, and re-renders rows — non-trivial logic at 0% line coverage. Add a smoke test that calls `SetTheme(theme.Load("midnight"))` after seeding events and asserts the buffer count survives and `View()` still renders rows. Theme switching is a runtime feature (Feature 16) so this matters.
+
+---
+
+## Story 178 — Universal filter UX: test coverage gaps
+**Found:** 2026-04-27 | **Source:** PR #226 Review
+**Feature:** 14-page-b-redesign
+
+Items to log:
+1. The 8 new `TestXxxPane_Esc_ClearsCommittedFilter` tests assert only that `ActiveFilterQuery()` returns `""` after Esc — they do not verify that previously-filtered rows reappear in `View()`. If `refreshRows()` is dropped after `ClearQuery()`, the filter query clears but the table stays narrowed. Fix: add `assert.Contains(t, pane.View(), "Jazz")` (or equivalent non-matching row name) to each test, following the `GatewayLivePane` `TestGatewayLivePane_CommittedFilter_ClearedByEsc` pattern.
+2. `TestFilter_ClearQuery_ResetsQueryWithoutDeactivating` does not assert the "without deactivating" contract in the active→ClearQuery direction. It only calls `ClearQuery()` when `IsActive()` is already false. Add a parallel assertion that calls `ClearQuery()` on an active filter (toggled but no Enter) and asserts `IsActive()` remains `true`.
+3. `docs/DESIGN.md` pane walkthrough text (~line 1139 for NetworkLog) still says "Esc resets scroll to page 1" without mentioning the filter-clear step. The canonical keybinding tables (§17 and `docs/keybinding.md`) are correct; this is only the descriptive prose. Update when next touching the design doc.

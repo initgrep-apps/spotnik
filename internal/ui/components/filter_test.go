@@ -160,3 +160,18 @@ func TestFilter_MatchesAnyZeroArgsWithQueryReturnsFalse(t *testing.T) {
 	// Active query with zero args — nothing can match
 	assert.False(t, f.MatchesAny())
 }
+
+func TestFilter_ClearQuery_ResetsQueryWithoutDeactivating(t *testing.T) {
+	f := components.NewFilter(testTheme())
+	f.Toggle() // activate
+	for _, r := range []rune{'r', 'o', 'c', 'k'} {
+		f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	f.Update(tea.KeyMsg{Type: tea.KeyEnter}) // commit "rock"
+	assert.Equal(t, "rock", f.Query(), "query must be committed after Enter")
+	assert.False(t, f.IsActive(), "filter must be inactive after Enter")
+
+	f.ClearQuery()
+	assert.Equal(t, "", f.Query(), "query must be cleared")
+	assert.False(t, f.IsActive(), "active state must be unchanged after ClearQuery")
+}

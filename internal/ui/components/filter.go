@@ -53,6 +53,14 @@ func (f *Filter) Toggle() {
 	}
 }
 
+// ClearQuery clears the committed filter query without changing active state.
+// Called by panes to implement Esc-to-clear when the filter input is closed but
+// a committed query is still narrowing results.
+func (f *Filter) ClearQuery() {
+	f.input.Reset()
+	f.query = ""
+}
+
 // IsActive returns whether the filter is currently accepting input.
 func (f *Filter) IsActive() bool {
 	return f.active
