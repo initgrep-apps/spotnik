@@ -4,6 +4,17 @@ package layout
 type Cell struct {
 	PaneID      PaneID
 	WidthWeight int
+	// RowSpan is the number of rows this cell spans vertically (0 or 1 = one row).
+	// A cell with RowSpan 2 occupies its own row plus the next row in its column position.
+	RowSpan int
+}
+
+// rowSpan returns the effective row span (minimum 1).
+func (c Cell) rowSpan() int {
+	if c.RowSpan < 2 {
+		return 1
+	}
+	return c.RowSpan
 }
 
 // Row represents a horizontal strip of cells in the grid with its relative height.
@@ -30,9 +41,18 @@ var PresetDashboard = Preset{
 		PaneTopTracks: true, PaneTopArtists: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 2, Cells: []Cell{{PaneNowPlaying, 1}}},
-		{HeightWeight: 3, Cells: []Cell{{PanePlaylists, 1}, {PaneAlbums, 1}, {PaneLikedSongs, 1}}},
-		{HeightWeight: 3, Cells: []Cell{{PaneQueue, 1}, {PaneRecentlyPlayed, 1}, {PaneTopTracks, 1}, {PaneTopArtists, 1}}},
+		{HeightWeight: 2, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PanePlaylists, WidthWeight: 1},
+			{PaneID: PaneAlbums, WidthWeight: 1},
+			{PaneID: PaneLikedSongs, WidthWeight: 1},
+		}},
+		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PaneQueue, WidthWeight: 1},
+			{PaneID: PaneRecentlyPlayed, WidthWeight: 1},
+			{PaneID: PaneTopTracks, WidthWeight: 1},
+			{PaneID: PaneTopArtists, WidthWeight: 1},
+		}},
 	},
 }
 
@@ -43,8 +63,11 @@ var PresetListening = Preset{
 		PaneNowPlaying: true, PaneQueue: true, PaneRecentlyPlayed: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 3, Cells: []Cell{{PaneNowPlaying, 1}}},
-		{HeightWeight: 2, Cells: []Cell{{PaneQueue, 1}, {PaneRecentlyPlayed, 1}}},
+		{HeightWeight: 3, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 2, Cells: []Cell{
+			{PaneID: PaneQueue, WidthWeight: 1},
+			{PaneID: PaneRecentlyPlayed, WidthWeight: 1},
+		}},
 	},
 }
 
@@ -55,8 +78,12 @@ var PresetLibrary = Preset{
 		PaneNowPlaying: true, PanePlaylists: true, PaneAlbums: true, PaneLikedSongs: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, Cells: []Cell{{PaneNowPlaying, 1}}},
-		{HeightWeight: 4, Cells: []Cell{{PanePlaylists, 1}, {PaneAlbums, 1}, {PaneLikedSongs, 1}}},
+		{HeightWeight: 1, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 4, Cells: []Cell{
+			{PaneID: PanePlaylists, WidthWeight: 1},
+			{PaneID: PaneAlbums, WidthWeight: 1},
+			{PaneID: PaneLikedSongs, WidthWeight: 1},
+		}},
 	},
 }
 
@@ -67,17 +94,19 @@ var PresetDiscovery = Preset{
 		PaneNowPlaying: true, PaneTopTracks: true, PaneTopArtists: true, PaneRecentlyPlayed: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, Cells: []Cell{{PaneNowPlaying, 1}}},
-		{HeightWeight: 2, Cells: []Cell{{PaneTopTracks, 1}, {PaneTopArtists, 1}}},
-		{HeightWeight: 2, Cells: []Cell{{PaneRecentlyPlayed, 1}}},
+		{HeightWeight: 1, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 2, Cells: []Cell{
+			{PaneID: PaneTopTracks, WidthWeight: 1},
+			{PaneID: PaneTopArtists, WidthWeight: 1},
+		}},
+		{HeightWeight: 2, Cells: []Cell{{PaneID: PaneRecentlyPlayed, WidthWeight: 1}}},
 	},
 }
 
 // Page B preset
 
-// PresetNerdStatus shows NowPlaying compact strip + three diagnostic panes + NetworkLog.
-// Layout: NowPlaying strip (row 1), GatewayHealth/PollingTraffic/GatewayLive side-by-side
-// (row 2), NetworkLog full-width (row 3).
+// PresetNerdStatus shows NowPlaying strip, GatewayHealth + PollingTraffic stacked on the left
+// (30%), GatewayLive spanning full height on the right (70%), NetworkLog full-width below.
 var PresetNerdStatus = Preset{
 	Name: "Nerd Status",
 	Visible: map[PaneID]bool{
@@ -88,9 +117,20 @@ var PresetNerdStatus = Preset{
 		PaneNetworkLog:     true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, Cells: []Cell{{PaneNowPlaying, 1}}},
-		{HeightWeight: 3, Cells: []Cell{{PaneGatewayHealth, 1}, {PanePollingTraffic, 1}, {PaneGatewayLive, 1}}},
-		{HeightWeight: 2, Cells: []Cell{{PaneNetworkLog, 1}}},
+		{HeightWeight: 1, Cells: []Cell{
+			{PaneID: PaneNowPlaying, WidthWeight: 1},
+		}},
+		{HeightWeight: 2, Cells: []Cell{
+			{PaneID: PaneGatewayHealth, WidthWeight: 1},
+			{PaneID: PaneGatewayLive, WidthWeight: 3, RowSpan: 2}, // spans this row and the next
+		}},
+		{HeightWeight: 2, Cells: []Cell{
+			{PaneID: PanePollingTraffic, WidthWeight: 1},
+			// GatewayLive continuation — no cell here; recompute() handles the span
+		}},
+		{HeightWeight: 2, Cells: []Cell{
+			{PaneID: PaneNetworkLog, WidthWeight: 1},
+		}},
 	},
 }
 
