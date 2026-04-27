@@ -476,3 +476,13 @@ Items to log:
 1. The 8 new `TestXxxPane_Esc_ClearsCommittedFilter` tests assert only that `ActiveFilterQuery()` returns `""` after Esc — they do not verify that previously-filtered rows reappear in `View()`. If `refreshRows()` is dropped after `ClearQuery()`, the filter query clears but the table stays narrowed. Fix: add `assert.Contains(t, pane.View(), "Jazz")` (or equivalent non-matching row name) to each test, following the `GatewayLivePane` `TestGatewayLivePane_CommittedFilter_ClearedByEsc` pattern.
 2. `TestFilter_ClearQuery_ResetsQueryWithoutDeactivating` does not assert the "without deactivating" contract in the active→ClearQuery direction. It only calls `ClearQuery()` when `IsActive()` is already false. Add a parallel assertion that calls `ClearQuery()` on an active filter (toggled but no Enter) and asserts `IsActive()` remains `true`.
 3. `docs/DESIGN.md` pane walkthrough text (~line 1139 for NetworkLog) still says "Esc resets scroll to page 1" without mentioning the filter-clear step. The canonical keybinding tables (§17 and `docs/keybinding.md`) are correct; this is only the descriptive prose. Update when next touching the design doc.
+
+---
+
+## Story 179 — Page B toggle keys: minor test coverage gaps
+**Found:** 2026-04-27 | **Source:** PR #227 Review
+**Feature:** 14-page-b-redesign
+
+Items to log:
+1. Keys `'6'`-`'8'` on Page B intentionally map to nothing (not in `pageBToggleKeyMap`), but no routing-level test asserts this no-op. A future change that mistakenly extends `pageBToggleKeyMap` to `'6'`-`'8'` would not be caught at the routing layer (the preset-membership guard in `TogglePane` would catch it downstream). Add a test asserting `'6'` on Page B does not change any pane visibility.
+2. `TestTogglePane_PageB_IgnoresPageAPanes` calls `TogglePane(PaneQueue)` on Page B then asserts `IsPaneVisible(PaneNowPlaying)` — an indirect check because `PaneQueue` is never visible on Page B regardless of toggles. Add a comment to the test explaining why the direct assertion is not expressible via the public `IsPaneVisible` API.
