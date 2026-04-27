@@ -19,8 +19,8 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// toggleKeyMap maps rune keys '1'-'8' to their corresponding PaneID.
-// This is used for btop-style pane visibility toggling.
+// toggleKeyMap maps rune keys '1'-'8' to their corresponding Page A PaneID.
+// This is used for btop-style pane visibility toggling on Page A.
 var toggleKeyMap = map[rune]layout.PaneID{
 	'1': layout.PaneNowPlaying,
 	'2': layout.PaneQueue,
@@ -30,6 +30,16 @@ var toggleKeyMap = map[rune]layout.PaneID{
 	'6': layout.PaneRecentlyPlayed,
 	'7': layout.PaneTopTracks,
 	'8': layout.PaneTopArtists,
+}
+
+// pageBToggleKeyMap maps rune keys '1'-'5' to Page B PaneIDs.
+// This is used for btop-style pane visibility toggling on Page B.
+var pageBToggleKeyMap = map[rune]layout.PaneID{
+	'1': layout.PaneNowPlaying,
+	'2': layout.PaneGatewayHealth,
+	'3': layout.PanePollingTraffic,
+	'4': layout.PaneGatewayLive,
+	'5': layout.PaneNetworkLog,
 }
 
 // isPlaybackKey returns true for keys that control playback regardless of focus.
@@ -193,9 +203,13 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.schedulePrefsFlush()
 	}
 
-	// '1'-'8' toggle pane visibility (Page A only).
+	// '1'-'8' (Page A) or '1'-'5' (Page B) toggle pane visibility.
 	if m.Type == tea.KeyRunes && len(m.Runes) == 1 {
-		if id, ok := toggleKeyMap[m.Runes[0]]; ok {
+		keyMap := toggleKeyMap
+		if a.layout.ActivePage() == layout.PageB {
+			keyMap = pageBToggleKeyMap
+		}
+		if id, ok := keyMap[m.Runes[0]]; ok {
 			a.layout.TogglePane(id)
 			a.propagateSizes()
 			a.syncFocus()

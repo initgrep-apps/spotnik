@@ -270,17 +270,13 @@ func (m *Manager) SetPreset(index int) {
 }
 
 // TogglePane toggles visibility of a pane (keys 1-8 on Page A, 1-5 on Page B).
-// Does nothing if the pane belongs to a different page or is not part of the current preset.
+// Does nothing if the pane is not part of the current preset.
 // If toggling would hide ALL panes, the toggle is rejected.
+// NOTE: Preset membership is the sole authority for whether a pane is toggleable.
+// This naturally handles cross-page safety: panes not in the active preset are rejected,
+// including Page A panes on Page B and vice versa (with the exception of PaneNowPlaying
+// which appears in both pages' presets and is intentionally toggleable on both).
 func (m *Manager) TogglePane(id PaneID) {
-	// Each page can only toggle its own panes.
-	if m.activePage == PageA && id >= PaneNetworkLog {
-		return
-	}
-	if m.activePage == PageB && id < PaneNetworkLog {
-		return
-	}
-
 	// Check that the pane is in the current preset
 	preset := m.presets[m.activePage][m.activePreset[m.activePage]]
 	if !preset.Visible[id] {

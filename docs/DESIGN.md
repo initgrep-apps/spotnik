@@ -99,12 +99,12 @@ Note: for these features and existing featues a lot of componetns are available 
 | — | Gateway Live | `PaneGatewayLive` | `store.ReadEventsFrom(cursor)` — 500-entry event stream | `4` | `PaneBorderRequestFlow()` orange/amber |
 | — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (200-entry buffer) | `5` | `PaneBorderNetworkLog()` warm grey |
 
-Toggle keys `2`–`5` are only active on Page B. Page B panes are not toggleable via the
-standard Page A number keys (`1`–`8`).
+Toggle keys `2`–`5` are only active on Page B. Page A number keys (`1`–`8`) do not toggle
+Page B panes, and Page B number keys (`1`–`5`) do not toggle Page A panes.
 
 ### Key Notes
 
-- Keys `1`-`8` **toggle** pane visibility on Page A (btop-style hide/show), not pane-jump
+- Keys `1`-`8` **toggle** pane visibility on Page A; keys `1`-`5` toggle pane visibility on Page B (btop-style hide/show), not pane-jump
 - `0` toggles between Page A and Page B
 - Playback keys (`Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→`) always route to NowPlaying regardless of focus
 - `A` for "add to queue" in search overlay and list panes
@@ -180,7 +180,7 @@ Each pane's content area is `Rect.Width - 2` x `Rect.Height - 2` (borders consum
 
 ### Pane Toggling (btop-style)
 
-Keys `1`-`8` toggle the corresponding pane's visibility on Page A:
+Keys `1`-`8` toggle the corresponding pane's visibility on Page A; keys `1`-`5` toggle panes on Page B:
 - When a pane hides, siblings in the same row expand to fill its space
 - When all panes in a row hide, the row collapses and other rows expand
 - When a hidden pane is toggled back, it reappears in its original grid position
@@ -357,7 +357,7 @@ When switching presets:
 - All pane states (scroll position, selected item, filter text) are preserved
 - Focus moves to the first visible pane if the currently focused pane becomes hidden
 - The `renderGrid()` function re-assembles the layout immediately
-- Manual pane toggles (keys `1`-`8`) are reset when switching presets
+- Manual pane toggles (keys `1`-`8` on Page A, `1`-`5` on Page B) are reset when switching presets
 
 ---
 
@@ -705,7 +705,7 @@ descriptions in Muted role.
 
 ### Pane Toggle (replaces Direct Pane Jump)
 
-Keys `1`-`8` toggle pane visibility rather than jumping focus. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
+Keys `1`-`8` toggle pane visibility on Page A; keys `1`-`5` toggle pane visibility on Page B. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
 
 ### Playback Keys (Always Route to NowPlaying)
 
@@ -738,8 +738,9 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 |-----|--------|-------|
 | **Pages** | | |
 | `0` | Toggle Page A / Page B | Global |
-| **Pane Toggle (Page A)** | | |
+| **Pane Toggle** | | |
 | `1`-`8` | Toggle pane 1-8 visibility | Page A |
+| `1`-`5` | Toggle pane 1-5 visibility | Page B |
 | **Presets** | | |
 | `p` | Cycle to next preset | Current page |
 | **Playback (always route to NowPlaying)** | | |

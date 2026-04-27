@@ -40,7 +40,7 @@ var helpContent = [2][]helpSection{
 	{
 		{title: "Global", bindings: []helpBinding{
 			{"/", "Search"}, {"d", "Devices"}, {"u", "Profile"}, {"t", "Theme"}, {"?", "Help"},
-			{"q", "Quit"}, {"0", "Toggle page"}, {"1-8", "Toggle pane"}, {"p", "Preset"},
+			{"q", "Quit"}, {"0", "Toggle page"}, {"1-8 / 1-5", "Toggle pane (A/B)"}, {"p", "Preset"},
 		}},
 		{title: "Navigation", bindings: []helpBinding{
 			{"Tab", "Next pane"}, {"Shift+Tab", "Prev pane"},

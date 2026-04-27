@@ -279,6 +279,20 @@ func TestTogglePane_CannotHideLastVisible(t *testing.T) {
 		"last visible pane must not be hideable")
 }
 
+func TestTogglePane_PageB_TogglesNowPlaying(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(200, 50)
+	m.TogglePage() // switch to Page B
+
+	// NowPlaying (key 1) is in PresetNerdStatus and must be toggleable on Page B.
+	require.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
+	m.TogglePane(layout.PaneNowPlaying)
+	assert.False(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must hide after toggle on Page B")
+
+	m.TogglePane(layout.PaneNowPlaying)
+	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must show after second toggle on Page B")
+}
+
 func TestTogglePane_PageB_TogglesPageBPanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)

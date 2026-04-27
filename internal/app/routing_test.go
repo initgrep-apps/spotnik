@@ -252,3 +252,20 @@ func TestIsPlaybackKey_N_NotPlaybackKey(t *testing.T) {
 	assert.False(t, cmdProducesPlaybackRequestMsg(cmd),
 		"'n' must not produce PlaybackRequestMsg — it must fall through to the focused pane")
 }
+
+// TestPageBNumberKeys_TogglePageBPanes verifies that pressing '2' on Page B toggles
+// GatewayHealth visibility, rather than being silently ignored.
+func TestPageBNumberKeys_TogglePageBPanes(t *testing.T) {
+	a := app.New(&config.Config{}, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
+	// Switch to Page B with '0'.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")})
+
+	// GatewayHealth must be visible before the toggle.
+	require.True(t, a.Layout().IsPaneVisible(layout.PaneGatewayHealth),
+		"GatewayHealth must be visible on Page B before toggle")
+	// Pressing '2' on Page B must toggle GatewayHealth.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	assert.False(t, a.Layout().IsPaneVisible(layout.PaneGatewayHealth),
+		"GatewayHealth must be hidden after pressing '2' on Page B")
+}

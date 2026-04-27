@@ -16,7 +16,8 @@
 | `?` | Open help overlay |
 | `q` | Quit |
 | `0` | Toggle Page A / Page B |
-| `1`–`8` | Toggle pane visibility (Page A only) |
+| `1`–`8` | Toggle pane visibility on Page A |
+| `1`–`5` | Toggle pane visibility on Page B |
 | `p` | Cycle preset |
 
 ## Playback
