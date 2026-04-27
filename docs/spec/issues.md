@@ -486,3 +486,13 @@ Items to log:
 Items to log:
 1. Keys `'6'`-`'8'` on Page B intentionally map to nothing (not in `pageBToggleKeyMap`), but no routing-level test asserts this no-op. A future change that mistakenly extends `pageBToggleKeyMap` to `'6'`-`'8'` would not be caught at the routing layer (the preset-membership guard in `TogglePane` would catch it downstream). Add a test asserting `'6'` on Page B does not change any pane visibility.
 2. `TestTogglePane_PageB_IgnoresPageAPanes` calls `TogglePane(PaneQueue)` on Page B then asserts `IsPaneVisible(PaneNowPlaying)` — an indirect check because `PaneQueue` is never visible on Page B regardless of toggles. Add a comment to the test explaining why the direct assertion is not expressible via the public `IsPaneVisible` API.
+
+---
+
+## Story 180 — Stacked Page B layout: RowSpan edge cases
+**Found:** 2026-04-27 | **Source:** PR #228 Review (round 2)
+**Feature:** 14-page-b-redesign
+
+Items to log:
+1. Focus order in spanner rows places the spanner (`GatewayLive`) before its left sibling (`GatewayHealth`) in row 1. The `focusOrder` doc comment says "row-by-row, left-to-right" but spanner cells are added at origin row in the loop before non-spanner cells. Harmless in practice (Tab cycles through all panes) but the ordering is slightly unintuitive. Reorder if the doc comment is ever enforced.
+2. Step 4's non-spanner placement loop has a latent edge case: if a continuation row contains 2+ non-spanner cells that straddle a reserved spanner interval, the proportional `w = available * weight / totalWWeight` for a non-last cell could place it overlapping the reserved interval (the `nextFreeX` call is at the top of the loop, but the proportional `w` may extend into the reserved zone). `PresetNerdStatus` never exercises this (continuation rows have at most one non-spanner cell), but a future preset with multiple non-spanner cells in a continuation row should be tested explicitly.

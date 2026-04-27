@@ -1,7 +1,7 @@
 ---
 title: "Fix: Stacked Page B layout — RowSpan support + 30/70 Health+Traffic vs GatewayLive"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
