@@ -13,6 +13,11 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
+// NOTE: GatewayHealthPane.View() returns raw content without a border.
+// The outer btop-style border is added by render.go via layout.RenderPaneBorder,
+// which reads Title() and ToggleKey() directly from the pane interface.
+// Do NOT wrap View() output in uikit.PaneChrome — that causes a double border.
+
 // Compile-time check: GatewayHealthPane implements layout.Pane.
 var _ layout.Pane = &GatewayHealthPane{}
 
@@ -145,16 +150,7 @@ func (p *GatewayHealthPane) View() string {
 		dedupStyle.Render(uikit.GlyphFor(uikit.GlyphRateLimit, mode)),
 		"Dedup", dedupStyle.Render(dedupData), labelWidth, mutedStyle)
 
-	content := strings.Join([]string{tokenRow, slotRow, backoffRow, dedupRow}, "\n")
-	return uikit.PaneChrome{
-		Width:       p.width,
-		Height:      p.height,
-		Title:       p.Title(),
-		ToggleKey:   p.ToggleKey(),
-		AccentColor: layout.PaneBorderColor(p.ID(), th),
-		Focused:     p.focused,
-		Theme:       th,
-	}.Render(content)
+	return strings.Join([]string{tokenRow, slotRow, backoffRow, dedupRow}, "\n")
 }
 
 // renderRow composes a single grid row: icon  label  data.

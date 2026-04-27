@@ -46,6 +46,15 @@ func TestGatewayHealthPane_View_ContainsHealthRows(t *testing.T) {
 	assert.Contains(t, view, "Dedup")
 }
 
+func TestGatewayHealthPane_View_NoBorder(t *testing.T) {
+	p := newTestGatewayHealthPane(t)
+	p.SetSize(50, 10)
+	view := p.View()
+	// render.go adds the outer border; View() must return raw content only.
+	assert.NotContains(t, view, "╭")
+	assert.NotContains(t, view, "╰")
+}
+
 func TestGatewayHealthPane_Update_DrainsCursor(t *testing.T) {
 	store := state.New()
 	p := panes.NewGatewayHealthPane(store, theme.Load("black"))

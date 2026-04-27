@@ -46,6 +46,15 @@ func TestPollingTrafficPane_View_ContainsAllRows(t *testing.T) {
 	assert.Contains(t, view, "Recent")
 }
 
+func TestPollingTrafficPane_View_NoBorder(t *testing.T) {
+	p := newTestPollingTrafficPane(t)
+	p.SetSize(50, 10)
+	view := p.View()
+	// render.go adds the outer border; View() must return raw content only.
+	assert.NotContains(t, view, "╭")
+	assert.NotContains(t, view, "╰")
+}
+
 func TestPollingTrafficPane_Update_PollingSnapshotMsg(t *testing.T) {
 	p := newTestPollingTrafficPane(t)
 	p.SetSize(50, 10)

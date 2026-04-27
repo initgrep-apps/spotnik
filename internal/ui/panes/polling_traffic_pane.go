@@ -142,16 +142,7 @@ func (p *PollingTrafficPane) View() string {
 		renderedRows = append(renderedRows, icon+"  "+label+"  "+statusStr)
 	}
 
-	content := strings.Join(renderedRows, "\n")
-	return uikit.PaneChrome{
-		Width:       p.width,
-		Height:      p.height,
-		Title:       p.Title(),
-		ToggleKey:   p.ToggleKey(),
-		AccentColor: layout.PaneBorderColor(p.ID(), th),
-		Focused:     p.focused,
-		Theme:       th,
-	}.Render(content)
+	return strings.Join(renderedRows, "\n")
 }
 
 // pollingHumanInterval converts milliseconds to a human-readable interval string.
