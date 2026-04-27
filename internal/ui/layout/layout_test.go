@@ -674,6 +674,10 @@ func TestRecompute_RowSpan_GatewayLive(t *testing.T) {
 	assert.Equal(t, healthRect.X+healthRect.Width, liveRect.X,
 		"GatewayLive must be immediately right of GatewayHealth")
 
+	// GatewayLive must be 3x wider than GatewayHealth (weight 3 vs weight 1)
+	assert.Equal(t, 3*healthRect.Width, liveRect.Width,
+		"GatewayLive must have 3× the width of GatewayHealth")
+
 	// NetworkLog must be full-width below all middle panes
 	assert.Equal(t, 0, netRect.X)
 	assert.Greater(t, netRect.Y, liveRect.Y, "NetworkLog is below GatewayLive")
@@ -719,4 +723,46 @@ func TestRecompute_RowSpan_ToggleHidingSpannedPanes(t *testing.T) {
 	// GatewayHealth and GatewayLive must remain visible
 	assert.Greater(t, healthRect.Width, 0, "GatewayHealth must remain visible")
 	assert.Greater(t, liveRect.Width, 0, "GatewayLive must remain visible")
+}
+
+func TestRecompute_RowSpan_ToggleHidingOriginSibling(t *testing.T) {
+	// Hiding GatewayHealth (non-spanner in the spanner's origin row) must not
+	// collapse PollingTraffic in the continuation row to zero width.
+	m := layout.NewManager()
+	m.Resize(200, 80)
+	m.TogglePage()
+
+	m.TogglePane(layout.PaneGatewayHealth)
+
+	healthRect := m.PaneRect(layout.PaneGatewayHealth)
+	trafficRect := m.PaneRect(layout.PanePollingTraffic)
+	liveRect := m.PaneRect(layout.PaneGatewayLive)
+
+	assert.Equal(t, layout.Rect{}, healthRect, "GatewayHealth must be hidden")
+	assert.Greater(t, liveRect.Width, 0, "GatewayLive must remain visible")
+	assert.Greater(t, trafficRect.Width, 0, "PollingTraffic must remain visible in continuation row")
+
+	// PollingTraffic must not overlap GatewayLive
+	overlap := trafficRect.X < liveRect.X+liveRect.Width && trafficRect.X+trafficRect.Width > liveRect.X
+	assert.False(t, overlap, "PollingTraffic must not overlap GatewayLive")
+}
+
+func TestRecompute_RowSpan_PageB_RectsNonOverlapping(t *testing.T) {
+	// Use odd dimensions to exercise rounding-remainder paths.
+	m := layout.NewManager()
+	m.Resize(201, 79)
+	m.TogglePage()
+
+	visible := m.VisiblePanes()
+	for i := 0; i < len(visible); i++ {
+		for j := i + 1; j < len(visible); j++ {
+			a := m.PaneRect(visible[i])
+			b := m.PaneRect(visible[j])
+			overlap := a.X < b.X+b.Width && a.X+a.Width > b.X &&
+				a.Y < b.Y+b.Height && a.Y+a.Height > b.Y
+			assert.False(t, overlap,
+				"panes %d and %d must not overlap: %+v vs %+v",
+				visible[i], visible[j], a, b)
+		}
+	}
 }

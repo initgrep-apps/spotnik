@@ -187,8 +187,10 @@ func (m *Manager) recompute() {
 
 	// ── Step 3: spanning pass — compute spanner Rects ─────────────────────────
 	//
-	// For each origin row, assign X/W to all cells in declaration order,
-	// then for spanning cells accumulate H across covered rows.
+	// Use declared row cells (including hidden) to derive each spanner's X so
+	// that column alignment is preserved when sibling cells are toggled off.
+	// The effective denominator is widened when a continuation row has own cells
+	// that need horizontal space alongside the spanner.
 
 	type spannerRect struct {
 		x, w, y, h int
@@ -196,7 +198,6 @@ func (m *Manager) recompute() {
 	spannerRects := make(map[PaneID]spannerRect)
 
 	for _, rl := range rowLayouts {
-		// Only process rows that contain a spanner at origin.
 		hasSpanner := false
 		for _, c := range rl.ownCells {
 			if c.rowSpan > 1 {
@@ -208,35 +209,62 @@ func (m *Manager) recompute() {
 			continue
 		}
 
-		// Total weight for this row (all own cells — both span and non-span).
-		totalW := 0
-		for _, c := range rl.ownCells {
-			totalW += c.widthWeight
-		}
+		declaredCells := grid.Grid[rl.origIdx].Cells
 
-		// Assign X/W in declaration order; record spanners.
-		cx := 0
-		for j, c := range rl.ownCells {
-			var w int
-			if totalW == 0 {
-				w = 0
-			} else if j == len(rl.ownCells)-1 {
-				w = m.width - cx
-			} else {
-				w = m.width * c.widthWeight / totalW
+		for _, c := range rl.ownCells {
+			if c.rowSpan <= 1 {
+				continue
 			}
-			if c.rowSpan > 1 {
-				// Accumulate height across covered rows.
-				totalH := 0
-				for k := 0; k < c.rowSpan; k++ {
-					targetOrig := rl.origIdx + k
-					if rli, ok := rowIdxByOrig[targetOrig]; ok {
-						totalH += rowLayouts[rli].height
+
+			// Sum declared weights (all cells, including hidden) and weight to
+			// the left of this spanner — preserves column X across toggles.
+			declaredTotalW, leftW := 0, 0
+			seenSpanner := false
+			for _, dc := range declaredCells {
+				declaredTotalW += dc.WidthWeight
+				if dc.PaneID == c.paneID {
+					seenSpanner = true
+				}
+				if !seenSpanner {
+					leftW += dc.WidthWeight
+				}
+			}
+
+			// Widen denominator if a continuation row has own cells that need
+			// space alongside the spanner.
+			effectiveTotalW := declaredTotalW
+			for k := 1; k < c.rowSpan && rl.origIdx+k < nRows; k++ {
+				targetOrig := rl.origIdx + k
+				if rli, ok := rowIdxByOrig[targetOrig]; ok {
+					contRow := rowLayouts[rli]
+					if len(contRow.ownCells) > 0 {
+						contW := c.widthWeight
+						for _, cc := range contRow.ownCells {
+							contW += cc.widthWeight
+						}
+						if contW > effectiveTotalW {
+							effectiveTotalW = contW
+						}
 					}
 				}
-				spannerRects[c.paneID] = spannerRect{x: cx, w: w, y: rl.y, h: totalH}
 			}
-			cx += w
+
+			spannerX, spannerW := 0, 0
+			if effectiveTotalW > 0 {
+				spannerX = m.width * leftW / effectiveTotalW
+				spannerW = m.width * c.widthWeight / effectiveTotalW
+			}
+
+			// Accumulate height across all covered rows.
+			totalH := 0
+			for k := 0; k < c.rowSpan; k++ {
+				targetOrig := rl.origIdx + k
+				if rli, ok := rowIdxByOrig[targetOrig]; ok {
+					totalH += rowLayouts[rli].height
+				}
+			}
+
+			spannerRects[c.paneID] = spannerRect{x: spannerX, w: spannerW, y: rl.y, h: totalH}
 		}
 	}
 
