@@ -1,7 +1,7 @@
 ---
 title: "Page B PaneID Constants and Preset Layout"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
