@@ -269,17 +269,15 @@ func (m *Manager) SetPreset(index int) {
 	m.recompute()
 }
 
-// TogglePane toggles visibility of a pane (Page A only, keys 1-8).
-// Does nothing if on Page B or if the pane is not part of the current preset.
+// TogglePane toggles visibility of a pane (keys 1-8 on Page A, 1-5 on Page B).
+// Does nothing if the pane belongs to a different page or is not part of the current preset.
 // If toggling would hide ALL panes, the toggle is rejected.
 func (m *Manager) TogglePane(id PaneID) {
-	// Page B panes are not individually toggleable
-	if m.activePage == PageB {
+	// Each page can only toggle its own panes.
+	if m.activePage == PageA && id >= PaneNetworkLog {
 		return
 	}
-
-	// Only Page A panes (0-7) are toggleable
-	if id >= PaneNetworkLog {
+	if m.activePage == PageB && id < PaneNetworkLog {
 		return
 	}
 

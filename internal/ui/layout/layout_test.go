@@ -279,15 +279,37 @@ func TestTogglePane_CannotHideLastVisible(t *testing.T) {
 		"last visible pane must not be hideable")
 }
 
-func TestTogglePane_DoesNothingOnPageB(t *testing.T) {
+func TestTogglePane_PageB_TogglesPageBPanes(t *testing.T) {
 	m := layout.NewManager()
-	m.Resize(120, 30)
-	m.TogglePage() // Go to Page B
+	m.Resize(200, 50)
+	m.TogglePage() // switch to Page B
 
-	// Page B panes are not toggleable
-	assert.True(t, m.IsPaneVisible(layout.PaneNetworkLog))
-	m.TogglePane(layout.PaneNetworkLog)
-	assert.True(t, m.IsPaneVisible(layout.PaneNetworkLog), "Page B panes should not be toggleable")
+	// GatewayHealth (key 2) should be toggleable on Page B
+	require.True(t, m.IsPaneVisible(layout.PaneGatewayHealth))
+	m.TogglePane(layout.PaneGatewayHealth)
+	assert.False(t, m.IsPaneVisible(layout.PaneGatewayHealth), "GatewayHealth must hide after toggle")
+
+	m.TogglePane(layout.PaneGatewayHealth)
+	assert.True(t, m.IsPaneVisible(layout.PaneGatewayHealth), "GatewayHealth must show after second toggle")
+}
+
+func TestTogglePane_PageB_IgnoresPageAPanes(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(200, 50)
+	m.TogglePage() // switch to Page B
+
+	// Page A panes must not be toggleable while on Page B
+	m.TogglePane(layout.PaneQueue) // PaneQueue < PaneNetworkLog — Page A pane
+	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must still be visible")
+}
+
+func TestTogglePane_PageA_IgnoresPageBPanes(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(200, 50)
+	// Still on Page A — attempting to toggle a Page B pane must be a no-op
+	m.TogglePane(layout.PaneGatewayHealth)
+	// NowPlaying is a Page A pane and must remain visible (no change to Page A state)
+	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
 }
 
 func TestIsPaneVisible_ReflectsToggleState(t *testing.T) {
@@ -535,18 +557,6 @@ func TestEdge_VerySmallTerminal(t *testing.T) {
 	})
 }
 
-func TestPageB_NoPanesToggleable(t *testing.T) {
-	m := layout.NewManager()
-	m.Resize(120, 30)
-	m.TogglePage() // Page B
-
-	// NetworkLog and GatewayHealth are Page B — not toggleable
-	m.TogglePane(layout.PaneNetworkLog)
-	m.TogglePane(layout.PaneGatewayHealth)
-
-	assert.True(t, m.IsPaneVisible(layout.PaneNetworkLog))
-	assert.True(t, m.IsPaneVisible(layout.PaneGatewayHealth))
-}
 
 func TestPresetCycleFullLoop(t *testing.T) {
 	m := layout.NewManager()
