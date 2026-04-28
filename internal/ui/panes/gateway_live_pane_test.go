@@ -651,16 +651,17 @@ func TestGatewayLivePane_Filter_NarrowsLiveOnEachKeystroke(t *testing.T) {
 
 // TestGatewayLivePane_View_NoEmbeddedANSIInLabels pins the regression introduced
 // by the uikit.ListRow-based single-cell approach: ListRow.Render composed the
-// glyph and label into a single pre-rendered string with multiple ANSI segments
-// separated by resets, all stuffed into one table cell. The row-level selection
-// background (SelectedBg) set by WithRowStyleFunc was interrupted by those resets,
-// so only the first segment appeared highlighted.
+// glyph and label into a single pre-rendered ANSI string with multiple segments
+// separated by \x1b[0m resets, all stuffed into one table cell. The row-level
+// selection background (SelectedBg) set by WithRowStyleFunc was interrupted by
+// those resets, so only the first segment appeared highlighted.
 //
-// After the multi-column refactor the event column value is a plain string with
-// no embedded ANSI. The test strips ANSI from the rendered line and confirms the
-// visible event label text appears intact — verifying that the label is a plain
-// value, not a pre-coloured composite. Additionally it verifies that the pane's
-// table has two columns (glyph + event), not the old single-column "row" layout.
+// After the multi-column refactor the event column value is a plain string — no
+// pre-rendered ANSI. The test locates the raw label text in the rendered view and
+// asserts that no \x1b[0m reset appears *within* the label's byte range. An ANSI
+// reset after the cell is fine (bubble-table closes each cell's foreground), but
+// a reset *inside* the label is the structural signature of the old ListRow path.
+// Additionally the test pins the two-column layout (glyph + event).
 func TestGatewayLivePane_View_NoEmbeddedANSIInLabels(t *testing.T) {
 	p, store := newTestGatewayLivePane(t)
 	p.SetSize(80, 20)
@@ -677,14 +678,37 @@ func TestGatewayLivePane_View_NoEmbeddedANSIInLabels(t *testing.T) {
 
 	view := p.View()
 
-	// Verify structural property: the event label appears in the stripped view,
-	// confirming the event column is a plain string (not a pre-rendered ANSI blob).
-	stripped := stripANSI(view)
-	if !strings.Contains(stripped, "ansi-check") {
-		t.Fatalf("stripped view must contain 'ansi-check'; stripped = %q", stripped)
+	// The event label is "<timestamp>  GET /v1/me/player/ansi-check  allowed"
+	// (from buildGatewayLiveRow for EventRequestAllowed).
+	// Locate the path segment in the raw rendered output.
+	labelFragment := "ansi-check"
+	labelStart := strings.Index(view, labelFragment)
+	if labelStart == -1 {
+		t.Fatalf("raw View() must contain %q; view = %q", labelFragment, view)
 	}
-	if !strings.Contains(stripped, "allowed") {
-		t.Errorf("stripped view must contain 'allowed' (event label suffix); stripped = %q", stripped)
+
+	// The old ListRow path rendered glyph + timestamp + method + path as separately
+	// ANSI-coloured segments joined by \x1b[0m resets, all within a single cell value.
+	// A reset mid-cell (between label words) is the structural regression signature.
+	//
+	// After the refactor the event column value is a plain string. bubble-table closes
+	// the cell with a reset *after* the last visible character — that trailing reset
+	// is expected and acceptable. We search only from labelStart to just past the
+	// "allowed" suffix: the visible characters of this label, not beyond.
+	labelSuffix := "  allowed"
+	suffixIdx := strings.Index(view[labelStart:], labelSuffix)
+	var labelSpan string
+	if suffixIdx != -1 {
+		// Include "  allowed" in the span but nothing after.
+		labelEnd := labelStart + suffixIdx + len(labelSuffix)
+		labelSpan = view[labelStart:labelEnd]
+	} else {
+		// Fallback: just check the fragment itself.
+		labelSpan = view[labelStart : labelStart+len(labelFragment)]
+	}
+
+	if strings.Contains(labelSpan, "\x1b[0m") {
+		t.Errorf("ANSI reset found inside visible event label — this is the ListRow regression; label span = %q", labelSpan)
 	}
 
 	// Verify column layout: GatewayLivePane must use two columns (glyph, event).
