@@ -350,7 +350,9 @@ func TestRender_ThemeOverlay_Composited(t *testing.T) {
 	a.themeOverlay = newThemeOverlayForTest(a)
 
 	result := a.buildView()
-	assert.Contains(t, result, "Gruvbox", "theme overlay content should appear when showThemeSwitcher is true")
+	// Assert on a theme that falls within the visible composited window — the test
+	// background is narrow enough that only the first few themes are reachable.
+	assert.Contains(t, result, "Catppuccin Mocha", "theme overlay content should appear when showThemeSwitcher is true")
 }
 
 // TestRenderWithOverlayChrome_Composited verifies that renderWithOverlayChrome correctly

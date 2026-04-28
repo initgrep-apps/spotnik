@@ -131,6 +131,9 @@ func (o *ThemeOverlay) View() string {
 
 	var lines []string
 	for i, th := range o.themes {
+		if i > 0 {
+			lines = append(lines, strings.Repeat(" ", innerWidth))
+		}
 		lines = append(lines, o.renderRow(i, th, innerWidth))
 	}
 
@@ -177,13 +180,12 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 	}
 
 	// Choose glyph and role based on whether this is the current theme.
+	// Glyph alone signals active state — no caption needed.
 	glyph := uikit.GlyphAvailable
 	intent := uikit.RoleMuted
-	caption := ""
 	if isCurrent {
 		glyph = uikit.GlyphActive
 		intent = uikit.RoleAccent
-		caption = "active"
 	}
 
 	// Apply cursor background to ListRow theme when the row is highlighted.
@@ -206,7 +208,6 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 	listRow := uikit.ListRow{
 		Glyph:         glyph,
 		Label:         th.Name(),
-		Caption:       caption,
 		Intent:        intent,
 		Theme:         rowTheme,
 		RowBackground: rowBg,
