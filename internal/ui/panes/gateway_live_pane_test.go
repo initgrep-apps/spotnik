@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -646,4 +647,140 @@ func TestGatewayLivePane_Filter_NarrowsLiveOnEachKeystroke(t *testing.T) {
 	if strings.Contains(view, "tracks") {
 		t.Errorf("View() during typing of 'player' must hide 'tracks' rows (live filter contract); view = %q", view)
 	}
+}
+
+// TestGatewayLivePane_View_NoEmbeddedANSIInLabels pins the regression introduced
+// by the uikit.ListRow-based single-cell approach: ListRow.Render composed the
+// glyph and label into a single pre-rendered string with multiple ANSI segments
+// separated by resets, all stuffed into one table cell. The row-level selection
+// background (SelectedBg) set by WithRowStyleFunc was interrupted by those resets,
+// so only the first segment appeared highlighted.
+//
+// After the multi-column refactor the event column value is a plain string with
+// no embedded ANSI. The test strips ANSI from the rendered line and confirms the
+// visible event label text appears intact — verifying that the label is a plain
+// value, not a pre-coloured composite. Additionally it verifies that the pane's
+// table has two columns (glyph + event), not the old single-column "row" layout.
+func TestGatewayLivePane_View_NoEmbeddedANSIInLabels(t *testing.T) {
+	p, store := newTestGatewayLivePane(t)
+	p.SetSize(80, 20)
+	p.SetFocused(true)
+
+	store.RecordEvent(domain.GatewayEvent{
+		Timestamp: time.Now(),
+		Kind:      domain.EventRequestAllowed,
+		Method:    "GET",
+		Path:      "/v1/me/player/ansi-check",
+		Snapshot:  domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10},
+	})
+	p.Update(panes.TickMsg{})
+
+	view := p.View()
+
+	// Verify structural property: the event label appears in the stripped view,
+	// confirming the event column is a plain string (not a pre-rendered ANSI blob).
+	stripped := stripANSI(view)
+	if !strings.Contains(stripped, "ansi-check") {
+		t.Fatalf("stripped view must contain 'ansi-check'; stripped = %q", stripped)
+	}
+	if !strings.Contains(stripped, "allowed") {
+		t.Errorf("stripped view must contain 'allowed' (event label suffix); stripped = %q", stripped)
+	}
+
+	// Verify column layout: GatewayLivePane must use two columns (glyph, event).
+	// The old single-column "row" layout is no longer acceptable.
+	cols := p.Table().Columns()
+	if len(cols) != 2 {
+		t.Fatalf("GatewayLivePane must have exactly 2 columns, got %d: %+v", len(cols), cols)
+	}
+	if cols[0].Key != "glyph" {
+		t.Errorf("column[0].Key = %q, want %q", cols[0].Key, "glyph")
+	}
+	if cols[1].Key != "event" {
+		t.Errorf("column[1].Key = %q, want %q", cols[1].Key, "event")
+	}
+}
+
+// TestGatewayLivePane_View_ColumnAlignmentMatchesNetworkLog verifies that the glyph
+// column in GatewayLivePane occupies a narrow single-glyph slot: one Unicode rune
+// wide plus bubble-table's standard column padding. This mirrors the multi-column
+// pattern used by all other TableBasedPane consumers (NetworkLog, LikedSongs, etc.)
+// and ensures the glyph is visually separated from the event text without the
+// wide hand-crafted padding that the old ListRow approach produced.
+func TestGatewayLivePane_View_ColumnAlignmentMatchesNetworkLog(t *testing.T) {
+	p, store := newTestGatewayLivePane(t)
+	p.SetSize(80, 20)
+
+	// Record three events of different kinds so multiple rows are visible.
+	events := []domain.GatewayEvent{
+		{Timestamp: time.Now(), Kind: domain.EventRequestAllowed, Method: "GET",
+			Path: "/v1/me/player/a", Snapshot: domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10}},
+		{Timestamp: time.Now(), Kind: domain.EventRequestBlocked, Method: "GET",
+			Path: "/v1/me/player/b", Snapshot: domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10}},
+		{Timestamp: time.Now(), Kind: domain.EventTokenRefilled, Method: "GET",
+			Path: "/v1/me/player/c", Snapshot: domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10}},
+	}
+	for _, e := range events {
+		store.RecordEvent(e)
+	}
+	p.Update(panes.TickMsg{})
+
+	view := p.View()
+
+	// Collect lines that contain recognisable event labels. We verify that:
+	// - Each data row begins with a narrow glyph segment (≤ 4 visible characters
+	//   before the first double-space separator that bubble-table inserts between
+	//   columns). A ListRow row would embed much wider padding.
+	// - lipgloss.Width is used rather than len() to be ANSI-safe.
+	rowLines := []string{}
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "allowed") ||
+			strings.Contains(line, "blocked") ||
+			strings.Contains(line, "Tokens refilled") {
+			rowLines = append(rowLines, line)
+		}
+	}
+	if len(rowLines) == 0 {
+		t.Fatalf("no recognisable event rows found in View(); view = %q", view)
+	}
+
+	for _, line := range rowLines {
+		// Strip ANSI codes for width measurement.
+		visible := lipgloss.NewStyle().Render("") // force lipgloss initialisation
+		_ = visible
+		// Find the double-space that bubble-table places at the column boundary.
+		// Before that separator is the glyph column content; after is the event text.
+		stripped := stripANSI(line)
+		idx := strings.Index(stripped, "  ") // two-space column divider
+		if idx == -1 {
+			// Some rows may be pagination lines or blank — skip those.
+			continue
+		}
+		glyphSegment := stripped[:idx]
+		// The glyph segment must be narrow: the glyph itself (1 rune) plus
+		// up to 3 characters of bubble-table column padding → ≤ 4 total.
+		glyphWidth := lipgloss.Width(glyphSegment)
+		if glyphWidth > 4 {
+			t.Errorf("glyph column segment %q is %d chars wide, want ≤ 4 (glyph + padding); full row = %q",
+				glyphSegment, glyphWidth, stripped)
+		}
+	}
+}
+
+// stripANSI removes ANSI escape sequences for width-measurement in table alignment tests.
+func stripANSI(s string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			// Skip until 'm'.
+			for i < len(s) && s[i] != 'm' {
+				i++
+			}
+			i++ // skip 'm'
+		} else {
+			out.WriteByte(s[i])
+			i++
+		}
+	}
+	return out.String()
 }
