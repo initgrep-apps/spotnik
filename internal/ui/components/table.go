@@ -61,6 +61,7 @@ type Table struct {
 	inner        btable.Model
 	config       TableConfig
 	rows         []map[string]string
+	richRows     []map[string]any // set via SetRichRows; nil when SetRows was used last
 	playingIndex int
 	width        int
 	height       int
@@ -127,10 +128,42 @@ func (t *Table) rebuild() {
 	t.applyRows()
 }
 
-// applyRows converts the stored []map[string]string into bubble-table Row values
-// and applies them to the inner model. The playing indicator replaces the index
-// column value for the currently playing row.
+// applyRows converts the stored row data into bubble-table Row values and applies
+// them to the inner model. When richRows is set (via SetRichRows), each cell value
+// may be a plain string or a btable.StyledCell — both are passed directly to
+// bubble-table. When richRows is nil, the plain []map[string]string path is used.
+// The playing indicator replaces the first-column value for the playing row in
+// both paths.
 func (t *Table) applyRows() {
+	// Rich-rows path: accept string or btable.StyledCell per cell.
+	if t.richRows != nil {
+		if len(t.richRows) == 0 {
+			t.inner = t.inner.WithRows(nil)
+			return
+		}
+		th := t.config.Theme
+		btRows := make([]btable.Row, len(t.richRows))
+		for i, rowData := range t.richRows {
+			data := btable.RowData{}
+			for k, v := range rowData {
+				data[k] = v
+			}
+			if i == t.playingIndex {
+				if len(t.config.Columns) > 0 {
+					firstKey := t.config.Columns[0].Key
+					data[firstKey] = btable.NewStyledCell(
+						playingSymbol,
+						lipgloss.NewStyle().Foreground(th.PlayingIndicator()),
+					)
+				}
+			}
+			btRows[i] = btable.NewRow(data)
+		}
+		t.inner = t.inner.WithRows(btRows)
+		return
+	}
+
+	// Plain string-rows path (existing behaviour, unmodified).
 	if len(t.rows) == 0 {
 		t.inner = t.inner.WithRows(nil)
 		return
@@ -182,8 +215,27 @@ func (t *Table) SetSize(width, height int) {
 
 // SetRows updates the table data. Each row is a map[string]string keyed by
 // the column Key values defined in ColumnDef. Rows are re-styled immediately.
+// Calling SetRows clears any previously set rich rows.
 func (t *Table) SetRows(rows []map[string]string) {
 	t.rows = rows
+	t.richRows = nil
+	t.applyRows()
+}
+
+// SetRichRows updates the table data with rows whose cell values may be either
+// plain strings (rendered with the column's foreground colour) or
+// btable.StyledCell instances (rendered with a per-cell foreground while still
+// inheriting the row-level highlight background). Used by panes that need
+// per-row colour variation that single-value column Color cannot express
+// (e.g. GatewayLivePane's per-event-kind glyph colours).
+//
+// Existing SetRows([]map[string]string) callers are unaffected.
+func (t *Table) SetRichRows(rows []map[string]any) {
+	// Stored separately from t.rows so that Rows() (used by RebuildTableTheme)
+	// keeps its existing string-only return contract for callers that do not
+	// need rich values.
+	t.richRows = rows
+	t.rows = nil
 	t.applyRows()
 }
 
