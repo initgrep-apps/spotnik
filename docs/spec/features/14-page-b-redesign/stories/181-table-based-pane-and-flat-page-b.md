@@ -1,7 +1,7 @@
 ---
 title: "Refactor: TableBasedPane consolidation, graded border filter label, flat Page B (delete RowSpan)"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
