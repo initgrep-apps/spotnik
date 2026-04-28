@@ -187,46 +187,27 @@ func (p *ProfileOverlay) SetTheme(t theme.Theme) {
 }
 
 // renderActions returns lines for the logout/forget action section of the overlay.
-// When pendingAction is set, the armed action shows a warning prompt instead of
-// the normal label; the other action is shown as normal.
-// Each normal action uses two lines: the label on line 1 and the description on
-// line 2 (indented), matching the pre-PR two-line layout at the fixed card width.
+// Confirmation feedback is delivered via toast (ProfileConfirmToastMsg), so the
+// overlay shows only the static action labels regardless of pendingAction state.
 func (p *ProfileOverlay) renderActions() []string {
 	const actionWidth = 34 // matches the inner content width used in View()
-	warnStyle := lipgloss.NewStyle().Foreground(p.theme.Warning())
-	descStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 
-	var lines []string
-
-	// Logout row.
-	if p.pendingAction == profileActionLogout {
-		lines = append(lines, warnStyle.Render("  Press l again to confirm logout"))
-	} else {
-		row := uikit.ListRow{
-			Label:  "l  Logout",
-			Intent: uikit.RolePlain,
-			Theme:  p.theme,
-		}
-		lines = append(lines, row.Render(actionWidth))
-		lines = append(lines, descStyle.Render("   ends session · keeps Client ID"))
+	logoutRow := uikit.ListRow{
+		Label:  "l  Logout",
+		Intent: uikit.RolePlain,
+		Theme:  p.theme,
+	}
+	forgetRow := uikit.ListRow{
+		Label:  "f  Forget",
+		Intent: uikit.RolePlain,
+		Theme:  p.theme,
 	}
 
-	lines = append(lines, "")
-
-	// Forget row.
-	if p.pendingAction == profileActionForget {
-		lines = append(lines, warnStyle.Render("  Press f again to confirm forget"))
-	} else {
-		row := uikit.ListRow{
-			Label:  "f  Forget",
-			Intent: uikit.RolePlain,
-			Theme:  p.theme,
-		}
-		lines = append(lines, row.Render(actionWidth))
-		lines = append(lines, descStyle.Render("   removes session + Client ID"))
+	return []string{
+		logoutRow.Render(actionWidth),
+		"",
+		forgetRow.Render(actionWidth),
 	}
-
-	return lines
 }
 
 // truncateRunes truncates s to at most max runes, appending … if truncated.

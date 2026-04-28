@@ -176,7 +176,8 @@ func keyMsg(r string) tea.KeyMsg {
 }
 
 // TestProfileOverlay_logoutFirstPress_showsConfirmation verifies that the first press of 'l'
-// shows a confirmation prompt in View() without executing logout.
+// emits a confirmation command and does NOT render any inline confirmation text in View()
+// (confirmation is delivered via toast — see ProfileConfirmToastMsg).
 func TestProfileOverlay_logoutFirstPress_showsConfirmation(t *testing.T) {
 	overlay, store := newTestProfileOverlay()
 	overlay.SetSize(40, 12)
@@ -190,10 +191,10 @@ func TestProfileOverlay_logoutFirstPress_showsConfirmation(t *testing.T) {
 	updated, cmd := overlay.Update(keyMsg("l"))
 	model := updated.(*ProfileOverlay)
 
-	// cmd is now non-nil (emits ProfileConfirmToastMsg) — this is expected.
 	assert.NotNil(t, cmd, "first 'l' press should emit a ProfileConfirmToastMsg command")
-	assert.Contains(t, model.View(), "Press l again to confirm", "first 'l' should show logout confirmation prompt")
-	assert.NotContains(t, model.View(), "!!", "confirmation line should not start with !!")
+	view := model.View()
+	assert.NotContains(t, view, "Press l again", "confirmation must not be rendered inline; toast handles it")
+	assert.Contains(t, view, "Logout", "logout label should still render")
 }
 
 // TestProfileOverlay_logoutSecondPress_emitsLogoutMsg verifies that two consecutive 'l' presses
@@ -218,7 +219,8 @@ func TestProfileOverlay_logoutSecondPress_emitsLogoutMsg(t *testing.T) {
 }
 
 // TestProfileOverlay_forgetFirstPress_showsConfirmation verifies that the first press of 'f'
-// shows a forget confirmation prompt in View() without executing.
+// emits a confirmation command and does NOT render any inline confirmation text in View()
+// (confirmation is delivered via toast — see ProfileConfirmToastMsg).
 func TestProfileOverlay_forgetFirstPress_showsConfirmation(t *testing.T) {
 	overlay, store := newTestProfileOverlay()
 	overlay.SetSize(40, 12)
@@ -232,10 +234,10 @@ func TestProfileOverlay_forgetFirstPress_showsConfirmation(t *testing.T) {
 	updated, cmd := overlay.Update(keyMsg("f"))
 	model := updated.(*ProfileOverlay)
 
-	// cmd is now non-nil (emits ProfileConfirmToastMsg) — this is expected.
 	assert.NotNil(t, cmd, "first 'f' press should emit a ProfileConfirmToastMsg command")
-	assert.Contains(t, model.View(), "Press f again to confirm", "first 'f' should show forget confirmation prompt")
-	assert.NotContains(t, model.View(), "!!", "confirmation line should not start with !!")
+	view := model.View()
+	assert.NotContains(t, view, "Press f again", "confirmation must not be rendered inline; toast handles it")
+	assert.Contains(t, view, "Forget", "forget label should still render")
 }
 
 // TestProfileOverlay_forgetSecondPress_emitsForgetMsg verifies that two consecutive 'f' presses
@@ -277,9 +279,12 @@ func TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew(t *testing
 
 	// 'f' arms forget — now emits a ProfileConfirmToastMsg.
 	assert.NotNil(t, cmd, "pressing 'f' after 'l' should emit a ProfileConfirmToastMsg")
-	view := model.View()
-	assert.Contains(t, view, "Press f again to confirm", "after 'l' then 'f', should show forget confirmation")
-	assert.NotContains(t, view, "Press l again to confirm", "logout confirmation should no longer show")
+	assert.Equal(t, profileActionForget, model.pendingAction, "pendingAction should be armed for forget")
+
+	// Confirmation no longer renders inline — verify toast text from cmd.
+	toast, ok := cmd().(ProfileConfirmToastMsg)
+	require.True(t, ok, "cmd should produce ProfileConfirmToastMsg, got %T", cmd())
+	assert.Contains(t, toast.Text, "confirm forget")
 }
 
 // TestProfileOverlay_Init_ReturnsNil verifies that Init() returns nil.
@@ -347,9 +352,9 @@ func TestProfileOverlay_forgetFirstPress_emitsToastMsg(t *testing.T) {
 	assert.Contains(t, toast.Text, "confirm forget")
 }
 
-// TestProfileOverlay_confirmationView_noDoubleExclamation verifies that the confirmation
-// line in View() does not start with "!!" after the first 'l' press.
-func TestProfileOverlay_confirmationView_noDoubleExclamation(t *testing.T) {
+// TestProfileOverlay_confirmationView_noInlineText verifies that the overlay does not
+// render any inline confirmation prompt after first 'l' press — the toast handles it.
+func TestProfileOverlay_confirmationView_noInlineText(t *testing.T) {
 	store := state.New()
 	store.SetUserProfile(domain.UserProfile{
 		ID:          "user1",
@@ -362,6 +367,6 @@ func TestProfileOverlay_confirmationView_noDoubleExclamation(t *testing.T) {
 
 	updated, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
 	view := updated.(*ProfileOverlay).View()
+	assert.NotContains(t, view, "Press l again", "overlay must not render inline confirmation; toast handles it")
 	assert.NotContains(t, view, "!!")
-	assert.Contains(t, view, "Press l again to confirm")
 }

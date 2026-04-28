@@ -44,8 +44,7 @@ var helpContent = [2][]helpSection{
 		}},
 		{title: "Navigation", bindings: []helpBinding{
 			{"Tab", "Next pane"}, {"Shift+Tab", "Prev pane"},
-			{"↑ / k", "Scroll up"}, {"↓ / j", "Scroll down"},
-			{"Esc", "Close overlay · clear filter · scroll top"},
+			{"Esc", "Close / clear"},
 		}},
 	},
 	{
@@ -55,10 +54,11 @@ var helpContent = [2][]helpSection{
 		}},
 		{title: "Pane Actions", bindings: []helpBinding{
 			{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
+			{"↑ / k", "Scroll up"}, {"↓ / j", "Scroll down"},
 		}},
 		{title: "Profile Overlay", bindings: []helpBinding{
-			{"l", "Logout — end session (keeps Client ID) — press twice"},
-			{"f", "Forget — remove session + Client ID — press twice"},
+			{"l", "Logout"},
+			{"f", "Forget"},
 		}},
 	},
 }

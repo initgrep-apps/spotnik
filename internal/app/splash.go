@@ -25,11 +25,6 @@ func renderSplashView(t theme.Theme, version string, width, height int) string {
 		Foreground(t.TextMuted()).
 		Render("A terminal Spotify client")
 
-	infoPanelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.TextMuted()).
-		Padding(0, 2)
-
 	versionLine := lipgloss.NewStyle().
 		Foreground(t.TextPrimary()).
 		Render("Version " + version)
@@ -41,16 +36,20 @@ func renderSplashView(t theme.Theme, version string, width, height int) string {
 		Gap:   1,
 	}.Render()
 
-	infoPanel := infoPanelStyle.Render(
-		lipgloss.JoinVertical(lipgloss.Left, versionLine, premiumLine),
-	)
+	warningPanel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.TextMuted()).
+		Padding(0, 2).
+		Render(premiumLine)
 
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		bannerStyle.Render(banner),
 		"",
 		tagline,
 		"",
-		infoPanel,
+		versionLine,
+		"",
+		warningPanel,
 	)
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
