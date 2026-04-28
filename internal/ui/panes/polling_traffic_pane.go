@@ -142,7 +142,7 @@ func (p *PollingTrafficPane) View() string {
 		renderedRows = append(renderedRows, icon+"  "+label+"  "+statusStr)
 	}
 
-	return strings.Join(renderedRows, "\n")
+	return lipgloss.NewStyle().PaddingLeft(1).Render(strings.Join(renderedRows, "\n"))
 }
 
 // pollingHumanInterval converts milliseconds to a human-readable interval string.

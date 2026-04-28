@@ -6,8 +6,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	btable "github.com/evertras/bubble-table/table"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -268,4 +270,96 @@ func TestTable_ViewRendersHeader(t *testing.T) {
 	// Headers should appear in the view (rendered text may include ANSI codes around the word)
 	assert.Contains(t, view, "Track")
 	assert.Contains(t, view, "Artist")
+}
+
+// makeRichColumns returns a two-column layout matching GatewayLivePane's design.
+func makeRichColumns() []components.ColumnDef {
+	th := testTheme()
+	return []components.ColumnDef{
+		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary()},
+		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
+	}
+}
+
+// TestTable_SetRichRows_PlainStringCellsRender verifies that a []map[string]any with
+// plain string values for both columns renders the expected text in View().
+func TestTable_SetRichRows_PlainStringCellsRender(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:      makeRichColumns(),
+		Theme:        testTheme(),
+		PlayingIndex: -1,
+		ShowHeader:   false,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(80, 20)
+
+	rows := []map[string]any{
+		{"glyph": "✓", "event": "Request allowed"},
+		{"glyph": "✗", "event": "Request blocked"},
+	}
+	tbl.SetRichRows(rows)
+
+	view := tbl.View()
+	assert.Contains(t, view, "Request allowed", "first event label must appear in view")
+	assert.Contains(t, view, "Request blocked", "second event label must appear in view")
+}
+
+// TestTable_SetRichRows_StyledCellAppliesForeground verifies that a btable.StyledCell
+// in the glyph column renders with its foreground ANSI SGR sequence.
+// TrueColor is forced per-test so ANSI codes are emitted without breaking other
+// tests (e.g. InfoBox centering tests that rely on no-color lipgloss measurements).
+func TestTable_SetRichRows_StyledCellAppliesForeground(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	cfg := components.TableConfig{
+		Columns:      makeRichColumns(),
+		Theme:        testTheme(),
+		PlayingIndex: -1,
+		ShowHeader:   false,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(80, 20)
+
+	redStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff0000"))
+	styledGlyph := btable.NewStyledCell("✓", redStyle)
+
+	rows := []map[string]any{
+		{"glyph": styledGlyph, "event": "styled event"},
+	}
+	tbl.SetRichRows(rows)
+
+	view := tbl.View()
+	// The red foreground should produce an ANSI 38 (set foreground colour) sequence.
+	assert.Contains(t, view, "\x1b[38", "styled cell must produce ANSI foreground escape in rendered output")
+	assert.Contains(t, view, "styled event", "event column label must appear in view")
+}
+
+// TestTable_SetRichRows_DoesNotAffectExistingSetRows verifies that calling SetRichRows
+// after SetRows replaces the data and no leftover string rows appear.
+func TestTable_SetRichRows_DoesNotAffectExistingSetRows(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:      makeRichColumns(),
+		Theme:        testTheme(),
+		PlayingIndex: -1,
+		ShowHeader:   false,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(80, 20)
+
+	// First load plain string rows via SetRows.
+	tbl.SetRows([]map[string]string{
+		{"glyph": "A", "event": "old plain row"},
+	})
+	viewBefore := tbl.View()
+	assert.Contains(t, viewBefore, "old plain row", "SetRows data must appear before SetRichRows")
+
+	// Now replace with rich rows via SetRichRows.
+	tbl.SetRichRows([]map[string]any{
+		{"glyph": "B", "event": "new rich row"},
+	})
+	viewAfter := tbl.View()
+	assert.Contains(t, viewAfter, "new rich row", "SetRichRows data must appear after call")
+	assert.NotContains(t, viewAfter, "old plain row", "SetRows data must not appear after SetRichRows replaces it")
 }

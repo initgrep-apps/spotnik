@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	btable "github.com/evertras/bubble-table/table"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
@@ -41,12 +43,16 @@ type GatewayLivePane struct {
 }
 
 // NewGatewayLivePane creates a GatewayLivePane with the given store and theme.
-// The table has a single column ("row") with no header.
+// The table uses a two-column layout (glyph, event) with no header. Per-row
+// glyph foreground is applied via btable.StyledCell so the row-level selection
+// background is not interrupted by embedded ANSI resets.
 func NewGatewayLivePane(s state.StateReader, th theme.Theme) *GatewayLivePane {
 	columns := []components.ColumnDef{
-		// Empty color so the column applies no foreground — ListRow.Render() supplies
-		// its own ANSI intent colours, which must not be overridden by the column style.
-		{Key: "row", Header: "", FlexFactor: 1, Color: ""},
+		// FlexFactor 1:30 reserves a narrow glyph column (one Unicode rune plus
+		// bubble-table column padding) and gives the remainder to the event text.
+		// Color on the glyph column is a fallback; per-row StyledCell overrides it.
+		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary()},
+		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:      columns,
@@ -92,7 +98,8 @@ func (p *GatewayLivePane) SetTheme(th theme.Theme) {
 	p.theme = th
 	newFilter := components.NewFilter(th)
 	columns := []components.ColumnDef{
-		{Key: "row", Header: "", FlexFactor: 1, Color: ""},
+		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary()},
+		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
 	}
 	newTable := components.NewTable(components.TableConfig{
 		Columns:      columns,
@@ -291,29 +298,35 @@ func buildGatewayLiveRow(e domain.GatewayEvent) (gatewayLiveRow, bool) {
 	}, true
 }
 
-// buildTableRows converts the buffer to table rows, applying the live filter query.
+// buildTableRows converts the buffer to rich table rows, applying the live filter
+// query. Per-row glyph foreground is applied via btable.StyledCell so that
+// bubble-table's row-level selection background (SelectedBg) is not interrupted
+// by embedded ANSI resets. The event column receives a plain string.
+//
 // No-ops when width is zero to avoid rendering rows with negative label width.
 func (p *GatewayLivePane) buildTableRows() {
 	if p.width == 0 {
 		return
 	}
 	query := strings.ToLower(p.Filter().Query())
-	rows := make([]map[string]string, 0, len(p.buffer))
+	mode := uikit.ActiveMode()
+	rows := make([]map[string]any, 0, len(p.buffer))
 
 	for _, row := range p.buffer {
 		if query != "" && !strings.Contains(row.matchString, query) {
 			continue
 		}
-		rendered := uikit.ListRow{
-			Glyph:  row.glyphRole,
-			Label:  row.label,
-			Intent: row.intent,
-			Theme:  p.theme,
-		}.Render(p.width - 2)
-		rows = append(rows, map[string]string{"row": rendered})
+		glyphCell := btable.NewStyledCell(
+			uikit.GlyphFor(row.glyphRole, mode),
+			lipgloss.NewStyle().Foreground(uikit.ColourFor(row.intent, p.theme)),
+		)
+		rows = append(rows, map[string]any{
+			"glyph": glyphCell,
+			"event": row.label,
+		})
 	}
 
-	p.Table().SetRows(rows)
+	p.Table().SetRichRows(rows)
 }
 
 // resizeTable adjusts the table height to account for the filter bar when active.

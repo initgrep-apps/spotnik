@@ -154,7 +154,8 @@ func (p *GatewayHealthPane) View() string {
 		dedupStyle.Render(uikit.GlyphFor(uikit.GlyphRateLimit, mode)),
 		"Dedup", dedupStyle.Render(dedupData), labelWidth, mutedStyle)
 
-	return strings.Join([]string{tokenRow, slotRow, backoffRow, dedupRow}, "\n")
+	return lipgloss.NewStyle().PaddingLeft(1).Render(
+		strings.Join([]string{tokenRow, slotRow, backoffRow, dedupRow}, "\n"))
 }
 
 // renderRow composes a single grid row: icon  label  data.
