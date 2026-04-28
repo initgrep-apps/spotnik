@@ -63,8 +63,5 @@ Playback keys are always active regardless of which pane has focus.
 | Key | Action |
 |-----|--------|
 | `Tab` / `Shift+Tab` | Cycle search category |
-| `Enter` | Play selected result |
 | `Ctrl+A` | Add result to queue |
-| `Ctrl+U` | Clear search input |
 | `PgDn` / `PgUp` | Next / previous result page |
-| `Esc` | Close search overlay |
