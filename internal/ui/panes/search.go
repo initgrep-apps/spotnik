@@ -867,13 +867,10 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		Render(inner)
 
 	cfg := layout.BorderConfig{
-		Width:  w,
-		Height: h,
-		Title:  "Results",
-		Actions: []layout.Action{
-			{Key: "Enter", Label: "play"},
-			{Key: "Ctrl+A", Label: "queue"},
-		},
+		Width:   w,
+		Height:  h,
+		Title:   "Results",
+		Actions: nil,
 		// SeekBar() (cyan-family) is distinct from Search's ActiveBorder() (bright blue/green)
 		// and Keys' TextMuted() (dim), giving the three panels a clear visual hierarchy.
 		AccentColor: o.theme.SeekBar(),

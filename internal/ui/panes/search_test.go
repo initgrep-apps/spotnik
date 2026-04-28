@@ -637,19 +637,6 @@ func TestSearchOverlay_View_BtopBorderTitle(t *testing.T) {
 	assert.Contains(t, view, "Search", "border title should contain 'Search'")
 }
 
-// TestSearchOverlay_View_BtopBorderActions verifies action shortcuts appear in the border.
-// In the three-panel design, "Enter play" and "Ctrl+A queue" appear in the Results panel border.
-func TestSearchOverlay_View_BtopBorderActions(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 40)
-
-	view := o.View()
-
-	// Results panel border shows "Enter play" and "Ctrl+A queue" actions.
-	assert.Contains(t, view, "play", "results border should show 'play' action")
-	assert.Contains(t, view, "queue", "results border should show 'queue' action")
-}
-
 // --- Story 82: Three-panel layout tests ---
 
 // TestSearchTab_EnumValues verifies numTabs==5 and tabToAPITypes returns correct types.
@@ -3002,4 +2989,19 @@ func TestSearchOverlay_View_KeysPanel_SingleLine(t *testing.T) {
 	assert.NotContains(t, plain, "enter play", "Enter play must not be advertised")
 	assert.NotContains(t, plain, "esc close", "Esc close must not be advertised")
 	assert.NotContains(t, plain, "ctrl+u clear", "Ctrl+U must not be advertised")
+}
+
+// TestSearchOverlay_View_ResultsPanel_NoCornerActions verifies the Results
+// panel border no longer carries the "Enter play / Ctrl+A queue" corner-notch
+// actions. The bottom keybar is the single source of truth for visible
+// bindings.
+func TestSearchOverlay_View_ResultsPanel_NoCornerActions(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	view := o.View()
+
+	plain := stripANSI(view)
+
+	assert.NotContains(t, plain, "Enter play", "corner-notch 'Enter play' must be removed")
+	assert.NotContains(t, plain, "Ctrl+A queue", "corner-notch 'Ctrl+A queue' must be removed")
 }
