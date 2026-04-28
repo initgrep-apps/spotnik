@@ -745,9 +745,6 @@ func TestGatewayLivePane_View_ColumnAlignmentMatchesNetworkLog(t *testing.T) {
 	}
 
 	for _, line := range rowLines {
-		// Strip ANSI codes for width measurement.
-		visible := lipgloss.NewStyle().Render("") // force lipgloss initialisation
-		_ = visible
 		// Find the double-space that bubble-table places at the column boundary.
 		// Before that separator is the glyph column content; after is the event text.
 		stripped := stripANSI(line)
