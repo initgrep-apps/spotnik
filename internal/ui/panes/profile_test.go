@@ -8,6 +8,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -425,6 +426,23 @@ func TestProfileOverlay_View_KeyBarLine(t *testing.T) {
 	// Old stacked-row format must be gone.
 	assert.NotContains(t, plain, "l  Logout", "old stacked Logout row must be removed")
 	assert.NotContains(t, plain, "f  Forget", "old stacked Forget row must be removed")
+}
+
+// TestProfileOverlay_View_ASCIIGlyphs validates the glyph system wiring by
+// verifying ASCII-mode renders the ASCII variants (per uikit.GlyphFor).
+func TestProfileOverlay_View_ASCIIGlyphs(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	st := newPremiumProfileStore() // "Irshad", "IN", premium
+	p := NewProfileOverlay(st, theme.Load("black"))
+	p.SetSize(80, 40)
+
+	plain := stripANSI(p.View())
+
+	assert.Regexp(t, `\(\*\)\s+Irshad`, plain, "name row: (*) in ASCII mode")
+	assert.Regexp(t, `\*P\s+Premium`, plain, "plan row: *P in ASCII mode")
+	assert.Regexp(t, `\( \)\s+IN`, plain, "region row: ( ) in ASCII mode")
 }
 
 // TestProfileOverlay_View_NoSeparators verifies the horizontal rule lines

@@ -17,8 +17,9 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// maxProfileNameLen is the maximum number of runes shown for the display name.
-const maxProfileNameLen = 20
+// maxProfileNameLen is the maximum runes shown for the display name.
+// Sized to fit innerWidth=22 with the widest ASCII glyph (3 cols) + 2-space gap.
+const maxProfileNameLen = 17
 
 // profileAction represents the pending confirmation action in the profile overlay.
 type profileAction int
