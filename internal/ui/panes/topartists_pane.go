@@ -39,15 +39,10 @@ var topArtistsRangeLabels = map[string]string{
 // by artist name and per-pane time range cycling via the g key.
 // Enter on a selected row emits PlayContextMsg to start playback of that artist.
 type TopArtistsPane struct {
-	BasePane
+	*TableBasedPane
 
 	// timeRange is the currently active Spotify time range for top artists.
 	timeRange string
-
-	// table renders the top artists list.
-	table *components.Table
-	// filter provides in-pane text filtering by artist name.
-	filter *components.Filter
 }
 
 // NewTopArtistsPane creates a TopArtistsPane with the given store, theme, and focus state.
@@ -70,10 +65,8 @@ func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *T
 	})
 
 	a := &TopArtistsPane{
-		BasePane:  BasePane{store: store, theme: th, focused: focused},
-		timeRange: "short_term",
-		table:     t,
-		filter:    components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, components.NewFilter(th)),
+		timeRange:      "short_term",
 	}
 	t.SetFocused(focused)
 	a.refreshRows()
@@ -93,15 +86,12 @@ func (a *TopArtistsPane) ToggleKey() int { return 8 }
 func (a *TopArtistsPane) TimeRange() string { return a.timeRange }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// When the filter is active, only shows the Esc/close hint.
-// Otherwise shows filter (f) and time range cycle (g) with the current range as label.
+// Shows filter (f) and time range cycle (g) with the current range as label.
+// The close-notch is retired — the border renderer uses FilterQuery instead.
 func (a *TopArtistsPane) Actions() []layout.Action {
-	if a.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
 	rangeLabel := topArtistsRangeLabels[a.timeRange]
 	return []layout.Action{
-		{Key: "f", Label: "filter"},
+		a.BaseFilterAction(),
 		{Key: "g", Label: rangeLabel},
 	}
 }
@@ -109,23 +99,16 @@ func (a *TopArtistsPane) Actions() []layout.Action {
 // Init satisfies tea.Model. TopArtistsPane has no startup command.
 func (a *TopArtistsPane) Init() tea.Cmd { return nil }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (a *TopArtistsPane) HasActiveFilter() bool { return a.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (a *TopArtistsPane) ActiveFilterQuery() string { return a.filter.Query() }
-
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (a *TopArtistsPane) SetFocused(focused bool) {
-	a.BasePane.SetFocused(focused)
-	a.table.SetFocused(focused && !a.filter.IsActive())
+	a.TableBasedPane.SetFocused(focused)
+	a.Table().SetFocused(focused && !a.Filter().IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (a *TopArtistsPane) SetSize(width, height int) {
-	a.BasePane.SetSize(width, height)
-	a.filter.SetWidth(width)
+	a.TableBasedPane.SetSize(width, height)
+	a.Filter().SetWidth(width)
 	a.resizeTable()
 }
 
@@ -144,35 +127,23 @@ func (a *TopArtistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if a.filter.IsActive() {
-		cmd := a.filter.Update(msg)
-		if !a.filter.IsActive() {
-			a.table.SetFocused(true)
-			a.resizeTable()
-		}
-		a.refreshRows()
-		return a, cmd
-	}
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return a, nil
 	}
 
-	switch {
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f":
-		a.filter.Toggle()
-		a.table.SetFocused(false)
-		a.resizeTable()
-		return a, nil
+	// Delegate filter-key routing to the base.
+	if consumed, cmd := a.HandleFilterKey(keyMsg, a.refreshRows, a.resizeTable); consumed {
+		return a, cmd
+	}
 
+	switch {
 	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "g":
 		return a.cycleTimeRange()
 
 	case keyMsg.Type == tea.KeyEnter:
 		artists := a.filteredArtists()
-		idx := a.table.SelectedIndex()
+		idx := a.Table().SelectedIndex()
 		if idx >= 0 && idx < len(artists) {
 			uri := artists[idx].URI
 			return a, func() tea.Msg { return PlayContextMsg{ContextURI: uri} }
@@ -180,19 +151,8 @@ func (a *TopArtistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Esc: first clear a committed filter query; second press resets scroll.
-	if keyMsg.Type == tea.KeyEscape {
-		if a.filter.Query() != "" {
-			a.filter.ClearQuery()
-			a.refreshRows()
-			return a, nil
-		}
-		a.table.GotoTop()
-		return a, nil
-	}
-
 	// Forward navigation to the table.
-	cmd := a.table.Update(keyMsg)
+	cmd := a.Table().Update(keyMsg)
 	return a, cmd
 }
 
@@ -223,10 +183,10 @@ func (a *TopArtistsPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 // View renders the top artists pane content. Pure — reads state, returns string.
 func (a *TopArtistsPane) View() string {
 	var parts []string
-	if a.filter.IsActive() {
-		parts = append(parts, a.filter.View(a.width))
+	if a.Filter().IsActive() {
+		parts = append(parts, a.Filter().View(a.width))
 	}
-	parts = append(parts, a.table.View())
+	parts = append(parts, a.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -246,18 +206,18 @@ func (a *TopArtistsPane) refreshRows() {
 			"flw":   formatArtistFollowers(artist.Followers.Total),
 		}
 	}
-	a.table.SetRows(rows)
+	a.Table().SetRows(rows)
 }
 
 // filteredArtists returns the top artists for the current time range, filtered by query.
 func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 	all := a.store.TopArtists(a.timeRange)
-	if a.filter.Query() == "" {
+	if a.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.FullArtist, 0, len(all))
 	for _, artist := range all {
-		if a.filter.MatchesAny(artist.Name) {
+		if a.Filter().MatchesAny(artist.Name) {
 			result = append(result, artist)
 		}
 	}
@@ -266,6 +226,7 @@ func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — existing behaviour.
 func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
@@ -274,7 +235,8 @@ func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},
 	}
-	a.table, a.filter = components.RebuildTableTheme(th, cols, a.table.Rows(), a.focused)
+	newTable, newFilter := components.RebuildTableTheme(th, cols, a.Table().Rows(), a.focused)
+	a.SwapTableAndFilter(newTable, newFilter)
 	a.resizeTable()
 	a.refreshRows()
 }
@@ -282,13 +244,13 @@ func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (a *TopArtistsPane) resizeTable() {
 	tableHeight := a.height
-	if a.filter.IsActive() {
+	if a.Filter().IsActive() {
 		tableHeight--
 	}
 	if tableHeight < 0 {
 		tableHeight = 0
 	}
-	a.table.SetSize(a.width, tableHeight)
+	a.Table().SetSize(a.width, tableHeight)
 }
 
 // artistPopStars converts a Spotify popularity score (0–100) to a 5-star visual grade

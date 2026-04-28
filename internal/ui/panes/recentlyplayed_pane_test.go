@@ -66,11 +66,12 @@ func TestRecentlyPlayedPane_Actions_FilterActive(t *testing.T) {
 	pane, _ := newTestRecentlyPlayedPane()
 	pane.SetFocused(true)
 	pane.SetSize(120, 20)
-	// Toggle filter on
+	// Toggle filter on — Actions() must still return {f, filter}, not {Esc, close}.
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
-	assert.Equal(t, "Esc", actions[0].Key)
+	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "filter", actions[0].Label)
 }
 
 func TestRecentlyPlayedPane_RendersTrackNames(t *testing.T) {

@@ -37,13 +37,8 @@ type networkLogRow struct {
 // all API requests read from the GatewayEventLog via cursor-based reads.
 // It does NOT import api/.
 type NetworkLogPane struct {
-	store             state.StateReader
-	theme             theme.Theme
-	table             *components.Table
-	filter            *components.Filter
-	focused           bool
-	width             int
-	height            int
+	*TableBasedPane
+
 	eventCursor       uint64
 	completedRequests []networkLogRow
 	// pendingDecisions accumulates decision events (allowed/blocked/dedupJoined)
@@ -79,10 +74,7 @@ func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	})
 
 	p := &NetworkLogPane{
-		store:            s,
-		theme:            th,
-		table:            t,
-		filter:           components.NewFilter(th),
+		TableBasedPane:   NewTableBasedPane(s, th, false, t, components.NewFilter(th)),
 		pendingDecisions: make(map[uint64]domain.EventKind),
 	}
 	t.SetFocused(false)
@@ -99,47 +91,26 @@ func (p *NetworkLogPane) Title() string { return "Network Log" }
 // ToggleKey returns 5 — the Page B toggle key for the Network Log pane.
 func (p *NetworkLogPane) ToggleKey() int { return 5 }
 
-// Actions returns shortcut hints based on filter state.
-func (p *NetworkLogPane) Actions() []layout.Action {
-	if p.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
-	return []layout.Action{
-		{Key: "f", Label: "filter"},
-	}
-}
-
 // SetSize updates the content area dimensions.
 func (p *NetworkLogPane) SetSize(width, height int) {
-	p.width = width
-	p.height = height
-	p.filter.SetWidth(width)
+	p.TableBasedPane.SetSize(width, height)
+	p.Filter().SetWidth(width)
 	p.resizeTable()
 }
 
 // SetFocused updates the keyboard focus state.
 func (p *NetworkLogPane) SetFocused(focused bool) {
-	p.focused = focused
-	p.table.SetFocused(focused && !p.filter.IsActive())
+	p.TableBasedPane.SetFocused(focused)
+	p.Table().SetFocused(focused && !p.Filter().IsActive())
 }
-
-// IsFocused returns whether this pane has keyboard focus.
-func (p *NetworkLogPane) IsFocused() bool { return p.focused }
-
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (p *NetworkLogPane) HasActiveFilter() bool { return p.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (p *NetworkLogPane) ActiveFilterQuery() string { return p.filter.Query() }
 
 // SelectedIndex returns the current table cursor row (0-based).
 // Exported for testing.
-func (p *NetworkLogPane) SelectedIndex() int { return p.table.SelectedIndex() }
+func (p *NetworkLogPane) SelectedIndex() int { return p.Table().SelectedIndex() }
 
 // TableCurrentPage returns the current page number (1-indexed) of the inner table.
 // Exported for testing the Esc scroll-reset behaviour (story 173).
-func (p *NetworkLogPane) TableCurrentPage() int { return p.table.CurrentPage() }
+func (p *NetworkLogPane) TableCurrentPage() int { return p.Table().CurrentPage() }
 
 // EventCursor returns the current event cursor position.
 // Exported for testing.
@@ -168,55 +139,24 @@ func (p *NetworkLogPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !p.focused {
 			return p, nil
 		}
-		return p.handleKey(m)
-	}
-	return p, nil
-}
-
-// handleKey routes key events for the network log pane.
-func (p *NetworkLogPane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// When filter is active, forward all keys to the filter.
-	if p.filter.IsActive() {
-		cmd := p.filter.Update(m)
-		if !p.filter.IsActive() {
-			p.table.SetFocused(true)
-			p.resizeTable()
+		// Delegate filter-key routing to the base.
+		if consumed, cmd := p.HandleFilterKey(m, p.buildTableRows, p.resizeTable); consumed {
+			return p, cmd
 		}
-		p.buildTableRows()
+		// Forward j/k and other navigation to the table.
+		cmd := p.Table().Update(m)
 		return p, cmd
 	}
-
-	// 'f' activates the filter.
-	if m.Type == tea.KeyRunes && string(m.Runes) == "f" {
-		p.filter.Toggle()
-		p.table.SetFocused(false)
-		p.resizeTable()
-		return p, nil
-	}
-
-	// Esc: first clear a committed filter query; second press resets scroll.
-	if m.Type == tea.KeyEscape {
-		if p.filter.Query() != "" {
-			p.filter.ClearQuery()
-			p.refreshRows()
-			return p, nil
-		}
-		p.table.GotoTop()
-		return p, nil
-	}
-
-	// Forward j/k and other navigation to the table.
-	cmd := p.table.Update(m)
-	return p, cmd
+	return p, nil
 }
 
 // View renders the network log pane. Pure — no side effects.
 func (p *NetworkLogPane) View() string {
 	var parts []string
-	if p.filter.IsActive() {
-		parts = append(parts, p.filter.View(p.width))
+	if p.Filter().IsActive() {
+		parts = append(parts, p.Filter().View(p.width))
 	}
-	parts = append(parts, p.table.View())
+	parts = append(parts, p.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -322,7 +262,7 @@ func (p *NetworkLogPane) refreshRows() {
 // buildTableRows iterates completedRequests in reverse (newest-first), applies
 // the filter, and sets the table rows.
 func (p *NetworkLogPane) buildTableRows() {
-	query := p.filter.Query()
+	query := p.Filter().Query()
 	rows := make([]map[string]string, 0, len(p.completedRequests))
 
 	// Iterate newest-first.
@@ -349,7 +289,7 @@ func (p *NetworkLogPane) buildTableRows() {
 
 		// Apply filter: match on endpoint path, status code, priority, or decision.
 		if query != "" {
-			if !p.filter.MatchesAny(row.path, statusStr, pri, dec) {
+			if !p.Filter().MatchesAny(row.path, statusStr, pri, dec) {
 				continue
 			}
 		}
@@ -364,14 +304,14 @@ func (p *NetworkLogPane) buildTableRows() {
 			"decision": dec,
 		})
 	}
-	p.table.SetRows(rows)
+	p.Table().SetRows(rows)
 }
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — existing behaviour.
 func (p *NetworkLogPane) SetTheme(th theme.Theme) {
 	p.theme = th
-	p.filter = components.NewFilter(th)
 	columns := []components.ColumnDef{
 		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex()},
 		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary()},
@@ -381,25 +321,20 @@ func (p *NetworkLogPane) SetTheme(th theme.Theme) {
 		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex()},
 		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary()},
 	}
-	p.table = components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	})
-	p.table.SetFocused(p.focused)
+	newTable, newFilter := components.RebuildTableTheme(th, columns, p.Table().Rows(), p.focused)
+	p.SwapTableAndFilter(newTable, newFilter)
 	p.resizeTable()
-	p.refreshRows()
+	p.buildTableRows()
 }
 
 // resizeTable adjusts table height to account for the filter bar when active.
 func (p *NetworkLogPane) resizeTable() {
 	h := p.height
-	if p.filter.IsActive() {
+	if p.Filter().IsActive() {
 		h--
 	}
 	if h < 0 {
 		h = 0
 	}
-	p.table.SetSize(p.width, h)
+	p.Table().SetSize(p.width, h)
 }

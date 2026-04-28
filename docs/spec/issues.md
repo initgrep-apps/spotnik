@@ -496,3 +496,26 @@ Items to log:
 Items to log:
 1. Focus order in spanner rows places the spanner (`GatewayLive`) before its left sibling (`GatewayHealth`) in row 1. The `focusOrder` doc comment says "row-by-row, left-to-right" but spanner cells are added at origin row in the loop before non-spanner cells. Harmless in practice (Tab cycles through all panes) but the ordering is slightly unintuitive. Reorder if the doc comment is ever enforced.
 2. Step 4's non-spanner placement loop has a latent edge case: if a continuation row contains 2+ non-spanner cells that straddle a reserved spanner interval, the proportional `w = available * weight / totalWWeight` for a non-last cell could place it overlapping the reserved interval (the `nextFreeX` call is at the top of the loop, but the proportional `w` may extend into the reserved zone). `PresetNerdStatus` never exercises this (continuation rows have at most one non-spanner cell), but a future preset with multiple non-spanner cells in a continuation row should be tested explicitly.
+
+> **Resolved by story 181 (PR #230, 2026-04-28):** RowSpan retired entirely; recompute simplified to a flat two-loop algorithm. Both items above are no longer applicable.
+
+---
+
+## Story 181 — TableBasedPane refactor: minor follow-ups
+
+**Found:** 2026-04-28 | **Source:** PR #230 Review (round 1)
+**Feature:** 14-page-b-redesign
+
+Items to log:
+
+1. `NewTableBasedPane` accepts `nil` for `table` or `filter` silently. The first call to any forwarded method (e.g. `HasActiveFilter()`) would nil-deref deep in `HandleFilterKey` rather than at the construction call site. Today's nine call sites all pass non-nil, but a constructor-level nil check would surface the failure at app startup. One-line fix; symmetric with the existing nil-hook fallback inside `HandleFilterKey`.
+
+2. The pointer-embedding requirement (`*TableBasedPane` rather than `TableBasedPane` value) is convention only — Go has no syntax to enforce it. A future contributor switching to value embedding would silently break `SwapTableAndFilter` semantics on the `SetTheme` path. A reflection-based test that walks every registered pane and asserts the embed kind is `reflect.Ptr` would close the loop.
+
+3. `BorderConfig.FilterQuery` doc comment in `internal/ui/layout/border.go:35-39` says "non-empty when filter mode is active." Slightly imprecise — filter mode can be active with an empty query (immediately after pressing `f`, before typing). The actual semantics: the field always reflects `Filter().Query()`; rendering keys on `FilterQuery != ""`. Reword to "FilterQuery is the live filter query string. When non-empty, ..."
+
+4. `recompute` in `internal/ui/layout/layout.go:62-64` early-returns on invalid preset index without resetting `m.focusOrder`. The `len(liveRows) == 0` branch (line 92-95) does reset; the early-return path doesn't. Today no code path can hit this branch (preset indexes are always validated by `SetPreset`/`CyclePreset`), but the inconsistency is a defensive one-liner away. Either reset there too, or document the unreachability.
+
+5. `GatewayLivePane.buildTableRows()` no-ops when `p.width == 0`. If a `TickMsg` arrives before the first `WindowSizeMsg`, the buffer grows correctly but the table never gets the rows; user sees a one-tick flicker once sizing is applied. Add `p.buildTableRows()` at the end of `SetSize` once `w > 0` to close the gap.
+
+6. `Cell`, `Row`, `Preset` shapes (post-RowSpan retirement) lack a `Validate()` helper for invariants (positive `WidthWeight`/`HeightWeight`, unique `PaneID` in Grid, `Visible` map consistency with cells). A misconfigured preset literal would silently produce a blank screen. Cheap defensive helper; ideal place is a unit test that walks `PageAPresets` and `PageBPresets` once.

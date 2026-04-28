@@ -73,8 +73,9 @@ func TestPaneChrome_FilterMode_NoArrow(t *testing.T) {
 	}
 	lines := uikit.Capture(pc.Render(""))
 	assert.NotContains(t, lines[0], "ᐅ")
-	assert.Contains(t, lines[0], `filtering: "rock"`)
-	assert.Contains(t, lines[0], "╮ Esc close ╭")
+	assert.Contains(t, lines[0], "f(rock)")
+	assert.NotContains(t, lines[0], `filtering:`)
+	assert.NotContains(t, lines[0], "╮ Esc close ╭")
 }
 
 func TestPaneChrome_UnfocusedTitleNotBold(t *testing.T) {

@@ -1,6 +1,6 @@
 ---
 title: "Page B Redesign (Nerd Status)"
-status: in-progress
+status: done
 ---
 
 ## Description
@@ -78,3 +78,13 @@ TDD guide for every story. Each story cross-references the matching `## Task N` 
   line-by-line compositor and corrected `focusOrder` so spanners are appended after their
   origin-row siblings (Tab now walks left-to-right). Regression tests pin both the
   Page B `VisiblePanes()` order and the rendered output's column alignment.
+
+- **PR #230 (2026-04-28):** Story 181 — structural refactor that retired RowSpan and
+  consolidated nine panes' duplicated filter routing into `TableBasedPane`. Replaced
+  the binary border filter fallback with a graded `f(query) → f(qu…) → f(…) → drop`
+  shrink (helper `FormatFilterLabel` in `border.go`). Removed the per-pane
+  `╮ Esc close ╭` notch (`Esc` is documented globally in the help overlay).
+  `GatewayLivePane` switched from Enter-to-apply to live filtering, matching the
+  other eight panes. `Cell.RowSpan` and the spanner-aware `recompute()` are deleted;
+  `PresetNerdStatus` is reverted to a flat 1:1:3 middle row using the same engine
+  Page A uses successfully.

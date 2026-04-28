@@ -241,3 +241,9 @@ func (t *Table) GotoTop() {
 func (t *Table) CurrentPage() int {
 	return (&t.inner).CurrentPage()
 }
+
+// GotoPage navigates to the given page number (1-indexed). Used in tests to
+// seed a non-first-page state before verifying that GotoTop resets it.
+func (t *Table) GotoPage(page int) {
+	t.inner = t.inner.WithCurrentPage(page)
+}

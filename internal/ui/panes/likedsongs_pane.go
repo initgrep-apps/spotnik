@@ -24,14 +24,9 @@ var _ layout.FilterQueryPane = &LikedSongsPane{}
 // LikedSongsPane is the Bubble Tea model for the Liked Songs pane (toggle key 5).
 // It renders a dense bubble-table of the user's liked tracks with columns for index,
 // track name, artist, and duration. It supports in-pane filtering by track name and
-// artist, and the 'i' key toggles like/unlike for the selected track.
+// artist.
 type LikedSongsPane struct {
-	BasePane
-
-	// table renders the liked track list.
-	table *components.Table
-	// filter provides in-pane text filtering by track name and artist.
-	filter *components.Filter
+	*TableBasedPane
 }
 
 // NewLikedSongsPane creates a LikedSongsPane with the given store, theme, and focus state.
@@ -53,9 +48,7 @@ func NewLikedSongsPane(store state.StateReader, th theme.Theme, focused bool) *L
 	})
 
 	l := &LikedSongsPane{
-		BasePane: BasePane{store: store, theme: th, focused: focused},
-		table:    t,
-		filter:   components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, components.NewFilter(th)),
 	}
 	t.SetFocused(focused)
 	l.refreshRows()
@@ -71,36 +64,19 @@ func (l *LikedSongsPane) Title() string { return "Liked Songs" }
 // ToggleKey returns 5 — the number key for btop-style pane toggling.
 func (l *LikedSongsPane) ToggleKey() int { return 5 }
 
-// Actions returns the pane-specific shortcut hints displayed in the border.
-func (l *LikedSongsPane) Actions() []layout.Action {
-	if l.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
-	return []layout.Action{
-		{Key: "f", Label: "filter"},
-	}
-}
-
 // Init satisfies tea.Model. LikedSongsPane has no startup command.
 func (l *LikedSongsPane) Init() tea.Cmd { return nil }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (l *LikedSongsPane) HasActiveFilter() bool { return l.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (l *LikedSongsPane) ActiveFilterQuery() string { return l.filter.Query() }
-
 // SetFocused updates the keyboard focus state and propagates it to the table.
 func (l *LikedSongsPane) SetFocused(focused bool) {
-	l.BasePane.SetFocused(focused)
-	l.table.SetFocused(focused && !l.filter.IsActive())
+	l.TableBasedPane.SetFocused(focused)
+	l.Table().SetFocused(focused && !l.Filter().IsActive())
 }
 
 // SetSize updates the render dimensions and propagates them to the table and filter.
 func (l *LikedSongsPane) SetSize(width, height int) {
-	l.BasePane.SetSize(width, height)
-	l.filter.SetWidth(width)
+	l.TableBasedPane.SetSize(width, height)
+	l.Filter().SetWidth(width)
 	l.resizeTable()
 }
 
@@ -117,32 +93,19 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return l, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if l.filter.IsActive() {
-		cmd := l.filter.Update(msg)
-		if !l.filter.IsActive() {
-			l.table.SetFocused(true)
-			l.resizeTable()
-		}
-		l.refreshRows()
-		return l, cmd
-	}
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return l, nil
 	}
 
-	switch {
-	case keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "f":
-		l.filter.Toggle()
-		l.table.SetFocused(false)
-		l.resizeTable()
-		return l, nil
+	// Delegate filter-key routing to the base.
+	if consumed, cmd := l.HandleFilterKey(keyMsg, l.refreshRows, l.resizeTable); consumed {
+		return l, cmd
+	}
 
-	case keyMsg.Type == tea.KeyEnter:
+	if keyMsg.Type == tea.KeyEnter {
 		tracks := l.filteredTracks()
-		idx := l.table.SelectedIndex()
+		idx := l.Table().SelectedIndex()
 		if idx >= 0 && idx < len(tracks) {
 			uri := tracks[idx].Track.URI
 			return l, func() tea.Msg {
@@ -153,22 +116,10 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return l, nil
-
-	}
-
-	// Esc: first clear a committed filter query; second press resets scroll.
-	if keyMsg.Type == tea.KeyEscape {
-		if l.filter.Query() != "" {
-			l.filter.ClearQuery()
-			l.refreshRows()
-			return l, nil
-		}
-		l.table.GotoTop()
-		return l, nil
 	}
 
 	// Forward navigation to the table.
-	cmd := l.table.Update(keyMsg)
+	cmd := l.Table().Update(keyMsg)
 	return l, cmd
 }
 
@@ -176,11 +127,11 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (l *LikedSongsPane) View() string {
 	var parts []string
 
-	if l.filter.IsActive() {
-		parts = append(parts, l.filter.View(l.width))
+	if l.Filter().IsActive() {
+		parts = append(parts, l.Filter().View(l.width))
 	}
 
-	parts = append(parts, l.table.View())
+	parts = append(parts, l.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -204,14 +155,14 @@ func (l *LikedSongsPane) refreshRows() {
 			"duration": formatDurationMs(st.Track.DurationMs),
 		}
 	}
-	l.table.SetRows(rows)
+	l.Table().SetRows(rows)
 }
 
 // filteredTracks returns the liked tracks filtered by the current filter query.
 // Filter matches on track name OR artist name.
 func (l *LikedSongsPane) filteredTracks() []domain.SavedTrack {
 	all := l.store.LikedTracks()
-	if l.filter.Query() == "" {
+	if l.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.SavedTrack, 0, len(all))
@@ -220,7 +171,7 @@ func (l *LikedSongsPane) filteredTracks() []domain.SavedTrack {
 		if len(st.Track.Artists) > 0 {
 			artistName = st.Track.Artists[0].Name
 		}
-		if l.filter.MatchesAny(st.Track.Name, artistName) {
+		if l.Filter().MatchesAny(st.Track.Name, artistName) {
 			result = append(result, st)
 		}
 	}
@@ -229,6 +180,7 @@ func (l *LikedSongsPane) filteredTracks() []domain.SavedTrack {
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 // Called when the user switches themes at runtime.
+// NOTE: rebuilding Filter resets the active state and query — existing behaviour.
 func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 	l.theme = th
 	cols := []components.ColumnDef{
@@ -237,7 +189,8 @@ func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
-	l.table, l.filter = components.RebuildTableTheme(th, cols, l.table.Rows(), l.focused)
+	newTable, newFilter := components.RebuildTableTheme(th, cols, l.Table().Rows(), l.focused)
+	l.SwapTableAndFilter(newTable, newFilter)
 	l.resizeTable()
 	l.refreshRows()
 }
@@ -245,11 +198,11 @@ func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (l *LikedSongsPane) resizeTable() {
 	tableHeight := l.height
-	if l.filter.IsActive() {
+	if l.Filter().IsActive() {
 		tableHeight--
 	}
 	if tableHeight < 0 {
 		tableHeight = 0
 	}
-	l.table.SetSize(l.width, tableHeight)
+	l.Table().SetSize(l.width, tableHeight)
 }

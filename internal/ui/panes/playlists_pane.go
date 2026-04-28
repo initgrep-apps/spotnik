@@ -21,6 +21,9 @@ import (
 // Compile-time check: PlaylistsPane implements layout.Pane.
 var _ layout.Pane = &PlaylistsPane{}
 
+// Compile-time check: PlaylistsPane implements layout.FilterablePane.
+var _ layout.FilterablePane = &PlaylistsPane{}
+
 // Compile-time check: PlaylistsPane implements layout.FilterQueryPane.
 var _ layout.FilterQueryPane = &PlaylistsPane{}
 
@@ -45,12 +48,8 @@ type playlistDebounceMsg struct {
 // background data. Tracks are stored in pane fields (loadedTracks), not in the
 // global store. This mirrors the search pane pattern.
 type PlaylistsPane struct {
-	BasePane
+	*TableBasedPane
 
-	// table renders the playlist list.
-	table *components.Table
-	// filter provides in-pane text filtering for playlist names.
-	filter *components.Filter
 	// trackTable renders the track list when inTrackView is true.
 	trackTable *components.Table
 
@@ -105,11 +104,10 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 		ShowHeader:   true,
 	})
 
+	f := components.NewFilter(th)
 	p := &PlaylistsPane{
-		BasePane:   BasePane{store: store, theme: th, focused: focused},
-		table:      t,
-		filter:     components.NewFilter(th),
-		trackTable: tt,
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, f),
+		trackTable:     tt,
 	}
 	t.SetFocused(focused)
 	p.refreshPlaylistRows()
@@ -136,41 +134,29 @@ func (p *PlaylistsPane) Actions() []layout.Action {
 	if p.inTrackView {
 		return []layout.Action{{Key: "Esc", Label: "back"}}
 	}
-	if p.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "close"}}
-	}
-	return []layout.Action{
-		{Key: "f", Label: "filter"},
-	}
+	return []layout.Action{p.BaseFilterAction()}
 }
 
 // Init satisfies tea.Model. PlaylistsPane has no startup command.
 func (p *PlaylistsPane) Init() tea.Cmd { return nil }
 
-// HasActiveFilter returns true when the in-pane filter is capturing keystrokes.
-func (p *PlaylistsPane) HasActiveFilter() bool { return p.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (p *PlaylistsPane) ActiveFilterQuery() string { return p.filter.Query() }
-
 // SetFocused updates the keyboard focus state, routing focus to the correct table
 // based on whether the track sub-view is active.
 func (p *PlaylistsPane) SetFocused(focused bool) {
-	p.BasePane.SetFocused(focused)
+	p.TableBasedPane.SetFocused(focused)
 	if p.inTrackView {
 		p.trackTable.SetFocused(focused)
-		p.table.SetFocused(false)
+		p.Table().SetFocused(false)
 	} else {
-		p.table.SetFocused(focused && !p.filter.IsActive())
+		p.Table().SetFocused(focused && !p.Filter().IsActive())
 		p.trackTable.SetFocused(false)
 	}
 }
 
 // SetSize updates the render dimensions and propagates them to both tables and filter.
 func (p *PlaylistsPane) SetSize(width, height int) {
-	p.BasePane.SetSize(width, height)
-	p.filter.SetWidth(width)
+	p.TableBasedPane.SetSize(width, height)
+	p.Filter().SetWidth(width)
 	p.trackTable.SetSize(width, height)
 	p.resizeTable()
 }
@@ -223,49 +209,32 @@ func (p *PlaylistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 
-	// When filter is active, forward all key events to the filter.
-	if p.filter.IsActive() {
-		cmd := p.filter.Update(msg)
-		if !p.filter.IsActive() {
-			// Filter just closed — refocus the active table.
-			if p.inTrackView {
-				p.trackTable.SetFocused(true)
-			} else {
-				p.table.SetFocused(true)
-			}
-			p.resizeTable()
-		}
-		// Refresh the active table (playlist list or track list).
-		p.RefreshRows()
-		return p, cmd
-	}
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return p, nil
 	}
 
 	// In track sub-view: handle Enter (play), Esc (back), and table navigation.
+	// Filter is not active in track view.
 	if p.inTrackView {
 		return p.handleTrackViewKey(keyMsg)
 	}
 
-	// In playlist list: handle keys.
+	// In playlist list: handle keys (including filter routing).
 	return p.handleListViewKey(keyMsg)
 }
 
 // handleListViewKey handles key events in the playlist list view.
 func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Type == tea.KeyRunes && string(key.Runes) == "f":
-		p.filter.Toggle()
-		p.table.SetFocused(false)
-		p.resizeTable()
-		return p, nil
+	// Delegate filter keys (f, Esc) to the shared handler first.
+	if consumed, cmd := p.HandleFilterKey(key, p.refreshPlaylistRows, p.resizeTable); consumed {
+		return p, cmd
+	}
 
-	case key.Type == tea.KeyEnter:
+	switch key.Type {
+	case tea.KeyEnter:
 		playlist := p.filteredPlaylist()
-		idx := p.table.SelectedIndex()
+		idx := p.Table().SelectedIndex()
 		if idx >= 0 && idx < len(playlist) {
 			pl := playlist[idx]
 
@@ -292,7 +261,7 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			// Switch to track sub-view immediately (shows empty table while loading)
 			p.inTrackView = true
-			p.table.SetFocused(false)
+			p.Table().SetFocused(false)
 			p.trackTable.SetFocused(true)
 			p.resizeTable()
 			p.refreshTrackRows() // shows 0 rows initially
@@ -301,20 +270,10 @@ func (p *PlaylistsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return p, p.schedulePlaylistDebounce()
 		}
 		return p, nil
-
-	// Esc: first clear a committed filter query; second press resets scroll.
-	case key.Type == tea.KeyEscape:
-		if p.filter.Query() != "" {
-			p.filter.ClearQuery()
-			p.refreshPlaylistRows()
-			return p, nil
-		}
-		p.table.GotoTop()
-		return p, nil
 	}
 
 	// Forward navigation to the table.
-	cmd := p.table.Update(key)
+	cmd := p.Table().Update(key)
 	return p, cmd
 }
 
@@ -326,7 +285,7 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 		// any in-flight fetch.
 		p.inTrackView = false
 		p.trackTable.SetFocused(false)
-		p.table.SetFocused(true)
+		p.Table().SetFocused(true)
 		p.resizeTable()
 		return p, func() tea.Msg { return PlaylistTrackViewClosedMsg{} }
 
@@ -416,14 +375,14 @@ func (p *PlaylistsPane) checkPrefetch() tea.Cmd {
 func (p *PlaylistsPane) View() string {
 	var parts []string
 
-	if p.filter.IsActive() {
-		parts = append(parts, p.filter.View(p.width))
+	if p.Filter().IsActive() {
+		parts = append(parts, p.Filter().View(p.width))
 	}
 
 	if p.inTrackView {
 		parts = append(parts, p.trackTable.View())
 	} else {
-		parts = append(parts, p.table.View())
+		parts = append(parts, p.Table().View())
 	}
 
 	return strings.Join(parts, "\n")
@@ -467,7 +426,7 @@ func (p *PlaylistsPane) refreshPlaylistRows() {
 			"tracks": fmt.Sprintf("%d", pl.TrackCount),
 		}
 	}
-	p.table.SetRows(rows)
+	p.Table().SetRows(rows)
 }
 
 // isOwnedByCurrentUser returns true if the playlist is owned by the current user.
@@ -502,12 +461,12 @@ func (p *PlaylistsPane) refreshTrackRows() {
 // filteredPlaylist returns the playlists filtered by the current filter query.
 func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 	all := p.store.Playlists()
-	if p.filter.Query() == "" {
+	if p.Filter().Query() == "" {
 		return all
 	}
 	result := make([]domain.SimplePlaylist, 0, len(all))
 	for _, pl := range all {
-		if p.filter.Matches(pl.Name) {
+		if p.Filter().Matches(pl.Name) {
 			result = append(result, pl)
 		}
 	}
@@ -524,7 +483,8 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
-	p.table, p.filter = components.RebuildTableTheme(th, listCols, p.table.Rows(), p.focused && !p.inTrackView)
+	newTable, newFilter := components.RebuildTableTheme(th, listCols, p.Table().Rows(), p.focused && !p.inTrackView)
+	p.SwapTableAndFilter(newTable, newFilter)
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{
@@ -552,7 +512,7 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 // resizeTable updates the table size, accounting for the filter bar when active.
 func (p *PlaylistsPane) resizeTable() {
 	tableHeight := p.height
-	if p.filter.IsActive() {
+	if p.Filter().IsActive() {
 		tableHeight-- // one line for the filter bar
 	}
 	if tableHeight < 0 {
@@ -561,6 +521,6 @@ func (p *PlaylistsPane) resizeTable() {
 	if p.inTrackView {
 		p.trackTable.SetSize(p.width, tableHeight)
 	} else {
-		p.table.SetSize(p.width, tableHeight)
+		p.Table().SetSize(p.width, tableHeight)
 	}
 }

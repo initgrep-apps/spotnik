@@ -31,19 +31,13 @@ type gatewayLiveRow struct {
 
 // GatewayLivePane displays a 500-entry reverse-chronological gateway event stream
 // that is scrollable and filterable. New events are prepended on each tick.
-// A committed filter (Enter-to-apply) narrows visible rows; the query appears in
-// the pane border via layout.FilterQueryPane.
+// A live filter (typing narrows rows immediately) is toggled with 'f'; the
+// current query appears in the pane border via layout.FilterQueryPane.
 type GatewayLivePane struct {
-	store       state.StateReader
-	theme       theme.Theme
-	focused     bool
-	width       int
-	height      int
+	*TableBasedPane
+
 	eventCursor uint64
 	buffer      []gatewayLiveRow // newest-first; capped at maxGatewayLiveRows
-	table       *components.Table
-	filter      *components.Filter
-	activeQuery string // committed filter (Enter-to-apply)
 }
 
 // NewGatewayLivePane creates a GatewayLivePane with the given store and theme.
@@ -62,11 +56,9 @@ func NewGatewayLivePane(s state.StateReader, th theme.Theme) *GatewayLivePane {
 	})
 	t.SetFocused(false)
 
+	f := components.NewFilter(th)
 	return &GatewayLivePane{
-		store:  s,
-		theme:  th,
-		table:  t,
-		filter: components.NewFilter(th),
+		TableBasedPane: NewTableBasedPane(s, th, false, t, f),
 	}
 }
 
@@ -79,21 +71,10 @@ func (p *GatewayLivePane) Title() string { return "Gateway Live" }
 // ToggleKey returns 4 — the Page B toggle key for this pane.
 func (p *GatewayLivePane) ToggleKey() int { return 4 }
 
-// Actions returns shortcut hints based on filter state.
-func (p *GatewayLivePane) Actions() []layout.Action {
-	if p.filter.IsActive() {
-		return []layout.Action{{Key: "Esc", Label: "cancel"}}
-	}
-	return []layout.Action{{Key: "f", Label: "filter"}}
-}
-
-// IsFocused returns whether this pane has keyboard focus.
-func (p *GatewayLivePane) IsFocused() bool { return p.focused }
-
 // SetFocused updates the keyboard focus state.
 func (p *GatewayLivePane) SetFocused(f bool) {
-	p.focused = f
-	p.table.SetFocused(f && !p.filter.IsActive())
+	p.TableBasedPane.SetFocused(f)
+	p.Table().SetFocused(f && !p.Filter().IsActive())
 }
 
 // Init returns nil — GatewayLivePane reacts to TickMsg from the app.
@@ -101,38 +82,29 @@ func (p *GatewayLivePane) Init() tea.Cmd { return nil }
 
 // SetSize updates the content area dimensions.
 func (p *GatewayLivePane) SetSize(w, h int) {
-	p.width = w
-	p.height = h
-	p.filter.SetWidth(w)
+	p.TableBasedPane.SetSize(w, h)
+	p.Filter().SetWidth(w)
 	p.resizeTable()
 }
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
 func (p *GatewayLivePane) SetTheme(th theme.Theme) {
 	p.theme = th
-	p.filter = components.NewFilter(th)
+	newFilter := components.NewFilter(th)
 	columns := []components.ColumnDef{
 		{Key: "row", Header: "", FlexFactor: 1, Color: ""},
 	}
-	t := components.NewTable(components.TableConfig{
+	newTable := components.NewTable(components.TableConfig{
 		Columns:      columns,
 		Theme:        th,
 		PlayingIndex: -1,
 		ShowHeader:   false,
 	})
-	t.SetFocused(p.focused && !p.filter.IsActive())
-	p.table = t
+	newTable.SetFocused(p.focused && !p.Filter().IsActive())
+	p.SwapTableAndFilter(newTable, newFilter)
 	p.resizeTable()
 	p.buildTableRows()
 }
-
-// HasActiveFilter returns true when the in-pane filter input is capturing keystrokes.
-// Satisfies layout.FilterablePane.
-func (p *GatewayLivePane) HasActiveFilter() bool { return p.filter.IsActive() }
-
-// ActiveFilterQuery returns the committed filter query for border display.
-// Satisfies layout.FilterQueryPane.
-func (p *GatewayLivePane) ActiveFilterQuery() string { return p.activeQuery }
 
 // BufferedEventCount returns the number of events in the buffer.
 // Exported for testing.
@@ -140,7 +112,7 @@ func (p *GatewayLivePane) BufferedEventCount() int { return len(p.buffer) }
 
 // TableCurrentPage returns the current page number (1-indexed) of the inner table.
 // Exported for testing the Esc scroll-reset behaviour.
-func (p *GatewayLivePane) TableCurrentPage() int { return p.table.CurrentPage() }
+func (p *GatewayLivePane) TableCurrentPage() int { return p.Table().CurrentPage() }
 
 // Update handles key events and TickMsg to refresh the live event stream.
 func (p *GatewayLivePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -159,58 +131,13 @@ func (p *GatewayLivePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKey routes key events for the gateway live pane.
 func (p *GatewayLivePane) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// When filter is active, handle Enter/Esc at pane level; forward others to filter.
-	if p.filter.IsActive() {
-		switch m.Type {
-		case tea.KeyEnter:
-			// Commit: only update activeQuery if the user typed something.
-			// Enter on an empty input preserves the prior committed query.
-			if q := p.filter.Query(); q != "" {
-				p.activeQuery = q
-			}
-			p.filter.Toggle() // deactivates and clears filter input
-			p.table.SetFocused(true)
-			p.resizeTable()
-			p.buildTableRows()
-			return p, nil
-		case tea.KeyEscape:
-			// Cancel: deactivate filter without committing.
-			p.filter.Toggle()
-			p.table.SetFocused(true)
-			p.resizeTable()
-			p.buildTableRows()
-			return p, nil
-		default:
-			// Forward keystroke to filter input. buildTableRows is intentionally
-			// omitted here — filter query changes only take effect on Enter (Enter-to-apply).
-			cmd := p.filter.Update(m)
-			return p, cmd
-		}
-	}
-
-	// 'f' activates the filter.
-	if m.Type == tea.KeyRunes && string(m.Runes) == "f" {
-		p.filter.Toggle()
-		p.table.SetFocused(false)
-		p.resizeTable()
-		return p, nil
-	}
-
-	// Esc when filter is not open:
-	// Mode 1: committed query exists → clear it.
-	// Mode 2: no committed query → reset scroll to page 1.
-	if m.Type == tea.KeyEscape {
-		if p.activeQuery != "" {
-			p.activeQuery = ""
-			p.buildTableRows()
-			return p, nil
-		}
-		p.table.GotoTop()
-		return p, nil
+	// Delegate filter keys (f, Esc, and forwarding when active) to the shared handler.
+	if consumed, cmd := p.HandleFilterKey(m, p.buildTableRows, p.resizeTable); consumed {
+		return p, cmd
 	}
 
 	// Forward navigation keys to the table.
-	cmd := p.table.Update(m)
+	cmd := p.Table().Update(m)
 	return p, cmd
 }
 
@@ -220,10 +147,10 @@ func (p *GatewayLivePane) View() string {
 		return ""
 	}
 	var parts []string
-	if p.filter.IsActive() {
-		parts = append(parts, p.filter.View(p.width))
+	if p.Filter().IsActive() {
+		parts = append(parts, p.Filter().View(p.width))
 	}
-	parts = append(parts, p.table.View())
+	parts = append(parts, p.Table().View())
 	return strings.Join(parts, "\n")
 }
 
@@ -364,13 +291,13 @@ func buildGatewayLiveRow(e domain.GatewayEvent) (gatewayLiveRow, bool) {
 	}, true
 }
 
-// buildTableRows converts the buffer to table rows, applying the committed filter.
+// buildTableRows converts the buffer to table rows, applying the live filter query.
 // No-ops when width is zero to avoid rendering rows with negative label width.
 func (p *GatewayLivePane) buildTableRows() {
 	if p.width == 0 {
 		return
 	}
-	query := strings.ToLower(p.activeQuery)
+	query := strings.ToLower(p.Filter().Query())
 	rows := make([]map[string]string, 0, len(p.buffer))
 
 	for _, row := range p.buffer {
@@ -386,17 +313,17 @@ func (p *GatewayLivePane) buildTableRows() {
 		rows = append(rows, map[string]string{"row": rendered})
 	}
 
-	p.table.SetRows(rows)
+	p.Table().SetRows(rows)
 }
 
 // resizeTable adjusts the table height to account for the filter bar when active.
 func (p *GatewayLivePane) resizeTable() {
 	h := p.height
-	if p.filter.IsActive() {
+	if p.Filter().IsActive() {
 		h--
 	}
 	if h < 0 {
 		h = 0
 	}
-	p.table.SetSize(p.width, h)
+	p.Table().SetSize(p.width, h)
 }

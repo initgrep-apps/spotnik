@@ -478,23 +478,25 @@ func TestQueuePane_Filter_NoMatchesShowsEmptyTable(t *testing.T) {
 	assert.NotContains(t, output, "Save Your Tears", "no tracks should match")
 }
 
-// TestQueuePane_Filter_ActionsChangedWhenActive verifies Actions() changes when filter is active.
-func TestQueuePane_Filter_ActionsChangedWhenActive(t *testing.T) {
+// TestQueuePane_Filter_ActionsUnchangedWhenActive verifies Actions() always returns
+// the {f, filter} hint — the close-notch is retired (Esc is a global key).
+// The border renderer uses FilterQuery to show the graded f(query) label instead.
+func TestQueuePane_Filter_ActionsUnchangedWhenActive(t *testing.T) {
 	pane := newTestQueuePaneWithData(true)
 	pane.SetSize(80, 20)
 
-	// Default actions: only filter (A was removed in story 120).
+	// Default actions: only filter.
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
 	assert.Equal(t, "f", actions[0].Key)
 
-	// Activate filter.
+	// Activate filter — Actions() must still return {f, filter}, not {Esc, close}.
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	pp := m.(*QueuePane)
 	filterActions := pp.Actions()
-	require.Len(t, filterActions, 1, "filter active should show only close action")
-	assert.Equal(t, "Esc", filterActions[0].Key)
-	assert.Equal(t, "close", filterActions[0].Label)
+	require.Len(t, filterActions, 1, "filter active must still return {f, filter}")
+	assert.Equal(t, "f", filterActions[0].Key)
+	assert.Equal(t, "filter", filterActions[0].Label)
 }
 
 // --- Task 4: Comprehensive tests ---

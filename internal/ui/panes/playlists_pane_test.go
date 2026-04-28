@@ -76,7 +76,7 @@ func TestPlaylistsPane_Actions_ListView(t *testing.T) {
 	assert.NotContains(t, keys, "r", "r (rename stub) must be absent")
 }
 
-// TestPlaylistsPane_Actions_FilterActive returns close action when filter is active.
+// TestPlaylistsPane_Actions_FilterActive returns filter action unchanged when filter is active.
 func TestPlaylistsPane_Actions_FilterActive(t *testing.T) {
 	pane := newTestPlaylistsPane(true)
 	pane.SetSize(80, 20)
@@ -84,7 +84,8 @@ func TestPlaylistsPane_Actions_FilterActive(t *testing.T) {
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
 	require.Len(t, actions, 1)
-	assert.Equal(t, "Esc", actions[0].Key)
+	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "filter", actions[0].Label)
 }
 
 // TestPlaylistsPane_Actions_TrackView returns only Esc back action in track view (story 106).

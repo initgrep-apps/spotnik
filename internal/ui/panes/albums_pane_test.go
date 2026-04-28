@@ -95,14 +95,16 @@ func TestAlbumsPane_Actions_Default(t *testing.T) {
 	assert.Contains(t, keys, "f", "should have filter action")
 }
 
-// TestAlbumsPane_Actions_FilterActive returns close action when filter is active.
+// TestAlbumsPane_Actions_FilterActive verifies Actions() always returns {f, filter} + {Enter, open}
+// in list view — the close-notch is retired; the border uses FilterQuery instead.
 func TestAlbumsPane_Actions_FilterActive(t *testing.T) {
 	pane := newTestAlbumsPane(true)
 	pane.SetSize(80, 20)
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
-	require.Len(t, actions, 1)
-	assert.Equal(t, "Esc", actions[0].Key)
+	require.Len(t, actions, 2)
+	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "Enter", actions[1].Key)
 }
 
 // TestAlbumsPane_View_Empty verifies clean render on empty data.

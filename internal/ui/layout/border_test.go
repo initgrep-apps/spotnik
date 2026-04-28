@@ -194,10 +194,105 @@ func TestRenderPaneBorder_FilterMode(t *testing.T) {
 	require.NotEmpty(t, lines)
 
 	topLine := stripANSI(lines[0])
-	assert.Contains(t, topLine, "filtering:", "filter mode prefix should appear")
+	// Filter mode now renders as f(query) — graded shrink label, no close-notch.
+	assert.Contains(t, topLine, "f(rock)", "filter mode must render f(query) label")
 	assert.Contains(t, topLine, "rock", "filter query should appear")
 	// Actions should NOT appear in filter mode
 	assert.NotContains(t, topLine, "new", "action labels should not appear in filter mode")
+	// Close-notch retired — no "Esc close" in filter mode
+	assert.NotContains(t, topLine, "Esc close", "filter mode must not render close-notch")
+}
+
+func TestFormatFilterLabel(t *testing.T) {
+	cases := []struct {
+		name   string
+		query  string
+		budget int
+		want   string
+	}{
+		// Variant 1 — full unquoted form fits
+		{"full at large budget", "rock", 20, "f(rock)"},
+		{"full at exact 7-col budget (rock)", "rock", 7, "f(rock)"},
+		{"full at exact 12-col budget (rocknroll)", "rocknroll", 12, "f(rocknroll)"},
+		// Variant 2 — truncation. "rocknroll" trimmed: f(rocknro…) w11, …,
+		// f(roc…) w7, f(ro…) w6, f(r…) w5.
+		{"truncated to f(rocknro…) at 11-col budget", "rocknroll", 11, "f(rocknro…)"},
+		{"truncated to f(roc…) at 7-col budget", "rocknroll", 7, "f(roc…)"},
+		{"truncated to f(ro…) at 6-col budget", "rocknroll", 6, "f(ro…)"},
+		{"truncated to f(r…) at 5-col budget", "rocknroll", 5, "f(r…)"},
+		// "rock" can also truncate when budget < 7
+		{"rock truncated to f(ro…) at 6-col budget", "rock", 6, "f(ro…)"},
+		{"rock truncated to f(r…) at 5-col budget", "rock", 5, "f(r…)"},
+		// Variant 3 — minimal indicator
+		{"falls back to f(…) at 4-col budget", "rocknroll", 4, "f(…)"},
+		// Single-rune query: variant 2 loop is skipped (i starts at 0, condition i>=1 false)
+		{"single-rune query fits f(x) at 4-col budget", "x", 4, "f(x)"},
+		{"single-rune query drops at 3-col budget (no truncation possible)", "x", 3, ""},
+		// Variant 4 — drop
+		{"too narrow drops to empty", "rocknroll", 3, ""},
+		{"empty query returns empty", "", 100, ""},
+		{"zero budget returns empty", "rock", 0, ""},
+		{"negative budget returns empty", "rock", -1, ""},
+		// Wide-rune (CJK) queries: lipgloss.Width counts each as 2 columns;
+		// formatFilterLabel relies on that for correct fit calculations.
+		// Example: "字" → "f(字)" width 5. At budget 5 → returns "f(字)".
+		// At budget 4 → variant 1 fails (5>4), variant 2 loop skipped
+		// (1 rune), variant 3 "f(…)" width 4 → returns "f(…)".
+		{"wide-rune fits f(字) at 5-col budget", "字", 5, "f(字)"},
+		{"wide-rune falls back to f(…) at 4-col budget", "字", 4, "f(…)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := layout.FormatFilterLabel(tc.query, tc.budget)
+			assert.Equal(t, tc.want, got)
+			if got != "" {
+				assert.LessOrEqual(t, lipgloss.Width(got), tc.budget,
+					"label width must fit within budget")
+			}
+		})
+	}
+}
+
+func TestRenderPaneBorder_NarrowPane_FilterShrinksGracefully(t *testing.T) {
+	cfg := layout.BorderConfig{
+		Width: 30, Height: 5,
+		Title: "Queue", ToggleKey: 2,
+		AccentColor: lipgloss.Color("#888"),
+		FilterQuery: "rock",
+		Theme:       theme.Load("black"),
+	}
+	out := stripANSI(layout.RenderPaneBorder("", cfg))
+
+	// Positive: filter indicator must be present in some form.
+	assert.Contains(t, out, "f(", "narrow pane must still show filter indicator")
+
+	// Negative: the close-notch is fully retired in filter mode. Verify by
+	// asserting that no segment of the rendered output contains the literal
+	// close-notch sequence "Esc close" (case-sensitive). The action-mode
+	// notch with "filter" is also absent because cfg.FilterQuery is non-empty.
+	assert.NotContains(t, out, "Esc close",
+		"filter mode must not render the ╮ Esc close ╭ notch (Esc is global, see help overlay)")
+}
+
+func TestRenderPaneBorder_FilterModeRendersOnlyLabel(t *testing.T) {
+	// Wide pane so f("rock") fits comfortably; assert the right segment is
+	// exactly the label, no notch, no separator dash bar before "╮" except
+	// the top-border fill dashes.
+	cfg := layout.BorderConfig{
+		Width: 80, Height: 5,
+		Title: "Queue", ToggleKey: 2,
+		AccentColor: lipgloss.Color("#888"),
+		FilterQuery: "rock",
+		Theme:       theme.Load("black"),
+	}
+	topLine := strings.Split(stripANSI(layout.RenderPaneBorder("", cfg)), "\n")[0]
+	assert.Contains(t, topLine, "f(rock)")
+	assert.NotContains(t, topLine, "Esc close")
+	// The top-right notch corners are part of the border itself (╭...╮); the
+	// CLOSE-NOTCH was an inner ╮...╭ pair around "Esc close". Confirm we have
+	// exactly one ╮ on the line (the top-right border corner).
+	assert.Equal(t, 1, strings.Count(topLine, "╮"),
+		"filter mode should have exactly one ╮ (the top-right border corner)")
 }
 
 func TestRenderPaneBorder_NoToggleKey(t *testing.T) {
@@ -595,8 +690,10 @@ func TestRenderPaneBorder_QueueWithActiveFilter(t *testing.T) {
 	assert.Equal(t, 8, len(lines))
 
 	topLine := stripANSI(lines[0])
-	assert.Contains(t, topLine, "filtering:")
+	// Filter mode now renders as f(query) label — no legacy "filtering:" prefix.
+	assert.Contains(t, topLine, "f(rock)", "filter mode must render f(query) label")
 	assert.Contains(t, topLine, "rock")
+	assert.NotContains(t, topLine, "filtering:", "old filtering: prefix retired")
 	// Original actions should not appear
 	assert.NotContains(t, topLine, "clear")
 
@@ -722,10 +819,10 @@ func TestBuildRightSegment_CornerNotchFormat(t *testing.T) {
 	assert.NotContains(t, topLine, "ᐅ", "corner-notch format must not use ᐅ prefix for actions")
 }
 
-// TestRenderPaneBorder_FilterMode_UsesNotchNotArrow verifies that filter mode
-// uses the same corner-notch format as actions mode (╮ Esc close ╭) and does
-// NOT use the banned ᐅ prefix.
-func TestRenderPaneBorder_FilterMode_UsesNotchNotArrow(t *testing.T) {
+// TestRenderPaneBorder_FilterMode_UsesLabelNotNotch verifies that filter mode
+// renders the graded f(query) label and does NOT render the retired close-notch
+// or the banned ᐅ prefix.
+func TestRenderPaneBorder_FilterMode_UsesLabelNotNotch(t *testing.T) {
 	th := theme.Load("black")
 	cfg := layout.BorderConfig{
 		Width:       60,
@@ -743,8 +840,9 @@ func TestRenderPaneBorder_FilterMode_UsesNotchNotArrow(t *testing.T) {
 
 	topLine := stripANSI(lines[0])
 	assert.NotContains(t, topLine, "ᐅ", "filter mode must not use ᐅ prefix")
-	assert.Contains(t, topLine, `filtering: "rock"`, "filter mode must show preamble")
-	assert.Contains(t, topLine, "╮ Esc close ╭", "filter mode must use corner-notch format")
+	assert.NotContains(t, topLine, `filtering: "rock"`, "old filtering: prefix retired")
+	assert.NotContains(t, topLine, "Esc close", "close-notch retired — Esc is global")
+	assert.Contains(t, topLine, "f(rock)", "filter mode must render f(query) label")
 }
 
 // TestRenderPaneBorder_ASCIIMode_SwapsCorners verifies that when ascii glyph

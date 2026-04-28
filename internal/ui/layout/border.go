@@ -33,7 +33,9 @@ type BorderConfig struct {
 	// Focused: full AccentColor + Bold title; unfocused: AccentColor + Faint (dimmed but colored).
 	Focused bool
 	// FilterQuery is non-empty when filter mode is active.
-	// When set, replaces the action shortcuts with: filtering: "query" ─╮ Esc close ╭
+	// When set, replaces the action shortcuts with the graded f(query) label
+	// (see FormatFilterLabel). No close-notch — Esc is a global key documented
+	// in the help overlay.
 	FilterQuery string
 	// Theme provides KeyHint() and TextMuted() colors for action rendering.
 	Theme theme.Theme
@@ -155,9 +157,6 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	// leave those fields empty fall back to unicode rounded corners.
 	cornerTL, cornerTR, cornerBL, cornerBR, hBar, vBar := resolveGlyphs(cfg)
 
-	// Build the right-side segment (actions or filter).
-	rightSegment := buildRightSegment(cfg, keyHintStyle, mutedStyle)
-
 	// Build the left-side prefix (toggle key + title).
 	leftInner := buildLeftInner(cfg, keyHintStyle, titleStyle)
 
@@ -177,12 +176,28 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 		leftPrefix = hBar + " " // space before title: ╭─ Title ──╮
 	}
 
+	outerWidth := cfg.Width // includes ╭ and ╮
+
+	// Compute the right-segment budget: total columns minus fixed left side and
+	// at least one dash. This is passed to buildRightSegment so the filter label
+	// can progressively shrink rather than dropping entirely on narrow panes.
+	const minDashes = 1
+	budget := outerWidth - 2 - // corners
+		lipgloss.Width(leftPrefix) -
+		lipgloss.Width(leftInner) -
+		minDashes
+	if budget < 0 {
+		budget = 0
+	}
+
+	// Build the right-side segment (actions or filter) with the computed budget.
+	rightSegment := buildRightSegment(cfg, keyHintStyle, mutedStyle, budget)
+
 	// Total non-dash columns in the top border:
 	// 1 (╭) + len(leftPrefix) + w(leftInner) + w(dashes) + w(rightSegment) + 1 (╮) = Width
 	// => w(dashes) = Width - 2 - len(leftPrefix) - w(leftInner) - w(rightSegment)
 
-	outerWidth := cfg.Width // includes ╭ and ╮
-	fixedWidth := 1 +       // ╭
+	fixedWidth := 1 + // ╭
 		lipgloss.Width(leftPrefix) + // "─ " = 2
 		lipgloss.Width(leftInner) + // superscript + title (variable)
 		lipgloss.Width(rightSegment) + // actions or filter
@@ -256,16 +271,56 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	return strings.Join(rows, "\n")
 }
 
+// FormatFilterLabel returns the most informative filter label that fits
+// within the given column budget. Tries variants from widest to narrowest:
+//
+//  1. f(rock)   — preferred; full query in unquoted form
+//  2. f(ro…)    — truncated; trims the query rune-by-rune with a trailing …
+//  3. f(…)      — minimal; signals an active filter without showing query
+//  4. ""        — drop; even f(…) does not fit
+//
+// The returned string is unstyled — the caller is responsible for applying
+// theme colours via mutedStyle.
+//
+// budget is in terminal columns. The right segment in filter mode is exactly
+// this label — no close-notch is rendered. Esc is a global key documented in
+// the help overlay (`?`), not repeated per-pane.
+func FormatFilterLabel(query string, budget int) string {
+	if query == "" || budget <= 0 {
+		return ""
+	}
+
+	// Variant 1 — full unquoted form
+	if v := "f(" + query + ")"; lipgloss.Width(v) <= budget {
+		return v
+	}
+	// Variant 2 — progressively trim the query, append …
+	runes := []rune(query)
+	for i := len(runes) - 1; i >= 1; i-- {
+		v := "f(" + string(runes[:i]) + "…)"
+		if lipgloss.Width(v) <= budget {
+			return v
+		}
+	}
+	// Variant 3 — minimal indicator
+	if v := "f(…)"; lipgloss.Width(v) <= budget {
+		return v
+	}
+	// Variant 4 — drop
+	return ""
+}
+
 // buildRightSegment builds the right-side content of the top border:
 // either filter mode text or action shortcuts.
 // Returns an empty string if there are no actions and no filter.
 //
-// Filter mode: "filtering: "query" ─╮ Esc close ╭" — same notch format as actions.
+// Filter mode: renders a graded shrink label via FormatFilterLabel (e.g. "f(query)").
+// No close-notch is rendered — Esc is a global key documented in the help overlay.
 // Action mode uses the corner-notch format: each action is rendered as
 // "╮ key label ╭" with a single "─" between consecutive notches.
 // The ╮ and ╭ characters use the pane's accent color (faint when unfocused)
 // so they visually blend into the border dashes as notch cutouts.
-func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) string) string {
+func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) string, budget int) string {
 	// borderChar renders a single character in the pane accent color (faint if unfocused).
 	// Used for the ╮ and ╭ notch characters so they blend into the border line.
 	borderChar := func(s string) string {
@@ -285,14 +340,13 @@ func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) s
 	hRule := rsH
 
 	if cfg.FilterQuery != "" {
-		// Filter mode — notch format matching actions mode.
-		// Output: filtering: "query" ─╮ Esc close ╭
-		preamble := mutedStyle(`filtering: "` + cfg.FilterQuery + `"`)
-		sep := mutedStyle(" " + hRule)
-		notch := borderChar(trCorner) + " " +
-			keyHintStyle("Esc") + " " + mutedStyle("close") + " " +
-			borderChar(tlCorner)
-		return preamble + sep + notch
+		// Filter mode: render the most informative label that fits the budget.
+		// No close-notch — Esc is a global key documented in the help overlay.
+		label := FormatFilterLabel(cfg.FilterQuery, budget)
+		if label == "" {
+			return ""
+		}
+		return mutedStyle(label)
 	}
 
 	if len(cfg.Actions) == 0 {

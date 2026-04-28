@@ -646,146 +646,109 @@ func TestFocusRotation_AfterHideWrapsCorrectly(t *testing.T) {
 	assert.Equal(t, first, m.FocusedPane())
 }
 
-// ── Task 2: RowSpan — GatewayLive spans Health + Traffic rows ────────────────
+// ── Story 181: flat Page B layout (RowSpan retired) ─────────────────────────
 
-func TestRecompute_RowSpan_GatewayLive(t *testing.T) {
+func TestRecompute_PageBFlat_ThreeRows(t *testing.T) {
 	m := layout.NewManager()
-	m.Resize(200, 80)
-	m.TogglePage() // switch to Page B (PresetNerdStatus)
+	m.Resize(200, 50)
+	m.TogglePage() // switch to Page B (flat 3-row PresetNerdStatus)
 
-	healthRect := m.PaneRect(layout.PaneGatewayHealth)
-	trafficRect := m.PaneRect(layout.PanePollingTraffic)
-	liveRect := m.PaneRect(layout.PaneGatewayLive)
-	netRect := m.PaneRect(layout.PaneNetworkLog)
+	np := m.PaneRect(layout.PaneNowPlaying)
+	h := m.PaneRect(layout.PaneGatewayHealth)
+	pt := m.PaneRect(layout.PanePollingTraffic)
+	gl := m.PaneRect(layout.PaneGatewayLive)
+	nl := m.PaneRect(layout.PaneNetworkLog)
 
-	// GatewayLive must be taller than GatewayHealth alone
-	assert.Greater(t, liveRect.Height, healthRect.Height,
-		"GatewayLive must span both Health and Traffic rows")
+	// Three rows: NowPlaying / [Health Traffic Live] / NetworkLog
+	assert.Equal(t, 0, np.X)
+	assert.Equal(t, 200, np.Width)
+	assert.Equal(t, np.Y+np.Height, h.Y, "row 2 starts where row 1 ends")
+	assert.Equal(t, h.Y, pt.Y, "Health and Traffic share row")
+	assert.Equal(t, h.Y, gl.Y, "Live shares row with Health/Traffic")
+	assert.Equal(t, h.Y+h.Height, nl.Y, "NetworkLog starts where row 2 ends")
+	assert.Equal(t, h.Height, pt.Height, "Health/Traffic/Live share row height")
+	assert.Equal(t, h.Height, gl.Height)
 
-	// GatewayLive height must equal Health + Traffic combined height
-	assert.Equal(t, healthRect.Height+trafficRect.Height, liveRect.Height,
-		"GatewayLive height = Health + Traffic")
-
-	// Health and Traffic must share the same left column (same X, same Width)
-	assert.Equal(t, healthRect.X, trafficRect.X, "Health and Traffic must align left")
-	assert.Equal(t, healthRect.Width, trafficRect.Width, "Health and Traffic must have equal width")
-
-	// GatewayLive must start where Health ends (same row, to the right)
-	assert.Equal(t, healthRect.X+healthRect.Width, liveRect.X,
-		"GatewayLive must be immediately right of GatewayHealth")
-
-	// GatewayLive must be 3x wider than GatewayHealth (weight 3 vs weight 1)
-	assert.Equal(t, 3*healthRect.Width, liveRect.Width,
-		"GatewayLive must have 3× the width of GatewayHealth")
-
-	// NetworkLog must be full-width below all middle panes
-	assert.Equal(t, 0, netRect.X)
-	assert.Greater(t, netRect.Y, liveRect.Y, "NetworkLog is below GatewayLive")
+	// 1:1:3 width split (with last-cell rounding compensation absorbed by Live)
+	assert.Equal(t, h.Width, pt.Width, "Health and Traffic equal width")
+	assert.InDelta(t, 3*h.Width, gl.Width, 2, "Live ≈ 3× Health (rounding ±2)")
+	assert.Equal(t, 200, h.Width+pt.Width+gl.Width, "row width sums to terminal width")
 }
 
-func TestRecompute_RowSpan_ToggleHidingSpanner(t *testing.T) {
-	// Hiding GatewayLive (the spanner) should remove the right column.
-	// GatewayHealth and PollingTraffic expand to full width.
+func TestTogglePane_PageB_HealthHidden_TrafficLiveExpand(t *testing.T) {
 	m := layout.NewManager()
-	m.Resize(200, 80)
+	m.Resize(200, 50)
 	m.TogglePage()
-
-	m.TogglePane(layout.PaneGatewayLive)
-
-	healthRect := m.PaneRect(layout.PaneGatewayHealth)
-	trafficRect := m.PaneRect(layout.PanePollingTraffic)
-	liveRect := m.PaneRect(layout.PaneGatewayLive)
-
-	// GatewayLive must not be visible
-	assert.Equal(t, layout.Rect{}, liveRect, "GatewayLive must be hidden")
-
-	// GatewayHealth and PollingTraffic must expand to full width
-	assert.Equal(t, 200, healthRect.Width, "GatewayHealth should be full width when spanner is hidden")
-	assert.Equal(t, 200, trafficRect.Width, "PollingTraffic should be full width when spanner is hidden")
-}
-
-func TestRecompute_RowSpan_ToggleHidingSpannedPanes(t *testing.T) {
-	// Hiding PollingTraffic should leave GatewayHealth and GatewayLive visible.
-	// GatewayLive should still span at least its own row.
-	m := layout.NewManager()
-	m.Resize(200, 80)
-	m.TogglePage()
-
-	m.TogglePane(layout.PanePollingTraffic)
-
-	healthRect := m.PaneRect(layout.PaneGatewayHealth)
-	trafficRect := m.PaneRect(layout.PanePollingTraffic)
-	liveRect := m.PaneRect(layout.PaneGatewayLive)
-
-	// PollingTraffic must not be visible
-	assert.Equal(t, layout.Rect{}, trafficRect, "PollingTraffic must be hidden")
-
-	// GatewayHealth and GatewayLive must remain visible
-	assert.Greater(t, healthRect.Width, 0, "GatewayHealth must remain visible")
-	assert.Greater(t, liveRect.Width, 0, "GatewayLive must remain visible")
-}
-
-func TestRecompute_RowSpan_ToggleHidingOriginSibling(t *testing.T) {
-	// Hiding GatewayHealth (non-spanner in the spanner's origin row) must not
-	// collapse PollingTraffic in the continuation row to zero width.
-	m := layout.NewManager()
-	m.Resize(200, 80)
-	m.TogglePage()
+	pre := m.PaneRect(layout.PanePollingTraffic).Width
 
 	m.TogglePane(layout.PaneGatewayHealth)
+	assert.False(t, m.IsPaneVisible(layout.PaneGatewayHealth))
 
-	healthRect := m.PaneRect(layout.PaneGatewayHealth)
-	trafficRect := m.PaneRect(layout.PanePollingTraffic)
-	liveRect := m.PaneRect(layout.PaneGatewayLive)
-
-	assert.Equal(t, layout.Rect{}, healthRect, "GatewayHealth must be hidden")
-	assert.Greater(t, liveRect.Width, 0, "GatewayLive must remain visible")
-	assert.Greater(t, trafficRect.Width, 0, "PollingTraffic must remain visible in continuation row")
-
-	// PollingTraffic must not overlap GatewayLive
-	overlap := trafficRect.X < liveRect.X+liveRect.Width && trafficRect.X+trafficRect.Width > liveRect.X
-	assert.False(t, overlap, "PollingTraffic must not overlap GatewayLive")
+	pt := m.PaneRect(layout.PanePollingTraffic)
+	gl := m.PaneRect(layout.PaneGatewayLive)
+	assert.Equal(t, 0, pt.X, "Traffic now starts at x=0")
+	assert.Greater(t, pt.Width, pre, "Traffic must absorb Health's column")
+	assert.Equal(t, pt.Y, gl.Y)
+	assert.Equal(t, 200, pt.Width+gl.Width, "remaining cells fill the row width")
 }
 
-func TestRecompute_RowSpan_PageB_FocusOrderSpannerLast(t *testing.T) {
-	// VisiblePanes() on Page B must list panes in left-to-right, top-to-bottom
-	// reading order. The spanner (GatewayLive) sits to the right of GatewayHealth
-	// in row 1, so focus order must be:
-	//   NowPlaying → GatewayHealth → GatewayLive → PollingTraffic → NetworkLog
-	// Reverting Step 4 to add spanners BEFORE non-spanners would invert the
-	// Health/Live pair and make Tab jump to the right column first.
+func TestTogglePane_PageB_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 	m := layout.NewManager()
-	m.Resize(200, 80)
+	m.Resize(200, 50)
+	m.TogglePage()
+	m.TogglePane(layout.PaneGatewayHealth)
+	m.TogglePane(layout.PanePollingTraffic)
+
+	gl := m.PaneRect(layout.PaneGatewayLive)
+	assert.Equal(t, 0, gl.X)
+	assert.Equal(t, 200, gl.Width, "Live fills full row when both siblings hidden")
+}
+
+func TestTogglePane_PageB_LiveHidden_HealthTrafficExpand(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(200, 50)
+	m.TogglePage()
+	m.TogglePane(layout.PaneGatewayLive)
+
+	h := m.PaneRect(layout.PaneGatewayHealth)
+	pt := m.PaneRect(layout.PanePollingTraffic)
+	assert.Equal(t, 0, h.X)
+	assert.Equal(t, h.Width, pt.Width, "Health and Traffic split equally")
+	assert.Equal(t, 200, h.Width+pt.Width, "they fill the full row")
+}
+
+func TestRecompute_PageB_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
+	// Flat layout: focus order is purely visual reading order.
+	m := layout.NewManager()
+	m.Resize(200, 50)
 	m.TogglePage()
 
 	expected := []layout.PaneID{
 		layout.PaneNowPlaying,
 		layout.PaneGatewayHealth,
-		layout.PaneGatewayLive,
 		layout.PanePollingTraffic,
+		layout.PaneGatewayLive,
 		layout.PaneNetworkLog,
 	}
 	assert.Equal(t, expected, m.VisiblePanes(),
-		"Page B focus order: spanner must come after origin-row siblings")
+		"Page B focus order: NowPlaying → Health → Traffic → Live → NetworkLog")
 
-	// RotateFocus must walk the same sequence.
 	for i, want := range expected {
 		assert.Equal(t, want, m.FocusedPane(),
 			"step %d: focused pane mismatch", i)
 		m.RotateFocus(true)
 	}
-	// After 5 forward rotations we wrap back to the first.
 	assert.Equal(t, expected[0], m.FocusedPane(), "rotation must wrap to first pane")
 }
 
-func TestRecompute_RowSpan_PageB_RectsNonOverlapping(t *testing.T) {
+func TestRecompute_PageB_RectsNonOverlapping(t *testing.T) {
 	// Use odd dimensions to exercise rounding-remainder paths.
 	m := layout.NewManager()
 	m.Resize(201, 79)
 	m.TogglePage()
 
 	visible := m.VisiblePanes()
-	for i := 0; i < len(visible); i++ {
+	for i := range visible {
 		for j := i + 1; j < len(visible); j++ {
 			a := m.PaneRect(visible[i])
 			b := m.PaneRect(visible[j])
