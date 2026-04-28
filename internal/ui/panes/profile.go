@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
@@ -110,50 +111,58 @@ func (p *ProfileOverlay) View() string {
 	profile := p.store.UserProfile()
 	isPremium := p.store.IsPremium()
 
-	const innerWidth = 34 // fixed card inner content width
+	const innerWidth = 22 // narrow card: 3 short rows + 1 keybar line
+
+	mode := uikit.ActiveMode()
 
 	var lines []string
 
 	if profile.ID == "" {
-		// Profile not yet loaded — show a loading placeholder.
 		loadingStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 		lines = append(lines, loadingStyle.Render("Loading profile..."))
 	} else {
-		// Display name — bold, truncated to maxProfileNameLen runes.
-		nameStyle := lipgloss.NewStyle().
-			Foreground(p.theme.TextPrimary()).
-			Bold(true)
+		// Row 1 — Name.
 		name := truncateRunes(profile.DisplayName, maxProfileNameLen)
-		lines = append(lines, nameStyle.Render(name))
+		lines = append(lines, p.renderRow(
+			uikit.GlyphFor(uikit.GlyphActive, mode),
+			p.theme.Info(),
+			p.theme.TextPrimary(),
+			name,
+		))
 
-		// Separator line.
-		sepStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-		lines = append(lines, sepStyle.Render("────────────────────"))
-
-		// Subscription badge.
+		// Row 2 — Plan.
+		var planGlyph string
+		var planValue string
+		var planColor lipgloss.Color
 		if isPremium {
-			badgeStyle := lipgloss.NewStyle().Foreground(p.theme.Info())
-			lines = append(lines, badgeStyle.Render("♛  Premium"))
+			planGlyph = uikit.GlyphFor(uikit.GlyphPremium, mode)
+			planValue = "Premium"
+			planColor = p.theme.Info()
 		} else {
-			badgeStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-			lines = append(lines, badgeStyle.Render("○  Free"))
+			planGlyph = uikit.GlyphFor(uikit.GlyphFreeTier, mode)
+			planValue = "Free"
+			planColor = p.theme.TextMuted()
 		}
+		lines = append(lines, p.renderRow(
+			planGlyph,
+			planColor,
+			p.theme.TextPrimary(),
+			planValue,
+		))
 
-		// Country code.
+		// Row 3 — Region (only if known).
 		if profile.Country != "" {
-			iconStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-			codeStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
-			lines = append(lines, iconStyle.Render("◎  ")+codeStyle.Render(profile.Country))
+			lines = append(lines, p.renderRow(
+				uikit.GlyphFor(uikit.GlyphInactive, mode),
+				p.theme.TextMuted(),
+				p.theme.TextPrimary(),
+				profile.Country,
+			))
 		}
 
-		// Separator before action section.
-		sepStyle2 := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		// Spacer + KeyBar action line.
 		lines = append(lines, "")
-		lines = append(lines, sepStyle2.Render("────────────────────"))
-		lines = append(lines, "")
-
-		// Action section: logout and forget with double-key confirmation.
-		lines = append(lines, p.renderActions()...)
+		lines = append(lines, p.renderActions())
 	}
 
 	inner := strings.Join(lines, "\n")
@@ -162,11 +171,11 @@ func (p *ProfileOverlay) View() string {
 		Render(inner)
 
 	cfg := layout.BorderConfig{
-		Width:       innerWidth + 2, // +2 for left/right border
+		Width:       innerWidth + 2,
 		Height:      strings.Count(inner, "\n") + 3,
 		Title:       "Profile",
 		AccentColor: p.theme.ActiveBorder(),
-		Focused:     true, // overlays are always focused
+		Focused:     true,
 		Theme:       p.theme,
 	}
 
@@ -186,28 +195,26 @@ func (p *ProfileOverlay) SetTheme(t theme.Theme) {
 	p.theme = t
 }
 
-// renderActions returns lines for the logout/forget action section of the overlay.
-// Confirmation feedback is delivered via toast (ProfileConfirmToastMsg), so the
-// overlay shows only the static action labels regardless of pendingAction state.
-func (p *ProfileOverlay) renderActions() []string {
-	const actionWidth = 34 // matches the inner content width used in View()
+// renderRow renders a single icon+value line: "<glyph>  <value>".
+// glyph and value get independent foreground colors so the glyph can carry
+// intent (Info for premium, TextMuted for region) while the value uses the
+// pane's primary text color.
+func (p *ProfileOverlay) renderRow(glyph string, glyphColor, valueColor lipgloss.Color, value string) string {
+	g := lipgloss.NewStyle().Foreground(glyphColor).Render(glyph)
+	v := lipgloss.NewStyle().Foreground(valueColor).Render(value)
+	return g + "  " + v
+}
 
-	logoutRow := uikit.ListRow{
-		Label:  "l  Logout",
-		Intent: uikit.RolePlain,
-		Theme:  p.theme,
+// renderActions returns the single-line KeyBar advertising logout/forget.
+// Real key handling lives in Update() — these key.Bindings are display-only.
+// Confirmation feedback is delivered via toast (ProfileConfirmToastMsg);
+// the rendered hint stays static regardless of pendingAction.
+func (p *ProfileOverlay) renderActions() string {
+	bindings := []key.Binding{
+		key.NewBinding(key.WithHelp("l", "logout")),
+		key.NewBinding(key.WithHelp("f", "forget")),
 	}
-	forgetRow := uikit.ListRow{
-		Label:  "f  Forget",
-		Intent: uikit.RolePlain,
-		Theme:  p.theme,
-	}
-
-	return []string{
-		logoutRow.Render(actionWidth),
-		"",
-		forgetRow.Render(actionWidth),
-	}
+	return uikit.KeyBar{Bindings: bindings, Theme: p.theme}.Render()
 }
 
 // truncateRunes truncates s to at most max runes, appending … if truncated.
