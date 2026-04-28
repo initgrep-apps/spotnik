@@ -412,7 +412,7 @@ func (o *SearchOverlay) SetSize(width, height int) {
 
 // resizeList recomputes the list dimensions from the current panelHeights() and
 // applies them via resultList.SetSize(). Must be called after any state change that
-// could affect showHintLine() (typing, backspace, Ctrl+U, tab cycle, SearchClearedMsg),
+// could affect showHintLine() (typing, backspace, tab cycle, SearchClearedMsg),
 // total (which controls whether the pagination bar occupies a line), or loading state
 // (which controls whether the spinner line occupies a line above the list).
 // Without this call, the list renders at a stale height whenever the hint line toggles,

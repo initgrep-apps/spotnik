@@ -2948,8 +2948,6 @@ func TestPgUp_LoadingNextPage_NoOp(t *testing.T) {
 }
 
 // --- Bug fix tests: M1, M2, M3 ---
-// NOTE: C1 (TestSearchOverlay_CtrlU_ClearsResults) deleted per 2026-04-28
-// overlay-keybinding-cleanup spec — Ctrl+U is no longer a supported shortcut.
 
 // TestSearchOverlay_AddToQueue_CarriesTrackName (M1) verifies that Ctrl+A on a track
 // populates AddToQueueMsg.TrackName so the queue toast shows the track title.
