@@ -3,7 +3,6 @@ package panes_test
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -403,36 +402,6 @@ func TestTabRouting_PrefixTyping_DoesNotCycleTabs(t *testing.T) {
 
 // --- Task 7: debounce uses cleanQuery and skips during prefixTyping ---
 
-// --- Ctrl+U prefix state reset ---
-
-// TestCtrlU_ResetsPrefixState verifies that Ctrl+U clears the prefix state so
-// subsequent typing does not hit a stale lockedPrefix and cause an index out of range.
-// Scenario: type ":songs kk" → Ctrl+U → verify prefixState is PrefixNone and lockedPrefix
-// is empty → type "h" → verify cleanQuery returns "h" without panic.
-func TestCtrlU_ResetsPrefixState(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 30)
-
-	// Type ":songs kk" to reach PrefixLocked state with a non-empty lockedPrefix.
-	for _, ch := range ":songs kk" {
-		o, _ = sendKey(t, o, string(ch))
-	}
-	require.Equal(t, panes.PrefixLocked, o.PrefixState(), "setup: should be locked after :songs kk")
-	require.Equal(t, ":songs", o.LockedPrefix(), "setup: locked prefix should be :songs")
-
-	// Ctrl+U clears the input.
-	o, _ = sendKey(t, o, "ctrl+u")
-
-	// After Ctrl+U, prefix state must be reset — otherwise the next cleanQuery() call
-	// would do value[len(":songs"):] on an empty string → index out of range panic.
-	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "Ctrl+U should reset prefixState to PrefixNone")
-	assert.Equal(t, "", o.LockedPrefix(), "Ctrl+U should clear lockedPrefix")
-
-	// Type "h" — cleanQuery must return "h", not panic.
-	o, _ = sendKey(t, o, "h")
-	assert.Equal(t, "h", o.CleanQuery(), "cleanQuery after Ctrl+U + typing should return typed char without panic")
-}
-
 // TestDebounce_SkippedDuringPrefixTyping verifies no debounce fires when still typing prefix.
 func TestDebounce_SkippedDuringPrefixTyping(t *testing.T) {
 	o := newTestSearchOverlay()
@@ -587,26 +556,6 @@ func TestPlaceholderTick_StopsWhenTyping(t *testing.T) {
 	// Fire placeholder tick — input is not empty, tick should NOT re-arm.
 	_, cmd := o.Update(panes.SearchPlaceholderTickMsgForTest())
 	assert.Nil(t, cmd, "placeholder tick should not re-arm when user has typed")
-}
-
-// TestPlaceholderTick_RestartsOnCtrlU verifies Ctrl+U returns a command that includes a new placeholder tick.
-func TestPlaceholderTick_RestartsOnCtrlU(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 30)
-
-	// Type a character so placeholder cycling was stopped.
-	o, _ = sendKey(t, o, "h")
-	require.Equal(t, "h", o.Query())
-
-	// Ctrl+U should include a placeholder tick restart in its returned command.
-	_, cmd := sendKey(t, o, "ctrl+u")
-	require.NotNil(t, cmd, "Ctrl+U should return a command")
-
-	// The command batch must include a placeholder tick command (non-nil).
-	msg := cmd()
-	batchMsg, ok := msg.(tea.BatchMsg)
-	require.True(t, ok, "Ctrl+U should return a BatchMsg, got %T", msg)
-	assert.Greater(t, len(batchMsg), 0, "batch should include at least one command")
 }
 
 // --- Part 2: SetSuggestions configuration ---

@@ -468,7 +468,7 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case searchPlaceholderTickMsg:
 		// Advance the cycling placeholder only when the input is empty.
 		// When the user has typed something the tick is not re-armed, so cycling stops.
-		// Re-arming happens in handleKey(KeyCtrlU) when the input is cleared.
+		// Re-arming resumes naturally when the user clears the input by editing (backspace, etc.).
 		if o.input.Value() == "" && o.prefixState == PrefixNone {
 			o.placeholderIdx = (o.placeholderIdx + 1) % len(searchPlaceholders)
 			o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
@@ -618,32 +618,11 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o, o.scheduleDebounce()
 
 	case tea.KeyCtrlU:
-		// Clear local input and all result state immediately.
-		// Reset the Prompt to the default and force-clear prefix state so that
-		// a subsequent cleanQuery() call does not index into a stale lockedPrefix.
-		// Also reset intent — clearing must not fire a search for the empty string.
-		// Clear results inline because SearchClearedMsg is intercepted by app.go
-		// (which returns early), so the overlay's own SearchClearedMsg handler is
-		// never reached. Inlining the clear is the correct fix.
-		o.input.Prompt = "> "
-		o.input.SetValue("")
-		o.lockedPrefix = ""
-		o.prefixState = PrefixNone
-		o.intent.tab = TabAll
-		o.intent.page = 1
-		o.intent.query = ""
-		o.results = nil
-		o.total = 0
-		o.loadingFirstPage = false
-		o.loadingNextPage = false
-		o.resultList.SetItems(nil)
-		// Re-apply list dimensions: clearing the input makes showHintLine() return true
-		// (searchH=4), which changes resultsH. resizeList() keeps the list height in sync.
-		o.resizeList()
-		return o, tea.Batch(
-			func() tea.Msg { return SearchClearedMsg{} },
-			searchPlaceholderTick(),
-		)
+		// No-op: Ctrl+U is no longer a supported shortcut per the 2026-04-28
+		// overlay-keybinding-cleanup spec. We intercept it here to prevent the
+		// underlying textinput from treating it as a readline "kill to beginning of line"
+		// (which would clear the input). Clearing only happens via direct edits.
+		return o, nil
 
 	case tea.KeyBackspace:
 		// When a prefix is locked (in Prompt) and the cursor is at position 0,

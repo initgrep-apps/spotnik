@@ -380,7 +380,10 @@ func TestSearchOverlay_Update_TypingJKA(t *testing.T) {
 	assert.Contains(t, o.Query(), "k", "k should be typed into input")
 }
 
-// TestSearchOverlay_Update_CtrlU verifies Ctrl+U clears the input.
+// TestSearchOverlay_Update_CtrlU verifies Ctrl+U is a no-op:
+// the input keeps its value (the textinput swallows Ctrl+U without effect).
+// Per the 2026-04-28 overlay-keybinding-cleanup spec, clearing only happens
+// when the user mutates the input directly.
 func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 	o := newTestSearchOverlay()
 
@@ -388,11 +391,11 @@ func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 	o, _ = sendKey(t, o, "e")
 	o, _ = sendKey(t, o, "l")
 	o, _ = sendKey(t, o, "l")
-	o, _ = sendKey(t, o, "o") // letters that are not action keys
+	o, _ = sendKey(t, o, "o")
 	require.Contains(t, o.Query(), "hello", "query should be 'hello' after typing those chars")
 
 	o, _ = sendKey(t, o, "ctrl+u")
-	assert.Empty(t, o.Query(), "Ctrl+U should clear the entire input")
+	assert.Equal(t, "hello", o.Query(), "Ctrl+U must not clear the input — clearing only via direct edits")
 }
 
 // --- Task 4.4: Result rendering tests ---
@@ -557,60 +560,6 @@ func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
 	msg := cmd()
 	_, ok := msg.(panes.SearchRequestMsg)
 	assert.True(t, ok, "debounce cmd should produce SearchRequestMsg, got %T", msg)
-}
-
-// --- Feature 20: Elm Architecture Purity tests ---
-
-// TestSearchOverlay_CtrlU_EmitsSearchClearedMsg verifies that pressing Ctrl+U
-// returns a command producing SearchClearedMsg instead of writing to the store directly.
-// Ctrl+U now returns a BatchMsg (SearchClearedMsg + placeholder tick restart).
-func TestSearchOverlay_CtrlU_EmitsSearchClearedMsg(t *testing.T) {
-	t.Helper()
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 30)
-
-	// Press Ctrl+U — should emit SearchClearedMsg (store is no longer involved).
-	// The command is a BatchMsg containing SearchClearedMsg and a placeholder tick restart.
-	_, cmd := sendKey(t, o, "ctrl+u")
-
-	require.NotNil(t, cmd, "Ctrl+U should return a command")
-	msg := cmd()
-
-	// Handle both direct SearchClearedMsg and BatchMsg (SearchClearedMsg + tick).
-	var gotCleared bool
-	switch m := msg.(type) {
-	case panes.SearchClearedMsg:
-		gotCleared = true
-	case tea.BatchMsg:
-		for _, subCmd := range m {
-			if subCmd == nil {
-				continue
-			}
-			if _, cleared := subCmd().(panes.SearchClearedMsg); cleared {
-				gotCleared = true
-			}
-		}
-	}
-	assert.True(t, gotCleared, "Ctrl+U must produce SearchClearedMsg (got %T)", msg)
-}
-
-// TestSearchOverlay_CtrlU_ClearsLocalInput verifies that Ctrl+U clears the local
-// input field (cosmetic) even though the store write is deferred to the root app.
-func TestSearchOverlay_CtrlU_ClearsLocalInput(t *testing.T) {
-	t.Helper()
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 30)
-
-	// Type some text first.
-	o, _ = sendKey(t, o, "b")
-	o, _ = sendKey(t, o, "l")
-	require.Equal(t, "bl", o.Query(), "input should be 'bl' after typing")
-
-	// Ctrl+U should clear the local input field.
-	o, _ = sendKey(t, o, "ctrl+u")
-	assert.Equal(t, "", o.Query(), "Ctrl+U should clear the local input field")
 }
 
 // TestSearchOverlay_SearchPageLoadedMsg_StoresResults verifies that SearchPageLoadedMsg
@@ -1682,13 +1631,15 @@ func TestResizeList_ViewHeightStableAcrossHintToggle(t *testing.T) {
 	assert.Equal(t, baseLines, afterTypingLines,
 		"view line count must be stable after typing (hint toggled off); resizeList() must have been called")
 
-	// Press Ctrl+U → hint reappears → searchH goes back to 4.
+	// Press Backspace → hint reappears → searchH goes back to 4.
 	// resultsH loses 1 line. resizeList() must decrease listH by 1.
-	o, _ = sendKey(t, o, "ctrl+u")
-	require.True(t, o.ShowHintLine(), "hint must reappear after Ctrl+U")
-	afterCtrlULines := countViewLines(o.View())
-	assert.Equal(t, baseLines, afterCtrlULines,
-		"view line count must be stable after Ctrl+U (hint toggled on); resizeList() must have been called")
+	// NOTE: Ctrl+U is no longer a supported clear shortcut (2026-04-28 overlay-keybinding-cleanup).
+	// We use Backspace here as the canonical input-editing path that restores the empty state.
+	o, _ = sendKey(t, o, "backspace")
+	require.True(t, o.ShowHintLine(), "hint must reappear after clearing input via backspace")
+	afterClearLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterClearLines,
+		"view line count must be stable after clearing input (hint toggled on); resizeList() must have been called")
 }
 
 // TestResizeList_ViewHeightStableAfterBackspace verifies view height stability when
@@ -2785,35 +2736,6 @@ func TestPaginationBar_NotRenderedWhenTotal0(t *testing.T) {
 		"pagination bar must not appear when total=0; view=%q", view)
 }
 
-// --- Task 7: Ctrl+U resets intent.page and intent.query ---
-
-// TestCtrlU_ResetIntentPageAndQuery verifies that Ctrl+U resets page to 1 and query to "".
-func TestCtrlU_ResetIntentPageAndQuery(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 40)
-	// Type a query and advance pages.
-	for _, ch := range "jazz" {
-		o, _ = sendKey(t, o, string(ch))
-	}
-	m, _ := o.Update(panes.SearchPageLoadedMsg{
-		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
-		Total:   51,
-	})
-	o = m.(*panes.SearchOverlay)
-	// Advance to page 5 by sending ctrl+right four times.
-	for i := 0; i < 4; i++ {
-		o, _ = sendKey(t, o, "pgdown")
-	}
-	require.Equal(t, 5, o.IntentPage(), "pre-condition: should be on page 5")
-
-	// Press Ctrl+U.
-	o, _ = sendKey(t, o, "ctrl+u")
-
-	assert.Equal(t, 1, o.IntentPage(), "ctrl+u must reset intent.page to 1")
-	assert.Equal(t, "", o.IntentQuery(), "ctrl+u must reset intent.query to empty")
-	assert.Equal(t, o.IntentTab(), o.ActiveTab(), "tab should be unchanged after ctrl+u")
-}
-
 // --- Task 8: Reset() zeros all story-102 fields ---
 // (Covered by TestSearchOverlay_Reset_ZerosStory102Fields above.)
 // Duplicate test with a simpler setup to verify all four fields explicitly.
@@ -3025,23 +2947,9 @@ func TestPgUp_LoadingNextPage_NoOp(t *testing.T) {
 	assert.Nil(t, cmd, "ctrl+left while loadingNextPage must return nil cmd")
 }
 
-// --- Bug fix tests: C1, M1, M2, M3 ---
-
-// TestSearchOverlay_CtrlU_ClearsResults (C1) verifies that Ctrl+U clears not only the
-// input but also the displayed results and resets loading flags.
-// Previously the KeyCtrlU handler cleared input/prefix/intent but left o.results,
-// o.total, and the resultList intact — stale results would remain on screen.
-func TestSearchOverlay_CtrlU_ClearsResults(t *testing.T) {
-	o := newTestSearchOverlayWithResults()
-	o.SetSize(80, 40)
-	require.NotEmpty(t, o.Results(), "prerequisite: results should be non-empty before Ctrl+U")
-	require.NotEmpty(t, o.ResultListItems(), "prerequisite: result list should be non-empty before Ctrl+U")
-
-	o, _ = sendKey(t, o, "ctrl+u")
-
-	assert.Nil(t, o.Results(), "Ctrl+U must clear o.results so stale results are not shown")
-	assert.Empty(t, o.ResultListItems(), "Ctrl+U must clear resultList items")
-}
+// --- Bug fix tests: M1, M2, M3 ---
+// NOTE: C1 (TestSearchOverlay_CtrlU_ClearsResults) deleted per 2026-04-28
+// overlay-keybinding-cleanup spec — Ctrl+U is no longer a supported shortcut.
 
 // TestSearchOverlay_AddToQueue_CarriesTrackName (M1) verifies that Ctrl+A on a track
 // populates AddToQueueMsg.TrackName so the queue toast shows the track title.
