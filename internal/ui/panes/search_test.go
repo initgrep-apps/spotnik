@@ -2904,7 +2904,7 @@ func TestSearchOverlay_ListNavigation_NoWrapAtLastItem(t *testing.T) {
 		"Down at last item must clamp (stay at 1), not wrap to 0 — InfiniteScrolling must be false")
 }
 
-// --- Pagination UX fixes: pgdown/pgup keybindings, pagination bar format, ShortHelp count ---
+// --- Pagination UX fixes: pgdown/pgup keybindings, pagination bar format ---
 
 // TestPgDown_AdvancesPage verifies that PageDown advances intent.page when hasNextPage()
 // is true and a query is set. This is the macOS-safe replacement for Ctrl+Right.
