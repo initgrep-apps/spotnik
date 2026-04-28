@@ -126,16 +126,15 @@ func (a *AlbumsPane) Title() string {
 func (a *AlbumsPane) ToggleKey() int { return 4 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// In track sub-view shows {Esc, back}. In list view always shows {f, filter} +
-// {Enter, open} — the close-notch is retired; the border uses FilterQuery instead.
+// In track sub-view shows {Esc, back}. In list view shows {f, filter} only —
+// Enter-to-open is the implicit pane-wide convention (matches Playlists), so the
+// hint is omitted to avoid border clutter and to keep the two drill-down panes
+// visually consistent.
 func (a *AlbumsPane) Actions() []layout.Action {
 	if a.inTrackView {
 		return []layout.Action{{Key: "Esc", Label: "back"}}
 	}
-	return []layout.Action{
-		a.BaseFilterAction(),
-		{Key: "Enter", Label: "open"},
-	}
+	return []layout.Action{a.BaseFilterAction()}
 }
 
 // Init satisfies tea.Model. AlbumsPane has no startup command.

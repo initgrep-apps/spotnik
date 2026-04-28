@@ -95,16 +95,17 @@ func TestAlbumsPane_Actions_Default(t *testing.T) {
 	assert.Contains(t, keys, "f", "should have filter action")
 }
 
-// TestAlbumsPane_Actions_FilterActive verifies Actions() always returns {f, filter} + {Enter, open}
-// in list view — the close-notch is retired; the border uses FilterQuery instead.
+// TestAlbumsPane_Actions_FilterActive verifies Actions() returns only {f, filter}
+// in list view. Enter-to-open is the implicit pane-wide convention shared with
+// Playlists; the hint is omitted to keep the two drill-down panes visually
+// consistent and to avoid border clutter.
 func TestAlbumsPane_Actions_FilterActive(t *testing.T) {
 	pane := newTestAlbumsPane(true)
 	pane.SetSize(80, 20)
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
+	require.Len(t, actions, 1)
 	assert.Equal(t, "f", actions[0].Key)
-	assert.Equal(t, "Enter", actions[1].Key)
 }
 
 // TestAlbumsPane_View_Empty verifies clean render on empty data.
