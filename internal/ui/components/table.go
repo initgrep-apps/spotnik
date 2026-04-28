@@ -1,6 +1,8 @@
 package components
 
 import (
+	"maps"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	btable "github.com/evertras/bubble-table/table"
@@ -144,10 +146,8 @@ func (t *Table) applyRows() {
 		th := t.config.Theme
 		btRows := make([]btable.Row, len(t.richRows))
 		for i, rowData := range t.richRows {
-			data := btable.RowData{}
-			for k, v := range rowData {
-				data[k] = v
-			}
+			data := make(btable.RowData, len(rowData))
+			maps.Copy(data, rowData)
 			if i == t.playingIndex {
 				if len(t.config.Columns) > 0 {
 					firstKey := t.config.Columns[0].Key
