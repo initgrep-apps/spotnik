@@ -649,23 +649,34 @@ func TestGatewayLivePane_Filter_NarrowsLiveOnEachKeystroke(t *testing.T) {
 	}
 }
 
-// TestGatewayLivePane_View_NoEmbeddedANSIInLabels pins the regression introduced
-// by the uikit.ListRow-based single-cell approach: ListRow.Render composed the
-// glyph and label into a single pre-rendered ANSI string with multiple segments
-// separated by \x1b[0m resets, all stuffed into one table cell. The row-level
-// selection background (SelectedBg) set by WithRowStyleFunc was interrupted by
-// those resets, so only the first segment appeared highlighted.
+// TestGatewayLivePane_View_NoAdjacentSGRSegmentsInRow pins the regression
+// introduced by the uikit.ListRow-based single-cell approach: ListRow.Render
+// composed the glyph and label as two separately ANSI-coloured segments joined
+// by "\x1b[0m \x1b[" (reset + one space + next-colour-open) all inside a single
+// table cell. That embedded reset interrupted the row-level selection background
+// applied by WithRowStyleFunc, so only the first (glyph) segment appeared
+// highlighted.
 //
-// After the multi-column refactor the event column value is a plain string — no
-// pre-rendered ANSI. The test locates the raw label text in the rendered view and
-// asserts that no \x1b[0m reset appears *within* the label's byte range. An ANSI
-// reset after the cell is fine (bubble-table closes each cell's foreground), but
-// a reset *inside* the label is the structural signature of the old ListRow path.
+// After the multi-column refactor the glyph is a btable.StyledCell in column 0
+// and the event text is a plain string in column 1. Bubble-table renders each
+// cell independently; the column separator adds multiple spaces between glyph
+// and event, so the pattern "\x1b[0m \x1b[" (reset + exactly one space + ANSI
+// open) never appears in the row line. With the old ListRow approach it reliably
+// appears because ListRow.Render joins glyph and label with exactly one plain
+// space: glyphStr + " " + labelStr.
+//
+// The test uses an unfocused pane to avoid the selected-row background styling
+// which adds bg-only padding sequences that would introduce their own
+// "\x1b[0m \x1b[" pattern in the transition from glyph to event column.
+//
 // Additionally the test pins the two-column layout (glyph + event).
-func TestGatewayLivePane_View_NoEmbeddedANSIInLabels(t *testing.T) {
+func TestGatewayLivePane_View_NoAdjacentSGRSegmentsInRow(t *testing.T) {
 	p, store := newTestGatewayLivePane(t)
 	p.SetSize(80, 20)
-	p.SetFocused(true)
+	// Deliberately unfocused: selected-row bg styling adds inter-column bg-only
+	// padding that itself produces "\x1b[0m \x1b[" between the padding and the
+	// event cell, making the assertion unstable under focus.
+	p.SetFocused(false)
 
 	store.RecordEvent(domain.GatewayEvent{
 		Timestamp: time.Now(),
@@ -678,37 +689,29 @@ func TestGatewayLivePane_View_NoEmbeddedANSIInLabels(t *testing.T) {
 
 	view := p.View()
 
-	// The event label is "<timestamp>  GET /v1/me/player/ansi-check  allowed"
-	// (from buildGatewayLiveRow for EventRequestAllowed).
-	// Locate the path segment in the raw rendered output.
-	labelFragment := "ansi-check"
-	labelStart := strings.Index(view, labelFragment)
-	if labelStart == -1 {
-		t.Fatalf("raw View() must contain %q; view = %q", labelFragment, view)
+	// Find the row line that contains the unique path fragment.
+	rowLine := ""
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "ansi-check") {
+			rowLine = line
+			break
+		}
+	}
+	if rowLine == "" {
+		t.Fatalf("raw View() must contain a line with %q; view = %q", "ansi-check", view)
 	}
 
-	// The old ListRow path rendered glyph + timestamp + method + path as separately
-	// ANSI-coloured segments joined by \x1b[0m resets, all within a single cell value.
-	// A reset mid-cell (between label words) is the structural regression signature.
+	// The old ListRow.Render output was: glyphStr + " " + labelStr, which in the
+	// rendered view produces the byte sequence "\x1b[0m \x1b[" — reset, exactly one
+	// space, then the next ANSI colour opener for the label. This is the structural
+	// signature of two adjacent SGR-styled segments within a single cell.
 	//
-	// After the refactor the event column value is a plain string. bubble-table closes
-	// the cell with a reset *after* the last visible character — that trailing reset
-	// is expected and acceptable. We search only from labelStart to just past the
-	// "allowed" suffix: the visible characters of this label, not beyond.
-	labelSuffix := "  allowed"
-	suffixIdx := strings.Index(view[labelStart:], labelSuffix)
-	var labelSpan string
-	if suffixIdx != -1 {
-		// Include "  allowed" in the span but nothing after.
-		labelEnd := labelStart + suffixIdx + len(labelSuffix)
-		labelSpan = view[labelStart:labelEnd]
-	} else {
-		// Fallback: just check the fragment itself.
-		labelSpan = view[labelStart : labelStart+len(labelFragment)]
-	}
-
-	if strings.Contains(labelSpan, "\x1b[0m") {
-		t.Errorf("ANSI reset found inside visible event label — this is the ListRow regression; label span = %q", labelSpan)
+	// After the multi-column refactor the glyph column width plus the InnerDivider
+	// separator gives three or more spaces between the glyph reset and the event
+	// cell's colour opener, so the single-space signature cannot appear.
+	const adjacentSGR = "\x1b[0m \x1b["
+	if strings.Contains(rowLine, adjacentSGR) {
+		t.Errorf("adjacent SGR segments (%q) found in row line — this is the ListRow regression; row = %q", adjacentSGR, rowLine)
 	}
 
 	// Verify column layout: GatewayLivePane must use two columns (glyph, event).
