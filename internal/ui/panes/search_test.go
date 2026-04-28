@@ -380,7 +380,10 @@ func TestSearchOverlay_Update_TypingJKA(t *testing.T) {
 	assert.Contains(t, o.Query(), "k", "k should be typed into input")
 }
 
-// TestSearchOverlay_Update_CtrlU verifies Ctrl+U clears the input.
+// TestSearchOverlay_Update_CtrlU verifies Ctrl+U is a no-op:
+// the input keeps its value (the textinput swallows Ctrl+U without effect).
+// Per the 2026-04-28 overlay-keybinding-cleanup spec, clearing only happens
+// when the user mutates the input directly.
 func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 	o := newTestSearchOverlay()
 
@@ -388,11 +391,11 @@ func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 	o, _ = sendKey(t, o, "e")
 	o, _ = sendKey(t, o, "l")
 	o, _ = sendKey(t, o, "l")
-	o, _ = sendKey(t, o, "o") // letters that are not action keys
+	o, _ = sendKey(t, o, "o")
 	require.Contains(t, o.Query(), "hello", "query should be 'hello' after typing those chars")
 
 	o, _ = sendKey(t, o, "ctrl+u")
-	assert.Empty(t, o.Query(), "Ctrl+U should clear the entire input")
+	assert.Equal(t, "hello", o.Query(), "Ctrl+U must not clear the input — clearing only via direct edits")
 }
 
 // --- Task 4.4: Result rendering tests ---
@@ -559,60 +562,6 @@ func TestSearchOverlay_DebounceToSearchRequest_Pipeline(t *testing.T) {
 	assert.True(t, ok, "debounce cmd should produce SearchRequestMsg, got %T", msg)
 }
 
-// --- Feature 20: Elm Architecture Purity tests ---
-
-// TestSearchOverlay_CtrlU_EmitsSearchClearedMsg verifies that pressing Ctrl+U
-// returns a command producing SearchClearedMsg instead of writing to the store directly.
-// Ctrl+U now returns a BatchMsg (SearchClearedMsg + placeholder tick restart).
-func TestSearchOverlay_CtrlU_EmitsSearchClearedMsg(t *testing.T) {
-	t.Helper()
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 30)
-
-	// Press Ctrl+U — should emit SearchClearedMsg (store is no longer involved).
-	// The command is a BatchMsg containing SearchClearedMsg and a placeholder tick restart.
-	_, cmd := sendKey(t, o, "ctrl+u")
-
-	require.NotNil(t, cmd, "Ctrl+U should return a command")
-	msg := cmd()
-
-	// Handle both direct SearchClearedMsg and BatchMsg (SearchClearedMsg + tick).
-	var gotCleared bool
-	switch m := msg.(type) {
-	case panes.SearchClearedMsg:
-		gotCleared = true
-	case tea.BatchMsg:
-		for _, subCmd := range m {
-			if subCmd == nil {
-				continue
-			}
-			if _, cleared := subCmd().(panes.SearchClearedMsg); cleared {
-				gotCleared = true
-			}
-		}
-	}
-	assert.True(t, gotCleared, "Ctrl+U must produce SearchClearedMsg (got %T)", msg)
-}
-
-// TestSearchOverlay_CtrlU_ClearsLocalInput verifies that Ctrl+U clears the local
-// input field (cosmetic) even though the store write is deferred to the root app.
-func TestSearchOverlay_CtrlU_ClearsLocalInput(t *testing.T) {
-	t.Helper()
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 30)
-
-	// Type some text first.
-	o, _ = sendKey(t, o, "b")
-	o, _ = sendKey(t, o, "l")
-	require.Equal(t, "bl", o.Query(), "input should be 'bl' after typing")
-
-	// Ctrl+U should clear the local input field.
-	o, _ = sendKey(t, o, "ctrl+u")
-	assert.Equal(t, "", o.Query(), "Ctrl+U should clear the local input field")
-}
-
 // TestSearchOverlay_SearchPageLoadedMsg_StoresResults verifies that SearchPageLoadedMsg
 // results are stored in the overlay and visible in View().
 func TestSearchOverlay_SearchPageLoadedMsg_StoresResults(t *testing.T) {
@@ -686,19 +635,6 @@ func TestSearchOverlay_View_BtopBorderTitle(t *testing.T) {
 	view := o.View()
 
 	assert.Contains(t, view, "Search", "border title should contain 'Search'")
-}
-
-// TestSearchOverlay_View_BtopBorderActions verifies action shortcuts appear in the border.
-// In the three-panel design, "Enter play" and "Ctrl+A queue" appear in the Results panel border.
-func TestSearchOverlay_View_BtopBorderActions(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 40)
-
-	view := o.View()
-
-	// Results panel border shows "Enter play" and "Ctrl+A queue" actions.
-	assert.Contains(t, view, "play", "results border should show 'play' action")
-	assert.Contains(t, view, "queue", "results border should show 'queue' action")
 }
 
 // --- Story 82: Three-panel layout tests ---
@@ -841,14 +777,17 @@ func TestSearchOverlay_View_TabBarActiveHighlight(t *testing.T) {
 	assert.Contains(t, view, "[All]", "active tab should be shown with brackets")
 }
 
-// TestSearchOverlay_View_HelpPanelContent verifies help bar contains keybinding text.
+// TestSearchOverlay_View_HelpPanelContent verifies the Keys panel renders
+// the uikit.KeyBar with the visible binding set.
 func TestSearchOverlay_View_HelpPanelContent(t *testing.T) {
 	o := newTestSearchOverlay()
 	// Use a wide terminal so the help bar has room to show keybinding text.
 	o.SetSize(150, 40)
 	view := o.View()
-	// Help bar should contain some key hint text (at least "esc").
-	assert.Contains(t, view, "esc", "help bar should show esc keybinding")
+	// Keys panel must advertise ctrl+a queue (the Queue binding).
+	assert.Contains(t, view, "ctrl+a", "help bar should show ctrl+a keybinding")
+	// Enter (play) and Esc (close) are no longer advertised in the keybar.
+	assert.NotContains(t, stripANSI(view), "esc close", "esc close must not appear in keybar")
 }
 
 // TestSearchOverlay_OverlayWidth_70Pct verifies overlayWidth returns 70% of terminal width.
@@ -876,26 +815,6 @@ func TestSearchOverlay_SetSize_PropagatesList(t *testing.T) {
 	// The overlay should also render without error.
 	view := o.View()
 	assert.NotEmpty(t, view, "view should not be empty after SetSize")
-}
-
-// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 8 bindings (all bindings).
-// ShortHelp is kept complete so it can be used programmatically; the help panel
-// uses ShowAll=true which bypasses ShortHelp and always renders the FullHelp 4×2 layout.
-func TestSearchKeyMap_ShortHelp(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	assert.Len(t, km.ShortHelp(), 8, "ShortHelp should return 8 bindings")
-}
-
-// TestSearchKeyMap_FullHelp verifies FullHelp returns 8 bindings.
-func TestSearchKeyMap_FullHelp(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	allBindings := km.FullHelp()
-	require.NotEmpty(t, allBindings)
-	total := 0
-	for _, group := range allBindings {
-		total += len(group)
-	}
-	assert.Equal(t, 8, total, "FullHelp should return 8 bindings total")
 }
 
 // TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults verifies that when a
@@ -1682,13 +1601,15 @@ func TestResizeList_ViewHeightStableAcrossHintToggle(t *testing.T) {
 	assert.Equal(t, baseLines, afterTypingLines,
 		"view line count must be stable after typing (hint toggled off); resizeList() must have been called")
 
-	// Press Ctrl+U → hint reappears → searchH goes back to 4.
+	// Press Backspace → hint reappears → searchH goes back to 4.
 	// resultsH loses 1 line. resizeList() must decrease listH by 1.
-	o, _ = sendKey(t, o, "ctrl+u")
-	require.True(t, o.ShowHintLine(), "hint must reappear after Ctrl+U")
-	afterCtrlULines := countViewLines(o.View())
-	assert.Equal(t, baseLines, afterCtrlULines,
-		"view line count must be stable after Ctrl+U (hint toggled on); resizeList() must have been called")
+	// NOTE: Ctrl+U is no longer a supported clear shortcut (2026-04-28 overlay-keybinding-cleanup).
+	// We use Backspace here as the canonical input-editing path that restores the empty state.
+	o, _ = sendKey(t, o, "backspace")
+	require.True(t, o.ShowHintLine(), "hint must reappear after clearing input via backspace")
+	afterClearLines := countViewLines(o.View())
+	assert.Equal(t, baseLines, afterClearLines,
+		"view line count must be stable after clearing input (hint toggled on); resizeList() must have been called")
 }
 
 // TestResizeList_ViewHeightStableAfterBackspace verifies view height stability when
@@ -1770,24 +1691,24 @@ func TestResizeList_ListHeightMatchesPanelFormula(t *testing.T) {
 	o.SetSize(100, 40)
 	h := o.OverlayHeight()
 
-	// Hint visible: searchH=4, helpH=4, resultsH = h-4-4, listH = resultsH-4.
+	// Hint visible: searchH=4, helpH=3, resultsH = h-4-3, listH = resultsH-4.
 	require.True(t, o.ShowHintLine())
-	wantHintVisible := (h - 4 - 4) - 4
+	wantHintVisible := (h - 4 - 3) - 4
 	if wantHintVisible < 1 {
 		wantHintVisible = 1
 	}
 	assert.Equal(t, wantHintVisible, o.ListHeight(),
-		"list height with hint visible must be overlayH - 4 - 4 - 4 = %d", wantHintVisible)
+		"list height with hint visible must be overlayH - 4 - 3 - 4 = %d", wantHintVisible)
 
-	// Type 'j' → hint hides: searchH=3, helpH=4, resultsH = h-3-4, listH = resultsH-4.
+	// Type 'j' → hint hides: searchH=3, helpH=3, resultsH = h-3-3, listH = resultsH-4.
 	o, _ = sendKey(t, o, "j")
 	require.False(t, o.ShowHintLine())
-	wantHintHidden := (h - 3 - 4) - 4
+	wantHintHidden := (h - 3 - 3) - 4
 	if wantHintHidden < 1 {
 		wantHintHidden = 1
 	}
 	assert.Equal(t, wantHintHidden, o.ListHeight(),
-		"list height with hint hidden must be overlayH - 3 - 4 - 4 = %d", wantHintHidden)
+		"list height with hint hidden must be overlayH - 3 - 3 - 4 = %d", wantHintHidden)
 	assert.Equal(t, wantHintVisible+1, wantHintHidden,
 		"hint-hidden list must be 1 taller than hint-visible list")
 }
@@ -2036,67 +1957,6 @@ func TestRenderTabBar_ShowsSpinnerWhenLoadingWithZeroItems(t *testing.T) {
 	// Zero items (no results delivered) — must not panic.
 	tabBar := panes.RenderTabBarForTest(o, 76)
 	assert.NotEmpty(t, tabBar, "tab bar must render without panic with zero items")
-}
-
-// --- Story 95: Help bar colors and ctrl+u in ShortHelp ---
-
-// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() includes k.Clear (ctrl+u)
-// with help text "clear" and k.Close (esc). Both are present because ShortHelp is restored
-// to all 8 bindings (the help panel uses ShowAll=true so FullHelp is always displayed in the UI).
-func TestSearchKeyMap_ShortHelp_ContainsCtrlU(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	bindings := km.ShortHelp()
-
-	require.Equal(t, 8, len(bindings), "ShortHelp() must return 8 bindings")
-
-	var foundClear, foundClose bool
-	for _, b := range bindings {
-		keys := b.Keys()
-		help := b.Help()
-		if len(keys) > 0 && keys[0] == "ctrl+u" && help.Desc == "clear" {
-			foundClear = true
-		}
-		if len(keys) > 0 && keys[0] == "esc" {
-			foundClose = true
-		}
-	}
-	assert.True(t, foundClear, "ShortHelp() must include a binding with key ctrl+u and desc clear")
-	assert.True(t, foundClose, "ShortHelp() must still include k.Close (esc)")
-}
-
-// TestNewSearchOverlay_HelpStylesUsesThemeColors verifies that NewSearchOverlay sets
-// all six help.Styles fields to theme token colors rather than the default muted grays.
-// It calls the exported RenderHelpForTest() helper and verifies the ANSI sequence for
-// theme.Info() wraps key name text in the rendered output.
-func TestNewSearchOverlay_HelpStylesUsesThemeColors(t *testing.T) {
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 40)
-
-	// Reference: what the key name "enter" should look like when styled with Info().
-	want := lipgloss.NewStyle().Foreground(th.Info()).Render("enter")
-
-	rendered := panes.RenderHelpForTest(o)
-	assert.True(t, strings.Contains(rendered, want),
-		"rendered help must contain Info()-styled key name; want %q in %q", want, rendered)
-}
-
-// TestSearchOverlay_SetTheme_PropagatesHelpStyles verifies that SetTheme() updates all
-// six o.help.Styles fields to match the new theme's color tokens.
-func TestSearchOverlay_SetTheme_PropagatesHelpStyles(t *testing.T) {
-	thA := theme.Load("black")
-	o := panes.NewSearchOverlay(thA)
-
-	thB := theme.Load("monokai")
-	o.SetTheme(thB)
-
-	shortKey := panes.HelpShortKeyForegroundForTest(o)
-	shortDesc := panes.HelpShortDescForegroundForTest(o)
-
-	assert.Equal(t, thB.Info(), shortKey,
-		"ShortKey foreground must equal themeB.Info() after SetTheme")
-	assert.Equal(t, thB.TextMuted(), shortDesc,
-		"ShortDesc foreground must equal themeB.TextMuted() after SetTheme")
 }
 
 // --- Story 99: searchIntent + scheduleDebounce ---
@@ -2634,30 +2494,6 @@ func TestPgUp_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
 	assert.False(t, isReq, "ctrl+left cmd must not immediately emit SearchRequestMsg")
 }
 
-// TestSearchKeyMap_ShortHelp_ContainsPaginationKeys verifies that both pagination bindings
-// use pgdown/pgup as the sole keys (macOS-safe — Ctrl+Right/Left removed entirely).
-// nextPage and prevPage appear in both ShortHelp (all 8 bindings) and FullHelp.
-func TestSearchKeyMap_ShortHelp_ContainsPaginationKeys(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	shortBindings := km.ShortHelp()
-
-	var foundNext, foundPrev bool
-	for _, b := range shortBindings {
-		keys := b.Keys()
-		if len(keys) > 0 && keys[0] == "pgdown" {
-			// pgdown must be the ONLY key — ctrl+right must not be present
-			assert.Len(t, keys, 1, "nextPage must have exactly 1 key (pgdown only, ctrl+right removed)")
-			foundNext = true
-		}
-		if len(keys) > 0 && keys[0] == "pgup" {
-			assert.Len(t, keys, 1, "prevPage must have exactly 1 key (pgup only, ctrl+left removed)")
-			foundPrev = true
-		}
-	}
-	assert.True(t, foundNext, "ShortHelp() must include nextPage binding with pgdown as sole key")
-	assert.True(t, foundPrev, "ShortHelp() must include prevPage binding with pgup as sole key")
-}
-
 // --- Task 6: renderPaginationBar + Panel 2 layout + resizeList ---
 
 // TestRenderPaginationBar_FirstPage_PrevArrowDimmed verifies that on page 1,
@@ -2781,37 +2617,12 @@ func TestPaginationBar_NotRenderedWhenTotal0(t *testing.T) {
 	o.SetSize(80, 40)
 	// No results delivered — total stays 0.
 	view := o.View()
-	assert.False(t, strings.Contains(view, "page"), // pagination bar uses "page N"
-		"pagination bar must not appear when total=0; view=%q", view)
-}
-
-// --- Task 7: Ctrl+U resets intent.page and intent.query ---
-
-// TestCtrlU_ResetIntentPageAndQuery verifies that Ctrl+U resets page to 1 and query to "".
-func TestCtrlU_ResetIntentPageAndQuery(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 40)
-	// Type a query and advance pages.
-	for _, ch := range "jazz" {
-		o, _ = sendKey(t, o, string(ch))
-	}
-	m, _ := o.Update(panes.SearchPageLoadedMsg{
-		Results: panes.TracksToSearchListItems([]domain.Track{{URI: "u1", Name: "Jazz"}}),
-		Total:   51,
-	})
-	o = m.(*panes.SearchOverlay)
-	// Advance to page 5 by sending ctrl+right four times.
-	for i := 0; i < 4; i++ {
-		o, _ = sendKey(t, o, "pgdown")
-	}
-	require.Equal(t, 5, o.IntentPage(), "pre-condition: should be on page 5")
-
-	// Press Ctrl+U.
-	o, _ = sendKey(t, o, "ctrl+u")
-
-	assert.Equal(t, 1, o.IntentPage(), "ctrl+u must reset intent.page to 1")
-	assert.Equal(t, "", o.IntentQuery(), "ctrl+u must reset intent.query to empty")
-	assert.Equal(t, o.IntentTab(), o.ActiveTab(), "tab should be unchanged after ctrl+u")
+	plain := stripANSI(view)
+	// The pagination bar renders "page N" (with a space before the number).
+	// "pgdn/pgup page" in the keybar uses the word "page" too, so we check for
+	// the more specific pattern " page 1 " which only the pagination bar emits.
+	assert.False(t, strings.Contains(plain, "page 1"),
+		"pagination bar must not appear when total=0; plain=%q", plain)
 }
 
 // --- Task 8: Reset() zeros all story-102 fields ---
@@ -3025,23 +2836,7 @@ func TestPgUp_LoadingNextPage_NoOp(t *testing.T) {
 	assert.Nil(t, cmd, "ctrl+left while loadingNextPage must return nil cmd")
 }
 
-// --- Bug fix tests: C1, M1, M2, M3 ---
-
-// TestSearchOverlay_CtrlU_ClearsResults (C1) verifies that Ctrl+U clears not only the
-// input but also the displayed results and resets loading flags.
-// Previously the KeyCtrlU handler cleared input/prefix/intent but left o.results,
-// o.total, and the resultList intact — stale results would remain on screen.
-func TestSearchOverlay_CtrlU_ClearsResults(t *testing.T) {
-	o := newTestSearchOverlayWithResults()
-	o.SetSize(80, 40)
-	require.NotEmpty(t, o.Results(), "prerequisite: results should be non-empty before Ctrl+U")
-	require.NotEmpty(t, o.ResultListItems(), "prerequisite: result list should be non-empty before Ctrl+U")
-
-	o, _ = sendKey(t, o, "ctrl+u")
-
-	assert.Nil(t, o.Results(), "Ctrl+U must clear o.results so stale results are not shown")
-	assert.Empty(t, o.ResultListItems(), "Ctrl+U must clear resultList items")
-}
+// --- Bug fix tests: M1, M2, M3 ---
 
 // TestSearchOverlay_AddToQueue_CarriesTrackName (M1) verifies that Ctrl+A on a track
 // populates AddToQueueMsg.TrackName so the queue toast shows the track title.
@@ -3109,7 +2904,7 @@ func TestSearchOverlay_ListNavigation_NoWrapAtLastItem(t *testing.T) {
 		"Down at last item must clamp (stay at 1), not wrap to 0 — InfiniteScrolling must be false")
 }
 
-// --- Pagination UX fixes: pgdown/pgup keybindings, pagination bar format, ShortHelp count ---
+// --- Pagination UX fixes: pgdown/pgup keybindings, pagination bar format ---
 
 // TestPgDown_AdvancesPage verifies that PageDown advances intent.page when hasNextPage()
 // is true and a query is set. This is the macOS-safe replacement for Ctrl+Right.
@@ -3158,36 +2953,55 @@ func TestPgUp_PrevPage(t *testing.T) {
 	assert.False(t, isReq, "pgup cmd must not immediately emit SearchRequestMsg (debounced)")
 }
 
-// --- ShowAll help bar (2-row FullHelp layout) ---
-
-// TestSearchKeyMap_FullHelp_FourGroupsOfTwo verifies that FullHelp() returns exactly 4 groups
-// of 2 bindings each. This structure drives the 4-column × 2-row layout rendered by
-// bubbles/help when ShowAll=true — each group becomes a column, each binding a row.
-func TestSearchKeyMap_FullHelp_FourGroupsOfTwo(t *testing.T) {
+// TestSearchKeyMap_OnlyVisibleBindings verifies the keymap exposes exactly
+// the 5 bindings advertised in the bottom keybar after the cleanup:
+// Queue, TabNext, TabPrev, nextPage, prevPage. Play/Close/Clear are removed
+// from the map (Enter/Esc behavior remains in Update() but is not advertised;
+// Ctrl+U clear is gone entirely).
+func TestSearchKeyMap_OnlyVisibleBindings(t *testing.T) {
 	km := panes.NewSearchKeyMap()
-	groups := km.FullHelp()
-	assert.Len(t, groups, 4, "FullHelp must have 4 groups for 4-column layout")
-	for i, g := range groups {
-		assert.Len(t, g, 2, "each FullHelp group must have 2 bindings (column %d)", i)
-	}
+
+	assert.Equal(t, []string{"ctrl+a"}, km.Queue.Keys(), "Queue → ctrl+a")
+	assert.Equal(t, "ctrl+a", km.Queue.Help().Key)
+	assert.Equal(t, "queue", km.Queue.Help().Desc)
+
+	assert.Equal(t, []string{"tab"}, km.TabNext.Keys())
+	assert.Equal(t, "tab", km.TabNext.Help().Key)
+	assert.Equal(t, "category", km.TabNext.Help().Desc, "Tab help should read 'category', not 'filter'")
+
+	assert.Equal(t, []string{"shift+tab"}, km.TabPrev.Keys())
 }
 
-// TestHelpPanel_ShowsAllBindings verifies that the help panel renders ALL 8 bindings
-// (pgdn, pgup, esc, ctrl+u, enter, ctrl+a, tab, shift+tab) because ShowAll=true is set
-// on the help model, causing help.View() to use FullHelp instead of ShortHelp.
-func TestHelpPanel_ShowsAllBindings(t *testing.T) {
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(200, 50) // wide terminal so no truncation
+// TestSearchOverlay_View_KeysPanel_SingleLine verifies the Keys panel renders
+// a single-line uikit.KeyBar with the cleaned binding set, and that the dead
+// bindings (Enter play, Esc close, Ctrl+U clear) are absent.
+func TestSearchOverlay_View_KeysPanel_SingleLine(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	view := o.View()
 
-	rendered := panes.RenderHelpForTest(o)
+	plain := stripANSI(view)
 
-	// Strip ANSI escapes for plain-text assertion.
-	plain := lipgloss.NewStyle().Render(rendered)
+	assert.Contains(t, plain, "ctrl+a queue", "ctrl+a queue must appear")
+	assert.Contains(t, plain, "tab/shift+tab category", "tab/shift+tab category must appear")
+	assert.Contains(t, plain, "pgdn/pgup page", "pgdn/pgup page must appear")
 
-	// All 8 key names must appear in the rendered help output.
-	for _, wantKey := range []string{"enter", "ctrl+a", "tab", "shift+tab", "esc", "ctrl+u", "pgdn", "pgup"} {
-		assert.True(t, strings.Contains(plain, wantKey),
-			"help panel must render key %q (ShowAll=true shows all 8 bindings); rendered=%q", wantKey, plain)
-	}
+	assert.NotContains(t, plain, "enter play", "Enter play must not be advertised")
+	assert.NotContains(t, plain, "esc close", "Esc close must not be advertised")
+	assert.NotContains(t, plain, "ctrl+u clear", "Ctrl+U must not be advertised")
+}
+
+// TestSearchOverlay_View_ResultsPanel_NoCornerActions verifies the Results
+// panel border no longer carries the "Enter play / Ctrl+A queue" corner-notch
+// actions. The bottom keybar is the single source of truth for visible
+// bindings.
+func TestSearchOverlay_View_ResultsPanel_NoCornerActions(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	view := o.View()
+
+	plain := stripANSI(view)
+
+	assert.NotContains(t, plain, "Enter play", "corner-notch 'Enter play' must be removed")
+	assert.NotContains(t, plain, "Ctrl+A queue", "corner-notch 'Ctrl+A queue' must be removed")
 }

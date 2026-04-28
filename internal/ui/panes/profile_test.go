@@ -1,12 +1,14 @@
 package panes
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -194,7 +196,7 @@ func TestProfileOverlay_logoutFirstPress_showsConfirmation(t *testing.T) {
 	assert.NotNil(t, cmd, "first 'l' press should emit a ProfileConfirmToastMsg command")
 	view := model.View()
 	assert.NotContains(t, view, "Press l again", "confirmation must not be rendered inline; toast handles it")
-	assert.Contains(t, view, "Logout", "logout label should still render")
+	assert.Contains(t, view, "logout", "logout label should still render")
 }
 
 // TestProfileOverlay_logoutSecondPress_emitsLogoutMsg verifies that two consecutive 'l' presses
@@ -237,7 +239,7 @@ func TestProfileOverlay_forgetFirstPress_showsConfirmation(t *testing.T) {
 	assert.NotNil(t, cmd, "first 'f' press should emit a ProfileConfirmToastMsg command")
 	view := model.View()
 	assert.NotContains(t, view, "Press f again", "confirmation must not be rendered inline; toast handles it")
-	assert.Contains(t, view, "Forget", "forget label should still render")
+	assert.Contains(t, view, "forget", "forget label should still render")
 }
 
 // TestProfileOverlay_forgetSecondPress_emitsForgetMsg verifies that two consecutive 'f' presses
@@ -369,4 +371,94 @@ func TestProfileOverlay_confirmationView_noInlineText(t *testing.T) {
 	view := updated.(*ProfileOverlay).View()
 	assert.NotContains(t, view, "Press l again", "overlay must not render inline confirmation; toast handles it")
 	assert.NotContains(t, view, "!!")
+}
+
+// newPremiumProfileStore creates a state.Store pre-loaded with a premium user profile
+// (DisplayName "Irshad", Country "IN", Product "premium"). Reused by table-layout tests.
+func newPremiumProfileStore() *state.Store {
+	st := state.New()
+	st.SetUserProfile(domain.UserProfile{
+		ID:          "user123",
+		DisplayName: "Irshad",
+		Product:     "premium",
+		Country:     "IN",
+	})
+	return st
+}
+
+// TestProfileOverlay_View_TableLayout verifies the three icon+value rows
+// render in order (Name, Plan, Region), each as glyph + two-space gap + value,
+// inside the single bordered card.
+func TestProfileOverlay_View_TableLayout(t *testing.T) {
+	st := newPremiumProfileStore()
+	p := NewProfileOverlay(st, theme.Load("black"))
+	p.SetSize(80, 40)
+
+	plain := stripANSI(p.View())
+
+	// Three rows in order. Glyphs use unicode mode (default).
+	assert.Regexp(t, `◉\s+Irshad`, plain, "name row: ◉ + Irshad")
+	assert.Regexp(t, `♛\s+Premium`, plain, "plan row: ♛ + Premium")
+	assert.Regexp(t, `◎\s+IN`, plain, "region row: ◎ + IN")
+
+	// Order check: Name appears before Plan appears before Region.
+	idxName := strings.Index(plain, "Irshad")
+	idxPlan := strings.Index(plain, "Premium")
+	idxRegion := strings.Index(plain, "IN")
+	require.True(t, idxName >= 0 && idxPlan >= 0 && idxRegion >= 0, "all three rows must render")
+	assert.Less(t, idxName, idxPlan, "Name above Plan")
+	assert.Less(t, idxPlan, idxRegion, "Plan above Region")
+}
+
+// TestProfileOverlay_View_KeyBarLine verifies the action area renders as a
+// single uikit.KeyBar line, not as two stacked rows.
+func TestProfileOverlay_View_KeyBarLine(t *testing.T) {
+	st := newPremiumProfileStore()
+	p := NewProfileOverlay(st, theme.Load("black"))
+	p.SetSize(80, 40)
+
+	plain := stripANSI(p.View())
+
+	// Both bindings on the same logical line, separated by the KeyBar middot.
+	assert.Regexp(t, `l\s+logout\s*[·|]\s*f\s+forget`, plain,
+		"l logout and f forget must appear on one line separated by the KeyBar separator")
+
+	// Old stacked-row format must be gone.
+	assert.NotContains(t, plain, "l  Logout", "old stacked Logout row must be removed")
+	assert.NotContains(t, plain, "f  Forget", "old stacked Forget row must be removed")
+}
+
+// TestProfileOverlay_View_ASCIIGlyphs validates the glyph system wiring by
+// verifying ASCII-mode renders the ASCII variants (per uikit.GlyphFor).
+func TestProfileOverlay_View_ASCIIGlyphs(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	st := newPremiumProfileStore() // "Irshad", "IN", premium
+	p := NewProfileOverlay(st, theme.Load("black"))
+	p.SetSize(80, 40)
+
+	plain := stripANSI(p.View())
+
+	assert.Regexp(t, `\(\*\)\s+Irshad`, plain, "name row: (*) in ASCII mode")
+	assert.Regexp(t, `\*P\s+Premium`, plain, "plan row: *P in ASCII mode")
+	assert.Regexp(t, `\( \)\s+IN`, plain, "region row: ( ) in ASCII mode")
+}
+
+// TestProfileOverlay_View_NoSeparators verifies the horizontal rule lines
+// used as section separators in the old implementation are gone.
+func TestProfileOverlay_View_NoSeparators(t *testing.T) {
+	st := newPremiumProfileStore()
+	p := NewProfileOverlay(st, theme.Load("black"))
+	p.SetSize(80, 40)
+
+	plain := stripANSI(p.View())
+
+	// The old implementation rendered "│────────────────────" content separator
+	// lines (20 dashes framed by the border │). The new layout has none.
+	// We check the framed form to distinguish content lines from border corners
+	// (the bottom border ╰──────────────────────╯ has more than 20 dashes and
+	// no leading │).
+	assert.NotContains(t, plain, "│────────────────────",
+		"the 20-char content separator lines must be removed")
 }
