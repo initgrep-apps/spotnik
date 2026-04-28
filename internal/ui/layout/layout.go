@@ -47,86 +47,45 @@ func (m *Manager) Resize(width, height int) {
 // recompute recalculates all Rects from the active preset + hidden state.
 // Called after Resize, SetPreset, CyclePreset, TogglePage, TogglePane.
 //
-// RowSpan support: a Cell with RowSpan ≥ 2 spans its own grid row plus the next N-1 rows.
-// The spanning cell occupies a fixed horizontal interval in all covered rows. Continuation
-// rows (those covered by a spanner from an earlier row) reserve that interval and place their
-// own cells proportionally in the remaining horizontal space.
+// The layout engine is a simple flat two-pass algorithm:
+//  1. Filter rows/cells to only those that are visible (preset.Visible && !hidden).
+//  2. Distribute height proportionally by HeightWeight; last row gets remainder.
+//  3. Within each row distribute width proportionally by WidthWeight; last cell gets remainder.
+//
+// Toggle redistribution is automatic: removing a cell from a row expands surviving
+// cells in that row; removing all cells from a row collapses the row itself.
 func (m *Manager) recompute() {
 	m.rects = make(map[PaneID]Rect)
 
-	preset := m.activePreset[m.activePage]
 	presets := m.presets[m.activePage]
-	if preset >= len(presets) {
+	presetIdx := m.activePreset[m.activePage]
+	if presetIdx >= len(presets) {
 		return
 	}
-	grid := presets[preset]
+	grid := presets[presetIdx]
 
-	// isVisible reports whether a cell should be shown.
 	isVisible := func(id PaneID) bool {
 		return grid.Visible[id] && !m.hidden[id]
 	}
 
-	// ── Step 1: determine which original grid rows are "live" ──────────────────
-	//
-	// A row is live if:
-	//   (a) it has at least one own visible cell, OR
-	//   (b) a spanner from an earlier live row still covers this row.
-	//
-	// We track, for each original row index, which spanner panes cover it
-	// (so the row layout step knows what horizontal space to reserve).
-
-	nRows := len(grid.Grid)
-	// ownCellsByRow: for each original row index, the set of visible own cells.
-	type cellSpec struct {
+	type liveCell struct {
 		paneID      PaneID
 		widthWeight int
-		rowSpan     int // effective (≥1)
 	}
-	ownCellsByRow := make([][]cellSpec, nRows)
-	for ri, row := range grid.Grid {
-		for _, cell := range row.Cells {
-			if isVisible(cell.PaneID) {
-				ownCellsByRow[ri] = append(ownCellsByRow[ri], cellSpec{
-					paneID:      cell.PaneID,
-					widthWeight: cell.WidthWeight,
-					rowSpan:     cell.rowSpan(),
-				})
-			}
-		}
-	}
-
-	// spannerCoverageByRow: for each original row index, which spanner panes cover it.
-	// A spanner originating in row i with rowSpan s covers rows i, i+1, ..., i+s-1.
-	// This slice tracks coverage from "above" (rows i+1 .. i+s-1).
-	spannerCoverageByRow := make([][]PaneID, nRows)
-	for ri, cells := range ownCellsByRow {
-		for _, c := range cells {
-			if c.rowSpan > 1 {
-				for k := 1; k < c.rowSpan && ri+k < nRows; k++ {
-					spannerCoverageByRow[ri+k] = append(spannerCoverageByRow[ri+k], c.paneID)
-				}
-			}
-		}
-	}
-
-	// liveRows: list of original row indices that are live.
 	type liveRow struct {
-		origIdx         int
-		heightWeight    int
-		ownCells        []cellSpec
-		spannerCoverage []PaneID
+		heightWeight int
+		cells        []liveCell
 	}
 	var liveRows []liveRow
-	for ri, origRow := range grid.Grid {
-		hasOwn := len(ownCellsByRow[ri]) > 0
-		hasCoverage := len(spannerCoverageByRow[ri]) > 0
-		if hasOwn || hasCoverage {
-			liveRows = append(liveRows, liveRow{
-				origIdx:         ri,
-				heightWeight:    origRow.HeightWeight,
-				ownCells:        ownCellsByRow[ri],
-				spannerCoverage: spannerCoverageByRow[ri],
-			})
+	for _, row := range grid.Grid {
+		var cells []liveCell
+		for _, c := range row.Cells {
+			if isVisible(c.PaneID) {
+				cells = append(cells, liveCell{c.PaneID, c.WidthWeight})
+			}
+		}
+		if len(cells) > 0 {
+			liveRows = append(liveRows, liveRow{row.HeightWeight, cells})
 		}
 	}
 
@@ -136,254 +95,57 @@ func (m *Manager) recompute() {
 		return
 	}
 
-	// ── Step 2: distribute height among live rows ──────────────────────────────
-
 	contentH := m.height - m.headerHeight - m.statusHeight
 	if contentH < 0 {
 		contentH = 0
 	}
 
 	totalHWeight := 0
-	for _, row := range liveRows {
-		totalHWeight += row.heightWeight
+	for _, r := range liveRows {
+		totalHWeight += r.heightWeight
 	}
 
-	type rowLayout struct {
-		origIdx         int
-		y               int
-		height          int
-		ownCells        []cellSpec
-		spannerCoverage []PaneID
-	}
-	rowLayouts := make([]rowLayout, len(liveRows))
+	var newFocusOrder []PaneID
 	y := 0
 	for i, row := range liveRows {
 		var h int
-		if totalHWeight == 0 {
+		switch {
+		case totalHWeight == 0:
 			h = 0
-		} else if i == len(liveRows)-1 {
+		case i == len(liveRows)-1:
 			h = contentH - y
-		} else {
+		default:
 			h = contentH * row.heightWeight / totalHWeight
 		}
 		if h < 0 {
 			h = 0
 		}
-		rowLayouts[i] = rowLayout{
-			origIdx:         row.origIdx,
-			y:               y,
-			height:          h,
-			ownCells:        row.ownCells,
-			spannerCoverage: row.spannerCoverage,
-		}
-		y += h
-	}
 
-	// Build lookup: origIdx → rowLayout index (for spanner height accumulation).
-	rowIdxByOrig := make(map[int]int, len(rowLayouts))
-	for i, rl := range rowLayouts {
-		rowIdxByOrig[rl.origIdx] = i
-	}
-
-	// ── Step 3: spanning pass — compute spanner Rects ─────────────────────────
-	//
-	// Use declared row cells (including hidden) to derive each spanner's X so
-	// that column alignment is preserved when sibling cells are toggled off.
-	// The effective denominator is widened when a continuation row has own cells
-	// that need horizontal space alongside the spanner.
-
-	type spannerRect struct {
-		x, w, y, h int
-	}
-	spannerRects := make(map[PaneID]spannerRect)
-
-	for _, rl := range rowLayouts {
-		hasSpanner := false
-		for _, c := range rl.ownCells {
-			if c.rowSpan > 1 {
-				hasSpanner = true
-				break
-			}
-		}
-		if !hasSpanner {
-			continue
-		}
-
-		declaredCells := grid.Grid[rl.origIdx].Cells
-
-		for _, c := range rl.ownCells {
-			if c.rowSpan <= 1 {
-				continue
-			}
-
-			// Sum declared weights (all cells, including hidden) and weight to
-			// the left of this spanner — preserves column X across toggles.
-			declaredTotalW, leftW := 0, 0
-			seenSpanner := false
-			for _, dc := range declaredCells {
-				declaredTotalW += dc.WidthWeight
-				if dc.PaneID == c.paneID {
-					seenSpanner = true
-				}
-				if !seenSpanner {
-					leftW += dc.WidthWeight
-				}
-			}
-
-			// Widen denominator if a continuation row has own cells that need
-			// space alongside the spanner.
-			effectiveTotalW := declaredTotalW
-			for k := 1; k < c.rowSpan && rl.origIdx+k < nRows; k++ {
-				targetOrig := rl.origIdx + k
-				if rli, ok := rowIdxByOrig[targetOrig]; ok {
-					contRow := rowLayouts[rli]
-					if len(contRow.ownCells) > 0 {
-						contW := c.widthWeight
-						for _, cc := range contRow.ownCells {
-							contW += cc.widthWeight
-						}
-						if contW > effectiveTotalW {
-							effectiveTotalW = contW
-						}
-					}
-				}
-			}
-
-			spannerX, spannerW := 0, 0
-			if effectiveTotalW > 0 {
-				spannerX = m.width * leftW / effectiveTotalW
-				spannerW = m.width * c.widthWeight / effectiveTotalW
-			}
-
-			// Accumulate height across all covered rows.
-			totalH := 0
-			for k := 0; k < c.rowSpan; k++ {
-				targetOrig := rl.origIdx + k
-				if rli, ok := rowIdxByOrig[targetOrig]; ok {
-					totalH += rowLayouts[rli].height
-				}
-			}
-
-			spannerRects[c.paneID] = spannerRect{x: spannerX, w: spannerW, y: rl.y, h: totalH}
-		}
-	}
-
-	// Assign Rects for all spanning cells.
-	for id, sr := range spannerRects {
-		m.rects[id] = Rect{X: sr.x, Y: sr.y, Width: sr.w, Height: sr.h}
-	}
-
-	// ── Step 4: per-row placement — place non-spanner cells ───────────────────
-	//
-	// For each live row:
-	//   1. Compute reserved horizontal intervals from spanners covering this row.
-	//   2. Compute available width = totalWidth − sum(reserved widths).
-	//   3. Place non-spanner cells left-to-right using nextFreeX to skip reserved.
-
-	var newFocusOrder []PaneID
-	spannerInFocusOrder := make(map[PaneID]bool)
-
-	for _, rl := range rowLayouts {
-		// Build reserved interval list for this row.
-		// Reserve space for spanners that cover this row:
-		//   (a) spanners originating in an earlier row (continuation coverage), AND
-		//   (b) spanners originating in this row itself (so non-spanner own cells
-		//       are placed in the remaining horizontal space, not the full width).
-		type interval struct{ x, w int }
-		var reserved []interval
-		for _, covID := range rl.spannerCoverage {
-			if sr, ok := spannerRects[covID]; ok {
-				reserved = append(reserved, interval{sr.x, sr.w})
-			}
-		}
-		// Also reserve space for spanners originating in this row.
-		for _, c := range rl.ownCells {
-			if c.rowSpan > 1 {
-				if sr, ok := spannerRects[c.paneID]; ok {
-					reserved = append(reserved, interval{sr.x, sr.w})
-				}
-			}
-		}
-
-		// nextFreeX advances cx past any reserved interval that overlaps it.
-		nextFreeX := func(cx int) int {
-			for {
-				moved := false
-				for _, iv := range reserved {
-					if cx >= iv.x && cx < iv.x+iv.w {
-						cx = iv.x + iv.w
-						moved = true
-					}
-				}
-				if !moved {
-					break
-				}
-			}
-			return cx
-		}
-
-		// Compute available width for own non-spanner cells.
-		available := m.width
-		for _, iv := range reserved {
-			available -= iv.w
-		}
-
-		// Separate own cells into non-spanners (placed this row) and spanners
-		// (placed in step 3; added to focus order after non-spanners so that
-		// Tab navigates left-to-right: left-column panes before the spanner).
-		var nonSpanCells []cellSpec
-		var spanCells []cellSpec
-		for _, c := range rl.ownCells {
-			if c.rowSpan > 1 {
-				spanCells = append(spanCells, c)
-			} else {
-				nonSpanCells = append(nonSpanCells, c)
-			}
-		}
-
-		// Total weight for non-spanner cells (proportional width in available space).
 		totalWWeight := 0
-		for _, c := range nonSpanCells {
+		for _, c := range row.cells {
 			totalWWeight += c.widthWeight
 		}
 
-		cx := 0
-		for j, c := range nonSpanCells {
-			cx = nextFreeX(cx)
+		x := 0
+		for j, c := range row.cells {
 			var w int
-			if totalWWeight == 0 {
+			switch {
+			case totalWWeight == 0:
 				w = 0
-			} else if j == len(nonSpanCells)-1 {
-				// Last non-spanner cell: fill to next reserved boundary or terminal edge.
-				nextBoundary := m.width
-				for _, iv := range reserved {
-					if iv.x > cx && iv.x < nextBoundary {
-						nextBoundary = iv.x
-					}
-				}
-				w = nextBoundary - cx
-			} else {
-				w = available * c.widthWeight / totalWWeight
+			case j == len(row.cells)-1:
+				w = m.width - x
+			default:
+				w = m.width * c.widthWeight / totalWWeight
 			}
 			if w < 0 {
 				w = 0
 			}
-			m.rects[c.paneID] = Rect{X: cx, Y: rl.y, Width: w, Height: rl.height}
+			m.rects[c.paneID] = Rect{X: x, Y: y, Width: w, Height: h}
 			newFocusOrder = append(newFocusOrder, c.paneID)
-			cx += w
+			x += w
 		}
-
-		// Add spanners to focus order after non-spanners so Tab follows
-		// left-to-right visual order (left-column panes before the spanner).
-		for _, c := range spanCells {
-			if !spannerInFocusOrder[c.paneID] {
-				newFocusOrder = append(newFocusOrder, c.paneID)
-				spannerInFocusOrder[c.paneID] = true
-			}
-		}
+		y += h
 	}
-
-	// ── Step 5: update focus order ─────────────────────────────────────────────
 
 	prevFocused := m.currentFocusedPane()
 	m.focusOrder = newFocusOrder

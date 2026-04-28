@@ -4,17 +4,6 @@ package layout
 type Cell struct {
 	PaneID      PaneID
 	WidthWeight int
-	// RowSpan is the number of rows this cell spans vertically (0 or 1 = one row).
-	// A cell with RowSpan 2 occupies its own row plus the next row in its column position.
-	RowSpan int
-}
-
-// rowSpan returns the effective row span (minimum 1).
-func (c Cell) rowSpan() int {
-	if c.RowSpan < 2 {
-		return 1
-	}
-	return c.RowSpan
 }
 
 // Row represents a horizontal strip of cells in the grid with its relative height.
@@ -105,8 +94,9 @@ var PresetDiscovery = Preset{
 
 // Page B preset
 
-// PresetNerdStatus shows NowPlaying strip, GatewayHealth + PollingTraffic stacked on the left
-// (30%), GatewayLive spanning full height on the right (70%), NetworkLog full-width below.
+// PresetNerdStatus shows NowPlaying strip, three diagnostic panes side-by-side
+// (Health, Traffic, Live with weights 1:1:3 → ~20%/20%/60%), and NetworkLog
+// full-width below. All five panes are individually toggleable via keys 1-5.
 var PresetNerdStatus = Preset{
 	Name: "Nerd Status",
 	Visible: map[PaneID]bool{
@@ -120,13 +110,10 @@ var PresetNerdStatus = Preset{
 		{HeightWeight: 1, Cells: []Cell{
 			{PaneID: PaneNowPlaying, WidthWeight: 1},
 		}},
-		{HeightWeight: 2, Cells: []Cell{
+		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PaneGatewayHealth, WidthWeight: 1},
-			{PaneID: PaneGatewayLive, WidthWeight: 3, RowSpan: 2}, // spans this row and the next
-		}},
-		{HeightWeight: 2, Cells: []Cell{
 			{PaneID: PanePollingTraffic, WidthWeight: 1},
-			// GatewayLive continuation — no cell here; recompute() handles the span
+			{PaneID: PaneGatewayLive, WidthWeight: 3},
 		}},
 		{HeightWeight: 2, Cells: []Cell{
 			{PaneID: PaneNetworkLog, WidthWeight: 1},

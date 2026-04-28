@@ -130,6 +130,37 @@ func TestFilterActive_NumberKeys_DoNotTogglePanes(t *testing.T) {
 	assert.Equal(t, originalFocus, a.FocusedPane(), "'0' with active filter should not toggle page")
 }
 
+// TestFilterActive_Tab_DoesNotRotateFocus verifies that Tab while filter is
+// active does NOT rotate focus to the next pane. Tab is consumed by the
+// textinput inside the filter.
+//
+// Story 181: this pins the focus invariant — no code path moves focus away
+// from a pane with an active filter input.
+func TestFilterActive_Tab_DoesNotRotateFocus(t *testing.T) {
+	a := setupAppWithFilterablePane(t)
+	originalFocus := a.FocusedPane()
+	activateFilter(a)
+
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.Equal(t, originalFocus, a.FocusedPane(),
+		"Tab with active filter must not rotate focus")
+}
+
+// TestFilterActive_P_DoesNotCyclePreset verifies that 'p' while filter is
+// active does NOT cycle the preset. The keystroke is consumed by the filter
+// input as a literal character.
+//
+// Story 181: pins the focus invariant for preset cycling.
+func TestFilterActive_P_DoesNotCyclePreset(t *testing.T) {
+	a := setupAppWithFilterablePane(t)
+	originalFocus := a.FocusedPane()
+	activateFilter(a)
+
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	assert.Equal(t, originalFocus, a.FocusedPane(),
+		"'p' with active filter must not cycle preset")
+}
+
 // --- Profile overlay routing tests ---
 
 // newProfileTestApp creates a minimal App for profile overlay routing tests.

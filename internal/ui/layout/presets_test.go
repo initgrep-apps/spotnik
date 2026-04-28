@@ -109,35 +109,33 @@ func TestPresetNerdStatus_HasFivePanes(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneNetworkLog])
 }
 
-// TestPresetNerdStatus_GridHasFourRows verifies the stacked grid structure:
-// NowPlaying strip, GatewayHealth+GatewayLive(span=2) row, PollingTraffic continuation row,
+// TestPresetNerdStatus_FlatThreeRows verifies the flat grid structure (story 181):
+// NowPlaying strip, single middle row with Health+Traffic+Live (1:1:3),
 // NetworkLog full-width row.
-func TestPresetNerdStatus_GridHasFourRows(t *testing.T) {
-	require.Len(t, layout.PresetNerdStatus.Grid, 4)
+func TestPresetNerdStatus_FlatThreeRows(t *testing.T) {
+	require.Len(t, layout.PresetNerdStatus.Grid, 3)
+
+	p := layout.PresetNerdStatus
 
 	// Row 0: NowPlaying strip
-	p := layout.PresetNerdStatus
 	assert.Equal(t, 1, p.Grid[0].HeightWeight)
 	assert.Len(t, p.Grid[0].Cells, 1)
 	assert.Equal(t, layout.PaneNowPlaying, p.Grid[0].Cells[0].PaneID)
 
-	// Row 1: GatewayHealth (left) + GatewayLive (right, spans 2 rows)
-	row2 := p.Grid[1]
-	require.Len(t, row2.Cells, 2)
-	assert.Equal(t, layout.PaneGatewayHealth, row2.Cells[0].PaneID)
-	assert.Equal(t, layout.PaneGatewayLive, row2.Cells[1].PaneID)
-	assert.Equal(t, 2, row2.Cells[1].RowSpan, "GatewayLive must span 2 rows")
-	assert.Equal(t, 3, row2.Cells[1].WidthWeight, "GatewayLive must have weight 3 (70%)")
+	// Row 1: Health + Traffic + Live with 1:1:3 widths
+	middle := p.Grid[1]
+	require.Len(t, middle.Cells, 3)
+	assert.Equal(t, layout.PaneGatewayHealth, middle.Cells[0].PaneID)
+	assert.Equal(t, layout.PanePollingTraffic, middle.Cells[1].PaneID)
+	assert.Equal(t, layout.PaneGatewayLive, middle.Cells[2].PaneID)
+	assert.Equal(t, 1, middle.Cells[0].WidthWeight)
+	assert.Equal(t, 1, middle.Cells[1].WidthWeight)
+	assert.Equal(t, 3, middle.Cells[2].WidthWeight, "Live keeps weight 3 (~60%)")
 
-	// Row 2: PollingTraffic continuation (GatewayLive occupies the right side)
-	row3 := p.Grid[2]
-	require.Len(t, row3.Cells, 1)
-	assert.Equal(t, layout.PanePollingTraffic, row3.Cells[0].PaneID)
-
-	// Row 3: NetworkLog full-width
-	assert.Equal(t, 2, p.Grid[3].HeightWeight)
-	assert.Len(t, p.Grid[3].Cells, 1)
-	assert.Equal(t, layout.PaneNetworkLog, p.Grid[3].Cells[0].PaneID)
+	// Row 2: NetworkLog full-width
+	assert.Equal(t, 2, p.Grid[2].HeightWeight)
+	assert.Len(t, p.Grid[2].Cells, 1)
+	assert.Equal(t, layout.PaneNetworkLog, p.Grid[2].Cells[0].PaneID)
 }
 
 func TestPagePresets_Counts(t *testing.T) {
