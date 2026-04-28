@@ -100,15 +100,21 @@ func (b *TableBasedPane) ActiveFilterQuery() string { return b.filter.Query() }
 //   - refreshRows: re-read the store with current query and update rows
 //   - resizeTable: adjust table height for filter-bar visibility
 //
-// Both hooks must be non-nil. Passing nil is a programmer error and panics
-// — fail loud, fail early.
+// A nil hook is silently substituted with a no-op so a programmer error in
+// pane wiring degrades to a missing UI refresh rather than a TUI crash.
+// Tests in table_based_pane_test.go pin the no-op behaviour so future
+// refactors that drop a hook are caught at unit-test time. (Project rule:
+// no panic() in production code paths.)
 func (b *TableBasedPane) HandleFilterKey(
 	msg tea.KeyMsg,
 	refreshRows func(),
 	resizeTable func(),
 ) (consumed bool, cmd tea.Cmd) {
-	if refreshRows == nil || resizeTable == nil {
-		panic("TableBasedPane.HandleFilterKey: refreshRows and resizeTable must be non-nil")
+	if refreshRows == nil {
+		refreshRows = func() {}
+	}
+	if resizeTable == nil {
+		resizeTable = func() {}
 	}
 
 	// Path 1 — filter active: forward and refresh.

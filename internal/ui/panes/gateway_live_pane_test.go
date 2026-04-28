@@ -582,3 +582,68 @@ func TestGatewayLivePane_BuildTableRows_AllEventKinds(t *testing.T) {
 		}
 	})
 }
+
+// TestGatewayLivePane_Filter_NarrowsLiveOnEachKeystroke pins the live-filter
+// contract introduced by story 181. Before the refactor, GatewayLivePane held
+// a separate `activeQuery` field that was only set on Enter, so rows did NOT
+// narrow during typing. The story aligned this pane with the other eight
+// (live filter, no Enter-to-apply). This test asserts the new contract:
+// rows narrow as each rune is typed, ActiveFilterQuery is the live value,
+// and Enter is not required to make the filter take effect.
+//
+// A regression that re-introduces Enter-to-apply semantics (e.g. by adding
+// back an `activeQuery` field that gates buildTableRows) would make this
+// test fail at the keystroke-by-keystroke assertions.
+func TestGatewayLivePane_Filter_NarrowsLiveOnEachKeystroke(t *testing.T) {
+	p, store := newTestGatewayLivePane(t)
+	p.SetSize(80, 20)
+	p.SetFocused(true)
+
+	// Seed two distinguishable event paths.
+	for i := 0; i < 3; i++ {
+		store.RecordEvent(domain.GatewayEvent{
+			Timestamp: time.Now(),
+			Kind:      domain.EventRequestAllowed,
+			Method:    "GET",
+			Path:      fmt.Sprintf("/v1/me/player/%d", i),
+			Snapshot:  domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10},
+		})
+		store.RecordEvent(domain.GatewayEvent{
+			Timestamp: time.Now(),
+			Kind:      domain.EventRequestAllowed,
+			Method:    "GET",
+			Path:      fmt.Sprintf("/v1/me/tracks/%d", i),
+			Snapshot:  domain.GatewayStateSnapshot{TokensAvailable: 10, TokensMax: 10},
+		})
+	}
+	p.Update(panes.TickMsg{})
+
+	// Open filter input (no Enter yet).
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	if !p.HasActiveFilter() {
+		t.Fatal("filter must be active after pressing 'f'")
+	}
+
+	// Type "player" one rune at a time. After each keystroke, ActiveFilterQuery
+	// must reflect the live value — NOT wait for Enter.
+	wantProgress := []string{"p", "pl", "pla", "play", "playe", "player"}
+	for i, ch := range "player" {
+		p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		if got := p.ActiveFilterQuery(); got != wantProgress[i] {
+			t.Errorf("after typing %d rune(s): ActiveFilterQuery() = %q, want %q",
+				i+1, got, wantProgress[i])
+		}
+		if !p.HasActiveFilter() {
+			t.Fatalf("filter must remain active during typing (rune %d)", i+1)
+		}
+	}
+
+	// Crucially: rows must already be narrowed BEFORE Enter is pressed.
+	view := p.View()
+	if !strings.Contains(view, "player") {
+		t.Errorf("View() during typing must contain 'player' rows; view = %q", view)
+	}
+	if strings.Contains(view, "tracks") {
+		t.Errorf("View() during typing of 'player' must hide 'tracks' rows (live filter contract); view = %q", view)
+	}
+}
