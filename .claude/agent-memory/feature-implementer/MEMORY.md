@@ -35,3 +35,4 @@
 - [project_spotnik_feature116_complete.md](project_spotnik_feature116_complete.md) — Story 116 (Subscription Gating): premium gate patterns, visualizer exemption, test update pattern for gated handlers
 - [project_spotnik_feature164_complete.md](project_spotnik_feature164_complete.md) — Story 164 (ProgressBar primitive + seek/volume migration): import cycle fix via TableChrome move, PartialGlyph export, dead zone removal, □→░ ASCII mode collision gotcha
 - [project_spotnik_feature168_complete.md](project_spotnik_feature168_complete.md) — Story 168 (TUI Design System docs rewrite): ListRow/HeaderBar struct accuracy gotchas, ᐅ in retained §4/§19, TableChrome location, CI sandbox cache issue
+- [project_spotnik_story182_complete.md](project_spotnik_story182_complete.md) — Story 182 (GatewayLive multi-column, drop ListRow): richRows API, two-column refactor, ANSI-in-label regression test pattern, TestMain TrueColor gotcha

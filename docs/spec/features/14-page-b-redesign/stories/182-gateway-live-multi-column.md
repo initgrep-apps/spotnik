@@ -1,7 +1,7 @@
 ---
 title: "GatewayLivePane multi-column table — drop uikit.ListRow"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
