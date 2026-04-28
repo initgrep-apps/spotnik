@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -91,68 +90,33 @@ type SearchRequestMsg struct {
 // searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
 type searchSpinnerTickMsg spinner.TickMsg
 
-// searchKeyMap defines all keybindings shown in the help bar (Panel 3).
-// It implements the bubbles/help KeyMap interface.
+// searchKeyMap holds only the bindings advertised in the search overlay's
+// bottom keybar. Enter (play) and Esc (close) are handled in Update() but
+// not advertised — they are universal overlay conventions. Ctrl+U is no
+// longer wired (see the 2026-04-28 overlay-keybinding-cleanup spec).
 type searchKeyMap struct {
-	Play     key.Binding
 	Queue    key.Binding
 	TabNext  key.Binding
 	TabPrev  key.Binding
-	Close    key.Binding
-	Clear    key.Binding
 	nextPage key.Binding
 	prevPage key.Binding
 }
 
-// ShortHelp returns all 8 bindings. ShortHelp is bypassed at runtime (ShowAll=true on the help
-// model always renders FullHelp), but kept complete so callers inspecting the KeyMap programmatically
-// see the full set.
-func (k searchKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Play, k.Queue, k.TabNext, k.TabPrev, k.Close, k.Clear, k.nextPage, k.prevPage}
-}
-
-// FullHelp returns 4 groups of 2 bindings for the 4-column × 2-row layout rendered by
-// bubbles/help when ShowAll=true. Each inner slice is one column; the two bindings in
-// each column are rendered vertically, and the four columns are joined horizontally:
-//
-//	enter  play    tab     filter    esc    close    pgdn  next
-//	ctrl+a queue   shift↹  prev      ctrl+u clear    pgup  prev
-func (k searchKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Play, k.Queue},
-		{k.TabNext, k.TabPrev},
-		{k.Close, k.Clear},
-		{k.nextPage, k.prevPage},
-	}
-}
-
 // NewSearchKeyMap creates the default keybindings for the search overlay.
-// Exported for tests.
+// Exported for tests. Only includes bindings shown in the bottom keybar.
 func NewSearchKeyMap() searchKeyMap {
 	return searchKeyMap{
-		Play: key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "play"),
-		),
 		Queue: key.NewBinding(
 			key.WithKeys("ctrl+a"),
 			key.WithHelp("ctrl+a", "queue"),
 		),
 		TabNext: key.NewBinding(
 			key.WithKeys("tab"),
-			key.WithHelp("tab", "filter"),
+			key.WithHelp("tab", "category"),
 		),
 		TabPrev: key.NewBinding(
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "prev"),
-		),
-		Close: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "close"),
-		),
-		Clear: key.NewBinding(
-			key.WithKeys("ctrl+u"),
-			key.WithHelp("ctrl+u", "clear"),
 		),
 		nextPage: key.NewBinding(
 			// pgdown is the sole pagination key. ctrl+right was removed because macOS
@@ -176,12 +140,11 @@ func NewSearchKeyMap() searchKeyMap {
 // The overlay renders as three separate bordered panels stacked vertically:
 //   - Panel 1 (Search): text input
 //   - Panel 2 (Results): tab bar + separator + scrollable results list
-//   - Panel 3 (Keys): bubbles/help keybinding bar
+//   - Panel 3 (Keys): uikit.KeyBar single-line keybinding strip
 type SearchOverlay struct {
 	theme   theme.Theme
 	input   textinput.Model
 	spinner spinner.Model
-	help    help.Model
 	keyMap  searchKeyMap
 
 	// resultList is the bubbles/list model used in the results panel.
@@ -251,16 +214,6 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
 
-	h := help.New()
-	h.ShowAll = true // always render FullHelp (4×2 layout) so all 8 bindings are visible
-	// Override default muted-gray help styles with theme tokens so key names and
-	// descriptions match the overlay's visual language and update when the theme changes.
-	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Info())
-	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
-	h.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
-	h.Styles.FullKey = lipgloss.NewStyle().Foreground(t.Info())
-	h.Styles.FullDesc = lipgloss.NewStyle().Foreground(t.TextMuted())
-	h.Styles.FullSeparator = lipgloss.NewStyle().Foreground(t.TextMuted())
 	km := NewSearchKeyMap()
 
 	// Initialize the list.Model with the custom SearchItemDelegate.
@@ -282,7 +235,6 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 		theme:      t,
 		input:      ti,
 		spinner:    sp,
-		help:       h,
 		keyMap:     km,
 		resultList: rl,
 		intent:     searchIntent{query: "", tab: TabAll, page: 1},
@@ -388,7 +340,7 @@ func (o *SearchOverlay) panelHeights() (searchH, resultsH, helpH int) {
 	if o.showHintLine() {
 		searchH = 4
 	}
-	helpH = 4 // 2 content rows for 4×2 FullHelp layout + top/bottom border
+	helpH = 3 // 1 content row (single-line KeyBar) + top/bottom border
 	totalH := o.overlayHeight()
 	resultsH = totalH - searchH - helpH
 	if resultsH < 5 {
@@ -404,10 +356,6 @@ func (o *SearchOverlay) SetSize(width, height int) {
 	o.height = height
 
 	o.resizeList()
-
-	// Update help model width so it can truncate bindings appropriately.
-	w := o.overlayWidth()
-	o.help.Width = w - 4 // inside help panel border
 }
 
 // resizeList recomputes the list dimensions from the current panelHeights() and
@@ -965,33 +913,49 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
 }
 
-// renderHelpPanel builds Panel 3: the keybinding help bar.
-// Height is always 3 lines (border top + help content + border bottom).
-// The panel has no title — the keybinding content is self-explanatory,
-// and an empty title lets the dim TextMuted() border recede into the background.
+// renderHelpPanel builds Panel 3: the keybinding hint bar.
+// Height is fixed at 3 (top border + single content line + bottom border).
+// Renders a uikit.KeyBar over the visible binding subset. Title is empty
+// because the binding content is self-explanatory, and the dim TextMuted
+// border lets the panel recede.
 func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 	innerWidth := w - 2
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
 
-	// Render help bar using bubbles/help.View(keyMap).
-	helpContent := o.help.View(o.keyMap)
+	bar := uikit.KeyBar{
+		Bindings: o.hintBindings(),
+		Theme:    o.theme,
+	}.Render()
+
 	inner := lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
 		Height(h - 2).MaxHeight(h - 2).
-		Render(helpContent)
+		Render(bar)
 
 	cfg := layout.BorderConfig{
 		Width:       w,
 		Height:      h,
-		Title:       "", // no title — keybinding content is self-explanatory
+		Title:       "",
 		Actions:     []layout.Action{},
 		AccentColor: o.theme.TextMuted(),
 		Focused:     false,
 		Theme:       o.theme,
 	}
 	return layout.RenderPaneBorder(inner, cfg)
+}
+
+// hintBindings returns the synthetic key.Binding list rendered by the bottom
+// keybar. The composite Key strings ("tab/shift+tab", "pgdn/pgup") exist
+// purely for display and are NEVER matched against tea.KeyMsg input — real
+// key handling lives in handleKey().
+func (o *SearchOverlay) hintBindings() []key.Binding {
+	return []key.Binding{
+		o.keyMap.Queue,
+		key.NewBinding(key.WithHelp("tab/shift+tab", "category")),
+		key.NewBinding(key.WithHelp("pgdn/pgup", "page")),
+	}
 }
 
 // renderPaginationBar renders the [ ←  page N of M  → ] line.
@@ -1121,13 +1085,6 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
 	o.input.CompletionStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
-	// Propagate to help styles so key names and descriptions use the new theme colors.
-	o.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(th.Info())
-	o.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(th.TextMuted())
-	o.help.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(th.TextMuted())
-	o.help.Styles.FullKey = lipgloss.NewStyle().Foreground(th.Info())
-	o.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(th.TextMuted())
-	o.help.Styles.FullSeparator = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Re-render the Prompt tag if a prefix is locked, applying the new theme colors.
 	if o.prefixState == PrefixLocked {
 		o.promoteToPromptTag()
@@ -1311,24 +1268,6 @@ func (o *SearchOverlay) PromoteToPromptTag() {
 // DemoteFromPromptTag is the exported wrapper for demoteFromPromptTag — used in tests.
 func (o *SearchOverlay) DemoteFromPromptTag() {
 	o.demoteFromPromptTag()
-}
-
-// RenderHelpForTest calls o.help.View(o.keyMap) and returns the raw rendered string.
-// Exported for tests that need to inspect help bar ANSI output.
-func RenderHelpForTest(o *SearchOverlay) string {
-	return o.help.View(o.keyMap)
-}
-
-// HelpShortKeyForegroundForTest returns the foreground color set on o.help.Styles.ShortKey.
-// Exported for tests that verify SetTheme() propagates help colors correctly.
-func HelpShortKeyForegroundForTest(o *SearchOverlay) lipgloss.TerminalColor {
-	return o.help.Styles.ShortKey.GetForeground()
-}
-
-// HelpShortDescForegroundForTest returns the foreground color set on o.help.Styles.ShortDesc.
-// Exported for tests that verify SetTheme() propagates help colors correctly.
-func HelpShortDescForegroundForTest(o *SearchOverlay) lipgloss.TerminalColor {
-	return o.help.Styles.ShortDesc.GetForeground()
 }
 
 // HasNextPage exposes the private hasNextPage() method for tests.

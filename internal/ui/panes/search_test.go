@@ -790,14 +790,17 @@ func TestSearchOverlay_View_TabBarActiveHighlight(t *testing.T) {
 	assert.Contains(t, view, "[All]", "active tab should be shown with brackets")
 }
 
-// TestSearchOverlay_View_HelpPanelContent verifies help bar contains keybinding text.
+// TestSearchOverlay_View_HelpPanelContent verifies the Keys panel renders
+// the uikit.KeyBar with the visible binding set.
 func TestSearchOverlay_View_HelpPanelContent(t *testing.T) {
 	o := newTestSearchOverlay()
 	// Use a wide terminal so the help bar has room to show keybinding text.
 	o.SetSize(150, 40)
 	view := o.View()
-	// Help bar should contain some key hint text (at least "esc").
-	assert.Contains(t, view, "esc", "help bar should show esc keybinding")
+	// Keys panel must advertise ctrl+a queue (the Queue binding).
+	assert.Contains(t, view, "ctrl+a", "help bar should show ctrl+a keybinding")
+	// Enter (play) and Esc (close) are no longer advertised in the keybar.
+	assert.NotContains(t, stripANSI(view), "esc close", "esc close must not appear in keybar")
 }
 
 // TestSearchOverlay_OverlayWidth_70Pct verifies overlayWidth returns 70% of terminal width.
@@ -825,26 +828,6 @@ func TestSearchOverlay_SetSize_PropagatesList(t *testing.T) {
 	// The overlay should also render without error.
 	view := o.View()
 	assert.NotEmpty(t, view, "view should not be empty after SetSize")
-}
-
-// TestSearchKeyMap_ShortHelp verifies ShortHelp returns 8 bindings (all bindings).
-// ShortHelp is kept complete so it can be used programmatically; the help panel
-// uses ShowAll=true which bypasses ShortHelp and always renders the FullHelp 4×2 layout.
-func TestSearchKeyMap_ShortHelp(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	assert.Len(t, km.ShortHelp(), 8, "ShortHelp should return 8 bindings")
-}
-
-// TestSearchKeyMap_FullHelp verifies FullHelp returns 8 bindings.
-func TestSearchKeyMap_FullHelp(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	allBindings := km.FullHelp()
-	require.NotEmpty(t, allBindings)
-	total := 0
-	for _, group := range allBindings {
-		total += len(group)
-	}
-	assert.Equal(t, 8, total, "FullHelp should return 8 bindings total")
 }
 
 // TestSearchOverlay_SearchPageLoadedMsg_ErrorPreservesResults verifies that when a
@@ -1721,24 +1704,24 @@ func TestResizeList_ListHeightMatchesPanelFormula(t *testing.T) {
 	o.SetSize(100, 40)
 	h := o.OverlayHeight()
 
-	// Hint visible: searchH=4, helpH=4, resultsH = h-4-4, listH = resultsH-4.
+	// Hint visible: searchH=4, helpH=3, resultsH = h-4-3, listH = resultsH-4.
 	require.True(t, o.ShowHintLine())
-	wantHintVisible := (h - 4 - 4) - 4
+	wantHintVisible := (h - 4 - 3) - 4
 	if wantHintVisible < 1 {
 		wantHintVisible = 1
 	}
 	assert.Equal(t, wantHintVisible, o.ListHeight(),
-		"list height with hint visible must be overlayH - 4 - 4 - 4 = %d", wantHintVisible)
+		"list height with hint visible must be overlayH - 4 - 3 - 4 = %d", wantHintVisible)
 
-	// Type 'j' → hint hides: searchH=3, helpH=4, resultsH = h-3-4, listH = resultsH-4.
+	// Type 'j' → hint hides: searchH=3, helpH=3, resultsH = h-3-3, listH = resultsH-4.
 	o, _ = sendKey(t, o, "j")
 	require.False(t, o.ShowHintLine())
-	wantHintHidden := (h - 3 - 4) - 4
+	wantHintHidden := (h - 3 - 3) - 4
 	if wantHintHidden < 1 {
 		wantHintHidden = 1
 	}
 	assert.Equal(t, wantHintHidden, o.ListHeight(),
-		"list height with hint hidden must be overlayH - 3 - 4 - 4 = %d", wantHintHidden)
+		"list height with hint hidden must be overlayH - 3 - 3 - 4 = %d", wantHintHidden)
 	assert.Equal(t, wantHintVisible+1, wantHintHidden,
 		"hint-hidden list must be 1 taller than hint-visible list")
 }
@@ -1987,67 +1970,6 @@ func TestRenderTabBar_ShowsSpinnerWhenLoadingWithZeroItems(t *testing.T) {
 	// Zero items (no results delivered) — must not panic.
 	tabBar := panes.RenderTabBarForTest(o, 76)
 	assert.NotEmpty(t, tabBar, "tab bar must render without panic with zero items")
-}
-
-// --- Story 95: Help bar colors and ctrl+u in ShortHelp ---
-
-// TestSearchKeyMap_ShortHelp_ContainsCtrlU verifies that ShortHelp() includes k.Clear (ctrl+u)
-// with help text "clear" and k.Close (esc). Both are present because ShortHelp is restored
-// to all 8 bindings (the help panel uses ShowAll=true so FullHelp is always displayed in the UI).
-func TestSearchKeyMap_ShortHelp_ContainsCtrlU(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	bindings := km.ShortHelp()
-
-	require.Equal(t, 8, len(bindings), "ShortHelp() must return 8 bindings")
-
-	var foundClear, foundClose bool
-	for _, b := range bindings {
-		keys := b.Keys()
-		help := b.Help()
-		if len(keys) > 0 && keys[0] == "ctrl+u" && help.Desc == "clear" {
-			foundClear = true
-		}
-		if len(keys) > 0 && keys[0] == "esc" {
-			foundClose = true
-		}
-	}
-	assert.True(t, foundClear, "ShortHelp() must include a binding with key ctrl+u and desc clear")
-	assert.True(t, foundClose, "ShortHelp() must still include k.Close (esc)")
-}
-
-// TestNewSearchOverlay_HelpStylesUsesThemeColors verifies that NewSearchOverlay sets
-// all six help.Styles fields to theme token colors rather than the default muted grays.
-// It calls the exported RenderHelpForTest() helper and verifies the ANSI sequence for
-// theme.Info() wraps key name text in the rendered output.
-func TestNewSearchOverlay_HelpStylesUsesThemeColors(t *testing.T) {
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(80, 40)
-
-	// Reference: what the key name "enter" should look like when styled with Info().
-	want := lipgloss.NewStyle().Foreground(th.Info()).Render("enter")
-
-	rendered := panes.RenderHelpForTest(o)
-	assert.True(t, strings.Contains(rendered, want),
-		"rendered help must contain Info()-styled key name; want %q in %q", want, rendered)
-}
-
-// TestSearchOverlay_SetTheme_PropagatesHelpStyles verifies that SetTheme() updates all
-// six o.help.Styles fields to match the new theme's color tokens.
-func TestSearchOverlay_SetTheme_PropagatesHelpStyles(t *testing.T) {
-	thA := theme.Load("black")
-	o := panes.NewSearchOverlay(thA)
-
-	thB := theme.Load("monokai")
-	o.SetTheme(thB)
-
-	shortKey := panes.HelpShortKeyForegroundForTest(o)
-	shortDesc := panes.HelpShortDescForegroundForTest(o)
-
-	assert.Equal(t, thB.Info(), shortKey,
-		"ShortKey foreground must equal themeB.Info() after SetTheme")
-	assert.Equal(t, thB.TextMuted(), shortDesc,
-		"ShortDesc foreground must equal themeB.TextMuted() after SetTheme")
 }
 
 // --- Story 99: searchIntent + scheduleDebounce ---
@@ -2585,30 +2507,6 @@ func TestPgUp_Valid_DecreasesPageAndSchedulesDebounce(t *testing.T) {
 	assert.False(t, isReq, "ctrl+left cmd must not immediately emit SearchRequestMsg")
 }
 
-// TestSearchKeyMap_ShortHelp_ContainsPaginationKeys verifies that both pagination bindings
-// use pgdown/pgup as the sole keys (macOS-safe — Ctrl+Right/Left removed entirely).
-// nextPage and prevPage appear in both ShortHelp (all 8 bindings) and FullHelp.
-func TestSearchKeyMap_ShortHelp_ContainsPaginationKeys(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-	shortBindings := km.ShortHelp()
-
-	var foundNext, foundPrev bool
-	for _, b := range shortBindings {
-		keys := b.Keys()
-		if len(keys) > 0 && keys[0] == "pgdown" {
-			// pgdown must be the ONLY key — ctrl+right must not be present
-			assert.Len(t, keys, 1, "nextPage must have exactly 1 key (pgdown only, ctrl+right removed)")
-			foundNext = true
-		}
-		if len(keys) > 0 && keys[0] == "pgup" {
-			assert.Len(t, keys, 1, "prevPage must have exactly 1 key (pgup only, ctrl+left removed)")
-			foundPrev = true
-		}
-	}
-	assert.True(t, foundNext, "ShortHelp() must include nextPage binding with pgdown as sole key")
-	assert.True(t, foundPrev, "ShortHelp() must include prevPage binding with pgup as sole key")
-}
-
 // --- Task 6: renderPaginationBar + Panel 2 layout + resizeList ---
 
 // TestRenderPaginationBar_FirstPage_PrevArrowDimmed verifies that on page 1,
@@ -2732,8 +2630,12 @@ func TestPaginationBar_NotRenderedWhenTotal0(t *testing.T) {
 	o.SetSize(80, 40)
 	// No results delivered — total stays 0.
 	view := o.View()
-	assert.False(t, strings.Contains(view, "page"), // pagination bar uses "page N"
-		"pagination bar must not appear when total=0; view=%q", view)
+	plain := stripANSI(view)
+	// The pagination bar renders "page N" (with a space before the number).
+	// "pgdn/pgup page" in the keybar uses the word "page" too, so we check for
+	// the more specific pattern " page 1 " which only the pagination bar emits.
+	assert.False(t, strings.Contains(plain, "page 1"),
+		"pagination bar must not appear when total=0; plain=%q", plain)
 }
 
 // --- Task 8: Reset() zeros all story-102 fields ---
@@ -3064,36 +2966,40 @@ func TestPgUp_PrevPage(t *testing.T) {
 	assert.False(t, isReq, "pgup cmd must not immediately emit SearchRequestMsg (debounced)")
 }
 
-// --- ShowAll help bar (2-row FullHelp layout) ---
-
-// TestSearchKeyMap_FullHelp_FourGroupsOfTwo verifies that FullHelp() returns exactly 4 groups
-// of 2 bindings each. This structure drives the 4-column × 2-row layout rendered by
-// bubbles/help when ShowAll=true — each group becomes a column, each binding a row.
-func TestSearchKeyMap_FullHelp_FourGroupsOfTwo(t *testing.T) {
+// TestSearchKeyMap_OnlyVisibleBindings verifies the keymap exposes exactly
+// the 5 bindings advertised in the bottom keybar after the cleanup:
+// Queue, TabNext, TabPrev, nextPage, prevPage. Play/Close/Clear are removed
+// from the map (Enter/Esc behavior remains in Update() but is not advertised;
+// Ctrl+U clear is gone entirely).
+func TestSearchKeyMap_OnlyVisibleBindings(t *testing.T) {
 	km := panes.NewSearchKeyMap()
-	groups := km.FullHelp()
-	assert.Len(t, groups, 4, "FullHelp must have 4 groups for 4-column layout")
-	for i, g := range groups {
-		assert.Len(t, g, 2, "each FullHelp group must have 2 bindings (column %d)", i)
-	}
+
+	assert.Equal(t, []string{"ctrl+a"}, km.Queue.Keys(), "Queue → ctrl+a")
+	assert.Equal(t, "ctrl+a", km.Queue.Help().Key)
+	assert.Equal(t, "queue", km.Queue.Help().Desc)
+
+	assert.Equal(t, []string{"tab"}, km.TabNext.Keys())
+	assert.Equal(t, "tab", km.TabNext.Help().Key)
+	assert.Equal(t, "category", km.TabNext.Help().Desc, "Tab help should read 'category', not 'filter'")
+
+	assert.Equal(t, []string{"shift+tab"}, km.TabPrev.Keys())
 }
 
-// TestHelpPanel_ShowsAllBindings verifies that the help panel renders ALL 8 bindings
-// (pgdn, pgup, esc, ctrl+u, enter, ctrl+a, tab, shift+tab) because ShowAll=true is set
-// on the help model, causing help.View() to use FullHelp instead of ShortHelp.
-func TestHelpPanel_ShowsAllBindings(t *testing.T) {
-	th := theme.Load("black")
-	o := panes.NewSearchOverlay(th)
-	o.SetSize(200, 50) // wide terminal so no truncation
+// TestSearchOverlay_View_KeysPanel_SingleLine verifies the Keys panel renders
+// a single-line uikit.KeyBar with the cleaned binding set, and that the dead
+// bindings (Enter play, Esc close, Ctrl+U clear) are absent.
+func TestSearchOverlay_View_KeysPanel_SingleLine(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 40)
+	view := o.View()
 
-	rendered := panes.RenderHelpForTest(o)
+	plain := stripANSI(view)
 
-	// Strip ANSI escapes for plain-text assertion.
-	plain := lipgloss.NewStyle().Render(rendered)
+	assert.Contains(t, plain, "ctrl+a queue", "ctrl+a queue must appear")
+	assert.Contains(t, plain, "tab/shift+tab category", "tab/shift+tab category must appear")
+	assert.Contains(t, plain, "pgdn/pgup page", "pgdn/pgup page must appear")
 
-	// All 8 key names must appear in the rendered help output.
-	for _, wantKey := range []string{"enter", "ctrl+a", "tab", "shift+tab", "esc", "ctrl+u", "pgdn", "pgup"} {
-		assert.True(t, strings.Contains(plain, wantKey),
-			"help panel must render key %q (ShowAll=true shows all 8 bindings); rendered=%q", wantKey, plain)
-	}
+	assert.NotContains(t, plain, "enter play", "Enter play must not be advertised")
+	assert.NotContains(t, plain, "esc close", "Esc close must not be advertised")
+	assert.NotContains(t, plain, "ctrl+u clear", "Ctrl+U must not be advertised")
 }
