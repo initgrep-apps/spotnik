@@ -86,6 +86,16 @@ const (
 	GlyphPremium    GlyphRole = "music.premium"
 	GlyphFreeTier   GlyphRole = "music.free"
 	GlyphCloud      GlyphRole = "music.cloud"
+	GlyphPlaylist   GlyphRole = "music.playlist"
+
+	// Generic separators
+	GlyphSeparator GlyphRole = "sep.bullet"
+
+	// Device-type icons (devices pane)
+	GlyphDeviceComputer GlyphRole = "device.computer"
+	GlyphDevicePhone    GlyphRole = "device.phone"
+	GlyphDeviceSpeaker  GlyphRole = "device.speaker"
+	GlyphDeviceTV       GlyphRole = "device.tv"
 
 	// Graphical fills
 	GlyphBarFull          GlyphRole = "bar.full"
@@ -171,6 +181,16 @@ var glyphTable = map[GlyphRole][2]string{
 	GlyphPremium:    {"♛", "*P"},
 	GlyphFreeTier:   {"○", "(o)"},
 	GlyphCloud:      {"☁", "(c)"},
+	GlyphPlaylist:   {"▤", "[=]"},
+
+	// Generic separators
+	GlyphSeparator: {"·", "|"},
+
+	// Device-type icons
+	GlyphDeviceComputer: {"⊡", "[c]"},
+	GlyphDevicePhone:    {"⊞", "[p]"},
+	GlyphDeviceSpeaker:  {"⊟", "[s]"},
+	GlyphDeviceTV:       {"⊠", "[tv]"},
 
 	// Graphical
 	GlyphBarFull:          {"█", "#"},

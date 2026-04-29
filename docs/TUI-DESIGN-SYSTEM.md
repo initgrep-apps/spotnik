@@ -1099,6 +1099,22 @@ also use notch format; `filtering: "query"` renders as muted preamble before the
 | premium badge | `♛` | `*P` |
 | free-tier badge | `○` | `(o)` |
 | cloud / remote device | `☁` | `(c)` |
+| playlist badge | `▤` | `[=]` |
+
+### 4.6a Generic separators
+
+| Role | Unicode | ASCII |
+|---|---|---|
+| separator (bullet) | `·` | `\|` |
+
+### 4.6b Device-type icons (devices pane)
+
+| Role | Unicode | ASCII |
+|---|---|---|
+| computer | `⊡` | `[c]` |
+| phone | `⊞` | `[p]` |
+| speaker | `⊟` | `[s]` |
+| TV | `⊠` | `[tv]` |
 
 ### 4.7 Graphical fills (ProgressBar, Visualizer)
 

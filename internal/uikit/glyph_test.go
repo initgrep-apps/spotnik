@@ -74,6 +74,31 @@ func TestGlyph_UnknownRoleReturnsEmpty(t *testing.T) {
 	assert.Empty(t, uikit.GlyphFor(unknown, uikit.GlyphASCII))
 }
 
+// TestGlyphFor_NewDomainRoles verifies the catalogue rows for GlyphPlaylist,
+// GlyphSeparator, and the four device-type glyphs.
+func TestGlyphFor_NewDomainRoles(t *testing.T) {
+	tests := []struct {
+		role    uikit.GlyphRole
+		unicode string
+		ascii   string
+	}{
+		{uikit.GlyphPlaylist, "▤", "[=]"},
+		{uikit.GlyphSeparator, "·", "|"},
+		{uikit.GlyphDeviceComputer, "⊡", "[c]"},
+		{uikit.GlyphDevicePhone, "⊞", "[p]"},
+		{uikit.GlyphDeviceSpeaker, "⊟", "[s]"},
+		{uikit.GlyphDeviceTV, "⊠", "[tv]"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			assert.Equal(t, tt.unicode, uikit.GlyphFor(tt.role, uikit.GlyphUnicode),
+				"unicode form for %q", tt.role)
+			assert.Equal(t, tt.ascii, uikit.GlyphFor(tt.role, uikit.GlyphASCII),
+				"ascii form for %q", tt.role)
+		})
+	}
+}
+
 func TestGlyph_BannedGlyphsAbsentEverywhere(t *testing.T) {
 	// U+26A0 is the old warning sign — banned in favour of U+25EC (◬).
 	// Use the Go Unicode escape \u26A0 so the source file itself does not
