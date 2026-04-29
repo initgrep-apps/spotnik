@@ -34,8 +34,9 @@ func (b *InfoBox) SetSize(w, h int) {
 // title is rendered in the top border: ╭─ Title ─────────────╮ (unicode) or
 // +- Title -------------+ (ascii), depending on uikit.ActiveMode().
 // lines contains the content to vertically-center inside the box.
-// When focused is true the border is rendered with full brightness and bold
-// title; when false the border is dimmed (Faint on top of AccentColor).
+// Border colour encodes focus state: focused → ActiveBorder(), unfocused →
+// InactiveBorder(). PaneChrome is always passed Focused=true so it does not
+// additionally apply a Faint dim over the chosen colour.
 //
 // Content behaviour:
 //   - Each line is truncated (with "…") to the inner width (width-2).
@@ -106,14 +107,19 @@ func (b *InfoBox) Render(title string, lines []string, focused bool) string {
 	// -----------------------------------------------------------------------
 	// Delegate border rendering to uikit.PaneChrome so glyphs are
 	// resolved via the active glyph mode (ascii / unicode).
-	// AccentColor uses ActiveBorder() always; Focused controls bold/dim.
+	// Border colour encodes focus state directly; Focused is always true so
+	// PaneChrome does not additionally Faint the already-chosen colour.
 	// -----------------------------------------------------------------------
+	border := b.th.ActiveBorder()
+	if !focused {
+		border = b.th.InactiveBorder()
+	}
 	chrome := uikit.PaneChrome{
 		Width:       w,
 		Height:      h,
 		Title:       title,
-		AccentColor: b.th.ActiveBorder(),
-		Focused:     focused,
+		AccentColor: border,
+		Focused:     true, // colour encodes focus; don't ALSO faint over it
 		Theme:       b.th,
 	}
 	return chrome.Render(interior)
