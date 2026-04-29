@@ -147,22 +147,38 @@ func TestSteps_empty_returnsEmptyString(t *testing.T) {
 	assert.Equal(t, "", s.render(Fixed))
 }
 
+// TestHint_AsciiArrow verifies that Hint.render() uses the ASCII arrow (">")
+// when uikit is in ASCII mode, never the unicode "→".
+func TestHint_AsciiArrow(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	h := Hint{Cmd: "spotnik auth login"}
+	out := stripAnsi(h.render(Fixed))
+	assert.True(t, strings.HasPrefix(out, "> "), "ASCII Hint must start with '> ', got: %q", out)
+	assert.NotContains(t, out, "→", "unicode arrow must not appear in ASCII mode")
+}
+
 func TestHint_renderWithAllFields(t *testing.T) {
 	h := Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to reconnect"}
 	out := stripAnsi(h.render(Fixed))
-	assert.Equal(t, "→ Run spotnik auth login to reconnect", out)
+	want := uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode()) + " Run spotnik auth login to reconnect"
+	assert.Equal(t, want, out)
 }
 
 func TestHint_omitsEmptyFields(t *testing.T) {
 	h := Hint{Cmd: "spotnik auth register"}
 	out := stripAnsi(h.render(Fixed))
-	assert.Equal(t, "→ spotnik auth register", out)
+	arrow := uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode())
+	assert.Equal(t, arrow+" spotnik auth register", out)
 }
 
 func TestHint_arrowOnlyWhenAllEmpty(t *testing.T) {
 	h := Hint{}
 	out := stripAnsi(h.render(Fixed))
-	assert.Equal(t, "→", out)
+	arrow := uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode())
+	assert.Equal(t, arrow, out)
 }
 
 func TestURL_noLabel_rendersHrefOnly(t *testing.T) {

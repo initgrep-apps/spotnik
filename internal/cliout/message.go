@@ -176,7 +176,8 @@ type Hint struct {
 func (Hint) isMessage() {}
 
 func (h Hint) render(p Palette) string {
-	arrow := lipgloss.NewStyle().Foreground(p.Accent).Bold(true).Render("→")
+	arrow := lipgloss.NewStyle().Foreground(p.Accent).Bold(true).
+		Render(uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode()))
 	parts := []string{arrow}
 	if h.Verb != "" {
 		parts = append(parts, lipgloss.NewStyle().Foreground(p.Plain).Render(h.Verb))
