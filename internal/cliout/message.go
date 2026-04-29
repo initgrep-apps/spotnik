@@ -75,7 +75,7 @@ func statusColor(s Status, p Palette) lipgloss.TerminalColor {
 	}
 }
 
-// Header is a primary status line rendered as "◉ Subject  State".
+// Header is a primary status line rendered as "<status-glyph> Subject  State".
 type Header struct {
 	Status  Status
 	Subject string
@@ -91,7 +91,7 @@ func (h Header) render(p Palette) string {
 	return glyph + "  " + subject + "  " + state
 }
 
-// Step is an inline progress event rendered as "✓ Text".
+// Step is an inline progress event rendered as "<status-glyph> Text".
 type Step struct {
 	Status Status
 	Text   string
@@ -166,7 +166,7 @@ func (s Steps) render(p Palette) string {
 	return strings.Join(lines, "\n")
 }
 
-// Hint is an action suggestion rendered as "→ Verb Cmd Tail".
+// Hint is an action suggestion rendered as "<info-arrow> Verb Cmd Tail".
 type Hint struct {
 	Verb string
 	Cmd  string

@@ -37,19 +37,21 @@ func TestStatusColor_allBranches(t *testing.T) {
 }
 
 func TestStatusGlyph(t *testing.T) {
+	// Resolves via uikit.GlyphFor so the test is valid in both unicode and ASCII mode.
 	cases := []struct {
 		s    Status
-		want string
+		role uikit.GlyphRole
 	}{
-		{Active, "◉"},
-		{Inactive, "◎"},
-		{StatusSuccess, "✓"},
-		{StatusFailure, "✗"},
-		{StatusWarning, "◬"},
-		{Pending, "◌"},
+		{Active, uikit.GlyphActive},
+		{Inactive, uikit.GlyphInactive},
+		{StatusSuccess, uikit.GlyphSuccess},
+		{StatusFailure, uikit.GlyphError},
+		{StatusWarning, uikit.GlyphWarning},
+		{Pending, uikit.GlyphLocked},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, statusGlyph(c.s), "statusGlyph(%v)", c.s)
+		want := uikit.GlyphFor(c.role, uikit.ActiveMode())
+		assert.Equal(t, want, statusGlyph(c.s), "statusGlyph(%v)", c.s)
 	}
 }
 
@@ -117,7 +119,7 @@ func TestStatusGlyph_HonoursUikitMode(t *testing.T) {
 func TestHeader_renderActive(t *testing.T) {
 	h := Header{Status: Active, Subject: "Spotnik", State: "authenticated"}
 	out := h.render(Fixed)
-	assert.Contains(t, out, "◉")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphActive, uikit.ActiveMode()))
 	assert.Contains(t, out, "Spotnik")
 	assert.Contains(t, out, "authenticated")
 }
@@ -125,7 +127,7 @@ func TestHeader_renderActive(t *testing.T) {
 func TestHeader_renderSuccess(t *testing.T) {
 	h := Header{Status: StatusSuccess, Subject: "Auth", State: "complete"}
 	out := h.render(Fixed)
-	assert.Contains(t, out, "✓")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, out, "Auth")
 	assert.Contains(t, out, "complete")
 }
@@ -133,7 +135,7 @@ func TestHeader_renderSuccess(t *testing.T) {
 func TestStep_render(t *testing.T) {
 	s := Step{Status: StatusSuccess, Text: "Authorization received"}
 	out := s.render(Fixed)
-	assert.Contains(t, out, "✓")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, out, "Authorization received")
 }
 

@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // TestAsk_validFirstAttempt_returnsValue verifies that a valid first input is
@@ -46,7 +48,7 @@ func TestAsk_validatorFails_thenSucceeds(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "abc", got)
-	assert.Contains(t, buf.String(), "✗")
+	assert.Contains(t, buf.String(), uikit.GlyphFor(uikit.GlyphError, uikit.ActiveMode()))
 	assert.Contains(t, buf.String(), "must be abc")
 }
 
