@@ -93,6 +93,24 @@ func TestStatusBar_PageAwareBindings(t *testing.T) {
 	assert.NotContains(t, resultB, "preset", "Page B must not show preset binding")
 }
 
+// TestStatusBar_AsciiBorder verifies that in ASCII mode the StatusBar border uses
+// ASCII corner and rule characters (+, -, |) rather than unicode box-drawing chars.
+func TestStatusBar_AsciiBorder(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+	th := theme.Load("black")
+	km := testKeyMap{bindings: []key.Binding{
+		key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}}
+	sb := uikit.StatusBar{Width: 160, Bindings: km, Theme: th}
+	result := sb.Render()
+	assert.NotContains(t, result, "╭", "ascii mode must not use unicode corner ╭")
+	assert.NotContains(t, result, "╮", "ascii mode must not use unicode corner ╮")
+	assert.NotContains(t, result, "╰", "ascii mode must not use unicode corner ╰")
+	assert.NotContains(t, result, "╯", "ascii mode must not use unicode corner ╯")
+	assert.Contains(t, result, "+", "ascii mode must use + for corners")
+}
+
 // TestStatusBar_RoleTokens verifies that StatusBar uses theme.KeyHint() for key labels
 // and theme.TextMuted() for its border accent — NOT theme.Info(). Two themes where
 // KeyHint and Info diverge are used to prove the correct token is applied.

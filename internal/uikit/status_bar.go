@@ -44,6 +44,7 @@ func (s StatusBar) Render() string {
 		Height(statusH - 2).MaxHeight(statusH - 2).
 		Render(content)
 
+	m := ActiveMode()
 	cfg := layout.BorderConfig{
 		Width:       w,
 		Height:      statusH,
@@ -52,6 +53,14 @@ func (s StatusBar) Render() string {
 		AccentColor: s.Theme.TextMuted(),
 		Focused:     false,
 		Theme:       s.Theme,
+		// Resolve glyph mode here so layout/border.go does not need to import
+		// internal/uikit (which would create a cycle).
+		CornerTL: GlyphFor(GlyphCornerTL, m),
+		CornerTR: GlyphFor(GlyphCornerTR, m),
+		CornerBL: GlyphFor(GlyphCornerBL, m),
+		CornerBR: GlyphFor(GlyphCornerBR, m),
+		HRule:    GlyphFor(GlyphHRule, m),
+		VRule:    GlyphFor(GlyphVRule, m),
 	}
 	return layout.RenderPaneBorder(inner, cfg)
 }
