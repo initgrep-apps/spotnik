@@ -15,9 +15,8 @@ const (
 	GlyphASCII
 )
 
-// Glyph roles. Grouped by category. Additions require updating the spec in
-// docs/superpowers/specs/2026-04-24-tui-design-system-design.md §5 and the
-// canonical doc docs/TUI-DESIGN-SYSTEM.md in the same PR.
+// Glyph roles. Grouped by category. Additions require updating
+// docs/TUI-DESIGN-SYSTEM.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
 const (
 	// Structural / borders
 	GlyphCornerTL       GlyphRole = "corner.tl"
@@ -132,8 +131,8 @@ const (
 	GlyphBarHeavy         GlyphRole = "bar.heavy"
 )
 
-// glyphTable holds the unicode + ascii forms for every role. Keep this table
-// in sync with the spec §5 and docs/TUI-DESIGN-SYSTEM.md §5.
+// glyphTable holds the unicode + ascii forms for every role. Additions require
+// updating docs/TUI-DESIGN-SYSTEM.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
 var glyphTable = map[GlyphRole][2]string{
 	// Structural
 	GlyphCornerTL:       {"╭", "+"},
