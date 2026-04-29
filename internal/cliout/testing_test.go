@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 func TestCapture_recordsMessagesWithoutRendering(t *testing.T) {
@@ -42,9 +44,8 @@ func TestCapture_nested_restoresPreviousRecorder(t *testing.T) {
 func TestSetTestMode_pinsASCII(t *testing.T) {
 	SetTestMode(true)
 	t.Cleanup(func() { SetTestMode(false) })
-	// lipgloss profile is global — just verify SetTestMode(true) doesn't panic
-	// and inTestMode reports true.
 	assert.True(t, inTestMode())
+	assert.Equal(t, uikit.GlyphASCII, uikit.ActiveMode(), "SetTestMode(true) must pin uikit to ASCII")
 }
 
 func TestCapture_WriteInline_captured(t *testing.T) {

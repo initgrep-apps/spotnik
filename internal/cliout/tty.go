@@ -53,6 +53,8 @@ func pinASCII() {
 // immediately, uikit is pinned to GlyphASCII mode so that glyph-role assertions
 // are deterministic, and spinner animation is disabled.
 // Tests call this in TestMain for deterministic output.
+// Note: calling SetTestMode(false) does not revert either side effect — pinASCII
+// is sync.Once-guarded and uikit mode is not restored.
 func SetTestMode(enabled bool) {
 	testModeMu.Lock()
 	defer testModeMu.Unlock()
