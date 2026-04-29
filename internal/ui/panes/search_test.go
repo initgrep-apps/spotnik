@@ -11,6 +11,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -3004,4 +3005,55 @@ func TestSearchOverlay_View_ResultsPanel_NoCornerActions(t *testing.T) {
 
 	assert.NotContains(t, plain, "Enter play", "corner-notch 'Enter play' must be removed")
 	assert.NotContains(t, plain, "Ctrl+A queue", "corner-notch 'Ctrl+A queue' must be removed")
+}
+
+// TestSearchOverlay_AsciiBorder_Idle verifies that the search overlay (idle/no
+// query state) renders ASCII-safe border corner glyphs when the uikit mode is
+// ASCII. Corner characters (╭╮╰╯) uniquely identify border corners and must not
+// appear in ASCII mode. The inner tab-separator (─) and table cursor (│) are
+// content characters not controlled by OverlayChrome and are intentionally
+// excluded from this assertion.
+func TestSearchOverlay_AsciiBorder_Idle(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	out := stripANSI(o.View())
+	if strings.ContainsAny(out, "╭╮╰╯") {
+		t.Errorf("ascii overlay (idle) must not contain unicode border corners, got: %q", out)
+	}
+}
+
+// TestSearchOverlay_AsciiBorder_Loading verifies that the search overlay in a
+// loading state renders ASCII-safe border corner glyphs. The renderResultsPanel
+// code path is exercised with loadingFirstPage=true (spinner-only results area).
+func TestSearchOverlay_AsciiBorder_Loading(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	// Trigger loading state so renderResultsPanel takes the loading code path.
+	model, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = model.(*panes.SearchOverlay)
+	out := stripANSI(o.View())
+	if strings.ContainsAny(out, "╭╮╰╯") {
+		t.Errorf("ascii overlay (loading) must not contain unicode border corners, got: %q", out)
+	}
+}
+
+// TestSearchOverlay_AsciiBorder_Results verifies that the search overlay with
+// results loaded renders ASCII-safe border corner glyphs. The renderResultsPanel
+// code path is exercised with populated results (list + pagination bar area).
+func TestSearchOverlay_AsciiBorder_Results(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestSearchOverlayWithResults()
+	o.SetSize(80, 30)
+	out := stripANSI(o.View())
+	if strings.ContainsAny(out, "╭╮╰╯") {
+		t.Errorf("ascii overlay (results) must not contain unicode border corners, got: %q", out)
+	}
 }
