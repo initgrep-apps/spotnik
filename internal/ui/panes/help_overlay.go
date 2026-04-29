@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/ui/layout"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
@@ -149,16 +149,13 @@ func (o *HelpOverlay) View() string {
 		Width(innerW).MaxWidth(innerW).
 		Render(inner)
 
-	cfg := layout.BorderConfig{
-		Width:       totalW,
-		Height:      len(rows) + 2, // +2 for top and bottom border rows
-		Title:       "Help",
-		AccentColor: o.theme.ActiveBorder(),
-		Focused:     true, // overlays are always focused
-		Theme:       o.theme,
+	chrome := uikit.OverlayChrome{
+		Width:  totalW,
+		Height: len(rows) + 2, // +2 for top and bottom border rows
+		Title:  "Help",
+		Theme:  o.theme,
 	}
-
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // renderColumn renders one side of the two-column layout.
