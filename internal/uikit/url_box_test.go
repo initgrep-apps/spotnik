@@ -137,6 +137,24 @@ func TestURLBox_NarrowWidthNoInnerSpace(t *testing.T) {
 	_ = out
 }
 
+// TestURLBox_AsciiMode verifies that URLBox renders in ASCII mode without unicode
+// box-drawing characters (╭╮╰╯─│) and still contains the URL content.
+func TestURLBox_AsciiMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	u := "https://example.com/auth"
+	b := uikit.URLBox{URL: u, Width: 40, Theme: th}
+	result := b.Render()
+	stripped := strings.Join(uikit.Capture(result), "\n")
+	assert.NotContains(t, stripped, "╭", "ascii mode must not use unicode corner ╭")
+	assert.NotContains(t, stripped, "╮", "ascii mode must not use unicode corner ╮")
+	assert.NotContains(t, stripped, "╰", "ascii mode must not use unicode corner ╰")
+	assert.NotContains(t, stripped, "╯", "ascii mode must not use unicode corner ╯")
+	assert.Contains(t, stripped, u, "ascii mode must still contain the URL")
+}
+
 // TestURLBox_ExactMultipleWidth verifies the tail-append branch: when the URL
 // length is an exact multiple of innerW, the last segment is non-empty and
 // appended. We verify by checking the URL appears in the output.
