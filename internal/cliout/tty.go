@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	"golang.org/x/term"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 var (
@@ -35,9 +37,12 @@ func checkNoColor() bool {
 	return os.Getenv("NO_COLOR") != ""
 }
 
-// pinASCII forces lipgloss to render without ANSI escapes. Called once when
-// the first Write/StartSpinner/Ask resolves to a non-TTY or NO_COLOR path,
-// or when SetTestMode(true) is called. Uses sync.Once so it is permanent once set.
+// pinASCII forces lipgloss to render without ANSI colour escapes. It controls
+// colour profile only — glyph mode is sourced independently from
+// uikit.ActiveMode() and is not affected by this call.
+// Called once when the first Write/StartSpinner/Ask resolves to a non-TTY or
+// NO_COLOR path, or when SetTestMode(true) is called. Uses sync.Once so it is
+// permanent once set.
 func pinASCII() {
 	profileOnce.Do(func() {
 		lipgloss.SetColorProfile(termenv.Ascii)
@@ -45,7 +50,8 @@ func pinASCII() {
 }
 
 // SetTestMode enables or disables test mode. In test mode, pinASCII is called
-// immediately and spinner animation is disabled (Story 149 uses this flag).
+// immediately, uikit is pinned to GlyphASCII mode so that glyph-role assertions
+// are deterministic, and spinner animation is disabled.
 // Tests call this in TestMain for deterministic output.
 func SetTestMode(enabled bool) {
 	testModeMu.Lock()
@@ -53,6 +59,7 @@ func SetTestMode(enabled bool) {
 	testMode = enabled
 	if enabled {
 		pinASCII()
+		uikit.SetModeForTest(uikit.GlyphASCII)
 	}
 }
 
