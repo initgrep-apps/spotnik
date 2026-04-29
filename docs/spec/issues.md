@@ -519,3 +519,25 @@ Items to log:
 5. `GatewayLivePane.buildTableRows()` no-ops when `p.width == 0`. If a `TickMsg` arrives before the first `WindowSizeMsg`, the buffer grows correctly but the table never gets the rows; user sees a one-tick flicker once sizing is applied. Add `p.buildTableRows()` at the end of `SetSize` once `w > 0` to close the gap.
 
 6. `Cell`, `Row`, `Preset` shapes (post-RowSpan retirement) lack a `Validate()` helper for invariants (positive `WidthWeight`/`HeightWeight`, unique `PaneID` in Grid, `Visible` map consistency with cells). A misconfigured preset literal would silently produce a blank screen. Cheap defensive helper; ideal place is a unit test that walks `PageAPresets` and `PageBPresets` once.
+
+---
+
+## Story 183 minor issues — uikit catalogue & SpinnerFrames hardening
+**Found:** 2026-04-29 | **Source:** PR #235 Review
+**Feature:** 13-tui-design-system
+
+PR #235 (story 183) shipped clean after two review rounds. The following sub-threshold concerns were filed instead of blocking the merge:
+
+1. `internal/uikit/spinner_frames.go` — `SpinnerFrames(mode)` returns the package-level slice (`spinnerFramesUnicode` / `spinnerFramesASCII`) directly. Doc comment says "must NOT be mutated by the caller", but the contract is comment-only. Both `uikit.Spinner` and `cliout.Spinner` share these slices, so an in-place mutation in one consumer corrupts the other. Either return a fresh `append([]string(nil), ...)` slice per call, or expose `SpinnerFrame(m, i)` / `SpinnerFrameCount(m)` accessors that never hand out the slice.
+
+2. `internal/uikit/glyph.go` `GlyphFor` and `internal/uikit/spinner_frames.go` `SpinnerFrames` use a two-state `if mode == GlyphASCII { ... } return unicode` cascade. If a third `GlyphMode` is ever added (e.g. `GlyphNerdFont`), every call site silently keeps returning Unicode without a compile-time signal. Convert to a `switch mode { case GlyphASCII: …; case GlyphUnicode: …; default: … }` so future modes surface as missing cases.
+
+3. `internal/uikit/toast.go` `truncateRunes` invariant ("max must be >= len(ellipsis runes)") is comment-only. Currently safe because `Normalize` is the only caller and uses 48 / 160. A future caller passing `max < 3` in ASCII mode would slice `runes[max-3:max]` and panic. Add a runtime guard or expose the function only via a typed helper that enforces the bound.
+
+4. `internal/uikit/toast_test.go` — body truncation is shared with title via `Normalize`, so the existing `TestToast_TruncatedTitle_AsciiEllipsis` covers the code path. Adding one explicit body assertion (161-rune body in ASCII mode ends with `...`) would make the test surface match the public contract more directly.
+
+5. `internal/uikit/spinner.go` — FPS changed from `time.Second / 10` to `time.Second / 12` during the refactor. Story spec didn't mandate a value, but the change is undocumented. Either revert or note the rationale in a doc comment.
+
+6. `internal/uikit/spinner_test.go:170` — `TestSpinner_Running_Unicode_UsesSpinnerFrames` calls `SetModeForTest(GlyphUnicode)` and defers `SetModeForTest(GlyphUnicode)`. The defer is a no-op (Unicode is already the default). Harmless, but copying this test as a template would propagate the no-op pattern.
+
+7. `internal/uikit/glyph.go` — `GlyphSeparator` value is `"sep.bullet"` but the Go identifier is generic. If a second separator ever lands (`sep.dash`, `sep.pipe`), the existing identifier becomes ambiguous. Consider renaming to `GlyphSepBullet` for parity with the rest of the bucketed naming.

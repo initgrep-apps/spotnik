@@ -1,7 +1,7 @@
 ---
 title: "Glyph catalogue extensions + uikit self-audit fixes + SpinnerFrames export"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
