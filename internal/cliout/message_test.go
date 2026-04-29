@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // stripAnsi removes ANSI escape sequences so tests can assert on visible text only.
@@ -54,6 +56,29 @@ func TestStatusGlyph(t *testing.T) {
 func TestStatusGlyph_unknown(t *testing.T) {
 	// Any unknown Status value must return "?" without panicking.
 	assert.Equal(t, "?", statusGlyph(Status(99)))
+}
+
+// TestStatusGlyph_AsciiMode verifies that every Status value returns its ASCII
+// form when uikit is pinned to ASCII mode.
+func TestStatusGlyph_AsciiMode(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	cases := []struct {
+		s    Status
+		want string
+	}{
+		{Active, uikit.GlyphFor(uikit.GlyphActive, uikit.GlyphASCII)},
+		{Inactive, uikit.GlyphFor(uikit.GlyphInactive, uikit.GlyphASCII)},
+		{StatusSuccess, uikit.GlyphFor(uikit.GlyphSuccess, uikit.GlyphASCII)},
+		{StatusFailure, uikit.GlyphFor(uikit.GlyphError, uikit.GlyphASCII)},
+		{StatusWarning, uikit.GlyphFor(uikit.GlyphWarning, uikit.GlyphASCII)},
+		{Pending, uikit.GlyphFor(uikit.GlyphLocked, uikit.GlyphASCII)},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, statusGlyph(c.s), "statusGlyph(%v) in ASCII mode", c.s)
+	}
 }
 
 func TestHeader_renderActive(t *testing.T) {

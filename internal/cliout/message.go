@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Message is implemented by every CLI message type. External packages cannot
@@ -32,24 +34,25 @@ const (
 	Pending
 )
 
-// statusGlyph returns the glyph for a status value.
+// statusGlyphRole maps each Status value to its uikit GlyphRole.
+// Glyphs are resolved at render time via uikit.GlyphFor so that ASCII mode
+// and unicode mode are both honoured.
+var statusGlyphRole = map[Status]uikit.GlyphRole{
+	Active:        uikit.GlyphActive,
+	Inactive:      uikit.GlyphInactive,
+	StatusSuccess: uikit.GlyphSuccess,
+	StatusFailure: uikit.GlyphError,
+	StatusWarning: uikit.GlyphWarning,
+	Pending:       uikit.GlyphLocked,
+}
+
+// statusGlyph returns the glyph for a status value in the current uikit mode.
 func statusGlyph(s Status) string {
-	switch s {
-	case Active:
-		return "◉"
-	case Inactive:
-		return "◎"
-	case StatusSuccess:
-		return "✓"
-	case StatusFailure:
-		return "✗"
-	case StatusWarning:
-		return "◬"
-	case Pending:
-		return "◌"
-	default:
+	role, ok := statusGlyphRole[s]
+	if !ok {
 		return "?"
 	}
+	return uikit.GlyphFor(role, uikit.ActiveMode())
 }
 
 // statusColor maps a status to a palette role colour.
