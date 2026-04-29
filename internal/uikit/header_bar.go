@@ -49,7 +49,7 @@ func (h HeaderBar) Render() string {
 		Bold(true).
 		Render(h.Page)
 
-	sep := muted.Render(" ─ ")
+	sep := muted.Render(" " + GlyphFor(GlyphHRule, ActiveMode()) + " ")
 	left := appName + sep + muted.Render("Page ") + key
 
 	// Append preset segment only when Preset >= 0 (Page A).
