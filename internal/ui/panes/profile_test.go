@@ -464,7 +464,8 @@ func TestProfileOverlay_View_NoSeparators(t *testing.T) {
 }
 
 // TestProfilePane_AsciiBorder verifies that the ProfileOverlay border in ASCII mode
-// uses ASCII corner characters ('+') and no unicode box-drawing characters (╭╮╰╯─│).
+// uses ASCII corner characters ('+') and '|' verticals, with no unicode box-drawing
+// characters (╭╮╰╯─│) present anywhere in the output.
 func TestProfilePane_AsciiBorder(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphASCII)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
@@ -476,10 +477,12 @@ func TestProfilePane_AsciiBorder(t *testing.T) {
 	out := p.View()
 	require.NotEmpty(t, out, "ProfileOverlay.View must produce output")
 
-	// ASCII mode: unicode box-drawing characters must be absent in the border.
-	for _, ch := range []string{"╭", "╮", "╰", "╯"} {
+	// ASCII mode: all six unicode box-drawing characters must be absent.
+	for _, ch := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
 		assert.NotContains(t, out, ch, "unicode glyph %q must not appear in ASCII mode", ch)
 	}
 	// ASCII mode: '+' corners must be present.
 	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode border")
+	// ASCII mode: '|' vertical rules must be present.
+	assert.Contains(t, out, "|", "'|' vertical rules must appear in ASCII mode")
 }

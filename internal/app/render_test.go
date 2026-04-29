@@ -1023,4 +1023,6 @@ func TestRenderGrid_AsciiBorders(t *testing.T) {
 	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode grid borders")
 	// ASCII mode: '-' horizontal rules must be present.
 	assert.Contains(t, out, "-", "'-' rules must appear in ASCII mode grid borders")
+	// ASCII mode: '|' vertical rules must be present.
+	assert.Contains(t, out, "|", "'|' vertical rules must appear in ASCII mode grid borders")
 }
