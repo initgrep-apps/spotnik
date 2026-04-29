@@ -97,6 +97,27 @@ const (
 	GlyphDeviceSpeaker  GlyphRole = "device.speaker"
 	GlyphDeviceTV       GlyphRole = "device.tv"
 
+	// Keyboard chords
+	GlyphEnter     GlyphRole = "kbd.enter"
+	GlyphEscape    GlyphRole = "kbd.escape"
+	GlyphTab       GlyphRole = "kbd.tab"
+	GlyphBackspace GlyphRole = "kbd.backspace"
+	GlyphSpace     GlyphRole = "kbd.space"
+
+	// Superscripts (used for pane toggle keys)
+	GlyphSuperscript0     GlyphRole = "sup.0"
+	GlyphSuperscript1     GlyphRole = "sup.1"
+	GlyphSuperscript2     GlyphRole = "sup.2"
+	GlyphSuperscript3     GlyphRole = "sup.3"
+	GlyphSuperscript4     GlyphRole = "sup.4"
+	GlyphSuperscript5     GlyphRole = "sup.5"
+	GlyphSuperscript6     GlyphRole = "sup.6"
+	GlyphSuperscript7     GlyphRole = "sup.7"
+	GlyphSuperscript8     GlyphRole = "sup.8"
+	GlyphSuperscript9     GlyphRole = "sup.9"
+	GlyphSuperscriptPlus  GlyphRole = "sup.plus"
+	GlyphSuperscriptMinus GlyphRole = "sup.minus"
+
 	// Graphical fills
 	GlyphBarFull          GlyphRole = "bar.full"
 	GlyphBarSevenEighths  GlyphRole = "bar.78"
@@ -191,6 +212,27 @@ var glyphTable = map[GlyphRole][2]string{
 	GlyphDevicePhone:    {"⊞", "[p]"},
 	GlyphDeviceSpeaker:  {"⊟", "[s]"},
 	GlyphDeviceTV:       {"⊠", "[tv]"},
+
+	// Keyboard chords
+	GlyphEnter:     {"⏎", "Enter"},
+	GlyphEscape:    {"⎋", "Esc"},
+	GlyphTab:       {"⇥", "Tab"},
+	GlyphBackspace: {"⌫", "BS"},
+	GlyphSpace:     {"␣", "Space"},
+
+	// Superscripts
+	GlyphSuperscript0:     {"⁰", "0"},
+	GlyphSuperscript1:     {"¹", "1"},
+	GlyphSuperscript2:     {"²", "2"},
+	GlyphSuperscript3:     {"³", "3"},
+	GlyphSuperscript4:     {"⁴", "4"},
+	GlyphSuperscript5:     {"⁵", "5"},
+	GlyphSuperscript6:     {"⁶", "6"},
+	GlyphSuperscript7:     {"⁷", "7"},
+	GlyphSuperscript8:     {"⁸", "8"},
+	GlyphSuperscript9:     {"⁹", "9"},
+	GlyphSuperscriptPlus:  {"⁺", "+"},
+	GlyphSuperscriptMinus: {"⁻", "-"},
 
 	// Graphical
 	GlyphBarFull:          {"█", "#"},

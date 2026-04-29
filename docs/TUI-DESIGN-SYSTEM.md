@@ -1145,24 +1145,34 @@ Keyboard-chord glyphs are **text-first**. Only arrow keys, Enter, and Esc may us
 form; modifier keys (Ctrl, Alt, Shift, Cmd) always render as text for cross-platform
 readability.
 
-| Role | Unicode | ASCII |
-|---|---|---|
-| enter | `⏎` / `↵` | `Enter` |
-| escape | `⎋` | `Esc` |
-| tab | `⇥` | `Tab` |
-| shift | — | `Shift` |
-| backspace | `⌫` | `BS` |
-| space | `␣` | `Space` |
-| ctrl / alt / cmd | — | `Ctrl` / `Alt` / `Cmd` |
+| Role | GlyphRole constant | Unicode | ASCII |
+|---|---|---|---|
+| enter | `GlyphEnter` | `⏎` | `Enter` |
+| escape | `GlyphEscape` | `⎋` | `Esc` |
+| tab | `GlyphTab` | `⇥` | `Tab` |
+| backspace | `GlyphBackspace` | `⌫` | `BS` |
+| space | `GlyphSpace` | `␣` | `Space` |
+| shift | — | `Shift` (text only) | `Shift` |
+| ctrl / alt / cmd | — | `Ctrl` / `Alt` / `Cmd` (text only) | `Ctrl` / `Alt` / `Cmd` |
 
 ### 4.10 Superscripts
 
-Used in pane titles (toggle-key number) and repeat-one indicator. No ascii equivalent
-beyond regular digits.
+Used in pane titles (toggle-key number) and repeat-one indicator.
 
-| Role | Unicode | ASCII |
-|---|---|---|
-| 1–8 | `¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸` | `1 2 3 4 5 6 7 8` |
+| Role | GlyphRole constant | Unicode | ASCII |
+|---|---|---|---|
+| 0 | `GlyphSuperscript0` | `⁰` | `0` |
+| 1 | `GlyphSuperscript1` | `¹` | `1` |
+| 2 | `GlyphSuperscript2` | `²` | `2` |
+| 3 | `GlyphSuperscript3` | `³` | `3` |
+| 4 | `GlyphSuperscript4` | `⁴` | `4` |
+| 5 | `GlyphSuperscript5` | `⁵` | `5` |
+| 6 | `GlyphSuperscript6` | `⁶` | `6` |
+| 7 | `GlyphSuperscript7` | `⁷` | `7` |
+| 8 | `GlyphSuperscript8` | `⁸` | `8` |
+| 9 | `GlyphSuperscript9` | `⁹` | `9` |
+| + | `GlyphSuperscriptPlus` | `⁺` | `+` |
+| − | `GlyphSuperscriptMinus` | `⁻` | `-` |
 | 0, 9 | `⁰ ⁹` | `0 9` |
 | +, − | `⁺ ⁻` | `+ -` |
 
