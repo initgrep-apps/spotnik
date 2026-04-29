@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // TestMain installs test mode for the entire cliout package test suite.
@@ -17,6 +19,22 @@ import (
 func TestMain(m *testing.M) {
 	SetTestMode(true)
 	os.Exit(m.Run())
+}
+
+// TestSpinnerFrames_AsciiSet verifies that resolveSpinnerFrames returns the
+// ASCII frame set (|, /, -, \) when uikit is pinned to ASCII mode.
+func TestSpinnerFrames_AsciiSet(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	frames := resolveSpinnerFrames()
+	want := uikit.SpinnerFrames(uikit.GlyphASCII)
+	assert.Equal(t, want, frames, "ASCII mode must return the ASCII spinner frames")
+	// Confirm none of the braille characters appear.
+	for _, f := range frames {
+		assert.NotContains(t, f, "⠋", "braille frame must not appear in ASCII mode")
+	}
 }
 
 // TestStartSpinner_nonTTY_writesStaticPendingLine verifies that in test mode
