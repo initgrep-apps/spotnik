@@ -149,12 +149,9 @@ func (o *ThemeOverlay) View() string {
 	}
 
 	cfg := layout.BorderConfig{
-		Width:  totalWidth,
-		Height: totalHeight,
-		Title:  "Themes",
-		Actions: []layout.Action{
-			{Key: "Enter", Label: "select"},
-		},
+		Width:       totalWidth,
+		Height:      totalHeight,
+		Title:       "Themes",
 		AccentColor: o.theme.ActiveBorder(),
 		Focused:     true, // overlays are always focused
 		Theme:       o.theme,
@@ -234,8 +231,8 @@ func (o *ThemeOverlay) renderRow(idx int, th *theme.ConfigTheme, innerWidth int)
 func (o *ThemeOverlay) overlayWidth() int {
 	minWidth := 40
 	for _, th := range o.themes {
-		// indicator (1) + space (1) + name + padding (2) + 5 swatches + space (2) each
-		needed := 1 + 1 + len(th.Name()) + 2 + 5*2 + 4
+		// indicator (1) + space (1) + name + padding (2) + 5 swatches × ("██" + space) (15) + leading gap (2)
+		needed := 1 + 1 + len(th.Name()) + 2 + 5*3 + 2
 		if needed > minWidth {
 			minWidth = needed
 		}
@@ -258,7 +255,7 @@ func renderSwatches(t *theme.ConfigTheme) string {
 	}
 	var b strings.Builder
 	for _, c := range colors {
-		b.WriteString(lipgloss.NewStyle().Foreground(c).Render("█"))
+		b.WriteString(lipgloss.NewStyle().Foreground(c).Render("██"))
 		b.WriteString(" ")
 	}
 	return b.String()

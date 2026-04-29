@@ -303,6 +303,6 @@ func TestRenderSwatches_Contains5Blocks(t *testing.T) {
 	require.True(t, ok, "Load should return *ConfigTheme")
 
 	result := renderSwatches(ct)
-	count := strings.Count(result, "█")
-	assert.Equal(t, 5, count, "renderSwatches should produce exactly 5 block chars")
+	count := strings.Count(result, "██")
+	assert.Equal(t, 5, count, "renderSwatches should produce exactly 5 swatches")
 }

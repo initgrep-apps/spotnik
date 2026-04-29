@@ -299,16 +299,6 @@ func TestDeviceOverlay_View_BtopBorderTitle(t *testing.T) {
 	assert.Contains(t, view, "Devices", "border title should contain 'Devices'")
 }
 
-func TestDeviceOverlay_View_BtopBorderActions(t *testing.T) {
-	overlay := newTestDeviceOverlay()
-	overlay.devices = testDevices()
-
-	view := overlay.View()
-
-	// Action from the spec: "Enter select"
-	assert.Contains(t, view, "select", "border should show 'select' action")
-}
-
 func TestDeviceOverlay_View_ActiveDeviceSymbol(t *testing.T) {
 	overlay := newTestDeviceOverlay()
 	overlay.devices = testDevices()

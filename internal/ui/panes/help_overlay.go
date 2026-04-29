@@ -150,12 +150,9 @@ func (o *HelpOverlay) View() string {
 		Render(inner)
 
 	cfg := layout.BorderConfig{
-		Width:  totalW,
-		Height: len(rows) + 2, // +2 for top and bottom border rows
-		Title:  "Help",
-		Actions: []layout.Action{
-			{Key: "Esc", Label: "close"},
-		},
+		Width:       totalW,
+		Height:      len(rows) + 2, // +2 for top and bottom border rows
+		Title:       "Help",
 		AccentColor: o.theme.ActiveBorder(),
 		Focused:     true, // overlays are always focused
 		Theme:       o.theme,

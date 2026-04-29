@@ -164,12 +164,9 @@ func (d *DeviceOverlay) View() string {
 	}
 
 	cfg := layout.BorderConfig{
-		Width:  totalWidth,
-		Height: totalHeight,
-		Title:  "Devices",
-		Actions: []layout.Action{
-			{Key: "Enter", Label: "select"},
-		},
+		Width:       totalWidth,
+		Height:      totalHeight,
+		Title:       "Devices",
 		AccentColor: d.theme.ActiveBorder(),
 		Focused:     true, // overlays are always focused
 		Theme:       d.theme,
