@@ -1176,8 +1176,6 @@ Used in pane titles (toggle-key number) and repeat-one indicator.
 | 9 | `GlyphSuperscript9` | `⁹` | `9` |
 | + | `GlyphSuperscriptPlus` | `⁺` | `+` |
 | − | `GlyphSuperscriptMinus` | `⁻` | `-` |
-| 0, 9 | `⁰ ⁹` | `0 9` |
-| +, − | `⁺ ⁻` | `+ -` |
 
 ### 4.11 Glyph mode detection
 
