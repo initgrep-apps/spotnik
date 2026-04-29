@@ -1,6 +1,6 @@
 ---
 title: "TUI Design System"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -20,8 +20,17 @@ full rationale (problem, goals, glyph catalogue, role matrix, primitive contract
 migration plan, risks).
 
 **Implementation plan:** `docs/superpowers/plans/2026-04-24-tui-design-system.md` — the
-canonical step-by-step TDD guide for every story. Each story below cross-references the
-matching `## Task N (SN): ...` section in the plan.
+canonical step-by-step TDD guide for stories 150–172. Each story below cross-references
+the matching `## Task N (SN): ...` section in the plan.
+
+**Glyph fallback follow-up (stories 183–192).** The post-merge audit
+(`docs/superpowers/specs/2026-04-29-glyph-fallback-audit-design.md`) found that while
+`uikit` is ~97% compliant, the running app still leaks unicode glyphs end-to-end:
+`renderGrid` builds `BorderConfig` inline without populating glyph fields (every grid
+pane border stays unicode under `ui.glyphs = "ascii"`); `internal/cliout` maintains a
+parallel hardcoded glyph set and ignores `ActiveMode()`; visualizer is unicode-only;
+`controls.go` and `infobox.go` hand-roll their own borders. Stories 183–192 close the
+gap end-to-end. Plan: `docs/superpowers/plans/2026-04-29-glyph-fallback.md`.
 
 **What changes:**
 
@@ -41,6 +50,13 @@ matching `## Task N (SN): ...` section in the plan.
 - `bubbleup` alerts wrapped behind a typed `Toast` API (`Intent`, `Title`, `Body`, `TTL`);
   every `a.alerts.NewAlertCmd` call site migrated.
 - OAuth wait in onboarding uses the new `Spinner` with `Done`/`Fail`/`Cancel` contract.
+- **Glyph-fallback follow-up (183–192):** new `PlaybackControls` primitive, new
+  `GlyphSeparator` / `GlyphPlaylist` / `GlyphDevice*` / `GlyphEnter` / `GlyphEscape` /
+  `GlyphTab` / `GlyphBackspace` / `GlyphSpace` / `GlyphSuperscript0..9/Plus/Minus`
+  catalogue rows, exported `uikit.SpinnerFrames(mode)`, `cliout` imports `uikit` for the
+  shared catalogue, `renderGrid` + 5 direct callers migrated to `PaneChrome` /
+  `OverlayChrome`, audio visualizer gains `AsciiBarsRenderer`, banned-glyph + catalogue
+  -leak + direct-`RenderPaneBorder` CI guards, and `LANG=C` test matrix.
 
 **Supersedes:** fragments of `docs/DESIGN.md` that describe pane chrome, header, status
 bar, overlay rendering, and onboarding panel internals (S19). `DESIGN.md` retains
@@ -48,68 +64,130 @@ layout, grid, page, and preset mechanics.
 
 **Peer feature:** `12-cli-output`. The glyph catalogue (§5 of the design record) and
 emphasis-role vocabulary (§6) are shared between `internal/cliout` and
-`internal/uikit`; glyph swaps propagate to both packages in the same PR (S14).
+`internal/uikit`; glyph swaps propagate to both packages in the same PR (S14, S184).
 
 **Depends on:** nothing — every story merges green against `make ci` independently.
 Phase 1 (S1 + S2) must ship before any Phase 2+ story. Phases 2–4 parallelise
-internally. Phase 5 depends on everything.
+internally. Phase 5 depends on everything. Glyph-fallback stories form Phases 6–11
+(see Story Order); story 183 gates 184–192; story 192 ships last.
 
 ## Acceptance Criteria
 
-- [ ] `internal/uikit/` package exists with 18 primitive files (`pane_chrome.go`,
+- [x] `internal/uikit/` package exists with 18 primitive files (`pane_chrome.go`,
       `overlay_chrome.go`, `panel.go`, `table_chrome.go`, `list_row.go`,
       `section_label.go`, `empty_state.go`, `url_box.go`, `header_bar.go`,
       `status_bar.go`, `key_bar.go`, `chip.go`, `form_field.go`, `toast.go`,
       `status_glyph.go`, `progress_bar.go`, `spinner.go`) plus scaffold files
       (`doc.go`, `glyph.go`, `role.go`, `config.go`, `capture.go`)
-- [ ] `internal/uikit` package coverage = 100% (`go test -cover ./internal/uikit/...`)
-- [ ] `internal/uikit.Capture(fn)` captures ANSI-stripped line arrays for structural
+- [x] `internal/uikit` package coverage = 100% (`go test -cover ./internal/uikit/...`)
+- [x] `internal/uikit.Capture(fn)` captures ANSI-stripped line arrays for structural
       assertions without rendering side-effects
-- [ ] Every primitive ships with a unicode snapshot test **and** an ascii snapshot test
-- [ ] Every primitive has a role-token assertion (field → theme token) matching §6.2 of
+- [x] Every primitive ships with a unicode snapshot test **and** an ascii snapshot test
+- [x] Every primitive has a role-token assertion (field → theme token) matching §6.2 of
       the design record
-- [ ] `config.Config` has a `UI` section with `Glyphs string` field; default `"auto"`;
+- [x] `config.Config` has a `UI` section with `Glyphs string` field; default `"auto"`;
       accepted values `auto` | `unicode` | `ascii`; rejected values fail validation
-- [ ] `uikit.ActiveMode()` returns `GlyphUnicode` when `LANG`/`LC_ALL` matches `UTF-8`,
+- [x] `uikit.ActiveMode()` returns `GlyphUnicode` when `LANG`/`LC_ALL` matches `UTF-8`,
       else `GlyphASCII`; honours the config override
-- [ ] `docs/TUI-DESIGN-SYSTEM.md` exists under `docs/` with every primitive documented
+- [x] `docs/TUI-DESIGN-SYSTEM.md` exists under `docs/` with every primitive documented
       via the six-block contract template (Purpose, Fields, Rendering, Roles, Glyphs,
       Lifecycle, Tests)
-- [ ] `docs/DESIGN.md` no longer contains the primitive-rendering sections; retains
+- [x] `docs/DESIGN.md` no longer contains the primitive-rendering sections; retains
       layout, grid, page, preset, and pane-toggle mechanics; points at
       `docs/TUI-DESIGN-SYSTEM.md`
-- [ ] `docs/PANE-TEMPLATE.md` Step 2 scaffold uses `uikit.PaneChrome` + uikit primitives
-- [ ] `CLAUDE.md` Reading Order references `docs/TUI-DESIGN-SYSTEM.md`
-- [ ] `CLAUDE.md` "What Agents Must NEVER Do" has an entry requiring glyph/primitive
+- [x] `docs/PANE-TEMPLATE.md` Step 2 scaffold uses `uikit.PaneChrome` + uikit primitives
+- [x] `CLAUDE.md` Reading Order references `docs/TUI-DESIGN-SYSTEM.md`
+- [x] `CLAUDE.md` "What Agents Must NEVER Do" has an entry requiring glyph/primitive
       additions to update the design-system doc in the same commit
-- [ ] `internal/ui/layout/border.go` no longer emits `ᐅ`; filter mode uses the notch
+- [x] `internal/ui/layout/border.go` no longer emits `ᐅ`; filter mode uses the notch
       format `filtering: "query" ─╮ Esc close ╭`; supports ascii mode via `GlyphFor`
-- [ ] `internal/cliout/message.go` `StatusWarning` glyph is `◬`, not `⚠`; ascii form `!`
-- [ ] All 5 `renderWith*Overlay` call sites in `internal/app/render.go` go through
+- [x] `internal/cliout/message.go` `StatusWarning` glyph is `◬`, not `⚠`; ascii form `!`
+- [x] All 5 `renderWith*Overlay` call sites in `internal/app/render.go` go through
       `uikit.OverlayChrome`
-- [ ] `renderOnboarding*`, `renderAuthPanel`, `renderTooSmall`, `renderSplash` go through
+- [x] `renderOnboarding*`, `renderAuthPanel`, `renderTooSmall`, `renderSplash` go through
       `uikit.Panel`
-- [ ] `renderHeader`, `renderProfileChip`, device-chip builder go through
+- [x] `renderHeader`, `renderProfileChip`, device-chip builder go through
       `uikit.HeaderBar` + `uikit.Chip`
-- [ ] `renderStatusBar` goes through `uikit.StatusBar` + `uikit.KeyBar`
-- [ ] `components/table.go` rendering goes through `uikit.TableChrome`
-- [ ] Theme overlay, profile overlay, playlist read-only rows use `uikit.ListRow` /
+- [x] `renderStatusBar` goes through `uikit.StatusBar` + `uikit.KeyBar`
+- [x] `components/table.go` rendering goes through `uikit.TableChrome`
+- [x] Theme overlay, profile overlay, playlist read-only rows use `uikit.ListRow` /
       `uikit.LockedRow`
-- [ ] Page B sub-section labels (GATEWAY, APP, GATEWAY LOG, SPOTIFY, AUTO-TRAFFIC) go
+- [x] Page B sub-section labels (GATEWAY, APP, GATEWAY LOG, SPOTIFY, AUTO-TRAFFIC) go
       through `uikit.SectionLabel`
-- [ ] Empty queue, empty search results, loading playlist tracks use `uikit.EmptyState`
-- [ ] Onboarding redirect-URI block uses `uikit.URLBox`
-- [ ] Every `a.alerts.NewAlertCmd(type, msg)` call site migrated to `a.toasts.Cmd(Toast{...})`
+- [x] Empty queue, empty search results, loading playlist tracks use `uikit.EmptyState`
+- [x] Onboarding redirect-URI block uses `uikit.URLBox`
+- [x] Every `a.alerts.NewAlertCmd(type, msg)` call site migrated to `a.toasts.Cmd(Toast{...})`
       with intent-typed `ToastIntent`
-- [ ] Seek bar and volume bar in `components/controls.go` go through `uikit.ProgressBar`
+- [x] Seek bar and volume bar in `components/controls.go` go through `uikit.ProgressBar`
       with partial-block rendering unicode and `=`/`-`/`.` ascii fallback
-- [ ] OAuth wait in onboarding uses `uikit.Spinner`; Done/Fail/Cancel states emit
+- [x] OAuth wait in onboarding uses `uikit.Spinner`; Done/Fail/Cancel states emit
       `SpinnerDoneMsg` / `SpinnerFailMsg` / `SpinnerCancelledMsg`
-- [ ] Onboarding client-ID input uses `uikit.FormField` with intrinsic validation and
+- [x] Onboarding client-ID input uses `uikit.FormField` with intrinsic validation and
       error slot beneath
-- [ ] `make ci` passes after every story
-- [ ] No feature flag (`ui.design_system = on/off`) — each primitive is migrated at its
+- [x] No feature flag (`ui.design_system = on/off`) — each primitive is migrated at its
       call sites with visual diff in code review
+
+### Glyph fallback (stories 183–192)
+
+- [ ] `internal/uikit/glyph.go` exposes `GlyphSeparator`, `GlyphPlaylist`,
+      `GlyphDeviceComputer`, `GlyphDevicePhone`, `GlyphDeviceSpeaker`, `GlyphDeviceTV`,
+      `GlyphEnter`, `GlyphEscape`, `GlyphTab`, `GlyphBackspace`, `GlyphSpace`,
+      `GlyphSuperscript0..9`, `GlyphSuperscriptPlus`, `GlyphSuperscriptMinus` with
+      `glyphTable` rows and matching unicode + ascii forms (per audit §4.1)
+- [ ] `uikit.SpinnerFrames(mode GlyphMode) []string` is exported and is the single
+      source of braille (unicode) and `|/-\` (ascii) frame arrays for both
+      `uikit.Spinner` and `cliout.Spinner`
+- [ ] `internal/uikit/list_row.go`, `toast.go`, `header_bar.go`, `key_bar.go`,
+      `status_bar.go` resolve every glyph and border field via `GlyphFor` —
+      no hardcoded `…`, ` ─ `, ` · `, ` | `, or omitted `BorderConfig` glyph fields
+- [ ] `EmptyState`, `URLBox`, `HeaderBar`, `FormField` ship ASCII-mode snapshot tests
+- [ ] `internal/cliout` imports `internal/uikit` and resolves every glyph and spinner
+      frame via `uikit.GlyphFor` / `uikit.SpinnerFrames`; `statusGlyph()` is a `Status`
+      → `GlyphRole` map; `Hint` arrow uses `GlyphFor(GlyphInfo, mode)`;
+      `cliout.SetTestMode(true)` additionally calls `uikit.SetModeForTest(GlyphASCII)`
+- [ ] `internal/cliout` test suite asserts glyph **roles** via `uikit.GlyphFor`, not raw
+      codepoints, and runs in both unicode and ASCII modes
+- [ ] `internal/app/render.go:renderGrid` migrates from inline `BorderConfig` +
+      `layout.RenderPaneBorder` to `uikit.PaneChrome.Render`; every grid pane border
+      honours `ui.glyphs = "ascii"`
+- [ ] `internal/ui/panes/themes.go` and `internal/ui/panes/profile.go` migrate from
+      direct `RenderPaneBorder` to `uikit.PaneChrome.Render`
+- [ ] `internal/ui/panes/devices.go`, `internal/ui/panes/help_overlay.go`, and the three
+      `internal/ui/panes/search.go` overlay-render paths migrate to
+      `uikit.OverlayChrome.Render`
+- [ ] `internal/ui/components/infobox.go` migrates from hand-rolled border to
+      `uikit.PaneChrome.Render`
+- [ ] `internal/uikit/playback_controls.go` ships a `PlaybackControls` primitive owning
+      the seven transport glyphs (shuffle / play / pause / queue / repeat-off /
+      repeat-all / repeat-one); `internal/ui/components/controls.go` becomes a thin
+      compatibility wrapper that translates legacy string repeat modes
+- [ ] `uikit.RegisterBubbleupAlerts(theme)` resolves all five toast prefixes
+      (`success`, `error`, `warning`, `info`, `ratelimit`) via `GlyphFor` at call time
+- [ ] `internal/ui/panes/nowplaying.go:Title()` resolves `▶`, `⏸`, `─` via `GlyphFor`
+- [ ] `internal/ui/components/viz/ascii_bars.go` ships an `AsciiBarsRenderer` (4-level
+      `# = .` columns); `viz/engine.go` selects renderer based on `uikit.ActiveMode()`
+      so the visualizer is present (degraded) in ascii mode
+- [ ] Every Phase 5 inline glyph leak — `panes/devices.go` (`◉/○/⊡⊞⊟⊠`, "No devices found"),
+      `panes/search.go` (`bubbles/spinner.Model`), `panes/search_delegate.go`
+      (`categorySymbol`, separators), `panes/recentlyplayed_pane.go` and
+      `panes/nowplaying.go` empty messages, `panes/networklog_pane.go` (`◷`/`⚡`),
+      `panes/profile.go` (`…`), `panes/help_overlay.go` (`│`),
+      `panes/gateway_health_pane.go` (custom dot-bar → `uikit.ProgressBar`),
+      `app/render.go` (`♪`/`•`/`…`), `components/gradient.go` (`♪`),
+      `components/table.go` (`playingSymbol`), `components/viz/block.go` (`█`) —
+      resolves through `GlyphFor` or its owning primitive
+- [ ] `make check-glyphs` exists, executable, and CI-wired; it runs:
+      `scripts/check-banned-glyphs.sh` (no `⚠`, `ᐅ`, `┌┐└┘`, `╔╗╚╝`, `✅`, `❌`, `❗`),
+      `scripts/check-catalogue-leaks.sh` (catalogue characters appear only in
+      `internal/uikit/glyph.go` and canonical doc files), and
+      `scripts/check-render-pane-border.sh` (no direct `layout.RenderPaneBorder`
+      callers outside `internal/uikit/`)
+- [ ] CI matrix runs the full test suite once with `LANG=en_US.UTF-8` and once with
+      `LANG=C`; both pass
+- [ ] Manual smoke test under `LANG=C` and `ui.glyphs = "ascii"` confirms every grid
+      pane, every overlay, splash, onboarding, toast intent, and the visualizer
+      render legibly with no mojibake and correct width
+- [ ] `make ci` passes after every story
 
 ## Story Order
 
@@ -168,3 +246,62 @@ Phase 5 — Composites & cleanup (depends on Phases 2–4).
     retain layout/grid/page mechanics, pointer to `TUI-DESIGN-SYSTEM.md`);
     `docs/TUI-DESIGN-SYSTEM.md` created with 18 primitive contracts;
     `docs/PANE-TEMPLATE.md` Step 2 scaffold updated to use `PaneChrome`.
+
+Phase 6 — Glyph-fallback foundation (gate for 184–192).
+
+20. `183-glyph-catalogue-uikit-audit.md` — domain / chord / superscript catalogue rows
+    with co-committed `docs/TUI-DESIGN-SYSTEM.md` updates; export
+    `uikit.SpinnerFrames(mode)`; fix `list_row.go`, `toast.go`, `header_bar.go`,
+    `key_bar.go`, `status_bar.go` self-audit gaps; ASCII snapshot tests for
+    `EmptyState`, `URLBox`, `HeaderBar`, `FormField`.
+
+Phase 7 — cliout integration (depends on 183).
+
+21. `184-cliout-uikit-integration.md` — `internal/cliout` imports `internal/uikit`;
+    `statusGlyph()` becomes `Status` → `GlyphRole` map; `Hint` arrow via
+    `GlyphFor(GlyphInfo)`; spinner frames via `uikit.SpinnerFrames(ActiveMode())`;
+    `cliout.SetTestMode` calls `uikit.SetModeForTest`; tests rebaselined to assert
+    glyph roles, not codepoints, in both modes.
+
+Phase 8 — Pane chrome migration (depends on 183).
+
+22. `185-pane-chrome-migration.md` — `app/render.go:renderGrid`,
+    `panes/themes.go`, `panes/profile.go`, `components/infobox.go` migrate to
+    `uikit.PaneChrome.Render`. Single largest fallback gap.
+23. `186-overlay-chrome-migration.md` — `panes/devices.go`, `panes/help_overlay.go`,
+    and three `panes/search.go` overlay-render paths migrate to
+    `uikit.OverlayChrome.Render`.
+
+Phase 9 — Critical content fixes (depends on 183).
+
+24. `187-playback-controls-primitive.md` — new `uikit.PlaybackControls` primitive owning
+    the seven transport glyphs; `components/controls.go` becomes a thin compatibility
+    wrapper translating legacy string repeat modes; `panes/nowplaying.go:Title()`
+    routes `▶`/`⏸`/`─` via `GlyphFor`.
+25. `188-toast-bubbleup-registration.md` — `uikit.RegisterBubbleupAlerts(theme)`
+    resolves the five alert prefixes via `GlyphFor` at call time; `notifications.go`
+    becomes a thin wrapper calling the helper.
+26. `189-viz-ascii-renderer.md` — new `viz.AsciiBarsRenderer` (4-level `# = .` columns);
+    `viz/engine.go` selects renderer based on `uikit.ActiveMode()`; visualizer stays
+    present (degraded) in ascii mode rather than rendering mojibake.
+
+Phase 10 — Pane content cleanup (depends on 183, 187).
+
+27. `190-pane-content-search-devices.md` — `panes/devices.go` status glyphs / device
+    icons / empty state; `panes/search.go` `bubbles/spinner.Model` → `uikit.Spinner`;
+    `panes/search_delegate.go` `categorySymbol` and separators routed through
+    `GlyphFor`.
+28. `191-remaining-glyph-leaks.md` — empty-state migrations
+    (`recentlyplayed_pane.go`, `nowplaying.go`); inline glyph leaks across
+    `networklog_pane.go`, `profile.go`, `help_overlay.go`, `gradient.go`,
+    `app/render.go` (banner / bullets / ellipsis), `components/table.go`
+    `playingSymbol`, `viz/block.go` `█`; `gateway_health_pane.go` custom dot-bar →
+    `uikit.ProgressBar`.
+
+Phase 11 — Test parity, CI guards, smoke (depends on 184–191).
+
+29. `192-glyph-fallback-ci-guards.md` — `cliout` ASCII test sweep; `make check-glyphs`
+    target wrapping `scripts/check-banned-glyphs.sh`,
+    `scripts/check-catalogue-leaks.sh`, and `scripts/check-render-pane-border.sh`;
+    CI matrix runs the test suite under `LANG=en_US.UTF-8` and `LANG=C`; manual smoke
+    test under `LANG=C` and `ui.glyphs = "ascii"` covering every surface.

@@ -74,6 +74,84 @@ func TestGlyph_UnknownRoleReturnsEmpty(t *testing.T) {
 	assert.Empty(t, uikit.GlyphFor(unknown, uikit.GlyphASCII))
 }
 
+// TestGlyphFor_KeyboardChords verifies §4.9 keyboard-chord catalogue rows.
+func TestGlyphFor_KeyboardChords(t *testing.T) {
+	tests := []struct {
+		role    uikit.GlyphRole
+		unicode string
+		ascii   string
+	}{
+		{uikit.GlyphEnter, "⏎", "Enter"},
+		{uikit.GlyphEscape, "⎋", "Esc"},
+		{uikit.GlyphTab, "⇥", "Tab"},
+		{uikit.GlyphBackspace, "⌫", "BS"},
+		{uikit.GlyphSpace, "␣", "Space"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			assert.Equal(t, tt.unicode, uikit.GlyphFor(tt.role, uikit.GlyphUnicode),
+				"unicode form for %q", tt.role)
+			assert.Equal(t, tt.ascii, uikit.GlyphFor(tt.role, uikit.GlyphASCII),
+				"ascii form for %q", tt.role)
+		})
+	}
+}
+
+// TestGlyphFor_Superscripts verifies §4.10 superscript catalogue rows.
+func TestGlyphFor_Superscripts(t *testing.T) {
+	tests := []struct {
+		role    uikit.GlyphRole
+		unicode string
+		ascii   string
+	}{
+		{uikit.GlyphSuperscript0, "⁰", "0"},
+		{uikit.GlyphSuperscript1, "¹", "1"},
+		{uikit.GlyphSuperscript2, "²", "2"},
+		{uikit.GlyphSuperscript3, "³", "3"},
+		{uikit.GlyphSuperscript4, "⁴", "4"},
+		{uikit.GlyphSuperscript5, "⁵", "5"},
+		{uikit.GlyphSuperscript6, "⁶", "6"},
+		{uikit.GlyphSuperscript7, "⁷", "7"},
+		{uikit.GlyphSuperscript8, "⁸", "8"},
+		{uikit.GlyphSuperscript9, "⁹", "9"},
+		{uikit.GlyphSuperscriptPlus, "⁺", "+"},
+		{uikit.GlyphSuperscriptMinus, "⁻", "-"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			assert.Equal(t, tt.unicode, uikit.GlyphFor(tt.role, uikit.GlyphUnicode),
+				"unicode form for %q", tt.role)
+			assert.Equal(t, tt.ascii, uikit.GlyphFor(tt.role, uikit.GlyphASCII),
+				"ascii form for %q", tt.role)
+		})
+	}
+}
+
+// TestGlyphFor_NewDomainRoles verifies the catalogue rows for GlyphPlaylist,
+// GlyphSeparator, and the four device-type glyphs.
+func TestGlyphFor_NewDomainRoles(t *testing.T) {
+	tests := []struct {
+		role    uikit.GlyphRole
+		unicode string
+		ascii   string
+	}{
+		{uikit.GlyphPlaylist, "▤", "[=]"},
+		{uikit.GlyphSeparator, "·", "|"},
+		{uikit.GlyphDeviceComputer, "⊡", "[c]"},
+		{uikit.GlyphDevicePhone, "⊞", "[p]"},
+		{uikit.GlyphDeviceSpeaker, "⊟", "[s]"},
+		{uikit.GlyphDeviceTV, "⊠", "[tv]"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			assert.Equal(t, tt.unicode, uikit.GlyphFor(tt.role, uikit.GlyphUnicode),
+				"unicode form for %q", tt.role)
+			assert.Equal(t, tt.ascii, uikit.GlyphFor(tt.role, uikit.GlyphASCII),
+				"ascii form for %q", tt.role)
+		})
+	}
+}
+
 func TestGlyph_BannedGlyphsAbsentEverywhere(t *testing.T) {
 	// U+26A0 is the old warning sign — banned in favour of U+25EC (◬).
 	// Use the Go Unicode escape \u26A0 so the source file itself does not

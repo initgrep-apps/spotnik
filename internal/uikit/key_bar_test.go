@@ -65,6 +65,23 @@ func TestKeyBar_SingleBinding_NoSeparator(t *testing.T) {
 	assert.NotContains(t, line, "·", "single binding must not have a separator")
 }
 
+// TestKeyBar_AsciiSeparator verifies that in ASCII mode the separator is the GlyphSeparator
+// ASCII form ("|") and that the explicit branch in key_bar.go is eliminated in favour of
+// a single GlyphFor call.
+func TestKeyBar_AsciiSeparator(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+	th := theme.Load("black")
+	bindings := []key.Binding{
+		key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy")),
+		key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+	out := uikit.KeyBar{Bindings: bindings, Theme: th}.Render()
+	line := uikit.Capture(out)[0]
+	assert.NotContains(t, line, "·", "ascii mode must not use middot separator")
+	assert.Contains(t, line, "|", "ascii mode must use GlyphSeparator ascii form (|)")
+}
+
 // TestKeyBar_RoleTokens verifies that KeyBar uses KeyHint() for keys and TextMuted() for descs.
 func TestKeyBar_RoleTokens(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphUnicode)

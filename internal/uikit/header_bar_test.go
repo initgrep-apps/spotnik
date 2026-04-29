@@ -133,6 +133,24 @@ func TestHeaderBar_GapAtLeastOne(t *testing.T) {
 	assert.NotPanics(t, func() { h.Render() }, "Render must not panic when content overflows Width")
 }
 
+// TestHeaderBar_AsciiSeparator verifies that in ASCII mode the header bar separator
+// is " - " (ASCII hyphen), not " ─ " (unicode horizontal rule).
+func TestHeaderBar_AsciiSeparator(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+	th := theme.Load("black")
+	h := uikit.HeaderBar{
+		Width:   160,
+		AppName: "spotnik",
+		Page:    "A",
+		Preset:  0,
+		Theme:   th,
+	}
+	plain := uikit.Capture(h.Render())[0]
+	assert.Contains(t, plain, " - ", "ascii mode must use hyphen separator")
+	assert.NotContains(t, plain, " ─ ", "ascii mode must not use unicode horizontal rule")
+}
+
 // TestHeaderBar_PresetN_ShowsIndex verifies that preset index > 0 is shown correctly.
 func TestHeaderBar_PresetN_ShowsIndex(t *testing.T) {
 	th := theme.Load("black")

@@ -24,7 +24,8 @@ type URLBox struct {
 	Theme theme.Theme
 }
 
-// Render returns the URL inside a lipgloss RoundedBorder styled box.
+// Render returns the URL inside a styled box. In unicode mode a rounded border
+// (╭╮╰╯─│) is used; in ASCII mode the border uses +/-/| characters.
 // Long URLs are wrapped at '&' boundaries or hard-wrapped at the inner width.
 func (b URLBox) Render() string {
 	// border (1 each side) + padding (1 each side) = 4 chars overhead.
@@ -33,8 +34,26 @@ func (b URLBox) Render() string {
 		innerW = 1
 	}
 	wrapped := wrapAtAmpersand(b.URL, innerW)
+
+	mode := ActiveMode()
+	var border lipgloss.Border
+	if mode == GlyphASCII {
+		border = lipgloss.Border{
+			Top:         GlyphFor(GlyphHRule, mode),
+			Bottom:      GlyphFor(GlyphHRule, mode),
+			Left:        GlyphFor(GlyphVRule, mode),
+			Right:       GlyphFor(GlyphVRule, mode),
+			TopLeft:     GlyphFor(GlyphCornerTL, mode),
+			TopRight:    GlyphFor(GlyphCornerTR, mode),
+			BottomLeft:  GlyphFor(GlyphCornerBL, mode),
+			BottomRight: GlyphFor(GlyphCornerBR, mode),
+		}
+	} else {
+		border = lipgloss.RoundedBorder()
+	}
+
 	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(border).
 		BorderForeground(b.Theme.TextMuted()).
 		Foreground(b.Theme.Accent()).
 		Padding(0, 1).

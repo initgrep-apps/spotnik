@@ -260,6 +260,27 @@ func TestFormField_Render_ValidationError_TwoDistinctColours(t *testing.T) {
 		"error line must contain at least two distinct ANSI colour sequences (Error glyph + Plain text), got: %v", colourOpeners)
 }
 
+// TestFormField_AsciiValidationError verifies that in ASCII mode the validation
+// error glyph is "x" (ASCII form of GlyphError), not "✗" (unicode form).
+func TestFormField_AsciiValidationError(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := newTestTheme()
+	f := uikit.NewFormField(uikit.FormFieldConfig{
+		Label:    "Client ID",
+		Validate: validHexValidator,
+		Theme:    th,
+	})
+
+	f.SetValue("bad-value")
+	_ = f.Validate()
+
+	rendered := stripANSI(f.Render())
+	assert.Contains(t, rendered, "x", "ascii mode validation error must use 'x' glyph")
+	assert.NotContains(t, rendered, "✗", "ascii mode must not use unicode error glyph ✗")
+}
+
 // TestFormField_NewFormField_TextStyleAndCursorStyleSet is a regression test for
 // Input.Text = Plain and Input.Cursor = Accent role wiring. It verifies that the
 // TextStyle carries the TextPrimary foreground and the Cursor.Style carries the

@@ -28,10 +28,7 @@ func (k KeyBar) Render() string {
 	keyStyle := lipgloss.NewStyle().Foreground(t.KeyHint())
 	descStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 
-	sep := " · "
-	if ActiveMode() == GlyphASCII {
-		sep = " | "
-	}
+	sep := " " + GlyphFor(GlyphSeparator, ActiveMode()) + " "
 
 	parts := make([]string, 0, len(k.Bindings))
 	for _, b := range k.Bindings {

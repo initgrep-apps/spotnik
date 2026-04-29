@@ -195,6 +195,34 @@ func TestEmptyState_CenterLineNoOverflow(t *testing.T) {
 	assert.True(t, found, "text must appear somewhere in output")
 }
 
+// TestEmptyState_AsciiMode verifies that EmptyState renders correctly in ASCII mode:
+// the output has exactly Height lines, contains the text and hint, and does NOT
+// contain any unicode box-drawing or ellipsis glyphs (regression guard so that
+// a future change adding a unicode glyph without routing through GlyphFor fails).
+func TestEmptyState_AsciiMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text: "No items", Hint: "Press / to search",
+		Width: 40, Height: 6, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	assert.Equal(t, 6, len(lines), "ascii mode must return exactly Height lines")
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "No items", "ascii mode must contain text")
+	assert.Contains(t, full, "Press / to search", "ascii mode must contain hint")
+
+	// Negative assertions: no unicode box-drawing characters or ellipsis must
+	// appear. If a future change adds a unicode glyph without routing it through
+	// GlyphFor, this test will catch the regression.
+	for _, banned := range []string{"╭", "╮", "╰", "╯", "─", "│", "…"} {
+		assert.NotContains(t, full, banned,
+			"ascii mode must not contain unicode glyph %q", banned)
+	}
+}
+
 // containsSubstr is a simple substring check used in tests.
 func containsSubstr(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)

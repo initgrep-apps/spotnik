@@ -1099,6 +1099,22 @@ also use notch format; `filtering: "query"` renders as muted preamble before the
 | premium badge | `♛` | `*P` |
 | free-tier badge | `○` | `(o)` |
 | cloud / remote device | `☁` | `(c)` |
+| playlist badge | `▤` | `[=]` |
+
+### 4.6a Generic separators
+
+| Role | Unicode | ASCII |
+|---|---|---|
+| separator (bullet) | `·` | `\|` |
+
+### 4.6b Device-type icons (devices pane)
+
+| Role | Unicode | ASCII |
+|---|---|---|
+| computer | `⊡` | `[c]` |
+| phone | `⊞` | `[p]` |
+| speaker | `⊟` | `[s]` |
+| TV | `⊠` | `[tv]` |
 
 ### 4.7 Graphical fills (ProgressBar, Visualizer)
 
@@ -1119,9 +1135,12 @@ also use notch format; `filtering: "query"` renders as muted preamble before the
 
 ### 4.8 Spinner frames
 
+Exported via `uikit.SpinnerFrames(mode GlyphMode) []string`. Both `uikit.Spinner`
+and `cliout.Spinner` source frames from this function — no inline arrays.
+
 | Set | Unicode | ASCII |
 |---|---|---|
-| braille (default) | `⣾⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` | `\|/-\|/-\` |
+| braille (10 frames) | `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` | `\|/-` (4 frames) |
 
 ### 4.9 Keyboard chords
 
@@ -1129,26 +1148,34 @@ Keyboard-chord glyphs are **text-first**. Only arrow keys, Enter, and Esc may us
 form; modifier keys (Ctrl, Alt, Shift, Cmd) always render as text for cross-platform
 readability.
 
-| Role | Unicode | ASCII |
-|---|---|---|
-| enter | `⏎` / `↵` | `Enter` |
-| escape | `⎋` | `Esc` |
-| tab | `⇥` | `Tab` |
-| shift | — | `Shift` |
-| backspace | `⌫` | `BS` |
-| space | `␣` | `Space` |
-| ctrl / alt / cmd | — | `Ctrl` / `Alt` / `Cmd` |
+| Role | GlyphRole constant | Unicode | ASCII |
+|---|---|---|---|
+| enter | `GlyphEnter` | `⏎` | `Enter` |
+| escape | `GlyphEscape` | `⎋` | `Esc` |
+| tab | `GlyphTab` | `⇥` | `Tab` |
+| backspace | `GlyphBackspace` | `⌫` | `BS` |
+| space | `GlyphSpace` | `␣` | `Space` |
+| shift | — | `Shift` (text only) | `Shift` |
+| ctrl / alt / cmd | — | `Ctrl` / `Alt` / `Cmd` (text only) | `Ctrl` / `Alt` / `Cmd` |
 
 ### 4.10 Superscripts
 
-Used in pane titles (toggle-key number) and repeat-one indicator. No ascii equivalent
-beyond regular digits.
+Used in pane titles (toggle-key number) and repeat-one indicator.
 
-| Role | Unicode | ASCII |
-|---|---|---|
-| 1–8 | `¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸` | `1 2 3 4 5 6 7 8` |
-| 0, 9 | `⁰ ⁹` | `0 9` |
-| +, − | `⁺ ⁻` | `+ -` |
+| Role | GlyphRole constant | Unicode | ASCII |
+|---|---|---|---|
+| 0 | `GlyphSuperscript0` | `⁰` | `0` |
+| 1 | `GlyphSuperscript1` | `¹` | `1` |
+| 2 | `GlyphSuperscript2` | `²` | `2` |
+| 3 | `GlyphSuperscript3` | `³` | `3` |
+| 4 | `GlyphSuperscript4` | `⁴` | `4` |
+| 5 | `GlyphSuperscript5` | `⁵` | `5` |
+| 6 | `GlyphSuperscript6` | `⁶` | `6` |
+| 7 | `GlyphSuperscript7` | `⁷` | `7` |
+| 8 | `GlyphSuperscript8` | `⁸` | `8` |
+| 9 | `GlyphSuperscript9` | `⁹` | `9` |
+| + | `GlyphSuperscriptPlus` | `⁺` | `+` |
+| − | `GlyphSuperscriptMinus` | `⁻` | `-` |
 
 ### 4.11 Glyph mode detection
 

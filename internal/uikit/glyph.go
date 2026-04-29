@@ -15,9 +15,8 @@ const (
 	GlyphASCII
 )
 
-// Glyph roles. Grouped by category. Additions require updating the spec in
-// docs/superpowers/specs/2026-04-24-tui-design-system-design.md §5 and the
-// canonical doc docs/TUI-DESIGN-SYSTEM.md in the same PR.
+// Glyph roles. Grouped by category. Additions require updating
+// docs/TUI-DESIGN-SYSTEM.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
 const (
 	// Structural / borders
 	GlyphCornerTL       GlyphRole = "corner.tl"
@@ -86,6 +85,37 @@ const (
 	GlyphPremium    GlyphRole = "music.premium"
 	GlyphFreeTier   GlyphRole = "music.free"
 	GlyphCloud      GlyphRole = "music.cloud"
+	GlyphPlaylist   GlyphRole = "music.playlist"
+
+	// Generic separators
+	GlyphSeparator GlyphRole = "sep.bullet"
+
+	// Device-type icons (devices pane)
+	GlyphDeviceComputer GlyphRole = "device.computer"
+	GlyphDevicePhone    GlyphRole = "device.phone"
+	GlyphDeviceSpeaker  GlyphRole = "device.speaker"
+	GlyphDeviceTV       GlyphRole = "device.tv"
+
+	// Keyboard chords
+	GlyphEnter     GlyphRole = "kbd.enter"
+	GlyphEscape    GlyphRole = "kbd.escape"
+	GlyphTab       GlyphRole = "kbd.tab"
+	GlyphBackspace GlyphRole = "kbd.backspace"
+	GlyphSpace     GlyphRole = "kbd.space"
+
+	// Superscripts (used for pane toggle keys)
+	GlyphSuperscript0     GlyphRole = "sup.0"
+	GlyphSuperscript1     GlyphRole = "sup.1"
+	GlyphSuperscript2     GlyphRole = "sup.2"
+	GlyphSuperscript3     GlyphRole = "sup.3"
+	GlyphSuperscript4     GlyphRole = "sup.4"
+	GlyphSuperscript5     GlyphRole = "sup.5"
+	GlyphSuperscript6     GlyphRole = "sup.6"
+	GlyphSuperscript7     GlyphRole = "sup.7"
+	GlyphSuperscript8     GlyphRole = "sup.8"
+	GlyphSuperscript9     GlyphRole = "sup.9"
+	GlyphSuperscriptPlus  GlyphRole = "sup.plus"
+	GlyphSuperscriptMinus GlyphRole = "sup.minus"
 
 	// Graphical fills
 	GlyphBarFull          GlyphRole = "bar.full"
@@ -101,8 +131,8 @@ const (
 	GlyphBarHeavy         GlyphRole = "bar.heavy"
 )
 
-// glyphTable holds the unicode + ascii forms for every role. Keep this table
-// in sync with the spec §5 and docs/TUI-DESIGN-SYSTEM.md §5.
+// glyphTable holds the unicode + ascii forms for every role. Additions require
+// updating docs/TUI-DESIGN-SYSTEM.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
 var glyphTable = map[GlyphRole][2]string{
 	// Structural
 	GlyphCornerTL:       {"╭", "+"},
@@ -171,6 +201,37 @@ var glyphTable = map[GlyphRole][2]string{
 	GlyphPremium:    {"♛", "*P"},
 	GlyphFreeTier:   {"○", "(o)"},
 	GlyphCloud:      {"☁", "(c)"},
+	GlyphPlaylist:   {"▤", "[=]"},
+
+	// Generic separators
+	GlyphSeparator: {"·", "|"},
+
+	// Device-type icons
+	GlyphDeviceComputer: {"⊡", "[c]"},
+	GlyphDevicePhone:    {"⊞", "[p]"},
+	GlyphDeviceSpeaker:  {"⊟", "[s]"},
+	GlyphDeviceTV:       {"⊠", "[tv]"},
+
+	// Keyboard chords
+	GlyphEnter:     {"⏎", "Enter"},
+	GlyphEscape:    {"⎋", "Esc"},
+	GlyphTab:       {"⇥", "Tab"},
+	GlyphBackspace: {"⌫", "BS"},
+	GlyphSpace:     {"␣", "Space"},
+
+	// Superscripts
+	GlyphSuperscript0:     {"⁰", "0"},
+	GlyphSuperscript1:     {"¹", "1"},
+	GlyphSuperscript2:     {"²", "2"},
+	GlyphSuperscript3:     {"³", "3"},
+	GlyphSuperscript4:     {"⁴", "4"},
+	GlyphSuperscript5:     {"⁵", "5"},
+	GlyphSuperscript6:     {"⁶", "6"},
+	GlyphSuperscript7:     {"⁷", "7"},
+	GlyphSuperscript8:     {"⁸", "8"},
+	GlyphSuperscript9:     {"⁹", "9"},
+	GlyphSuperscriptPlus:  {"⁺", "+"},
+	GlyphSuperscriptMinus: {"⁻", "-"},
 
 	// Graphical
 	GlyphBarFull:          {"█", "#"},
