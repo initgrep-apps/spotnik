@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // TestMain installs test mode for the entire cliout package test suite.
@@ -19,37 +21,55 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// TestSpinnerFrames_AsciiSet verifies that resolveSpinnerFrames returns the
+// ASCII frame set (|, /, -, \) when uikit is pinned to ASCII mode.
+func TestSpinnerFrames_AsciiSet(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	frames := resolveSpinnerFrames()
+	want := uikit.SpinnerFrames(uikit.GlyphASCII)
+	assert.Equal(t, want, frames, "ASCII mode must return the ASCII spinner frames")
+	// Confirm none of the braille characters appear.
+	for _, f := range frames {
+		assert.NotContains(t, f, "⠋", "braille frame must not appear in ASCII mode")
+	}
+}
+
 // TestStartSpinner_nonTTY_writesStaticPendingLine verifies that in test mode
-// (non-TTY), StartSpinner writes a ◌ pending line and Done writes a ✓ step.
+// (non-TTY), StartSpinner writes a pending glyph line and Done writes a success step.
 func TestStartSpinner_nonTTY_writesStaticPendingLine(t *testing.T) {
 	var buf bytes.Buffer
 	h := StartSpinner(&buf, "Waiting")
 	h.Done("Done")
 	out := buf.String()
-	assert.Contains(t, out, "◌", "pending glyph expected on start")
+	pendingGlyph := uikit.GlyphFor(uikit.GlyphLocked, uikit.ActiveMode())
+	successGlyph := uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode())
+	assert.Contains(t, out, pendingGlyph, "pending glyph expected on start")
 	assert.Contains(t, out, "Waiting")
-	assert.Contains(t, out, "✓", "success glyph expected on Done")
+	assert.Contains(t, out, successGlyph, "success glyph expected on Done")
 	assert.Contains(t, out, "Done")
 }
 
-// TestSpinner_Fail_writesFailureStep verifies Fail writes a ✗ step.
+// TestSpinner_Fail_writesFailureStep verifies Fail writes a failure step.
 func TestSpinner_Fail_writesFailureStep(t *testing.T) {
 	var buf bytes.Buffer
 	h := StartSpinner(&buf, "Waiting")
 	h.Fail("timed out")
 	out := buf.String()
-	assert.Contains(t, out, "✗")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphError, uikit.ActiveMode()))
 	assert.Contains(t, out, "timed out")
 }
 
-// TestSpinner_Stop_silentNoResolutionLine verifies Stop produces no ✓ or ✗ line.
+// TestSpinner_Stop_silentNoResolutionLine verifies Stop produces no success or failure glyph.
 func TestSpinner_Stop_silentNoResolutionLine(t *testing.T) {
 	var buf bytes.Buffer
 	h := StartSpinner(&buf, "Waiting")
 	h.Stop()
 	out := buf.String()
-	assert.NotContains(t, out, "✓")
-	assert.NotContains(t, out, "✗")
+	assert.NotContains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
+	assert.NotContains(t, out, uikit.GlyphFor(uikit.GlyphError, uikit.ActiveMode()))
 }
 
 // TestSpinner_ResolveIdempotent verifies that calling Done twice only
@@ -60,7 +80,8 @@ func TestSpinner_ResolveIdempotent(t *testing.T) {
 	h.Done("first")
 	h.Done("second") // must be a no-op
 	out := buf.String()
-	count := strings.Count(out, "✓")
+	successGlyph := uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode())
+	count := strings.Count(out, successGlyph)
 	assert.Equal(t, 1, count, "second Done must be a no-op")
 }
 
@@ -95,7 +116,7 @@ func TestSpinnerHandle_resolve_onTTY_Done(t *testing.T) {
 	// Cursor restore escape must be in output.
 	assert.Contains(t, out, "\x1b[?25h")
 	// Resolution step must be present.
-	assert.Contains(t, out, "✓")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, out, "finished")
 }
 
@@ -112,8 +133,8 @@ func TestSpinnerHandle_resolve_onTTY_Stop(t *testing.T) {
 	close(h.done)
 	h.Stop()
 	out := buf.String()
-	assert.NotContains(t, out, "✓")
-	assert.NotContains(t, out, "✗")
+	assert.NotContains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
+	assert.NotContains(t, out, uikit.GlyphFor(uikit.GlyphError, uikit.ActiveMode()))
 	// Cursor restore and trailing newline expected.
 	assert.Contains(t, out, "\x1b[?25h")
 }

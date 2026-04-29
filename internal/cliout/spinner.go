@@ -11,11 +11,17 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 const spinnerInterval = 100 * time.Millisecond
+
+// resolveSpinnerFrames returns the animation frame slice for the current uikit
+// mode. The returned slice is a stable reference — callers must not mutate it.
+func resolveSpinnerFrames() []string {
+	return uikit.SpinnerFrames(uikit.ActiveMode())
+}
 
 // SpinnerHandle controls a running spinner. Obtain one via StartSpinner.
 // Done, Fail, and Stop are safe to call from any goroutine and are idempotent.
@@ -65,9 +71,13 @@ func StartSpinner(w io.Writer, text string) *SpinnerHandle {
 }
 
 // run redraws the spinner on every tick until ctx is cancelled.
+// Frames are snapshotted once at start so the animation does not switch
+// mid-flight if the mode changes (not expected in production but important
+// for test determinism).
 func (h *SpinnerHandle) run(ctx context.Context) {
 	defer close(h.done)
 
+	frames := resolveSpinnerFrames() // snapshot once at start
 	p := current()
 	frameStyle := lipgloss.NewStyle().Foreground(p.Accent).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(p.Muted)
@@ -78,7 +88,7 @@ func (h *SpinnerHandle) run(ctx context.Context) {
 
 	i := 0
 	render := func() {
-		line := padding + frameStyle.Render(spinnerFrames[i%len(spinnerFrames)]) + " " + textStyle.Render(h.text)
+		line := padding + frameStyle.Render(frames[i%len(frames)]) + " " + textStyle.Render(h.text)
 		_, _ = fmt.Fprint(h.w, "\r\x1b[K"+line)
 		i++
 	}

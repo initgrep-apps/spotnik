@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Message is implemented by every CLI message type. External packages cannot
@@ -32,24 +34,25 @@ const (
 	Pending
 )
 
-// statusGlyph returns the glyph for a status value.
+// statusGlyphRole maps each Status value to its uikit GlyphRole.
+// Glyphs are resolved at render time via uikit.GlyphFor so that ASCII mode
+// and unicode mode are both honoured.
+var statusGlyphRole = map[Status]uikit.GlyphRole{
+	Active:        uikit.GlyphActive,
+	Inactive:      uikit.GlyphInactive,
+	StatusSuccess: uikit.GlyphSuccess,
+	StatusFailure: uikit.GlyphError,
+	StatusWarning: uikit.GlyphWarning,
+	Pending:       uikit.GlyphLocked,
+}
+
+// statusGlyph returns the glyph for a status value in the current uikit mode.
 func statusGlyph(s Status) string {
-	switch s {
-	case Active:
-		return "◉"
-	case Inactive:
-		return "◎"
-	case StatusSuccess:
-		return "✓"
-	case StatusFailure:
-		return "✗"
-	case StatusWarning:
-		return "◬"
-	case Pending:
-		return "◌"
-	default:
+	role, ok := statusGlyphRole[s]
+	if !ok {
 		return "?"
 	}
+	return uikit.GlyphFor(role, uikit.ActiveMode())
 }
 
 // statusColor maps a status to a palette role colour.
@@ -72,7 +75,7 @@ func statusColor(s Status, p Palette) lipgloss.TerminalColor {
 	}
 }
 
-// Header is a primary status line rendered as "◉ Subject  State".
+// Header is a primary status line rendered as "<status-glyph> Subject  State".
 type Header struct {
 	Status  Status
 	Subject string
@@ -88,7 +91,7 @@ func (h Header) render(p Palette) string {
 	return glyph + "  " + subject + "  " + state
 }
 
-// Step is an inline progress event rendered as "✓ Text".
+// Step is an inline progress event rendered as "<status-glyph> Text".
 type Step struct {
 	Status Status
 	Text   string
@@ -163,7 +166,7 @@ func (s Steps) render(p Palette) string {
 	return strings.Join(lines, "\n")
 }
 
-// Hint is an action suggestion rendered as "→ Verb Cmd Tail".
+// Hint is an action suggestion rendered as "<info-arrow> Verb Cmd Tail".
 type Hint struct {
 	Verb string
 	Cmd  string
@@ -173,7 +176,8 @@ type Hint struct {
 func (Hint) isMessage() {}
 
 func (h Hint) render(p Palette) string {
-	arrow := lipgloss.NewStyle().Foreground(p.Accent).Bold(true).Render("→")
+	arrow := lipgloss.NewStyle().Foreground(p.Accent).Bold(true).
+		Render(uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode()))
 	parts := []string{arrow}
 	if h.Verb != "" {
 		parts = append(parts, lipgloss.NewStyle().Foreground(p.Plain).Render(h.Verb))

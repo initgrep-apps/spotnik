@@ -761,7 +761,7 @@ func TestPrintLogoutSuccess(t *testing.T) {
 	var buf strings.Builder
 	cmd.PrintLogoutSuccess(&buf)
 	output := buf.String()
-	assert.Contains(t, output, "✓")
+	assert.Contains(t, output, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, output, "Signed out")
 }
 
@@ -771,9 +771,9 @@ func TestPrintForgetSuccess(t *testing.T) {
 	var buf strings.Builder
 	cmd.PrintForgetSuccess(&buf)
 	output := buf.String()
-	assert.Contains(t, output, "✓")
+	assert.Contains(t, output, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, output, "Session ended")
-	assert.Contains(t, output, "→")
+	assert.Contains(t, output, uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode()))
 }
 
 // TestPrintAuthStatus_fourStates exercises all four PrintAuthStatus states:
@@ -1017,7 +1017,7 @@ func TestRunRegister_promptValidatesClientID(t *testing.T) {
 
 	out := buf.String()
 	assert.Contains(t, out, "Client ID:")
-	assert.Contains(t, out, "✗", "validation failure step must be printed")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphError, uikit.ActiveMode()), "validation failure step must be printed")
 	assert.Contains(t, out, "client ID must be 32 characters", "short input must trigger length error")
 	assert.Contains(t, out, "client ID must be hexadecimal", "non-hex input must trigger hex error")
 }

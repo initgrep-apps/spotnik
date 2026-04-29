@@ -1,5 +1,5 @@
 
-  ◎  Spotnik  not registered                                
+  ( )  Spotnik  not registered                              
   1  Create a Spotify app at developer.spotify.com/dashboard
   2  Run: spotnik auth register                             
-  → Follow the prompts to set client_id and authenticate    
+  > Follow the prompts to set client_id and authenticate    

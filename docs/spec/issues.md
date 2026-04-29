@@ -541,3 +541,15 @@ PR #235 (story 183) shipped clean after two review rounds. The following sub-thr
 6. `internal/uikit/spinner_test.go:170` — `TestSpinner_Running_Unicode_UsesSpinnerFrames` calls `SetModeForTest(GlyphUnicode)` and defers `SetModeForTest(GlyphUnicode)`. The defer is a no-op (Unicode is already the default). Harmless, but copying this test as a template would propagate the no-op pattern.
 
 7. `internal/uikit/glyph.go` — `GlyphSeparator` value is `"sep.bullet"` but the Go identifier is generic. If a second separator ever lands (`sep.dash`, `sep.pipe`), the existing identifier becomes ambiguous. Consider renaming to `GlyphSepBullet` for parity with the rest of the bucketed naming.
+
+---
+
+## Story 184 minor issues — cliout/uikit integration polish
+**Found:** 2026-04-29 | **Source:** PR #236 Review
+**Feature:** 13-tui-design-system
+
+PR #236 (story 184) shipped clean after one fix round. Sub-threshold concerns logged for future hardening:
+
+1. `internal/cliout/spinner_test.go` `TestSpinnerFrames_AsciiSet` asserts only the ASCII frame set. A constant-mode bug like `func resolveSpinnerFrames() []string { return uikit.SpinnerFrames(GlyphASCII) }` would still pass because TestMain pins ASCII. Add a symmetric unicode-mode sub-test that toggles `uikit.SetModeForTest(GlyphUnicode)` and asserts `resolveSpinnerFrames()` returns `uikit.SpinnerFrames(GlyphUnicode)`.
+
+2. `internal/cliout/tty.go` `SetTestMode(false)` does not restore the prior `uikit` mode (only `SetTestMode(true)` pins it). Currently benign because `cmd/root_test.go` and `cliout` `TestMain` pin ASCII once and never toggle mid-suite. If a future test toggles modes, snapshot the prior mode at `SetTestMode(true)` entry and restore on `false`.

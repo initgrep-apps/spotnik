@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // stripAnsi removes ANSI escape sequences so tests can assert on visible text only.
@@ -35,19 +37,21 @@ func TestStatusColor_allBranches(t *testing.T) {
 }
 
 func TestStatusGlyph(t *testing.T) {
+	// Resolves via uikit.GlyphFor so the test is valid in both unicode and ASCII mode.
 	cases := []struct {
 		s    Status
-		want string
+		role uikit.GlyphRole
 	}{
-		{Active, "◉"},
-		{Inactive, "◎"},
-		{StatusSuccess, "✓"},
-		{StatusFailure, "✗"},
-		{StatusWarning, "◬"},
-		{Pending, "◌"},
+		{Active, uikit.GlyphActive},
+		{Inactive, uikit.GlyphInactive},
+		{StatusSuccess, uikit.GlyphSuccess},
+		{StatusFailure, uikit.GlyphError},
+		{StatusWarning, uikit.GlyphWarning},
+		{Pending, uikit.GlyphLocked},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, statusGlyph(c.s), "statusGlyph(%v)", c.s)
+		want := uikit.GlyphFor(c.role, uikit.ActiveMode())
+		assert.Equal(t, want, statusGlyph(c.s), "statusGlyph(%v)", c.s)
 	}
 }
 
@@ -56,10 +60,66 @@ func TestStatusGlyph_unknown(t *testing.T) {
 	assert.Equal(t, "?", statusGlyph(Status(99)))
 }
 
+// TestStatusGlyph_AsciiMode verifies that every Status value returns its ASCII
+// form when uikit is pinned to ASCII mode.
+func TestStatusGlyph_AsciiMode(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	cases := []struct {
+		s    Status
+		want string
+	}{
+		{Active, uikit.GlyphFor(uikit.GlyphActive, uikit.GlyphASCII)},
+		{Inactive, uikit.GlyphFor(uikit.GlyphInactive, uikit.GlyphASCII)},
+		{StatusSuccess, uikit.GlyphFor(uikit.GlyphSuccess, uikit.GlyphASCII)},
+		{StatusFailure, uikit.GlyphFor(uikit.GlyphError, uikit.GlyphASCII)},
+		{StatusWarning, uikit.GlyphFor(uikit.GlyphWarning, uikit.GlyphASCII)},
+		{Pending, uikit.GlyphFor(uikit.GlyphLocked, uikit.GlyphASCII)},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, statusGlyph(c.s), "statusGlyph(%v) in ASCII mode", c.s)
+	}
+}
+
+// TestStatusGlyph_HonoursUikitMode is the regression test that pins the
+// contract: cliout output must follow uikit.ActiveMode() for every glyph.
+// It switches between unicode and ASCII mode and asserts that statusGlyph()
+// returns the expected form in both cases.
+func TestStatusGlyph_HonoursUikitMode(t *testing.T) {
+	cases := []struct {
+		mode uikit.GlyphMode
+		s    Status
+		role uikit.GlyphRole
+	}{
+		{uikit.GlyphUnicode, Active, uikit.GlyphActive},
+		{uikit.GlyphUnicode, Inactive, uikit.GlyphInactive},
+		{uikit.GlyphUnicode, StatusSuccess, uikit.GlyphSuccess},
+		{uikit.GlyphUnicode, StatusFailure, uikit.GlyphError},
+		{uikit.GlyphUnicode, StatusWarning, uikit.GlyphWarning},
+		{uikit.GlyphUnicode, Pending, uikit.GlyphLocked},
+		{uikit.GlyphASCII, Active, uikit.GlyphActive},
+		{uikit.GlyphASCII, Inactive, uikit.GlyphInactive},
+		{uikit.GlyphASCII, StatusSuccess, uikit.GlyphSuccess},
+		{uikit.GlyphASCII, StatusFailure, uikit.GlyphError},
+		{uikit.GlyphASCII, StatusWarning, uikit.GlyphWarning},
+		{uikit.GlyphASCII, Pending, uikit.GlyphLocked},
+	}
+	for _, c := range cases {
+		prev := uikit.ActiveMode()
+		uikit.SetModeForTest(c.mode)
+		got := statusGlyph(c.s)
+		want := uikit.GlyphFor(c.role, c.mode)
+		assert.Equal(t, want, got, "statusGlyph(%v) in mode %v", c.s, c.mode)
+		uikit.SetModeForTest(prev)
+	}
+}
+
 func TestHeader_renderActive(t *testing.T) {
 	h := Header{Status: Active, Subject: "Spotnik", State: "authenticated"}
 	out := h.render(Fixed)
-	assert.Contains(t, out, "◉")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphActive, uikit.ActiveMode()))
 	assert.Contains(t, out, "Spotnik")
 	assert.Contains(t, out, "authenticated")
 }
@@ -67,7 +127,7 @@ func TestHeader_renderActive(t *testing.T) {
 func TestHeader_renderSuccess(t *testing.T) {
 	h := Header{Status: StatusSuccess, Subject: "Auth", State: "complete"}
 	out := h.render(Fixed)
-	assert.Contains(t, out, "✓")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, out, "Auth")
 	assert.Contains(t, out, "complete")
 }
@@ -75,7 +135,7 @@ func TestHeader_renderSuccess(t *testing.T) {
 func TestStep_render(t *testing.T) {
 	s := Step{Status: StatusSuccess, Text: "Authorization received"}
 	out := s.render(Fixed)
-	assert.Contains(t, out, "✓")
+	assert.Contains(t, out, uikit.GlyphFor(uikit.GlyphSuccess, uikit.ActiveMode()))
 	assert.Contains(t, out, "Authorization received")
 }
 
@@ -122,22 +182,38 @@ func TestSteps_empty_returnsEmptyString(t *testing.T) {
 	assert.Equal(t, "", s.render(Fixed))
 }
 
+// TestHint_AsciiArrow verifies that Hint.render() uses the ASCII arrow (">")
+// when uikit is in ASCII mode, never the unicode "→".
+func TestHint_AsciiArrow(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	h := Hint{Cmd: "spotnik auth login"}
+	out := stripAnsi(h.render(Fixed))
+	assert.True(t, strings.HasPrefix(out, "> "), "ASCII Hint must start with '> ', got: %q", out)
+	assert.NotContains(t, out, "→", "unicode arrow must not appear in ASCII mode")
+}
+
 func TestHint_renderWithAllFields(t *testing.T) {
 	h := Hint{Verb: "Run", Cmd: "spotnik auth login", Tail: "to reconnect"}
 	out := stripAnsi(h.render(Fixed))
-	assert.Equal(t, "→ Run spotnik auth login to reconnect", out)
+	want := uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode()) + " Run spotnik auth login to reconnect"
+	assert.Equal(t, want, out)
 }
 
 func TestHint_omitsEmptyFields(t *testing.T) {
 	h := Hint{Cmd: "spotnik auth register"}
 	out := stripAnsi(h.render(Fixed))
-	assert.Equal(t, "→ spotnik auth register", out)
+	arrow := uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode())
+	assert.Equal(t, arrow+" spotnik auth register", out)
 }
 
 func TestHint_arrowOnlyWhenAllEmpty(t *testing.T) {
 	h := Hint{}
 	out := stripAnsi(h.render(Fixed))
-	assert.Equal(t, "→", out)
+	arrow := uikit.GlyphFor(uikit.GlyphInfo, uikit.ActiveMode())
+	assert.Equal(t, arrow, out)
 }
 
 func TestURL_noLabel_rendersHrefOnly(t *testing.T) {

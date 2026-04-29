@@ -1,7 +1,7 @@
 ---
 title: "cliout integration with uikit catalogue (statusGlyph, Hint, spinner, test rebaseline)"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

@@ -1,4 +1,4 @@
 
-  ✗ Authentication failed                       
+  x Authentication failed                       
   Reason  token exchange failed: 400 Bad Request
-  → Run spotnik auth login to try again         
+  > Run spotnik auth login to try again         

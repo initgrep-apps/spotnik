@@ -1,5 +1,5 @@
 
-  ◎  Spotnik  not registered              
+  ( )  Spotnik  not registered            
   1  Go to developer.spotify.com/dashboard
   2  Create or select a Spotify app       
   3  Add this redirect URI:               
