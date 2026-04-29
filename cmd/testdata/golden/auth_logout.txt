@@ -1,2 +1,2 @@
 
-  ✓ Signed out
+  + Signed out
