@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
@@ -148,7 +147,7 @@ func (o *ThemeOverlay) View() string {
 		totalHeight = 4
 	}
 
-	cfg := layout.BorderConfig{
+	chrome := uikit.PaneChrome{
 		Width:       totalWidth,
 		Height:      totalHeight,
 		Title:       "Themes",
@@ -157,7 +156,7 @@ func (o *ThemeOverlay) View() string {
 		Theme:       o.theme,
 	}
 
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // renderRow renders a single theme row with indicator and color swatches.

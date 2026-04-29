@@ -462,3 +462,27 @@ func TestProfileOverlay_View_NoSeparators(t *testing.T) {
 	assert.NotContains(t, plain, "│────────────────────",
 		"the 20-char content separator lines must be removed")
 }
+
+// TestProfilePane_AsciiBorder verifies that the ProfileOverlay border in ASCII mode
+// uses ASCII corner characters ('+') and '|' verticals, with no unicode box-drawing
+// characters (╭╮╰╯─│) present anywhere in the output.
+func TestProfilePane_AsciiBorder(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	st := newPremiumProfileStore()
+	p := NewProfileOverlay(st, theme.Load("black"))
+	p.SetSize(40, 12)
+
+	out := p.View()
+	require.NotEmpty(t, out, "ProfileOverlay.View must produce output")
+
+	// ASCII mode: all six unicode box-drawing characters must be absent.
+	for _, ch := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+		assert.NotContains(t, out, ch, "unicode glyph %q must not appear in ASCII mode", ch)
+	}
+	// ASCII mode: '+' corners must be present.
+	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode border")
+	// ASCII mode: '|' vertical rules must be present.
+	assert.Contains(t, out, "|", "'|' vertical rules must appear in ASCII mode")
+}

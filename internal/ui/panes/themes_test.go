@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -305,4 +306,28 @@ func TestRenderSwatches_Contains5Blocks(t *testing.T) {
 	result := renderSwatches(ct)
 	count := strings.Count(result, "██")
 	assert.Equal(t, 5, count, "renderSwatches should produce exactly 5 swatches")
+}
+
+// TestThemesPane_AsciiBorder verifies that the ThemeOverlay border in ASCII mode
+// uses ASCII corner characters ('+') and '|' verticals, with no unicode box-drawing
+// characters (╭╮╰╯─│) present anywhere in the output.
+func TestThemesPane_AsciiBorder(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	overlay := newTestThemeOverlay()
+	overlay.width = 60
+	overlay.height = 20
+
+	out := overlay.View()
+	require.NotEmpty(t, out, "ThemeOverlay.View must produce output")
+
+	// ASCII mode: all six unicode box-drawing characters must be absent.
+	for _, ch := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+		assert.NotContains(t, out, ch, "unicode glyph %q must not appear in ASCII mode", ch)
+	}
+	// ASCII mode: '+' corners must be present.
+	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode border")
+	// ASCII mode: '|' vertical rules must be present.
+	assert.Contains(t, out, "|", "'|' vertical rules must appear in ASCII mode")
 }

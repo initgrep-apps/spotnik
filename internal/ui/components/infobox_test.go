@@ -4,8 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // infoboxTestTheme returns the black theme for InfoBox tests.
@@ -168,4 +172,69 @@ func TestInfoBox_Render_MinimumDimensions(t *testing.T) {
 	assert.NotPanics(t, func() {
 		_ = ib.Render("X", []string{"very long string that should be truncated hard"}, false)
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Test: ASCII mode border fallback
+// ---------------------------------------------------------------------------
+
+// TestInfoBox_AsciiBorder verifies that InfoBox in ASCII mode emits '+' corners
+// and '|' verticals, with no unicode box-drawing characters (╭╮╰╯─│) present.
+func TestInfoBox_AsciiBorder(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	ib := newTestInfoBox(28, 10)
+	out := ib.Render("Track Info", []string{"Song Name", "Artist"}, true)
+
+	require.NotEmpty(t, out, "InfoBox.Render must produce output")
+
+	// ASCII mode: all six unicode box-drawing characters must be absent.
+	for _, ch := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+		assert.NotContains(t, out, ch, "unicode glyph %q must not appear in ASCII mode", ch)
+	}
+	// ASCII mode: '+' corners must be present.
+	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode border")
+	// ASCII mode: '|' vertical rules must be present.
+	assert.Contains(t, out, "|", "'|' vertical rules must appear in ASCII mode")
+	// The title must still appear.
+	assert.Contains(t, out, "Track Info", "title must appear in ASCII mode border")
+}
+
+// ---------------------------------------------------------------------------
+// Test: unfocused border uses InactiveBorder colour (regression guard)
+// ---------------------------------------------------------------------------
+
+// TestInfoBox_Render_UnfocusedUsesInactiveBorderColor verifies that Render with
+// focused=false produces output that differs from focused=true (the border colour
+// changes) and that the ANSI output contains the inactive-border colour code.
+// This is a regression test: a prior refactor accidentally always used
+// ActiveBorder(), making unfocused sub-panes glow instead of fading to background.
+func TestInfoBox_Render_UnfocusedUsesInactiveBorderColor(t *testing.T) {
+	// Pin to TrueColor so lipgloss emits full 24-bit ANSI sequences we can compare.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	th := infoboxTestTheme() // black theme: ActiveBorder=#00afff, InactiveBorder=#1e1e1e
+	ib := NewInfoBox(th)
+	ib.SetSize(28, 10)
+	lines := []string{"Hello"}
+
+	outFocused := ib.Render("Box", lines, true)
+	outUnfocused := ib.Render("Box", lines, false)
+
+	// The two renders must differ — focused uses ActiveBorder, unfocused uses InactiveBorder.
+	assert.NotEqual(t, outFocused, outUnfocused,
+		"focused and unfocused renders must differ (border colour encodes focus state)")
+
+	// The unfocused render must contain the InactiveBorder colour code.
+	// lipgloss emits "38;2;R;G;B" (foreground) for the border colour in TrueColor mode.
+	// #1e1e1e == rgb(30,30,30) → "38;2;30;30;30".
+	assert.Contains(t, outUnfocused, "38;2;30;30;30",
+		"unfocused render must contain InactiveBorder (#1e1e1e = rgb(30,30,30)) ANSI colour code")
+
+	// The focused render must NOT contain the InactiveBorder colour code.
+	assert.NotContains(t, outFocused, "38;2;30;30;30",
+		"focused render must not contain InactiveBorder colour code")
 }
