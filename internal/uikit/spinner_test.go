@@ -158,3 +158,57 @@ func TestSpinner_FailCmd_UsesTeaTick(t *testing.T) {
 	_, ok := msg.(uikit.SpinnerFailMsg)
 	assert.True(t, ok)
 }
+
+// TestSpinner_Running_ASCII_UsesSpinnerFrames verifies that a running Spinner in
+// ASCII mode renders a frame drawn from SpinnerFrames(GlyphASCII), i.e. one of
+// "|", "/", "-", "\". This locks in the integration between NewSpinner and
+// SpinnerFrames — if spinner.go ever reverted to an inline frame array with
+// different characters, this test would fail.
+func TestSpinner_Running_ASCII_UsesSpinnerFrames(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := newTestTheme()
+	s := uikit.NewSpinner("Working", th)
+
+	// The spinner is in running state (result == nil) so View() returns
+	// the current frame + text. Strip ANSI to get bare characters.
+	v := stripANSI(s.View())
+
+	asciiFrames := uikit.SpinnerFrames(uikit.GlyphASCII)
+	found := false
+	for _, f := range asciiFrames {
+		if strings.Contains(v, f) {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found,
+		"running spinner in ASCII mode must render a frame from SpinnerFrames(GlyphASCII) %v, got: %q",
+		asciiFrames, v)
+}
+
+// TestSpinner_Running_Unicode_UsesSpinnerFrames verifies that a running Spinner in
+// Unicode mode renders a frame drawn from SpinnerFrames(GlyphUnicode), i.e. one of
+// the 10 braille characters. This mirrors the ASCII counterpart.
+func TestSpinner_Running_Unicode_UsesSpinnerFrames(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := newTestTheme()
+	s := uikit.NewSpinner("Working", th)
+
+	v := stripANSI(s.View())
+
+	unicodeFrames := uikit.SpinnerFrames(uikit.GlyphUnicode)
+	found := false
+	for _, f := range unicodeFrames {
+		if strings.Contains(v, f) {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found,
+		"running spinner in Unicode mode must render a frame from SpinnerFrames(GlyphUnicode) %v, got: %q",
+		unicodeFrames, v)
+}
