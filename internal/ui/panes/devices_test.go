@@ -7,8 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
+	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -438,4 +439,23 @@ func TestDeviceOverlay_CursorClampedOnEmptyList(t *testing.T) {
 	assert.NotPanics(t, func() {
 		overlay.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	}, "pressing Enter on empty list must not panic")
+}
+
+// TestDevicesOverlay_AsciiBorder verifies that the devices overlay renders
+// ASCII-safe border characters (+, -, |) when the uikit glyph mode is ASCII,
+// and that no unicode box-drawing characters (╭╮╰╯─│) are present.
+func TestDevicesOverlay_AsciiBorder(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestDeviceOverlay()
+	o.SetSize(50, 20)
+	out := stripANSI(o.View())
+	if strings.ContainsAny(out, "╭╮╰╯─│") {
+		t.Errorf("ascii overlay must not contain unicode borders, got: %q", out)
+	}
 }
