@@ -10,6 +10,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	btoverlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -994,4 +995,32 @@ func TestRenderOnboardingError_panelTitle(t *testing.T) {
 	// Panel title embedded in border: "╭─ Step 2 of 2 — Authorization Failed..."
 	assert.Contains(t, view, "╭─ Step 2 of 2")
 	assert.Contains(t, view, "Authorization Failed")
+}
+
+// TestRenderGrid_AsciiBorders verifies that every grid pane border in ASCII mode
+// uses ASCII corner characters ('+') and horizontal rules ('-'), with no unicode
+// box-drawing characters (╭╮╰╯─│) present anywhere in the output.
+func TestRenderGrid_AsciiBorders(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	a := newRenderTestApp()
+	// Use a large terminal so all panes in the preset get non-zero rects.
+	a.width = 220
+	a.height = 60
+	a.currentView = viewGrid
+	a.layout.Resize(a.width, a.height)
+
+	out := a.renderGrid()
+	require.NotEmpty(t, out, "renderGrid must produce output for a valid terminal size")
+
+	// ASCII mode: unicode box-drawing characters must be absent.
+	for _, ch := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+		assert.NotContains(t, out, ch, "unicode glyph %q must not appear in ASCII mode", ch)
+	}
+
+	// ASCII mode: '+' corners must be present (at least one pane rendered a border).
+	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode grid borders")
+	// ASCII mode: '-' horizontal rules must be present.
+	assert.Contains(t, out, "-", "'-' rules must appear in ASCII mode grid borders")
 }

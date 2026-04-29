@@ -414,7 +414,7 @@ func (a *App) renderGrid() string {
 		if !ok || rect.Width == 0 || rect.Height == 0 {
 			continue
 		}
-		cfg := layout.BorderConfig{
+		chrome := uikit.PaneChrome{
 			Width:       rect.Width,
 			Height:      rect.Height,
 			Title:       pane.Title(),
@@ -425,9 +425,9 @@ func (a *App) renderGrid() string {
 			Theme:       a.theme,
 		}
 		if fqp, ok := pane.(layout.FilterQueryPane); ok {
-			cfg.FilterQuery = fqp.ActiveFilterQuery()
+			chrome.FilterQuery = fqp.ActiveFilterQuery()
 		}
-		bordered := layout.RenderPaneBorder(pane.View(), cfg)
+		bordered := chrome.Render(pane.View())
 		capped := lipgloss.NewStyle().
 			Width(rect.Width).MaxWidth(rect.Width).
 			Height(rect.Height).MaxHeight(rect.Height).
