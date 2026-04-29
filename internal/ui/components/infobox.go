@@ -34,8 +34,8 @@ func (b *InfoBox) SetSize(w, h int) {
 // title is rendered in the top border: ╭─ Title ─────────────╮ (unicode) or
 // +- Title -------------+ (ascii), depending on uikit.ActiveMode().
 // lines contains the content to vertically-center inside the box.
-// When focused is true the border is drawn in ActiveBorder(); otherwise
-// InactiveBorder() is used.
+// When focused is true the border is rendered with full brightness and bold
+// title; when false the border is dimmed (Faint on top of AccentColor).
 //
 // Content behaviour:
 //   - Each line is truncated (with "…") to the inner width (width-2).
