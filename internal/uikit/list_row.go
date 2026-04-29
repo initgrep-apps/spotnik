@@ -42,16 +42,19 @@ func PadOrTruncate(s string, width int) string {
 	if w < width {
 		return s + Pad(width-w)
 	}
-	// Truncate: remove characters from the right until we fit, then append "…".
+	// Truncate: remove characters from the right until we fit, then append the
+	// ellipsis glyph (unicode "…" or ascii "..."). The glyph may be multi-rune so
+	// we measure by terminal column width, not rune count.
+	ell := GlyphFor(GlyphEllipsis, ActiveMode())
 	runes := []rune(s)
 	for len(runes) > 0 {
-		candidate := string(runes) + "…"
+		candidate := string(runes) + ell
 		if lipgloss.Width(candidate) <= width {
 			return candidate
 		}
 		runes = runes[:len(runes)-1]
 	}
-	return "…"
+	return ell
 }
 
 // ListRow renders a single-line list item with an optional leading glyph, a

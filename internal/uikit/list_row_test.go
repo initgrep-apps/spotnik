@@ -473,3 +473,25 @@ func TestListRow_RowBackground_NilNoOp(t *testing.T) {
 		t.Errorf("expected no background escape when RowBackground is nil, but found %q in %q", bgEscape, out)
 	}
 }
+
+// TestListRow_PadOrTruncate_AsciiEllipsis verifies that PadOrTruncate uses the
+// ASCII three-dot ellipsis "..." in ascii mode and the unicode "…" in unicode mode.
+func TestListRow_PadOrTruncate_AsciiEllipsis(t *testing.T) {
+	t.Run("ascii mode produces ...", func(t *testing.T) {
+		uikit.SetModeForTest(uikit.GlyphASCII)
+		defer uikit.SetModeForTest(uikit.GlyphUnicode)
+		got := uikit.PadOrTruncate("toolongstring", 5)
+		assert.True(t, strings.HasSuffix(got, "..."),
+			"ascii mode truncation must end with ..., got %q", got)
+		assert.NotContains(t, got, "…",
+			"ascii mode truncation must not contain unicode ellipsis, got %q", got)
+	})
+
+	t.Run("unicode mode produces …", func(t *testing.T) {
+		uikit.SetModeForTest(uikit.GlyphUnicode)
+		defer uikit.SetModeForTest(uikit.GlyphUnicode)
+		got := uikit.PadOrTruncate("toolongstring", 5)
+		assert.True(t, strings.HasSuffix(got, "…"),
+			"unicode mode truncation must end with …, got %q", got)
+	})
+}

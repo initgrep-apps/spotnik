@@ -199,6 +199,27 @@ func TestToastManager_Cmd_InvalidIntent(t *testing.T) {
 	assert.Nil(t, cmd, "out-of-range intent should return nil cmd (bounds guard)")
 }
 
+// TestToast_TruncatedTitle_AsciiEllipsis verifies that in ASCII mode a title
+// longer than 48 runes is truncated with "..." (3 ASCII dots), not "…".
+func TestToast_TruncatedTitle_AsciiEllipsis(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	// Build a title of exactly 49 runes so Normalize triggers truncation.
+	base := "A very long notification title that should be cut"
+	for len([]rune(base)) < 49 {
+		base += "x"
+	}
+	base = string([]rune(base)[:49])
+
+	toast := uikit.Toast{Intent: uikit.ToastError, Title: base}.Normalize()
+	runes := []rune(toast.Title)
+	assert.Equal(t, 48, len(runes), "truncated title must be 48 runes")
+	suffix := string(runes[45:]) // last 3 runes
+	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
+	assert.NotContains(t, toast.Title, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
 // makeTestAlertModel creates a minimal bubbleup.AlertModel with all five Spotnik
 // alert types registered so ToastManager.Cmd can be exercised without importing
 // the components package (which imports theme, etc.).
