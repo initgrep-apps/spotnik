@@ -12,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
@@ -171,7 +170,7 @@ func (p *ProfileOverlay) View() string {
 		Width(innerWidth).MaxWidth(innerWidth).
 		Render(inner)
 
-	cfg := layout.BorderConfig{
+	chrome := uikit.PaneChrome{
 		Width:       innerWidth + 2,
 		Height:      strings.Count(inner, "\n") + 3,
 		Title:       "Profile",
@@ -180,7 +179,7 @@ func (p *ProfileOverlay) View() string {
 		Theme:       p.theme,
 	}
 
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // SetSize updates the render dimensions for the overlay.
