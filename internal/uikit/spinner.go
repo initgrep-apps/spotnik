@@ -40,11 +40,12 @@ type Spinner struct {
 // ASCII mode is resolved via ActiveMode(); use SetModeForTest in tests.
 func NewSpinner(text string, th theme.Theme) *Spinner {
 	m := spinner.New()
-	// Use rotating-bar frames in ASCII mode; Dot (⣾) in unicode.
-	if ActiveMode() == GlyphASCII {
-		m.Spinner = spinner.Line // |/-\ frames
-	} else {
-		m.Spinner = spinner.Dot
+	// Source frames from the shared SpinnerFrames helper so that uikit and
+	// cliout use the identical frame sets — no inline arrays.
+	mode := ActiveMode()
+	m.Spinner = spinner.Spinner{
+		Frames: SpinnerFrames(mode),
+		FPS:    time.Second / 12,
 	}
 	m.Style = lipgloss.NewStyle().Foreground(th.Accent())
 	return &Spinner{s: m, text: text, theme: th}

@@ -1135,9 +1135,12 @@ also use notch format; `filtering: "query"` renders as muted preamble before the
 
 ### 4.8 Spinner frames
 
+Exported via `uikit.SpinnerFrames(mode GlyphMode) []string`. Both `uikit.Spinner`
+and `cliout.Spinner` source frames from this function — no inline arrays.
+
 | Set | Unicode | ASCII |
 |---|---|---|
-| braille (default) | `⣾⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` | `\|/-\|/-\` |
+| braille (10 frames) | `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` | `\|/-` (4 frames) |
 
 ### 4.9 Keyboard chords
 
