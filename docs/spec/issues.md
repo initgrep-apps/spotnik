@@ -553,3 +553,13 @@ PR #236 (story 184) shipped clean after one fix round. Sub-threshold concerns lo
 1. `internal/cliout/spinner_test.go` `TestSpinnerFrames_AsciiSet` asserts only the ASCII frame set. A constant-mode bug like `func resolveSpinnerFrames() []string { return uikit.SpinnerFrames(GlyphASCII) }` would still pass because TestMain pins ASCII. Add a symmetric unicode-mode sub-test that toggles `uikit.SetModeForTest(GlyphUnicode)` and asserts `resolveSpinnerFrames()` returns `uikit.SpinnerFrames(GlyphUnicode)`.
 
 2. `internal/cliout/tty.go` `SetTestMode(false)` does not restore the prior `uikit` mode (only `SetTestMode(true)` pins it). Currently benign because `cmd/root_test.go` and `cliout` `TestMain` pin ASCII once and never toggle mid-suite. If a future test toggles modes, snapshot the prior mode at `SetTestMode(true)` entry and restore on `false`.
+
+---
+
+## Story 185 minor issues — PaneChrome migration brittleness
+**Found:** 2026-04-29 | **Source:** PR #237 Review
+**Feature:** 13-tui-design-system
+
+PR #237 (story 185) shipped clean after one fix round. One sub-threshold concern logged:
+
+1. `TestRenderGrid_AsciiBorders` (`internal/app/render_test.go`) asserts `─` and `│` appear nowhere in the entire grid output, not just in border positions. `internal/ui/panes/playlists_pane.go` and `albums_pane.go` emit literal `──` separators in `Title()` when `inTrackView` is true. Default test-app state doesn't trigger that branch today, so the test passes. A future change that selects a playlist before snapshot, or a new pane that uses `─`/`│` as a content separator, will break this test even if border glyphs are correct. Consider scoping assertions to first/last lines of each pane rect, or asserting the four corners specifically.

@@ -1,7 +1,7 @@
 ---
 title: "PaneChrome migration: renderGrid + themes + profile + infobox"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
