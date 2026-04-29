@@ -81,6 +81,39 @@ func TestStatusGlyph_AsciiMode(t *testing.T) {
 	}
 }
 
+// TestStatusGlyph_HonoursUikitMode is the regression test that pins the
+// contract: cliout output must follow uikit.ActiveMode() for every glyph.
+// It switches between unicode and ASCII mode and asserts that statusGlyph()
+// returns the expected form in both cases.
+func TestStatusGlyph_HonoursUikitMode(t *testing.T) {
+	cases := []struct {
+		mode uikit.GlyphMode
+		s    Status
+		role uikit.GlyphRole
+	}{
+		{uikit.GlyphUnicode, Active, uikit.GlyphActive},
+		{uikit.GlyphUnicode, Inactive, uikit.GlyphInactive},
+		{uikit.GlyphUnicode, StatusSuccess, uikit.GlyphSuccess},
+		{uikit.GlyphUnicode, StatusFailure, uikit.GlyphError},
+		{uikit.GlyphUnicode, StatusWarning, uikit.GlyphWarning},
+		{uikit.GlyphUnicode, Pending, uikit.GlyphLocked},
+		{uikit.GlyphASCII, Active, uikit.GlyphActive},
+		{uikit.GlyphASCII, Inactive, uikit.GlyphInactive},
+		{uikit.GlyphASCII, StatusSuccess, uikit.GlyphSuccess},
+		{uikit.GlyphASCII, StatusFailure, uikit.GlyphError},
+		{uikit.GlyphASCII, StatusWarning, uikit.GlyphWarning},
+		{uikit.GlyphASCII, Pending, uikit.GlyphLocked},
+	}
+	for _, c := range cases {
+		prev := uikit.ActiveMode()
+		uikit.SetModeForTest(c.mode)
+		got := statusGlyph(c.s)
+		want := uikit.GlyphFor(c.role, c.mode)
+		assert.Equal(t, want, got, "statusGlyph(%v) in mode %v", c.s, c.mode)
+		uikit.SetModeForTest(prev)
+	}
+}
+
 func TestHeader_renderActive(t *testing.T) {
 	h := Header{Status: Active, Subject: "Spotnik", State: "authenticated"}
 	out := h.render(Fixed)
