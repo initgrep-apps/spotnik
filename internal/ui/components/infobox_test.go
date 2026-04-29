@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // infoboxTestTheme returns the black theme for InfoBox tests.
@@ -168,4 +170,29 @@ func TestInfoBox_Render_MinimumDimensions(t *testing.T) {
 	assert.NotPanics(t, func() {
 		_ = ib.Render("X", []string{"very long string that should be truncated hard"}, false)
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Test: ASCII mode border fallback
+// ---------------------------------------------------------------------------
+
+// TestInfoBox_AsciiBorder verifies that InfoBox in ASCII mode emits '+' corners
+// and '-' rules, with no unicode box-drawing characters (╭╮╰╯─│) present.
+func TestInfoBox_AsciiBorder(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	ib := newTestInfoBox(28, 10)
+	out := ib.Render("Track Info", []string{"Song Name", "Artist"}, true)
+
+	require.NotEmpty(t, out, "InfoBox.Render must produce output")
+
+	// ASCII mode: unicode box-drawing characters must be absent in the border.
+	for _, ch := range []string{"╭", "╮", "╰", "╯"} {
+		assert.NotContains(t, out, ch, "unicode glyph %q must not appear in ASCII mode", ch)
+	}
+	// ASCII mode: '+' corners must be present.
+	assert.Contains(t, out, "+", "'+' corners must appear in ASCII mode border")
+	// The title must still appear.
+	assert.Contains(t, out, "Track Info", "title must appear in ASCII mode border")
 }
