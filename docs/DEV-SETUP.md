@@ -41,30 +41,14 @@ redirect URI registered.
 1. Go to <https://developer.spotify.com/dashboard>
 2. Log in and click **Create app**
 3. Fill in any name and description
-4. Add the redirect URI: `http://localhost:8888/callback`
+4. Add the redirect URI: `http://127.0.0.1` (Spotnik picks a free local port at runtime)
 5. Save, then open the app settings to copy your **Client ID**
 
 The Client ID is a 32-character hex string. You do **not** need the Client Secret.
 
----
-
-## Environment Variables
-
-Create a `.env` file in the project root (it is `.gitignore`d):
-
-```bash
-SPOTIFY_CLIENT_ID=<your-32-char-client-id>
-```
-
-The Makefile automatically loads `.env` on every target via `-include .env && export`.
-
-Alternatively, export the variable in your shell:
-
-```bash
-export SPOTIFY_CLIENT_ID=<your-client-id>
-```
-
-Without a Client ID the binary will build but authentication will fail.
+The Client ID is configured in `~/.config/spotnik/config.toml` (Spotnik bootstraps the
+file on first launch and prompts via `spotnik auth register`). No environment variable
+or build flag is required.
 
 ---
 
@@ -152,7 +136,8 @@ without leaving the app.
 If auth fails, delete stored tokens and retry:
 
 ```bash
-./bin/spotnik auth logout
+./bin/spotnik auth logout   # remove tokens, keep client_id
+./bin/spotnik auth forget   # remove tokens AND client_id from config
 ```
 
 Tokens are stored in the OS keychain (macOS Keychain, Linux Secret Service, Windows

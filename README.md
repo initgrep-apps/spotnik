@@ -196,12 +196,6 @@ make build
 ./bin/spotnik
 ```
 
-To set your own Spotify client ID at build time:
-
-```bash
-SPOTIFY_CLIENT_ID=your-client-id make build
-```
-
 All make targets:
 
 ```
@@ -213,17 +207,6 @@ make test-coverage  Coverage report (min 80%)
 make ci             Full pre-commit check (lint + tests + build)
 make clean          Remove build artifacts
 ```
-
----
-
-## Contributing
-
-- Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `test`, `chore`
-- Run `make ci` before pushing — CI fails on lint or coverage violations
-- One feature per branch; branch naming: `feat/NN-description`
-- Never merge your own PR
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
 ---
 

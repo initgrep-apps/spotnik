@@ -33,7 +33,7 @@ canonical reference for primitives, glyph catalogue, and role matrix.
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Language | Go 1.22+ | Single binary, no runtime |
+| Language | Go 1.26+ | Single binary, no runtime |
 | TUI | Bubble Tea v0.27+ | Elm architecture |
 | Styling | Lip Gloss | Token-based, via Theme interface |
 | Components | Bubbles | Lists, inputs, spinners |
@@ -54,7 +54,7 @@ canonical reference for primitives, glyph catalogue, and role matrix.
 
 ```
 module github.com/initgrep-apps/spotnik
-go 1.22
+go 1.26
 ```
 
 ---
