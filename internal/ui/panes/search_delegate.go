@@ -93,7 +93,8 @@ func NewSearchItemDelegate(t theme.Theme) SearchItemDelegate {
 // Height returns the number of lines each item occupies (3: title + subtitle + description).
 func (d SearchItemDelegate) Height() int { return 3 }
 
-// wrapLine applies layout to a content line.
+// wrapLine applies layout to a single content line.
+// content must be a single line; multi-line input only gets the bar on the first line.
 // Selected items get a left accent bar (GlyphVRule in ActiveBorder colour) followed by a space;
 // in ASCII mode GlyphVRule renders as "|". Normal items get 2-space left padding.
 // No background fill is used — the border glyph is the sole selection indicator.

@@ -1088,18 +1088,6 @@ func SearchDebounceMsgWithIntentForTest(o *SearchOverlay) tea.Msg {
 	return searchDebounceMsg{intent: o.intent}
 }
 
-// SearchSpinnerTickCmd returns a tea.Cmd that drives one tick of the search overlay's
-// uikit.Spinner — exported for tests that need to advance the spinner frame.
-// The returned cmd, when executed, fires a spinner.TickMsg matched to the overlay's
-// own spinner instance so the Update default branch can advance the animation frame.
-//
-// NOTE: the TickMsg must originate from the overlay's own spinner (same ID) to be
-// accepted by the bubbles spinner's Update; calls SearchSpinnerInitCmd instead when
-// you need the initial cmd from the overlay's spinner.
-func SearchSpinnerTickCmd() tea.Cmd {
-	return nil // deprecated — use SearchSpinnerInitCmd(o) to drive ticks
-}
-
 // SearchSpinnerInitCmd returns the uikit.Spinner's Init() cmd for the given overlay.
 // The resulting cmd produces a TickMsg that matches the overlay's spinner ID and is
 // correctly forwarded by Update's default branch to advance the animation frame.
