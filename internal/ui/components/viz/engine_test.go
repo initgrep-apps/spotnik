@@ -143,19 +143,28 @@ func TestBlockRenderer_ColorsAssigned(t *testing.T) {
 }
 
 func TestBlockRenderer_OnlyBlockOrSpace(t *testing.T) {
+	// Pin to unicode mode so the expected fill glyph is '█', not '#'.
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
 	r := BlockRenderer{}
 	colors := makeColors(4)
 	colHeights := makeColHeights(20, 4)
 	frame := r.RenderFrame(20, 4, colHeights, colors)
+	fillGlyph := []rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode()))[0]
 	for _, line := range frame {
 		for _, ch := range line.Text {
-			assert.True(t, ch == '█' || ch == ' ',
+			assert.True(t, ch == fillGlyph || ch == ' ',
 				"expected block char or space, got %U (%c)", ch, ch)
 		}
 	}
 }
 
 func TestBlockRenderer_FullHeight_AllFilled(t *testing.T) {
+	// Pin to unicode mode so the expected fill glyph is '█', not '#'.
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
 	r := BlockRenderer{}
 	width := 5
 	height := 4
@@ -165,9 +174,10 @@ func TestBlockRenderer_FullHeight_AllFilled(t *testing.T) {
 	}
 	colors := makeColors(height)
 	frame := r.RenderFrame(width, height, colHeights, colors)
+	fillGlyph := []rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode()))[0]
 	for _, line := range frame {
 		for _, ch := range line.Text {
-			assert.Equal(t, '█', ch)
+			assert.Equal(t, fillGlyph, ch)
 		}
 	}
 }
@@ -542,6 +552,12 @@ func TestAllPatterns_PausedBlank(t *testing.T) {
 }
 
 func TestBraillePatterns_OnlyBrailleRunes(t *testing.T) {
+	// Pin to unicode mode: the engine falls back to AsciiBarsRenderer in ASCII mode,
+	// so braille-pattern assertions are only meaningful in unicode mode.
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(prev)
+
 	th := theme.Load("black")
 	braillePatterns := []int{0, 1, 2, 6}
 
@@ -567,8 +583,15 @@ func TestBraillePatterns_OnlyBrailleRunes(t *testing.T) {
 }
 
 func TestBlockPatterns_OnlyBlockOrSpace(t *testing.T) {
+	// Pin to unicode mode: the engine falls back to AsciiBarsRenderer in ASCII mode,
+	// so block-pattern assertions are only meaningful in unicode mode.
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(prev)
+
 	th := theme.Load("black")
 	blockPatterns := []int{3, 4, 5}
+	fillGlyph := []rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode()))[0]
 
 	for _, idx := range blockPatterns {
 		ps := Patterns()
@@ -583,7 +606,7 @@ func TestBlockPatterns_OnlyBlockOrSpace(t *testing.T) {
 			f := e.CurrentFrame()
 			for _, line := range f {
 				for _, ch := range line.Text {
-					assert.True(t, ch == '█' || ch == ' ',
+					assert.True(t, ch == fillGlyph || ch == ' ',
 						"block pattern %d: unexpected rune %U (%c)", idx, ch, ch)
 				}
 			}
