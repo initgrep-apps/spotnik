@@ -1,6 +1,6 @@
 ---
 title: "Search"
-status: in-progress
+status: done
 ---
 
 ## Description

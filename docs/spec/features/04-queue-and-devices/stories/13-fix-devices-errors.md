@@ -1,7 +1,7 @@
 ---
 title: "Fix Devices Error Handling"
 feature: 07-devices
-status: open
+status: closed
 ---
 
 ## Background

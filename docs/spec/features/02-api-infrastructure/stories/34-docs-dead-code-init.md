@@ -1,7 +1,7 @@
 ---
 title: "Docs, Dead Code & Defensive Init"
 feature: 00-architecture
-status: open
+status: closed
 ---
 
 ## Background

@@ -1,7 +1,7 @@
 ---
 title: "Fix Queue Overflow"
 feature: 06-queue
-status: open
+status: closed
 ---
 
 ## Background

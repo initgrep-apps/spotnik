@@ -1,7 +1,7 @@
 ---
 title: "Fix Auth UX"
 feature: 02-auth
-status: open
+status: closed
 ---
 
 ## Background

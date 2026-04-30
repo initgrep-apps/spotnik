@@ -1,7 +1,7 @@
 ---
 title: "Command Safety & Error Handling"
 feature: 03-playback
-status: open
+status: closed
 ---
 
 ## Background
