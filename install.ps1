@@ -26,8 +26,14 @@ Write-Success "Arch: amd64"
 $version = $env:SPOTNIK_VERSION
 if (-not $version) {
     Write-Info "Resolving latest version..."
-    $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/initgrep-apps/spotnik/releases/latest' -UseBasicParsing
-    $version = $release.tag_name
+    try {
+        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/initgrep-apps/spotnik/releases/latest' -UseBasicParsing
+        $version = $release.tag_name
+    } catch {
+        Write-Err "Failed to query GitHub API: $_"
+        Write-Info "Workaround: `$env:SPOTNIK_VERSION = 'vX.Y.Z'; irm ... | iex"
+        exit 1
+    }
 }
 if (-not $version) {
     Write-Err "Could not resolve version from GitHub API"
@@ -48,8 +54,21 @@ New-Item -ItemType Directory -Path $tmpDir | Out-Null
 try {
     # Download
     Write-Info "Downloading $zipName..."
-    Invoke-WebRequest -Uri "$baseUrl/$zipName"      -OutFile "$tmpDir\$zipName"      -UseBasicParsing
-    Invoke-WebRequest -Uri "$baseUrl/$checksumName" -OutFile "$tmpDir\$checksumName" -UseBasicParsing
+    try {
+        Invoke-WebRequest -Uri "$baseUrl/$zipName"      -OutFile "$tmpDir\$zipName"      -UseBasicParsing
+        Invoke-WebRequest -Uri "$baseUrl/$checksumName" -OutFile "$tmpDir\$checksumName" -UseBasicParsing
+    } catch {
+        $status = $null
+        if ($_.Exception -is [System.Net.WebException] -and $_.Exception.Response) {
+            $status = [int]$_.Exception.Response.StatusCode
+        }
+        if ($status -eq 404) {
+            Write-Err "Release $version not found (404). Check https://github.com/initgrep-apps/spotnik/releases for available versions."
+        } else {
+            Write-Err "Download failed: $_"
+        }
+        exit 1
+    }
     Write-Success "Downloaded"
 
     # Verify checksum
@@ -87,9 +106,21 @@ try {
 
     # Update user PATH
     $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
-    if ($userPath -notlike "*$installDir*") {
-        [Environment]::SetEnvironmentVariable('PATH', "$installDir;$userPath", 'User')
-        Write-Warn "Added $installDir to your PATH (restart shell to take effect)"
+    if (-not $userPath) { $userPath = '' }
+    $pathEntries = $userPath -split ';' | Where-Object { $_ -ne '' }
+    if ($pathEntries -notcontains $installDir) {
+        $newPath = (@($installDir) + $pathEntries) -join ';'
+        if ($newPath.Length -gt 2047) {
+            Write-Warn "User PATH would exceed safe length ($($newPath.Length) chars). Add manually: $installDir"
+        } else {
+            try {
+                [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+                Write-Warn "Added $installDir to your PATH (restart shell to take effect)"
+            } catch {
+                Write-Warn "Could not update PATH automatically: $_"
+                Write-Warn "Add manually to user PATH: $installDir"
+            }
+        }
     }
 
     # Confirm

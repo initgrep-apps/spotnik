@@ -54,12 +54,16 @@ resolve_version() {
         echo "$SPOTNIK_VERSION"
         return
     fi
+    local response
+    if ! response="$(curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" 2>&1)"; then
+        ui_error "Failed to query GitHub API: $response"
+        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
+        exit 1
+    fi
     local version
-    version="$(curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" \
-        | grep '"tag_name"' \
-        | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+    version="$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
     if [[ -z "$version" ]]; then
-        ui_error "Could not resolve latest version from GitHub API"
+        ui_error "Could not parse tag_name from GitHub API response"
         exit 1
     fi
     echo "$version"
@@ -68,11 +72,12 @@ resolve_version() {
 verify_checksum() {
     local dir="$1" checksums="$2"
     if command -v sha256sum >/dev/null 2>&1; then
-        (cd "$dir" && sha256sum --ignore-missing -c "$checksums" >/dev/null 2>&1)
+        (cd "$dir" && sha256sum --ignore-missing -c "$checksums")
     elif command -v shasum >/dev/null 2>&1; then
-        (cd "$dir" && shasum -a 256 --ignore-missing -c "$checksums" >/dev/null 2>&1)
+        (cd "$dir" && shasum -a 256 --ignore-missing -c "$checksums")
     else
-        ui_warn "sha256sum/shasum not found — skipping checksum verification"
+        ui_error "Neither sha256sum nor shasum found — refusing to install without verification"
+        return 1
     fi
 }
 
@@ -128,6 +133,12 @@ main() {
     tar -xzf "$tmpdir/$tarball" -C "$tmpdir"
     ui_success "Extracted"
 
+    if [[ ! -f "$tmpdir/spotnik" ]]; then
+        ui_error "spotnik binary not found in $tarball after extraction"
+        ui_info "The release artifact may be corrupt — please file an issue"
+        exit 1
+    fi
+
     local install_dir; install_dir="$(resolve_install_dir)"
     local need_sudo=false
     [[ -w "$install_dir" ]] || need_sudo=true
@@ -136,7 +147,11 @@ main() {
     chmod +x "$tmpdir/spotnik"
     if [[ "$need_sudo" == "true" ]]; then
         ui_info "sudo required for $install_dir"
-        sudo mv "$tmpdir/spotnik" "$install_dir/spotnik"
+        if ! sudo mv "$tmpdir/spotnik" "$install_dir/spotnik" </dev/tty; then
+            ui_error "Failed to install to $install_dir (sudo cancelled or unavailable)"
+            ui_info "Override the destination: SPOTNIK_INSTALL_DIR=\$HOME/.local/bin curl ... | bash"
+            exit 1
+        fi
     else
         mv "$tmpdir/spotnik" "$install_dir/spotnik"
     fi
