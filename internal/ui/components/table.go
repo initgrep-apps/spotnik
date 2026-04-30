@@ -7,10 +7,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	btable "github.com/evertras/bubble-table/table"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// playingSymbol is the Unicode playing indicator shown in the index column.
-const playingSymbol = "▶"
+// playingSymbol returns the playing indicator glyph, resolved via the active
+// GlyphMode so ASCII mode emits ">" instead of the unicode "▶".
+func playingSymbol() string {
+	return uikit.GlyphFor(uikit.GlyphPlaying, uikit.ActiveMode())
+}
 
 // emptyBorder is a bubble-table Border with space characters for all positions,
 // effectively hiding the table's built-in border. The outer pane border
@@ -152,7 +156,7 @@ func (t *Table) applyRows() {
 				if len(t.config.Columns) > 0 {
 					firstKey := t.config.Columns[0].Key
 					data[firstKey] = btable.NewStyledCell(
-						playingSymbol,
+						playingSymbol(),
 						lipgloss.NewStyle().Foreground(th.PlayingIndicator()),
 					)
 				}
