@@ -3009,10 +3009,9 @@ func TestSearchOverlay_View_ResultsPanel_NoCornerActions(t *testing.T) {
 
 // TestSearchOverlay_AsciiBorder_Idle verifies that the search overlay (idle/no
 // query state) renders ASCII-safe border corner glyphs when the uikit mode is
-// ASCII. Corner characters (╭╮╰╯) uniquely identify border corners and must not
-// appear in ASCII mode. The inner tab-separator (─) and table cursor (│) are
-// content characters not controlled by OverlayChrome and are intentionally
-// excluded from this assertion.
+// ASCII. Corner characters (╭╮╰╯) and vertical bars (│) must not appear in
+// ASCII mode. The inner tab-separator (─) is a content character hardcoded in
+// search.go:803 and is intentionally excluded from this assertion.
 func TestSearchOverlay_AsciiBorder_Idle(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphASCII)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
@@ -3020,9 +3019,8 @@ func TestSearchOverlay_AsciiBorder_Idle(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 	out := stripANSI(o.View())
-	if strings.ContainsAny(out, "╭╮╰╯") {
-		t.Errorf("ascii overlay (idle) must not contain unicode border corners, got: %q", out)
-	}
+	assert.False(t, strings.ContainsAny(out, "╭╮╰╯│"), "ASCII mode should not contain unicode box-drawing corners or vertical bars")
+	// Note: ─ is excluded because internal/ui/panes/search.go:803 hardcodes a ─ separator in the tab bar (latent ASCII gap, tracked in issues.md)
 }
 
 // TestSearchOverlay_AsciiBorder_Loading verifies that the search overlay in a
@@ -3038,9 +3036,8 @@ func TestSearchOverlay_AsciiBorder_Loading(t *testing.T) {
 	model, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
 	o = model.(*panes.SearchOverlay)
 	out := stripANSI(o.View())
-	if strings.ContainsAny(out, "╭╮╰╯") {
-		t.Errorf("ascii overlay (loading) must not contain unicode border corners, got: %q", out)
-	}
+	assert.False(t, strings.ContainsAny(out, "╭╮╰╯│"), "ASCII mode should not contain unicode box-drawing corners or vertical bars")
+	// Note: ─ is excluded because internal/ui/panes/search.go:803 hardcodes a ─ separator in the tab bar (latent ASCII gap, tracked in issues.md)
 }
 
 // TestSearchOverlay_AsciiBorder_Results verifies that the search overlay with
@@ -3053,7 +3050,8 @@ func TestSearchOverlay_AsciiBorder_Results(t *testing.T) {
 	o := newTestSearchOverlayWithResults()
 	o.SetSize(80, 30)
 	out := stripANSI(o.View())
-	if strings.ContainsAny(out, "╭╮╰╯") {
-		t.Errorf("ascii overlay (results) must not contain unicode border corners, got: %q", out)
-	}
+	assert.False(t, strings.ContainsAny(out, "╭╮╰╯"), "ASCII mode should not contain unicode box-drawing corners")
+	// Note: ─ is excluded because internal/ui/panes/search.go:803 hardcodes a ─ separator in the tab bar.
+	// │ is excluded in the Results path because bubble-table renders │ column separators as inner content
+	// (third-party component, not OverlayChrome). Both are latent ASCII gaps tracked in issues.md.
 }

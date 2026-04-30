@@ -156,7 +156,8 @@ func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
 // TestHelpOverlay_AsciiBorder verifies that the help overlay border renders
 // ASCII-safe characters when the uikit glyph mode is ASCII. Corner characters
 // (╭╮╰╯) and horizontal rules (─) must not appear. The inner column divider
-// (│) is content, not a border glyph, so it is excluded from this assertion.
+// (│) is content (see internal/ui/panes/help_overlay.go:140), not a border
+// glyph, so it is excluded from this assertion.
 func TestHelpOverlay_AsciiBorder(t *testing.T) {
 	prev := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
@@ -172,4 +173,5 @@ func TestHelpOverlay_AsciiBorder(t *testing.T) {
 	if strings.ContainsAny(out, "╭╮╰╯─") {
 		t.Errorf("ascii overlay border must not contain unicode corner/rule glyphs, got: %q", out)
 	}
+	assert.Contains(t, out, "+", "ASCII mode should render '+' corners")
 }

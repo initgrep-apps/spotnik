@@ -458,4 +458,5 @@ func TestDevicesOverlay_AsciiBorder(t *testing.T) {
 	if strings.ContainsAny(out, "╭╮╰╯─│") {
 		t.Errorf("ascii overlay must not contain unicode borders, got: %q", out)
 	}
+	assert.Contains(t, out, "+", "ASCII mode should render '+' corners")
 }
