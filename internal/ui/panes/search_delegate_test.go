@@ -153,20 +153,42 @@ func TestTruncateString(t *testing.T) {
 	ellipsis := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
 	ellipsisLen := len([]rune(ellipsis))
 
+	// wantPrefixOf computes the expected rune-correct prefix for a truncated result:
+	// the first (max - ellipsisLen) runes of s. Mode-agnostic — works for both
+	// unicode ("…", 1 rune) and ASCII ("...", 3 runes) ellipsis forms.
+	wantPrefixOf := func(s string, max int) string {
+		runes := []rune(s)
+		keep := max - ellipsisLen
+		if keep <= 0 || keep > len(runes) {
+			return ""
+		}
+		return string(runes[:keep])
+	}
+
 	tests := []struct {
-		name    string
-		s       string
-		max     int
-		wantLen int    // expected rune count of result
-		wantSuf string // expected suffix when truncation occurs
+		name       string
+		s          string
+		max        int
+		wantLen    int    // expected rune count of result
+		wantSuf    string // expected suffix when truncation occurs
+		wantPrefix string // expected prefix when truncation occurs (empty = not checked)
 	}{
-		{name: "truncated", s: "hello world", max: 5, wantLen: 5, wantSuf: ellipsis},
+		{
+			name: "truncated", s: "hello world", max: 5, wantLen: 5,
+			wantSuf: ellipsis, wantPrefix: wantPrefixOf("hello world", 5),
+		},
 		{name: "fits", s: "short", max: 10, wantLen: 5},
 		{name: "exact", s: "exact", max: 5, wantLen: 5},
 		{name: "empty", s: "", max: 10, wantLen: 0},
-		{name: "multibyte", s: "café", max: 3, wantLen: 3, wantSuf: ellipsis},
+		{
+			name: "multibyte", s: "café", max: 3, wantLen: 3,
+			wantSuf: ellipsis, wantPrefix: wantPrefixOf("café", 3),
+		},
 		{name: "zero max", s: "hello", max: 0, wantLen: 0},
-		{name: "small max", s: "hello", max: ellipsisLen, wantSuf: ellipsis},
+		{
+			name: "small max", s: "hello", max: ellipsisLen,
+			wantSuf: ellipsis,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -181,6 +203,10 @@ func TestTruncateString(t *testing.T) {
 					"truncated result %q should be at least as long as the ellipsis", got)
 				assert.Equal(t, tt.wantSuf, got[len(got)-len(tt.wantSuf):],
 					"result should end with ellipsis %q, got %q", tt.wantSuf, got)
+			}
+			if tt.wantPrefix != "" {
+				assert.True(t, strings.HasPrefix(got, tt.wantPrefix),
+					"truncated result %q should start with %q (correct prefix)", got, tt.wantPrefix)
 			}
 		})
 	}
