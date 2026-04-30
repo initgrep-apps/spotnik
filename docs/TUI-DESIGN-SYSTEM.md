@@ -1400,7 +1400,6 @@ the right one.
 | `docs/TUI-DESIGN-SYSTEM.md` (this file) | Primitive contracts, glyph catalogue, role matrix, feedback surfaces |
 | `docs/DESIGN.md` | Layout mechanics: grid, pages, presets, pane toggling, focus rotation, min-terminal-size rule, keybindings |
 | `docs/CLI-OUTPUT.md` | CLI message types, glyphs, palette, interactive prompts (`internal/cliout`) |
-| `docs/PANE-TEMPLATE.md` | Step-by-step guide for adding a new pane; Step 2 scaffold uses `uikit.PaneChrome` |
 
 Where both `DESIGN.md` and `TUI-DESIGN-SYSTEM.md` apply — for example, pane borders —
 `DESIGN.md` describes the pane identity (colour token, toggle key, pane ID); this document
