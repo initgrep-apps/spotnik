@@ -591,3 +591,15 @@ PR #239 (story 187) shipped clean after one fix round. Sub-threshold concerns lo
 2. Unicode-mode tests don't assert ASCII fallbacks (`||`, `Q`, `sh`, `ro`, `|>`) are absent. `GlyphFor` itself has catalogue-level tests in `glyph_test.go`, so a regression that hardcoded ASCII strings while bypassing `GlyphFor` is unlikely but possible.
 
 3. Visual diff (intentional, mention in PR description for downstream surprises): `RepeatOff` now renders `⟳` instead of legacy `↻`; `nowplaying.go:Title()` flipped from state-mode (`▶` when playing) to action-mode (`⏸` when playing) to match the controls strip semantics.
+
+---
+
+## Story 189 minor issues — viz ASCII renderer test depth
+**Found:** 2026-04-30 | **Source:** PR #241 Review
+**Feature:** 13-tui-design-system
+
+PR #241 (story 189) shipped clean after one fix round. One sub-threshold concern logged:
+
+1. `selectRenderer` is called inside `engine.go:generateFrames`, which only runs on `SetSize` / `CyclePattern` / `SetPattern`. If a future change toggles `uikit.ActiveMode()` at runtime without resize/cycle (e.g. live mode toggle hotkey), the cached frames stay stale until the next regen. No test covers this. Borderline — only matters if mode-toggle-at-runtime becomes a feature. Add a test that flips mode after `SetSize`, calls `CyclePattern` (forcing regen), and verifies the new renderer wins, or hook `selectRenderer` into a frame-time read if mode flips become user-facing.
+
+2. Comment typo in `TestAsciiBars_FourLevelDensityRamp` at line ~195: row-glyph documentation is jumbled (test logic is correct, only the explanatory comment is wrong). Cleanup-only.
