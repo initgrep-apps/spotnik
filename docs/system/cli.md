@@ -1,8 +1,7 @@
 # CLI Output Reference
 
 This document is the canonical reference for all CLI output in spotnik. Read it before
-writing or modifying any CLI subcommand output. It supersedes the informal guidelines
-in story `09-auth-and-profile/stories/145-cli-auth-ux-polish-2.md`.
+writing or modifying any CLI subcommand output.
 
 **See also:** `design.md` (TUI theme tokens) · `../../README.md#keybindings` (keybindings)
 
