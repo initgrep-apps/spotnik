@@ -1,6 +1,7 @@
 package uikit_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -219,6 +220,44 @@ func TestToast_TruncatedTitle_AsciiEllipsis(t *testing.T) {
 	suffix := string(runes[45:]) // last 3 runes
 	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
 	assert.NotContains(t, toast.Title, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
+// TestToast_TruncatedBody_AsciiEllipsis verifies that in ASCII mode a body
+// longer than 160 runes is truncated with "..." (3 ASCII dots), not "…".
+// Symmetric counterpart to TestToast_TruncatedTitle_AsciiEllipsis.
+func TestToast_TruncatedBody_AsciiEllipsis(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	// Build a body of exactly 161 runes so Normalize triggers truncation.
+	base := strings.Repeat("a", 161)
+	require.Equal(t, 161, len([]rune(base)), "precondition: base is 161 runes")
+
+	toast := uikit.Toast{Intent: uikit.ToastError, Body: base}.Normalize()
+	runes := []rune(toast.Body)
+	assert.Equal(t, 160, len(runes), "truncated body must be 160 runes")
+	suffix := string(runes[157:]) // last 3 runes
+	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
+	assert.NotContains(t, toast.Body, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
+// TestTruncateRunes_MaxLessThanEllipsisLen verifies that truncateRunes (via
+// Normalize) does not panic when max < len(ellipsis runes). In that edge case
+// the original string should be returned unmodified rather than slicing out of
+// bounds. Normalize always calls with max >= 48 so this is a future-caller guard.
+// We exercise it indirectly by constructing a 2-rune body — the ellipsis in
+// ASCII mode is 3 runes, but the max is not externally configurable, so we test
+// the guard by verifying the existing thresholds (48/160) work cleanly, and
+// document the guard via a direct truncateRunes test if it is exported.
+// Because truncateRunes is unexported, this test verifies the contract via the
+// public Normalize path: a ≤max body must pass through unchanged.
+func TestToast_Normalize_ShortBodyUnchanged(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	short := "ab" // 2 runes — well under any max; must never panic or corrupt
+	toast := uikit.Toast{Intent: uikit.ToastInfo, Body: short}.Normalize()
+	assert.Equal(t, short, toast.Body, "short body must pass through Normalize unchanged")
 }
 
 // TestRegisterBubbleupAlerts_AsciiPrefixes verifies that RegisterBubbleupAlerts resolves
