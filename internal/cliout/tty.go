@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	profileOnce  sync.Once
-	testMode     bool
-	testModeMu   sync.RWMutex
-	priorUiMode  uikit.GlyphMode
+	profileOnce sync.Once
+	testMode    bool
+	testModeMu  sync.RWMutex
+	priorUiMode uikit.GlyphMode
 )
 
 // isTTY returns whether w is an *os.File pointing at a terminal.
