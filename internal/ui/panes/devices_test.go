@@ -66,6 +66,7 @@ func TestDeviceOverlay_View_ActiveDevice(t *testing.T) {
 
 func TestDeviceOverlay_View_EmptyList(t *testing.T) {
 	overlay := newTestDeviceOverlay()
+	overlay.SetSize(60, 20)
 	overlay.devices = []DeviceInfo{}
 
 	view := overlay.View()
@@ -183,8 +184,8 @@ func TestDeviceOverlay_DeviceTypeIcon(t *testing.T) {
 		{"Smartphone", "⊞"},
 		{"Speaker", "⊟"},
 		{"TV", "⊠"},
-		{"Unknown", "○"},
-		{"", "○"},
+		{"Unknown", "◎"},
+		{"", "◎"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.deviceType, func(t *testing.T) {
@@ -258,6 +259,7 @@ func TestDeviceOverlay_View_ShowsEmptyWhenNoError(t *testing.T) {
 	// No error set, no devices loaded.
 	th := theme.Load("black")
 	overlay := NewDeviceOverlay(s, th)
+	overlay.SetSize(60, 20)
 
 	output := overlay.View()
 	assert.Contains(t, output, "No devices found")
@@ -441,6 +443,41 @@ func TestDeviceOverlay_CursorClampedOnEmptyList(t *testing.T) {
 	}, "pressing Enter on empty list must not panic")
 }
 
+// TestDevicesOverlay_AsciiContent verifies that in ASCII mode the device overlay
+// renders ASCII glyphs for status bullets and device-type icons, and that none of
+// the unicode literals (◉ ○ ⊡ ⊞ ⊟ ⊠) appear in the output.
+func TestDevicesOverlay_AsciiContent(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestDeviceOverlay()
+	o.SetSize(60, 20)
+	o.devices = []DeviceInfo{
+		{ID: "1", Name: "My Mac",     Type: "Computer",   IsActive: true},
+		{ID: "2", Name: "My Phone",   Type: "Smartphone", IsActive: false},
+		{ID: "3", Name: "My Speaker", Type: "Speaker",    IsActive: false},
+		{ID: "4", Name: "My TV",      Type: "TV",         IsActive: false},
+	}
+
+	out := stripANSI(o.View())
+
+	// ASCII bullet for active device must be present, unicode must not appear.
+	assert.Contains(t, out, "(*)", "ASCII mode active bullet should be (*)")
+	assert.NotContains(t, out, "◉", "unicode ◉ must not appear in ASCII mode")
+	assert.NotContains(t, out, "○", "unicode ○ must not appear in ASCII mode")
+
+	// ASCII device-type icons.
+	assert.Contains(t, out, "[c]",  "Computer ASCII icon should be [c]")
+	assert.Contains(t, out, "[p]",  "Smartphone ASCII icon should be [p]")
+	assert.Contains(t, out, "[s]",  "Speaker ASCII icon should be [s]")
+	assert.Contains(t, out, "[tv]", "TV ASCII icon should be [tv]")
+
+	// None of the unicode literals must survive in ASCII mode.
+	for _, ch := range []string{"⊡", "⊞", "⊟", "⊠"} {
+		assert.NotContains(t, out, ch, "unicode device icon %q must not appear in ASCII mode", ch)
+	}
+}
+
 // TestDevicesOverlay_AsciiBorder verifies that the devices overlay renders
 // ASCII-safe border characters (+, -, |) when the uikit glyph mode is ASCII,
 // and that no unicode box-drawing characters (╭╮╰╯─│) are present.
@@ -454,6 +491,8 @@ func TestDevicesOverlay_AsciiBorder(t *testing.T) {
 
 	o := newTestDeviceOverlay()
 	o.SetSize(50, 20)
+	// Populate devices so the chrome rendering path is taken (not the EmptyState path).
+	o.devices = testDevices()
 	out := stripANSI(o.View())
 	if strings.ContainsAny(out, "╭╮╰╯─│") {
 		t.Errorf("ascii overlay must not contain unicode borders, got: %q", out)
