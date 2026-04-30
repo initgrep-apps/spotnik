@@ -41,3 +41,8 @@ Thumbs.db
 .gocache/
 .gomodcache
 .claude/worktrees
+.claude/agent-memory/
+.claude/agents/
+.claude/skills/
+.claude/settings.local.json
+.agents/

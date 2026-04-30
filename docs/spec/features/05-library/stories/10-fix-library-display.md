@@ -1,7 +1,7 @@
 ---
 title: "Fix Library Display"
 feature: 04-library
-status: open
+status: closed
 ---
 
 ## Background

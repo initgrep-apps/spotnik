@@ -1,6 +1,6 @@
 ---
 title: "Library Browser & Playlists"
-status: in-progress
+status: done
 ---
 
 ## Description

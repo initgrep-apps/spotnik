@@ -1,4 +1,4 @@
-# DESIGN.md — btop-Inspired UI Redesign Specification
+# Design — btop-Inspired UI Specification
 
 > **This document is the authoritative design specification for Spotnik.**
 > A responsive, pane-based grid inspired by btop's celebrated terminal UI design.
@@ -11,7 +11,7 @@
 
 **Authority.** Layout mechanics (grid, pages, presets, keys 1–8, page switch) live in
 this document. Primitive rendering (PaneChrome, Toast, Panel, HeaderBar, StatusBar,
-overlay chrome, onboarding panels) lives in `docs/TUI-DESIGN-SYSTEM.md`. Where both
+overlay chrome, onboarding panels) lives in `tui.md`. Where both
 apply — e.g. pane borders — this document describes the pane identity (colour token,
 toggle key, pane ID); the design-system doc describes the exact rendering contract.
 
@@ -363,7 +363,7 @@ When switching presets:
 
 ## 5. Pane Border Chrome
 
-See `docs/TUI-DESIGN-SYSTEM.md §3.1` (PaneChrome) for the full rendering contract:
+See `tui.md §3.1` (PaneChrome) for the full rendering contract:
 border anatomy, action-notch format, filter-mode preamble, glyph choices, roles, and
 ascii fallback.
 
@@ -653,7 +653,7 @@ The NowPlaying pane uses a horizontal split layout inspired by btop's CPU pane:
 
 ## 12. Notifications
 
-See `docs/TUI-DESIGN-SYSTEM.md §3.15` (Toast) for the full rendering contract: intent
+See `tui.md §3.15` (Toast) for the full rendering contract: intent
 types, default TTLs, glyph table, positioning per view-mode, and content rules.
 
 ---
@@ -662,7 +662,7 @@ types, default TTLs, glyph table, positioning per view-mode, and content rules.
 
 The search overlay remains a floating modal above the grid.
 
-See `docs/TUI-DESIGN-SYSTEM.md §3.2` (OverlayChrome) for the border rendering contract.
+See `tui.md §3.2` (OverlayChrome) for the border rendering contract.
 The search overlay uses `OverlayChrome` with Accent border and notch-format action hints.
 Results use the dense table column format documented in §9 of this document.
 
@@ -676,14 +676,14 @@ fall back to custom if required, taking inspiration from it.
 Uses `OverlayChrome` with `Devices` title. Positioned top-right via `btoverlay.Composite()`.
 Active device row uses `ListRow` with `◉` glyph (Success role); inactive rows use `○`.
 
-See `docs/TUI-DESIGN-SYSTEM.md §3.2` (OverlayChrome) and `§3.5` (ListRow) for rendering
+See `tui.md §3.2` (OverlayChrome) and `§3.5` (ListRow) for rendering
 contracts.
 
 ---
 
 ## 15. Global Header & Status Bar
 
-See `docs/TUI-DESIGN-SYSTEM.md §3.10` (HeaderBar) and `§3.11` (StatusBar) for the
+See `tui.md §3.10` (HeaderBar) and `§3.11` (StatusBar) for the
 rendering contracts: field roles, glyph choices, background token, and ascii fallback.
 
 **Header (top line):** app name · page indicator · preset info · right-side device and
@@ -1322,7 +1322,7 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 
 ## 24. Box Drawing Reference
 
-**Unchanged from DESIGN.md:** Rounded corners exclusively.
+**Unchanged from design.md:** Rounded corners exclusively.
 
 ```
 ╭─────────────╮   Used for all pane borders and overlays
@@ -1336,7 +1336,7 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 
 ## 25. Color System Rules
 
-**Unchanged from DESIGN.md:**
+**Unchanged from design.md:**
 - All color values come from `internal/ui/theme/`
 - Never hardcode hex values in component code
 - Always reference tokens through the `Theme` interface
@@ -1354,5 +1354,5 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 
 ---
 
-*Status: DRAFT — supersedes DESIGN.md for new layout work*
+*Status: DRAFT — supersedes design.md for new layout work*
 *Created: 2026-03-25*

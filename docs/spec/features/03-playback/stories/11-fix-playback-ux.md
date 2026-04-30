@@ -1,7 +1,7 @@
 ---
 title: "Fix Playback UX"
 feature: 03-playback
-status: open
+status: closed
 ---
 
 ## Background

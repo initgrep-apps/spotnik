@@ -5,10 +5,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/initgrep-apps/spotnik)](go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A terminal Spotify client for developers. Keyboard-driven, single binary, beautiful in a terminal.
-
-Not a Spotify clone — a developer-first music environment. Target user: developer with Spotify
-Premium who lives in the terminal all day.
+A terminal Spotify client . Keyboard-driven, single binary, beautiful in a terminal.
 
 ---
 
@@ -104,17 +101,22 @@ directly into the TUI.
 
 ## Keybindings
 
+> When changing any keybinding, update this section, `docs/system/design.md §17`, and
+> the `helpContent` var in `internal/ui/panes/help_overlay.go` in the same commit.
+
 ### Global
 
 | Key | Action |
 |-----|--------|
 | `/` | Open search overlay |
 | `d` | Open device switcher |
+| `u` | Open user profile overlay |
 | `t` | Open theme switcher |
 | `?` | Open help overlay |
 | `q` | Quit |
 | `0` | Toggle Page A / Page B |
-| `1`–`8` | Toggle pane visibility (Page A only) |
+| `1`–`8` | Toggle pane visibility on Page A |
+| `1`–`5` | Toggle pane visibility on Page B |
 | `p` | Cycle preset layout |
 
 ### Playback
@@ -136,8 +138,9 @@ Playback keys are always active regardless of which pane has focus.
 |-----|--------|
 | `Tab` | Next pane focus |
 | `Shift+Tab` | Previous pane focus |
-| `j` / `k` | Scroll down / up |
-| `Esc` | Close overlay or filter |
+| `↑` / `k` | Scroll up |
+| `↓` / `j` | Scroll down |
+| `Esc` | Close overlay · clear filter · scroll top |
 
 ### Pane Actions
 
@@ -145,10 +148,18 @@ Playback keys are always active regardless of which pane has focus.
 |-----|--------|---------|
 | `Enter` | Select / play item | Focused pane |
 | `f` | Toggle filter | List panes |
+| `g` | Cycle time range | TopTracks / TopArtists |
 | `A` | Add to queue | Search overlay, list panes |
 | `i` | Like / unlike track | LikedSongs pane |
 | `x` | Remove track from playlist | Playlists pane track sub-view |
 | `Shift+↑` / `Shift+↓` | Reorder track | Playlists pane |
+
+### Profile Overlay
+
+| Key | Action |
+|-----|--------|
+| `l` | Logout — ends session, keeps Client ID. Press twice to confirm. |
+| `f` | Forget — removes session + Client ID. Press twice to confirm. |
 
 ### Search Overlay
 
@@ -160,8 +171,6 @@ Playback keys are always active regardless of which pane has focus.
 | `Ctrl+U` | Clear search input |
 | `PgDn` / `PgUp` | Next / previous result page |
 | `Esc` | Close search overlay |
-
-Full keybinding reference: [docs/keybinding.md](docs/keybinding.md)
 
 ---
 
@@ -185,45 +194,66 @@ theme = "black"
 
 ---
 
-## Building from Source
+## Development
 
-Requires Go 1.26+ (see `go.mod`).
+### Prerequisites
+
+- **Go 1.26+** (see `go.mod`) — `brew install go` or download from <https://go.dev/dl/>
+- **golangci-lint** — required by `make lint` and `make ci`:
+  ```bash
+  brew install golangci-lint
+  # or
+  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+  ```
+
+### Build and run
 
 ```bash
 git clone https://github.com/initgrep-apps/spotnik.git
 cd spotnik
-make build
-./bin/spotnik
+make build       # binary at bin/spotnik
+make run         # build + run
 ```
 
-To set your own Spotify client ID at build time:
+### Make targets
+
+| Target | What it does |
+|--------|-------------|
+| `make build` | Compile to `bin/spotnik` |
+| `make run` | Build + run |
+| `make test` | Unit tests (`-race -count=1`) |
+| `make test-integration` | Integration tests (build tag `integration`) |
+| `make test-coverage` | Unit tests + coverage; fails below 80% |
+| `make lint` | Run `golangci-lint ./...` |
+| `make fmt` / `make fmt-check` | Format / verify formatting |
+| `make tidy-check` | Verify `go.mod` / `go.sum` are tidy |
+| `make ci` | Full pre-commit gate: `fmt-check → tidy-check → lint → test-coverage → build` |
+| `make clean` | Remove `bin/` and coverage artifacts |
+| `make install` | Install binary to `$GOPATH/bin` |
+| `make release` | Cross-compile for all release targets |
+
+### Debugging
 
 ```bash
-SPOTIFY_CLIENT_ID=your-client-id make build
+DEBUG=1 ./bin/spotnik           # enables Bubble Tea debug log
+tail -f debug.log               # in another terminal
+
+go test -race ./...             # race detector
+
+./bin/spotnik auth logout       # remove tokens, keep client_id
+./bin/spotnik auth forget       # remove tokens AND client_id
 ```
 
-All make targets:
+Press `0` inside the app to switch to Page B — live API gateway request flow and network
+event log, useful for diagnosing rate-limit or connectivity issues.
 
-```
-make build          Build binary for current platform
-make run            Build and run
-make test           Run all tests
-make lint           Run golangci-lint
-make test-coverage  Coverage report (min 80%)
-make ci             Full pre-commit check (lint + tests + build)
-make clean          Remove build artifacts
-```
+### Architecture
 
----
-
-## Contributing
-
-- Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `test`, `chore`
-- Run `make ci` before pushing — CI fails on lint or coverage violations
-- One feature per branch; branch naming: `feat/NN-description`
-- Never merge your own PR
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+See [docs/system/architecture.md](docs/system/architecture.md) for the full reference.
+The `docs/system/` folder also holds [design.md](docs/system/design.md) (UI layout spec),
+[tui.md](docs/system/tui.md) (primitive contracts), [cli.md](docs/system/cli.md) (CLI
+output spec), and [api-guide.md](docs/system/api-guide.md) (Spotify Web API capability
+inventory).
 
 ---
 

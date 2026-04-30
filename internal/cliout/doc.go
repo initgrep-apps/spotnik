@@ -5,6 +5,6 @@
 // the fluent Builder and call Write / WriteInline. Rendering is palette-aware and
 // honours NO_COLOR and TTY detection automatically.
 //
-// Before adding a new message type or glyph, read docs/CLI-OUTPUT.md — it is the
+// Before adding a new message type or glyph, read docs/system/cli.md — it is the
 // canonical reference for the project's CLI output conventions.
 package cliout

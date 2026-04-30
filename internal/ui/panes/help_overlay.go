@@ -37,7 +37,7 @@ const colPadLeft = 2
 // resolved via uikit.ActiveMode() so arrow keys render as ASCII alternatives
 // when running in ASCII mode. Call this in View(), not at package init.
 // [0] = left column (Global, Navigation), [1] = right column (Playback, Pane Actions).
-// NOTE: When changing any keybinding, also update docs/keybinding.md and docs/DESIGN.md §17.
+// NOTE: When changing any keybinding, also update README.md Keybindings and docs/system/design.md §17.
 func buildHelpContent() [2][]helpSection {
 	m := uikit.ActiveMode()
 	al := uikit.GlyphFor(uikit.GlyphArrowLeft, m)

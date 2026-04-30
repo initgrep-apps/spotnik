@@ -1,7 +1,7 @@
 ---
 title: "Fix Recently Played Empty State"
 feature: 08-stats
-status: open
+status: closed
 ---
 
 ## Background

@@ -1,6 +1,6 @@
 ---
 title: "Playback & NowPlaying"
-status: in-progress
+status: done
 ---
 
 ## Description

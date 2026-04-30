@@ -1,7 +1,7 @@
 ---
 title: "Type Design Alignment"
 feature: 00-architecture
-status: open
+status: closed
 ---
 
 ## Background

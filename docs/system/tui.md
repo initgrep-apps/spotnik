@@ -1,8 +1,8 @@
 # TUI Design System — Spotnik
 
 > Canonical reference for `internal/uikit` primitives, glyph catalogue, role matrix, and
-> feedback surfaces. Peer to `docs/CLI-OUTPUT.md`. Layout mechanics (grid, pages, presets)
-> live in `docs/DESIGN.md`.
+> feedback surfaces. Peer to `cli.md`. Layout mechanics (grid, pages, presets)
+> live in `design.md`.
 
 ---
 
@@ -22,7 +22,7 @@ lifecycle, tests), the frozen glyph catalogue, the role / colour matrix, and the
 non-overlapping feedback surfaces.
 
 **What this document does NOT cover:** layout grid, pages, presets, pane toggling, or focus
-rotation — those live in `docs/DESIGN.md`.
+rotation — those live in `design.md`.
 
 ---
 
@@ -41,7 +41,7 @@ rotation — those live in `docs/DESIGN.md`.
 
 1. Compose primitives with raw `lipgloss.NewStyle()` at call sites — use the primitive.
 2. Introduce a new glyph without updating §4 (Glyph catalogue) in the same PR **and**
-   `docs/TUI-DESIGN-SYSTEM.md` in the same commit.
+   `tui.md` in the same commit.
 3. Use `ᐅ` (U+1405 Canadian Syllabics Pa) — banned. All action hints use notch format.
 4. Use `⚠` — use `◬` (unicode) or `!` (ascii).
 5. Use sharp corners `┌┐└┘` or double corners `╔╗╚╝` — banned.
@@ -1088,7 +1088,7 @@ glyph in both modes.
 ## 4. Glyph Catalogue
 
 Every glyph the TUI and CLI use. Every row has a unicode form and an ascii fallback.
-New glyphs require a PR that updates this table and `docs/TUI-DESIGN-SYSTEM.md` in the
+New glyphs require a PR that updates this table and `tui.md` in the
 same commit. Removed glyphs are flagged "banned".
 
 ### 4.1 Structural / borders
@@ -1096,7 +1096,7 @@ same commit. Removed glyphs are flagged "banned".
 | Role | Unicode | ASCII | Notes |
 |---|---|---|---|
 | corner rounded | `╭ ╮ ╰ ╯` | `+ + + +` | Default pane, overlay, panel chrome |
-| corner sharp | `┌ ┐ └ ┘` | — | **Banned** (DESIGN.md rule) |
+| corner sharp | `┌ ┐ └ ┘` | — | **Banned** (design.md rule) |
 | corner double | `╔ ╗ ╚ ╝` | — | **Banned** |
 | horizontal rule | `─` | `-` | |
 | vertical rule | `│` | `\|` | |
@@ -1397,13 +1397,12 @@ the right one.
 
 | Document | Authority over |
 |---|---|
-| `docs/TUI-DESIGN-SYSTEM.md` (this file) | Primitive contracts, glyph catalogue, role matrix, feedback surfaces |
-| `docs/DESIGN.md` | Layout mechanics: grid, pages, presets, pane toggling, focus rotation, min-terminal-size rule, keybindings |
-| `docs/CLI-OUTPUT.md` | CLI message types, glyphs, palette, interactive prompts (`internal/cliout`) |
-| `docs/PANE-TEMPLATE.md` | Step-by-step guide for adding a new pane; Step 2 scaffold uses `uikit.PaneChrome` |
+| `tui.md` (this file) | Primitive contracts, glyph catalogue, role matrix, feedback surfaces |
+| `design.md` | Layout mechanics: grid, pages, presets, pane toggling, focus rotation, min-terminal-size rule, keybindings |
+| `cli.md` | CLI message types, glyphs, palette, interactive prompts (`internal/cliout`) |
 
-Where both `DESIGN.md` and `TUI-DESIGN-SYSTEM.md` apply — for example, pane borders —
-`DESIGN.md` describes the pane identity (colour token, toggle key, pane ID); this document
+Where both `design.md` and `tui.md` apply — for example, pane borders —
+`design.md` describes the pane identity (colour token, toggle key, pane ID); this document
 describes the exact rendering contract (field roles, glyph choices, notch format).
 
 The glyph catalogue (§4) and emphasis-role vocabulary (§5) are shared between

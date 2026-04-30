@@ -1,7 +1,7 @@
 ---
 title: "Fix Search Results"
 feature: 05-search
-status: open
+status: closed
 ---
 
 ## Background

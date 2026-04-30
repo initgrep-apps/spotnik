@@ -1,7 +1,7 @@
 ---
 title: "CI/CD & Release Pipeline"
 feature: 15-cicd
-status: partially done
+status: done
 ---
 
 ## Background

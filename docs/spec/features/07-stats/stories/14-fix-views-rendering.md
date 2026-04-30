@@ -1,7 +1,7 @@
 ---
 title: "Fix Views Rendering (Stats + Playlists)"
 feature: 08-stats
-status: open
+status: closed
 ---
 
 ## Background

@@ -1,7 +1,7 @@
 ---
 title: "app.go Decomposition"
 feature: 00-architecture
-status: open
+status: closed
 ---
 
 ## Background

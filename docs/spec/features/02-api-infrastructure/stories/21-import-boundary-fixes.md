@@ -1,7 +1,7 @@
 ---
 title: "Import Boundary Fixes"
 feature: 00-architecture
-status: open
+status: closed
 ---
 
 ## Background
