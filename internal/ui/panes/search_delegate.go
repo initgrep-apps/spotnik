@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // SearchListItem represents a single search result in the bubbles/list.
@@ -59,20 +60,21 @@ func (i SearchListItem) Description() string { return i.Subtitle }
 // FilterValue returns the searchable string for list filtering, satisfying list.Item.
 func (i SearchListItem) FilterValue() string { return i.Name }
 
-// categorySymbol returns the single-character badge for the given category.
-// Symbols are BMP Unicode glyphs (not emoji) so lipgloss Foreground() coloring works reliably.
+// categorySymbol returns the badge glyph for the given category via the uikit catalogue.
+// In ASCII mode ActiveMode() returns GlyphASCII and GlyphFor returns safe ASCII forms.
 func categorySymbol(category string) string {
+	m := uikit.ActiveMode()
 	switch category {
 	case "track":
-		return "♪" // U+266A Eighth Note — musical, single-width
+		return uikit.GlyphFor(uikit.GlyphMusicNote, m)
 	case "artist":
-		return "★" // U+2605 Black Star — fame/artist, single-width
+		return uikit.GlyphFor(uikit.GlyphPinned, m)
 	case "album":
-		return "◎" // U+25CE Bullseye — disc-like, single-width
+		return uikit.GlyphFor(uikit.GlyphInactive, m)
 	case "playlist":
-		return "▤" // U+25A4 Square with horizontal fill — list, single-width
+		return uikit.GlyphFor(uikit.GlyphPlaylist, m)
 	default:
-		return "·"
+		return uikit.GlyphFor(uikit.GlyphSeparator, m)
 	}
 }
 
@@ -91,16 +93,17 @@ func NewSearchItemDelegate(t theme.Theme) SearchItemDelegate {
 // Height returns the number of lines each item occupies (3: title + subtitle + description).
 func (d SearchItemDelegate) Height() int { return 3 }
 
-// wrapLine applies layout to a content line.
-// Selected items get a left accent border (│ in ActiveBorder colour); normal items get 2-space
-// left padding. No background fill is used — the border is the sole selection indicator.
+// wrapLine applies layout to a single content line.
+// content must be a single line; multi-line input only gets the bar on the first line.
+// Selected items get a left accent bar (GlyphVRule in ActiveBorder colour) followed by a space;
+// in ASCII mode GlyphVRule renders as "|". Normal items get 2-space left padding.
+// No background fill is used — the border glyph is the sole selection indicator.
 func (d SearchItemDelegate) wrapLine(content string, selected bool) string {
 	if selected {
-		return lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(d.theme.ActiveBorder()).
-			Padding(0, 0, 0, 1).
-			Render(content)
+		bar := lipgloss.NewStyle().
+			Foreground(d.theme.ActiveBorder()).
+			Render(uikit.GlyphFor(uikit.GlyphVRule, uikit.ActiveMode()))
+		return bar + " " + content
 	}
 	return lipgloss.NewStyle().
 		Padding(0, 0, 0, 2).
@@ -330,9 +333,11 @@ func (d SearchItemDelegate) line3Style(selected bool, normal lipgloss.Color) lip
 	return lipgloss.NewStyle().Foreground(normal)
 }
 
-// styledDot returns " · " rendered in TextMuted color.
+// styledDot returns a separator glyph (GlyphSeparator) surrounded by spaces,
+// rendered in TextMuted color. In ASCII mode GlyphSeparator renders as "|".
 func (d SearchItemDelegate) styledDot() string {
-	return lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(" · ")
+	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
+	return lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(" " + sep + " ")
 }
 
 // rightAlign composes left and right parts so right is flush to the given width,

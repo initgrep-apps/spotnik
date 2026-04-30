@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1071,4 +1072,90 @@ func TestRenderDefault_Selected(t *testing.T) {
 	assert.Contains(t, selected, "Mystery Item", "selected default output should contain the name")
 	assert.Contains(t, selected, "│", "selected default should contain left border │")
 	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestSearchDelegate_AsciiCategorySymbols verifies that in ASCII mode categorySymbol returns
+// the correct ASCII fallbacks and does not contain any of the unicode glyph literals.
+func TestSearchDelegate_AsciiCategorySymbols(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	tests := []struct {
+		category string
+		want     string
+		notWant  []string
+	}{
+		{
+			category: "track",
+			want:     "*", // GlyphMusicNote ASCII form
+			notWant:  []string{"♪"},
+		},
+		{
+			category: "artist",
+			want:     "*", // GlyphPinned ASCII form
+			notWant:  []string{"★"},
+		},
+		{
+			category: "album",
+			want:     "( )", // GlyphInactive ASCII form
+			notWant:  []string{"◎"},
+		},
+		{
+			category: "playlist",
+			want:     "[=]", // GlyphPlaylist ASCII form
+			notWant:  []string{"▤"},
+		},
+		{
+			category: "unknown",
+			want:     "|", // GlyphSeparator ASCII form
+			notWant:  []string{"·"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.category, func(t *testing.T) {
+			got := categorySymbol(tt.category)
+			assert.Equal(t, tt.want, got, "ASCII mode categorySymbol(%q) should return %q", tt.category, tt.want)
+			for _, notWant := range tt.notWant {
+				assert.NotContains(t, got, notWant,
+					"ASCII mode categorySymbol(%q) must not contain unicode literal %q", tt.category, notWant)
+			}
+		})
+	}
+}
+
+// TestSearchDelegate_WrapLine_AsciiSelectionBar verifies that in ASCII mode the selection
+// bar rendered by wrapLine(selected=true) uses "|" (ASCII VRule) instead of "│" (unicode).
+// The unselected branch must not contain any bar character in either mode.
+func TestSearchDelegate_WrapLine_AsciiSelectionBar(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	d := newTestDelegate()
+
+	// Selected branch — must contain "|" and not "│".
+	selectedOut := stripANSI(d.wrapLine("hello", true))
+	assert.Contains(t, selectedOut, "|", "ASCII mode selected wrapLine must contain '|'")
+	assert.NotContains(t, selectedOut, "│", "ASCII mode selected wrapLine must not contain unicode '│'")
+	assert.Contains(t, selectedOut, "hello", "selected wrapLine must include content")
+
+	// Unselected branch — must not contain a bar in either mode.
+	unselectedOut := stripANSI(d.wrapLine("hello", false))
+	assert.NotContains(t, unselectedOut, "|", "unselected wrapLine must not contain a bar")
+	assert.NotContains(t, unselectedOut, "│", "unselected wrapLine must not contain unicode '│'")
+	assert.Contains(t, unselectedOut, "hello", "unselected wrapLine must include content")
+}
+
+// TestSearchDelegate_StyledDot_AsciiSeparator verifies that in ASCII mode styledDot()
+// returns " | " (with surrounding spaces) using the ASCII GlyphSeparator form,
+// and never emits the unicode "·" middot character.
+func TestSearchDelegate_StyledDot_AsciiSeparator(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	d := newTestDelegate()
+	dotOut := stripANSI(d.styledDot())
+
+	assert.Contains(t, dotOut, " | ", "ASCII mode styledDot must return ' | ' (ASCII GlyphSeparator with spaces)")
+	assert.NotContains(t, dotOut, "·", "ASCII mode styledDot must not contain unicode '·'")
 }

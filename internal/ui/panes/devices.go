@@ -142,13 +142,29 @@ func (d *DeviceOverlay) View() string {
 	// NOTE: Device errors are routed through toast notifications (app.go).
 	// store.DevicesError() is preserved for retry logic but never read in View().
 	if len(d.devices) == 0 {
-		emptyStyle := lipgloss.NewStyle().
-			Foreground(d.theme.TextMuted())
-		lines = append(lines, emptyStyle.Render("No devices found"))
-	} else {
-		for i, dev := range d.devices {
-			lines = append(lines, d.renderDevice(i, dev))
+		innerW := totalWidth - 2
+		if innerW < 2 {
+			innerW = 2
 		}
+		// Reserve enough height for the empty-state content (2 text lines + padding).
+		const emptyStateHeight = 6
+		inner := uikit.EmptyState{
+			Text:   "No devices found",
+			Hint:   "Open Spotify on a device to see it here",
+			Width:  innerW,
+			Height: emptyStateHeight - 2, // subtract border rows from inner height
+			Theme:  d.theme,
+		}.Render()
+		chrome := uikit.OverlayChrome{
+			Width:  totalWidth,
+			Height: emptyStateHeight,
+			Title:  "Devices",
+			Theme:  d.theme,
+		}
+		return chrome.Render(inner)
+	}
+	for i, dev := range d.devices {
+		lines = append(lines, d.renderDevice(i, dev))
 	}
 
 	inner := strings.Join(lines, "\n")
@@ -199,24 +215,25 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 	// Only cursor rows get Background(SelectedBg()); non-cursor rows have NO explicit
 	// background so they blend with the composited overlay background rather than
 	// rendering as opaque rectangles over the dimmed grid behind the overlay.
+	m := uikit.ActiveMode()
 	if isCursor {
 		bg := d.theme.SelectedBg()
 		if dev.IsActive {
 			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.HeaderChipFg()).Background(bg)
-			bullet = "◉"
+			bullet = uikit.GlyphFor(uikit.GlyphActive, m)
 		} else {
 			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.InactiveBorder()).Background(bg)
-			bullet = "○"
+			bullet = uikit.GlyphFor(uikit.GlyphAvailable, m)
 		}
 		nameStyle = lipgloss.NewStyle().Foreground(d.theme.TextPrimary()).Background(bg)
 	} else {
 		// Non-cursor: no Background() at all.
 		if dev.IsActive {
 			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.HeaderChipFg())
-			bullet = "◉"
+			bullet = uikit.GlyphFor(uikit.GlyphActive, m)
 		} else {
 			bulletStyle = lipgloss.NewStyle().Foreground(d.theme.InactiveBorder())
-			bullet = "○"
+			bullet = uikit.GlyphFor(uikit.GlyphAvailable, m)
 		}
 		nameStyle = lipgloss.NewStyle().Foreground(d.theme.TextPrimary())
 	}
@@ -248,19 +265,21 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 }
 
 // deviceTypeIcon returns the display icon prefix for a Spotify device type.
-// Falls back to "○" for any unrecognized type.
+// Falls back to GlyphAvailable (○) for any unrecognized type, preserving the
+// pre-migration visual appearance of "an available but uncategorised device".
 func deviceTypeIcon(deviceType string) string {
+	m := uikit.ActiveMode()
 	switch deviceType {
 	case "Computer":
-		return "⊡"
+		return uikit.GlyphFor(uikit.GlyphDeviceComputer, m)
 	case "Smartphone":
-		return "⊞"
+		return uikit.GlyphFor(uikit.GlyphDevicePhone, m)
 	case "Speaker":
-		return "⊟"
+		return uikit.GlyphFor(uikit.GlyphDeviceSpeaker, m)
 	case "TV":
-		return "⊠"
+		return uikit.GlyphFor(uikit.GlyphDeviceTV, m)
 	default:
-		return "○"
+		return uikit.GlyphFor(uikit.GlyphAvailable, m)
 	}
 }
 

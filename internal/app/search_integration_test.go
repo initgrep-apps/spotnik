@@ -494,3 +494,60 @@ func TestApp_SearchPageLoadedMsg_StalenessTable_AllVariants(t *testing.T) {
 		})
 	}
 }
+
+// --- Regression: search spinner ticks survive the global spinner.TickMsg handler ---
+
+// TestApp_SearchSpinnerTick_NotDroppedByGlobalHandler is a regression test for the
+// production path where searchSpinnerTickMsg was swallowed by handlers.go:148.
+//
+// The global handler matches on spinner.TickMsg and returns (a, nil) for any state
+// other than viewOnboarding+stepOAuth. Before the fix, the raw spinner.TickMsg from
+// uikit.Spinner.Init() hit that handler first and was dropped, so the search overlay's
+// spinner never animated.
+//
+// After the fix, the tick arrives as panes.searchSpinnerTickMsg (private wrapper),
+// which the global handler does not recognise. It falls through to the
+// "if a.searchOpen" block at handlers.go:1091 and is forwarded to searchPane.Update(),
+// which returns a non-nil re-arm cmd.
+func TestApp_SearchSpinnerTick_NotDroppedByGlobalHandler(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Open search via '/' — this calls openSearch() → searchPane.Init()
+	// The Init() cmd includes wrapSearchSpinnerTick(o.sp.Init()), producing
+	// a searchSpinnerTickMsg instead of a raw spinner.TickMsg.
+	model, openCmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	a = model.(*app.App)
+	require.True(t, a.SearchOpen(), "search must be open after '/'")
+	require.NotNil(t, openCmd, "openSearch must return a non-nil init cmd")
+
+	// Execute the batch returned by openSearch to find the wrapped spinner tick.
+	openMsg := openCmd()
+	batchMsg, ok := openMsg.(tea.BatchMsg)
+	require.True(t, ok, "openSearch cmd must fire a BatchMsg, got %T", openMsg)
+
+	// Find the spinner tick sub-command in the batch and feed its message
+	// through the production app.Update() path. If the spinner message were
+	// the raw spinner.TickMsg it would be dropped by handlers.go:148 and
+	// returnedCmd would be nil. With the fix, it must be non-nil (re-armed).
+	var foundSpinnerTick bool
+	for _, subCmd := range batchMsg {
+		if subCmd == nil {
+			continue
+		}
+		subMsg := subCmd()
+		if subMsg == nil {
+			continue
+		}
+		// Feed into the real app.Update() — the production code path.
+		_, returnedCmd := a.Update(subMsg)
+		if returnedCmd != nil {
+			// Non-nil cmd means the message was forwarded to the overlay and
+			// the spinner re-armed. This is the regression-sensitive assertion.
+			foundSpinnerTick = true
+			break
+		}
+	}
+	assert.True(t, foundSpinnerTick,
+		"search spinner tick must survive app.Update() and re-arm (not be dropped by global spinner handler)")
+}

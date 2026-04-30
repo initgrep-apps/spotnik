@@ -1775,48 +1775,44 @@ func TestResizeList_SearchClearedMsg_WithNonEmptyInput(t *testing.T) {
 
 // --- Story 94: Spinner fix tests ---
 
-// TestSearchSpinnerTick_ReturnsNonNilCmd verifies that SearchSpinnerTickCmd() returns
-// a non-nil tea.Cmd.
+// TestSearchSpinnerTick_ReturnsNonNilCmd verifies that SearchSpinnerInitCmd(o) returns
+// a non-nil tea.Cmd for a fresh overlay.
 func TestSearchSpinnerTick_ReturnsNonNilCmd(t *testing.T) {
-	cmd := panes.SearchSpinnerTickCmd()
-	assert.NotNil(t, cmd, "searchSpinnerTick() must return a non-nil tea.Cmd")
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	cmd := panes.SearchSpinnerInitCmd(o)
+	assert.NotNil(t, cmd, "SearchSpinnerInitCmd must return a non-nil tea.Cmd")
 }
 
-// TestSearchSpinnerTick_FiresSearchSpinnerTickMsg verifies that executing the cmd returned
-// by SearchSpinnerTickCmd() produces a message that is accepted as a spinner tick by the
-// overlay (i.e. it is a searchSpinnerTickMsg, not a spinner.TickMsg).
-// We verify this indirectly: send the cmd result to the overlay's Update and confirm it
-// advances the spinner (non-panic, returns a new cmd that is also non-nil).
+// TestSearchSpinnerTick_CmdFiresCorrectType verifies that executing SearchSpinnerInitCmd(o)
+// produces a message that, when forwarded to overlay.Update(), re-arms the spinner
+// (i.e. returns a non-nil cmd from the default forwarding branch).
 func TestSearchSpinnerTick_CmdFiresCorrectType(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 
-	cmd := panes.SearchSpinnerTickCmd()
+	// SearchSpinnerInitCmd uses the overlay's own spinner Init cmd, so the resulting
+	// TickMsg carries the correct spinner ID and is accepted by o.sp.Update().
+	cmd := panes.SearchSpinnerInitCmd(o)
 	require.NotNil(t, cmd)
 
-	// Execute the cmd — it should fire after 130ms, but for type checking we execute it
-	// directly (tea.Cmd is a function, so we call it).
-	// The returned message must be handled by searchSpinnerTickMsg case (not fall-through).
 	msg := cmd()
 	require.NotNil(t, msg, "cmd must fire a non-nil message")
 
-	// Send the message to Update — the spinner case must process it and re-arm with
-	// another cmd. If it were a spinner.TickMsg it would fall through to textinput.Update
-	// and return nil cmd.
+	// Send the message to Update — the default branch forwards it to o.sp.Update()
+	// which advances the frame and returns a new tick cmd.
 	model, returnedCmd := o.Update(msg)
 	updated := model.(*panes.SearchOverlay)
 	_ = updated
-	// The searchSpinnerTickMsg handler re-arms with searchSpinnerTick(), so returned
-	// cmd must be non-nil.
-	assert.NotNil(t, returnedCmd, "searchSpinnerTickMsg handler must re-arm with a new cmd")
+	// The spinner's Update re-arms with the next tick cmd.
+	assert.NotNil(t, returnedCmd, "spinner Update must re-arm with a new cmd")
 }
 
-// TestSearchOverlay_Init_NoRawSpinnerTickMsg verifies that Init() includes at least one
-// sub-command that, when executed and passed to Update(), causes the spinner frame to
-// advance — confirming the batch uses searchSpinnerTickMsg (not the raw spinner.TickMsg
-// which falls through to the textinput case without advancing the spinner).
-func TestSearchOverlay_Init_NoRawSpinnerTickMsg(t *testing.T) {
+// TestSearchOverlay_Init_SpinnerTickAdvancesFrame verifies that Init() includes
+// the uikit.Spinner's tick cmd, which when executed and fed back to Update()
+// causes the spinner frame to advance.
+func TestSearchOverlay_Init_SpinnerTickAdvancesFrame(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
@@ -1832,8 +1828,8 @@ func TestSearchOverlay_Init_NoRawSpinnerTickMsg(t *testing.T) {
 	require.True(t, ok, "Init() must return a BatchMsg, got %T", msg)
 
 	// Process every sub-command in the batch and look for one that advances the spinner.
-	// A searchSpinnerTickMsg causes spinner.Update() to advance the frame; a raw
-	// spinner.TickMsg would fall through to textinput.Update and not advance the frame.
+	// The uikit.Spinner's tick cmd fires a TickMsg that the overlay's default Update
+	// branch forwards to o.sp.Update(), advancing the animation frame.
 	var spinnerAdvanced bool
 	for _, subCmd := range batchMsg {
 		if subCmd == nil {
@@ -1850,27 +1846,26 @@ func TestSearchOverlay_Init_NoRawSpinnerTickMsg(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, spinnerAdvanced, "Init() batch must include a searchSpinnerTickMsg cmd that advances the spinner frame")
+	assert.True(t, spinnerAdvanced, "Init() batch must include a spinner tick cmd that advances the spinner frame")
 }
 
-// TestSearchSpinnerTickMsg_ReArmsWithSearchSpinnerTickMsg verifies that sending a
-// searchSpinnerTickMsg to Update re-arms with another searchSpinnerTickMsg (not spinner.TickMsg).
-// We verify this by executing the returned cmd and sending the result back to Update —
-// the chain must remain intact for 5 consecutive ticks.
+// TestSearchSpinnerTickMsg_ReArms verifies that the spinner tick chain remains intact:
+// each tick fires a TickMsg that, when forwarded by Update's default branch to
+// o.sp.Update(), re-arms with a new tick cmd for 5 consecutive iterations.
 func TestSearchSpinnerTickMsg_ReArms(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 
-	// Obtain the initial cmd from SearchSpinnerTickCmd (our wrapper).
-	cmd := panes.SearchSpinnerTickCmd()
+	// Use SearchSpinnerInitCmd to start the chain from the overlay's own spinner.
+	cmd := panes.SearchSpinnerInitCmd(o)
 	require.NotNil(t, cmd)
 	msg := cmd()
 
 	for i := 0; i < 5; i++ {
 		model, retCmd := o.Update(msg)
 		o = model.(*panes.SearchOverlay)
-		require.NotNil(t, retCmd, "tick #%d: handler must re-arm", i+1)
+		require.NotNil(t, retCmd, "tick #%d: spinner must re-arm", i+1)
 		// Execute the returned cmd to get the next message in the chain.
 		msg = retCmd()
 		require.NotNil(t, msg, "tick #%d: re-arm cmd must fire a message", i+1)
@@ -1878,18 +1873,18 @@ func TestSearchSpinnerTickMsg_ReArms(t *testing.T) {
 }
 
 // TestSearchSpinnerTickMsg_AdvancesFrame verifies that the spinner frame advances
-// after receiving searchSpinnerTickMsg messages.
+// after receiving spinner tick messages via the overlay's own Init cmd chain.
 func TestSearchSpinnerTickMsg_AdvancesFrame(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
 	o.SetSize(80, 40)
 
 	// Capture the initial spinner view.
-	// NOTE: spinner.View() is always available (spinner is internal to SearchOverlay).
 	initialFrame := panes.SpinnerView(o)
 
 	// Drive 5 spinner ticks — the frame must change at least once in those 5 ticks.
-	cmd := panes.SearchSpinnerTickCmd()
+	// Use SearchSpinnerInitCmd to ensure the TickMsg carries the correct spinner ID.
+	cmd := panes.SearchSpinnerInitCmd(o)
 	require.NotNil(t, cmd)
 	msg := cmd()
 	for i := 0; i < 5; i++ {
@@ -1922,6 +1917,52 @@ func TestRenderTabBar_ShowsSpinnerWhenLoading(t *testing.T) {
 	assert.NotEmpty(t, tabBar, "tab bar must render without panic")
 }
 
+// TestSearchOverlay_Spinner_AsciiRunningFrames verifies that in ASCII mode the search
+// spinner renders rotating-bar frames (|/−\) and never emits braille codepoints.
+// Regression guard: if GlyphMode routing breaks, the unicode braille frames bleed through.
+func TestSearchOverlay_Spinner_AsciiRunningFrames(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	// Set loadingFirstPage so the spinner is shown in the results panel.
+	model, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = model.(*panes.SearchOverlay)
+	require.True(t, o.LoadingFirstPage(), "prerequisite: loadingFirstPage must be true")
+
+	// Drive the spinner forward several ticks to advance the frame.
+	cmd := panes.SearchSpinnerInitCmd(o)
+	require.NotNil(t, cmd)
+	msg := cmd()
+	for i := 0; i < 8; i++ {
+		var retCmd tea.Cmd
+		model, retCmd = o.Update(msg)
+		o = model.(*panes.SearchOverlay)
+		if retCmd != nil {
+			msg = retCmd()
+		}
+	}
+
+	view := o.View()
+
+	// ASCII rotating-bar frames — at least one must appear in the rendered view.
+	containsASCIIFrame := strings.Contains(view, "|") ||
+		strings.Contains(view, "/") ||
+		strings.Contains(view, "-") ||
+		strings.Contains(view, `\`)
+	assert.True(t, containsASCIIFrame, "ASCII mode spinner must render one of |, /, -, \\ in view")
+
+	// Unicode braille frames must NOT appear.
+	brailleFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	for _, frame := range brailleFrames {
+		assert.NotContains(t, view, frame,
+			"ASCII mode spinner must not render braille frame %q", frame)
+	}
+}
+
 // TestRenderTabBar_NoSpinnerWhenNotLoading verifies that the tab bar does not contain
 // spinner characters when no loading state is active.
 // TODO(19-search-redesign): story 99 will restore spinner-in-tabbar control via o.results.
@@ -1949,7 +1990,7 @@ func TestRenderTabBar_ShowsSpinnerWhenLoadingWithZeroItems(t *testing.T) {
 	o.SetSize(80, 40)
 
 	// Tick the spinner once so its frame is initialized.
-	cmd := panes.SearchSpinnerTickCmd()
+	cmd := panes.SearchSpinnerInitCmd(o)
 	require.NotNil(t, cmd)
 	tickMsg := cmd()
 	model, _ := o.Update(tickMsg)

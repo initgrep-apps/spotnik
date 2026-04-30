@@ -1,7 +1,7 @@
 ---
 title: "Pane content cleanup: devices content / search spinner / search_delegate"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background

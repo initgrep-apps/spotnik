@@ -71,6 +71,30 @@ type searchDebounceMsg struct {
 	intent searchIntent
 }
 
+// searchSpinnerTickMsg wraps bubbles/spinner.TickMsg so the search overlay's
+// spinner ticks are never intercepted by the global spinner.TickMsg handler in
+// app/handlers.go (which is reserved for the onboarding spinner).
+// This is the same isolation pattern established in story 94.
+type searchSpinnerTickMsg spinner.TickMsg
+
+// wrapSearchSpinnerTick takes a cmd returned by bubbles/spinner.Update (or Init)
+// and wraps any resulting spinner.TickMsg in searchSpinnerTickMsg so it stays
+// invisible to the global handler. Must be applied to every spinner command
+// in the chain — not just the first one — because bubbles re-arms its own tick
+// on every update.
+func wrapSearchSpinnerTick(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg := cmd()
+		if t, ok := msg.(spinner.TickMsg); ok {
+			return searchSpinnerTickMsg(t)
+		}
+		return msg
+	}
+}
+
 // SearchClosedMsg is emitted when the user presses Esc, signalling the root
 // app model to close the overlay and restore the previous pane focus.
 type SearchClosedMsg struct{}
@@ -85,9 +109,6 @@ type SearchRequestMsg struct {
 	Types []string
 	Page  int // 1-based page number; reflects intent.page at debounce fire time
 }
-
-// searchSpinnerTickMsg is used by the bubbles/spinner to advance its frame.
-type searchSpinnerTickMsg spinner.TickMsg
 
 // searchKeyMap holds only the bindings advertised in the search overlay's
 // bottom keybar. Enter (play) and Esc (close) are handled in Update() but
@@ -141,10 +162,10 @@ func NewSearchKeyMap() searchKeyMap {
 //   - Panel 2 (Results): tab bar + separator + scrollable results list
 //   - Panel 3 (Keys): uikit.KeyBar single-line keybinding strip
 type SearchOverlay struct {
-	theme   theme.Theme
-	input   textinput.Model
-	spinner spinner.Model
-	keyMap  searchKeyMap
+	theme  theme.Theme
+	input  textinput.Model
+	sp     *uikit.Spinner
+	keyMap searchKeyMap
 
 	// resultList is the bubbles/list model used in the results panel.
 	// Story 84 will wire actual items into it; here it is initialized and sized.
@@ -209,10 +230,6 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti.CompletionStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
 	ti.Focus()
 
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(t.TextMuted())
-
 	km := NewSearchKeyMap()
 
 	// Initialize the list.Model with the custom SearchItemDelegate.
@@ -231,9 +248,13 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	rl.InfiniteScrolling = false
 
 	return &SearchOverlay{
-		theme:      t,
-		input:      ti,
-		spinner:    sp,
+		theme: t,
+		input: ti,
+		// Spinner text is empty so each render site can supply its own context label
+		// ("Searching…" on first page load, "Loading…" on next-page fetch).
+		// uikit.Spinner.View() returns "frame " (frame + space) when text is empty,
+		// so callers append their label directly: sp.View() + "Searching…".
+		sp:         uikit.NewSpinner("", t),
 		keyMap:     km,
 		resultList: rl,
 		intent:     searchIntent{query: "", tab: TabAll, page: 1},
@@ -393,25 +414,19 @@ func (o *SearchOverlay) resizeList() {
 	o.lastSetListH = listH
 }
 
-// Init starts the cursor blink loop, placeholder ticker, and emits SearchClearedMsg
-// so each search session begins with a clean state (previous results and query are discarded).
-// searchSpinnerTick() is used instead of o.spinner.Tick so the spinner advances via the
-// private searchSpinnerTickMsg type, preventing cross-component spinner.TickMsg interference.
+// Init starts the cursor blink loop, placeholder ticker, spinner tick, and emits
+// SearchClearedMsg so each search session begins with a clean state.
+// The spinner's init command is wrapped in wrapSearchSpinnerTick so its ticks
+// use searchSpinnerTickMsg instead of the raw spinner.TickMsg, preventing
+// the global onboarding spinner handler (handlers.go) from silently dropping them.
 func (o *SearchOverlay) Init() tea.Cmd {
 	clearCmd := func() tea.Msg { return SearchClearedMsg{} }
-	return tea.Batch(textinput.Blink, searchSpinnerTick(), clearCmd, searchPlaceholderTick())
+	return tea.Batch(textinput.Blink, wrapSearchSpinnerTick(o.sp.Init()), clearCmd, searchPlaceholderTick())
 }
 
 // Update handles all messages for the search overlay.
 func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
-	case searchSpinnerTickMsg:
-		// Advance the spinner frame. Ignore the cmd returned by spinner.Update because
-		// it fires spinner.TickMsg (the raw bubbles type), not searchSpinnerTickMsg.
-		// We re-arm manually with searchSpinnerTick() to keep the private type in the loop.
-		o.spinner, _ = o.spinner.Update(spinner.TickMsg(m))
-		return o, searchSpinnerTick()
-
 	case searchPlaceholderTickMsg:
 		// Advance the cycling placeholder only when the input is empty.
 		// When the user has typed something the tick is not re-armed, so cycling stops.
@@ -479,12 +494,22 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return o.handleKey(m)
+
+	case searchSpinnerTickMsg:
+		// Drive the spinner frame forward. Re-wrap the returned tick command so
+		// each subsequent tick also arrives as searchSpinnerTickMsg (not raw
+		// spinner.TickMsg), keeping it invisible to the global onboarding handler.
+		var spCmd tea.Cmd
+		o.sp, spCmd = o.sp.Update(spinner.TickMsg(m))
+		return o, wrapSearchSpinnerTick(spCmd)
 	}
 
-	// Forward key events to text input for cursor blinking.
-	var cmd tea.Cmd
-	o.input, cmd = o.input.Update(msg)
-	return o, cmd
+	// Forward all other messages to the text input (cursor blink, etc.).
+	// NOTE: raw spinner.TickMsg is intentionally NOT forwarded here — the search
+	// overlay's spinner ticks arrive exclusively as searchSpinnerTickMsg above.
+	var inputCmd tea.Cmd
+	o.input, inputCmd = o.input.Update(msg)
+	return o, inputCmd
 }
 
 // handleDebounce is called when a searchDebounceMsg arrives. It discards stale
@@ -808,7 +833,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 	if o.loadingNextPage {
 		spinnerLine = lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
-			Render(o.spinner.View() + " Loading…")
+			Render(o.sp.View() + "Loading…")
 	}
 
 	// Calculate extra lines consumed by optional elements.
@@ -833,7 +858,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		centered := lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Width(innerWidth).Align(lipgloss.Center).
-			Render(o.spinner.View() + " Searching…")
+			Render(o.sp.View() + "Searching…")
 		resultsArea = lipgloss.NewStyle().
 			Width(innerWidth).MaxWidth(innerWidth).
 			Height(resultsAreaH).MaxHeight(resultsAreaH).
@@ -1033,17 +1058,6 @@ func (o *SearchOverlay) overlayHeight() int {
 	return h
 }
 
-// searchSpinnerTick returns a tea.Cmd that fires searchSpinnerTickMsg after 130ms.
-// The 130ms interval matches the spinner.Dot tick rate from bubbles/spinner.
-// We wrap the tick as searchSpinnerTickMsg instead of using o.spinner.Tick directly
-// because spinner.Tick fires spinner.TickMsg, which our Update handler does not match
-// (intentional isolation to prevent cross-component interference).
-func searchSpinnerTick() tea.Cmd {
-	return tea.Tick(130*time.Millisecond, func(_ time.Time) tea.Msg {
-		return searchSpinnerTickMsg{}
-	})
-}
-
 // scheduleDebounce snapshots the current intent and returns a 300ms tick.
 // When the tick fires, handleDebounce compares the snapshot to the current
 // intent — if they differ, the tick is discarded (the user has since moved on).
@@ -1067,8 +1081,9 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	o.theme = th
 	// Update the list delegate so badge and selection colors use the new theme.
 	o.resultList.SetDelegate(NewSearchItemDelegate(th))
-	// Update spinner foreground so loading indicator uses the new theme.
-	o.spinner.Style = lipgloss.NewStyle().Foreground(th.TextMuted())
+	// Reconstruct spinner so loading indicator uses the new theme's colors.
+	// Empty text: each render site appends its own context label.
+	o.sp = uikit.NewSpinner("", th)
 	// Update placeholder style so the cycling hints use the new Info() color.
 	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
@@ -1114,17 +1129,19 @@ func SearchDebounceMsgWithIntentForTest(o *SearchOverlay) tea.Msg {
 	return searchDebounceMsg{intent: o.intent}
 }
 
-// SearchSpinnerTickCmd exposes the private searchSpinnerTick() function for tests.
-// Tests that need to drive the spinner should use this to obtain a cmd, execute it,
-// and pass the resulting message to overlay.Update().
-func SearchSpinnerTickCmd() tea.Cmd {
-	return searchSpinnerTick()
+// SearchSpinnerInitCmd returns the overlay's spinner Init() cmd wrapped in
+// wrapSearchSpinnerTick so the resulting TickMsg arrives as searchSpinnerTickMsg
+// and is handled by Update's explicit case — not intercepted by the global
+// onboarding spinner handler in handlers.go.
+// Exported for tests that drive the spinner tick chain manually.
+func SearchSpinnerInitCmd(o *SearchOverlay) tea.Cmd {
+	return wrapSearchSpinnerTick(o.sp.Init())
 }
 
 // SpinnerView returns the current rendered spinner frame string — exported for tests
 // that need to detect frame advancement.
 func SpinnerView(o *SearchOverlay) string {
-	return o.spinner.View()
+	return o.sp.View()
 }
 
 // RenderTabBarForTest calls renderTabBar with the given inner width and returns the result.
@@ -1133,10 +1150,10 @@ func RenderTabBarForTest(o *SearchOverlay, innerWidth int) string {
 	return o.renderTabBar(innerWidth)
 }
 
-// ContainsSpinnerFrame returns true when s contains the current spinner frame string.
+// ContainsSpinnerFrame returns true when s contains the current spinner view string.
 // Used in tests to verify the spinner appears (or does not appear) in rendered output.
 func ContainsSpinnerFrame(o *SearchOverlay, s string) bool {
-	frame := o.spinner.View()
+	frame := o.sp.View()
 	return frame != "" && strings.Contains(s, frame)
 }
 
