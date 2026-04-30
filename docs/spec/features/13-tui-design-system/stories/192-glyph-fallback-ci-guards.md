@@ -1,7 +1,7 @@
 ---
 title: "CI guards: banned-glyph + catalogue-leak + chrome-caller, LANG=C matrix, smoke test"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
