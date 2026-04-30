@@ -314,21 +314,13 @@ func renderStyledLines(lines viz.Frame) string {
 
 // renderEmpty shows the "Nothing playing" empty state, centered in the pane.
 func (p *NowPlayingPane) renderEmpty() string {
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	content := lipgloss.JoinVertical(lipgloss.Center,
-		mutedStyle.Render("Nothing playing"),
-		"",
-		mutedStyle.Render("Open Spotify on a device"),
-		mutedStyle.Render("and start playing music"),
-	)
-
-	// Center the content block within the available pane dimensions.
-	bodyHeight := paneMax(p.height-4, 6) // subtract header + padding
-	centered := lipgloss.Place(paneMax(p.width-4, 20), bodyHeight,
-		lipgloss.Center, lipgloss.Center, content)
-
-	return centered
+	return uikit.EmptyState{
+		Text:   "Nothing playing",
+		Hint:   "Open Spotify on a device and start playing music",
+		Width:  p.width,
+		Height: p.height,
+		Theme:  p.theme,
+	}.Render()
 }
 
 // handleTick processes a TickMsg: increments local progress when playing.
