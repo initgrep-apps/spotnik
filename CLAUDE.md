@@ -18,13 +18,13 @@ Target user: developer with Spotify Premium who lives in the terminal all day.
 
 Read **this file** and **your feature spec**. That's it.
 
-`docs/ARCHITECTURE.md` and `docs/DESIGN.md` are reference docs — consult them only when
+`docs/system/architecture.md` and `docs/system/design.md` are reference docs — consult them only when
 the feature spec explicitly points you to a pattern or layout you need to look up.
 
-When writing or modifying CLI output, consult `docs/CLI-OUTPUT.md` — the canonical
+When writing or modifying CLI output, consult `docs/system/cli.md` — the canonical
 reference for message types, glyphs, palette, and interactive prompts.
 
-When writing or modifying TUI primitives, consult `docs/TUI-DESIGN-SYSTEM.md` — the
+When writing or modifying TUI primitives, consult `docs/system/tui.md` — the
 canonical reference for primitives, glyph catalogue, and role matrix.
 
 ---
@@ -61,7 +61,7 @@ go 1.26
 
 ## Project Layout
 
-Full structure with annotations is in `docs/ARCHITECTURE.md`. Top-level overview:
+Full structure with annotations is in `docs/system/architecture.md`. Top-level overview:
 
 ```
 spotnik/
@@ -112,7 +112,7 @@ docs/spec/
 
 ## Architecture Rules
 
-Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non-negotiables:
+Full patterns and code examples are in `docs/system/architecture.md`. These are the non-negotiables:
 
 - **All API data lives in the Store** — never in a pane struct
 - **Side effects only via Commands** — never call API inside `Update()` directly
@@ -121,7 +121,7 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 - **Panes never talk to each other** — only through messages routed via root model
 - **`ui/` never imports `api/`** — data flows through messages and store only
 - **`api/` never imports `ui/`** — one-way dependency enforced
-- **Commands must not mutate the Store** — return data in Msg payloads; only `Update()` writes to Store. Msg types carry `Data` + `Err error` fields. See `docs/ARCHITECTURE.md` "Data-Carrying Messages" section for before/after examples.
+- **Commands must not mutate the Store** — return data in Msg payloads; only `Update()` writes to Store. Msg types carry `Data` + `Err error` fields. See `docs/system/architecture.md` "Data-Carrying Messages" section for before/after examples.
 - **All API errors route through toast notifications** — use `a.alerts.NewAlertCmd(type, msg)` from `app.go` Update handlers. Pane `View()` methods must never render inline error boxes or read store error fields for display.
 
 ---
@@ -143,7 +143,7 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 
 - **80% coverage minimum** — `make test-coverage` enforces this, CI fails below threshold
 - Every function in `api/`, `state/`, `config/` needs a test
-- Style: **table-driven** — see `docs/ARCHITECTURE.md` for the pattern
+- Style: **table-driven** — see `docs/system/architecture.md` for the pattern
 - API mocks: use `httptest.NewServer` — no external mock libraries
 - Fixtures: JSON responses in `testdata/fixtures/` named descriptively
 
@@ -162,12 +162,12 @@ Full patterns and code examples are in `docs/ARCHITECTURE.md`. These are the non
 
 ## Design Rules
 
-Full spec is in `docs/DESIGN.md` — read it before any UI work. Hard rules:
+Full spec is in `docs/system/design.md` — read it before any UI work. Hard rules:
 
-- **Grid layout managed by LayoutManager** — 10 panes across 2 pages, configured via presets; see `docs/DESIGN.md` for full spec
+- **Grid layout managed by LayoutManager** — 10 panes across 2 pages, configured via presets; see `docs/system/design.md` for full spec
 - **Never hardcode hex values** — always use `Theme` interface tokens
 - **Default theme is `black`** — config key `theme = "black"`
-- **Keybindings are frozen** — full table in `docs/DESIGN.md` §17, update there first if changing
+- **Keybindings are frozen** — full table in `docs/system/design.md` §17, update there first if changing
 - **Rounded corners only** — `╭╮╰╯`, never `┌┐└┘`
 - **Status bar always visible** — never hide or remove it
 
@@ -218,7 +218,7 @@ Follow this sequence exactly for every feature — no shortcuts.
 3. Add a feature not in `docs/spec/features/` without creating a spec first
 4. Call API synchronously from `View()` or `Update()`
 5. Skip writing tests for new `api/`, `state/`, `config/` code
-6. Change keybindings without updating `docs/DESIGN.md`
+6. Change keybindings without updating `docs/system/design.md`
 7. Use `panic()` in production code paths
 8. Use `time.Sleep()` — use `tea.Tick`
 9. Import `ui/` from `api/` or `api/` from `ui/`
@@ -228,12 +228,12 @@ Follow this sequence exactly for every feature — no shortcuts.
 13. Merge a PR — unless you are the orchestrator agent after external review passes
 14. Render inline error boxes in pane `View()` methods — all API errors go through toast notifications via `a.alerts.NewAlertCmd`
 15. Add, change, or remove a keybinding without updating all three locations in the
-    same commit: `docs/keybinding.md`, `docs/DESIGN.md §17`, and the `helpContent` var in
+    same commit: `docs/keybinding.md`, `docs/system/design.md §17`, and the `helpContent` var in
     `internal/ui/panes/help_overlay.go`.
 16. Add a new message type or glyph to `internal/cliout` without updating
-    `docs/CLI-OUTPUT.md` in the same commit.
+    `docs/system/cli.md` in the same commit.
 17. Add a new primitive, glyph, or role to `internal/uikit` without updating
-    `docs/TUI-DESIGN-SYSTEM.md` in the same commit.
+    `docs/system/tui.md` in the same commit.
 
 ---
 
@@ -241,7 +241,7 @@ Follow this sequence exactly for every feature — no shortcuts.
 
 All keybindings are documented in three places that must stay in sync:
 - `docs/keybinding.md` — human-readable reference (canonical for external readers)
-- `docs/DESIGN.md §17` — spec-level keybinding table
+- `docs/system/design.md §17` — spec-level keybinding table
 - `internal/ui/panes/help_overlay.go` `helpContent` var — in-app help overlay display
 
 When adding, changing, or removing any keybinding, update all three in the same commit.

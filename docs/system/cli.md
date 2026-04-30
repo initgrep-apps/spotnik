@@ -4,7 +4,7 @@ This document is the canonical reference for all CLI output in spotnik. Read it 
 writing or modifying any CLI subcommand output. It supersedes the informal guidelines
 in story `09-auth-and-profile/stories/145-cli-auth-ux-polish-2.md`.
 
-**See also:** `docs/DESIGN.md` (TUI theme tokens) · `docs/keybinding.md` (keybindings)
+**See also:** `design.md` (TUI theme tokens) · `../keybinding.md` (keybindings)
 
 ---
 
@@ -15,7 +15,7 @@ typed message taxonomy, palette-aware rendering, TTY detection, and a test helpe
 structural assertions. Every user-facing CLI string must go through this package — no
 direct `fmt.Fprintln` for user-facing output.
 
-TUI panes and pane borders are governed by `docs/DESIGN.md` — not this document.
+TUI panes and pane borders are governed by `design.md` — not this document.
 CLI output and TUI output share theme tokens when `cli.palette = "theme"` is set, but
 they are rendered by separate code paths.
 
@@ -347,9 +347,9 @@ Follow this checklist when adding a new `spotnik` subcommand or output block:
 - **Supersedes:** inline CLI output guidelines in
   `docs/spec/features/09-auth-and-profile/stories/145-cli-auth-ux-polish-2.md`. Those
   guidelines are now stale; this document is the canonical reference.
-- **TUI output:** governed exclusively by `docs/DESIGN.md`. Theme tokens, pane borders,
+- **TUI output:** governed exclusively by `design.md`. Theme tokens, pane borders,
   and visualiser colours are out of scope for this document.
-- **Keybindings:** governed by `docs/keybinding.md`. The two documents do not overlap.
+- **Keybindings:** governed by `../keybinding.md`. The two documents do not overlap.
 - **Design record:** `docs/superpowers/specs/2026-04-22-cli-output-design.md` contains
   the full rationale (brainstorming decisions, advisor gap resolutions). Consult it for
   the "why"; consult this document for the "what".

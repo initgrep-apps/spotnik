@@ -168,4 +168,4 @@ spotnik/
 └── docs/                ← architecture, design, and spec documentation
 ```
 
-For the full architecture reference see [ARCHITECTURE.md](ARCHITECTURE.md).
+For the full architecture reference see [system/architecture.md](system/architecture.md).

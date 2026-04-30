@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — Technical Reference
+# Architecture — Technical Reference
 
 > **Reference only.** Feature specs embed the patterns you need inline.
 > Consult this document when you need deeper context on a pattern the feature spec points to.

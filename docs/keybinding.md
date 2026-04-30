@@ -1,6 +1,6 @@
 # Spotnik Keybindings
 
-> **Keep this file in sync** with `docs/DESIGN.md §17` and the `helpContent` var
+> **Keep this file in sync** with `docs/system/design.md §17` and the `helpContent` var
 > in `internal/ui/panes/help_overlay.go` whenever any keybinding changes.
 
 ---

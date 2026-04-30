@@ -16,7 +16,7 @@ const (
 )
 
 // Glyph roles. Grouped by category. Additions require updating
-// docs/TUI-DESIGN-SYSTEM.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
+// docs/system/tui.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
 const (
 	// Structural / borders
 	GlyphCornerTL       GlyphRole = "corner.tl"
@@ -132,7 +132,7 @@ const (
 )
 
 // glyphTable holds the unicode + ascii forms for every role. Additions require
-// updating docs/TUI-DESIGN-SYSTEM.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
+// updating docs/system/tui.md §4 (glyph catalogue) in the same PR per CLAUDE.md rule 17.
 var glyphTable = map[GlyphRole][2]string{
 	// Structural
 	GlyphCornerTL:       {"╭", "+"},
