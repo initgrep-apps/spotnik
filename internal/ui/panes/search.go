@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
@@ -766,16 +765,13 @@ func (o *SearchOverlay) renderSearchPanel(w, h int) string {
 		Height(h - 2).MaxHeight(h - 2).
 		Render(inner)
 
-	cfg := layout.BorderConfig{
-		Width:       w,
-		Height:      h,
-		Title:       "Search",
-		Actions:     []layout.Action{},
-		AccentColor: o.theme.ActiveBorder(),
-		Focused:     true, // search bar is always focused — it captures all input
-		Theme:       o.theme,
+	chrome := uikit.OverlayChrome{
+		Width:  w,
+		Height: h,
+		Title:  "Search",
+		Theme:  o.theme,
 	}
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // renderResultsPanel builds Panel 2: the tab bar, separator, optional spinner line,
@@ -866,18 +862,16 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		Height(innerHeight).MaxHeight(innerHeight).
 		Render(inner)
 
-	cfg := layout.BorderConfig{
-		Width:   w,
-		Height:  h,
-		Title:   "Results",
-		Actions: nil,
-		// SeekBar() (cyan-family) is distinct from Search's ActiveBorder() (bright blue/green)
-		// and Keys' TextMuted() (dim), giving the three panels a clear visual hierarchy.
-		AccentColor: o.theme.SeekBar(),
-		Focused:     false, // dimmer than the search bar
-		Theme:       o.theme,
+	// NOTE: OverlayChrome uses Accent() and Focused=true, consolidating the three panels
+	// under a uniform glyph-aware border. The former SeekBar()/TextMuted() accent distinction
+	// was a visual-hierarchy hint; OverlayChrome is the canonical overlay primitive.
+	chrome := uikit.OverlayChrome{
+		Width:  w,
+		Height: h,
+		Title:  "Results",
+		Theme:  o.theme,
 	}
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // renderTabBar renders the tab selector row inside Panel 2.
@@ -931,16 +925,13 @@ func (o *SearchOverlay) renderHelpPanel(w, h int) string {
 		Height(h - 2).MaxHeight(h - 2).
 		Render(bar)
 
-	cfg := layout.BorderConfig{
-		Width:       w,
-		Height:      h,
-		Title:       "",
-		Actions:     []layout.Action{},
-		AccentColor: o.theme.TextMuted(),
-		Focused:     false,
-		Theme:       o.theme,
+	chrome := uikit.OverlayChrome{
+		Width:  w,
+		Height: h,
+		Title:  "",
+		Theme:  o.theme,
 	}
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // hintBindings returns the synthetic key.Binding list rendered by the bottom

@@ -11,6 +11,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -3004,4 +3005,53 @@ func TestSearchOverlay_View_ResultsPanel_NoCornerActions(t *testing.T) {
 
 	assert.NotContains(t, plain, "Enter play", "corner-notch 'Enter play' must be removed")
 	assert.NotContains(t, plain, "Ctrl+A queue", "corner-notch 'Ctrl+A queue' must be removed")
+}
+
+// TestSearchOverlay_AsciiBorder_Idle verifies that the search overlay (idle/no
+// query state) renders ASCII-safe border corner glyphs when the uikit mode is
+// ASCII. Corner characters (╭╮╰╯) and vertical bars (│) must not appear in
+// ASCII mode. The inner tab-separator (─) is a content character hardcoded in
+// search.go:803 and is intentionally excluded from this assertion.
+func TestSearchOverlay_AsciiBorder_Idle(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	out := stripANSI(o.View())
+	assert.False(t, strings.ContainsAny(out, "╭╮╰╯│"), "ASCII mode should not contain unicode box-drawing corners or vertical bars")
+	// Note: ─ is excluded because internal/ui/panes/search.go:803 hardcodes a ─ separator in the tab bar (latent ASCII gap, tracked in issues.md)
+}
+
+// TestSearchOverlay_AsciiBorder_Loading verifies that the search overlay in a
+// loading state renders ASCII-safe border corner glyphs. The renderResultsPanel
+// code path is exercised with loadingFirstPage=true (spinner-only results area).
+func TestSearchOverlay_AsciiBorder_Loading(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+	// Trigger loading state so renderResultsPanel takes the loading code path.
+	model, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = model.(*panes.SearchOverlay)
+	out := stripANSI(o.View())
+	assert.False(t, strings.ContainsAny(out, "╭╮╰╯│"), "ASCII mode should not contain unicode box-drawing corners or vertical bars")
+	// Note: ─ is excluded because internal/ui/panes/search.go:803 hardcodes a ─ separator in the tab bar (latent ASCII gap, tracked in issues.md)
+}
+
+// TestSearchOverlay_AsciiBorder_Results verifies that the search overlay with
+// results loaded renders ASCII-safe border corner glyphs. The renderResultsPanel
+// code path is exercised with populated results (list + pagination bar area).
+func TestSearchOverlay_AsciiBorder_Results(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestSearchOverlayWithResults()
+	o.SetSize(80, 30)
+	out := stripANSI(o.View())
+	assert.False(t, strings.ContainsAny(out, "╭╮╰╯"), "ASCII mode should not contain unicode box-drawing corners")
+	// Note: ─ is excluded because internal/ui/panes/search.go:803 hardcodes a ─ separator in the tab bar.
+	// │ is excluded in the Results path because bubble-table renders │ column separators as inner content
+	// (third-party component, not OverlayChrome). Both are latent ASCII gaps tracked in issues.md.
 }

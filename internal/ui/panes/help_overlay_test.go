@@ -1,10 +1,14 @@
 package panes
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
+	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -147,4 +151,27 @@ func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestHelpOverlay_AsciiBorder verifies that the help overlay border renders
+// ASCII-safe characters when the uikit glyph mode is ASCII. Corner characters
+// (╭╮╰╯) and horizontal rules (─) must not appear. The inner column divider
+// (│) is content (see internal/ui/panes/help_overlay.go:140), not a border
+// glyph, so it is excluded from this assertion.
+func TestHelpOverlay_AsciiBorder(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestHelpOverlay()
+	o.SetSize(120, 40)
+	out := stripANSI(o.View())
+	// Corners and horizontal rule come from the border; these must be ASCII in ASCII mode.
+	if strings.ContainsAny(out, "╭╮╰╯─") {
+		t.Errorf("ascii overlay border must not contain unicode corner/rule glyphs, got: %q", out)
+	}
+	assert.Contains(t, out, "+", "ASCII mode should render '+' corners")
 }

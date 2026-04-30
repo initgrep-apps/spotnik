@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/state"
-	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // DeviceOverlay is the floating device-switcher overlay model.
@@ -163,16 +163,13 @@ func (d *DeviceOverlay) View() string {
 		totalHeight = 4
 	}
 
-	cfg := layout.BorderConfig{
-		Width:       totalWidth,
-		Height:      totalHeight,
-		Title:       "Devices",
-		AccentColor: d.theme.ActiveBorder(),
-		Focused:     true, // overlays are always focused
-		Theme:       d.theme,
+	chrome := uikit.OverlayChrome{
+		Width:  totalWidth,
+		Height: totalHeight,
+		Title:  "Devices",
+		Theme:  d.theme,
 	}
-
-	return layout.RenderPaneBorder(inner, cfg)
+	return chrome.Render(inner)
 }
 
 // overlayWidth computes the overlay width based on device name lengths.
