@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.dalton.dog/bubbleup"
@@ -220,4 +221,36 @@ func TestNewNotifications_AlertDoesNotInterfereWithGrid(t *testing.T) {
 	gridContent := "╭─ Playlists ─────────────╮\n│  Track 1                │\n╰─────────────────────────╯"
 	rendered := model.Render(gridContent)
 	assert.Contains(t, rendered, "╭─ Playlists", "grid content should pass through unchanged when no alert")
+}
+
+// TestNewNotifications_WarningPrefixIsExclamation_ASCII verifies that in ASCII mode
+// the warning alert prefix is "!" (ASCII warning glyph) and that "◬" does NOT appear.
+// This locks in that the NewNotifications wrapper honours ActiveMode() at registration
+// time — a regression where the prefix is hardcoded to the unicode glyph would fail here.
+func TestNewNotifications_WarningPrefixIsExclamation_ASCII(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load(theme.DefaultThemeID)
+	model := NewNotifications(th)
+
+	cmd := model.NewAlertCmd("warning", "Premium required")
+	require.NotNil(t, cmd)
+	msg := cmd()
+	updated, _ := model.Update(msg)
+	am, ok := updated.(bubbleup.AlertModel)
+	require.True(t, ok)
+
+	// Use 20 lines of content so the bottom-right positioned alert is visible.
+	var contentLines []string
+	for i := 0; i < 20; i++ {
+		contentLines = append(contentLines, strings.Repeat(" ", 70))
+	}
+	content := strings.Join(contentLines, "\n")
+	rendered := am.Render(content)
+
+	assert.Contains(t, rendered, "!",
+		"warning toast in ASCII mode must use '!' prefix")
+	assert.NotContains(t, rendered, "◬",
+		"warning toast in ASCII mode must not use unicode ◬ glyph")
 }
