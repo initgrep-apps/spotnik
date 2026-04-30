@@ -499,3 +499,57 @@ func TestDevicesOverlay_AsciiBorder(t *testing.T) {
 	}
 	assert.Contains(t, out, "+", "ASCII mode should render '+' corners")
 }
+
+// TestDevicesOverlay_EmptyState_AsciiContent verifies that when no devices are loaded
+// and ASCII mode is active, the empty state renders the correct text content and
+// uses ASCII chrome (+ corners) instead of unicode box-drawing characters.
+//
+// Regression guard for Fix 2: before the fix, the empty-state path returned early
+// without wrapping in OverlayChrome, so the border title "Devices" and chrome were absent.
+func TestDevicesOverlay_EmptyState_AsciiContent(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	o := newTestDeviceOverlay()
+	o.SetSize(50, 20)
+	// Explicitly ensure devices list is empty.
+	o.devices = []DeviceInfo{}
+
+	out := stripANSI(o.View())
+
+	// Content assertions.
+	assert.Contains(t, out, "No devices found", "empty state must show 'No devices found'")
+
+	// Chrome assertions: ASCII corners must appear; unicode box-drawing must not.
+	assert.Contains(t, out, "+", "ASCII mode empty state must render '+' corners from OverlayChrome")
+	if strings.ContainsAny(out, "╭╮╰╯") {
+		t.Errorf("ASCII mode empty state must not render unicode corners (╭╮╰╯), got: %q", out)
+	}
+}
+
+// TestDeviceOverlay_View_EmptyList_HasChrome verifies that the empty-state path for
+// the device overlay renders with OverlayChrome (border + title), not as bare text.
+// Regression guard: before Fix 2, the empty path returned early without chrome.
+func TestDeviceOverlay_View_EmptyList_HasChrome(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	o := newTestDeviceOverlay()
+	o.SetSize(60, 20)
+	o.devices = []DeviceInfo{}
+
+	view := o.View()
+
+	// The border title must appear inside the chrome.
+	assert.Contains(t, view, "Devices", "empty state chrome must show 'Devices' title")
+	// Rounded corners confirm OverlayChrome is used (unicode mode default).
+	assert.True(t,
+		strings.ContainsAny(view, "╭╮╰╯"),
+		"empty state must have chrome corners (╭╮╰╯)")
+	assert.Contains(t, view, "No devices found", "empty state content must appear inside chrome")
+}

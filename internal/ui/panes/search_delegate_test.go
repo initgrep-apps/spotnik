@@ -1123,3 +1123,39 @@ func TestSearchDelegate_AsciiCategorySymbols(t *testing.T) {
 		})
 	}
 }
+
+// TestSearchDelegate_WrapLine_AsciiSelectionBar verifies that in ASCII mode the selection
+// bar rendered by wrapLine(selected=true) uses "|" (ASCII VRule) instead of "│" (unicode).
+// The unselected branch must not contain any bar character in either mode.
+func TestSearchDelegate_WrapLine_AsciiSelectionBar(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	d := newTestDelegate()
+
+	// Selected branch — must contain "|" and not "│".
+	selectedOut := stripANSI(d.wrapLine("hello", true))
+	assert.Contains(t, selectedOut, "|", "ASCII mode selected wrapLine must contain '|'")
+	assert.NotContains(t, selectedOut, "│", "ASCII mode selected wrapLine must not contain unicode '│'")
+	assert.Contains(t, selectedOut, "hello", "selected wrapLine must include content")
+
+	// Unselected branch — must not contain a bar in either mode.
+	unselectedOut := stripANSI(d.wrapLine("hello", false))
+	assert.NotContains(t, unselectedOut, "|", "unselected wrapLine must not contain a bar")
+	assert.NotContains(t, unselectedOut, "│", "unselected wrapLine must not contain unicode '│'")
+	assert.Contains(t, unselectedOut, "hello", "unselected wrapLine must include content")
+}
+
+// TestSearchDelegate_StyledDot_AsciiSeparator verifies that in ASCII mode styledDot()
+// returns " | " (with surrounding spaces) using the ASCII GlyphSeparator form,
+// and never emits the unicode "·" middot character.
+func TestSearchDelegate_StyledDot_AsciiSeparator(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	d := newTestDelegate()
+	dotOut := stripANSI(d.styledDot())
+
+	assert.Contains(t, dotOut, " | ", "ASCII mode styledDot must return ' | ' (ASCII GlyphSeparator with spaces)")
+	assert.NotContains(t, dotOut, "·", "ASCII mode styledDot must not contain unicode '·'")
+}

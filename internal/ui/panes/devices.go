@@ -142,13 +142,26 @@ func (d *DeviceOverlay) View() string {
 	// NOTE: Device errors are routed through toast notifications (app.go).
 	// store.DevicesError() is preserved for retry logic but never read in View().
 	if len(d.devices) == 0 {
-		return uikit.EmptyState{
+		innerW := totalWidth - 2
+		if innerW < 2 {
+			innerW = 2
+		}
+		// Reserve enough height for the empty-state content (2 text lines + padding).
+		const emptyStateHeight = 6
+		inner := uikit.EmptyState{
 			Text:   "No devices found",
 			Hint:   "Open Spotify on a device to see it here",
-			Width:  d.width,
-			Height: d.height - 4,
+			Width:  innerW,
+			Height: emptyStateHeight - 2, // subtract border rows from inner height
 			Theme:  d.theme,
 		}.Render()
+		chrome := uikit.OverlayChrome{
+			Width:  totalWidth,
+			Height: emptyStateHeight,
+			Title:  "Devices",
+			Theme:  d.theme,
+		}
+		return chrome.Render(inner)
 	}
 	for i, dev := range d.devices {
 		lines = append(lines, d.renderDevice(i, dev))
