@@ -603,3 +603,17 @@ PR #241 (story 189) shipped clean after one fix round. One sub-threshold concern
 1. `selectRenderer` is called inside `engine.go:generateFrames`, which only runs on `SetSize` / `CyclePattern` / `SetPattern`. If a future change toggles `uikit.ActiveMode()` at runtime without resize/cycle (e.g. live mode toggle hotkey), the cached frames stay stale until the next regen. No test covers this. Borderline — only matters if mode-toggle-at-runtime becomes a feature. Add a test that flips mode after `SetSize`, calls `CyclePattern` (forcing regen), and verifies the new renderer wins, or hook `selectRenderer` into a frame-time read if mode flips become user-facing.
 
 2. Comment typo in `TestAsciiBars_FourLevelDensityRamp` at line ~195: row-glyph documentation is jumbled (test logic is correct, only the explanatory comment is wrong). Cleanup-only.
+
+---
+
+## Story 190 minor issues — pane content cleanup polish
+**Found:** 2026-04-30 | **Source:** PR #242 Review
+**Feature:** 13-tui-design-system
+
+PR #242 (story 190) shipped after one fix round that addressed two CRITICAL production regressions (search spinner not animating, devices empty-state losing chrome). Sub-threshold cleanups logged:
+
+1. `internal/ui/panes/devices.go:View()` computes `innerWidth` twice — once at lines 129-132 before the `len(d.devices) == 0` check, then again inside the empty-state path. Trivial dedup.
+
+2. `TestSearchOverlay_Spinner_AsciiRunningFrames` positive assertion may pass on `OverlayChrome` border `|` characters (VRule) since they share the rotating-bar glyph in ASCII. The braille negative assertion is airtight, but the positive frame check could be tightened by isolating spinner output (e.g. assert frame appears in the same line as "Searching…" rather than anywhere in the view).
+
+3. The default-branch `o.sp.Update(msg)` was intentionally removed in favour of explicit `searchSpinnerTickMsg` handling. If a future change adds another spinner-driven sub-component to the search overlay, the dispatcher needs revisiting (currently only the search overlay's own spinner uses `searchSpinnerTickMsg`).
