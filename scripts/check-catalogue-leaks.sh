@@ -11,7 +11,28 @@ set -euo pipefail
 #
 # Comment-only hits are filtered: a match is ignored when the glyph first
 # appears after "//" on the same line (i.e. only in a comment, not in code).
-CHARS=( "╭" "╮" "╰" "╯" "✓" "✗" "◬" "→" "⧖" "◉" "◎" "○" "●" "◌" "▶" "▷" "⏸" "≡" "↻" "⇄" "♪" "▤" "█" "▒" "•" "…" )
+CHARS=(
+  # Structural / borders
+  "╭" "╮" "╰" "╯" "─" "│" "×"
+  # Intent / feedback
+  "✓" "✗" "◬" "→" "⧖" "⚡" "◷" "⏸" "⊘"
+  # State / availability
+  "◉" "◎" "○" "●" "□" "■" "◌" "★" "☆" "•"
+  # Navigation / scroll
+  "▼" "▲" "►" "◄" "…" "›" "‹" "←" "↑" "↓" "↔"
+  # Playback controls
+  "▶" "▷" "⏭" "⏮" "⏩" "⏪" "⇄" "↻" "↻¹" "⟳" "≡" "⏏"
+  # Domain / music / identity
+  "♪" "♫" "♛" "☁" "▤" "·"
+  # Device-type icons
+  "⊡" "⊞" "⊟" "⊠"
+  # Keyboard chords
+  "⏎" "⎋" "⇥" "⌫" "␣"
+  # Superscripts
+  "⁰" "¹" "²" "³" "⁴" "⁵" "⁶" "⁷" "⁸" "⁹" "⁺" "⁻"
+  # Graphical fills / bars
+  "█" "▉" "▊" "▋" "▌" "▍" "▎" "▏" "░" "▒" "▓"
+)
 
 LEAKS=""
 for c in "${CHARS[@]}"; do

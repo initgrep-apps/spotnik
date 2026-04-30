@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // authPreparedMsg is sent after PKCE setup and callback server are ready.
@@ -207,7 +208,7 @@ func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) s
 		"",
 		statusStyle.Render(status),
 		"",
-		hintStyle.Render("c  copy URL  ·  q  quit"),
+		hintStyle.Render("c  copy URL  "+uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())+"  q  quit"),
 	)
 
 	box := outerBorder.Render(content)

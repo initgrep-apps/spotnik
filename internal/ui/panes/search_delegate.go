@@ -223,7 +223,8 @@ func (d SearchItemDelegate) renderAlbum(w io.Writer, si SearchListItem, selected
 		d.styledDot() +
 		lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(si.ReleaseYear)
 
-	rightMetaPlain := len(si.AlbumType) + len(" · ") + len(si.ReleaseYear)
+	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
+	rightMetaPlain := len([]rune(si.AlbumType)) + 1 + len([]rune(sep)) + 1 + len([]rune(si.ReleaseYear))
 	nameMaxW := innerW - 2 - rightMetaPlain - 1
 	if nameMaxW < 1 {
 		nameMaxW = 1
@@ -333,6 +334,12 @@ func (d SearchItemDelegate) line3Style(selected bool, normal lipgloss.Color) lip
 	return lipgloss.NewStyle().Foreground(normal)
 }
 
+// subtitleSep returns the plain separator string (" · " in unicode, " | " in ASCII)
+// for use when building Subtitle strings in the converter functions.
+func subtitleSep() string {
+	return " " + uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode()) + " "
+}
+
 // styledDot returns a separator glyph (GlyphSeparator) surrounded by spaces,
 // rendered in TextMuted color. In ASCII mode GlyphSeparator renders as "|".
 func (d SearchItemDelegate) styledDot() string {
@@ -383,7 +390,8 @@ func TracksToSearchListItems(tracks []domain.Track) []SearchListItem {
 	for i, t := range tracks {
 		artists := joinArtistNames(t.Artists)
 		dur := formatSearchDuration(t.DurationMs)
-		subtitle := artists + " · " + t.Album.Name + " · " + dur
+		sep := subtitleSep()
+		subtitle := artists + sep + t.Album.Name + sep + dur
 		items[i] = SearchListItem{
 			Category:    "track",
 			Name:        t.Name,
@@ -408,7 +416,7 @@ func ArtistsToSearchListItems(artists []domain.SearchArtist) []SearchListItem {
 		followers := formatFollowers(a.Followers)
 		subtitle := genres
 		if genres != "" && followers != "" {
-			subtitle += " · " + followers
+			subtitle += subtitleSep() + followers
 		} else if followers != "" {
 			subtitle = followers
 		}
@@ -434,7 +442,8 @@ func AlbumsToSearchListItems(albums []domain.SearchAlbum) []SearchListItem {
 		artists := joinArtistNames(al.Artists)
 		year := extractYear(al.ReleaseDate)
 		tc := fmt.Sprintf("%d tracks", al.TotalTracks)
-		subtitle := artists + " · " + year + " · " + tc
+		sep := subtitleSep()
+		subtitle := artists + sep + year + sep + tc
 		items[i] = SearchListItem{
 			Category:     "album",
 			Name:         al.Name,
@@ -456,10 +465,11 @@ func PlaylistsToSearchListItems(playlists []domain.SearchPlaylist) []SearchListI
 	items := make([]SearchListItem, len(playlists))
 	for i, p := range playlists {
 		tc := fmt.Sprintf("%d tracks", p.TrackCount)
-		subtitle := "by " + p.Owner.DisplayName + " · " + tc
+		sep := subtitleSep()
+		subtitle := "by " + p.Owner.DisplayName + sep + tc
 		desc := truncateString(p.Description, 60)
 		if desc != "" {
-			subtitle += " · " + desc
+			subtitle += sep + desc
 		}
 		items[i] = SearchListItem{
 			Category:       "playlist",

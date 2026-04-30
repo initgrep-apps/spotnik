@@ -138,7 +138,7 @@ func (kv KV) render(p Palette) string {
 		pad := strings.Repeat(" ", maxLabel-len(pair.Label))
 		line := labelStyle.Render(pair.Label+pad) + "  " + valueStyle.Render(pair.Value)
 		if pair.Caption != "" {
-			line += "  " + captionStyle.Render("·  "+pair.Caption)
+			line += "  " + captionStyle.Render(uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())+"  "+pair.Caption)
 		}
 		lines[i] = line
 	}

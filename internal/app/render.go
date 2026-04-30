@@ -510,9 +510,10 @@ func (a *App) renderTooSmall() string {
 		BorderForeground(a.theme.ActiveBorder()).
 		Padding(1, 2)
 
+	x := uikit.GlyphFor(uikit.GlyphOverlayDismiss, uikit.ActiveMode())
 	msg := fmt.Sprintf(
-		"Spotnik needs more space\n\nCurrent:  %d × %d\nRequired: %d × %d\n\nPlease resize your terminal and retry.",
-		a.width, a.height, minTermWidth, minTermHeight,
+		"Spotnik needs more space\n\nCurrent:  %d %s %d\nRequired: %d %s %d\n\nPlease resize your terminal and retry.",
+		a.width, x, a.height, minTermWidth, x, minTermHeight,
 	)
 	return style.Render(msg)
 }

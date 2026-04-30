@@ -825,7 +825,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 	// Separator row (1 line) — thin dashes in TextMuted color.
 	separator := lipgloss.NewStyle().
 		Foreground(o.theme.TextMuted()).
-		Render(strings.Repeat("─", innerWidth))
+		Render(strings.Repeat(uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode()), innerWidth))
 
 	// Spinner line (1 line) — only visible while loadingNextPage.
 	// When loadingFirstPage, the entire results area shows only the spinner.
