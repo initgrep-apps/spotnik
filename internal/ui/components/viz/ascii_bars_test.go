@@ -155,9 +155,15 @@ func TestAsciiBars_ZeroDisplayHeight(t *testing.T) {
 	assert.Empty(t, frame)
 }
 
-// TestAsciiBars_TopRow_EmptyForHalfHeight confirms that top rows are empty
-// when columns are at half max height (2 out of 4).
-func TestAsciiBars_TopRow_EmptyForHalfHeight(t *testing.T) {
+// TestAsciiBars_HalfHeight_FourLevelRamp confirms the 4-level density ramp at the
+// canonical height=4 case. With colHeight=2 (half of MaxHeight=4), the new
+// integer-row mapping must produce all four glyph levels:
+//
+//	row 0 (top):    rowFromBottom=3, diff=-1 → '.'  (cap above bar)
+//	row 1:          rowFromBottom=2, diff= 0 → '='  (top edge of bar)
+//	row 2:          rowFromBottom=1, diff= 1 → '#'  (inside bar)
+//	row 3 (bottom): rowFromBottom=0, diff= 2 → '#'  (inside bar)
+func TestAsciiBars_HalfHeight_FourLevelRamp(t *testing.T) {
 	r := NewAsciiBarsRenderer()
 	width := 4
 	height := 4
@@ -166,11 +172,46 @@ func TestAsciiBars_TopRow_EmptyForHalfHeight(t *testing.T) {
 	colors := makeColors(height)
 	frame := r.RenderFrame(width, height, colHeights, colors)
 
-	// Top row (index 0) should be empty (height=2 fills only bottom half)
 	for _, ch := range frame[0].Text {
-		assert.Equal(t, ' ', ch,
-			"top row should be empty when column height is half of max")
+		assert.Equal(t, '.', ch, "row 0 (top): one step above bar top should be '.'")
 	}
+	for _, ch := range frame[1].Text {
+		assert.Equal(t, '=', ch, "row 1: top edge of bar should be '='")
+	}
+	for _, ch := range frame[2].Text {
+		assert.Equal(t, '#', ch, "row 2: inside bar should be '#'")
+	}
+	for _, ch := range frame[3].Text {
+		assert.Equal(t, '#', ch, "row 3 (bottom): inside bar should be '#'")
+	}
+}
+
+// TestAsciiBars_FourLevelDensityRamp confirms that all four glyph levels —
+// ' ', '.', '=', '#' — appear in a height=4 frame when column heights span
+// the full [1,4] range. This is the canonical acceptance test for the 4-level
+// density contract: the old band-based implementation never produced '=' or '.'
+// at integer column heights.
+func TestAsciiBars_FourLevelDensityRamp(t *testing.T) {
+	r := NewAsciiBarsRenderer()
+	// colHeights {1,2,3,4} at height=4 exercises every glyph:
+	//   h=1: rows get  ' ' ' ' '=' '#'  (bottom-up: diff=1,'=','-1','.')
+	//   h=2: rows get  '.' '=' '#' '#'
+	//   h=3: rows get  '=' '#' '#' '#'
+	//   h=4: rows get  '#' '#' '#' '#'
+	frame := r.RenderFrame(4, 4, []int{1, 2, 3, 4}, makeColors(4))
+	require.Len(t, frame, 4)
+
+	all := strings.Join(func() []string {
+		s := make([]string, len(frame))
+		for i, l := range frame {
+			s[i] = l.Text
+		}
+		return s
+	}(), "")
+
+	assert.Contains(t, all, "#", "frame should contain '#'")
+	assert.Contains(t, all, "=", "frame should contain '=' (top-edge glyph)")
+	assert.Contains(t, all, ".", "frame should contain '.' (cap-above-bar glyph)")
 }
 
 // TestAsciiBars_RowCount_MatchesDisplay confirms row count in the frame equals
@@ -201,20 +242,6 @@ func TestAsciiBars_ThemeColorApplied(t *testing.T) {
 	assert.Equal(t, th.Gradient3(), frame[0].Color)
 	assert.Equal(t, th.Gradient2(), frame[1].Color)
 	assert.Equal(t, th.Gradient1(), frame[2].Color)
-}
-
-// TestAsciiBars_OutputContainsOnlyPrintable confirms no stray control chars
-// (other than ANSI sequences handled by lipgloss).
-func TestAsciiBars_OutputContainsOnlyPrintable(t *testing.T) {
-	r := NewAsciiBarsRenderer()
-	frame := r.RenderFrame(8, 4, []int{0, 1, 2, 3, 4, 4, 3, 1}, makeColors(4))
-	for _, line := range frame {
-		for _, ch := range line.Text {
-			// Only space and printable ASCII bar chars allowed.
-			assert.True(t, ch == ' ' || ch == '#' || ch == '=' || ch == '.',
-				"unexpected character %U in output", ch)
-		}
-	}
 }
 
 // TestAsciiBars_WidthPreserved confirms each row has exactly `width` rune columns

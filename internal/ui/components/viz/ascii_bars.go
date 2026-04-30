@@ -29,29 +29,27 @@ func (r *AsciiBarsRenderer) MaxHeight(_ int) int { return 4 }
 // RenderFrame converts column heights (range [0, 4]) to ASCII bar display lines
 // with per-row coloring. Row 0 is the top; row (height-1) is the bottom.
 //
-// Mapping from column height to character at each display row:
-//   - A column of height h fills from the bottom upward. The fractional fill
-//     of row rowIdx from the top is: filledFrac = h/4.0, and the row's threshold
-//     from the bottom is: rowFrac = (height - rowIdx) / height.
-//   - If filledFrac >= rowFrac          → '#' (fully covered)
-//   - If filledFrac >= rowFrac - 1/4H   → '=' (partially covered, upper band)
-//   - If filledFrac >= rowFrac - 2/4H   → '.' (lightly covered, lower band)
-//   - Otherwise                          → ' ' (empty)
+// Because MaxHeight always returns 4, column heights are integers in [0, 4].
+// The mapping uses direct integer arithmetic (no fractional bands) so all four
+// glyph levels are reachable at every display height:
+//
+//   - r = height - 1 - rowIdx  (0 = bottom row, height-1 = top row)
+//   - h - r >= 1          → '#'  (row is inside the filled bar)
+//   - h - r == 0, h > 0   → '='  (row is exactly at the top edge of bar)
+//   - h - r == -1, h > 0  → '.'  (row is one step above the bar top)
+//   - otherwise            → ' '  (empty)
+//
+// The h > 0 guard ensures zero-height columns remain blank.
 func (r *AsciiBarsRenderer) RenderFrame(width, height int, colHeights []int, colors []lipgloss.Color) Frame {
 	if width <= 0 || height <= 0 {
 		return Frame{}
 	}
 
 	frame := make(Frame, height)
-	hf := float64(height)
-	// band is the fractional height of one sub-level step, constant for this render.
-	band := 1.0 / (4.0 * hf)
 
 	for rowIdx := 0; rowIdx < height; rowIdx++ {
-		// rowFrac is the normalised threshold from the bottom for this row.
-		// Row 0 (top) has the highest threshold; row height-1 (bottom) has
-		// threshold = 1/height (just above zero).
-		rowFrac := float64(height-rowIdx) / hf
+		// r is the bottom-up index: bottom row is 0, top row is height-1.
+		rowFromBottom := height - 1 - rowIdx
 
 		row := make([]byte, width)
 		for col := 0; col < width; col++ {
@@ -59,14 +57,14 @@ func (r *AsciiBarsRenderer) RenderFrame(width, height int, colHeights []int, col
 			if col < len(colHeights) {
 				h = colHeights[col]
 			}
-			filledFrac := float64(h) / 4.0
+			diff := h - rowFromBottom
 
 			switch {
-			case filledFrac >= rowFrac:
+			case diff >= 1:
 				row[col] = '#'
-			case filledFrac >= rowFrac-band:
+			case diff == 0 && h > 0:
 				row[col] = '='
-			case filledFrac >= rowFrac-2*band:
+			case diff == -1 && h > 0:
 				row[col] = '.'
 			default:
 				row[col] = ' '
