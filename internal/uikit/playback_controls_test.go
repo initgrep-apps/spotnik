@@ -6,6 +6,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestPlaybackControls(playing, shuffle bool, repeat uikit.RepeatMode) uikit.PlaybackControls {
@@ -51,6 +52,61 @@ func TestPlaybackControls_RenderASCII_Playing(t *testing.T) {
 	assert.NotContains(t, out, "⇄")
 	assert.NotContains(t, out, "↻")
 	assert.NotContains(t, out, "⏷")
+}
+
+// TestPlaybackControls_RoleTokens verifies that active positions use Theme.PlayingIndicator()
+// and inactive positions use Theme.TextSecondary(). A regression swapping active/inactive
+// style would not be caught by glyph-only tests.
+//
+// Black theme: PlayingIndicator=#00ff88 (0,255,136)   → "38;2;0;255;136"
+//
+//	TextSecondary=#888888   (136,136,136) → "38;2;136;136;136"
+func TestPlaybackControls_RoleTokens(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	activeANSI := "38;2;0;255;136"     // PlayingIndicator #00ff88
+	inactiveANSI := "38;2;136;136;136" // TextSecondary    #888888
+
+	// Sanity: active and inactive colors must differ so the test is meaningful.
+	require.NotEqual(t, th.PlayingIndicator(), th.TextSecondary(),
+		"test precondition: PlayingIndicator and TextSecondary must differ for black theme")
+
+	t.Run("all active except queue", func(t *testing.T) {
+		// Playing=true, Shuffle=true, Repeat=RepeatAll →
+		//   shuffle, play/pause, repeat: active color
+		//   queue: always inactive
+		c := uikit.PlaybackControls{
+			Playing:    true,
+			Shuffle:    true,
+			RepeatMode: uikit.RepeatAll,
+			Theme:      th,
+		}
+		out := c.Render()
+
+		assert.Contains(t, out, activeANSI,
+			"active positions (shuffle/play/repeat) must use PlayingIndicator color")
+		assert.Contains(t, out, inactiveANSI,
+			"queue position must always use TextSecondary (inactive) color")
+	})
+
+	t.Run("all inactive", func(t *testing.T) {
+		// Playing=false, Shuffle=false, Repeat=RepeatOff →
+		//   all four positions: inactive color only
+		c := uikit.PlaybackControls{
+			Playing:    false,
+			Shuffle:    false,
+			RepeatMode: uikit.RepeatOff,
+			Theme:      th,
+		}
+		out := c.Render()
+
+		assert.NotContains(t, out, activeANSI,
+			"no active positions — PlayingIndicator color must NOT appear")
+		assert.Contains(t, out, inactiveANSI,
+			"all positions inactive — TextSecondary color must appear")
+	})
 }
 
 // TestPlaybackControls_RepeatModes verifies each repeat mode renders the correct glyph.

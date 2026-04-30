@@ -932,6 +932,50 @@ func TestNowPlaying_AsciiTitle(t *testing.T) {
 	assert.NotContains(t, title, "─", "─ should not appear in ASCII mode")
 }
 
+// TestNowPlaying_UnicodeTitlePlayPauseMapping verifies that Title() in compact mode
+// (height < 8) maps IsPlaying correctly to the action glyph in unicode mode:
+//   - IsPlaying=true  → shows ⏸ (pause action) and NOT ▶
+//   - IsPlaying=false → shows ▶ (play action)  and NOT ⏸
+//
+// A regression swapping the if/else branches inside Title() would be caught here.
+func TestNowPlaying_UnicodeTitlePlayPauseMapping(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	tests := []struct {
+		name      string
+		isPlaying bool
+		wantGlyph string
+		denyGlyph string
+	}{
+		{
+			name:      "playing shows pause action ⏸",
+			isPlaying: true,
+			wantGlyph: "⏸",
+			denyGlyph: "▶",
+		},
+		{
+			name:      "paused shows play action ▶",
+			isPlaying: false,
+			wantGlyph: "▶",
+			denyGlyph: "⏸",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pane, _ := newTestNowPlayingPaneWithState(tt.isPlaying, true)
+			pane.SetSize(80, 6) // height < 8 triggers compact title path
+
+			title := pane.Title()
+			assert.Contains(t, title, tt.wantGlyph,
+				"compact title with isPlaying=%v should contain %q", tt.isPlaying, tt.wantGlyph)
+			assert.NotContains(t, title, tt.denyGlyph,
+				"compact title with isPlaying=%v must NOT contain %q", tt.isPlaying, tt.denyGlyph)
+		})
+	}
+}
+
 // TestNowPlayingPane_HandleKey_N_NoOp verifies that pressing "n" on the NowPlayingPane
 // no longer emits a playback command — the n→next binding was removed in Story 118.
 // The → key (tea.KeyRight) remains the authoritative "next track" binding.
