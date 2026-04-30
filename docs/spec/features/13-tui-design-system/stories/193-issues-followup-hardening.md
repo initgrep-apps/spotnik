@@ -1,7 +1,7 @@
 ---
 title: "Feature 13 issues follow-up: hardening + content ASCII gaps + test depth"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
