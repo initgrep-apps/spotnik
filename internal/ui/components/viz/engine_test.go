@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -859,6 +860,72 @@ func TestNewEngine_NilTheme_UsesDefault(t *testing.T) {
 		f := e.CurrentFrame()
 		assert.Len(t, f, 4, "nil-theme engine should produce correct frame height")
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Story 189: Engine selects AsciiBarsRenderer in ASCII mode
+// ---------------------------------------------------------------------------
+
+// TestEngine_SelectsAsciiRendererInAsciiMode confirms that when
+// uikit.ActiveMode() == uikit.GlyphASCII the engine uses AsciiBarsRenderer
+// and the resulting frame contains only ASCII bar characters.
+func TestEngine_SelectsAsciiRendererInAsciiMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(10, 4)
+	e.SetPlaying(true)
+	f := e.CurrentFrame()
+	require.Len(t, f, 4)
+
+	for rowIdx, line := range f {
+		for _, ch := range line.Text {
+			assert.True(t, ch == '#' || ch == '=' || ch == '.' || ch == ' ',
+				"row %d: ASCII mode should only produce # = . or space, got %U (%c)",
+				rowIdx, ch, ch)
+		}
+	}
+}
+
+// TestEngine_SelectsUnicodeRendererInUnicodeMode confirms that in unicode mode
+// the engine does NOT use the ASCII renderer — frames should contain braille or
+// block characters from the current pattern.
+func TestEngine_SelectsUnicodeRendererInUnicodeMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(10, 4)
+	e.SetPlaying(true)
+	f := e.CurrentFrame()
+	require.Len(t, f, 4)
+
+	// Default pattern 0 is braille — should contain braille runes.
+	for rowIdx, line := range f {
+		for _, ch := range line.Text {
+			assert.False(t, ch == '#' || ch == '=',
+				"row %d: unicode mode should not contain ASCII bar chars, got %U (%c)",
+				rowIdx, ch, ch)
+		}
+	}
+
+	// Positive assertion: at least one braille rune (U+2800–U+28FF) must appear.
+	// A regression that returned all-spaces would still satisfy the negative check
+	// above; this assertion catches that.
+	hasBraille := false
+	for _, line := range f {
+		for _, ch := range line.Text {
+			if ch >= '⠀' && ch <= '⣿' {
+				hasBraille = true
+				break
+			}
+		}
+		if hasBraille {
+			break
+		}
+	}
+	assert.True(t, hasBraille, "unicode mode should produce at least one braille rune from BrailleRenderer")
 }
 
 // ---------------------------------------------------------------------------

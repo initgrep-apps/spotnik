@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // TickMsg is sent on the visualizer's animation tick.
@@ -175,6 +176,18 @@ func (e *Engine) tickCmd() tea.Cmd {
 	})
 }
 
+// selectRenderer returns the Renderer to use for the current pattern.
+// When uikit.ActiveMode() reports GlyphASCII, AsciiBarsRenderer is returned
+// regardless of the configured pattern so the visualizer remains present
+// (at reduced resolution) on non-UTF-8 terminals. In unicode mode the
+// pattern's own renderer (braille or block) is used.
+func (e *Engine) selectRenderer() Renderer {
+	if uikit.ActiveMode() == uikit.GlyphASCII {
+		return NewAsciiBarsRenderer()
+	}
+	return e.patterns[e.patternIdx].Renderer
+}
+
 // generateFrames builds the precomputed frame table for the current pattern.
 // Precomputes numFrames frames using the current pattern's HeightFunc and Renderer.
 // Per-row colors are assigned using the gradient (Gradient3 top, Gradient1 bottom).
@@ -186,14 +199,16 @@ func (e *Engine) generateFrames() []Frame {
 	p := e.patterns[e.patternIdx]
 	colors := e.buildColors(e.height)
 
-	// MaxHeight is renderer-specific: braille uses height*4 (dot rows),
-	// block uses height (display rows). Delegating avoids type assertions here.
-	maxHeight := p.Renderer.MaxHeight(e.height)
+	// selectRenderer chooses AsciiBarsRenderer in ASCII mode; the pattern's own
+	// renderer (braille or block) otherwise. MaxHeight is renderer-specific:
+	// braille uses height*4 (dot rows), block and ascii use height or 4.
+	r := e.selectRenderer()
+	maxHeight := r.MaxHeight(e.height)
 
 	frames := make([]Frame, numFrames)
 	for f := 0; f < numFrames; f++ {
 		colHeights := p.HeightFunc(e.width, maxHeight, f)
-		frames[f] = p.Renderer.RenderFrame(e.width, e.height, colHeights, colors)
+		frames[f] = r.RenderFrame(e.width, e.height, colHeights, colors)
 	}
 	return frames
 }

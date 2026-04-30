@@ -1,7 +1,7 @@
 ---
 title: "Visualizer ASCII renderer + engine selects renderer by ActiveMode"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
