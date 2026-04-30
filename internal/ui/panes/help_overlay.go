@@ -33,34 +33,43 @@ const keyColWidth = 16
 // sit flush against the outer border or the centre divider.
 const colPadLeft = 2
 
-// helpContent is the static two-column keybinding reference.
+// buildHelpContent returns the two-column keybinding reference with glyphs
+// resolved via uikit.ActiveMode() so arrow keys render as ASCII alternatives
+// when running in ASCII mode. Call this in View(), not at package init.
 // [0] = left column (Global, Navigation), [1] = right column (Playback, Pane Actions).
 // NOTE: When changing any keybinding, also update docs/keybinding.md and docs/DESIGN.md §17.
-var helpContent = [2][]helpSection{
-	{
-		{title: "Global", bindings: []helpBinding{
-			{"/", "Search"}, {"d", "Devices"}, {"u", "Profile"}, {"t", "Theme"}, {"?", "Help"},
-			{"q", "Quit"}, {"0", "Toggle page"}, {"1-8 / 1-5", "Toggle pane (A/B)"}, {"p", "Preset"},
-		}},
-		{title: "Navigation", bindings: []helpBinding{
-			{"Tab", "Next pane"}, {"Shift+Tab", "Prev pane"},
-			{"Esc", "Close / clear"},
-		}},
-	},
-	{
-		{title: "Playback", bindings: []helpBinding{
-			{"Space", "Play / Pause"}, {"← / →", "Prev / Next"},
-			{"+  / -", "Volume"}, {"s", "Shuffle"}, {"r", "Repeat"}, {"v", "Visualizer"},
-		}},
-		{title: "Pane Actions", bindings: []helpBinding{
-			{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
-			{"↑ / k", "Scroll up"}, {"↓ / j", "Scroll down"},
-		}},
-		{title: "Profile Overlay", bindings: []helpBinding{
-			{"l", "Logout"},
-			{"f", "Forget"},
-		}},
-	},
+func buildHelpContent() [2][]helpSection {
+	m := uikit.ActiveMode()
+	al := uikit.GlyphFor(uikit.GlyphArrowLeft, m)
+	ar := uikit.GlyphFor(uikit.GlyphArrowRight, m)
+	au := uikit.GlyphFor(uikit.GlyphArrowUp, m)
+	ad := uikit.GlyphFor(uikit.GlyphArrowDown, m)
+	return [2][]helpSection{
+		{
+			{title: "Global", bindings: []helpBinding{
+				{"/", "Search"}, {"d", "Devices"}, {"u", "Profile"}, {"t", "Theme"}, {"?", "Help"},
+				{"q", "Quit"}, {"0", "Toggle page"}, {"1-8 / 1-5", "Toggle pane (A/B)"}, {"p", "Preset"},
+			}},
+			{title: "Navigation", bindings: []helpBinding{
+				{"Tab", "Next pane"}, {"Shift+Tab", "Prev pane"},
+				{"Esc", "Close / clear"},
+			}},
+		},
+		{
+			{title: "Playback", bindings: []helpBinding{
+				{"Space", "Play / Pause"}, {al + " / " + ar, "Prev / Next"},
+				{"+  / -", "Volume"}, {"s", "Shuffle"}, {"r", "Repeat"}, {"v", "Visualizer"},
+			}},
+			{title: "Pane Actions", bindings: []helpBinding{
+				{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
+				{au + " / k", "Scroll up"}, {ad + " / j", "Scroll down"},
+			}},
+			{title: "Profile Overlay", bindings: []helpBinding{
+				{"l", "Logout"},
+				{"f", "Forget"},
+			}},
+		},
+	}
 }
 
 // HelpOverlay is the floating keybinding reference overlay model.
@@ -126,8 +135,9 @@ func (o *HelpOverlay) View() string {
 	leftW := (innerW - 1) / 2
 	rightW := innerW - 1 - leftW
 
-	leftLines := strings.Split(o.renderColumn(helpContent[0], leftW), "\n")
-	rightLines := strings.Split(o.renderColumn(helpContent[1], rightW), "\n")
+	content := buildHelpContent()
+	leftLines := strings.Split(o.renderColumn(content[0], leftW), "\n")
+	rightLines := strings.Split(o.renderColumn(content[1], rightW), "\n")
 
 	// Pad the shorter column to match heights so the divider is aligned.
 	for len(leftLines) < len(rightLines) {

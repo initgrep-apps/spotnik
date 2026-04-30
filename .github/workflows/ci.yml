@@ -1,5 +1,6 @@
 # CI workflow — runs on every push and on PRs targeting main.
-# Executes the full make ci gate: fmt-check, tidy-check, lint, test-coverage, build.
+# Executes the full make ci gate: fmt-check, tidy-check, lint, test-coverage,
+# check-glyphs, build.
 name: CI
 
 on:
@@ -32,3 +33,25 @@ jobs:
 
       - name: Run make ci
         run: make ci
+
+      - name: Glyph fallback guards
+        run: make check-glyphs
+
+  tests-locale:
+    name: Tests (${{ matrix.locale }} locale)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        locale: [en_US.UTF-8, C]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests with LANG=${{ matrix.locale }}
+        run: LANG=${{ matrix.locale }} make test

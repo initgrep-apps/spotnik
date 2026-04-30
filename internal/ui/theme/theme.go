@@ -41,7 +41,7 @@ type Theme interface {
 
 	// Semantic colours
 	SectionHeader() lipgloss.Color    // Section labels: LIBRARY, QUEUE, NOW PLAYING
-	PlayingIndicator() lipgloss.Color // ▶ currently playing symbol
+	PlayingIndicator() lipgloss.Color // playing symbol (GlyphPlaying role)
 	SeekBar() lipgloss.Color          // Seek bar fill
 	VolumeBar() lipgloss.Color        // Volume bar fill
 	Success() lipgloss.Color          // Success states

@@ -249,7 +249,7 @@ func PrintReRegisterInstructions(w io.Writer, redirectURI string) {
 // Exported for testing. Used by both runAuthLogin and runRegister.
 func PrintSignedInLaunching(w io.Writer) {
 	cliout.Write(w, cliout.Header{Status: cliout.Active, Subject: "Signed in", State: ""})
-	cliout.WriteInline(w, cliout.Hint{Tail: "Launching spotnik…"})
+	cliout.WriteInline(w, cliout.Hint{Tail: "Launching spotnik" + uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())})
 }
 
 // LogoutTokens removes all stored token keys from the token store.

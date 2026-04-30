@@ -578,10 +578,11 @@ func truncateString(s string, max int) string {
 		return ""
 	}
 	if len(runes) > max {
+		ellipsis := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
 		if max == 1 {
-			return "…"
+			return ellipsis
 		}
-		return string(runes[:max-1]) + "…"
+		return string(runes[:max-1]) + ellipsis
 	}
 	return s
 }

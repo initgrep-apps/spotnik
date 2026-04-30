@@ -833,7 +833,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 	if o.loadingNextPage {
 		spinnerLine = lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
-			Render(o.sp.View() + "Loading…")
+			Render(o.sp.View() + "Loading" + uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode()))
 	}
 
 	// Calculate extra lines consumed by optional elements.
@@ -858,7 +858,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		centered := lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Width(innerWidth).Align(lipgloss.Center).
-			Render(o.sp.View() + "Searching…")
+			Render(o.sp.View() + "Searching" + uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode()))
 		resultsArea = lipgloss.NewStyle().
 			Width(innerWidth).MaxWidth(innerWidth).
 			Height(resultsAreaH).MaxHeight(resultsAreaH).
@@ -991,8 +991,9 @@ func (o *SearchOverlay) renderPaginationBar(w int) string {
 		nextStyle = o.theme.TextMuted()
 	}
 
-	left := lipgloss.NewStyle().Foreground(prevStyle).Render("[ ←")
-	right := lipgloss.NewStyle().Foreground(nextStyle).Render("→ ]")
+	m := uikit.ActiveMode()
+	left := lipgloss.NewStyle().Foreground(prevStyle).Render("[ " + uikit.GlyphFor(uikit.GlyphArrowLeft, m))
+	right := lipgloss.NewStyle().Foreground(nextStyle).Render(uikit.GlyphFor(uikit.GlyphArrowRight, m) + " ]")
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, left, center, right)
 	return lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(bar)
 }
