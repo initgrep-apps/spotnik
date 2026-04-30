@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -661,9 +662,9 @@ func TestNowPlayingPane_SplitLayout_ContainsControls(t *testing.T) {
 	pane.SetSize(80, 24)
 
 	output := pane.View()
-	// Controls renders Unicode glyphs — shuffle ⇄ and repeat ↻.
+	// Controls renders Unicode glyphs — shuffle ⇄ and repeat-off ⟳ (GlyphRepeatOff).
 	assert.Contains(t, output, "⇄", "split layout InfoBox should contain shuffle control")
-	assert.Contains(t, output, "↻", "split layout InfoBox should contain repeat control")
+	assert.Contains(t, output, "⟳", "split layout InfoBox should contain repeat-off control")
 }
 
 // TestNowPlayingPane_Title_ShowsTrackInfoWhenSmall verifies that Title() includes
@@ -908,6 +909,69 @@ func TestNowPlayingPane_HandleKey_KeySpace_Plays(t *testing.T) {
 			req, ok := msg.(PlaybackRequestMsg)
 			require.True(t, ok, "tea.KeySpace must produce PlaybackRequestMsg, got %T", msg)
 			assert.Equal(t, tt.wantAction, req.Action)
+		})
+	}
+}
+
+// TestNowPlaying_AsciiTitle verifies that Title() in compact mode (height < 8)
+// uses ASCII glyphs when GlyphASCII mode is active: the pause-indicator resolves
+// to "||" and the unicode literals ▶, ⏸, ─ are absent from the output.
+func TestNowPlaying_AsciiTitle(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 6) // height < 8 triggers compact title path
+
+	title := pane.Title()
+	// IsPlaying == true → GlyphPaused → "||" in ASCII mode
+	assert.Contains(t, title, "||", "ASCII mode playing state should show || pause glyph")
+	// Unicode literals must not appear in ASCII mode
+	assert.NotContains(t, title, "▶", "▶ should not appear in ASCII mode")
+	assert.NotContains(t, title, "⏸", "⏸ should not appear in ASCII mode")
+	assert.NotContains(t, title, "─", "─ should not appear in ASCII mode")
+}
+
+// TestNowPlaying_UnicodeTitlePlayPauseMapping verifies that Title() in compact mode
+// (height < 8) maps IsPlaying correctly to the action glyph in unicode mode:
+//   - IsPlaying=true  → shows ⏸ (pause action) and NOT ▶
+//   - IsPlaying=false → shows ▶ (play action)  and NOT ⏸
+//
+// A regression swapping the if/else branches inside Title() would be caught here.
+func TestNowPlaying_UnicodeTitlePlayPauseMapping(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	tests := []struct {
+		name      string
+		isPlaying bool
+		wantGlyph string
+		denyGlyph string
+	}{
+		{
+			name:      "playing shows pause action ⏸",
+			isPlaying: true,
+			wantGlyph: "⏸",
+			denyGlyph: "▶",
+		},
+		{
+			name:      "paused shows play action ▶",
+			isPlaying: false,
+			wantGlyph: "▶",
+			denyGlyph: "⏸",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pane, _ := newTestNowPlayingPaneWithState(tt.isPlaying, true)
+			pane.SetSize(80, 6) // height < 8 triggers compact title path
+
+			title := pane.Title()
+			assert.Contains(t, title, tt.wantGlyph,
+				"compact title with isPlaying=%v should contain %q", tt.isPlaying, tt.wantGlyph)
+			assert.NotContains(t, title, tt.denyGlyph,
+				"compact title with isPlaying=%v must NOT contain %q", tt.isPlaying, tt.denyGlyph)
 		})
 	}
 }

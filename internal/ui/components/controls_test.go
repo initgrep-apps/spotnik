@@ -41,7 +41,8 @@ func TestControls_ShuffleOff(t *testing.T) {
 func TestControls_RepeatOff(t *testing.T) {
 	c := newTestControls(false, false, "off")
 	out := c.Render()
-	assert.Contains(t, out, "↻")
+	// RepeatOff uses GlyphRepeatOff (⟳), not GlyphRepeatAll (↻)
+	assert.Contains(t, out, "⟳")
 	assert.NotContains(t, out, "↻1")
 	assert.NotContains(t, out, "↻¹")
 }
@@ -79,4 +80,26 @@ func TestControls_NoOldSymbols(t *testing.T) {
 	out := c.Render()
 	assert.NotContains(t, out, "~")
 	assert.NotContains(t, out, "=>")
+}
+
+// TestNewControls_RepeatModeTranslation verifies all four string inputs are
+// correctly translated to uikit.RepeatMode values.
+func TestNewControls_RepeatModeTranslation(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantContain string
+		desc        string
+	}{
+		{"off", "⟳", "off → RepeatOff renders ⟳"},
+		{"context", "↻", "context → RepeatAll renders ↻"},
+		{"track", "↻¹", "track → RepeatOne renders ↻¹"},
+		{"unknown", "⟳", "unknown → RepeatOff (fallback) renders ⟳"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			c := newTestControls(false, false, tt.input)
+			out := c.Render()
+			assert.Contains(t, out, tt.wantContain, tt.desc)
+		})
+	}
 }
