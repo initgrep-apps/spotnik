@@ -4,7 +4,7 @@ This document is the canonical reference for all CLI output in spotnik. Read it 
 writing or modifying any CLI subcommand output. It supersedes the informal guidelines
 in story `09-auth-and-profile/stories/145-cli-auth-ux-polish-2.md`.
 
-**See also:** `design.md` (TUI theme tokens) · `../keybinding.md` (keybindings)
+**See also:** `design.md` (TUI theme tokens) · `../../README.md#keybindings` (keybindings)
 
 ---
 
@@ -349,7 +349,7 @@ Follow this checklist when adding a new `spotnik` subcommand or output block:
   guidelines are now stale; this document is the canonical reference.
 - **TUI output:** governed exclusively by `design.md`. Theme tokens, pane borders,
   and visualiser colours are out of scope for this document.
-- **Keybindings:** governed by `../keybinding.md`. The two documents do not overlap.
+- **Keybindings:** governed by `../../README.md#keybindings`. The two documents do not overlap.
 - **Design record:** `docs/superpowers/specs/2026-04-22-cli-output-design.md` contains
   the full rationale (brainstorming decisions, advisor gap resolutions). Consult it for
   the "why"; consult this document for the "what".

@@ -27,6 +27,8 @@ reference for message types, glyphs, palette, and interactive prompts.
 When writing or modifying TUI primitives, consult `docs/system/tui.md` — the
 canonical reference for primitives, glyph catalogue, and role matrix.
 
+For Spotify Web API endpoints and capability scope, consult `docs/system/api-guide.md`.
+
 ---
 
 ## Tech Stack (Non-Negotiable)
@@ -228,8 +230,8 @@ Follow this sequence exactly for every feature — no shortcuts.
 13. Merge a PR — unless you are the orchestrator agent after external review passes
 14. Render inline error boxes in pane `View()` methods — all API errors go through toast notifications via `a.alerts.NewAlertCmd`
 15. Add, change, or remove a keybinding without updating all three locations in the
-    same commit: `docs/keybinding.md`, `docs/system/design.md §17`, and the `helpContent` var in
-    `internal/ui/panes/help_overlay.go`.
+    same commit: the **Keybindings** section in `README.md`, `docs/system/design.md §17`, and
+    the `helpContent` var in `internal/ui/panes/help_overlay.go`.
 16. Add a new message type or glyph to `internal/cliout` without updating
     `docs/system/cli.md` in the same commit.
 17. Add a new primitive, glyph, or role to `internal/uikit` without updating
@@ -240,7 +242,7 @@ Follow this sequence exactly for every feature — no shortcuts.
 ## Keybinding Maintenance
 
 All keybindings are documented in three places that must stay in sync:
-- `docs/keybinding.md` — human-readable reference (canonical for external readers)
+- `README.md` **Keybindings** section — canonical user-facing reference
 - `docs/system/design.md §17` — spec-level keybinding table
 - `internal/ui/panes/help_overlay.go` `helpContent` var — in-app help overlay display
 
