@@ -1087,27 +1087,27 @@ func TestSearchDelegate_AsciiCategorySymbols(t *testing.T) {
 	}{
 		{
 			category: "track",
-			want:     "*",        // GlyphMusicNote ASCII form
+			want:     "*", // GlyphMusicNote ASCII form
 			notWant:  []string{"♪"},
 		},
 		{
 			category: "artist",
-			want:     "*",        // GlyphPinned ASCII form
+			want:     "*", // GlyphPinned ASCII form
 			notWant:  []string{"★"},
 		},
 		{
 			category: "album",
-			want:     "( )",      // GlyphInactive ASCII form
+			want:     "( )", // GlyphInactive ASCII form
 			notWant:  []string{"◎"},
 		},
 		{
 			category: "playlist",
-			want:     "[=]",      // GlyphPlaylist ASCII form
+			want:     "[=]", // GlyphPlaylist ASCII form
 			notWant:  []string{"▤"},
 		},
 		{
 			category: "unknown",
-			want:     "|",        // GlyphSeparator ASCII form
+			want:     "|", // GlyphSeparator ASCII form
 			notWant:  []string{"·"},
 		},
 	}

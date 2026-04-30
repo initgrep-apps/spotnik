@@ -453,10 +453,10 @@ func TestDevicesOverlay_AsciiContent(t *testing.T) {
 	o := newTestDeviceOverlay()
 	o.SetSize(60, 20)
 	o.devices = []DeviceInfo{
-		{ID: "1", Name: "My Mac",     Type: "Computer",   IsActive: true},
-		{ID: "2", Name: "My Phone",   Type: "Smartphone", IsActive: false},
-		{ID: "3", Name: "My Speaker", Type: "Speaker",    IsActive: false},
-		{ID: "4", Name: "My TV",      Type: "TV",         IsActive: false},
+		{ID: "1", Name: "My Mac", Type: "Computer", IsActive: true},
+		{ID: "2", Name: "My Phone", Type: "Smartphone", IsActive: false},
+		{ID: "3", Name: "My Speaker", Type: "Speaker", IsActive: false},
+		{ID: "4", Name: "My TV", Type: "TV", IsActive: false},
 	}
 
 	out := stripANSI(o.View())
@@ -467,9 +467,9 @@ func TestDevicesOverlay_AsciiContent(t *testing.T) {
 	assert.NotContains(t, out, "○", "unicode ○ must not appear in ASCII mode")
 
 	// ASCII device-type icons.
-	assert.Contains(t, out, "[c]",  "Computer ASCII icon should be [c]")
-	assert.Contains(t, out, "[p]",  "Smartphone ASCII icon should be [p]")
-	assert.Contains(t, out, "[s]",  "Speaker ASCII icon should be [s]")
+	assert.Contains(t, out, "[c]", "Computer ASCII icon should be [c]")
+	assert.Contains(t, out, "[p]", "Smartphone ASCII icon should be [p]")
+	assert.Contains(t, out, "[s]", "Speaker ASCII icon should be [s]")
 	assert.Contains(t, out, "[tv]", "TV ASCII icon should be [tv]")
 
 	// None of the unicode literals must survive in ASCII mode.

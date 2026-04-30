@@ -85,14 +85,6 @@ type SearchRequestMsg struct {
 	Page  int // 1-based page number; reflects intent.page at debounce fire time
 }
 
-// searchSpinnerTickMsg is retained for backward compatibility with tests that
-// may inject it directly. It is no longer produced internally — uikit.Spinner
-// drives its own tick via the bubbles spinner infrastructure.
-//
-// Deprecated: forward unknown messages to o.sp.Update() instead of producing
-// this type explicitly.
-type searchSpinnerTickMsg struct{}
-
 // searchKeyMap holds only the bindings advertised in the search overlay's
 // bottom keybar. Enter (play) and Esc (close) are handled in Update() but
 // not advertised — they are universal overlay conventions. Ctrl+U is no
@@ -1025,7 +1017,6 @@ func (o *SearchOverlay) overlayHeight() int {
 	}
 	return h
 }
-
 
 // scheduleDebounce snapshots the current intent and returns a 300ms tick.
 // When the tick fires, handleDebounce compares the snapshot to the current
