@@ -497,7 +497,7 @@ func (a *App) renderWithOverlayChrome(background, overlayView string, hPos, vPos
 	return btoverlay.Composite(overlayView, dimmed, hPos, vPos, 0, 0)
 }
 
-// renderSplash renders the startup splash screen with go-figure ASCII art.
+// renderSplash renders the startup splash screen.
 func (a *App) renderSplash() string {
 	return renderSplashView(a.theme, a.version, a.width, a.height)
 }

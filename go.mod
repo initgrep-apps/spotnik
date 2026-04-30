@@ -7,7 +7,6 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
 	github.com/evertras/bubble-table v0.19.2
 	github.com/muesli/termenv v0.16.0
 	github.com/rmhubbert/bubbletea-overlay v0.6.6
