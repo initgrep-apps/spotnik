@@ -35,25 +35,8 @@ func (b URLBox) Render() string {
 	}
 	wrapped := wrapAtAmpersand(b.URL, innerW)
 
-	mode := ActiveMode()
-	var border lipgloss.Border
-	if mode == GlyphASCII {
-		border = lipgloss.Border{
-			Top:         GlyphFor(GlyphHRule, mode),
-			Bottom:      GlyphFor(GlyphHRule, mode),
-			Left:        GlyphFor(GlyphVRule, mode),
-			Right:       GlyphFor(GlyphVRule, mode),
-			TopLeft:     GlyphFor(GlyphCornerTL, mode),
-			TopRight:    GlyphFor(GlyphCornerTR, mode),
-			BottomLeft:  GlyphFor(GlyphCornerBL, mode),
-			BottomRight: GlyphFor(GlyphCornerBR, mode),
-		}
-	} else {
-		border = lipgloss.RoundedBorder()
-	}
-
 	style := lipgloss.NewStyle().
-		Border(border).
+		Border(RoundedBorder()).
 		BorderForeground(b.Theme.TextMuted()).
 		Foreground(b.Theme.Accent()).
 		Padding(0, 1).

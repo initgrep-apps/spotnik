@@ -148,11 +148,12 @@ clean:
 	@rm -rf $(BINARY_DIR) coverage.out coverage.html
 	@echo "✓ Clean"
 
-## Run glyph-fallback guards (banned glyphs, catalogue leaks, RenderPaneBorder callers)
+## Run glyph-fallback guards (banned glyphs, catalogue leaks, RenderPaneBorder callers, lipgloss borders)
 check-glyphs:
 	@scripts/check-banned-glyphs.sh
 	@scripts/check-catalogue-leaks.sh
 	@scripts/check-render-pane-border.sh
+	@scripts/check-lipgloss-borders.sh
 
 ## Run the full CI check (what CI runs)
 ci: fmt-check tidy-check lint test-coverage check-glyphs build

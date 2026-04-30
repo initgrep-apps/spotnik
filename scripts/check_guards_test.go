@@ -242,3 +242,82 @@ func TestRenderPaneBorder_TestFileExempt(t *testing.T) {
 	assert.Equal(t, 0, code,
 		"_test.go files are exempt from RenderPaneBorder check; output: %s", out)
 }
+
+// makeBorderTree sets up the directory tree expected by check-lipgloss-borders.sh
+// (internal/uikit/border.go must exist as the canonical source).
+func makeBorderTree(t *testing.T, dir string) string {
+	t.Helper()
+	internalDir := filepath.Join(dir, "internal", "pkg")
+	require.NoError(t, os.MkdirAll(internalDir, 0o755))
+	uikitDir := filepath.Join(dir, "internal", "uikit")
+	require.NoError(t, os.MkdirAll(uikitDir, 0o755))
+	cmdDir := filepath.Join(dir, "cmd")
+	require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+	// The canonical source — must be allowed to call lipgloss.RoundedBorder.
+	writeFile(t, filepath.Join(uikitDir, "border.go"),
+		"package uikit\n\nimport \"github.com/charmbracelet/lipgloss\"\n\nfunc RoundedBorder() lipgloss.Border {\n\treturn lipgloss.RoundedBorder()\n}\n")
+	return internalDir
+}
+
+// TestLipglossBorders_Clean verifies the script exits zero when only
+// internal/uikit/border.go calls lipgloss.RoundedBorder().
+func TestLipglossBorders_Clean(t *testing.T) {
+	dir := t.TempDir()
+	makeBorderTree(t, dir)
+
+	code, out := runScript(t, dir, scriptPath(t, "check-lipgloss-borders.sh"))
+	assert.Equal(t, 0, code, "expected exit 0 for clean tree; output: %s", out)
+	assert.Contains(t, out, "OK")
+}
+
+// TestLipglossBorders_Violation verifies that a non-uikit file calling
+// lipgloss.RoundedBorder() directly triggers a non-zero exit.
+func TestLipglossBorders_Violation(t *testing.T) {
+	dir := t.TempDir()
+	makeBorderTree(t, dir)
+	writeFile(t, filepath.Join(dir, "internal", "pkg", "bad.go"),
+		"package pkg\n\nimport \"github.com/charmbracelet/lipgloss\"\n\nfunc render() lipgloss.Border {\n\treturn lipgloss.RoundedBorder()\n}\n")
+
+	code, out := runScript(t, dir, scriptPath(t, "check-lipgloss-borders.sh"))
+	assert.NotEqual(t, 0, code,
+		"expected non-zero exit when lipgloss.RoundedBorder called outside uikit/border.go; output: %s", out)
+	assert.Contains(t, strings.ToUpper(out), "ERROR")
+}
+
+// TestLipglossBorders_NormalBorderViolation verifies the script also catches
+// other lipgloss border constructors (NormalBorder, ThickBorder, etc.) since
+// those would also bypass uikit's mode-aware wrapping.
+func TestLipglossBorders_NormalBorderViolation(t *testing.T) {
+	dir := t.TempDir()
+	makeBorderTree(t, dir)
+	writeFile(t, filepath.Join(dir, "cmd", "root.go"),
+		"package cmd\n\nimport \"github.com/charmbracelet/lipgloss\"\n\nfunc render() lipgloss.Border {\n\treturn lipgloss.NormalBorder()\n}\n")
+
+	code, out := runScript(t, dir, scriptPath(t, "check-lipgloss-borders.sh"))
+	assert.NotEqual(t, 0, code,
+		"expected non-zero exit for lipgloss.NormalBorder call outside uikit; output: %s", out)
+}
+
+// TestLipglossBorders_CommentExempt verifies comment-only references are not flagged.
+func TestLipglossBorders_CommentExempt(t *testing.T) {
+	dir := t.TempDir()
+	makeBorderTree(t, dir)
+	writeFile(t, filepath.Join(dir, "internal", "pkg", "doc.go"),
+		"// Package pkg — wraps lipgloss.RoundedBorder() for convenience.\npackage pkg\n")
+
+	code, out := runScript(t, dir, scriptPath(t, "check-lipgloss-borders.sh"))
+	assert.Equal(t, 0, code,
+		"comment-only lipgloss border reference should not be flagged; output: %s", out)
+}
+
+// TestLipglossBorders_TestFileExempt verifies _test.go files are exempt.
+func TestLipglossBorders_TestFileExempt(t *testing.T) {
+	dir := t.TempDir()
+	makeBorderTree(t, dir)
+	writeFile(t, filepath.Join(dir, "internal", "pkg", "x_test.go"),
+		"package pkg_test\n\nimport \"github.com/charmbracelet/lipgloss\"\n\nfunc TestFoo() { _ = lipgloss.RoundedBorder() }\n")
+
+	code, out := runScript(t, dir, scriptPath(t, "check-lipgloss-borders.sh"))
+	assert.Equal(t, 0, code,
+		"_test.go files are exempt; output: %s", out)
+}

@@ -506,7 +506,7 @@ func (a *App) renderSplash() string {
 // Shows the current and required dimensions so the user knows how much to resize.
 func (a *App) renderTooSmall() string {
 	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(uikit.RoundedBorder()).
 		BorderForeground(a.theme.ActiveBorder()).
 		Padding(1, 2)
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,4 +36,43 @@ func TestRenderSplashView_containsPremiumNotice(t *testing.T) {
 		"splash should contain the static Premium notice line")
 	assert.Contains(t, view, "Spotify Premium",
 		"splash should mention Spotify Premium in the notice")
+}
+
+// TestRenderSplashView_AsciiMode asserts the warning panel border honours
+// ui.glyphs = "ascii" — corners must be `+`, rules `-`/`|`, and no rounded
+// unicode glyphs (╭╮╰╯─│) leak through. The figlet banner is ASCII-only by
+// font choice (banner3-D), but the surrounding warning panel previously used
+// lipgloss.RoundedBorder() directly and ignored ActiveMode().
+func TestRenderSplashView_AsciiMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	view := renderSplashView(th, "v0.1.0", 120, 40)
+
+	for _, banned := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+		assert.NotContains(t, view, banned,
+			"ASCII mode must not contain rounded unicode border glyph %q", banned)
+	}
+	assert.Contains(t, view, "+", "ASCII mode warning panel should render '+' corners")
+	assert.Contains(t, view, "|", "ASCII mode warning panel should render '|' vertical rules")
+}
+
+// TestRenderSplashView_UnicodeMode keeps the legacy unicode rendering covered
+// so a regression that always returned ASCII would also fail.
+func TestRenderSplashView_UnicodeMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	view := renderSplashView(th, "v0.1.0", 120, 40)
+
+	// Rounded border must appear somewhere in the warning panel chrome.
+	hasRounded := false
+	for _, want := range []string{"╭", "╮", "╰", "╯"} {
+		if assert.Contains(t, view, want) {
+			hasRounded = true
+		}
+	}
+	assert.True(t, hasRounded, "unicode mode splash should contain rounded border corners")
 }
