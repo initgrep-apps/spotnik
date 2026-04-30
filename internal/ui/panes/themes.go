@@ -252,9 +252,10 @@ func renderSwatches(t *theme.ConfigTheme) string {
 		t.PaneBorderNowPlaying(),
 		t.ActiveBorder(),
 	}
+	swatch := uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode())
 	var b strings.Builder
 	for _, c := range colors {
-		b.WriteString(lipgloss.NewStyle().Foreground(c).Render("██"))
+		b.WriteString(lipgloss.NewStyle().Foreground(c).Render(swatch + swatch))
 		b.WriteString(" ")
 	}
 	return b.String()

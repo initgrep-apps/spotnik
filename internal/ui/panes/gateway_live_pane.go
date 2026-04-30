@@ -230,13 +230,13 @@ func buildGatewayLiveRow(e domain.GatewayEvent) (gatewayLiveRow, bool) {
 		role = uikit.GlyphWarning
 		intent = uikit.RoleWarning
 		snap := e.Snapshot
-		label = fmt.Sprintf("%s  Token consumed → %d", ts, snap.TokensAvailable)
+		label = fmt.Sprintf("%s  Token consumed %s %d", ts, uikit.GlyphFor(uikit.GlyphArrowRight, uikit.ActiveMode()), snap.TokensAvailable)
 
 	case domain.EventTokenRefilled:
 		role = uikit.GlyphRepeatAll
 		intent = uikit.RoleSuccess
 		snap := e.Snapshot
-		label = fmt.Sprintf("%s  Tokens refilled → %d", ts, snap.TokensAvailable)
+		label = fmt.Sprintf("%s  Tokens refilled %s %d", ts, uikit.GlyphFor(uikit.GlyphArrowRight, uikit.ActiveMode()), snap.TokensAvailable)
 
 	case domain.EventSemaphoreAcquired:
 		role = uikit.GlyphFilledSquare

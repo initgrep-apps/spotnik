@@ -23,7 +23,7 @@ PLATFORMS = \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: all build run test test-integration test-coverage lint fmt clean install release help
+.PHONY: all build run test test-integration test-coverage lint fmt clean install release check-glyphs help
 
 ## Default target
 all: lint test build
@@ -148,8 +148,14 @@ clean:
 	@rm -rf $(BINARY_DIR) coverage.out coverage.html
 	@echo "✓ Clean"
 
+## Run glyph-fallback guards (banned glyphs, catalogue leaks, RenderPaneBorder callers)
+check-glyphs:
+	@scripts/check-banned-glyphs.sh
+	@scripts/check-catalogue-leaks.sh
+	@scripts/check-render-pane-border.sh
+
 ## Run the full CI check (what CI runs)
-ci: fmt-check tidy-check lint test-coverage build
+ci: fmt-check tidy-check lint test-coverage check-glyphs build
 	@echo ""
 	@echo "✓ All CI checks passed"
 

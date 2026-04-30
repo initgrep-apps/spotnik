@@ -118,10 +118,10 @@ func TestHelpOverlay_View_NarrowTerminal(t *testing.T) {
 	assert.NotPanics(t, func() { _ = o.View() })
 }
 
-// TestHelpOverlay_Labels_TitleCase asserts that every binding label in helpContent
-// starts with an uppercase letter. A label like "search" fails; "Search" passes.
+// TestHelpOverlay_Labels_TitleCase asserts that every binding label in the help
+// content starts with an uppercase letter. A label like "search" fails; "Search" passes.
 func TestHelpOverlay_Labels_TitleCase(t *testing.T) {
-	for _, col := range helpContent {
+	for _, col := range buildHelpContent() {
 		for _, sec := range col {
 			for _, b := range sec.bindings {
 				if len(b.label) == 0 {
@@ -138,7 +138,7 @@ func TestHelpOverlay_Labels_TitleCase(t *testing.T) {
 // TestHelpOverlay_Navigation_NoJK asserts that the Navigation section contains
 // no binding whose key is "j / k" or "j/k".
 func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
-	for _, col := range helpContent {
+	for _, col := range buildHelpContent() {
 		for _, sec := range col {
 			if sec.title != "Navigation" {
 				continue

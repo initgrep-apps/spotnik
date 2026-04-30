@@ -631,3 +631,19 @@ PR #243 (story 191) shipped after one fix round that closed 6 ASCII test gaps (3
 2. `render_test.go` `TestRender_AsciiInlineGlyphs` positive assertion for `*` is mildly weak — multiple roles map to `*` in ASCII (`GlyphMusicNote`, `GlyphBullet`, `GlyphPinned`, `GlyphRunning`). The `NotContains` checks for unicode forms enforce no leakage, but a stronger positive assertion would isolate which role is producing the `*` (e.g. assert `*` appears in the banner line specifically rather than anywhere).
 
 3. Polish items: `networklog_pane.go:276` calls `uikit.ActiveMode()` per-row inside the loop (could hoist); `render.go:321-323` calls `uikit.GlyphFor(uikit.GlyphBullet, ...)` three times in the same function (could hoist as a local var, matching the existing `note` pattern); `recentlyplayed_pane.go:View()` has an `else` after a `return` (drop for idiomatic Go).
+
+---
+
+## Story 192 minor issues — final CI guards polish
+**Found:** 2026-04-30 | **Source:** PR #244 Review
+**Feature:** 13-tui-design-system
+
+PR #244 (story 192, FINAL story) shipped after one fix round that closed 5 important gaps including expanding `check-catalogue-leaks.sh` CHARS to full glyphTable parity (which exposed 7 latent production leaks) and adding e2e tests for all three guard scripts. Sub-threshold concerns:
+
+1. `TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars` accepts `'-'` as valid ASCII output but `AsciiBarsRenderer.RenderFrame` only emits `{ '#', '=', '.', ' ' }` — the `-` branch is dead. Slightly weaker than ideal but still catches braille/block leaks.
+
+2. Spinner braille frames `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` from `internal/uikit/spinner_frames.go` are not in `check-catalogue-leaks.sh` CHARS array. By design they dispatch via `SpinnerFrames(mode)` not `GlyphFor`, so a leak elsewhere wouldn't be caught. Minor coverage gap.
+
+3. `cliout` in-test ASCII pin partial — 5 of 8 test files (`prompt_test.go`, `builder_test.go`, `palette_test.go`, `render_test.go`, `tty_test.go`) lack explicit `SetModeForTest(GlyphASCII)` pin. Coverage relies on the locale matrix only; a developer running locally with `LANG=en_US.UTF-8` would not exercise ASCII paths in those packages.
+
+4. Locale matrix runs full `make ci` under both `en_US.UTF-8` and `C`, which duplicates locale-independent steps (lint, fmt, tidy, build). Intentional defensive overlap to catch any locale-dependent failure, but doubles CI cost.

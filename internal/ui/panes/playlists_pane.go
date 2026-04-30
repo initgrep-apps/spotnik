@@ -121,7 +121,8 @@ func (p *PlaylistsPane) ID() layout.PaneID { return layout.PanePlaylists }
 // track count sourced from the API response (p.trackTotal), not from the store.
 func (p *PlaylistsPane) Title() string {
 	if p.inTrackView {
-		return fmt.Sprintf("Playlists ── %s (%d tracks)", p.selectedName, p.trackTotal)
+		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
+		return fmt.Sprintf("Playlists %s%s %s (%d tracks)", hrule, hrule, p.selectedName, p.trackTotal)
 	}
 	return "Playlists"
 }

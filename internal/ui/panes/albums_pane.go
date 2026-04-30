@@ -14,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: AlbumsPane implements layout.Pane.
@@ -117,7 +118,8 @@ func (a *AlbumsPane) ID() layout.PaneID { return layout.PaneAlbums }
 // number of loaded tracks.
 func (a *AlbumsPane) Title() string {
 	if a.inTrackView {
-		return fmt.Sprintf("Albums ── %s (%d tracks)", a.selectedName, len(a.loadedTracks))
+		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
+		return fmt.Sprintf("Albums %s%s %s (%d tracks)", hrule, hrule, a.selectedName, len(a.loadedTracks))
 	}
 	return "Albums"
 }

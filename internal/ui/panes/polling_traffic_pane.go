@@ -91,12 +91,14 @@ func (p *PollingTrafficPane) View() string {
 		if p.pollSnapshot.IsIdle {
 			glyph := lipgloss.NewStyle().Foreground(th.Warning()).Render(uikit.GlyphFor(uikit.GlyphPaused, mode))
 			intervalStr := pollingHumanInterval(p.pollSnapshot.TickIntervalMs)
-			status := lipgloss.NewStyle().Foreground(th.Warning()).Render(fmt.Sprintf("idle · %s", intervalStr))
+			sep := uikit.GlyphFor(uikit.GlyphSeparator, mode)
+			status := lipgloss.NewStyle().Foreground(th.Warning()).Render(fmt.Sprintf("idle %s %s", sep, intervalStr))
 			playRow = icon + "  " + label + "  " + glyph + " " + status
 		} else {
 			glyph := lipgloss.NewStyle().Foreground(th.Success()).Render(uikit.GlyphFor(uikit.GlyphPlaying, mode))
 			intervalStr := pollingHumanInterval(p.pollSnapshot.TickIntervalMs)
-			status := lipgloss.NewStyle().Foreground(th.Success()).Render(fmt.Sprintf("%s · running", intervalStr))
+			sep := uikit.GlyphFor(uikit.GlyphSeparator, mode)
+			status := lipgloss.NewStyle().Foreground(th.Success()).Render(fmt.Sprintf("%s %s running", intervalStr, sep))
 			playRow = icon + "  " + label + "  " + glyph + " " + status
 		}
 	}
