@@ -47,37 +47,6 @@ release:
     owner: initgrep-apps
     name: spotnik
 
-brews:
-  - name: spotnik
-    repository:
-      owner: initgrep-apps
-      name: homebrew-tap
-      token: "{{ .Env.RELEASE_PAT }}"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: "chore: brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-    homepage: "https://github.com/initgrep-apps/spotnik"
-    description: "A terminal Spotify client for developers. Keyboard-driven, single binary."
-    license: MIT
-    install: |
-      bin.install "spotnik"
-    test: |
-      system "#{bin}/spotnik", "--version"
-
-scoops:
-  - repository:
-      owner: initgrep-apps
-      name: scoop-bucket
-      token: "{{ .Env.RELEASE_PAT }}"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: "chore: scoop manifest update for {{ .ProjectName }} version {{ .Tag }}"
-    homepage: "https://github.com/initgrep-apps/spotnik"
-    description: "A terminal Spotify client for developers. Keyboard-driven, single binary."
-    license: MIT
-
 nfpms:
   - id: packages
     package_name: spotnik
