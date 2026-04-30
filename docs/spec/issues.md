@@ -577,3 +577,17 @@ PR #238 (story 186) shipped clean after one fix round. Two latent ASCII-fallback
 2. `internal/uikit/components/table.go` (third-party `bubble-table@v0.19.2/table/border.go:78-79,93`) hardcodes `│` for column `Left`/`Right`/`InnerDivider`. The search Results overlay shows these column separators in ASCII mode. Either patch bubble-table via TableChrome glyph injection or document the limitation. Same category as item 1.
 
 3. `internal/ui/panes/help_overlay.go:140` renders `│` as a content divider via `lipgloss.NewStyle()...Render("│")` — already a known carve-out (it's a vertical divider, not a border), but worth tracking alongside items 1-2 if a future story sweeps inline glyphs across the help surface.
+
+---
+
+## Story 187 minor issues — PlaybackControls test depth + visual diffs
+**Found:** 2026-04-30 | **Source:** PR #239 Review
+**Feature:** 13-tui-design-system
+
+PR #239 (story 187) shipped clean after one fix round. Sub-threshold concerns logged:
+
+1. `internal/uikit/playback_controls_test.go` lacks a direct uikit-level test for the paused branch (`Playing=false`) asserting `▷` (unicode) / `|>` (ASCII) glyphs appear. Currently covered transitively via `controls_test.go` legacy wrapper. A regression that swapped `GlyphPaused`/`GlyphPausedPB` in the primitive itself wouldn't be caught directly.
+
+2. Unicode-mode tests don't assert ASCII fallbacks (`||`, `Q`, `sh`, `ro`, `|>`) are absent. `GlyphFor` itself has catalogue-level tests in `glyph_test.go`, so a regression that hardcoded ASCII strings while bypassing `GlyphFor` is unlikely but possible.
+
+3. Visual diff (intentional, mention in PR description for downstream surprises): `RepeatOff` now renders `⟳` instead of legacy `↻`; `nowplaying.go:Title()` flipped from state-mode (`▶` when playing) to action-mode (`⏸` when playing) to match the controls strip semantics.

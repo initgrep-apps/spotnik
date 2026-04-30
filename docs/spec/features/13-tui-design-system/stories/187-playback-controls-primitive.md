@@ -1,7 +1,7 @@
 ---
 title: "PlaybackControls primitive + controls.go wrapper + nowplaying title glyphs"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
