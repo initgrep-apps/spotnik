@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	profileOnce sync.Once
-	testMode    bool
-	testModeMu  sync.RWMutex
+	profileOnce  sync.Once
+	testMode     bool
+	testModeMu   sync.RWMutex
+	priorUiMode  uikit.GlyphMode
 )
 
 // isTTY returns whether w is an *os.File pointing at a terminal.
@@ -53,15 +54,21 @@ func pinASCII() {
 // immediately, uikit is pinned to GlyphASCII mode so that glyph-role assertions
 // are deterministic, and spinner animation is disabled.
 // Tests call this in TestMain for deterministic output.
-// Note: calling SetTestMode(false) does not revert either side effect — pinASCII
-// is sync.Once-guarded and uikit mode is not restored.
+//
+// SetTestMode(true) snapshots the current uikit mode before pinning to GlyphASCII.
+// SetTestMode(false) restores that snapshot, so nested test helpers that toggle
+// test mode do not permanently alter the active glyph mode.
+// Note: pinASCII is sync.Once-guarded and is not reversed by SetTestMode(false).
 func SetTestMode(enabled bool) {
 	testModeMu.Lock()
 	defer testModeMu.Unlock()
 	testMode = enabled
 	if enabled {
+		priorUiMode = uikit.ActiveMode()
 		pinASCII()
 		uikit.SetModeForTest(uikit.GlyphASCII)
+	} else {
+		uikit.SetModeForTest(priorUiMode)
 	}
 }
 
