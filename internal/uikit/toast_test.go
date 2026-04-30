@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -218,6 +219,58 @@ func TestToast_TruncatedTitle_AsciiEllipsis(t *testing.T) {
 	suffix := string(runes[45:]) // last 3 runes
 	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
 	assert.NotContains(t, toast.Title, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
+// TestRegisterBubbleupAlerts_AsciiPrefixes verifies that RegisterBubbleupAlerts resolves
+// the five toast prefixes to their ASCII forms when GlyphASCII mode is active.
+func TestRegisterBubbleupAlerts_AsciiPrefixes(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	defs := uikit.RegisterBubbleupAlerts(th)
+
+	wantPrefixes := map[string]string{
+		"success":   "+",
+		"error":     "x",
+		"warning":   "!",
+		"info":      ">",
+		"ratelimit": "~",
+	}
+	require.Len(t, defs, 5, "RegisterBubbleupAlerts must return exactly 5 definitions")
+	for _, d := range defs {
+		want, ok := wantPrefixes[d.Key]
+		if !ok {
+			continue
+		}
+		assert.Equal(t, want, d.Prefix, "alert %q ascii prefix = %q, want %q", d.Key, d.Prefix, want)
+	}
+}
+
+// TestRegisterBubbleupAlerts_UnicodePrefixes verifies that RegisterBubbleupAlerts resolves
+// the five toast prefixes to their unicode forms when GlyphUnicode mode is active.
+func TestRegisterBubbleupAlerts_UnicodePrefixes(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	defs := uikit.RegisterBubbleupAlerts(th)
+
+	wantPrefixes := map[string]string{
+		"success":   "✓",
+		"error":     "✗",
+		"warning":   "◬",
+		"info":      "→",
+		"ratelimit": "⧖",
+	}
+	require.Len(t, defs, 5, "RegisterBubbleupAlerts must return exactly 5 definitions")
+	for _, d := range defs {
+		want, ok := wantPrefixes[d.Key]
+		if !ok {
+			continue
+		}
+		assert.Equal(t, want, d.Prefix, "alert %q unicode prefix = %q, want %q", d.Key, d.Prefix, want)
+	}
 }
 
 // makeTestAlertModel creates a minimal bubbleup.AlertModel with all five Spotnik
