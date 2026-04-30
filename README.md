@@ -14,7 +14,7 @@ A terminal client for Spotify.
 > *Spotify Premium is required for playback control. See the
 > [Spotify Web API docs](https://developer.spotify.com/documentation/web-api/reference/pause-a-users-playback).*
 
----
+
 
 ## Install
 
@@ -56,7 +56,7 @@ can also install from source:
 go install github.com/initgrep-apps/spotnik@latest
 ```
 
----
+
 
 ## Setup
 
@@ -70,7 +70,7 @@ A Spotify Developer app is needed for the PKCE OAuth flow:
 3. Run `spotnik`. It bootstraps `~/.config/spotnik/config.toml` and prompts for the Client ID.
 4. Your browser opens for authorization. Tokens land in the OS keychain.
 
----
+
 
 ## Features
 
@@ -128,8 +128,6 @@ Live observability for the underlying API gateway.
 
 The gateway itself handles rate limiting, request dedup, adaptive polling, and
 automatic retry-after.
-
----
 
 ## Keybindings
 
@@ -197,7 +195,6 @@ automatic retry-after.
 | `PgDn` / `PgUp` | Page results |
 | `Esc` | Close |
 
----
 
 ## Configuration
 
@@ -235,7 +232,6 @@ glyphs = "auto"
 Available themes: `black` (default), `monokai`, `catppuccin`, `nord`, `light`,
 `dracula`, `gruvbox`, `rosepine`, `solarized`, `synthwave`, `tokyonight`.
 
----
 
 ## Development
 
@@ -254,7 +250,6 @@ Other targets: `build`, `test`, `test-integration`, `test-coverage`, `lint`,
 Architecture and system docs live in [docs/system/](docs/system/):
 `architecture.md`, `design.md`, `tui.md`, `cli.md`, and `api-guide.md`.
 
----
 
 ## License
 
