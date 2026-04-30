@@ -32,34 +32,27 @@ A terminal Spotify client . Keyboard-driven, single binary, beautiful in a termi
 
 ## Installation
 
-### Homebrew (macOS / Linux)
+### macOS / Linux
 
 ```bash
-brew install initgrep-apps/tap/spotnik
+curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
 ```
 
-### Scoop (Windows)
+Pin a specific version:
+
+```bash
+SPOTNIK_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
+```
+
+### Windows
 
 ```powershell
-scoop bucket add spotnik https://github.com/initgrep-apps/scoop-bucket
-scoop install spotnik
+powershell -c "irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex"
 ```
 
-### DEB package (Ubuntu / Debian)
+### Linux packages (DEB / RPM)
 
-```bash
-# Replace <version> with the latest release, e.g. 0.1.0
-wget https://github.com/initgrep-apps/spotnik/releases/latest/download/spotnik_<version>_linux_amd64.deb
-sudo dpkg -i spotnik_<version>_linux_amd64.deb
-```
-
-### RPM package (Fedora / RHEL)
-
-```bash
-# Replace <version> with the latest release, e.g. 0.1.0
-wget https://github.com/initgrep-apps/spotnik/releases/latest/download/spotnik_<version>_linux_amd64.rpm
-sudo rpm -i spotnik_<version>_linux_amd64.rpm
-```
+Download from the [Releases page](https://github.com/initgrep-apps/spotnik/releases/latest).
 
 ### Go install
 
@@ -67,9 +60,9 @@ sudo rpm -i spotnik_<version>_linux_amd64.rpm
 go install github.com/initgrep-apps/spotnik@latest
 ```
 
-### Binary download
+### Manual
 
-Download a pre-built binary for your platform from the
+Download a pre-built binary from the
 [Releases page](https://github.com/initgrep-apps/spotnik/releases/latest).
 
 ---
@@ -198,11 +191,9 @@ theme = "black"
 
 ### Prerequisites
 
-- **Go 1.26+** (see `go.mod`) — `brew install go` or download from <https://go.dev/dl/>
+- **Go 1.26+** (see `go.mod`) — download from <https://go.dev/dl/>
 - **golangci-lint** — required by `make lint` and `make ci`:
   ```bash
-  brew install golangci-lint
-  # or
   curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
   ```
 
