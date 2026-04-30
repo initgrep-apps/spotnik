@@ -62,8 +62,8 @@ func RegisterBubbleupAlerts(t theme.Theme) []bubbleup.AlertDefinition {
 	}
 }
 
-// intentKey maps ToastIntent to the bubbleup alert key registered in
-// internal/ui/components/notifications.go.
+// intentKey maps ToastIntent to the bubbleup alert key used by RegisterBubbleupAlerts
+// and consumed by ToastManager.Cmd when dispatching bubbleup commands.
 var intentKey = [...]string{
 	ToastSuccess:   "success",
 	ToastError:     "error",
