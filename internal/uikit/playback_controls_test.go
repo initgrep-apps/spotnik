@@ -109,6 +109,35 @@ func TestPlaybackControls_RoleTokens(t *testing.T) {
 	})
 }
 
+// TestPlaybackControls_Paused_Unicode verifies that Playing=false renders the
+// GlyphPausedPB glyph (▷) in unicode mode. GlyphPaused (⏸) is the "playing,
+// press to pause" icon; GlyphPausedPB (▷) is the "paused, press to play" icon.
+// A regression that swapped these two roles would not be caught by the
+// Playing=true tests above.
+func TestPlaybackControls_Paused_Unicode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	c := newTestPlaybackControls(false, false, uikit.RepeatOff)
+	out := c.Render()
+
+	assert.Contains(t, out, "▷", "paused state (Playing=false) must show ▷ (GlyphPausedPB) in unicode mode")
+	assert.NotContains(t, out, "⏸", "paused state must NOT show ⏸ (GlyphPaused); that is the playing-state icon")
+}
+
+// TestPlaybackControls_Paused_ASCII verifies that Playing=false renders "|>"
+// in ASCII mode. Catches a swap of GlyphPaused/GlyphPausedPB at the primitive level.
+func TestPlaybackControls_Paused_ASCII(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	c := newTestPlaybackControls(false, false, uikit.RepeatOff)
+	out := c.Render()
+
+	assert.Contains(t, out, "|>", "paused state (Playing=false) must show |> (GlyphPausedPB) in ASCII mode")
+	assert.NotContains(t, out, "||", "paused state must NOT show || (GlyphPaused); that is the playing-state icon")
+}
+
 // TestPlaybackControls_RepeatModes verifies each repeat mode renders the correct glyph.
 func TestPlaybackControls_RepeatModes(t *testing.T) {
 	tests := []struct {
