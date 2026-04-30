@@ -130,9 +130,6 @@ func (o *ThemeOverlay) View() string {
 
 	var lines []string
 	for i, th := range o.themes {
-		if i > 0 {
-			lines = append(lines, strings.Repeat(" ", innerWidth))
-		}
 		lines = append(lines, o.renderRow(i, th, innerWidth))
 	}
 
@@ -256,7 +253,7 @@ func renderSwatches(t *theme.ConfigTheme) string {
 	var b strings.Builder
 	for _, c := range colors {
 		b.WriteString(lipgloss.NewStyle().Foreground(c).Render(swatch + swatch))
-		b.WriteString(" ")
+		// b.WriteString(" ")
 	}
 	return b.String()
 }

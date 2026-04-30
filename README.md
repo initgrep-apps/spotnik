@@ -84,6 +84,7 @@ API gateway.
 * Press `1` through `8` to toggle individual panes. Each pane title shows a
   small superscript number indicating its toggle key.
 * Press `Tab` (or `Shift+Tab`) to move focus between visible panes.
+* Use `↑`/`↓` (or `j`/`k`, or the mouse wheel) to scroll list panes.
 * Press `Enter` in a list pane to play the highlighted item.
 * Press `f` to filter a list pane, and `Esc` to close any overlay or clear a
   filter.
@@ -163,6 +164,7 @@ automatic retry-after.
 |-----|--------|
 | `Tab` / `Shift+Tab` | Cycle focus |
 | `↑` `↓` `j` `k` | Scroll |
+| Mouse wheel | Scroll the pane under the cursor |
 | `Esc` | Close overlay, clear filter, or scroll to top |
 
 ### Pane actions
