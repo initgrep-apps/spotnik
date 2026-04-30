@@ -1,38 +1,26 @@
-# Spotnik
 
 [![CI](https://github.com/initgrep-apps/spotnik/actions/workflows/ci.yml/badge.svg)](https://github.com/initgrep-apps/spotnik/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/initgrep-apps/spotnik)](https://github.com/initgrep-apps/spotnik/releases/latest)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/initgrep-apps/spotnik)](go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A terminal Spotify client . Keyboard-driven, single binary, beautiful in a terminal.
+# Spotnik
+
+A terminal client for Spotify.
+
+> Spotnik controls playback on your Spotify Connect devices. It does not play
+> audio itself.
+>
+> *Spotify Premium is required for playback control. See the
+> [Spotify Web API docs](https://developer.spotify.com/documentation/web-api/reference/pause-a-users-playback).*
 
 ---
 
-## Features
+## Install
 
-- **10-pane btop-style grid** — Now Playing, Queue, Playlists, Albums, Liked Songs,
-  Recently Played, Top Tracks, Top Artists across two pages
-- **Braille visualizer** — animated waveform with gradient seek bar and volume bar
-- **Search overlay** — full-text search across tracks, artists, albums, playlists with
-  debounced input and prefix autocomplete
-- **Device switcher** — transfer playback to any Spotify Connect device
-- **Preset layouts** — `p` cycles through curated layouts; `1`–`8` toggle individual panes
-  (btop-style)
-- **Playlist management** — create, rename, reorder tracks, remove from playlist
-- **11 themes** — black (default), monokai, catppuccin, nord, light, dracula, gruvbox,
-  rosepine, solarized, synthwave, tokyonight
-- **Gateway observability** — Page B shows live request flow, token bucket state, and
-  API event log
-- **Adaptive polling** — polling intervals back off when idle; rate-limit responses trigger
-  automatic retry-after cooldown
-- **PKCE auth** — no client secret required; tokens stored in OS keychain
+### macOS and Linux
 
----
-
-## Installation
-
-### macOS / Linux
+Latest release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
@@ -46,208 +34,228 @@ SPOTNIK_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/initgrep-app
 
 ### Windows
 
+Latest release:
+
 ```powershell
 powershell -c "irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex"
 ```
 
-### Linux packages (DEB / RPM)
+Pin a specific version:
 
-Download from the [Releases page](https://github.com/initgrep-apps/spotnik/releases/latest).
+```powershell
+$env:SPOTNIK_VERSION="v0.1.0"; powershell -c "irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex"
+```
 
-### Go install
+### Other
+
+DEB and RPM packages, plus pre-built binaries, are on the
+[Releases page](https://github.com/initgrep-apps/spotnik/releases/latest). You
+can also install from source:
 
 ```bash
 go install github.com/initgrep-apps/spotnik@latest
 ```
 
-### Manual
+---
 
-Download a pre-built binary from the
-[Releases page](https://github.com/initgrep-apps/spotnik/releases/latest).
+## Setup
+
+Spotify Premium is required (the Web API only allows playback control on
+Premium accounts).
+
+A Spotify Developer app is needed for the PKCE OAuth flow:
+
+1. Visit [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app.
+2. Add `http://127.0.0.1:8888/callback` as a redirect URI.
+3. Run `spotnik`. It bootstraps `~/.config/spotnik/config.toml` and prompts for the Client ID.
+4. Your browser opens for authorization. Tokens land in the OS keychain.
 
 ---
 
-## Prerequisites
+## Features
 
-- **Spotify Premium** — playback controls require a Premium subscription
-- **Spotify Developer app** — needed for the PKCE OAuth flow:
-  1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-  2. Create an app and add `http://127.0.0.1:8888/callback` as a Redirect URI
-  3. Copy the Client ID — you'll need it in the config file (see [Configuration](#configuration))
+Spotnik organises the TUI into two pages with a btop-style, pane-based layout.
+Page A holds the everyday Spotify panes; Page B is a live developer view of the
+API gateway.
 
----
+### How to use
 
-## Quick Start
+* Press `0` to switch between Page A and Page B.
+* Press `1` through `8` to toggle individual panes. Each pane title shows a
+  small superscript number indicating its toggle key.
+* Press `Tab` (or `Shift+Tab`) to move focus between visible panes.
+* Press `Enter` in a list pane to play the highlighted item.
+* Press `f` to filter a list pane, and `Esc` to close any overlay or clear a
+  filter.
+* Playback keys (`Space`, `←`, `→`, `+`, `-`, `s`, `r`, `v`) work from any pane.
 
-```bash
-# First launch — Spotnik opens your browser for Spotify authorization
-spotnik
+See [Keybindings](#keybindings) for the full reference.
 
-# Or run the auth flow explicitly
-spotnik auth
-```
+### Page A: Spotify
 
-Tokens are stored securely in your OS keychain. After the first auth, `spotnik` launches
-directly into the TUI.
+* **Now Playing**: current track, braille visualizer, gradient seek bar, and volume bar.
+* **Queue**: upcoming tracks.
+* **Playlists**: your saved playlists.
+* **Albums**: your saved albums.
+* **Liked Songs**: your liked tracks.
+* **Recently Played**: listening history.
+* **Top Tracks**: your top tracks.
+* **Top Artists**: your top artists.
+
+### Overlays and global
+
+* **Search**: full-screen search across tracks, artists, albums, and playlists, with prefix autocomplete and paginated results.
+* **Devices**: transfer playback to any Spotify Connect device.
+* **Profile**: user profile, logout, and forget.
+* **Themes**: 11 built-in themes with a runtime switcher.
+* **Transport**: play, pause, skip, shuffle, repeat, and volume. Always active.
+* **Layouts**: preset cycling (`p`) and per-pane visibility toggles (`1`–`8`).
+* **Filter**: universal filter on list panes (`f`, `Esc` clears).
+
+### CLI
+
+* **Auth**: `spotnik auth {register, login, logout, forget, status}`.
+* **PKCE OAuth**: no client secret required. Tokens are stored in the OS keychain.
+
+### Page B: Developer
+
+Live observability for the underlying API gateway.
+
+* **Gateway Health**: token bucket, backoff, and rate-limit state.
+* **Polling Traffic**: per-pane request volume.
+* **Live Request Flow**: in-flight requests.
+* **Network Log**: recent API events.
+
+The gateway itself handles rate limiting, request dedup, adaptive polling, and
+automatic retry-after.
 
 ---
 
 ## Keybindings
 
-> When changing any keybinding, update this section, `docs/system/design.md §17`, and
-> the `helpContent` var in `internal/ui/panes/help_overlay.go` in the same commit.
-
 ### Global
 
 | Key | Action |
 |-----|--------|
-| `/` | Open search overlay |
-| `d` | Open device switcher |
-| `u` | Open user profile overlay |
-| `t` | Open theme switcher |
-| `?` | Open help overlay |
+| `/` | Search overlay |
+| `d` | Device switcher |
+| `u` | User profile overlay |
+| `t` | Theme switcher |
+| `?` | Help overlay |
 | `q` | Quit |
 | `0` | Toggle Page A / Page B |
-| `1`–`8` | Toggle pane visibility on Page A |
-| `1`–`5` | Toggle pane visibility on Page B |
+| `1`–`8` | Toggle pane visibility (Page A) |
+| `1`–`5` | Toggle pane visibility (Page B) |
 | `p` | Cycle preset layout |
 
-### Playback
-
-Playback keys are always active regardless of which pane has focus.
+### Playback (always active)
 
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `←` / `→` | Previous / next track |
-| `+` / `-` | Volume up / down |
+| `←` / `→` | Previous / next |
+| `+` / `-` | Volume |
 | `s` | Toggle shuffle |
-| `r` | Cycle repeat mode |
+| `r` | Cycle repeat |
 | `v` | Cycle visualizer pattern |
 
 ### Navigation
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Next pane focus |
-| `Shift+Tab` | Previous pane focus |
-| `↑` / `k` | Scroll up |
-| `↓` / `j` | Scroll down |
-| `Esc` | Close overlay · clear filter · scroll top |
+| `Tab` / `Shift+Tab` | Cycle focus |
+| `↑` `↓` `j` `k` | Scroll |
+| `Esc` | Close overlay, clear filter, or scroll to top |
 
-### Pane Actions
+### Pane actions
 
 | Key | Action | Context |
 |-----|--------|---------|
-| `Enter` | Select / play item | Focused pane |
+| `Enter` | Select or play | Focused pane |
 | `f` | Toggle filter | List panes |
-| `g` | Cycle time range | TopTracks / TopArtists |
-| `A` | Add to queue | Search overlay, list panes |
-| `i` | Like / unlike track | LikedSongs pane |
-| `x` | Remove track from playlist | Playlists pane track sub-view |
-| `Shift+↑` / `Shift+↓` | Reorder track | Playlists pane |
+| `g` | Cycle time range | TopTracks, TopArtists |
+| `A` | Add to queue | Search, list panes |
+| `i` | Like or unlike | Liked Songs |
+| `x` | Remove from playlist | Playlists track view |
+| `Shift+↑` / `Shift+↓` | Reorder track | Playlists |
 
-### Profile Overlay
-
-| Key | Action |
-|-----|--------|
-| `l` | Logout — ends session, keeps Client ID. Press twice to confirm. |
-| `f` | Forget — removes session + Client ID. Press twice to confirm. |
-
-### Search Overlay
+### Profile overlay
 
 | Key | Action |
 |-----|--------|
-| `Tab` / `Shift+Tab` | Cycle search category |
-| `Enter` | Play selected result |
-| `Ctrl+A` | Add result to queue |
-| `Ctrl+U` | Clear search input |
-| `PgDn` / `PgUp` | Next / previous result page |
-| `Esc` | Close search overlay |
+| `l` | Logout. Press twice to confirm. Keeps the Client ID. |
+| `f` | Forget. Press twice to confirm. Also removes the Client ID. |
+
+### Search overlay
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Cycle category |
+| `Enter` | Play result |
+| `Ctrl+A` | Add to queue |
+| `Ctrl+U` | Clear input |
+| `PgDn` / `PgUp` | Page results |
+| `Esc` | Close |
 
 ---
 
 ## Configuration
 
-Config file location: `~/.config/spotnik/config.toml`
-
-Spotnik bootstraps this file on first launch. Key options:
+Spotnik bootstraps `~/.config/spotnik/config.toml` on first launch. Full schema
+with defaults:
 
 ```toml
+# Spotnik configuration
+# https://github.com/initgrep-apps/spotnik
+
 [spotify]
-# Your Spotify Developer app client ID.
-# Required only if you did not use a pre-built binary with an embedded client ID.
-client_id = "your-client-id-here"
+# To use your own Spotify app credentials, uncomment and set:
+# client_id = "your-client-id-from-spotify-developer-dashboard"
 
 [preferences]
-# Active theme. Options: black (default), monokai, catppuccin, nord, light,
-# dracula, gruvbox, rosepine, solarized, synthwave, tokyonight
 theme = "black"
+# preset = 0          # Page A layout preset index (0-based)
+# visualizer = 0      # Visualizer pattern index (0-6)
+
+[cli]
+# CLI palette: "auto" (default), "fixed", or "theme"
+# - auto:  theme colours on dark-bg terminals, fixed elsewhere
+# - fixed: always the built-in Spotnik palette
+# - theme: inherit the TUI theme (may be unreadable on light terminals)
+palette = "auto"
+
+[ui]
+# Glyph rendering mode: "auto" (default), "unicode", or "ascii"
+# - auto:    use unicode glyphs when LC_ALL/LANG contains UTF-8, else ASCII
+# - unicode: always use unicode glyphs (requires a UTF-8 capable terminal)
+# - ascii:   always use ASCII fallback glyphs (safe for all terminals)
+glyphs = "auto"
 ```
+
+Available themes: `black` (default), `monokai`, `catppuccin`, `nord`, `light`,
+`dracula`, `gruvbox`, `rosepine`, `solarized`, `synthwave`, `tokyonight`.
 
 ---
 
 ## Development
 
-### Prerequisites
-
-- **Go 1.26+** (see `go.mod`) — download from <https://go.dev/dl/>
-- **golangci-lint** — required by `make lint` and `make ci`:
-  ```bash
-  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
-  ```
-
-### Build and run
+Requires **Go 1.26+** and **golangci-lint**.
 
 ```bash
 git clone https://github.com/initgrep-apps/spotnik.git
 cd spotnik
-make build       # binary at bin/spotnik
-make run         # build + run
+make ci          # fmt-check, tidy-check, lint, test-coverage (>=80%), build
+make run         # build and run
 ```
 
-### Make targets
+Other targets: `build`, `test`, `test-integration`, `test-coverage`, `lint`,
+`fmt`, `tidy-check`, `clean`, `install`, `release`.
 
-| Target | What it does |
-|--------|-------------|
-| `make build` | Compile to `bin/spotnik` |
-| `make run` | Build + run |
-| `make test` | Unit tests (`-race -count=1`) |
-| `make test-integration` | Integration tests (build tag `integration`) |
-| `make test-coverage` | Unit tests + coverage; fails below 80% |
-| `make lint` | Run `golangci-lint ./...` |
-| `make fmt` / `make fmt-check` | Format / verify formatting |
-| `make tidy-check` | Verify `go.mod` / `go.sum` are tidy |
-| `make ci` | Full pre-commit gate: `fmt-check → tidy-check → lint → test-coverage → build` |
-| `make clean` | Remove `bin/` and coverage artifacts |
-| `make install` | Install binary to `$GOPATH/bin` |
-| `make release` | Cross-compile for all release targets |
-
-### Debugging
-
-```bash
-DEBUG=1 ./bin/spotnik           # enables Bubble Tea debug log
-tail -f debug.log               # in another terminal
-
-go test -race ./...             # race detector
-
-./bin/spotnik auth logout       # remove tokens, keep client_id
-./bin/spotnik auth forget       # remove tokens AND client_id
-```
-
-Press `0` inside the app to switch to Page B — live API gateway request flow and network
-event log, useful for diagnosing rate-limit or connectivity issues.
-
-### Architecture
-
-See [docs/system/architecture.md](docs/system/architecture.md) for the full reference.
-The `docs/system/` folder also holds [design.md](docs/system/design.md) (UI layout spec),
-[tui.md](docs/system/tui.md) (primitive contracts), [cli.md](docs/system/cli.md) (CLI
-output spec), and [api-guide.md](docs/system/api-guide.md) (Spotify Web API capability
-inventory).
+Architecture and system docs live in [docs/system/](docs/system/):
+`architecture.md`, `design.md`, `tui.md`, `cli.md`, and `api-guide.md`.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
