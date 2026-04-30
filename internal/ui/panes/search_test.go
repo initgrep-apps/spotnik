@@ -1917,6 +1917,52 @@ func TestRenderTabBar_ShowsSpinnerWhenLoading(t *testing.T) {
 	assert.NotEmpty(t, tabBar, "tab bar must render without panic")
 }
 
+// TestSearchOverlay_Spinner_AsciiRunningFrames verifies that in ASCII mode the search
+// spinner renders rotating-bar frames (|/−\) and never emits braille codepoints.
+// Regression guard: if GlyphMode routing breaks, the unicode braille frames bleed through.
+func TestSearchOverlay_Spinner_AsciiRunningFrames(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	o := panes.NewSearchOverlay(th)
+	o.SetSize(80, 40)
+
+	// Set loadingFirstPage so the spinner is shown in the results panel.
+	model, _ := o.Update(panes.SearchLoadingMsg{IsFirstPage: true})
+	o = model.(*panes.SearchOverlay)
+	require.True(t, o.LoadingFirstPage(), "prerequisite: loadingFirstPage must be true")
+
+	// Drive the spinner forward several ticks to advance the frame.
+	cmd := panes.SearchSpinnerInitCmd(o)
+	require.NotNil(t, cmd)
+	msg := cmd()
+	for i := 0; i < 8; i++ {
+		var retCmd tea.Cmd
+		model, retCmd = o.Update(msg)
+		o = model.(*panes.SearchOverlay)
+		if retCmd != nil {
+			msg = retCmd()
+		}
+	}
+
+	view := o.View()
+
+	// ASCII rotating-bar frames — at least one must appear in the rendered view.
+	containsASCIIFrame := strings.Contains(view, "|") ||
+		strings.Contains(view, "/") ||
+		strings.Contains(view, "-") ||
+		strings.Contains(view, `\`)
+	assert.True(t, containsASCIIFrame, "ASCII mode spinner must render one of |, /, -, \\ in view")
+
+	// Unicode braille frames must NOT appear.
+	brailleFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	for _, frame := range brailleFrames {
+		assert.NotContains(t, view, frame,
+			"ASCII mode spinner must not render braille frame %q", frame)
+	}
+}
+
 // TestRenderTabBar_NoSpinnerWhenNotLoading verifies that the tab bar does not contain
 // spinner characters when no loading state is active.
 // TODO(19-search-redesign): story 99 will restore spinner-in-tabbar control via o.results.

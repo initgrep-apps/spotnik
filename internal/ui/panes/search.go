@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -68,6 +69,30 @@ type searchIntent struct {
 // It is never routed to app.go — handled entirely within SearchOverlay.Update().
 type searchDebounceMsg struct {
 	intent searchIntent
+}
+
+// searchSpinnerTickMsg wraps bubbles/spinner.TickMsg so the search overlay's
+// spinner ticks are never intercepted by the global spinner.TickMsg handler in
+// app/handlers.go (which is reserved for the onboarding spinner).
+// This is the same isolation pattern established in story 94.
+type searchSpinnerTickMsg spinner.TickMsg
+
+// wrapSearchSpinnerTick takes a cmd returned by bubbles/spinner.Update (or Init)
+// and wraps any resulting spinner.TickMsg in searchSpinnerTickMsg so it stays
+// invisible to the global handler. Must be applied to every spinner command
+// in the chain — not just the first one — because bubbles re-arms its own tick
+// on every update.
+func wrapSearchSpinnerTick(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg := cmd()
+		if t, ok := msg.(spinner.TickMsg); ok {
+			return searchSpinnerTickMsg(t)
+		}
+		return msg
+	}
 }
 
 // SearchClosedMsg is emitted when the user presses Esc, signalling the root
@@ -391,9 +416,12 @@ func (o *SearchOverlay) resizeList() {
 
 // Init starts the cursor blink loop, placeholder ticker, spinner tick, and emits
 // SearchClearedMsg so each search session begins with a clean state.
+// The spinner's init command is wrapped in wrapSearchSpinnerTick so its ticks
+// use searchSpinnerTickMsg instead of the raw spinner.TickMsg, preventing
+// the global onboarding spinner handler (handlers.go) from silently dropping them.
 func (o *SearchOverlay) Init() tea.Cmd {
 	clearCmd := func() tea.Msg { return SearchClearedMsg{} }
-	return tea.Batch(textinput.Blink, o.sp.Init(), clearCmd, searchPlaceholderTick())
+	return tea.Batch(textinput.Blink, wrapSearchSpinnerTick(o.sp.Init()), clearCmd, searchPlaceholderTick())
 }
 
 // Update handles all messages for the search overlay.
@@ -466,14 +494,22 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return o.handleKey(m)
+
+	case searchSpinnerTickMsg:
+		// Drive the spinner frame forward. Re-wrap the returned tick command so
+		// each subsequent tick also arrives as searchSpinnerTickMsg (not raw
+		// spinner.TickMsg), keeping it invisible to the global onboarding handler.
+		var spCmd tea.Cmd
+		o.sp, spCmd = o.sp.Update(spinner.TickMsg(m))
+		return o, wrapSearchSpinnerTick(spCmd)
 	}
 
-	// Forward to spinner (drives frame animation) and text input (cursor blink).
-	var spinCmd tea.Cmd
-	o.sp, spinCmd = o.sp.Update(msg)
+	// Forward all other messages to the text input (cursor blink, etc.).
+	// NOTE: raw spinner.TickMsg is intentionally NOT forwarded here — the search
+	// overlay's spinner ticks arrive exclusively as searchSpinnerTickMsg above.
 	var inputCmd tea.Cmd
 	o.input, inputCmd = o.input.Update(msg)
-	return o, tea.Batch(spinCmd, inputCmd)
+	return o, inputCmd
 }
 
 // handleDebounce is called when a searchDebounceMsg arrives. It discards stale
@@ -1093,11 +1129,13 @@ func SearchDebounceMsgWithIntentForTest(o *SearchOverlay) tea.Msg {
 	return searchDebounceMsg{intent: o.intent}
 }
 
-// SearchSpinnerInitCmd returns the uikit.Spinner's Init() cmd for the given overlay.
-// The resulting cmd produces a TickMsg that matches the overlay's spinner ID and is
-// correctly forwarded by Update's default branch to advance the animation frame.
+// SearchSpinnerInitCmd returns the overlay's spinner Init() cmd wrapped in
+// wrapSearchSpinnerTick so the resulting TickMsg arrives as searchSpinnerTickMsg
+// and is handled by Update's explicit case — not intercepted by the global
+// onboarding spinner handler in handlers.go.
+// Exported for tests that drive the spinner tick chain manually.
 func SearchSpinnerInitCmd(o *SearchOverlay) tea.Cmd {
-	return o.sp.Init()
+	return wrapSearchSpinnerTick(o.sp.Init())
 }
 
 // SpinnerView returns the current rendered spinner frame string — exported for tests
