@@ -563,3 +563,17 @@ PR #236 (story 184) shipped clean after one fix round. Sub-threshold concerns lo
 PR #237 (story 185) shipped clean after one fix round. One sub-threshold concern logged:
 
 1. `TestRenderGrid_AsciiBorders` (`internal/app/render_test.go`) asserts `─` and `│` appear nowhere in the entire grid output, not just in border positions. `internal/ui/panes/playlists_pane.go` and `albums_pane.go` emit literal `──` separators in `Title()` when `inTrackView` is true. Default test-app state doesn't trigger that branch today, so the test passes. A future change that selects a playlist before snapshot, or a new pane that uses `─`/`│` as a content separator, will break this test even if border glyphs are correct. Consider scoping assertions to first/last lines of each pane rect, or asserting the four corners specifically.
+
+---
+
+## Story 186 minor issues — overlay content ASCII fallback gaps
+**Found:** 2026-04-29 | **Source:** PR #238 Review
+**Feature:** 13-tui-design-system
+
+PR #238 (story 186) shipped clean after one fix round. Two latent ASCII-fallback content gaps logged — they live in inner content (not OverlayChrome border), so out of scope for this story:
+
+1. `internal/ui/panes/search.go:803` hardcodes `strings.Repeat("─", innerWidth)` for the search tab-bar separator. Under `ui.glyphs = "ascii"` this still emits `─`. Story 190 (pane-content-search-devices) or 191 (remaining-glyph-leaks) should route this through `uikit.GlyphFor(GlyphHRule, ActiveMode())`.
+
+2. `internal/uikit/components/table.go` (third-party `bubble-table@v0.19.2/table/border.go:78-79,93`) hardcodes `│` for column `Left`/`Right`/`InnerDivider`. The search Results overlay shows these column separators in ASCII mode. Either patch bubble-table via TableChrome glyph injection or document the limitation. Same category as item 1.
+
+3. `internal/ui/panes/help_overlay.go:140` renders `│` as a content divider via `lipgloss.NewStyle()...Render("│")` — already a known carve-out (it's a vertical divider, not a border), but worth tracking alongside items 1-2 if a future story sweeps inline glyphs across the help surface.
