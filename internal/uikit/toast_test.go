@@ -1,6 +1,7 @@
 package uikit_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -219,6 +220,40 @@ func TestToast_TruncatedTitle_AsciiEllipsis(t *testing.T) {
 	suffix := string(runes[45:]) // last 3 runes
 	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
 	assert.NotContains(t, toast.Title, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
+// TestToast_TruncatedBody_AsciiEllipsis verifies that in ASCII mode a body
+// longer than 160 runes is truncated with "..." (3 ASCII dots), not "…".
+// Symmetric counterpart to TestToast_TruncatedTitle_AsciiEllipsis.
+func TestToast_TruncatedBody_AsciiEllipsis(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	// Build a body of exactly 161 runes so Normalize triggers truncation.
+	base := strings.Repeat("a", 161)
+	require.Equal(t, 161, len([]rune(base)), "precondition: base is 161 runes")
+
+	toast := uikit.Toast{Intent: uikit.ToastError, Body: base}.Normalize()
+	runes := []rune(toast.Body)
+	assert.Equal(t, 160, len(runes), "truncated body must be 160 runes")
+	suffix := string(runes[157:]) // last 3 runes
+	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
+	assert.NotContains(t, toast.Body, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
+// TestToast_Normalize_ShortBodyUnchanged verifies the public Normalize path
+// when the body is already shorter than the truncation cap (max=160) — the
+// body passes through unchanged.
+//
+// The truncateRunes max < len(ellipsis) defensive guard is exercised
+// directly in truncate_runes_internal_test.go (in-package test).
+func TestToast_Normalize_ShortBodyUnchanged(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	short := "ab" // 2 runes — well under any max; must never panic or corrupt
+	toast := uikit.Toast{Intent: uikit.ToastInfo, Body: short}.Normalize()
+	assert.Equal(t, short, toast.Body, "short body must pass through Normalize unchanged")
 }
 
 // TestRegisterBubbleupAlerts_AsciiPrefixes verifies that RegisterBubbleupAlerts resolves

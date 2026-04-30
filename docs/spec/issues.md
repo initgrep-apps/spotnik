@@ -528,14 +528,6 @@ Items to log:
 
 PR #235 (story 183) shipped clean after two review rounds. The following sub-threshold concerns were filed instead of blocking the merge:
 
-1. `internal/uikit/spinner_frames.go` — `SpinnerFrames(mode)` returns the package-level slice (`spinnerFramesUnicode` / `spinnerFramesASCII`) directly. Doc comment says "must NOT be mutated by the caller", but the contract is comment-only. Both `uikit.Spinner` and `cliout.Spinner` share these slices, so an in-place mutation in one consumer corrupts the other. Either return a fresh `append([]string(nil), ...)` slice per call, or expose `SpinnerFrame(m, i)` / `SpinnerFrameCount(m)` accessors that never hand out the slice.
-
-2. `internal/uikit/glyph.go` `GlyphFor` and `internal/uikit/spinner_frames.go` `SpinnerFrames` use a two-state `if mode == GlyphASCII { ... } return unicode` cascade. If a third `GlyphMode` is ever added (e.g. `GlyphNerdFont`), every call site silently keeps returning Unicode without a compile-time signal. Convert to a `switch mode { case GlyphASCII: …; case GlyphUnicode: …; default: … }` so future modes surface as missing cases.
-
-3. `internal/uikit/toast.go` `truncateRunes` invariant ("max must be >= len(ellipsis runes)") is comment-only. Currently safe because `Normalize` is the only caller and uses 48 / 160. A future caller passing `max < 3` in ASCII mode would slice `runes[max-3:max]` and panic. Add a runtime guard or expose the function only via a typed helper that enforces the bound.
-
-4. `internal/uikit/toast_test.go` — body truncation is shared with title via `Normalize`, so the existing `TestToast_TruncatedTitle_AsciiEllipsis` covers the code path. Adding one explicit body assertion (161-rune body in ASCII mode ends with `...`) would make the test surface match the public contract more directly.
-
 5. `internal/uikit/spinner.go` — FPS changed from `time.Second / 10` to `time.Second / 12` during the refactor. Story spec didn't mandate a value, but the change is undocumented. Either revert or note the rationale in a doc comment.
 
 6. `internal/uikit/spinner_test.go:170` — `TestSpinner_Running_Unicode_UsesSpinnerFrames` calls `SetModeForTest(GlyphUnicode)` and defers `SetModeForTest(GlyphUnicode)`. The defer is a no-op (Unicode is already the default). Harmless, but copying this test as a template would propagate the no-op pattern.
@@ -543,16 +535,6 @@ PR #235 (story 183) shipped clean after two review rounds. The following sub-thr
 7. `internal/uikit/glyph.go` — `GlyphSeparator` value is `"sep.bullet"` but the Go identifier is generic. If a second separator ever lands (`sep.dash`, `sep.pipe`), the existing identifier becomes ambiguous. Consider renaming to `GlyphSepBullet` for parity with the rest of the bucketed naming.
 
 ---
-
-## Story 184 minor issues — cliout/uikit integration polish
-**Found:** 2026-04-29 | **Source:** PR #236 Review
-**Feature:** 13-tui-design-system
-
-PR #236 (story 184) shipped clean after one fix round. Sub-threshold concerns logged for future hardening:
-
-1. `internal/cliout/spinner_test.go` `TestSpinnerFrames_AsciiSet` asserts only the ASCII frame set. A constant-mode bug like `func resolveSpinnerFrames() []string { return uikit.SpinnerFrames(GlyphASCII) }` would still pass because TestMain pins ASCII. Add a symmetric unicode-mode sub-test that toggles `uikit.SetModeForTest(GlyphUnicode)` and asserts `resolveSpinnerFrames()` returns `uikit.SpinnerFrames(GlyphUnicode)`.
-
-2. `internal/cliout/tty.go` `SetTestMode(false)` does not restore the prior `uikit` mode (only `SetTestMode(true)` pins it). Currently benign because `cmd/root_test.go` and `cliout` `TestMain` pin ASCII once and never toggle mid-suite. If a future test toggles modes, snapshot the prior mode at `SetTestMode(true)` entry and restore on `false`.
 
 ---
 
@@ -570,13 +552,9 @@ PR #237 (story 185) shipped clean after one fix round. One sub-threshold concern
 **Found:** 2026-04-29 | **Source:** PR #238 Review
 **Feature:** 13-tui-design-system
 
-PR #238 (story 186) shipped clean after one fix round. Two latent ASCII-fallback content gaps logged — they live in inner content (not OverlayChrome border), so out of scope for this story:
+PR #238 (story 186) shipped clean after one fix round. One latent ASCII-fallback content gap remains:
 
-1. `internal/ui/panes/search.go:803` hardcodes `strings.Repeat("─", innerWidth)` for the search tab-bar separator. Under `ui.glyphs = "ascii"` this still emits `─`. Story 190 (pane-content-search-devices) or 191 (remaining-glyph-leaks) should route this through `uikit.GlyphFor(GlyphHRule, ActiveMode())`.
-
-2. `internal/uikit/components/table.go` (third-party `bubble-table@v0.19.2/table/border.go:78-79,93`) hardcodes `│` for column `Left`/`Right`/`InnerDivider`. The search Results overlay shows these column separators in ASCII mode. Either patch bubble-table via TableChrome glyph injection or document the limitation. Same category as item 1.
-
-3. `internal/ui/panes/help_overlay.go:140` renders `│` as a content divider via `lipgloss.NewStyle()...Render("│")` — already a known carve-out (it's a vertical divider, not a border), but worth tracking alongside items 1-2 if a future story sweeps inline glyphs across the help surface.
+2. `internal/uikit/components/table.go` (third-party `bubble-table@v0.19.2/table/border.go:78-79,93`) hardcodes `│` for column `Left`/`Right`/`InnerDivider`. The search Results overlay shows these column separators in ASCII mode. Either patch bubble-table via TableChrome glyph injection or document the limitation.
 
 ---
 
@@ -585,8 +563,6 @@ PR #238 (story 186) shipped clean after one fix round. Two latent ASCII-fallback
 **Feature:** 13-tui-design-system
 
 PR #239 (story 187) shipped clean after one fix round. Sub-threshold concerns logged:
-
-1. `internal/uikit/playback_controls_test.go` lacks a direct uikit-level test for the paused branch (`Playing=false`) asserting `▷` (unicode) / `|>` (ASCII) glyphs appear. Currently covered transitively via `controls_test.go` legacy wrapper. A regression that swapped `GlyphPaused`/`GlyphPausedPB` in the primitive itself wouldn't be caught directly.
 
 2. Unicode-mode tests don't assert ASCII fallbacks (`||`, `Q`, `sh`, `ro`, `|>`) are absent. `GlyphFor` itself has catalogue-level tests in `glyph_test.go`, so a regression that hardcoded ASCII strings while bypassing `GlyphFor` is unlikely but possible.
 
@@ -599,8 +575,6 @@ PR #239 (story 187) shipped clean after one fix round. Sub-threshold concerns lo
 **Feature:** 13-tui-design-system
 
 PR #241 (story 189) shipped clean after one fix round. One sub-threshold concern logged:
-
-1. `selectRenderer` is called inside `engine.go:generateFrames`, which only runs on `SetSize` / `CyclePattern` / `SetPattern`. If a future change toggles `uikit.ActiveMode()` at runtime without resize/cycle (e.g. live mode toggle hotkey), the cached frames stay stale until the next regen. No test covers this. Borderline — only matters if mode-toggle-at-runtime becomes a feature. Add a test that flips mode after `SetSize`, calls `CyclePattern` (forcing regen), and verifies the new renderer wins, or hook `selectRenderer` into a frame-time read if mode flips become user-facing.
 
 2. Comment typo in `TestAsciiBars_FourLevelDensityRamp` at line ~195: row-glyph documentation is jumbled (test logic is correct, only the explanatory comment is wrong). Cleanup-only.
 
@@ -641,8 +615,6 @@ PR #243 (story 191) shipped after one fix round that closed 6 ASCII test gaps (3
 PR #244 (story 192, FINAL story) shipped after one fix round that closed 5 important gaps including expanding `check-catalogue-leaks.sh` CHARS to full glyphTable parity (which exposed 7 latent production leaks) and adding e2e tests for all three guard scripts. Sub-threshold concerns:
 
 1. `TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars` accepts `'-'` as valid ASCII output but `AsciiBarsRenderer.RenderFrame` only emits `{ '#', '=', '.', ' ' }` — the `-` branch is dead. Slightly weaker than ideal but still catches braille/block leaks.
-
-2. Spinner braille frames `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` from `internal/uikit/spinner_frames.go` are not in `check-catalogue-leaks.sh` CHARS array. By design they dispatch via `SpinnerFrames(mode)` not `GlyphFor`, so a leak elsewhere wouldn't be caught. Minor coverage gap.
 
 3. `cliout` in-test ASCII pin partial — 5 of 8 test files (`prompt_test.go`, `builder_test.go`, `palette_test.go`, `render_test.go`, `tty_test.go`) lack explicit `SetModeForTest(GlyphASCII)` pin. Coverage relies on the locale matrix only; a developer running locally with `LANG=en_US.UTF-8` would not exercise ASCII paths in those packages.
 

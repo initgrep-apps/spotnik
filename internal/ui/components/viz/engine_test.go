@@ -981,6 +981,58 @@ func TestEngine_SelectsUnicodeRendererInUnicodeMode(t *testing.T) {
 	assert.True(t, hasBraille, "unicode mode should produce at least one braille rune from BrailleRenderer")
 }
 
+// TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern is the regression
+// test for story 193 task 5. selectRenderer is read at regen-time (inside
+// generateFrames) rather than frame-time, so the new renderer only takes
+// effect on the next regeneration (SetSize / CyclePattern / SetPattern).
+// This test verifies that a mode flip followed by CyclePattern causes the
+// engine to switch renderers:
+//   - Start in unicode mode → braille renderer active after SetSize.
+//   - Flip to ASCII mode → renderer not yet switched (frames are cached).
+//   - Call CyclePattern → triggers generateFrames → AsciiBarsRenderer wins.
+//   - Resulting frames must contain only ASCII bar characters.
+func TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern(t *testing.T) {
+	// Start in unicode mode.
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(10, 4)
+	e.SetPlaying(true)
+
+	// Sanity: in unicode mode, the first pattern is braille.
+	f := e.CurrentFrame()
+	require.Len(t, f, 4)
+	hasBraille := false
+	for _, line := range f {
+		for _, ch := range line.Text {
+			if ch >= '⠀' && ch <= '⣿' {
+				hasBraille = true
+				break
+			}
+		}
+	}
+	assert.True(t, hasBraille, "precondition: unicode mode SetSize should produce braille frames")
+
+	// Flip mode to ASCII without resizing — cached frames stay as braille.
+	uikit.SetModeForTest(uikit.GlyphASCII)
+
+	// Trigger regen via CyclePattern: generateFrames calls selectRenderer which
+	// now reads GlyphASCII and returns AsciiBarsRenderer.
+	e.CyclePattern()
+
+	fAscii := e.CurrentFrame()
+	require.Len(t, fAscii, 4)
+	for rowIdx, line := range fAscii {
+		for _, ch := range line.Text {
+			assert.True(t,
+				ch == '#' || ch == '=' || ch == '-' || ch == '.' || ch == ' ',
+				"row %d: after mode-flip + CyclePattern expected ASCII bar chars, got %U (%c)",
+				rowIdx, ch, ch)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

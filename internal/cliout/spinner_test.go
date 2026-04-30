@@ -37,6 +37,31 @@ func TestSpinnerFrames_AsciiSet(t *testing.T) {
 	}
 }
 
+// TestSpinnerFrames_UnicodeSet verifies that resolveSpinnerFrames returns the
+// unicode braille frame set when uikit is pinned to GlyphUnicode. This is the
+// symmetric counterpart to TestSpinnerFrames_AsciiSet and catches a constant-mode
+// bug such as func resolveSpinnerFrames() []string { return uikit.SpinnerFrames(GlyphASCII) }.
+func TestSpinnerFrames_UnicodeSet(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(prev)
+
+	frames := resolveSpinnerFrames()
+	want := uikit.SpinnerFrames(uikit.GlyphUnicode)
+	assert.Equal(t, want, frames, "Unicode mode must return the unicode (braille) spinner frames")
+	// Confirm at least one braille rune appears.
+	found := false
+	for _, f := range frames {
+		for _, r := range f {
+			if r >= '⠀' && r <= '⣿' {
+				found = true
+				break
+			}
+		}
+	}
+	assert.True(t, found, "unicode spinner frames must contain at least one braille rune")
+}
+
 // TestStartSpinner_nonTTY_writesStaticPendingLine verifies that in test mode
 // (non-TTY), StartSpinner writes a pending glyph line and Done writes a success step.
 func TestStartSpinner_nonTTY_writesStaticPendingLine(t *testing.T) {

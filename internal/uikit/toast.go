@@ -141,15 +141,23 @@ func (t Toast) Normalize() Toast {
 // truncateRunes truncates s to at most max runes. If len([]rune(s)) > max,
 // the last N runes (where N = len(ellipsis runes)) are replaced with the
 // ellipsis glyph (unicode "…" = 1 rune, ascii "..." = 3 runes) so the result
-// is exactly max runes. max must be >= len(ellipsis runes); Normalize always
-// calls this with max >= 48 so this invariant is guaranteed.
+// is exactly max runes.
+//
+// Runtime guard: if max < len(ellipsis runes) the function returns s unchanged
+// rather than panicking via an out-of-bounds slice. Normalize always calls this
+// with max >= 48 so the guard path is defensive — it protects future callers
+// that may pass a smaller max.
 func truncateRunes(s string, max int) string {
 	runes := []rune(s)
 	if len(runes) <= max {
 		return s
 	}
-	runes = runes[:max]
 	ell := []rune(GlyphFor(GlyphEllipsis, ActiveMode()))
+	if max < len(ell) {
+		// Guard: cannot fit even the ellipsis — return original unmodified.
+		return s
+	}
+	runes = runes[:max]
 	copy(runes[max-len(ell):max], ell)
 	return string(runes)
 }

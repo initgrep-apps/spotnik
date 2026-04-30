@@ -250,15 +250,20 @@ var glyphTable = map[GlyphRole][2]string{
 // GlyphFor returns the form of a role in the given mode.
 // Unknown role returns empty string — caller is expected to have compiled
 // against one of the exported GlyphRole constants.
+// Unknown modes fall back to GlyphUnicode.
 func GlyphFor(role GlyphRole, mode GlyphMode) string {
 	row, ok := glyphTable[role]
 	if !ok {
 		return ""
 	}
-	if mode == GlyphASCII {
+	switch mode {
+	case GlyphASCII:
 		return row[1]
+	case GlyphUnicode:
+		return row[0]
+	default:
+		return row[0]
 	}
-	return row[0]
 }
 
 // AllGlyphRoles returns every registered role. Used by tests for full-table
