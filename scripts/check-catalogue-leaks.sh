@@ -5,9 +5,10 @@ set -euo pipefail
 #
 # Exempt files (rendering implementation layers that cannot import uikit
 # due to import-cycle constraints):
-#   - internal/uikit/glyph.go         (canonical catalogue definition)
-#   - internal/ui/layout/border.go    (owns fallback glyph defaults)
-#   - internal/ui/layout/truncate.go  (uses "…" constant; layout cannot import uikit)
+#   - internal/uikit/glyph.go           (canonical glyph catalogue definition)
+#   - internal/uikit/spinner_frames.go  (canonical spinner-frame backing slices)
+#   - internal/ui/layout/border.go      (owns fallback glyph defaults)
+#   - internal/ui/layout/truncate.go    (uses "…" constant; layout cannot import uikit)
 #
 # Comment-only hits are filtered: a match is ignored when the glyph first
 # appears after "//" on the same line (i.e. only in a comment, not in code).
@@ -32,12 +33,16 @@ CHARS=(
   "⁰" "¹" "²" "³" "⁴" "⁵" "⁶" "⁷" "⁸" "⁹" "⁺" "⁻"
   # Graphical fills / bars
   "█" "▉" "▊" "▋" "▌" "▍" "▎" "▏" "░" "▒" "▓"
+  # Spinner braille frames — dispatched via SpinnerFrames(mode), not GlyphFor,
+  # but raw uses elsewhere should still be caught by this guard.
+  "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"
 )
 
 LEAKS=""
 for c in "${CHARS[@]}"; do
     found=$(grep -rn --include="*.go" "$c" internal/ cmd/ 2>/dev/null \
         | grep -v "internal/uikit/glyph.go" \
+        | grep -v "internal/uikit/spinner_frames.go" \
         | grep -v "internal/ui/layout/border.go" \
         | grep -v "internal/ui/layout/truncate.go" \
         | grep -v "_test.go" \

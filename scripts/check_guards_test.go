@@ -169,6 +169,23 @@ func TestCatalogueLeaks_TestFileExempt(t *testing.T) {
 		"_test.go files are exempt from catalogue-leak check; output: %s", out)
 }
 
+// TestCatalogueLeaks_SpinnerBrailleViolation verifies that a production .go
+// file containing a raw braille spinner rune (⠋) causes a non-zero exit.
+// Spinner braille frames are dispatched via SpinnerFrames(mode) — raw literals
+// elsewhere indicate a leak outside the sanctioned dispatch path.
+func TestCatalogueLeaks_SpinnerBrailleViolation(t *testing.T) {
+	dir := t.TempDir()
+	makeTree(t, dir)
+	// "⠋" is a braille spinner frame added to the catalogue guard in story 193.
+	writeFile(t, filepath.Join(dir, "internal", "pkg", "spinner.go"),
+		"package pkg\n\nconst frame = \"⠋\"\n")
+
+	code, out := runScript(t, dir, scriptPath(t, "check-catalogue-leaks.sh"))
+	assert.NotEqual(t, 0, code,
+		"raw braille spinner rune in production code should be flagged; output: %s", out)
+	assert.Contains(t, strings.ToUpper(out), "ERROR")
+}
+
 // ---------------------------------------------------------------------------
 // check-render-pane-border.sh tests
 // ---------------------------------------------------------------------------
