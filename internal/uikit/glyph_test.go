@@ -152,6 +152,15 @@ func TestGlyphFor_NewDomainRoles(t *testing.T) {
 	}
 }
 
+// TestGlyphFor_UnknownModeFallsBackToUnicode verifies that an unrecognised
+// GlyphMode returns the unicode form rather than silently returning an empty
+// string. Protects against future third modes being silently swallowed.
+func TestGlyphFor_UnknownModeFallsBackToUnicode(t *testing.T) {
+	want := uikit.GlyphFor(uikit.GlyphSuccess, uikit.GlyphUnicode)
+	got := uikit.GlyphFor(uikit.GlyphSuccess, uikit.GlyphMode(999))
+	assert.Equal(t, want, got, "unknown mode must fall back to unicode form")
+}
+
 func TestGlyph_BannedGlyphsAbsentEverywhere(t *testing.T) {
 	// U+26A0 is the old warning sign — banned in favour of U+25EC (◬).
 	// Use the Go Unicode escape \u26A0 so the source file itself does not

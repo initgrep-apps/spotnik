@@ -43,3 +43,26 @@ func TestSpinnerFrames_ASCIIContainsOnlyASCIIRunes(t *testing.T) {
 		}
 	}
 }
+
+// TestSpinnerFrames_MutationSafe verifies that mutating the returned slice does
+// not affect a subsequent call. The package-level backing slices must not be
+// handed out directly.
+func TestSpinnerFrames_MutationSafe(t *testing.T) {
+	for _, mode := range []uikit.GlyphMode{uikit.GlyphUnicode, uikit.GlyphASCII} {
+		original := uikit.SpinnerFrames(mode)
+		// Mutate the first element of the returned slice.
+		original[0] = "MUTATED"
+		// A second call must return the original, unmodified values.
+		fresh := uikit.SpinnerFrames(mode)
+		assert.NotEqual(t, "MUTATED", fresh[0],
+			"mutating SpinnerFrames result must not affect the package-level backing slice (mode=%v)", mode)
+	}
+}
+
+// TestSpinnerFrames_DefaultModeReturnsUnicode verifies that any unrecognised
+// GlyphMode falls back to unicode frames rather than silently returning nil.
+func TestSpinnerFrames_DefaultModeReturnsUnicode(t *testing.T) {
+	want := uikit.SpinnerFrames(uikit.GlyphUnicode)
+	got := uikit.SpinnerFrames(uikit.GlyphMode(999))
+	assert.Equal(t, want, got, "unknown mode should fall back to unicode frames")
+}
