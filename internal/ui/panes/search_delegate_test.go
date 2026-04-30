@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1071,4 +1072,54 @@ func TestRenderDefault_Selected(t *testing.T) {
 	assert.Contains(t, selected, "Mystery Item", "selected default output should contain the name")
 	assert.Contains(t, selected, "│", "selected default should contain left border │")
 	assert.NotEqual(t, normal, selected, "selected rendering should differ from non-selected")
+}
+
+// TestSearchDelegate_AsciiCategorySymbols verifies that in ASCII mode categorySymbol returns
+// the correct ASCII fallbacks and does not contain any of the unicode glyph literals.
+func TestSearchDelegate_AsciiCategorySymbols(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	tests := []struct {
+		category string
+		want     string
+		notWant  []string
+	}{
+		{
+			category: "track",
+			want:     "*",        // GlyphMusicNote ASCII form
+			notWant:  []string{"♪"},
+		},
+		{
+			category: "artist",
+			want:     "*",        // GlyphPinned ASCII form
+			notWant:  []string{"★"},
+		},
+		{
+			category: "album",
+			want:     "( )",      // GlyphInactive ASCII form
+			notWant:  []string{"◎"},
+		},
+		{
+			category: "playlist",
+			want:     "[=]",      // GlyphPlaylist ASCII form
+			notWant:  []string{"▤"},
+		},
+		{
+			category: "unknown",
+			want:     "|",        // GlyphSeparator ASCII form
+			notWant:  []string{"·"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.category, func(t *testing.T) {
+			got := categorySymbol(tt.category)
+			assert.Equal(t, tt.want, got, "ASCII mode categorySymbol(%q) should return %q", tt.category, tt.want)
+			for _, notWant := range tt.notWant {
+				assert.NotContains(t, got, notWant,
+					"ASCII mode categorySymbol(%q) must not contain unicode literal %q", tt.category, notWant)
+			}
+		})
+	}
 }
