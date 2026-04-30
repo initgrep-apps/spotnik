@@ -143,10 +143,8 @@ func TestBlockRenderer_ColorsAssigned(t *testing.T) {
 }
 
 func TestBlockRenderer_OnlyBlockOrSpace(t *testing.T) {
-	// Pin to unicode mode so the expected fill glyph is '█', not '#'.
-	uikit.SetModeForTest(uikit.GlyphUnicode)
-	defer uikit.SetModeForTest(uikit.GlyphUnicode)
-
+	// No mode pin — let LANG-driven ActiveMode() determine the fill glyph.
+	// fillGlyph is '█' in unicode mode and '#' in ASCII mode; both pass.
 	r := BlockRenderer{}
 	colors := makeColors(4)
 	colHeights := makeColHeights(20, 4)
@@ -161,10 +159,8 @@ func TestBlockRenderer_OnlyBlockOrSpace(t *testing.T) {
 }
 
 func TestBlockRenderer_FullHeight_AllFilled(t *testing.T) {
-	// Pin to unicode mode so the expected fill glyph is '█', not '#'.
-	uikit.SetModeForTest(uikit.GlyphUnicode)
-	defer uikit.SetModeForTest(uikit.GlyphUnicode)
-
+	// No mode pin — let LANG-driven ActiveMode() determine the fill glyph.
+	// fillGlyph is '█' in unicode mode and '#' in ASCII mode; both pass.
 	r := BlockRenderer{}
 	width := 5
 	height := 4
@@ -608,6 +604,40 @@ func TestBlockPatterns_OnlyBlockOrSpace(t *testing.T) {
 				for _, ch := range line.Text {
 					assert.True(t, ch == fillGlyph || ch == ' ',
 						"block pattern %d: unexpected rune %U (%c)", idx, ch, ch)
+				}
+			}
+		})
+	}
+}
+
+// TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars confirms that in ASCII mode
+// the engine routes all patterns to AsciiBarsRenderer and emits only
+// { '#', '=', '-', '.', ' ' } — the ASCII block chars.
+func TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars(t *testing.T) {
+	prev := uikit.ActiveMode()
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(prev)
+
+	th := theme.Load("black")
+	// Use block-pattern indices (3, 4, 5) as the representative set; in ASCII
+	// mode the engine falls back to AsciiBarsRenderer for ALL patterns.
+	blockPatterns := []int{3, 4, 5}
+	for _, idx := range blockPatterns {
+		ps := Patterns()
+		p := ps[idx]
+		t.Run(p.Name, func(t *testing.T) {
+			e := NewEngine(th)
+			for e.Pattern() != idx {
+				e.CyclePattern()
+			}
+			e.SetSize(20, 4)
+			e.SetPlaying(true)
+			f := e.CurrentFrame()
+			for _, line := range f {
+				for _, ch := range line.Text {
+					assert.True(t,
+						ch == '#' || ch == '=' || ch == '-' || ch == '.' || ch == ' ',
+						"ASCII mode block pattern %d: unexpected rune %U (%c)", idx, ch, ch)
 				}
 			}
 		})
