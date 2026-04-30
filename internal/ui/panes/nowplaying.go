@@ -14,6 +14,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // NowPlayingPane is the center pane Bubble Tea model.
@@ -82,14 +83,18 @@ func (p *NowPlayingPane) Title() string {
 			for i, a := range t.Artists {
 				artistNames[i] = a.Name
 			}
-			playSymbol := "▶"
-			if !ps.IsPlaying {
-				playSymbol = "⏸"
+			m := uikit.ActiveMode()
+			var stateGlyph string
+			if ps.IsPlaying {
+				stateGlyph = uikit.GlyphFor(uikit.GlyphPaused, m)
+			} else {
+				stateGlyph = uikit.GlyphFor(uikit.GlyphPlaying, m)
 			}
+			sep := uikit.GlyphFor(uikit.GlyphHRule, m)
 			current := formatDurationMs(p.localProgressMs)
 			total := formatDurationMs(t.DurationMs)
-			return fmt.Sprintf("Now Playing \u2500\u2500 %s \u00b7 %s \u2500\u2500 %s %s/%s",
-				t.Name, strings.Join(artistNames, ", "), playSymbol, current, total)
+			return fmt.Sprintf("Now Playing %s %s \u00b7 %s %s %s %s/%s",
+				sep, t.Name, strings.Join(artistNames, ", "), sep, stateGlyph, current, total)
 		}
 	}
 	return "Now Playing"

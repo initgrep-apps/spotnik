@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -910,6 +911,25 @@ func TestNowPlayingPane_HandleKey_KeySpace_Plays(t *testing.T) {
 			assert.Equal(t, tt.wantAction, req.Action)
 		})
 	}
+}
+
+// TestNowPlaying_AsciiTitle verifies that Title() in compact mode (height < 8)
+// uses ASCII glyphs when GlyphASCII mode is active: the pause-indicator resolves
+// to "||" and the unicode literals ▶, ⏸, ─ are absent from the output.
+func TestNowPlaying_AsciiTitle(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 6) // height < 8 triggers compact title path
+
+	title := pane.Title()
+	// IsPlaying == true → GlyphPaused → "||" in ASCII mode
+	assert.Contains(t, title, "||", "ASCII mode playing state should show || pause glyph")
+	// Unicode literals must not appear in ASCII mode
+	assert.NotContains(t, title, "▶", "▶ should not appear in ASCII mode")
+	assert.NotContains(t, title, "⏸", "⏸ should not appear in ASCII mode")
+	assert.NotContains(t, title, "─", "─ should not appear in ASCII mode")
 }
 
 // TestNowPlayingPane_HandleKey_N_NoOp verifies that pressing "n" on the NowPlayingPane
