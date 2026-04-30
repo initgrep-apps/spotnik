@@ -617,3 +617,17 @@ PR #242 (story 190) shipped after one fix round that addressed two CRITICAL prod
 2. `TestSearchOverlay_Spinner_AsciiRunningFrames` positive assertion may pass on `OverlayChrome` border `|` characters (VRule) since they share the rotating-bar glyph in ASCII. The braille negative assertion is airtight, but the positive frame check could be tightened by isolating spinner output (e.g. assert frame appears in the same line as "Searching…" rather than anywhere in the view).
 
 3. The default-branch `o.sp.Update(msg)` was intentionally removed in favour of explicit `searchSpinnerTickMsg` handling. If a future change adds another spinner-driven sub-component to the search overlay, the dispatcher needs revisiting (currently only the search overlay's own spinner uses `searchSpinnerTickMsg`).
+
+---
+
+## Story 191 minor issues — remaining glyph leaks
+**Found:** 2026-04-30 | **Source:** PR #243 Review
+**Feature:** 13-tui-design-system
+
+PR #243 (story 191) shipped after one fix round that closed 6 ASCII test gaps (3 critical: profile-truncation gate, help_overlay `│` divider, table playingSymbol). Sub-threshold concerns:
+
+1. `engine_test.go` `block.go` `'█'` rune assertions remain hardcoded. Will break under story 192's `LANG=C` CI matrix when `TestMain` calls `Use("auto")` and ASCII becomes the test default. Story 192 must update those assertions to use `uikit.GlyphFor(uikit.GlyphBarFull, mode)` for the expected value.
+
+2. `render_test.go` `TestRender_AsciiInlineGlyphs` positive assertion for `*` is mildly weak — multiple roles map to `*` in ASCII (`GlyphMusicNote`, `GlyphBullet`, `GlyphPinned`, `GlyphRunning`). The `NotContains` checks for unicode forms enforce no leakage, but a stronger positive assertion would isolate which role is producing the `*` (e.g. assert `*` appears in the banner line specifically rather than anywhere).
+
+3. Polish items: `networklog_pane.go:276` calls `uikit.ActiveMode()` per-row inside the loop (could hoist); `render.go:321-323` calls `uikit.GlyphFor(uikit.GlyphBullet, ...)` three times in the same function (could hoist as a local var, matching the existing `note` pattern); `recentlyplayed_pane.go:View()` has an `else` after a `return` (drop for idiomatic Go).

@@ -217,12 +217,14 @@ func (p *ProfileOverlay) renderActions() string {
 	return uikit.KeyBar{Bindings: bindings, Theme: p.theme}.Render()
 }
 
-// truncateRunes truncates s to at most max runes, appending … if truncated.
+// truncateRunes truncates s to at most max runes, appending the ellipsis glyph if truncated.
 // Used for display name capping so the profile card stays within its fixed width.
 func truncateRunes(s string, max int) string {
 	if utf8.RuneCountInString(s) <= max {
 		return s
 	}
+	ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+	ellRunes := utf8.RuneCountInString(ell)
 	runes := []rune(s)
-	return string(runes[:max-1]) + "…"
+	return string(runes[:max-ellRunes]) + ell
 }

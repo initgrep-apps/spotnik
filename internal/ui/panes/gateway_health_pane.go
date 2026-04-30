@@ -115,8 +115,11 @@ func (p *GatewayHealthPane) View() string {
 	}
 	tokenStyle := lipgloss.NewStyle().Foreground(tokenColor)
 	tokenIcon := tokenStyle.Render(uikit.GlyphFor(uikit.GlyphFilledDot, mode))
-	tokenBar := p.renderDotBar(snap.TokensAvailable, snap.TokensMax,
-		uikit.GlyphFilledDot, uikit.GlyphAvailable, tokenStyle, mutedStyle)
+	var tokenProgress float64
+	if snap.TokensMax > 0 {
+		tokenProgress = float64(snap.TokensAvailable) / float64(snap.TokensMax)
+	}
+	tokenBar := p.renderDotBar(tokenProgress, snap.TokensMax, th)
 	tokenRow := p.renderRow(tokenIcon, "Tokens", tokenBar, labelWidth, mutedStyle)
 
 	// Slot row
@@ -126,8 +129,11 @@ func (p *GatewayHealthPane) View() string {
 	}
 	slotStyle := lipgloss.NewStyle().Foreground(slotColor)
 	slotIcon := slotStyle.Render(uikit.GlyphFor(uikit.GlyphFilledSquare, mode))
-	slotBar := p.renderDotBar(snap.ConcurrentActive, snap.ConcurrentMax,
-		uikit.GlyphFilledSquare, uikit.GlyphEmptySquare, slotStyle, mutedStyle)
+	var slotProgress float64
+	if snap.ConcurrentMax > 0 {
+		slotProgress = float64(snap.ConcurrentActive) / float64(snap.ConcurrentMax)
+	}
+	slotBar := p.renderDotBar(slotProgress, snap.ConcurrentMax, th)
 	slotRow := p.renderRow(slotIcon, "Slots", slotBar, labelWidth, mutedStyle)
 
 	// Backoff row
@@ -163,23 +169,15 @@ func (p *GatewayHealthPane) renderRow(icon, label, data string, labelWidth int, 
 	return icon + "  " + labelStyle.Render(uikit.PadOrTruncate(label, labelWidth)) + "  " + data
 }
 
-// renderDotBar renders a horizontal bar of filled/empty glyphs.
-// filled is the current value; total is the maximum. Each position shows the
-// filledRole glyph when its index < filled, emptyRole otherwise.
-func (p *GatewayHealthPane) renderDotBar(filled, total int,
-	filledRole, emptyRole uikit.GlyphRole,
-	filledStyle, emptyStyle lipgloss.Style) string {
-	if total <= 0 {
+// renderDotBar renders a capacity bar using uikit.ProgressBar.
+// progress is the fill fraction in [0,1]; width is the bar's column width; th is the theme.
+func (p *GatewayHealthPane) renderDotBar(progress float64, width int, th theme.Theme) string {
+	if width <= 0 {
 		return ""
 	}
-	mode := uikit.ActiveMode()
-	var sb strings.Builder
-	for i := 0; i < total; i++ {
-		if i < filled {
-			sb.WriteString(filledStyle.Render(uikit.GlyphFor(filledRole, mode)))
-		} else {
-			sb.WriteString(emptyStyle.Render(uikit.GlyphFor(emptyRole, mode)))
-		}
-	}
-	return sb.String()
+	return uikit.ProgressBar{
+		Progress: progress,
+		Width:    width,
+		Theme:    th,
+	}.Render()
 }

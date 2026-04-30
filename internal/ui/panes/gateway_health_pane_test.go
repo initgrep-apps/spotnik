@@ -92,17 +92,17 @@ func TestGatewayHealthPane_FreshPane_NotWarningColor(t *testing.T) {
 
 // TestGatewayHealthPane_Update_DrainsCursor records event A (TokensAvailable=5),
 // ticks once, records event B (TokensAvailable=8), ticks again, and asserts the
-// rendered token bar reflects event B's 8 bar-dots (not A's 5 or accumulated A+B).
+// rendered token bar reflects event B's higher fill (not A's lower fill).
 //
-// The tokens row is: icon(●) + bar(N filled ● + M empty). The icon is always
-// GlyphFilledDot so total ● in the line = TokensAvailable + 1 (icon). We
-// compare A-tick and B-tick views to verify only event B's snapshot is reflected.
+// The token bar now uses uikit.ProgressBar which renders fill blocks (█ in unicode
+// mode). A higher TokensAvailable fraction produces more filled blocks, so viewAfterB
+// must contain more "█" characters than viewAfterA in the tokens row.
 func TestGatewayHealthPane_Update_DrainsCursor(t *testing.T) {
 	store := state.New()
 	p := panes.NewGatewayHealthPane(store, theme.Load("black"))
 	p.SetSize(80, 10)
 
-	// Event A: 5 tokens — capture view after tick.
+	// Event A: 5 tokens (50% fill) — capture view after tick.
 	store.RecordEvent(domain.GatewayEvent{
 		Kind: domain.EventTokenConsumed,
 		Snapshot: domain.GatewayStateSnapshot{
@@ -112,7 +112,7 @@ func TestGatewayHealthPane_Update_DrainsCursor(t *testing.T) {
 	p.Update(panes.TickMsg{})
 	viewAfterA := strings.Split(p.View(), "\n")[0]
 
-	// Event B: 8 tokens — capture view after tick.
+	// Event B: 8 tokens (80% fill) — capture view after tick.
 	store.RecordEvent(domain.GatewayEvent{
 		Kind: domain.EventTokenConsumed,
 		Snapshot: domain.GatewayStateSnapshot{
@@ -122,14 +122,15 @@ func TestGatewayHealthPane_Update_DrainsCursor(t *testing.T) {
 	p.Update(panes.TickMsg{})
 	viewAfterB := strings.Split(p.View(), "\n")[0]
 
-	// icon(●) + 5 bar-dots after A; icon(●) + 8 bar-dots after B.
-	// Total ● = available + 1 (icon).
-	dotsA := strings.Count(viewAfterA, "●")
-	dotsB := strings.Count(viewAfterB, "●")
-
-	assert.Equal(t, 6, dotsA, "after event A: token bar must show 5 bar-dots + 1 icon = 6 ●")
-	assert.Equal(t, 9, dotsB, "after event B: token bar must show 8 bar-dots + 1 icon = 9 ●")
-	assert.Greater(t, dotsB, dotsA, "event B (8 tokens) must show more filled dots than event A (5 tokens)")
+	// ProgressBar fill: event B (80%) must contain more filled blocks than A (50%).
+	// Count "█" (unicode fill glyph) — only bar fill cells use this glyph.
+	fillA := strings.Count(viewAfterA, "█")
+	fillB := strings.Count(viewAfterB, "█")
+	assert.Greater(t, fillB, fillA,
+		"event B (8/10 tokens) must show more fill blocks than event A (5/10 tokens): A=%d B=%d", fillA, fillB)
+	// The rendered lines for A and B must differ (different fill fractions).
+	assert.NotEqual(t, viewAfterA, viewAfterB,
+		"different TokensAvailable must produce different token bar output")
 }
 
 // TestGatewayHealthPane_Threshold_Tokens asserts that rendering with
@@ -205,47 +206,45 @@ func TestGatewayHealthPane_Threshold_Backoff(t *testing.T) {
 		"active backoff view must differ in ANSI escape codes from no-backoff view")
 }
 
-// TestGatewayHealthPane_View_TokensData asserts the total ● count in the tokens
-// row equals TokensAvailable + 1 (bar dots + the row icon which also uses GlyphFilledDot).
+// TestGatewayHealthPane_View_TokensData asserts that more TokensAvailable produces
+// more filled blocks in the ProgressBar-based token row. Higher availability → higher
+// fill fraction → more "█" fill glyphs in the rendered tokens line.
 func TestGatewayHealthPane_View_TokensData(t *testing.T) {
-	tests := []struct {
-		name      string
-		available int
-	}{
-		{"7 available", 7},
-		{"10 available (full)", 10},
-		{"3 available", 3},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := state.New()
-			p := panes.NewGatewayHealthPane(store, theme.Load("black"))
-			p.SetSize(80, 10)
-			store.RecordEvent(domain.GatewayEvent{
-				Kind: domain.EventTokenConsumed,
-				Snapshot: domain.GatewayStateSnapshot{
-					TokensAvailable: tt.available, TokensMax: 10,
-				},
-			})
-			p.Update(panes.TickMsg{})
-
-			lines := strings.Split(p.View(), "\n")
-			if len(lines) == 0 {
-				t.Fatal("expected non-empty view")
-			}
-			tokenLine := lines[0]
-			// Total ● = bar filled dots (TokensAvailable) + 1 icon dot.
-			filled := strings.Count(tokenLine, "●")
-			assert.Equal(t, tt.available+1, filled,
-				"token row must have %d ● (bar: %d + icon: 1)", tt.available+1, tt.available)
+	makeTokenLine := func(available int) string {
+		store := state.New()
+		p := panes.NewGatewayHealthPane(store, theme.Load("black"))
+		p.SetSize(80, 10)
+		store.RecordEvent(domain.GatewayEvent{
+			Kind: domain.EventTokenConsumed,
+			Snapshot: domain.GatewayStateSnapshot{
+				TokensAvailable: available, TokensMax: 10,
+			},
 		})
+		p.Update(panes.TickMsg{})
+		lines := strings.Split(p.View(), "\n")
+		if len(lines) == 0 {
+			t.Fatal("expected non-empty view")
+		}
+		return lines[0]
 	}
+
+	// 3 < 7 < 10 — fill blocks must be strictly ordered.
+	line3 := makeTokenLine(3)
+	line7 := makeTokenLine(7)
+	line10 := makeTokenLine(10)
+
+	fill3 := strings.Count(line3, "█")
+	fill7 := strings.Count(line7, "█")
+	fill10 := strings.Count(line10, "█")
+
+	assert.Greater(t, fill7, fill3, "7 available must show more fill than 3 available")
+	assert.Greater(t, fill10, fill7, "10 available (full) must show more fill than 7 available")
 }
 
-// TestGatewayHealthPane_FreshPane_TenFilledDots asserts that a newly created pane
-// renders 11 ● in the tokens row: 10 bar-dots (full healthy bucket) + 1 icon dot.
-func TestGatewayHealthPane_FreshPane_TenFilledDots(t *testing.T) {
+// TestGatewayHealthPane_FreshPane_FullTokenBar asserts that a newly created pane
+// (TokensAvailable == TokensMax == 10) renders a fully filled ProgressBar in the
+// tokens row: all bar cells show the "█" fill glyph (bar width = TokensMax = 10).
+func TestGatewayHealthPane_FreshPane_FullTokenBar(t *testing.T) {
 	p := newTestGatewayHealthPane(t)
 	p.SetSize(80, 10)
 
@@ -254,10 +253,13 @@ func TestGatewayHealthPane_FreshPane_TenFilledDots(t *testing.T) {
 		t.Fatal("expected non-empty view")
 	}
 	tokenLine := lines[0]
-	// icon(●) + 10 bar-dots = 11 total ● when TokensAvailable == TokensMax == 10.
-	filled := strings.Count(tokenLine, "●")
-	assert.Equal(t, 11, filled,
-		"fresh pane tokens row must show 11 ● (10 bar + 1 icon), got %d", filled)
+	// Full bar (progress = 1.0) renders TokensMax (10) "█" fill blocks; no empty "░".
+	filled := strings.Count(tokenLine, "█")
+	empty := strings.Count(tokenLine, "░")
+	assert.Equal(t, 10, filled,
+		"fresh pane tokens row must show 10 filled blocks (bar width = TokensMax = 10), got %d", filled)
+	assert.Equal(t, 0, empty,
+		"fresh pane tokens row must show 0 empty blocks when bucket is full, got %d", empty)
 }
 
 // TestGatewayHealthPane_PollingSnapshotMsg_Ignored asserts the pane ignores

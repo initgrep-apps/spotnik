@@ -16,6 +16,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: RecentlyPlayedPane implements layout.Pane.
@@ -131,7 +132,13 @@ func (r *RecentlyPlayedPane) View() string {
 		parts = append(parts, r.Filter().View(r.width))
 	}
 	if len(r.store.RecentlyPlayed()) == 0 && !r.Filter().IsActive() {
-		parts = append(parts, "  No recently played tracks")
+		return uikit.EmptyState{
+			Text:   "No recently played tracks",
+			Hint:   "Listen to something to populate this list",
+			Width:  r.width,
+			Height: r.height,
+			Theme:  r.theme,
+		}.Render()
 	} else {
 		parts = append(parts, r.Table().View())
 	}

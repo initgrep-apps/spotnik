@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // maxNetworkLogRows is the maximum number of completed request rows to retain.
@@ -272,9 +273,10 @@ func (p *NetworkLogPane) buildTableRows() {
 		statusStr := strconv.Itoa(row.statusCode)
 		latencyStr := fmt.Sprintf("%dms", row.durationMs)
 
-		pri := "◷ background"
+		mode := uikit.ActiveMode()
+		pri := uikit.GlyphFor(uikit.GlyphDeadline, mode) + " background"
 		if row.priority == domain.PriorityInteractive {
-			pri = "⚡ interactive"
+			pri = uikit.GlyphFor(uikit.GlyphRunning, mode) + " interactive"
 		}
 
 		dec := ""

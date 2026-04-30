@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -337,4 +338,21 @@ func TestGradientVolumeBar_PartialBlocks(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGradientVolumeBar_AsciiMode verifies that in ASCII mode the music-note
+// glyph rendered by GradientVolumeBar is the ASCII fallback ("*") and NOT the
+// unicode "♪" (GlyphMusicNote).
+func TestGradientVolumeBar_AsciiMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	b := newTestGradientVolumeBar(40)
+	out := b.Render(50)
+
+	// Unicode music note must not appear in ASCII mode.
+	assert.NotContains(t, out, "♪", "unicode music note ♪ must not appear in ASCII mode")
+
+	// ASCII fallback for GlyphMusicNote is "*" per the glyph catalogue.
+	assert.Contains(t, out, "*", "ASCII replacement '*' for ♪ (GlyphMusicNote) must appear in ASCII mode")
 }

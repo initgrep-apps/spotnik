@@ -1,7 +1,7 @@
 ---
 title: "Remaining inline glyph leaks + EmptyState migrations + ProgressBar + table/viz block"
 feature: 13-tui-design-system
-status: open
+status: done
 ---
 
 ## Background
