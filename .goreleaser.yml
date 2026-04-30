@@ -1,5 +1,3 @@
-# GoReleaser configuration for Spotnik.
-# Triggered by the GitHub Actions release workflow on v* tag push.
 version: 2
 
 project_name: spotnik
