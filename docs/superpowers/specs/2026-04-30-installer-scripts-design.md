@@ -71,9 +71,12 @@ dependency). Uses `SUCCESS`, `WARN`, `ERROR`, `MUTED`, `INFO`, `BOLD`, `NC` colo
                       shasum -a 256 --ignore-missing (macOS)
                       exit 1 on mismatch
 8.  Extract           tar -xzf → binary to tmp dir
-9.  Resolve install   a) $HOME/.local/bin writable + on $PATH  → install there
+9.  Resolve install   $SPOTNIK_INSTALL_DIR set → use it directly
+                      else:
+                      a) $HOME/.local/bin writable + on $PATH  → install there
                       b) $HOME/.local/bin writable, NOT on $PATH → install there + warn
                       c) not writable → offer /usr/local/bin via sudo
+                         (reads from /dev/tty — works in curl|bash context)
 10. Install binary    chmod +x, mv into place
 11. Confirm           run `spotnik --version`, print success
 ```
