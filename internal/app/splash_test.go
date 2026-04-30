@@ -38,11 +38,8 @@ func TestRenderSplashView_containsPremiumNotice(t *testing.T) {
 		"splash should mention Spotify Premium in the notice")
 }
 
-// TestRenderSplashView_AsciiMode asserts the warning panel border honours
-// ui.glyphs = "ascii" — corners must be `+`, rules `-`/`|`, and no rounded
-// unicode glyphs (╭╮╰╯─│) leak through. The figlet banner is ASCII-only by
-// font choice (banner3-D), but the surrounding warning panel previously used
-// lipgloss.RoundedBorder() directly and ignored ActiveMode().
+// TestRenderSplashView_AsciiMode asserts that ascii mode selects the plain-ASCII
+// banner and that the warning panel border also honours the mode (no rounded glyphs).
 func TestRenderSplashView_AsciiMode(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphASCII)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
@@ -50,16 +47,16 @@ func TestRenderSplashView_AsciiMode(t *testing.T) {
 	th := theme.Load("black")
 	view := renderSplashView(th, "v0.1.0", 120, 40)
 
-	for _, banned := range []string{"╭", "╮", "╰", "╯", "─", "│"} {
+	for _, banned := range []string{"╭", "╮", "╰", "╯", "─", "│", "█"} {
 		assert.NotContains(t, view, banned,
-			"ASCII mode must not contain rounded unicode border glyph %q", banned)
+			"ASCII mode must not contain unicode glyph %q", banned)
 	}
 	assert.Contains(t, view, "+", "ASCII mode warning panel should render '+' corners")
 	assert.Contains(t, view, "|", "ASCII mode warning panel should render '|' vertical rules")
 }
 
-// TestRenderSplashView_UnicodeMode keeps the legacy unicode rendering covered
-// so a regression that always returned ASCII would also fail.
+// TestRenderSplashView_UnicodeMode verifies the block-character banner and rounded
+// panel border are both present in unicode mode.
 func TestRenderSplashView_UnicodeMode(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphUnicode)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
@@ -67,7 +64,8 @@ func TestRenderSplashView_UnicodeMode(t *testing.T) {
 	th := theme.Load("black")
 	view := renderSplashView(th, "v0.1.0", 120, 40)
 
-	// Rounded border must appear somewhere in the warning panel chrome.
+	assert.Contains(t, view, "█", "unicode mode splash should contain block-character banner")
+
 	hasRounded := false
 	for _, want := range []string{"╭", "╮", "╰", "╯"} {
 		if assert.Contains(t, view, want) {

@@ -79,7 +79,7 @@ Download a pre-built binary for your platform from the
 - **Spotify Premium** — playback controls require a Premium subscription
 - **Spotify Developer app** — needed for the PKCE OAuth flow:
   1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-  2. Create an app and add `http://127.0.0.1` as a Redirect URI
+  2. Create an app and add `http://127.0.0.1:8888/callback` as a Redirect URI
   3. Copy the Client ID — you'll need it in the config file (see [Configuration](#configuration))
 
 ---
