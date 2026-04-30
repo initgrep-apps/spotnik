@@ -44,6 +44,8 @@ func (r *AsciiBarsRenderer) RenderFrame(width, height int, colHeights []int, col
 
 	frame := make(Frame, height)
 	hf := float64(height)
+	// band is the fractional height of one sub-level step, constant for this render.
+	band := 1.0 / (4.0 * hf)
 
 	for rowIdx := 0; rowIdx < height; rowIdx++ {
 		// rowFrac is the normalised threshold from the bottom for this row.
@@ -59,7 +61,6 @@ func (r *AsciiBarsRenderer) RenderFrame(width, height int, colHeights []int, col
 			}
 			filledFrac := float64(h) / 4.0
 
-			band := 1.0 / (4.0 * hf)
 			switch {
 			case filledFrac >= rowFrac:
 				row[col] = '#'

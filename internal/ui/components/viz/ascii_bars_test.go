@@ -37,7 +37,7 @@ func TestAsciiBars_AllAscii(t *testing.T) {
 		{'⠀', '⣿', "braille patterns"},
 	}
 	bannedChars := []rune{
-		'█', // U+2588 FULL BLOCK
+		'█',                               // U+2588 FULL BLOCK
 		'▉', '▊', '▋', '▌', '▍', '▎', '▏', // partial blocks
 	}
 
