@@ -241,16 +241,12 @@ func TestToast_TruncatedBody_AsciiEllipsis(t *testing.T) {
 	assert.NotContains(t, toast.Body, "…", "ascii truncation must not contain unicode ellipsis")
 }
 
-// TestTruncateRunes_MaxLessThanEllipsisLen verifies that truncateRunes (via
-// Normalize) does not panic when max < len(ellipsis runes). In that edge case
-// the original string should be returned unmodified rather than slicing out of
-// bounds. Normalize always calls with max >= 48 so this is a future-caller guard.
-// We exercise it indirectly by constructing a 2-rune body — the ellipsis in
-// ASCII mode is 3 runes, but the max is not externally configurable, so we test
-// the guard by verifying the existing thresholds (48/160) work cleanly, and
-// document the guard via a direct truncateRunes test if it is exported.
-// Because truncateRunes is unexported, this test verifies the contract via the
-// public Normalize path: a ≤max body must pass through unchanged.
+// TestToast_Normalize_ShortBodyUnchanged verifies the public Normalize path
+// when the body is already shorter than the truncation cap (max=160) — the
+// body passes through unchanged.
+//
+// The truncateRunes max < len(ellipsis) defensive guard is exercised
+// directly in truncate_runes_internal_test.go (in-package test).
 func TestToast_Normalize_ShortBodyUnchanged(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphASCII)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
