@@ -570,8 +570,9 @@ func formatAlbumType(t string) string {
 	}
 }
 
-// truncateString truncates s to max runes, appending "…" if truncated.
-// When max <= 1, returns "…" for non-empty strings to avoid a slice panic.
+// truncateString truncates s to max runes, appending the ellipsis glyph if truncated.
+// The ellipsis rune count is accounted for so the result never exceeds max runes.
+// When max is too small to fit even the ellipsis, it returns the ellipsis itself.
 func truncateString(s string, max int) string {
 	runes := []rune(s)
 	if max <= 0 {
@@ -579,10 +580,12 @@ func truncateString(s string, max int) string {
 	}
 	if len(runes) > max {
 		ellipsis := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
-		if max == 1 {
+		ellipsisLen := len([]rune(ellipsis))
+		keep := max - ellipsisLen
+		if keep <= 0 {
 			return ellipsis
 		}
-		return string(runes[:max-1]) + ellipsis
+		return string(runes[:keep]) + ellipsis
 	}
 	return s
 }

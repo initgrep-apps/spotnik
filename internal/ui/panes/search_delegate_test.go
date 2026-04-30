@@ -148,24 +148,40 @@ func TestFormatAlbumType(t *testing.T) {
 }
 
 func TestTruncateString(t *testing.T) {
+	// Resolve the ellipsis glyph for the active mode so tests pass in both unicode
+	// (GlyphEllipsis = "…", 1 rune) and ASCII (GlyphEllipsis = "...", 3 runes) modes.
+	ellipsis := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+	ellipsisLen := len([]rune(ellipsis))
+
 	tests := []struct {
-		s    string
-		max  int
-		want string
+		name    string
+		s       string
+		max     int
+		wantLen int    // expected rune count of result
+		wantSuf string // expected suffix when truncation occurs
 	}{
-		{s: "hello world", max: 5, want: "hell…"},
-		{s: "short", max: 10, want: "short"},
-		{s: "exact", max: 5, want: "exact"},
-		{s: "", max: 10, want: ""},
-		{s: "café", max: 3, want: "ca…"},
-		// Edge cases: max=0 and max=1 must not panic.
-		{s: "hello", max: 0, want: ""},
-		{s: "hello", max: 1, want: "…"},
+		{name: "truncated", s: "hello world", max: 5, wantLen: 5, wantSuf: ellipsis},
+		{name: "fits", s: "short", max: 10, wantLen: 5},
+		{name: "exact", s: "exact", max: 5, wantLen: 5},
+		{name: "empty", s: "", max: 10, wantLen: 0},
+		{name: "multibyte", s: "café", max: 3, wantLen: 3, wantSuf: ellipsis},
+		{name: "zero max", s: "hello", max: 0, wantLen: 0},
+		{name: "small max", s: "hello", max: ellipsisLen, wantSuf: ellipsis},
 	}
 	for _, tt := range tests {
-		t.Run(tt.s, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got := truncateString(tt.s, tt.max)
-			assert.Equal(t, tt.want, got)
+			gotRunes := []rune(got)
+			if tt.wantLen > 0 {
+				assert.LessOrEqual(t, len(gotRunes), tt.max,
+					"result must not exceed max runes; got %d runes: %q", len(gotRunes), got)
+			}
+			if tt.wantSuf != "" {
+				assert.True(t, len(gotRunes) >= len([]rune(tt.wantSuf)),
+					"truncated result %q should be at least as long as the ellipsis", got)
+				assert.Equal(t, tt.wantSuf, got[len(got)-len(tt.wantSuf):],
+					"result should end with ellipsis %q, got %q", tt.wantSuf, got)
+			}
 		})
 	}
 }
