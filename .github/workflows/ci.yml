@@ -38,7 +38,7 @@ jobs:
         run: make check-glyphs
 
   tests-locale:
-    name: Tests (${{ matrix.locale }} locale)
+    name: CI (${{ matrix.locale }} locale)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,5 +53,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run tests with LANG=${{ matrix.locale }}
-        run: LANG=${{ matrix.locale }} make test
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+            | sh -s -- -b "$(go env GOPATH)/bin" v2.11.3
+
+      - name: Run full CI with LANG=${{ matrix.locale }}
+        run: LANG=${{ matrix.locale }} make ci
