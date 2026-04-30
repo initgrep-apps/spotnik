@@ -8,7 +8,7 @@ set -euo pipefail
 # Only internal/uikit/border.go is allowed to call lipgloss.RoundedBorder()
 # (it is the canonical wrapper). Test files are excluded.
 
-PATTERN='lipgloss\.(RoundedBorder|NormalBorder|ThickBorder|DoubleBorder|MarkdownBorder|ASCIIBorder)\b'
+PATTERN='lipgloss\.(RoundedBorder|NormalBorder|ThickBorder|DoubleBorder|MarkdownBorder|ASCIIBorder|BlockBorder|HiddenBorder|OuterHalfBlockBorder|InnerHalfBlockBorder)\b'
 
 OFFENDERS=$(grep -rEn --include="*.go" "$PATTERN" internal/ cmd/ \
     | grep -v "internal/uikit/border.go:" \
