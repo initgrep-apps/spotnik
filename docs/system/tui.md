@@ -1097,7 +1097,7 @@ same commit. Removed glyphs are flagged "banned".
 |---|---|---|---|
 | corner rounded | `╭ ╮ ╰ ╯` | `+ + + +` | Default pane, overlay, panel chrome |
 | corner sharp | `┌ ┐ └ ┘` | — | **Banned** (design.md rule) |
-| corner double | `╔ ╗ ╚ ╝` | — | **Banned** |
+| corner double | `╔ ╗ ╚ ╝` | — | **Banned** as chrome. **Sole exception:** `internal/app/splash.go` figlet "ANSI Shadow" banner uses these as letter-shape glyphs (not as borders). `scripts/check-banned-glyphs.sh` skips that file. |
 | horizontal rule | `─` | `-` | |
 | vertical rule | `│` | `\|` | |
 | double horizontal | `═` | `=` | Reserved — section break inside prose (currently unused) |

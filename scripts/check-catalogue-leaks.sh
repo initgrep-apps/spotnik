@@ -9,6 +9,7 @@ set -euo pipefail
 #   - internal/uikit/spinner_frames.go  (canonical spinner-frame backing slices)
 #   - internal/ui/layout/border.go      (owns fallback glyph defaults)
 #   - internal/ui/layout/truncate.go    (uses "…" constant; layout cannot import uikit)
+#   - internal/app/splash.go            (figlet "ANSI Shadow" banner art; see docs/system/tui.md §4.1)
 #
 # Comment-only hits are filtered: a match is ignored when the glyph first
 # appears after "//" on the same line (i.e. only in a comment, not in code).
@@ -45,6 +46,7 @@ for c in "${CHARS[@]}"; do
         | grep -v "internal/uikit/spinner_frames.go" \
         | grep -v "internal/ui/layout/border.go" \
         | grep -v "internal/ui/layout/truncate.go" \
+        | grep -v "internal/app/splash.go" \
         | grep -v "_test.go" \
         | perl -ne 'print unless m{//.*'"$c"'}' \
         || true)
