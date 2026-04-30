@@ -78,7 +78,7 @@ func (f *FormField) Render() string {
 
 	labelStyle := lipgloss.NewStyle().Foreground(t.TextMuted())
 	inputBorderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(RoundedBorder()).
 		BorderForeground(t.Accent()).
 		Padding(0, 1)
 

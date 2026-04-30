@@ -172,12 +172,12 @@ func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) s
 	}
 
 	outerBorder := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(uikit.RoundedBorder()).
 		BorderForeground(t.ActiveBorder()).
 		Padding(1, 2)
 
 	urlBoxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(uikit.RoundedBorder()).
 		BorderForeground(t.TextMuted()).
 		Padding(0, 1)
 

@@ -37,7 +37,7 @@ func renderSplashView(t theme.Theme, version string, width, height int) string {
 	}.Render()
 
 	warningPanel := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(uikit.RoundedBorder()).
 		BorderForeground(t.TextMuted()).
 		Padding(0, 2).
 		Render(premiumLine)
