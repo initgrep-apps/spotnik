@@ -5,10 +5,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/initgrep-apps/spotnik)](go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A terminal Spotify client for developers. Keyboard-driven, single binary, beautiful in a terminal.
-
-Not a Spotify clone — a developer-first music environment. Target user: developer with Spotify
-Premium who lives in the terminal all day.
+A terminal Spotify client . Keyboard-driven, single binary, beautiful in a terminal.
 
 ---
 
