@@ -2,6 +2,7 @@ package components_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 	btable "github.com/evertras/bubble-table/table"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -362,4 +364,61 @@ func TestTable_SetRichRows_DoesNotAffectExistingSetRows(t *testing.T) {
 	viewAfter := tbl.View()
 	assert.Contains(t, viewAfter, "new rich row", "SetRichRows data must appear after call")
 	assert.NotContains(t, viewAfter, "old plain row", "SetRows data must not appear after SetRichRows replaces it")
+}
+
+// TestTable_PlayingSymbol_AsciiMode verifies that when the uikit glyph mode is
+// ASCII the playing indicator renders as ">" (GlyphPlaying ASCII form) and NOT
+// as the unicode "▶". Both the plain-rows and rich-rows paths in applyRows call
+// playingSymbol(), so we exercise them here.
+func TestTable_PlayingSymbol_AsciiMode(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	cols := makeColumns() // uses "index", "track", "artist", "duration"
+
+	t.Run("plain rows", func(t *testing.T) {
+		cfg := components.TableConfig{
+			Columns:      cols,
+			Theme:        testTheme(),
+			PlayingIndex: 0, // first row is playing
+			ShowHeader:   false,
+		}
+		tbl := components.NewTable(cfg)
+		tbl.SetSize(120, 20)
+		tbl.SetRows([]map[string]string{
+			{"index": "1", "track": "Song A", "artist": "Artist A", "duration": "3:30"},
+			{"index": "2", "track": "Song B", "artist": "Artist B", "duration": "4:00"},
+		})
+
+		out := tbl.View()
+		assert.NotContains(t, out, "▶", "unicode playing glyph ▶ must not appear in ASCII mode")
+		assert.True(t, strings.Contains(out, ">"), "ASCII playing glyph '>' must appear in ASCII mode")
+	})
+
+	t.Run("rich rows", func(t *testing.T) {
+		richCols := []components.ColumnDef{
+			{Key: "index", Header: "#", FlexFactor: 1},
+			{Key: "track", Header: "Track", FlexFactor: 4},
+		}
+		cfg := components.TableConfig{
+			Columns:      richCols,
+			Theme:        testTheme(),
+			PlayingIndex: 0,
+			ShowHeader:   false,
+		}
+		tbl := components.NewTable(cfg)
+		tbl.SetSize(120, 20)
+		tbl.SetRichRows([]map[string]any{
+			{"index": "1", "track": "Rich Song A"},
+			{"index": "2", "track": "Rich Song B"},
+		})
+
+		out := tbl.View()
+		assert.NotContains(t, out, "▶", "unicode playing glyph ▶ must not appear in ASCII mode (rich rows)")
+		assert.True(t, strings.Contains(out, ">"), "ASCII playing glyph '>' must appear in ASCII mode (rich rows)")
+	})
 }

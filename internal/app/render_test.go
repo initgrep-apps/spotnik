@@ -1040,6 +1040,8 @@ func TestRender_AsciiInlineGlyphs(t *testing.T) {
 		IsActive: true,
 	})
 	a.store.SetUserProfile(domain.UserProfile{
+		// ID must be non-empty to enter the profile-chip branch in renderHeader.
+		ID:          "u1",
 		DisplayName: "VeryLongProfileNameThatExceedsMaximumAllowedProfileDisplayNameLength",
 		Product:     "premium",
 	})
@@ -1052,11 +1054,22 @@ func TestRender_AsciiInlineGlyphs(t *testing.T) {
 	}, "\n")
 
 	plain := stripANSI(out)
+
+	// Absence assertions: no unicode literals must survive in ASCII mode.
 	for _, banned := range []string{"♪", "•", "…"} {
 		if strings.Contains(plain, banned) {
 			t.Errorf("ascii output must not contain %q", banned)
 		}
 	}
+
+	// Positive assertions: ASCII replacements must be present.
+	// GlyphMusicNote "♪" → "*"
+	assert.Contains(t, plain, "*", "ASCII replacement for ♪ (GlyphMusicNote) must appear as '*'")
+	// GlyphBullet "•" → "*"  (present in the onboarding title separator)
+	// Both map to "*" so the single Contains above covers both.
+
+	// GlyphEllipsis "…" → "..." — exercised by the truncated profile name.
+	assert.Contains(t, plain, "...", "ASCII replacement for … (GlyphEllipsis) must appear as '...'")
 }
 
 // TestRenderGrid_AsciiBorders verifies that every grid pane border in ASCII mode

@@ -2,6 +2,7 @@ package panes_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -950,4 +952,36 @@ func TestNetworkLogPane_Esc_ClearsCommittedFilter(t *testing.T) {
 	// Esc → clears filter
 	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}
+
+// TestNetworkLogPane_PriorityGlyphs_AsciiMode verifies that in ASCII mode the
+// priority column does not contain the unicode glyphs ⚡ (GlyphRunning /
+// interactive) or ◷ (GlyphDeadline / background). It also asserts that the
+// ASCII fallback forms are present instead.
+func TestNetworkLogPane_PriorityGlyphs_AsciiMode(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	s := state.New()
+	th := theme.Load("black")
+	pane := panes.NewNetworkLogPane(s, th)
+	pane.SetSize(160, 20)
+
+	// Interactive request.
+	recordHttpCompleted(s, 10, "GET", "/me/player", 200, 45, domain.PriorityInteractive)
+	// Background request.
+	recordHttpCompleted(s, 11, "GET", "/me/playlists", 200, 88, domain.PriorityBackground)
+
+	_, _ = pane.Update(panes.TickMsg{})
+
+	v := pane.View()
+
+	// Unicode glyphs must not appear in ASCII mode.
+	assert.NotContains(t, v, "⚡", "unicode interactive glyph ⚡ must not appear in ASCII mode")
+	assert.NotContains(t, v, "◷", "unicode background glyph ◷ must not appear in ASCII mode")
+
+	// ASCII fallbacks: GlyphRunning→"*", GlyphDeadline→"@" per glyph catalogue.
+	// The labels are still present as text (rendered alongside the glyph).
+	assert.True(t, strings.Contains(v, "*"), "ASCII replacement '*' for ⚡ must appear in ASCII mode")
+	assert.True(t, strings.Contains(v, "@"), "ASCII replacement '@' for ◷ must appear in ASCII mode")
 }
