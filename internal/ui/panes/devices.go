@@ -252,7 +252,8 @@ func (d *DeviceOverlay) renderDevice(idx int, dev DeviceInfo) string {
 }
 
 // deviceTypeIcon returns the display icon prefix for a Spotify device type.
-// Falls back to GlyphInactive for any unrecognized type.
+// Falls back to GlyphAvailable (○) for any unrecognized type, preserving the
+// pre-migration visual appearance of "an available but uncategorised device".
 func deviceTypeIcon(deviceType string) string {
 	m := uikit.ActiveMode()
 	switch deviceType {
@@ -265,7 +266,7 @@ func deviceTypeIcon(deviceType string) string {
 	case "TV":
 		return uikit.GlyphFor(uikit.GlyphDeviceTV, m)
 	default:
-		return uikit.GlyphFor(uikit.GlyphInactive, m)
+		return uikit.GlyphFor(uikit.GlyphAvailable, m)
 	}
 }
 

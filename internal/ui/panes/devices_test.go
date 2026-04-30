@@ -184,8 +184,8 @@ func TestDeviceOverlay_DeviceTypeIcon(t *testing.T) {
 		{"Smartphone", "⊞"},
 		{"Speaker", "⊟"},
 		{"TV", "⊠"},
-		{"Unknown", "◎"},
-		{"", "◎"},
+		{"Unknown", "○"},
+		{"", "○"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.deviceType, func(t *testing.T) {

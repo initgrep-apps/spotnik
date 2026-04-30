@@ -223,9 +223,13 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	rl.InfiniteScrolling = false
 
 	return &SearchOverlay{
-		theme:      t,
-		input:      ti,
-		sp:         uikit.NewSpinner("Loading...", t),
+		theme: t,
+		input: ti,
+		// Spinner text is empty so each render site can supply its own context label
+		// ("Searching…" on first page load, "Loading…" on next-page fetch).
+		// uikit.Spinner.View() returns "frame " (frame + space) when text is empty,
+		// so callers append their label directly: sp.View() + "Searching…".
+		sp:         uikit.NewSpinner("", t),
 		keyMap:     km,
 		resultList: rl,
 		intent:     searchIntent{query: "", tab: TabAll, page: 1},
@@ -793,7 +797,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 	if o.loadingNextPage {
 		spinnerLine = lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
-			Render(o.sp.View())
+			Render(o.sp.View() + "Loading…")
 	}
 
 	// Calculate extra lines consumed by optional elements.
@@ -818,7 +822,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		centered := lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Width(innerWidth).Align(lipgloss.Center).
-			Render(o.sp.View())
+			Render(o.sp.View() + "Searching…")
 		resultsArea = lipgloss.NewStyle().
 			Width(innerWidth).MaxWidth(innerWidth).
 			Height(resultsAreaH).MaxHeight(resultsAreaH).
@@ -1042,7 +1046,8 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	// Update the list delegate so badge and selection colors use the new theme.
 	o.resultList.SetDelegate(NewSearchItemDelegate(th))
 	// Reconstruct spinner so loading indicator uses the new theme's colors.
-	o.sp = uikit.NewSpinner("Loading...", th)
+	// Empty text: each render site appends its own context label.
+	o.sp = uikit.NewSpinner("", th)
 	// Update placeholder style so the cycling hints use the new Info() color.
 	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
