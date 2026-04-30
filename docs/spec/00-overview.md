@@ -19,7 +19,7 @@
 | 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79 | Token-based themes, TOML config, runtime switcher, 11 built-in themes |
 | 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | done | 02, 17, 76, 79, 80, 114–117, 134–145 | PKCE OAuth, config-first client ID, TUI onboarding, auth CLI subcommands, profile overlay |
 | 10 | Developer Visibility (Page B) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
-| 11 | CI/CD & Release | `features/11-cicd/` | in-progress | 57, 128–133, 194 | GitHub Actions, GoReleaser, release-please, multi-platform distribution, curl/PS1 installer scripts |
+| 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133, 194 | GitHub Actions, GoReleaser, release-please, multi-platform distribution, curl/PS1 installer scripts |
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | `internal/cliout` package, typed message taxonomy, palette config, TTY-guarded spinner, validated prompt |
 | 13 | TUI Design System | `features/13-tui-design-system/` | done | 150–172, 183–193 | `internal/uikit` package (18 primitives), frozen glyph catalogue with ASCII fallback, role-to-token matrix, glyph-fallback CI guards |
 | 14 | Page B Redesign (Nerd Status) | `features/14-page-b-redesign/` | done | 173–182 | Stacked Page B layout, GatewayHealth/PollingTraffic/GatewayLive panes, universal filter border + Esc-clear, TableBasedPane consolidation |

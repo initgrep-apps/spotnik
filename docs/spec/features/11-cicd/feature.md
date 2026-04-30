@@ -1,6 +1,6 @@
 ---
 title: "CI/CD & Release"
-status: in-progress
+status: done
 ---
 
 ## Description
@@ -20,3 +20,4 @@ GitHub Actions pipeline and GoReleaser configuration for automated multi-platfor
 - [ ] MIT `LICENSE` file present in project root
 - [ ] Full README with all 6 install channels present
 - [ ] Pipeline fails fast on lint or coverage threshold violations
+- [ ] update: installer scripts provided to download latest release and a specific version. scoop, brew, tap is deprecated
