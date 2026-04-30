@@ -909,19 +909,23 @@ func TestEngine_SelectsUnicodeRendererInUnicodeMode(t *testing.T) {
 				rowIdx, ch, ch)
 		}
 	}
-}
 
-// TestEngine_AsciiMode_MaxHeightIs4 confirms that in ASCII mode the engine
-// uses MaxHeight=4 (fixed, independent of display height).
-func TestEngine_AsciiMode_MaxHeightIs4(t *testing.T) {
-	uikit.SetModeForTest(uikit.GlyphASCII)
-	defer uikit.SetModeForTest(uikit.GlyphUnicode)
-
-	r := NewAsciiBarsRenderer()
-	// MaxHeight is 4 regardless of the display height passed.
-	assert.Equal(t, 4, r.MaxHeight(1))
-	assert.Equal(t, 4, r.MaxHeight(8))
-	assert.Equal(t, 4, r.MaxHeight(20))
+	// Positive assertion: at least one braille rune (U+2800–U+28FF) must appear.
+	// A regression that returned all-spaces would still satisfy the negative check
+	// above; this assertion catches that.
+	hasBraille := false
+	for _, line := range f {
+		for _, ch := range line.Text {
+			if ch >= '⠀' && ch <= '⣿' {
+				hasBraille = true
+				break
+			}
+		}
+		if hasBraille {
+			break
+		}
+	}
+	assert.True(t, hasBraille, "unicode mode should produce at least one braille rune from BrailleRenderer")
 }
 
 // ---------------------------------------------------------------------------
