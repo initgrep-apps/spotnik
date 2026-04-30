@@ -187,7 +187,7 @@ func (t *Table) applyRows() {
 			if len(t.config.Columns) > 0 {
 				firstKey := t.config.Columns[0].Key
 				data[firstKey] = btable.NewStyledCell(
-					playingSymbol,
+					playingSymbol(),
 					lipgloss.NewStyle().Foreground(th.PlayingIndicator()),
 				)
 			}
