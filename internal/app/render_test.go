@@ -997,6 +997,68 @@ func TestRenderOnboardingError_panelTitle(t *testing.T) {
 	assert.Contains(t, view, "Authorization Failed")
 }
 
+// stripANSI removes ANSI escape sequences from s, returning plain text.
+// Used in smoke tests that assert on literal content rather than styled output.
+func stripANSI(s string) string {
+	result := make([]byte, 0, len(s))
+	inEsc := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+				inEsc = false
+			}
+			continue
+		}
+		result = append(result, s[i])
+	}
+	return string(result)
+}
+
+// TestRender_AsciiInlineGlyphs confirms that in ASCII mode the combined render
+// output of the onboarding-title, onboarding-error, and header paths contains
+// none of the banned unicode glyph literals (♪, •, …).
+//
+// Device and profile names are chosen long enough to trigger the truncation paths
+// so that the ellipsis glyph is exercised.
+func TestRender_AsciiInlineGlyphs(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+
+	// Inject a device name and profile name that exceed the truncation limit so
+	// the ellipsis path is exercised.
+	a.store.SetActiveDevice(&domain.Device{
+		ID:       "dev1",
+		Name:     "VeryLongDeviceNameThatExceedsTheMaximumAllowedDeviceNameLength",
+		IsActive: true,
+	})
+	a.store.SetUserProfile(domain.UserProfile{
+		DisplayName: "VeryLongProfileNameThatExceedsMaximumAllowedProfileDisplayNameLength",
+		Product:     "premium",
+	})
+
+	// Combine several render paths that previously contained the banned literals.
+	out := strings.Join([]string{
+		a.onboardingTitle(),
+		a.renderOnboardingError(),
+		a.renderHeader(),
+	}, "\n")
+
+	plain := stripANSI(out)
+	for _, banned := range []string{"♪", "•", "…"} {
+		if strings.Contains(plain, banned) {
+			t.Errorf("ascii output must not contain %q", banned)
+		}
+	}
+}
+
 // TestRenderGrid_AsciiBorders verifies that every grid pane border in ASCII mode
 // uses ASCII corner characters ('+') and horizontal rules ('-'), with no unicode
 // box-drawing characters (╭╮╰╯─│) present anywhere in the output.

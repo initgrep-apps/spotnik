@@ -137,7 +137,7 @@ func (o *HelpOverlay) View() string {
 		rightLines = append(rightLines, strings.Repeat(" ", rightW))
 	}
 
-	divider := lipgloss.NewStyle().Foreground(o.theme.TextMuted()).Render("│")
+	divider := lipgloss.NewStyle().Foreground(o.theme.TextMuted()).Render(uikit.GlyphFor(uikit.GlyphVRule, uikit.ActiveMode()))
 
 	var rows []string
 	for i := range leftLines {

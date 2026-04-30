@@ -128,8 +128,9 @@ func (a *App) onboardingTitle() string {
 	subtitleStyle := lipgloss.NewStyle().
 		Foreground(a.theme.TextMuted())
 
+	note := uikit.GlyphFor(uikit.GlyphMusicNote, uikit.ActiveMode())
 	return lipgloss.JoinVertical(lipgloss.Center,
-		titleStyle.Render("♪  spotnik"),
+		titleStyle.Render(note+"  spotnik"),
 		subtitleStyle.Render("A terminal Spotify client"),
 	)
 }
@@ -317,9 +318,9 @@ func (a *App) renderOnboardingError() string {
 		uikit.StatusGlyph{Role: uikit.RoleError, Text: "Error: " + a.onboardingError, Theme: t, Gap: 1}.Render(),
 		"",
 		textStyle.Render("Common causes:"),
-		textStyle.Render("  •  Client ID mistyped or truncated"),
-		textStyle.Render("  •  Redirect URI does not match: "+redirectURI),
-		textStyle.Render("  •  Spotify app deleted or suspended"),
+		textStyle.Render("  "+uikit.GlyphFor(uikit.GlyphBullet, uikit.ActiveMode())+"  Client ID mistyped or truncated"),
+		textStyle.Render("  "+uikit.GlyphFor(uikit.GlyphBullet, uikit.ActiveMode())+"  Redirect URI does not match: "+redirectURI),
+		textStyle.Render("  "+uikit.GlyphFor(uikit.GlyphBullet, uikit.ActiveMode())+"  Spotify app deleted or suspended"),
 		"",
 		hintBar,
 	)
@@ -519,11 +520,14 @@ func (a *App) renderTooSmall() string {
 // maxDeviceNameLen is the maximum number of characters for the device name in the header.
 const maxDeviceNameLen = 25
 
-// truncateDeviceName truncates a device name to maxDeviceNameLen chars, appending … if needed.
+// truncateDeviceName truncates a device name to maxDeviceNameLen runes, appending the ellipsis
+// glyph if needed. Uses GlyphFor so ASCII mode emits "..." rather than the unicode ellipsis.
 func truncateDeviceName(name string) string {
 	runes := []rune(name)
 	if len(runes) > maxDeviceNameLen {
-		return string(runes[:maxDeviceNameLen-1]) + "…"
+		ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+		ellRunes := len([]rune(ell))
+		return string(runes[:maxDeviceNameLen-ellRunes]) + ell
 	}
 	return name
 }
@@ -544,11 +548,14 @@ func pageLabel(page layout.PageID) string {
 const maxProfileDisplayNameLen = 20
 
 // truncateProfileName truncates a display name to maxProfileDisplayNameLen runes,
-// appending … if truncated. Mirrors truncateDeviceName for display name capping.
+// appending the ellipsis glyph if truncated. Uses GlyphFor so ASCII mode emits "..."
+// rather than the unicode ellipsis. Mirrors truncateDeviceName for display name capping.
 func truncateProfileName(name string) string {
 	runes := []rune(name)
 	if len(runes) > maxProfileDisplayNameLen {
-		return string(runes[:maxProfileDisplayNameLen-1]) + "…"
+		ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+		ellRunes := len([]rune(ell))
+		return string(runes[:maxProfileDisplayNameLen-ellRunes]) + ell
 	}
 	return name
 }

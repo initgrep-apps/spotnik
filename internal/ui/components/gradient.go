@@ -191,13 +191,14 @@ func (b *GradientVolumeBar) Render(volume int) string {
 	bar := sb.String()
 
 	// Music note icon: gradient color when volume > 0, muted when 0.
+	note := uikit.GlyphFor(uikit.GlyphMusicNote, m)
 	var icon string
 	if volume > 0 {
 		iconStyle := lipgloss.NewStyle().Foreground(b.th.Gradient1())
-		icon = iconStyle.Render("♪")
+		icon = iconStyle.Render(note)
 	} else {
 		iconStyle := lipgloss.NewStyle().Foreground(b.th.TextMuted())
-		icon = iconStyle.Render("♪")
+		icon = iconStyle.Render(note)
 	}
 
 	return fmt.Sprintf("%s %s  %d%%", icon, bar, volume)
