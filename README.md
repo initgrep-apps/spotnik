@@ -37,13 +37,13 @@ SPOTNIK_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/initgrep-app
 Latest release:
 
 ```powershell
-powershell -c "irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex"
+irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 ```
 
 Pin a specific version:
 
 ```powershell
-$env:SPOTNIK_VERSION="v0.1.0"; powershell -c "irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex"
+$env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 ```
 
 ### Other
