@@ -36,6 +36,7 @@ Thumbs.db
 *.swp
 
 #claude
+docs/superpowers/
 .firecrawl/
 .superpowers/
 .gocache/
