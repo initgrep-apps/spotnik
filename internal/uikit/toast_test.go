@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -218,6 +219,95 @@ func TestToast_TruncatedTitle_AsciiEllipsis(t *testing.T) {
 	suffix := string(runes[45:]) // last 3 runes
 	assert.Equal(t, "...", suffix, "ascii mode must produce ... suffix, not …")
 	assert.NotContains(t, toast.Title, "…", "ascii truncation must not contain unicode ellipsis")
+}
+
+// TestRegisterBubbleupAlerts_AsciiPrefixes verifies that RegisterBubbleupAlerts resolves
+// the five toast prefixes to their ASCII forms when GlyphASCII mode is active.
+func TestRegisterBubbleupAlerts_AsciiPrefixes(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	defs := uikit.RegisterBubbleupAlerts(th)
+
+	wantPrefixes := map[string]string{
+		"success":   "+",
+		"error":     "x",
+		"warning":   "!",
+		"info":      ">",
+		"ratelimit": "~",
+	}
+	require.Len(t, defs, 5, "RegisterBubbleupAlerts must return exactly 5 definitions")
+	for _, d := range defs {
+		want, ok := wantPrefixes[d.Key]
+		if !ok {
+			continue
+		}
+		assert.Equal(t, want, d.Prefix, "alert %q ascii prefix = %q, want %q", d.Key, d.Prefix, want)
+	}
+}
+
+// TestRegisterBubbleupAlerts_UnicodePrefixes verifies that RegisterBubbleupAlerts resolves
+// the five toast prefixes to their unicode forms when GlyphUnicode mode is active.
+func TestRegisterBubbleupAlerts_UnicodePrefixes(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	th := theme.Load("black")
+	defs := uikit.RegisterBubbleupAlerts(th)
+
+	wantPrefixes := map[string]string{
+		"success":   "✓",
+		"error":     "✗",
+		"warning":   "◬",
+		"info":      "→",
+		"ratelimit": "⧖",
+	}
+	require.Len(t, defs, 5, "RegisterBubbleupAlerts must return exactly 5 definitions")
+	for _, d := range defs {
+		want, ok := wantPrefixes[d.Key]
+		if !ok {
+			continue
+		}
+		assert.Equal(t, want, d.Prefix, "alert %q unicode prefix = %q, want %q", d.Key, d.Prefix, want)
+	}
+}
+
+// TestRegisterBubbleupAlerts_CallTimeResolution verifies that RegisterBubbleupAlerts
+// resolves glyph prefixes via GlyphFor AT CALL TIME, not at package init. Two
+// sequential calls in opposite modes must produce different prefixes for at least
+// one intent key — a regression where prefixes are frozen at init time would make
+// both calls return identical results.
+func TestRegisterBubbleupAlerts_CallTimeResolution(t *testing.T) {
+	th := theme.Load("black")
+
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	unicodeDefs := uikit.RegisterBubbleupAlerts(th)
+
+	uikit.SetModeForTest(uikit.GlyphASCII)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+	asciiDefs := uikit.RegisterBubbleupAlerts(th)
+
+	// Build maps keyed by alert key so we can compare prefixes for the same intent.
+	unicodeByKey := make(map[string]string, len(unicodeDefs))
+	for _, d := range unicodeDefs {
+		unicodeByKey[d.Key] = d.Prefix
+	}
+	asciiByKey := make(map[string]string, len(asciiDefs))
+	for _, d := range asciiDefs {
+		asciiByKey[d.Key] = d.Prefix
+	}
+
+	// At least one prefix must differ between the two modes.
+	diffCount := 0
+	for key, uPrefix := range unicodeByKey {
+		if asciiByKey[key] != uPrefix {
+			diffCount++
+		}
+	}
+	require.Greater(t, diffCount, 0,
+		"RegisterBubbleupAlerts must resolve glyphs at call time — prefixes must differ between unicode and ASCII modes for at least one intent")
 }
 
 // makeTestAlertModel creates a minimal bubbleup.AlertModel with all five Spotnik

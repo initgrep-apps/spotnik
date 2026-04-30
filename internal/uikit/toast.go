@@ -5,6 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"go.dalton.dog/bubbleup"
+
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
 // ToastIntent classifies the semantic intent of a Toast notification.
@@ -25,8 +27,43 @@ const (
 	ToastRateLimit
 )
 
-// intentKey maps ToastIntent to the bubbleup alert key registered in
-// internal/ui/components/notifications.go.
+// RegisterBubbleupAlerts builds the bubbleup AlertDefinition slice for the five
+// toast intents. Glyph prefixes are resolved via GlyphFor at call time so the
+// result honours ActiveMode(). Call this after uikit.Use() to ensure the correct
+// mode is active.
+func RegisterBubbleupAlerts(t theme.Theme) []bubbleup.AlertDefinition {
+	m := ActiveMode()
+	return []bubbleup.AlertDefinition{
+		{
+			Key:       "success",
+			ForeColor: string(t.Success()),
+			Prefix:    GlyphFor(GlyphSuccess, m),
+		},
+		{
+			Key:       "error",
+			ForeColor: string(t.Error()),
+			Prefix:    GlyphFor(GlyphError, m),
+		},
+		{
+			Key:       "warning",
+			ForeColor: string(t.Warning()),
+			Prefix:    GlyphFor(GlyphWarning, m),
+		},
+		{
+			Key:       "info",
+			ForeColor: string(t.Info()),
+			Prefix:    GlyphFor(GlyphInfo, m),
+		},
+		{
+			Key:       "ratelimit",
+			ForeColor: string(t.Warning()),
+			Prefix:    GlyphFor(GlyphRateLimit, m),
+		},
+	}
+}
+
+// intentKey maps ToastIntent to the bubbleup alert key used by RegisterBubbleupAlerts
+// and consumed by ToastManager.Cmd when dispatching bubbleup commands.
 var intentKey = [...]string{
 	ToastSuccess:   "success",
 	ToastError:     "error",
