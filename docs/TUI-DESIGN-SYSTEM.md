@@ -1001,6 +1001,90 @@ after TTL; `Cancel` clears without a final line; ascii mode uses rotating `|/-\`
 
 ---
 
+### 3.19 PlaybackControls
+
+**Purpose:** Stateless transport-strip primitive. Owns the four transport icon
+positions (shuffle / play-pause / queue / repeat) and resolves every glyph through
+`GlyphFor` so both unicode and ASCII modes are handled automatically. The
+`components.Controls` compatibility wrapper delegates entirely to this struct.
+
+**Struct and constructor:**
+
+```go
+type RepeatMode int
+
+const (
+    RepeatOff RepeatMode = iota // ⟳ / ro — inactive colour
+    RepeatAll                   // ↻ / rp — active colour
+    RepeatOne                   // ↻¹ / rp1 — active colour
+)
+
+type PlaybackControls struct {
+    Playing    bool
+    Shuffle    bool
+    RepeatMode RepeatMode
+    Theme      theme.Theme
+}
+
+func (c PlaybackControls) Render() string
+```
+
+**Rendering (unicode, playing, shuffle off, repeat off):**
+
+```
+⇄  ⏸  ≡  ⟳
+```
+
+**Rendering (unicode, paused, shuffle on, repeat all):**
+
+```
+⇄  ▷  ≡  ↻
+```
+
+**Rendering (ascii, playing, shuffle off, repeat off):**
+
+```
+sh  ||  Q  ro
+```
+
+**Roles:**
+
+| Position | Condition | Role |
+|---|---|---|
+| Shuffle | shuffle on | `PlayingIndicator` |
+| Shuffle | shuffle off | `TextSecondary` |
+| Play/Pause | playing | `PlayingIndicator` (shows ⏸/`||`) |
+| Play/Pause | paused | `TextSecondary` (shows ▷/`|>`) |
+| Queue | always | `TextSecondary` |
+| Repeat | RepeatAll / RepeatOne | `PlayingIndicator` |
+| Repeat | RepeatOff | `TextSecondary` |
+
+**Glyphs:**
+
+| Position | Unicode | ASCII | GlyphRole |
+|---|---|---|---|
+| Shuffle | `⇄` | `sh` | `GlyphShuffle` |
+| Play (paused state) | `▷` | `\|>` | `GlyphPausedPB` |
+| Pause (playing state) | `⏸` | `\|\|` | `GlyphPaused` |
+| Queue | `≡` | `Q` | `GlyphQueue` |
+| Repeat Off | `⟳` | `ro` | `GlyphRepeatOff` |
+| Repeat All | `↻` | `rp` | `GlyphRepeatAll` |
+| Repeat One | `↻¹` | `rp1` | `GlyphRepeatOne` |
+
+**Visual note:** `GlyphRepeatOff` (`⟳`) is distinct from `GlyphRepeatAll` (`↻`).
+The legacy `components.Controls` rendered `↻` for both off and all states (with
+different colours). The primitive uses catalogue-intent glyphs exclusively.
+
+**Lifecycle:** stateless value — call `Render()` directly from `View()`.
+
+**Tests:** `TestPlaybackControls_RenderUnicode_Playing` — unicode output contains
+`⏸`, `≡`, `⇄`, `⟳` (off-state); `TestPlaybackControls_RenderASCII_Playing` —
+ascii output contains `||`, `Q`, `sh`, `ro`, no unicode glyphs;
+`TestPlaybackControls_RepeatModes` — all three `RepeatMode` values render correct
+glyph in both modes.
+
+---
+
 ## 4. Glyph Catalogue
 
 Every glyph the TUI and CLI use. Every row has a unicode form and an ascii fallback.
