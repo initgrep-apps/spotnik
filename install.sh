@@ -2,10 +2,15 @@
 set -euo pipefail
 
 # spotnik installer — macOS and Linux
-# Usage: curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
-# Env:   SPOTNIK_VERSION=v0.1.0   pin a release (default: latest)
-#        SPOTNIK_INSTALL_DIR=/path override install destination
-#        SPOTNIK_NO_MODIFY_PATH=1  suppress PATH warning
+# Usage:
+#   Latest stable:  curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
+#   Pinned:         curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash -s v0.1.0
+# Env:
+#   SPOTNIK_VERSION=v0.1.0    pin a release (alternative to positional arg)
+#   SPOTNIK_INSTALL_DIR=/path override install destination
+#   SPOTNIK_NO_MODIFY_PATH=1  suppress PATH warning
+#
+# Positional arg wins over env var. Default = latest stable (skips pre-releases).
 
 BOLD='\033[1m'
 SUCCESS='\033[38;2;0;229;204m'
@@ -50,6 +55,11 @@ detect_arch() {
 }
 
 resolve_version() {
+    local arg="${1:-}"
+    if [[ -n "$arg" ]]; then
+        echo "$arg"
+        return
+    fi
     if [[ -n "${SPOTNIK_VERSION:-}" ]]; then
         echo "$SPOTNIK_VERSION"
         return
@@ -57,7 +67,7 @@ resolve_version() {
     local response
     if ! response="$(curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" 2>&1)"; then
         ui_error "Failed to query GitHub API: $response"
-        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
+        ui_info "Workaround: pin a version, e.g. curl ... | bash -s v0.1.0"
         exit 1
     fi
     local version
@@ -106,7 +116,7 @@ main() {
     arch="$(detect_arch)";   ui_success "Arch: $arch"
 
     ui_info "Resolving version..."
-    version="$(resolve_version)"; ui_success "Version: $version"
+    version="$(resolve_version "${1:-}")"; ui_success "Version: $version"
 
     # GoReleaser strips the leading 'v' from {{.Version}} in artifact names,
     # but the GitHub release tag (and download URL path) keeps it.
@@ -149,7 +159,7 @@ main() {
         ui_info "sudo required for $install_dir"
         if ! sudo mv "$tmpdir/spotnik" "$install_dir/spotnik" </dev/tty; then
             ui_error "Failed to install to $install_dir (sudo cancelled or unavailable)"
-            ui_info "Override the destination: SPOTNIK_INSTALL_DIR=\$HOME/.local/bin curl ... | bash"
+            ui_info "Override the destination: SPOTNIK_INSTALL_DIR=\$HOME/.local/bin bash -c \"\$(curl -fsSL ...)\""
             exit 1
         fi
     else
@@ -171,4 +181,4 @@ main() {
     echo -e "\n${BOLD}  Run: spotnik${NC}\n"
 }
 
-main
+main "$@"
