@@ -104,7 +104,8 @@ A Spotify Developer app is needed for the PKCE OAuth flow:
 3. Run `spotnik`. It bootstraps `~/.config/spotnik/config.toml` and prompts for the Client ID.
 4. Your browser opens for authorization. Tokens land in the OS keychain.
 
-
+Spotnik requests 14 Spotify OAuth scopes. See [docs/SCOPES.md](docs/SCOPES.md)
+for the full list and revocation steps.
 
 ## Features
 
