@@ -41,9 +41,9 @@ the older specialised `actions/attest-build-provenance@v2`.
 Standard-tier content, grouped layout:
 
 1. **Intro** — PKCE flow, 14 scopes, keychain storage, link to revoke section.
-2. **Read-only access (9 scopes)** — sub-grouped by purpose: Playback state, Library,
+2. **Read-only access (10 scopes)** — sub-grouped by purpose: Playback state, Library,
    Playlists, Profile, Listening history, Following.
-3. **Write actions (5 scopes)** — sub-grouped: Playback control, Library modification,
+3. **Write actions (4 scopes)** — sub-grouped: Playback control, Library modification,
    Playlist editing.
 4. **What spotnik does *not* do** — no telemetry, no third-party endpoints, no
    background activity. Lists exact outbound hosts (`accounts.spotify.com`,

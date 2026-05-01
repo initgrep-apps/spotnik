@@ -11,7 +11,7 @@ spotnik does *not* do with that access, and how to revoke it at any time.
 
 [pkce]: https://datatracker.ietf.org/doc/html/rfc7636
 
-## Read-only access (9 scopes)
+## Read-only access (10 scopes)
 
 These scopes let spotnik display state. They do not allow any modification.
 
@@ -43,7 +43,7 @@ These scopes let spotnik display state. They do not allow any modification.
   Read the list of artists you follow. Used by the Top Artists pane to mark
   followed artists.
 
-## Write actions (5 scopes)
+## Write actions (4 scopes)
 
 These scopes allow spotnik to modify state on your account when you press a
 control. Every write action is initiated by a user keypress; spotnik never
