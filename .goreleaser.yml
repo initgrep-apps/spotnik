@@ -46,6 +46,11 @@ release:
   github:
     owner: initgrep-apps
     name: spotnik
+  # auto: tags matching -rc*, -beta*, -alpha*, -pre* publish as GitHub
+  # pre-releases. The /releases/latest API skips pre-releases, so the
+  # default `curl install.sh | bash` keeps pointing at the latest stable
+  # tag. RC testers opt in via SPOTNIK_VERSION=v0.1.0-rc1.
+  prerelease: auto
 
 nfpms:
   - id: packages

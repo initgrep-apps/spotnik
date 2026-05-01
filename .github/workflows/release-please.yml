@@ -5,9 +5,12 @@
 name: release-please
 
 on:
-  push:
-    branches:
-      - main
+  # Disabled during the v0.1.0 release-candidate cycle. Re-enable
+  # (uncomment push.branches) in a follow-up PR after v0.1.0 stable
+  # is tagged, so release-please can take over for v0.1.1+.
+  # push:
+  #   branches:
+  #     - main
   workflow_dispatch:
 
 permissions:
