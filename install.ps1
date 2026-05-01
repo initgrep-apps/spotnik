@@ -53,7 +53,7 @@ Write-Success "Version: $version"
 # GoReleaser strips the leading 'v' from artifact names; tag keeps it.
 $versionNum   = $version.TrimStart('v')
 $zipName      = "spotnik_${versionNum}_windows_amd64.zip"
-$checksumName = "spotnik_${versionNum}_checksums.txt"
+$checksumName = "checksums.txt"
 $baseUrl      = "https://github.com/initgrep-apps/spotnik/releases/download/$version"
 
 # Temp directory -- cleaned up in finally block

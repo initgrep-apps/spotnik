@@ -122,7 +122,7 @@ main() {
     # but the GitHub release tag (and download URL path) keeps it.
     local version_num="${version#v}"
     local tarball="spotnik_${version_num}_${os}_${arch}.tar.gz"
-    local checksums="spotnik_${version_num}_checksums.txt"
+    local checksums="checksums.txt"
     local base_url="https://github.com/initgrep-apps/spotnik/releases/download/${version}"
 
     local tmpdir; tmpdir="$(mktmpdir)"
