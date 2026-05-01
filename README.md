@@ -22,7 +22,7 @@ A terminal client for Spotify.
 
 ### macOS and Linux
 
-Latest release:
+Latest stable release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
@@ -31,12 +31,12 @@ curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.
 Pin a specific version:
 
 ```bash
-SPOTNIK_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash -s v0.1.0
 ```
 
 ### Windows
 
-Latest release:
+Latest stable release:
 
 ```powershell
 irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
@@ -45,7 +45,7 @@ irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | i
 Pin a specific version:
 
 ```powershell
-$env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
+& ([ScriptBlock]::Create((irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1))) v0.1.0
 ```
 
 ### Other
@@ -56,6 +56,38 @@ can also install from source:
 
 ```bash
 go install github.com/initgrep-apps/spotnik@latest
+```
+
+## Uninstall
+
+The uninstaller wipes tokens from the OS keychain (via `spotnik auth forget`),
+removes the binary, and prompts before deleting `~/.config/spotnik`.
+
+### macOS and Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
+```
+
+Skip the prompt:
+
+```bash
+SPOTNIK_PURGE_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash   # also delete config
+SPOTNIK_KEEP_CONFIG=1  curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash   # keep config
+```
+
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.ps1 | iex
+```
+
+### Manual
+
+```bash
+spotnik auth forget                  # wipe keychain + client ID
+sudo rm "$(command -v spotnik)"      # remove binary
+rm -rf ~/.config/spotnik             # remove config (optional)
 ```
 
 

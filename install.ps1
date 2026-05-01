@@ -3,8 +3,16 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # spotnik installer -- Windows (PowerShell 5.1+)
-# Usage: powershell -c "irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex"
-# Env:   $env:SPOTNIK_VERSION = "v0.1.0"  pin a release (default: latest)
+# Usage:
+#   Latest stable: irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
+#   Pinned:        & ([ScriptBlock]::Create((irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1))) v0.1.0
+# Env:
+#   $env:SPOTNIK_VERSION = "v0.1.0"  pin a release (alternative to positional arg)
+#
+# Positional arg wins over env var. Default = latest stable (skips pre-releases).
+param(
+    [string]$VersionArg
+)
 
 function Write-Banner  { Write-Host "`n  spotnik installer`n" -ForegroundColor White }
 function Write-Success { param($msg) Write-Host "v $msg" -ForegroundColor Cyan }
@@ -22,8 +30,9 @@ if ($cpuArch -ne 'AMD64') {
 }
 Write-Success "Arch: amd64"
 
-# Version resolution
-$version = $env:SPOTNIK_VERSION
+# Version resolution: positional arg > env var > latest stable
+$version = $VersionArg
+if (-not $version) { $version = $env:SPOTNIK_VERSION }
 if (-not $version) {
     Write-Info "Resolving latest version..."
     try {
@@ -31,7 +40,7 @@ if (-not $version) {
         $version = $release.tag_name
     } catch {
         Write-Err "Failed to query GitHub API: $_"
-        Write-Info "Workaround: `$env:SPOTNIK_VERSION = 'vX.Y.Z'; irm ... | iex"
+        Write-Info "Workaround: pin a version, e.g. & ([ScriptBlock]::Create((irm ...))) v0.1.0"
         exit 1
     }
 }
