@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.
 Pin a specific version:
 
 ```bash
-SPOTNIK_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | SPOTNIK_VERSION=v0.1.0 bash
 ```
 
 ### Windows

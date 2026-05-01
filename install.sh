@@ -3,7 +3,9 @@ set -euo pipefail
 
 # spotnik installer — macOS and Linux
 # Usage: curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
-# Env:   SPOTNIK_VERSION=v0.1.0   pin a release (default: latest)
+#        # Pin a version (env var must be on the bash side of the pipe):
+#        curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | SPOTNIK_VERSION=v0.1.0 bash
+# Env:   SPOTNIK_VERSION=v0.1.0   pin a release (default: latest stable, skips pre-releases)
 #        SPOTNIK_INSTALL_DIR=/path override install destination
 #        SPOTNIK_NO_MODIFY_PATH=1  suppress PATH warning
 
@@ -57,7 +59,7 @@ resolve_version() {
     local response
     if ! response="$(curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" 2>&1)"; then
         ui_error "Failed to query GitHub API: $response"
-        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
+        ui_info "Workaround: pin a version, e.g. curl ... | SPOTNIK_VERSION=v0.1.0 bash"
         exit 1
     fi
     local version
