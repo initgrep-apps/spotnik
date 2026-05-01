@@ -1,10 +1,9 @@
 {
-  "bootstrap-sha": "326d6d595068fc27781917b642a9c962422150c8",
   "packages": {
     ".": {
       "release-type": "go",
       "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },

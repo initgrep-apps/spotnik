@@ -4,10 +4,9 @@
 name: Release
 
 on:
-  # Release triggers disabled — uncomment push.tags when app is ready for first release.
-  # push:
-  #   tags:
-  #     - "v*"
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:

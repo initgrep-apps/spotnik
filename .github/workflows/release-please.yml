@@ -5,10 +5,9 @@
 name: release-please
 
 on:
-  # Release-please trigger disabled — uncomment push.branches when ready to re-enable automated release PRs.
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
