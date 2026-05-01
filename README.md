@@ -14,6 +14,8 @@ A terminal client for Spotify.
 > *Spotify Premium is required for playback control. See the
 > [Spotify Web API docs](https://developer.spotify.com/documentation/web-api/reference/pause-a-users-playback).*
 
+![Spotnik screenshot](screens/figma-export.png)
+
 
 
 ## Install
@@ -251,6 +253,23 @@ Other targets: `build`, `test`, `test-integration`, `test-coverage`, `lint`,
 
 Architecture and system docs live in [docs/system/](docs/system/):
 `architecture.md`, `design.md`, `tui.md`, `cli.md`, and `api-guide.md`.
+
+### Tech stack
+
+| Layer | Library |
+|-------|---------|
+| Language | [Go 1.26+](https://go.dev) |
+| TUI runtime | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
+| Components | [Bubbles](https://github.com/charmbracelet/bubbles) |
+| Styling | [Lip Gloss](https://github.com/charmbracelet/lipgloss) |
+| Tables | [bubble-table](https://github.com/Evertras/bubble-table) |
+| Overlays | [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) |
+| Config | [BurntSushi/toml](https://github.com/BurntSushi/toml) |
+| Keychain | [zalando/go-keyring](https://github.com/zalando/go-keyring) |
+| CLI | [spf13/cobra](https://github.com/spf13/cobra) |
+| HTTP | Go stdlib `net/http` |
+| Testing | `testing` + [testify](https://github.com/stretchr/testify) |
+| Release | [GoReleaser](https://goreleaser.com) + [release-please](https://github.com/googleapis/release-please) |
 
 
 ## License
