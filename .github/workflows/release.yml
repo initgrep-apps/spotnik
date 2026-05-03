@@ -1,6 +1,8 @@
 # Release workflow — fires when a v* tag is pushed.
-# GoReleaser builds 5 platform binaries, creates a GitHub Release,
-# and uploads DEB/RPM packages.
+# GoReleaser builds 5 platform binaries, creates a GitHub Release, and uploads
+# DEB/RPM packages. After GoReleaser runs, actions/attest@v4 generates a
+# Sigstore-signed SLSA Build Provenance v1.0 attestation per artifact, published
+# to GitHub's attestation API and verifiable with `gh attestation verify`.
 name: Release
 
 on:
@@ -10,7 +12,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write          # create the GitHub Release and upload artifacts
+  id-token: write          # OIDC token for Sigstore keyless signing
+  attestations: write      # publish attestations to GitHub's attestation API
 
 jobs:
   release:
@@ -18,21 +22,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code (full history for GoReleaser)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
         with:
           distribution: goreleaser
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest build provenance
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-checksums: ./dist/checksums.txt

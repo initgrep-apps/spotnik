@@ -35,7 +35,7 @@ archives:
       - README.md
 
 checksum:
-  name_template: "spotnik_{{.Version}}_checksums.txt"
+  name_template: "checksums.txt"
   algorithm: sha256
 
 # release-please manages the CHANGELOG; skip GoReleaser changelog generation.
