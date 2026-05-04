@@ -177,6 +177,24 @@ update_rc_files() {
     fi
 }
 
+write_fish_conf() {
+    local install_dir="$1"
+    local conf_dir="$HOME/.config/fish/conf.d"
+    mkdir -p "$conf_dir"
+    cat > "$conf_dir/spotnik.fish" <<EOF
+# Managed by the spotnik installer.
+if not contains -- $install_dir \$PATH
+    fish_add_path -g $install_dir
+end
+EOF
+    ui_success "Wrote $conf_dir/spotnik.fish"
+}
+
+# True if the user has fish configured (directory exists).
+has_fish_config() {
+    [ -d "$HOME/.config/fish" ]
+}
+
 main() {
     ui_banner
 
@@ -244,8 +262,11 @@ main() {
     else
         write_env_file "$install_dir"
         ui_success "Wrote $HOME/.config/spotnik/env"
-        update_rc_files
-        # fish branch added in subsequent task.
+        if has_fish_config; then
+            write_fish_conf "$install_dir"
+        else
+            update_rc_files
+        fi
     fi
 
     echo ""

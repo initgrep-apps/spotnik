@@ -23,6 +23,7 @@ load 'helpers'
 }
 
 @test "marker block written exactly once to ~/.bashrc on Ubuntu" {
+    [ ! -d "$HOME/.config/fish" ] || skip "fish image — rc files intentionally not edited"
     # Ubuntu image creates .bashrc by default for the tester user.
     [ -f "$HOME/.bashrc" ]
     run_install_pinned
@@ -31,8 +32,18 @@ load 'helpers'
 }
 
 @test "idempotent reinstall does not duplicate marker block" {
+    [ ! -d "$HOME/.config/fish" ] || skip "fish image — rc files intentionally not edited"
     run_install_pinned
     cp "$HOME/.bashrc" "$HOME/.bashrc.snapshot"
     run_install_pinned
     diff -u "$HOME/.bashrc.snapshot" "$HOME/.bashrc"
+}
+
+@test "fish-only env writes conf.d/spotnik.fish and skips rc files" {
+    [ -d "$HOME/.config/fish" ] || skip "not a fish image"
+    run_install_pinned
+    [ -f "$HOME/.config/fish/conf.d/spotnik.fish" ]
+    grep -q 'fish_add_path' "$HOME/.config/fish/conf.d/spotnik.fish"
+    refute_marker_block "$HOME/.bashrc"
+    refute_marker_block "$HOME/.zshrc"
 }
