@@ -22,21 +22,32 @@ load 'helpers'
     assert_spotnik_on_path_after_source
 }
 
-@test "marker block written exactly once to ~/.bashrc on Ubuntu" {
+@test "marker block written exactly once to primary rc file" {
     [ ! -d "$HOME/.config/fish" ] || skip "fish image — rc files intentionally not edited"
-    # Ubuntu image creates .bashrc by default for the tester user.
-    [ -f "$HOME/.bashrc" ]
+    # Pick whichever POSIX rc file the image provisioned. install.sh's
+    # update_rc_files iterates .bashrc/.zshrc/.bash_profile/.profile and edits
+    # all that exist, so asserting on the one present is sufficient.
+    local rc=""
+    for candidate in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        [ -f "$candidate" ] && rc="$candidate" && break
+    done
+    [ -n "$rc" ] || skip "no POSIX rc file present in this image"
     run_install_pinned
-    assert_marker_block "$HOME/.bashrc"
-    grep -q '\. "\$HOME/.config/spotnik/env"' "$HOME/.bashrc"
+    assert_marker_block "$rc"
+    grep -q '\. "\$HOME/.config/spotnik/env"' "$rc"
 }
 
 @test "idempotent reinstall does not duplicate marker block" {
     [ ! -d "$HOME/.config/fish" ] || skip "fish image — rc files intentionally not edited"
+    local rc=""
+    for candidate in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        [ -f "$candidate" ] && rc="$candidate" && break
+    done
+    [ -n "$rc" ] || skip "no POSIX rc file present in this image"
     run_install_pinned
-    cp "$HOME/.bashrc" "$HOME/.bashrc.snapshot"
+    cp "$rc" "$rc.snapshot"
     run_install_pinned
-    diff -u "$HOME/.bashrc.snapshot" "$HOME/.bashrc"
+    diff -u "$rc.snapshot" "$rc"
 }
 
 @test "fish-only env writes conf.d/spotnik.fish and skips rc files" {
