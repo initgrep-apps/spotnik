@@ -31,8 +31,11 @@ curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.
 Pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | SPOTNIK_VERSION=v0.1.0 bash
 ```
+
+After install, open a new terminal — or run `. ~/.config/spotnik/env` to use
+`spotnik` immediately in the current shell.
 
 ### Windows
 
@@ -45,8 +48,10 @@ irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | i
 Pin a specific version:
 
 ```powershell
-& ([ScriptBlock]::Create((irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1))) v0.1.0
+$env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 ```
+
+The installer updates your user PATH and current PowerShell session.
 
 ### Other
 
@@ -61,7 +66,10 @@ go install github.com/initgrep-apps/spotnik@latest
 ## Uninstall
 
 The uninstaller wipes tokens from the OS keychain (via `spotnik auth forget`),
-removes the binary, and prompts before deleting `~/.config/spotnik`.
+removes the binary, removes the env file at `~/.config/spotnik/env` plus any
+installer-managed lines from `~/.bashrc`, `~/.zshrc`, `~/.bash_profile`,
+`~/.profile`, and `~/.config/fish/conf.d/spotnik.fish`, and prompts before
+deleting `~/.config/spotnik`.
 
 ### macOS and Linux
 
@@ -85,9 +93,11 @@ irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.ps1 |
 ### Manual
 
 ```bash
-spotnik auth forget                  # wipe keychain + client ID
-sudo rm "$(command -v spotnik)"      # remove binary
-rm -rf ~/.config/spotnik             # remove config (optional)
+spotnik auth forget                              # wipe keychain + client ID
+sudo rm "$(command -v spotnik)"                  # remove binary
+rm -f ~/.config/spotnik/env                      # remove env file
+rm -rf ~/.config/spotnik                         # remove config (optional)
+# Strip the marker block from any rc files manually if needed.
 ```
 
 
