@@ -4,6 +4,11 @@ export SPOTNIK_TEST_VERSION="v0.1.0-rc1"
 # Default install dir for all tests; can be overridden per-test.
 export TEST_INSTALL_DIR="$HOME/.local/bin"
 
+# Marker text — single source of truth for the test layer. If install.sh's
+# RC_MARKER_OPEN/RC_MARKER_CLOSE ever change, update these to match.
+export SPOTNIK_RC_MARKER_OPEN_RE='^# >>> spotnik installer >>>$'
+export SPOTNIK_RC_MARKER_CLOSE_RE='^# <<< spotnik installer <<<$'
+
 # Run install.sh with a pinned version. Captures status + output.
 run_install_pinned() {
     SPOTNIK_VERSION="$SPOTNIK_TEST_VERSION" bash "$HOME/install.sh"
@@ -24,7 +29,7 @@ assert_marker_block() {
     local rc="$1"
     [ -f "$rc" ] || { echo "rc file missing: $rc" >&2; return 1; }
     local count
-    count="$(grep -c '^# >>> spotnik installer >>>$' "$rc" || true)"
+    count="$(grep -c "$SPOTNIK_RC_MARKER_OPEN_RE" "$rc" || true)"
     [ "$count" = "1" ] || { echo "marker count in $rc = $count, want 1" >&2; return 1; }
 }
 
@@ -32,8 +37,15 @@ assert_marker_block() {
 refute_marker_block() {
     local rc="$1"
     [ -f "$rc" ] || return 0
-    grep -q '^# >>> spotnik installer >>>$' "$rc" \
+    grep -q "$SPOTNIK_RC_MARKER_OPEN_RE" "$rc" \
         && { echo "marker unexpectedly present in $rc" >&2; return 1; } || true
+}
+
+# Strip the spotnik marker block from an rc file. Idempotent.
+strip_marker_block() {
+    local rc="$1"
+    [ -f "$rc" ] || return 0
+    sed -i "/${SPOTNIK_RC_MARKER_OPEN_RE}/,/${SPOTNIK_RC_MARKER_CLOSE_RE}/d" "$rc"
 }
 
 # Assert spotnik resolves on PATH after sourcing the env file.

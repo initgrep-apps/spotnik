@@ -52,9 +52,7 @@ load 'helpers'
     # bats does not isolate $HOME between tests; clear residue from earlier
     # cases so the absence-assertions are meaningful.
     rm -rf "$HOME/.config/spotnik"
-    if [ -f "$HOME/.bashrc" ]; then
-        sed -i '/^# >>> spotnik installer >>>$/,/^# <<< spotnik installer <<<$/d' "$HOME/.bashrc"
-    fi
+    strip_marker_block "$HOME/.bashrc"
     SPOTNIK_VERSION="$SPOTNIK_TEST_VERSION" SPOTNIK_NO_MODIFY_PATH=1 \
         bash "$HOME/install.sh"
     [ ! -f "$HOME/.config/spotnik/env" ]
@@ -72,7 +70,7 @@ load 'helpers'
 @test "latest smoke: no version pin produces an executable binary" {
     # GitHub's /releases/latest skips pre-releases; until a stable tag ships
     # this exercises a 404 path. Skip rather than red.
-    curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" \
+    curl -fsSL --max-time 10 "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" \
         >/dev/null 2>&1 || skip "no stable (non-pre) release published yet"
     run_install_latest
     [ -x "$TEST_INSTALL_DIR/spotnik" ]
