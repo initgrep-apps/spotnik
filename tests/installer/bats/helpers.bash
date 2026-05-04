@@ -9,6 +9,24 @@ export TEST_INSTALL_DIR="$HOME/.local/bin"
 export SPOTNIK_RC_MARKER_OPEN_RE='^# >>> spotnik installer >>>$'
 export SPOTNIK_RC_MARKER_CLOSE_RE='^# <<< spotnik installer <<<$'
 
+# POSIX rc files the installer may edit. Mirrors install.sh's update_rc_files
+# loop. If install.sh's list ever changes, update this to match.
+SPOTNIK_RC_CANDIDATES=(
+    "$HOME/.bashrc"
+    "$HOME/.zshrc"
+    "$HOME/.bash_profile"
+    "$HOME/.profile"
+)
+
+# Print every candidate rc file currently present in $HOME, one per line.
+# Empty output means no rc files exist in this image.
+present_rc_files() {
+    local rc
+    for rc in "${SPOTNIK_RC_CANDIDATES[@]}"; do
+        [ -f "$rc" ] && printf '%s\n' "$rc"
+    done
+}
+
 # Run install.sh with a pinned version. Captures status + output.
 run_install_pinned() {
     SPOTNIK_VERSION="$SPOTNIK_TEST_VERSION" bash "$HOME/install.sh"

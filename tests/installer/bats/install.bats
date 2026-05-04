@@ -22,32 +22,31 @@ load 'helpers'
     assert_spotnik_on_path_after_source
 }
 
-@test "marker block written exactly once to primary rc file" {
+@test "marker block written exactly once on every present rc" {
     [ ! -d "$HOME/.config/fish" ] || skip "fish image — rc files intentionally not edited"
-    # Pick whichever POSIX rc file the image provisioned. install.sh's
-    # update_rc_files iterates .bashrc/.zshrc/.bash_profile/.profile and edits
-    # all that exist, so asserting on the one present is sufficient.
-    local rc=""
-    for candidate in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
-        [ -f "$candidate" ] && rc="$candidate" && break
-    done
-    [ -n "$rc" ] || skip "no POSIX rc file present in this image"
     run_install_pinned
-    assert_marker_block "$rc"
-    grep -q '\. "\$HOME/.config/spotnik/env"' "$rc"
+    local checked=0 rc
+    while IFS= read -r rc; do
+        assert_marker_block "$rc"
+        grep -q '\. "\$HOME/.config/spotnik/env"' "$rc"
+        checked=$((checked + 1))
+    done < <(present_rc_files)
+    [ "$checked" -gt 0 ] || skip "no POSIX rc file present in this image"
 }
 
-@test "idempotent reinstall does not duplicate marker block" {
+@test "idempotent reinstall does not duplicate marker on any rc" {
     [ ! -d "$HOME/.config/fish" ] || skip "fish image — rc files intentionally not edited"
-    local rc=""
-    for candidate in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
-        [ -f "$candidate" ] && rc="$candidate" && break
-    done
-    [ -n "$rc" ] || skip "no POSIX rc file present in this image"
     run_install_pinned
-    cp "$rc" "$rc.snapshot"
+    local checked=0 rc
+    while IFS= read -r rc; do
+        cp "$rc" "$rc.snapshot"
+        checked=$((checked + 1))
+    done < <(present_rc_files)
+    [ "$checked" -gt 0 ] || skip "no POSIX rc file present in this image"
     run_install_pinned
-    diff -u "$rc.snapshot" "$rc"
+    while IFS= read -r rc; do
+        diff -u "$rc.snapshot" "$rc"
+    done < <(present_rc_files)
 }
 
 @test "fish-only env writes conf.d/spotnik.fish and skips rc files" {
