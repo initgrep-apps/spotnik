@@ -108,6 +108,28 @@ resolve_install_dir() {
     fi
 }
 
+write_env_file() {
+    local install_dir="$1"
+    local env_dir="$HOME/.config/spotnik"
+    local env_file="$env_dir/env"
+    mkdir -p "$env_dir"
+    # Render $HOME-relative paths as a literal $HOME token so the env file
+    # stays portable (rustup-style).
+    local path_literal="$install_dir"
+    if [[ "$install_dir" == "$HOME"/* ]]; then
+        path_literal="\$HOME${install_dir#"$HOME"}"
+    fi
+    # Use printf rather than heredoc to keep the case-guard literal.
+    {
+        printf '%s\n' '# Managed by the spotnik installer.'
+        printf '%s\n' '# Edits will be overwritten on reinstall.'
+        printf 'case ":${PATH}:" in\n'
+        printf '    *":%s:"*) ;;\n' "$path_literal"
+        printf '    *) export PATH="%s:$PATH" ;;\n' "$path_literal"
+        printf 'esac\n'
+    } > "$env_file"
+}
+
 main() {
     ui_banner
 
@@ -167,11 +189,15 @@ main() {
     fi
     ui_success "Installed $install_dir/spotnik"
 
-    if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" != "1" ]] && ! path_contains "$install_dir"; then
-        echo ""
-        ui_warn "$install_dir is not in your PATH. Add it:"
-        echo -e "  export PATH=\"$install_dir:\$PATH\""
-        echo "  Append this to ~/.bashrc or ~/.zshrc, then restart your shell."
+    if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" == "1" ]]; then
+        if ! path_contains "$install_dir"; then
+            ui_warn "$install_dir is not in your PATH (SPOTNIK_NO_MODIFY_PATH=1)."
+            echo -e "  Add manually: export PATH=\"$install_dir:\$PATH\""
+        fi
+    else
+        write_env_file "$install_dir"
+        ui_success "Wrote $HOME/.config/spotnik/env"
+        # rc edits and fish branch added in subsequent tasks.
     fi
 
     echo ""
