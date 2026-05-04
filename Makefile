@@ -19,7 +19,7 @@ PLATFORMS = \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: all build run test test-integration test-coverage lint fmt clean install release check-glyphs help
+.PHONY: all build run test test-integration test-coverage test-installer lint fmt clean install release check-glyphs help
 
 ## Default target
 all: lint test build
@@ -155,6 +155,12 @@ check-glyphs:
 ci: fmt-check tidy-check lint test-coverage check-glyphs build
 	@echo ""
 	@echo "✓ All CI checks passed"
+
+## Run installer tests in Docker matrix (Linux only)
+test-installer:
+	@echo "→ Running installer Docker matrix..."
+	@bash tests/installer/run.sh
+	@echo "✓ Installer tests passed"
 
 ## Show this help
 help:
