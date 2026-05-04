@@ -16,6 +16,16 @@ Describe 'install.ps1' {
     BeforeEach {
         if (Test-Path $Exe) { Remove-Item $Exe -Force }
         $env:SPOTNIK_VERSION = $null
+        # Reset both User-scope and process PATH so the installer's PATH-update
+        # branch fires every test. Without this, tests after the first would
+        # short-circuit on `if ($pathEntries -notcontains $installDir)` and
+        # never re-exercise the in-process PATH update at install.ps1:128.
+        $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+        if ($userPath) {
+            $cleaned = ($userPath -split ';' | Where-Object { $_ -and $_ -ne $InstallDir }) -join ';'
+            [Environment]::SetEnvironmentVariable('PATH', $cleaned, 'User')
+        }
+        $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -and $_ -ne $InstallDir }) -join ';'
     }
 
     It 'pinned via env var: downloads v0.1.0-rc1 asset (param-position regression)' {
