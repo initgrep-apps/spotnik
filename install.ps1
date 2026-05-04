@@ -1,18 +1,18 @@
 #Requires -Version 5.1
+param(
+    [string]$VersionArg
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # spotnik installer -- Windows (PowerShell 5.1+)
 # Usage:
 #   Latest stable: irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
-#   Pinned:        & ([ScriptBlock]::Create((irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1))) v0.1.0
+#   Pinned:        $env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 # Env:
-#   $env:SPOTNIK_VERSION = "v0.1.0"  pin a release (alternative to positional arg)
+#   $env:SPOTNIK_VERSION = "v0.1.0"  pin a release (preferred form)
 #
-# Positional arg wins over env var. Default = latest stable (skips pre-releases).
-param(
-    [string]$VersionArg
-)
+# Positional arg ($VersionArg) wins over env var. Default = latest stable (skips pre-releases).
 
 function Write-Banner  { Write-Host "`n  spotnik installer`n" -ForegroundColor White }
 function Write-Success { param($msg) Write-Host "v $msg" -ForegroundColor Cyan }
@@ -124,7 +124,9 @@ try {
         } else {
             try {
                 [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
-                Write-Warn "Added $installDir to your PATH (restart shell to take effect)"
+                # Also update the current process so spotnik is usable immediately.
+                $env:PATH = "$installDir;$env:PATH"
+                Write-Warn "Added $installDir to your PATH (current session ready; new shells inherit automatically)"
             } catch {
                 Write-Warn "Could not update PATH automatically: $_"
                 Write-Warn "Add manually to user PATH: $installDir"
