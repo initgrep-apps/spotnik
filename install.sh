@@ -8,7 +8,7 @@ set -euo pipefail
 # Env:
 #   SPOTNIK_VERSION=v0.1.0    pin a release (alternative to positional arg)
 #   SPOTNIK_INSTALL_DIR=/path override install destination
-#   SPOTNIK_NO_MODIFY_PATH=1  suppress PATH warning
+#   SPOTNIK_NO_MODIFY_PATH=1  do not write env file or modify shell init files
 #
 # Positional arg wins over env var. Default = latest stable (skips pre-releases).
 
