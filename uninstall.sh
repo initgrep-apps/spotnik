@@ -96,13 +96,59 @@ handle_config() {
     esac
 }
 
+remove_env_file() {
+    local env_file="$HOME/.config/spotnik/env"
+    if [ -f "$env_file" ]; then
+        rm -f "$env_file"
+        ui_success "Removed $env_file"
+    fi
+    rmdir "$HOME/.config/spotnik" 2>/dev/null || true
+}
+
+strip_rc_block() {
+    local rc="$1"
+    [ -f "$rc" ] || return 0
+    grep -qF '# >>> spotnik installer >>>' "$rc" || return 0
+    # Use awk to drop lines between markers (inclusive). Drop a single
+    # leading blank line if it precedes the marker.
+    local tmp; tmp="$(mktemp)"
+    awk '
+        BEGIN { skip = 0; held_blank = 0 }
+        /^# >>> spotnik installer >>>$/ { skip = 1; held_blank = 0; next }
+        /^# <<< spotnik installer <<<$/ { skip = 0; next }
+        skip == 1 { next }
+        /^$/ { held_blank = 1; next }
+        { if (held_blank) { print ""; held_blank = 0 } print }
+    ' "$rc" > "$tmp"
+    mv "$tmp" "$rc"
+    ui_success "Cleaned $rc"
+}
+
+strip_all_rc_files() {
+    local rc
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        strip_rc_block "$rc"
+    done
+}
+
+remove_fish_conf() {
+    local conf="$HOME/.config/fish/conf.d/spotnik.fish"
+    if [ -f "$conf" ]; then
+        rm -f "$conf"
+        ui_success "Removed $conf"
+    fi
+}
+
 main() {
     ui_banner
 
     local bin
     if ! bin="$(find_binary)"; then
         ui_warn "spotnik binary not found in PATH or common install locations"
-        ui_info "Nothing to uninstall."
+        ui_info "Continuing with config + rc cleanup."
+        remove_env_file
+        strip_all_rc_files
+        remove_fish_conf
         handle_config
         exit 0
     fi
@@ -110,6 +156,9 @@ main() {
 
     forget_credentials "$bin"
     remove_binary "$bin"
+    remove_env_file
+    strip_all_rc_files
+    remove_fish_conf
     handle_config
 
     echo ""
