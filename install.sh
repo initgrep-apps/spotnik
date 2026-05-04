@@ -120,6 +120,7 @@ write_env_file() {
         path_literal="\$HOME${install_dir#"$HOME"}"
     fi
     # Use printf rather than heredoc to keep the case-guard literal.
+    # shellcheck disable=SC2016  # the $PATH/${PATH} tokens MUST stay literal
     {
         printf '%s\n' '# Managed by the spotnik installer.'
         printf '%s\n' '# Edits will be overwritten on reinstall.'
@@ -131,7 +132,9 @@ write_env_file() {
 }
 
 RC_MARKER_OPEN='# >>> spotnik installer >>>'
+# shellcheck disable=SC2034  # paired with RC_MARKER_OPEN; intent is symmetry
 RC_MARKER_CLOSE='# <<< spotnik installer <<<'
+# shellcheck disable=SC2016  # $HOME stays literal; expands at source-time
 RC_BLOCK='# >>> spotnik installer >>>
 . "$HOME/.config/spotnik/env"
 # <<< spotnik installer <<<'
