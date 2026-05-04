@@ -40,7 +40,7 @@ if (-not $version) {
         $version = $release.tag_name
     } catch {
         Write-Err "Failed to query GitHub API: $_"
-        Write-Info "Workaround: pin a version, e.g. & ([ScriptBlock]::Create((irm ...))) v0.1.0"
+        Write-Info 'Workaround: pin a version, e.g. $env:SPOTNIK_VERSION="v0.1.0"; irm ... | iex'
         exit 1
     }
 }
