@@ -130,6 +130,53 @@ write_env_file() {
     } > "$env_file"
 }
 
+RC_MARKER_OPEN='# >>> spotnik installer >>>'
+RC_MARKER_CLOSE='# <<< spotnik installer <<<'
+RC_BLOCK='# >>> spotnik installer >>>
+. "$HOME/.config/spotnik/env"
+# <<< spotnik installer <<<'
+
+# True if rc file already contains a marker block.
+rc_has_marker() {
+    local rc="$1"
+    [ -f "$rc" ] && grep -qF "$RC_MARKER_OPEN" "$rc"
+}
+
+# Append the marker block to rc if missing. Idempotent.
+update_rc_file() {
+    local rc="$1"
+    if rc_has_marker "$rc"; then
+        return 0
+    fi
+    # Ensure file ends with a newline before appending.
+    if [ -s "$rc" ] && [ "$(tail -c1 "$rc"; echo x)" != $'\nx' ]; then
+        printf '\n' >> "$rc"
+    fi
+    printf '\n%s\n' "$RC_BLOCK" >> "$rc"
+    ui_success "Updated $rc"
+}
+
+# Edit each existing rc file. If none exist, create one matching $SHELL.
+update_rc_files() {
+    local edited=0
+    local rc
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        if [ -f "$rc" ]; then
+            update_rc_file "$rc"
+            edited=1
+        fi
+    done
+    if [ "$edited" = "0" ]; then
+        local shell_name; shell_name="$(basename "${SHELL:-/bin/bash}")"
+        case "$shell_name" in
+            zsh)  rc="$HOME/.zshrc" ;;
+            *)    rc="$HOME/.bashrc" ;;
+        esac
+        : > "$rc"
+        update_rc_file "$rc"
+    fi
+}
+
 main() {
     ui_banner
 
@@ -197,7 +244,8 @@ main() {
     else
         write_env_file "$install_dir"
         ui_success "Wrote $HOME/.config/spotnik/env"
-        # rc edits and fish branch added in subsequent tasks.
+        update_rc_files
+        # fish branch added in subsequent task.
     fi
 
     echo ""

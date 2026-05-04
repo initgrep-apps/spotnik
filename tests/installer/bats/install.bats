@@ -21,3 +21,18 @@ load 'helpers'
     run_install_pinned
     assert_spotnik_on_path_after_source
 }
+
+@test "marker block written exactly once to ~/.bashrc on Ubuntu" {
+    # Ubuntu image creates .bashrc by default for the tester user.
+    [ -f "$HOME/.bashrc" ]
+    run_install_pinned
+    assert_marker_block "$HOME/.bashrc"
+    grep -q '\. "\$HOME/.config/spotnik/env"' "$HOME/.bashrc"
+}
+
+@test "idempotent reinstall does not duplicate marker block" {
+    run_install_pinned
+    cp "$HOME/.bashrc" "$HOME/.bashrc.snapshot"
+    run_install_pinned
+    diff -u "$HOME/.bashrc.snapshot" "$HOME/.bashrc"
+}
