@@ -47,3 +47,36 @@ load 'helpers'
     refute_marker_block "$HOME/.bashrc"
     refute_marker_block "$HOME/.zshrc"
 }
+
+@test "SPOTNIK_NO_MODIFY_PATH=1 skips env file and rc edits" {
+    # bats does not isolate $HOME between tests; clear residue from earlier
+    # cases so the absence-assertions are meaningful.
+    rm -rf "$HOME/.config/spotnik"
+    if [ -f "$HOME/.bashrc" ]; then
+        sed -i '/^# >>> spotnik installer >>>$/,/^# <<< spotnik installer <<<$/d' "$HOME/.bashrc"
+    fi
+    SPOTNIK_VERSION="$SPOTNIK_TEST_VERSION" SPOTNIK_NO_MODIFY_PATH=1 \
+        bash "$HOME/install.sh"
+    [ ! -f "$HOME/.config/spotnik/env" ]
+    refute_marker_block "$HOME/.bashrc"
+}
+
+@test "SPOTNIK_INSTALL_DIR overrides env file path" {
+    local custom="$HOME/altbin"
+    SPOTNIK_VERSION="$SPOTNIK_TEST_VERSION" SPOTNIK_INSTALL_DIR="$custom" \
+        bash "$HOME/install.sh"
+    [ -x "$custom/spotnik" ]
+    grep -q "export PATH=\"\$HOME/altbin:\$PATH\"" "$HOME/.config/spotnik/env"
+}
+
+@test "latest smoke: no version pin produces an executable binary" {
+    # GitHub's /releases/latest skips pre-releases; until a stable tag ships
+    # this exercises a 404 path. Skip rather than red.
+    curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" \
+        >/dev/null 2>&1 || skip "no stable (non-pre) release published yet"
+    run_install_latest
+    [ -x "$TEST_INSTALL_DIR/spotnik" ]
+    run "$TEST_INSTALL_DIR/spotnik" --version
+    [ "$status" -eq 0 ]
+    [[ "$output" == spotnik* ]]
+}
