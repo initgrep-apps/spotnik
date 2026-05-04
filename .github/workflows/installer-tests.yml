@@ -24,7 +24,8 @@ jobs:
     name: linux-docker-matrix
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Run Docker matrix
         run: make test-installer
 
@@ -32,14 +33,21 @@ jobs:
     name: macos-direct
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install bats
         run: brew install bats-core
-      - name: Stage installer scripts
-        run: cp install.sh uninstall.sh /Users/runner/
+      # bats helpers (tests/installer/bats/helpers.bash) hard-code
+      # bash "$HOME/install.sh" — stage scripts in a clean fake HOME so the
+      # macOS direct-run path matches the Docker layout AND avoids residue
+      # from the runner image's pre-populated $HOME (.zshrc, etc.).
+      - name: Stage installer scripts in clean HOME
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakehome"
+          cp install.sh uninstall.sh "$RUNNER_TEMP/fakehome/"
       - name: Run bats suite
         env:
-          HOME: /Users/runner
+          HOME: ${{ runner.temp }}/fakehome
         run: |
           bats tests/installer/bats
 
@@ -47,7 +55,8 @@ jobs:
     name: windows-pester
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Run Pester suite
         shell: pwsh
         run: |
