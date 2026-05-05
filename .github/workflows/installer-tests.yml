@@ -1,5 +1,10 @@
 name: installer-tests
 
+# Principle of least privilege: tests only need to read the repo. No
+# release/issue/PR mutation, no OIDC, no attestations.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
