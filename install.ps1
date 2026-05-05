@@ -10,7 +10,8 @@ $ErrorActionPreference = 'Stop'
 #   Latest stable: irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 #   Pinned:        $env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 # Env:
-#   $env:SPOTNIK_VERSION = "v0.1.0"  pin a release (preferred form)
+#   $env:SPOTNIK_VERSION     = "v0.1.0"     pin a release (preferred form)
+#   $env:SPOTNIK_INSTALL_DIR = "C:\path"    override install destination
 #
 # Positional arg ($VersionArg) wins over env var. Default = latest stable (skips pre-releases).
 
@@ -100,8 +101,13 @@ try {
     Expand-Archive -Path "$tmpDir\$zipName" -DestinationPath $tmpDir -Force
     Write-Success "Extracted"
 
-    # Install
-    $installDir = Join-Path $env:USERPROFILE '.local\bin'
+    # Install — Microsoft's per-user convention: %LOCALAPPDATA%\Programs\<App>.
+    # Matches gh CLI, VS Code, etc. Override with $env:SPOTNIK_INSTALL_DIR.
+    if ($env:SPOTNIK_INSTALL_DIR) {
+        $installDir = $env:SPOTNIK_INSTALL_DIR
+    } else {
+        $installDir = Join-Path $env:LOCALAPPDATA 'Programs\spotnik'
+    }
     if (-not (Test-Path $installDir)) {
         New-Item -ItemType Directory -Path $installDir | Out-Null
     }

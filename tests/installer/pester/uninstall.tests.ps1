@@ -4,7 +4,7 @@ BeforeAll {
     $script:Repo        = (Resolve-Path "$PSScriptRoot\..\..\..").Path
     $script:Installer   = Join-Path $Repo 'install.ps1'
     $script:Uninstaller = Join-Path $Repo 'uninstall.ps1'
-    $script:InstallDir  = Join-Path $env:USERPROFILE '.local\bin'
+    $script:InstallDir  = Join-Path $env:LOCALAPPDATA 'Programs\spotnik'
     $script:Exe         = Join-Path $InstallDir 'spotnik.exe'
 }
 
