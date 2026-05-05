@@ -53,7 +53,7 @@ if (-not $exePath) {
         Remove-Item -Path $exePath -Force
         Write-Success "Removed $exePath"
     } catch {
-        Write-Err "Failed to remove $exePath: $_"
+        Write-Err "Failed to remove ${exePath}: $_"
         exit 1
     }
 

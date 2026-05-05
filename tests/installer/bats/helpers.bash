@@ -60,10 +60,14 @@ refute_marker_block() {
 }
 
 # Strip the spotnik marker block from an rc file. Idempotent.
+# Uses tempfile + mv rather than sed -i for portability across BSD (macOS)
+# and GNU sed — BSD requires an extension argument after -i, GNU does not.
 strip_marker_block() {
     local rc="$1"
     [ -f "$rc" ] || return 0
-    sed -i "/${SPOTNIK_RC_MARKER_OPEN_RE}/,/${SPOTNIK_RC_MARKER_CLOSE_RE}/d" "$rc"
+    local tmp; tmp="$(mktemp)"
+    sed "/${SPOTNIK_RC_MARKER_OPEN_RE}/,/${SPOTNIK_RC_MARKER_CLOSE_RE}/d" "$rc" > "$tmp"
+    mv "$tmp" "$rc"
 }
 
 # Assert spotnik resolves on PATH after sourcing the env file.
