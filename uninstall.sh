@@ -68,6 +68,7 @@ remove_binary() {
 
 handle_config() {
     if [[ ! -d "$CONFIG_DIR" ]]; then
+        ui_info "No config dir at $CONFIG_DIR"
         return
     fi
     if [[ "${SPOTNIK_KEEP_CONFIG:-0}" == "1" ]]; then
@@ -101,6 +102,8 @@ remove_env_file() {
     if [ -f "$env_file" ]; then
         rm -f "$env_file"
         ui_success "Removed $env_file"
+    else
+        ui_info "No env file at $env_file"
     fi
     rmdir "$HOME/.config/spotnik" 2>/dev/null || true
 }
@@ -125,10 +128,20 @@ strip_rc_block() {
 }
 
 strip_all_rc_files() {
-    local rc
+    local rc cleaned=0 rc_present=0
     for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
-        strip_rc_block "$rc"
+        [ -f "$rc" ] || continue
+        rc_present=$((rc_present + 1))
+        if grep -qF '# >>> spotnik installer >>>' "$rc" 2>/dev/null; then
+            strip_rc_block "$rc"
+            cleaned=$((cleaned + 1))
+        fi
     done
+    if [ "$rc_present" -eq 0 ]; then
+        ui_info "No POSIX rc files present"
+    elif [ "$cleaned" -eq 0 ]; then
+        ui_info "No installer-managed lines in rc files (checked $rc_present)"
+    fi
 }
 
 remove_fish_conf() {
@@ -136,6 +149,8 @@ remove_fish_conf() {
     if [ -f "$conf" ]; then
         rm -f "$conf"
         ui_success "Removed $conf"
+    else
+        ui_info "No fish conf at $conf"
     fi
 }
 
@@ -143,19 +158,15 @@ main() {
     ui_banner
 
     local bin
-    if ! bin="$(find_binary)"; then
+    if bin="$(find_binary)"; then
+        ui_success "Found: $bin"
+        forget_credentials "$bin"
+        remove_binary "$bin"
+    else
         ui_warn "spotnik binary not found in PATH or common install locations"
         ui_info "Continuing with config + rc cleanup."
-        remove_env_file
-        strip_all_rc_files
-        remove_fish_conf
-        handle_config
-        exit 0
     fi
-    ui_success "Found: $bin"
 
-    forget_credentials "$bin"
-    remove_binary "$bin"
     remove_env_file
     strip_all_rc_files
     remove_fish_conf

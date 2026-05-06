@@ -84,7 +84,7 @@ if (Test-Path $configDir) {
         Remove-Item -Recurse -Force $configDir
         Write-Success "Removed $configDir"
     } else {
-        $ans = Read-Host "  Also remove $configDir? [y/N]"
+        $ans = Read-Host "  Also remove ${configDir}? [y/N]"
         if ($ans -match '^[yY]') {
             Remove-Item -Recurse -Force $configDir
             Write-Success "Removed $configDir"
