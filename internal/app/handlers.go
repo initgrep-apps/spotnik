@@ -688,6 +688,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Title:  "Added to queue",
 		})
 
+	case clipboardCopiedMsg:
+		if m.Err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Copy failed",
+				Body:   "Select the URL above to copy manually.",
+			})
+		}
+		return a, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastSuccess,
+			Title:  "Copied",
+		})
+
 	case panes.FetchPlaylistsRequestMsg:
 		// Paginated requests (Offset > 0) always proceed to avoid incomplete data.
 		if m.Offset == 0 {
