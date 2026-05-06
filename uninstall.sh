@@ -129,13 +129,14 @@ strip_rc_block() {
         /^$/ { held_blank = 1; next }
         { if (held_blank) { print ""; held_blank = 0 } print }
     ' "$rc" > "$tmp"
-    # Sanity: if the source had non-marker, non-blank content, the result must too.
-    # Protects against a hypothetical awk regression that blanks the file.
-    local src_content_bytes out_content_bytes
-    src_content_bytes=$(grep -vE '^# (>>>|<<<) spotnik installer (>>>|<<<)$' "$rc" 2>/dev/null | grep -vE '^[[:space:]]*$' | wc -c | tr -d ' ')
-    out_content_bytes=$(grep -vE '^[[:space:]]*$' "$tmp" 2>/dev/null | wc -c | tr -d ' ')
-    if [[ "$src_content_bytes" -gt 0 && "$out_content_bytes" -eq 0 ]]; then
-        ui_error "Refusing to overwrite $rc with empty content (awk anomaly)"
+    # Sanity: the awk output must not contain either marker. Protects
+    # against an awk regression that fails to strip the block while
+    # producing output. False-positives an installer-only rc (legitimately
+    # produces empty output) would have hit the byte-count check we tried
+    # earlier — this marker-presence check correctly accepts that case.
+    if grep -qF '# >>> spotnik installer >>>' "$tmp" 2>/dev/null \
+        || grep -qF '# <<< spotnik installer <<<' "$tmp" 2>/dev/null; then
+        ui_error "Refusing to overwrite $rc — markers still present after strip (awk anomaly)"
         rm -f "$tmp"
         return 1
     fi

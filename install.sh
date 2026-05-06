@@ -64,27 +64,44 @@ resolve_version() {
         echo "$SPOTNIK_VERSION"
         return
     fi
-    local response
+    local response matched version
     if ! response="$(curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" 2>&1)"; then
         ui_error "Failed to query GitHub API: $response"
-        ui_info "Workaround: pin a version, e.g. curl ... | bash -s v0.1.0"
+        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
         exit 1
     fi
-    local version
-    version="$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+    matched="$(printf '%s' "$response" | grep '"tag_name"' || true)"
+    if [[ -z "$matched" ]]; then
+        ui_error "Could not find tag_name in GitHub API response"
+        ui_info "Response (first 200 chars): ${response:0:200}"
+        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
+        exit 1
+    fi
+    version="$(printf '%s' "$matched" | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
     if [[ -z "$version" ]]; then
-        ui_error "Could not parse tag_name from GitHub API response"
+        ui_error "Could not parse tag_name value from: $matched"
         exit 1
     fi
     echo "$version"
 }
 
 verify_checksum() {
-    local dir="$1" checksums="$2"
+    local dir="$1" checksums="$2" tarball="$3"
+    # Pre-flight: refuse to install if checksums.txt has no entry for our
+    # tarball. Without this, --ignore-missing would silently exit 0 on a
+    # malformed/empty checksums file.
+    if ! grep -qE "(^| )${tarball}\$" "$dir/$checksums"; then
+        ui_error "checksums.txt has no entry for $tarball — refusing to install"
+        return 1
+    fi
+    # Keep --ignore-missing because checksums.txt lists all release artifacts
+    # (Linux/macOS/Windows × amd64/arm64), and we only ever have one locally.
+    # The trailing grep asserts our tarball's line printed "OK" — defense
+    # in depth on top of the pre-flight grep.
     if command -v sha256sum >/dev/null 2>&1; then
-        (cd "$dir" && sha256sum --ignore-missing -c "$checksums")
+        (cd "$dir" && sha256sum --ignore-missing -c "$checksums" 2>&1 | grep -E "^${tarball}: OK\$")
     elif command -v shasum >/dev/null 2>&1; then
-        (cd "$dir" && shasum -a 256 --ignore-missing -c "$checksums")
+        (cd "$dir" && shasum -a 256 --ignore-missing -c "$checksums" 2>&1 | grep -E "^${tarball}: OK\$")
     else
         ui_error "Neither sha256sum nor shasum found — refusing to install without verification"
         return 1
@@ -186,8 +203,8 @@ write_fish_conf() {
     mkdir -p "$conf_dir"
     cat > "$conf_dir/spotnik.fish" <<EOF
 # Managed by the spotnik installer.
-if not contains -- $install_dir \$PATH
-    fish_add_path -g $install_dir
+if not contains -- '$install_dir' \$PATH
+    fish_add_path -g '$install_dir'
 end
 EOF
     ui_success "Wrote $conf_dir/spotnik.fish"
@@ -218,19 +235,32 @@ main() {
     local tmpdir; tmpdir="$(mktmpdir)"
 
     ui_info "Downloading $tarball..."
-    curl -fsSL --retry 3 -o "$tmpdir/$tarball"   "$base_url/$tarball"
-    curl -fsSL --retry 3 -o "$tmpdir/$checksums" "$base_url/$checksums"
+    if ! curl -fsSL --retry 3 -o "$tmpdir/$tarball" "$base_url/$tarball"; then
+        ui_error "Failed to download $tarball from $base_url"
+        ui_info "Check https://github.com/initgrep-apps/spotnik/releases for available versions."
+        exit 1
+    fi
+    ui_info "Downloading $checksums..."
+    if ! curl -fsSL --retry 3 -o "$tmpdir/$checksums" "$base_url/$checksums"; then
+        ui_error "Failed to download $checksums from $base_url"
+        ui_info "The release may be incompletely published. File an issue if persistent."
+        exit 1
+    fi
     ui_success "Downloaded"
 
     ui_info "Verifying checksum..."
-    if ! verify_checksum "$tmpdir" "$checksums"; then
+    if ! verify_checksum "$tmpdir" "$checksums" "$tarball"; then
         ui_error "Checksum mismatch — aborting"
         exit 1
     fi
     ui_success "Checksum OK"
 
     ui_info "Extracting..."
-    tar -xzf "$tmpdir/$tarball" -C "$tmpdir"
+    if ! tar -xzf "$tmpdir/$tarball" -C "$tmpdir" 2> "$tmpdir/tar.err"; then
+        ui_error "Failed to extract $tarball: $(cat "$tmpdir/tar.err" 2>/dev/null)"
+        ui_info "The downloaded archive may be corrupt — please retry or file an issue."
+        exit 1
+    fi
     ui_success "Extracted"
 
     if [[ ! -f "$tmpdir/spotnik" ]]; then
@@ -273,9 +303,15 @@ main() {
     fi
 
     echo ""
-    local installed_version
-    installed_version="$("$install_dir/spotnik" --version 2>/dev/null || echo "spotnik ${version}")"
-    ui_success "$installed_version"
+    local installed_version stderr_capture rc=0
+    stderr_capture="$("$install_dir/spotnik" --version 2>&1 >/dev/null)" || rc=$?
+    installed_version="$("$install_dir/spotnik" --version 2>/dev/null)" || true
+    if [[ $rc -ne 0 || -z "$installed_version" ]]; then
+        ui_warn "Installed binary failed to run: $stderr_capture"
+        ui_info "The download or your platform may be incompatible. File an issue if persistent."
+    else
+        ui_success "$installed_version"
+    fi
 
     if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" != "1" ]] && ! path_contains "$install_dir"; then
         echo ""
