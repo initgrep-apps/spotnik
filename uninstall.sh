@@ -48,7 +48,10 @@ forget_credentials() {
     local bin="$1"
     local stderr_capture rc=0
     ui_info "Wiping tokens and client ID from keychain..."
-    stderr_capture="$("$bin" auth forget </dev/tty 2>&1 >/dev/null)" || rc=$?
+    # auth forget is non-interactive (no stdin reads). Use </dev/null instead
+    # of </dev/tty so the call works in Docker/CI/non-TTY contexts where
+    # opening /dev/tty fails before the binary is even invoked.
+    stderr_capture="$("$bin" auth forget </dev/null 2>&1 >/dev/null)" || rc=$?
     if [[ $rc -eq 0 ]]; then
         ui_success "Credentials wiped"
     else
@@ -118,25 +121,18 @@ strip_rc_block() {
     local rc="$1"
     [ -f "$rc" ] || return 0
     grep -qF '# >>> spotnik installer >>>' "$rc" || return 0
-    # Use awk to drop lines between markers (inclusive). Drop a single
-    # leading blank line if it precedes the marker.
+    # Drop the marker block (inclusive). Plain sed range-delete preserves
+    # ALL other user content byte-for-byte — no held-blank logic that could
+    # collapse adjacent blanks elsewhere. Leaves a single extra blank line
+    # where the block used to be (the one install.sh inserted before the
+    # block); that's a cosmetic no-op, not a data loss.
     local tmp; tmp="$(mktemp)"
-    awk '
-        BEGIN { skip = 0; held_blank = 0 }
-        /^# >>> spotnik installer >>>$/ { skip = 1; held_blank = 0; next }
-        /^# <<< spotnik installer <<<$/ { skip = 0; next }
-        skip == 1 { next }
-        /^$/ { held_blank = 1; next }
-        { if (held_blank) { print ""; held_blank = 0 } print }
-    ' "$rc" > "$tmp"
-    # Sanity: the awk output must not contain either marker. Protects
-    # against an awk regression that fails to strip the block while
-    # producing output. False-positives an installer-only rc (legitimately
-    # produces empty output) would have hit the byte-count check we tried
-    # earlier — this marker-presence check correctly accepts that case.
+    sed -e '/^# >>> spotnik installer >>>$/,/^# <<< spotnik installer <<<$/d' "$rc" > "$tmp"
+    # Sanity: the output must not contain either marker. Protects against a
+    # sed regression that fails to strip the block while producing output.
     if grep -qF '# >>> spotnik installer >>>' "$tmp" 2>/dev/null \
         || grep -qF '# <<< spotnik installer <<<' "$tmp" 2>/dev/null; then
-        ui_error "Refusing to overwrite $rc — markers still present after strip (awk anomaly)"
+        ui_error "Refusing to overwrite $rc — markers still present after strip"
         rm -f "$tmp"
         return 1
     fi

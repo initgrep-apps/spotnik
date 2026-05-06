@@ -137,15 +137,19 @@ try {
             } else {
                 try {
                     [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
-                    # Also update the current process so spotnik is usable immediately.
-                    $env:PATH = "$installDir;$env:PATH"
-                    Write-Warn "Added $installDir to your PATH (current session ready; new shells inherit automatically)"
+                    Write-Warn "Added $installDir to user PATH (new shells inherit automatically)"
                 } catch {
                     Write-Warn "Could not update PATH automatically: $_"
                     Write-Warn "Add manually to user PATH: $installDir"
                     $pathOk = $false
                 }
             }
+        }
+        # Always sync process PATH so the running shell can resolve spotnik
+        # immediately, even when the user-scope entry was already there
+        # (e.g. long-lived shell predating a prior install).
+        if (($env:PATH -split ';') -notcontains $installDir) {
+            $env:PATH = "$installDir;$env:PATH"
         }
     }
 
