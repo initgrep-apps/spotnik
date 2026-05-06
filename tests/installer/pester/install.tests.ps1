@@ -53,4 +53,26 @@ Describe 'install.ps1' {
         & $Installer -VersionArg 'v0.1.0-rc1'
         ($env:PATH -split ';') | Should -Contain $InstallDir
     }
+
+    It 'honors $env:SPOTNIK_NO_MODIFY_PATH=1 -- skips PATH update' {
+        # Snapshot user PATH before
+        $before = [Environment]::GetEnvironmentVariable('PATH', 'User')
+        $beforeEntries = $before -split ';' | Where-Object { $_ -ne '' }
+
+        $env:SPOTNIK_VERSION = 'v0.1.0-rc1'
+        $env:SPOTNIK_NO_MODIFY_PATH = '1'
+        try {
+            & $Installer
+        } finally {
+            $env:SPOTNIK_NO_MODIFY_PATH = $null
+        }
+
+        # Binary should still be installed
+        Test-Path $Exe | Should -BeTrue
+
+        # User PATH should NOT contain InstallDir (unless it already did before)
+        $after = [Environment]::GetEnvironmentVariable('PATH', 'User')
+        $afterEntries = $after -split ';' | Where-Object { $_ -ne '' }
+        $afterEntries.Count | Should -Be $beforeEntries.Count
+    }
 }

@@ -10,8 +10,9 @@ $ErrorActionPreference = 'Stop'
 #   Latest stable: irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 #   Pinned:        $env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
 # Env:
-#   $env:SPOTNIK_VERSION     = "v0.1.0"     pin a release (preferred form)
-#   $env:SPOTNIK_INSTALL_DIR = "C:\path"    override install destination
+#   $env:SPOTNIK_VERSION        = "v0.1.0"   pin a release (preferred form)
+#   $env:SPOTNIK_INSTALL_DIR    = "C:\path"  override install destination
+#   $env:SPOTNIK_NO_MODIFY_PATH = "1"        skip user/process PATH update
 #
 # Positional arg ($VersionArg) wins over env var. Default = latest stable (skips pre-releases).
 
@@ -119,34 +120,53 @@ try {
     Copy-Item -Path $src.FullName -Destination "$installDir\spotnik.exe" -Force
     Write-Success "Installed $installDir\spotnik.exe"
 
-    # Update user PATH
-    $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
-    if (-not $userPath) { $userPath = '' }
-    $pathEntries = $userPath -split ';' | Where-Object { $_ -ne '' }
-    if ($pathEntries -notcontains $installDir) {
-        $newPath = (@($installDir) + $pathEntries) -join ';'
-        if ($newPath.Length -gt 2047) {
-            Write-Warn "User PATH would exceed safe length ($($newPath.Length) chars). Add manually: $installDir"
-        } else {
-            try {
-                [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
-                # Also update the current process so spotnik is usable immediately.
-                $env:PATH = "$installDir;$env:PATH"
-                Write-Warn "Added $installDir to your PATH (current session ready; new shells inherit automatically)"
-            } catch {
-                Write-Warn "Could not update PATH automatically: $_"
-                Write-Warn "Add manually to user PATH: $installDir"
+    # Update user PATH (honor SPOTNIK_NO_MODIFY_PATH for parity with install.sh).
+    $pathOk = $true
+    if ($env:SPOTNIK_NO_MODIFY_PATH -eq '1') {
+        Write-Warn "Skipping PATH update (`$env:SPOTNIK_NO_MODIFY_PATH=1)"
+        $pathOk = $false
+    } else {
+        $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+        if (-not $userPath) { $userPath = '' }
+        $pathEntries = $userPath -split ';' | Where-Object { $_ -ne '' }
+        if ($pathEntries -notcontains $installDir) {
+            $newPath = (@($installDir) + $pathEntries) -join ';'
+            if ($newPath.Length -gt 2047) {
+                Write-Warn "User PATH would exceed safe length ($($newPath.Length) chars). Add manually: $installDir"
+                $pathOk = $false
+            } else {
+                try {
+                    [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+                    # Also update the current process so spotnik is usable immediately.
+                    $env:PATH = "$installDir;$env:PATH"
+                    Write-Warn "Added $installDir to your PATH (current session ready; new shells inherit automatically)"
+                } catch {
+                    Write-Warn "Could not update PATH automatically: $_"
+                    Write-Warn "Add manually to user PATH: $installDir"
+                    $pathOk = $false
+                }
             }
         }
     }
 
     # Confirm
-    $exePath = "$installDir\spotnik.exe"
+    $exePath = Join-Path $installDir 'spotnik.exe'
     if (Test-Path $exePath) {
-        $ver = & $exePath --version 2>$null
-        Write-Host ""
-        Write-Success $ver
-        Write-Host "`n  Run: spotnik`n" -ForegroundColor White
+        $global:LASTEXITCODE = 0
+        $ver = & $exePath --version 2>&1
+        if ($LASTEXITCODE -eq 0 -and $ver) {
+            Write-Host ""
+            Write-Success $ver
+            if ($pathOk) {
+                Write-Host "`n  Run: spotnik`n" -ForegroundColor White
+            } else {
+                Write-Host "`n  Run with full path until PATH is fixed:" -ForegroundColor White
+                Write-Host "    & '$exePath'`n" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Warn "Installed binary failed to run (exit $LASTEXITCODE): $ver"
+            Write-Info "Possible causes: missing VC++ redistributable, Defender quarantine, wrong arch."
+        }
     }
 } finally {
     Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue

@@ -40,11 +40,16 @@ if (-not $exePath) {
 
     # Forget credentials (best-effort)
     Write-Info "Wiping tokens and client ID from Windows Credential Manager (spotnik auth forget)..."
-    try {
-        & $exePath auth forget | Out-Null
+    $global:LASTEXITCODE = 0
+    $forgetOutput = & $exePath auth forget 2>&1
+    $rc = $LASTEXITCODE
+    if ($rc -eq 0) {
         Write-Success "Credentials wiped"
-    } catch {
-        Write-Warn "spotnik auth forget exited non-zero (already forgotten?). Continuing."
+    } else {
+        Write-Warn "spotnik auth forget exited $rc. Continuing with uninstall."
+        if ($forgetOutput) {
+            Write-Info "Output: $forgetOutput"
+        }
     }
 
     # Remove binary
@@ -57,14 +62,24 @@ if (-not $exePath) {
         exit 1
     }
 
-    # Remove install dir from user PATH if it now contains nothing meaningful
+    # Remove the empty parent install dir (best-effort; preserves any sibling files)
     $installDir = Split-Path -Parent $exePath
+    if (Test-Path $installDir) {
+        try {
+            Remove-Item -Path $installDir -Force -ErrorAction Stop
+            Write-Success "Removed $installDir"
+        } catch {
+            Write-Info "$installDir not empty -- leaving in place"
+        }
+    }
+
+    # Strip install dir from user PATH if present
     $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
-    if ($userPath -and $userPath -split ';' -contains $installDir -and -not (Test-Path $installDir -PathType Container -ErrorAction SilentlyContinue)) {
+    if ($userPath -and ($userPath -split ';' -contains $installDir)) {
         $newPath = ($userPath -split ';' | Where-Object { $_ -ne $installDir -and $_ -ne '' }) -join ';'
         try {
             [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
-            Write-Info "Removed $installDir from user PATH"
+            Write-Success "Removed $installDir from user PATH"
         } catch {
             Write-Warn "Could not update PATH: $_"
         }
@@ -84,12 +99,16 @@ if (Test-Path $configDir) {
         Remove-Item -Recurse -Force $configDir
         Write-Success "Removed $configDir"
     } else {
-        $ans = Read-Host "  Also remove ${configDir}? [y/N]"
-        if ($ans -match '^[yY]') {
-            Remove-Item -Recurse -Force $configDir
-            Write-Success "Removed $configDir"
+        if (-not [Environment]::UserInteractive -or -not $Host.UI.RawUI) {
+            Write-Warn "Config dir kept ($configDir). Re-run with `$env:SPOTNIK_PURGE_CONFIG=1 to delete it."
         } else {
-            Write-Info "Kept $configDir"
+            $ans = Read-Host "  Also remove ${configDir}? [y/N]"
+            if ($ans -match '^[yY]') {
+                Remove-Item -Recurse -Force $configDir
+                Write-Success "Removed $configDir"
+            } else {
+                Write-Info "Kept $configDir"
+            }
         }
     }
 }
