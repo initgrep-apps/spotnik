@@ -36,7 +36,7 @@ For Spotify Web API endpoints and capability scope, consult `docs/system/api-gui
 | Layer | Choice | Notes |
 |---|---|---|
 | Language | Go 1.26+ | Single binary, no runtime |
-| TUI | Bubble Tea v0.27+ | Elm architecture |
+| TUI | Bubble Tea v1.3+ | Elm architecture |
 | Styling | Lip Gloss | Token-based, via Theme interface |
 | Components | Bubbles | Lists, inputs, spinners |
 | Tables | `github.com/evertras/bubble-table` | Dense sortable tables in panes |

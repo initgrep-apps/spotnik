@@ -125,8 +125,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
-			_ = copyToClipboard(a.authURL)
-			return a, nil
+			return a, copyToClipboardCmd(a.authURL)
 		}
 		return a, nil
 	}
@@ -510,8 +509,7 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// 'c' copies the redirect URI — only when the input field is empty.
 		// Once the user starts typing, 'c' is a valid hex character and must pass through.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" && a.onboardingField.Value() == "" {
-			_ = copyToClipboard(fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort))
-			return a, a.toasts.Cmd(uikit.Toast{Intent: uikit.ToastSuccess, Title: "Copied"})
+			return a, copyToClipboardCmd(fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort))
 		}
 		// Enter with non-empty input → validate via FormField then save.
 		if m.Type == tea.KeyEnter {
@@ -532,10 +530,9 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case stepOAuth:
-		// c → copy auth URL to clipboard and show brief confirmation feedback via toast.
+		// c → copy auth URL to clipboard via OSC 52; toast is emitted by the clipboardCopiedMsg handler.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
-			_ = copyToClipboard(a.onboardingAuthURL)
-			return a, a.toasts.Cmd(uikit.Toast{Intent: uikit.ToastSuccess, Title: "Copied"})
+			return a, copyToClipboardCmd(a.onboardingAuthURL)
 		}
 		return a, nil
 
