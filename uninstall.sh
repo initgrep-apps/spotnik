@@ -47,7 +47,7 @@ find_binary() {
 forget_credentials() {
     local bin="$1"
     local stderr_capture rc=0
-    ui_info "Wiping tokens and client ID from keychain (spotnik auth forget)..."
+    ui_info "Wiping tokens and client ID from keychain..."
     stderr_capture="$("$bin" auth forget </dev/tty 2>&1 >/dev/null)" || rc=$?
     if [[ $rc -eq 0 ]]; then
         ui_success "Credentials wiped"

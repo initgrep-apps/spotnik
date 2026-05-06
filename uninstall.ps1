@@ -39,7 +39,7 @@ if (-not $exePath) {
     Write-Success "Found: $exePath"
 
     # Forget credentials (best-effort)
-    Write-Info "Wiping tokens and client ID from Windows Credential Manager (spotnik auth forget)..."
+    Write-Info "Wiping tokens and client ID from Windows Credential Manager..."
     $global:LASTEXITCODE = 0
     $forgetOutput = & $exePath auth forget 2>&1
     $rc = $LASTEXITCODE

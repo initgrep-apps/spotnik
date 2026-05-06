@@ -207,7 +207,7 @@ if not contains -- '$install_dir' \$PATH
     fish_add_path -g '$install_dir'
 end
 EOF
-    ui_success "Wrote $conf_dir/spotnik.fish"
+    ui_success "Added $conf_dir/spotnik.fish"
 }
 
 # True if the user has fish configured (directory exists).
@@ -294,7 +294,7 @@ main() {
         fi
     else
         write_env_file "$install_dir"
-        ui_success "Wrote $HOME/.config/spotnik/env"
+        ui_success "Added $HOME/.config/spotnik/env"
         if has_fish_config; then
             write_fish_conf "$install_dir"
         else
