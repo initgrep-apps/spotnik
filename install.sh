@@ -1,16 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-# spotnik installer — macOS and Linux
-# Usage:
-#   Latest stable:  curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
-#   Pinned:         curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash -s v0.1.0
-# Env:
-#   SPOTNIK_VERSION=v0.1.0    pin a release (alternative to positional arg)
-#   SPOTNIK_INSTALL_DIR=/path override install destination
-#   SPOTNIK_NO_MODIFY_PATH=1  suppress PATH warning
+# spotnik installer for macOS and Linux.
 #
-# Positional arg wins over env var. Default = latest stable (skips pre-releases).
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | SPOTNIK_VERSION=v0.1.0 bash
+#
+# Env:
+#   SPOTNIK_VERSION         pin a release tag (default: latest stable)
+#   SPOTNIK_INSTALL_DIR     override install destination
+#   SPOTNIK_NO_MODIFY_PATH  do not write env file or modify shell init files
 
 BOLD='\033[1m'
 SUCCESS='\033[38;2;0;229;204m'
@@ -64,27 +64,38 @@ resolve_version() {
         echo "$SPOTNIK_VERSION"
         return
     fi
-    local response
+    local response matched version
     if ! response="$(curl -fsSL "https://api.github.com/repos/initgrep-apps/spotnik/releases/latest" 2>&1)"; then
         ui_error "Failed to query GitHub API: $response"
-        ui_info "Workaround: pin a version, e.g. curl ... | bash -s v0.1.0"
+        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
         exit 1
     fi
-    local version
-    version="$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+    matched="$(printf '%s' "$response" | grep '"tag_name"' || true)"
+    if [[ -z "$matched" ]]; then
+        ui_error "Could not find tag_name in GitHub API response"
+        ui_info "Response (first 200 chars): ${response:0:200}"
+        ui_info "Workaround: pin a version, e.g. SPOTNIK_VERSION=v0.1.0 curl ... | bash"
+        exit 1
+    fi
+    version="$(printf '%s' "$matched" | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
     if [[ -z "$version" ]]; then
-        ui_error "Could not parse tag_name from GitHub API response"
+        ui_error "Could not parse tag_name value from: $matched"
         exit 1
     fi
     echo "$version"
 }
 
 verify_checksum() {
-    local dir="$1" checksums="$2"
+    local dir="$1" checksums="$2" tarball="$3"
+    if ! grep -qE "(^| )${tarball}\$" "$dir/$checksums"; then
+        ui_error "checksums.txt has no entry for $tarball — refusing to install"
+        return 1
+    fi
+    # shellcheck disable=SC2016
     if command -v sha256sum >/dev/null 2>&1; then
-        (cd "$dir" && sha256sum --ignore-missing -c "$checksums")
+        (cd "$dir" && sha256sum --ignore-missing -c "$checksums" 2>&1 | grep -E "^${tarball}: OK\$")
     elif command -v shasum >/dev/null 2>&1; then
-        (cd "$dir" && shasum -a 256 --ignore-missing -c "$checksums")
+        (cd "$dir" && shasum -a 256 --ignore-missing -c "$checksums" 2>&1 | grep -E "^${tarball}: OK\$")
     else
         ui_error "Neither sha256sum nor shasum found — refusing to install without verification"
         return 1
@@ -108,6 +119,88 @@ resolve_install_dir() {
     fi
 }
 
+write_env_file() {
+    local install_dir="$1"
+    local env_dir="$HOME/.config/spotnik"
+    local env_file="$env_dir/env"
+    mkdir -p "$env_dir"
+    local path_literal="$install_dir"
+    if [[ "$install_dir" == "$HOME"/* ]]; then
+        path_literal="\$HOME${install_dir#"$HOME"}"
+    fi
+    # shellcheck disable=SC2016
+    {
+        printf '%s\n' '# Managed by the spotnik installer.'
+        printf '%s\n' '# Edits will be overwritten on reinstall.'
+        printf 'case ":${PATH}:" in\n'
+        printf '    *":%s:"*) ;;\n' "$path_literal"
+        printf '    *) export PATH="%s:$PATH" ;;\n' "$path_literal"
+        printf 'esac\n'
+    } > "$env_file"
+}
+
+RC_MARKER_OPEN='# >>> spotnik installer >>>'
+# shellcheck disable=SC2034
+RC_MARKER_CLOSE='# <<< spotnik installer <<<'
+# shellcheck disable=SC2016
+RC_BLOCK='# >>> spotnik installer >>>
+. "$HOME/.config/spotnik/env"
+# <<< spotnik installer <<<'
+
+rc_has_marker() {
+    local rc="$1"
+    [ -f "$rc" ] && grep -qF "$RC_MARKER_OPEN" "$rc"
+}
+
+update_rc_file() {
+    local rc="$1"
+    if rc_has_marker "$rc"; then
+        return 0
+    fi
+    if [ -s "$rc" ] && [ "$(tail -c1 "$rc"; echo x)" != $'\nx' ]; then
+        printf '\n' >> "$rc"
+    fi
+    printf '\n%s\n' "$RC_BLOCK" >> "$rc"
+    ui_success "Updated $rc"
+}
+
+update_rc_files() {
+    local edited=0
+    local rc
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        if [ -f "$rc" ]; then
+            update_rc_file "$rc"
+            edited=1
+        fi
+    done
+    if [ "$edited" = "0" ]; then
+        local shell_name; shell_name="$(basename "${SHELL:-/bin/bash}")"
+        case "$shell_name" in
+            zsh)  rc="$HOME/.zshrc" ;;
+            *)    rc="$HOME/.bashrc" ;;
+        esac
+        : > "$rc"
+        update_rc_file "$rc"
+    fi
+}
+
+write_fish_conf() {
+    local install_dir="$1"
+    local conf_dir="$HOME/.config/fish/conf.d"
+    mkdir -p "$conf_dir"
+    cat > "$conf_dir/spotnik.fish" <<EOF
+# Managed by the spotnik installer.
+if not contains -- '$install_dir' \$PATH
+    fish_add_path -g '$install_dir'
+end
+EOF
+    ui_success "Added $conf_dir/spotnik.fish"
+}
+
+has_fish_config() {
+    [ -d "$HOME/.config/fish" ]
+}
+
 main() {
     ui_banner
 
@@ -118,8 +211,8 @@ main() {
     ui_info "Resolving version..."
     version="$(resolve_version "${1:-}")"; ui_success "Version: $version"
 
-    # GoReleaser strips the leading 'v' from {{.Version}} in artifact names,
-    # but the GitHub release tag (and download URL path) keeps it.
+    # GoReleaser strips the leading 'v' from artifact names; the GitHub
+    # release tag (and download URL path) keeps it.
     local version_num="${version#v}"
     local tarball="spotnik_${version_num}_${os}_${arch}.tar.gz"
     local checksums="checksums.txt"
@@ -128,19 +221,32 @@ main() {
     local tmpdir; tmpdir="$(mktmpdir)"
 
     ui_info "Downloading $tarball..."
-    curl -fsSL --retry 3 -o "$tmpdir/$tarball"   "$base_url/$tarball"
-    curl -fsSL --retry 3 -o "$tmpdir/$checksums" "$base_url/$checksums"
+    if ! curl -fsSL --retry 3 -o "$tmpdir/$tarball" "$base_url/$tarball"; then
+        ui_error "Failed to download $tarball from $base_url"
+        ui_info "Check https://github.com/initgrep-apps/spotnik/releases for available versions."
+        exit 1
+    fi
+    ui_info "Downloading $checksums..."
+    if ! curl -fsSL --retry 3 -o "$tmpdir/$checksums" "$base_url/$checksums"; then
+        ui_error "Failed to download $checksums from $base_url"
+        ui_info "The release may be incompletely published. File an issue if persistent."
+        exit 1
+    fi
     ui_success "Downloaded"
 
     ui_info "Verifying checksum..."
-    if ! verify_checksum "$tmpdir" "$checksums"; then
+    if ! verify_checksum "$tmpdir" "$checksums" "$tarball"; then
         ui_error "Checksum mismatch — aborting"
         exit 1
     fi
     ui_success "Checksum OK"
 
     ui_info "Extracting..."
-    tar -xzf "$tmpdir/$tarball" -C "$tmpdir"
+    if ! tar -xzf "$tmpdir/$tarball" -C "$tmpdir" 2> "$tmpdir/tar.err"; then
+        ui_error "Failed to extract $tarball: $(cat "$tmpdir/tar.err" 2>/dev/null)"
+        ui_info "The downloaded archive may be corrupt — please retry or file an issue."
+        exit 1
+    fi
     ui_success "Extracted"
 
     if [[ ! -f "$tmpdir/spotnik" ]]; then
@@ -167,17 +273,38 @@ main() {
     fi
     ui_success "Installed $install_dir/spotnik"
 
-    if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" != "1" ]] && ! path_contains "$install_dir"; then
-        echo ""
-        ui_warn "$install_dir is not in your PATH. Add it:"
-        echo -e "  export PATH=\"$install_dir:\$PATH\""
-        echo "  Append this to ~/.bashrc or ~/.zshrc, then restart your shell."
+    if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" == "1" ]]; then
+        if ! path_contains "$install_dir"; then
+            ui_warn "$install_dir is not in your PATH (SPOTNIK_NO_MODIFY_PATH=1)."
+            echo -e "  Add manually: export PATH=\"$install_dir:\$PATH\""
+        fi
+    else
+        write_env_file "$install_dir"
+        ui_success "Added $HOME/.config/spotnik/env"
+        if has_fish_config; then
+            write_fish_conf "$install_dir"
+        else
+            update_rc_files
+        fi
     fi
 
     echo ""
-    local installed_version
-    installed_version="$("$install_dir/spotnik" --version 2>/dev/null || echo "spotnik ${version}")"
-    ui_success "$installed_version"
+    local installed_version stderr_capture rc=0
+    stderr_capture="$("$install_dir/spotnik" --version 2>&1 >/dev/null)" || rc=$?
+    installed_version="$("$install_dir/spotnik" --version 2>/dev/null)" || true
+    if [[ $rc -ne 0 || -z "$installed_version" ]]; then
+        ui_warn "Installed binary failed to run: $stderr_capture"
+        ui_info "The download or your platform may be incompatible. File an issue if persistent."
+    else
+        ui_success "$installed_version"
+    fi
+
+    if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" != "1" ]] && ! path_contains "$install_dir"; then
+        echo ""
+        echo -e "${BOLD}  Activate in this shell:${NC}  . \"\$HOME/.config/spotnik/env\""
+        echo -e "${MUTED}  (or open a new terminal — new shells inherit automatically)${NC}"
+    fi
+
     echo -e "\n${BOLD}  Run: spotnik${NC}\n"
 }
 
