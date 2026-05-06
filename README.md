@@ -77,11 +77,16 @@ deleting `~/.config/spotnik`.
 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
 ```
 
-Skip the prompt:
+Skip the prompt — also delete config:
 
 ```bash
-SPOTNIK_PURGE_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash   # also delete config
-SPOTNIK_KEEP_CONFIG=1  curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash   # keep config
+SPOTNIK_PURGE_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
+```
+
+Skip the prompt — keep config:
+
+```bash
+SPOTNIK_KEEP_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
 ```
 
 ### Windows
