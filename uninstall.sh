@@ -1,13 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# spotnik uninstaller — macOS and Linux
+# spotnik uninstaller for macOS and Linux.
+#
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
+#
 # Env:
-#   SPOTNIK_INSTALL_DIR=/path  prefer this dir when locating the binary
-#   SPOTNIK_PURGE_CONFIG=1     also delete ~/.config/spotnik (default: prompt)
-#   SPOTNIK_KEEP_CONFIG=1      skip config deletion (default: prompt)
+#   SPOTNIK_INSTALL_DIR    prefer this dir when locating the binary
+#   SPOTNIK_PURGE_CONFIG   also delete ~/.config/spotnik (default: prompt)
+#   SPOTNIK_KEEP_CONFIG    skip config deletion (default: prompt)
 
 BOLD='\033[1m'
 SUCCESS='\033[38;2;0;229;204m'
@@ -48,9 +50,6 @@ forget_credentials() {
     local bin="$1"
     local stderr_capture rc=0
     ui_info "Wiping tokens and client ID from keychain..."
-    # auth forget is non-interactive (no stdin reads). Use </dev/null instead
-    # of </dev/tty so the call works in Docker/CI/non-TTY contexts where
-    # opening /dev/tty fails before the binary is even invoked.
     stderr_capture="$("$bin" auth forget </dev/null 2>&1 >/dev/null)" || rc=$?
     if [[ $rc -eq 0 ]]; then
         ui_success "Credentials wiped"
@@ -121,15 +120,8 @@ strip_rc_block() {
     local rc="$1"
     [ -f "$rc" ] || return 0
     grep -qF '# >>> spotnik installer >>>' "$rc" || return 0
-    # Drop the marker block (inclusive). Plain sed range-delete preserves
-    # ALL other user content byte-for-byte — no held-blank logic that could
-    # collapse adjacent blanks elsewhere. Leaves a single extra blank line
-    # where the block used to be (the one install.sh inserted before the
-    # block); that's a cosmetic no-op, not a data loss.
     local tmp; tmp="$(mktemp)"
     sed -e '/^# >>> spotnik installer >>>$/,/^# <<< spotnik installer <<<$/d' "$rc" > "$tmp"
-    # Sanity: the output must not contain either marker. Protects against a
-    # sed regression that fails to strip the block while producing output.
     if grep -qF '# >>> spotnik installer >>>' "$tmp" 2>/dev/null \
         || grep -qF '# <<< spotnik installer <<<' "$tmp" 2>/dev/null; then
         ui_error "Refusing to overwrite $rc — markers still present after strip"

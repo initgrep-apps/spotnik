@@ -2,12 +2,14 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# spotnik uninstaller -- Windows (PowerShell 5.1+)
+# spotnik uninstaller for Windows (PowerShell 5.1+).
+#
 # Usage:
 #   irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.ps1 | iex
+#
 # Env:
-#   $env:SPOTNIK_PURGE_CONFIG = "1"   also delete %APPDATA%\spotnik (default: prompt)
-#   $env:SPOTNIK_KEEP_CONFIG  = "1"   skip config deletion (default: prompt)
+#   $env:SPOTNIK_PURGE_CONFIG    also delete %APPDATA%\spotnik (default: prompt)
+#   $env:SPOTNIK_KEEP_CONFIG     skip config deletion (default: prompt)
 
 function Write-Banner  { Write-Host "`n  spotnik uninstaller`n" -ForegroundColor White }
 function Write-Success { param($msg) Write-Host "v $msg" -ForegroundColor Cyan }
@@ -17,7 +19,6 @@ function Write-Err     { param($msg) Write-Host "x $msg" -ForegroundColor Red }
 
 Write-Banner
 
-# Resolve binary location
 $exePath = $null
 $cmd = Get-Command spotnik -ErrorAction SilentlyContinue
 if ($cmd) {
@@ -38,7 +39,6 @@ if (-not $exePath) {
 } else {
     Write-Success "Found: $exePath"
 
-    # Forget credentials (best-effort)
     Write-Info "Wiping tokens and client ID from Windows Credential Manager..."
     $global:LASTEXITCODE = 0
     $forgetOutput = & $exePath auth forget 2>&1
@@ -52,7 +52,6 @@ if (-not $exePath) {
         }
     }
 
-    # Remove binary
     Write-Info "Removing $exePath..."
     try {
         Remove-Item -Path $exePath -Force
@@ -62,7 +61,6 @@ if (-not $exePath) {
         exit 1
     }
 
-    # Remove the empty parent install dir (best-effort; preserves any sibling files)
     $installDir = Split-Path -Parent $exePath
     if (Test-Path $installDir) {
         try {
@@ -73,7 +71,6 @@ if (-not $exePath) {
         }
     }
 
-    # Strip install dir from user PATH if present
     $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
     if ($userPath -and ($userPath -split ';' -contains $installDir)) {
         $newPath = ($userPath -split ';' | Where-Object { $_ -ne $installDir -and $_ -ne '' }) -join ';'
@@ -86,7 +83,6 @@ if (-not $exePath) {
     }
 }
 
-# Config dir handling
 $configDir = Join-Path $env:APPDATA 'spotnik'
 if (-not (Test-Path $configDir)) {
     $configDir = Join-Path $env:USERPROFILE '.config\spotnik'

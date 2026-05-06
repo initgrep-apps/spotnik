@@ -5,16 +5,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# spotnik installer -- Windows (PowerShell 5.1+)
-# Usage:
-#   Latest stable: irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
-#   Pinned:        $env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
-# Env:
-#   $env:SPOTNIK_VERSION        = "v0.1.0"   pin a release (preferred form)
-#   $env:SPOTNIK_INSTALL_DIR    = "C:\path"  override install destination
-#   $env:SPOTNIK_NO_MODIFY_PATH = "1"        skip user/process PATH update
+# spotnik installer for Windows (PowerShell 5.1+).
 #
-# Positional arg ($VersionArg) wins over env var. Default = latest stable (skips pre-releases).
+# Usage:
+#   irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
+#   $env:SPOTNIK_VERSION="v0.1.0"; irm https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.ps1 | iex
+#
+# Env:
+#   $env:SPOTNIK_VERSION         pin a release tag (default: latest stable)
+#   $env:SPOTNIK_INSTALL_DIR     override install destination
+#   $env:SPOTNIK_NO_MODIFY_PATH  skip user/process PATH update
 
 function Write-Banner  { Write-Host "`n  spotnik installer`n" -ForegroundColor White }
 function Write-Success { param($msg) Write-Host "v $msg" -ForegroundColor Cyan }
@@ -24,7 +24,6 @@ function Write-Err     { param($msg) Write-Host "x $msg" -ForegroundColor Red }
 
 Write-Banner
 
-# Arch detection -- only amd64 is built
 $cpuArch = $env:PROCESSOR_ARCHITECTURE
 if ($cpuArch -ne 'AMD64') {
     Write-Err "Unsupported architecture: $cpuArch (only AMD64 supported)"
@@ -32,7 +31,6 @@ if ($cpuArch -ne 'AMD64') {
 }
 Write-Success "Arch: amd64"
 
-# Version resolution: positional arg > env var > latest stable
 $version = $VersionArg
 if (-not $version) { $version = $env:SPOTNIK_VERSION }
 if (-not $version) {
@@ -58,12 +56,10 @@ $zipName      = "spotnik_${versionNum}_windows_amd64.zip"
 $checksumName = "checksums.txt"
 $baseUrl      = "https://github.com/initgrep-apps/spotnik/releases/download/$version"
 
-# Temp directory -- cleaned up in finally block
 $tmpDir = Join-Path $env:TEMP "spotnik-install-$([System.IO.Path]::GetRandomFileName())"
 New-Item -ItemType Directory -Path $tmpDir | Out-Null
 
 try {
-    # Download
     Write-Info "Downloading $zipName..."
     try {
         Invoke-WebRequest -Uri "$baseUrl/$zipName"      -OutFile "$tmpDir\$zipName"      -UseBasicParsing
@@ -82,7 +78,6 @@ try {
     }
     Write-Success "Downloaded"
 
-    # Verify checksum
     Write-Info "Verifying checksum..."
     $checksumLine = Get-Content "$tmpDir\$checksumName" | Where-Object { $_ -match [regex]::Escape($zipName) }
     if (-not $checksumLine) {
@@ -97,13 +92,10 @@ try {
     }
     Write-Success "Checksum OK"
 
-    # Extract
     Write-Info "Extracting..."
     Expand-Archive -Path "$tmpDir\$zipName" -DestinationPath $tmpDir -Force
     Write-Success "Extracted"
 
-    # Install — Microsoft's per-user convention: %LOCALAPPDATA%\Programs\<App>.
-    # Matches gh CLI, VS Code, etc. Override with $env:SPOTNIK_INSTALL_DIR.
     if ($env:SPOTNIK_INSTALL_DIR) {
         $installDir = $env:SPOTNIK_INSTALL_DIR
     } else {
@@ -120,7 +112,6 @@ try {
     Copy-Item -Path $src.FullName -Destination "$installDir\spotnik.exe" -Force
     Write-Success "Installed $installDir\spotnik.exe"
 
-    # Update user PATH (honor SPOTNIK_NO_MODIFY_PATH for parity with install.sh).
     $pathOk = $true
     if ($env:SPOTNIK_NO_MODIFY_PATH -eq '1') {
         Write-Warn "Skipping PATH update (`$env:SPOTNIK_NO_MODIFY_PATH=1)"
@@ -145,15 +136,11 @@ try {
                 }
             }
         }
-        # Always sync process PATH so the running shell can resolve spotnik
-        # immediately, even when the user-scope entry was already there
-        # (e.g. long-lived shell predating a prior install).
         if (($env:PATH -split ';') -notcontains $installDir) {
             $env:PATH = "$installDir;$env:PATH"
         }
     }
 
-    # Confirm
     $exePath = Join-Path $installDir 'spotnik.exe'
     if (Test-Path $exePath) {
         $global:LASTEXITCODE = 0

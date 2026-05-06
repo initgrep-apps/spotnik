@@ -1,16 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-# spotnik installer — macOS and Linux
-# Usage:
-#   Latest stable:  curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
-#   Pinned:         curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash -s v0.1.0
-# Env:
-#   SPOTNIK_VERSION=v0.1.0    pin a release (alternative to positional arg)
-#   SPOTNIK_INSTALL_DIR=/path override install destination
-#   SPOTNIK_NO_MODIFY_PATH=1  do not write env file or modify shell init files
+# spotnik installer for macOS and Linux.
 #
-# Positional arg wins over env var. Default = latest stable (skips pre-releases).
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/install.sh | SPOTNIK_VERSION=v0.1.0 bash
+#
+# Env:
+#   SPOTNIK_VERSION         pin a release tag (default: latest stable)
+#   SPOTNIK_INSTALL_DIR     override install destination
+#   SPOTNIK_NO_MODIFY_PATH  do not write env file or modify shell init files
 
 BOLD='\033[1m'
 SUCCESS='\033[38;2;0;229;204m'
@@ -87,17 +87,11 @@ resolve_version() {
 
 verify_checksum() {
     local dir="$1" checksums="$2" tarball="$3"
-    # Pre-flight: refuse to install if checksums.txt has no entry for our
-    # tarball. Without this, --ignore-missing would silently exit 0 on a
-    # malformed/empty checksums file.
     if ! grep -qE "(^| )${tarball}\$" "$dir/$checksums"; then
         ui_error "checksums.txt has no entry for $tarball — refusing to install"
         return 1
     fi
-    # Keep --ignore-missing because checksums.txt lists all release artifacts
-    # (Linux/macOS/Windows × amd64/arm64), and we only ever have one locally.
-    # The trailing grep asserts our tarball's line printed "OK" — defense
-    # in depth on top of the pre-flight grep.
+    # shellcheck disable=SC2016
     if command -v sha256sum >/dev/null 2>&1; then
         (cd "$dir" && sha256sum --ignore-missing -c "$checksums" 2>&1 | grep -E "^${tarball}: OK\$")
     elif command -v shasum >/dev/null 2>&1; then
@@ -130,14 +124,11 @@ write_env_file() {
     local env_dir="$HOME/.config/spotnik"
     local env_file="$env_dir/env"
     mkdir -p "$env_dir"
-    # Render $HOME-relative paths as a literal $HOME token so the env file
-    # stays portable (rustup-style).
     local path_literal="$install_dir"
     if [[ "$install_dir" == "$HOME"/* ]]; then
         path_literal="\$HOME${install_dir#"$HOME"}"
     fi
-    # Use printf rather than heredoc to keep the case-guard literal.
-    # shellcheck disable=SC2016  # the $PATH/${PATH} tokens MUST stay literal
+    # shellcheck disable=SC2016
     {
         printf '%s\n' '# Managed by the spotnik installer.'
         printf '%s\n' '# Edits will be overwritten on reinstall.'
@@ -149,26 +140,23 @@ write_env_file() {
 }
 
 RC_MARKER_OPEN='# >>> spotnik installer >>>'
-# shellcheck disable=SC2034  # paired with RC_MARKER_OPEN; intent is symmetry
+# shellcheck disable=SC2034
 RC_MARKER_CLOSE='# <<< spotnik installer <<<'
-# shellcheck disable=SC2016  # $HOME stays literal; expands at source-time
+# shellcheck disable=SC2016
 RC_BLOCK='# >>> spotnik installer >>>
 . "$HOME/.config/spotnik/env"
 # <<< spotnik installer <<<'
 
-# True if rc file already contains a marker block.
 rc_has_marker() {
     local rc="$1"
     [ -f "$rc" ] && grep -qF "$RC_MARKER_OPEN" "$rc"
 }
 
-# Append the marker block to rc if missing. Idempotent.
 update_rc_file() {
     local rc="$1"
     if rc_has_marker "$rc"; then
         return 0
     fi
-    # Ensure file ends with a newline before appending.
     if [ -s "$rc" ] && [ "$(tail -c1 "$rc"; echo x)" != $'\nx' ]; then
         printf '\n' >> "$rc"
     fi
@@ -176,7 +164,6 @@ update_rc_file() {
     ui_success "Updated $rc"
 }
 
-# Edit each existing rc file. If none exist, create one matching $SHELL.
 update_rc_files() {
     local edited=0
     local rc
@@ -210,7 +197,6 @@ EOF
     ui_success "Added $conf_dir/spotnik.fish"
 }
 
-# True if the user has fish configured (directory exists).
 has_fish_config() {
     [ -d "$HOME/.config/fish" ]
 }
@@ -225,8 +211,8 @@ main() {
     ui_info "Resolving version..."
     version="$(resolve_version "${1:-}")"; ui_success "Version: $version"
 
-    # GoReleaser strips the leading 'v' from {{.Version}} in artifact names,
-    # but the GitHub release tag (and download URL path) keeps it.
+    # GoReleaser strips the leading 'v' from artifact names; the GitHub
+    # release tag (and download URL path) keeps it.
     local version_num="${version#v}"
     local tarball="spotnik_${version_num}_${os}_${arch}.tar.gz"
     local checksums="checksums.txt"
