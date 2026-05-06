@@ -156,6 +156,7 @@ ci: fmt-check tidy-check lint test-coverage check-glyphs build
 	@echo ""
 	@echo "✓ All CI checks passed"
 
+
 ## Show this help
 help:
 	@echo "spotnik — available make targets:"
