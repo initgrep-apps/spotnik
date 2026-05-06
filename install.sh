@@ -276,6 +276,13 @@ main() {
     local installed_version
     installed_version="$("$install_dir/spotnik" --version 2>/dev/null || echo "spotnik ${version}")"
     ui_success "$installed_version"
+
+    if [[ "${SPOTNIK_NO_MODIFY_PATH:-0}" != "1" ]] && ! path_contains "$install_dir"; then
+        echo ""
+        echo -e "${BOLD}  Activate in this shell:${NC}  . \"\$HOME/.config/spotnik/env\""
+        echo -e "${MUTED}  (or open a new terminal — new shells inherit automatically)${NC}"
+    fi
+
     echo -e "\n${BOLD}  Run: spotnik${NC}\n"
 }
 
