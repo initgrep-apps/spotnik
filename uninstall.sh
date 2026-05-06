@@ -5,8 +5,9 @@ set -euo pipefail
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
 # Env:
-#   SPOTNIK_PURGE_CONFIG=1   also delete ~/.config/spotnik (default: prompt)
-#   SPOTNIK_KEEP_CONFIG=1    skip config deletion (default: prompt)
+#   SPOTNIK_INSTALL_DIR=/path  prefer this dir when locating the binary
+#   SPOTNIK_PURGE_CONFIG=1     also delete ~/.config/spotnik (default: prompt)
+#   SPOTNIK_KEEP_CONFIG=1      skip config deletion (default: prompt)
 
 BOLD='\033[1m'
 SUCCESS='\033[38;2;0;229;204m'
@@ -45,11 +46,16 @@ find_binary() {
 
 forget_credentials() {
     local bin="$1"
+    local stderr_capture rc=0
     ui_info "Wiping tokens and client ID from keychain (spotnik auth forget)..."
-    if "$bin" auth forget </dev/tty 2>/dev/null; then
+    stderr_capture="$("$bin" auth forget </dev/tty 2>&1 >/dev/null)" || rc=$?
+    if [[ $rc -eq 0 ]]; then
         ui_success "Credentials wiped"
     else
-        ui_warn "spotnik auth forget exited non-zero (already forgotten?). Continuing."
+        ui_warn "spotnik auth forget exited $rc. Continuing with uninstall."
+        if [[ -n "$stderr_capture" ]]; then
+            ui_info "stderr: $stderr_capture"
+        fi
     fi
 }
 
@@ -123,6 +129,16 @@ strip_rc_block() {
         /^$/ { held_blank = 1; next }
         { if (held_blank) { print ""; held_blank = 0 } print }
     ' "$rc" > "$tmp"
+    # Sanity: if the source had non-marker, non-blank content, the result must too.
+    # Protects against a hypothetical awk regression that blanks the file.
+    local src_content_bytes out_content_bytes
+    src_content_bytes=$(grep -vE '^# (>>>|<<<) spotnik installer (>>>|<<<)$' "$rc" 2>/dev/null | grep -vE '^[[:space:]]*$' | wc -c | tr -d ' ')
+    out_content_bytes=$(grep -vE '^[[:space:]]*$' "$tmp" 2>/dev/null | wc -c | tr -d ' ')
+    if [[ "$src_content_bytes" -gt 0 && "$out_content_bytes" -eq 0 ]]; then
+        ui_error "Refusing to overwrite $rc with empty content (awk anomaly)"
+        rm -f "$tmp"
+        return 1
+    fi
     mv "$tmp" "$rc"
     ui_success "Cleaned $rc"
 }
