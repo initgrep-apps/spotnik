@@ -1,12 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# spotnik uninstaller — macOS and Linux
+# spotnik uninstaller for macOS and Linux.
+#
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/initgrep-apps/spotnik/main/uninstall.sh | bash
+#
 # Env:
-#   SPOTNIK_PURGE_CONFIG=1   also delete ~/.config/spotnik (default: prompt)
-#   SPOTNIK_KEEP_CONFIG=1    skip config deletion (default: prompt)
+#   SPOTNIK_INSTALL_DIR    prefer this dir when locating the binary
+#   SPOTNIK_PURGE_CONFIG   also delete ~/.config/spotnik (default: prompt)
+#   SPOTNIK_KEEP_CONFIG    skip config deletion (default: prompt)
 
 BOLD='\033[1m'
 SUCCESS='\033[38;2;0;229;204m'
@@ -45,11 +48,16 @@ find_binary() {
 
 forget_credentials() {
     local bin="$1"
-    ui_info "Wiping tokens and client ID from keychain (spotnik auth forget)..."
-    if "$bin" auth forget </dev/tty 2>/dev/null; then
+    local stderr_capture rc=0
+    ui_info "Wiping tokens and client ID from keychain..."
+    stderr_capture="$("$bin" auth forget </dev/null 2>&1 >/dev/null)" || rc=$?
+    if [[ $rc -eq 0 ]]; then
         ui_success "Credentials wiped"
     else
-        ui_warn "spotnik auth forget exited non-zero (already forgotten?). Continuing."
+        ui_warn "spotnik auth forget exited $rc. Continuing with uninstall."
+        if [[ -n "$stderr_capture" ]]; then
+            ui_info "stderr: $stderr_capture"
+        fi
     fi
 }
 
@@ -68,6 +76,7 @@ remove_binary() {
 
 handle_config() {
     if [[ ! -d "$CONFIG_DIR" ]]; then
+        ui_info "No config dir at $CONFIG_DIR"
         return
     fi
     if [[ "${SPOTNIK_KEEP_CONFIG:-0}" == "1" ]]; then
@@ -96,20 +105,76 @@ handle_config() {
     esac
 }
 
+remove_env_file() {
+    local env_file="$HOME/.config/spotnik/env"
+    if [ -f "$env_file" ]; then
+        rm -f "$env_file"
+        ui_success "Removed $env_file"
+    else
+        ui_info "No env file at $env_file"
+    fi
+    rmdir "$HOME/.config/spotnik" 2>/dev/null || true
+}
+
+strip_rc_block() {
+    local rc="$1"
+    [ -f "$rc" ] || return 0
+    grep -qF '# >>> spotnik installer >>>' "$rc" || return 0
+    local tmp; tmp="$(mktemp)"
+    sed -e '/^# >>> spotnik installer >>>$/,/^# <<< spotnik installer <<<$/d' "$rc" > "$tmp"
+    if grep -qF '# >>> spotnik installer >>>' "$tmp" 2>/dev/null \
+        || grep -qF '# <<< spotnik installer <<<' "$tmp" 2>/dev/null; then
+        ui_error "Refusing to overwrite $rc — markers still present after strip"
+        rm -f "$tmp"
+        return 1
+    fi
+    mv "$tmp" "$rc"
+    ui_success "Cleaned $rc"
+}
+
+strip_all_rc_files() {
+    local rc cleaned=0 rc_present=0
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        [ -f "$rc" ] || continue
+        rc_present=$((rc_present + 1))
+        if grep -qF '# >>> spotnik installer >>>' "$rc" 2>/dev/null; then
+            strip_rc_block "$rc"
+            cleaned=$((cleaned + 1))
+        fi
+    done
+    if [ "$rc_present" -eq 0 ]; then
+        ui_info "No POSIX rc files present"
+    elif [ "$cleaned" -eq 0 ]; then
+        ui_info "No installer-managed lines in rc files (checked $rc_present)"
+    fi
+}
+
+remove_fish_conf() {
+    local conf="$HOME/.config/fish/conf.d/spotnik.fish"
+    if [ -f "$conf" ]; then
+        rm -f "$conf"
+        ui_success "Removed $conf"
+    else
+        ui_info "No fish conf at $conf"
+    fi
+}
+
 main() {
     ui_banner
 
     local bin
-    if ! bin="$(find_binary)"; then
+    if bin="$(find_binary)"; then
+        ui_success "Found: $bin"
+        forget_credentials "$bin"
+        remove_binary "$bin"
+    else
         ui_warn "spotnik binary not found in PATH or common install locations"
-        ui_info "Nothing to uninstall."
-        handle_config
-        exit 0
+        ui_info "Continuing with config + rc cleanup."
     fi
-    ui_success "Found: $bin"
 
-    forget_credentials "$bin"
-    remove_binary "$bin"
+    remove_env_file
+    strip_all_rc_files
+    remove_fish_conf
     handle_config
 
     echo ""
