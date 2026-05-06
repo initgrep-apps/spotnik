@@ -1,7 +1,7 @@
 ---
 title: "Fix: clipboard copy works cross-platform via OSC 52"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
