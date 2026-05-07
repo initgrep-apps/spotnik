@@ -28,19 +28,32 @@ func TestInfoBox_RendersTitleAndBody(t *testing.T) {
 }
 
 // TestInfoBox_WrapsLongBody verifies that body text longer than the inner
-// width wraps and is not truncated.
+// width wraps to additional lines (not truncated, and not collapsed onto the
+// same physical row). Compares line counts of a short vs long body at the
+// same Width to prove the long body actually expands the rendered height.
 func TestInfoBox_WrapsLongBody(t *testing.T) {
 	th := theme.Load("black")
-	body := strings.Repeat("the quick brown fox ", 4) // ~80 chars
-	box := uikit.InfoBox{
+	const width = 40
+
+	short := uikit.InfoBox{
 		Title: "Title",
-		Body:  body,
-		Width: 40,
+		Body:  "fox",
+		Width: width,
+		Theme: th,
+	}.Render()
+	long := uikit.InfoBox{
+		Title: "Title",
+		Body:  strings.Repeat("the quick brown fox ", 4), // ~80 chars
+		Width: width,
 		Theme: th,
 	}.Render()
 
-	require.GreaterOrEqual(t, strings.Count(box, "\n"), 2)
-	assert.Contains(t, box, "fox")
+	shortLines := strings.Count(short, "\n")
+	longLines := strings.Count(long, "\n")
+	assert.Greater(t, longLines, shortLines,
+		"long body must wrap onto more rows than a short body at the same Width (short=%d long=%d)",
+		shortLines, longLines)
+	assert.Contains(t, long, "fox", "wrapped body must still contain its content")
 }
 
 // TestInfoBox_NarrowWidthGuard verifies that very small widths do not panic.
