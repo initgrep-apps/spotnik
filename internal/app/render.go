@@ -148,8 +148,14 @@ func (a *App) renderOnboarding() string {
 		body = a.renderOnboardingRegister()
 	}
 	if a.width > 0 && a.height > 0 {
-		return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, body)
+		body = lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, body)
 	}
+
+	// Composite the permissions overlay on top of Step 2 when open.
+	if a.onboardingPermissionsOverlay != nil && a.onboardingStep == stepOAuth {
+		return a.renderWithOverlayChrome(body, a.onboardingPermissionsOverlay.View(), btoverlay.Center, btoverlay.Center)
+	}
+
 	return body
 }
 
@@ -237,15 +243,22 @@ func (a *App) renderOnboardingOAuth() string {
 
 	panelW, panelH := uikit.PanelSize(a.width, a.height)
 
-	// URLBox wraps the auth URL inside a muted rounded box.
-	// Minimum box width of 50 ensures the URL is readable even at zero terminal width (tests).
-	urlBoxW := panelW - 12
-	if urlBoxW < 50 {
-		urlBoxW = 50
+	// Inner content width matches URLBox; same indent for visual alignment.
+	innerW := panelW - 12
+	if innerW < 50 {
+		innerW = 50
 	}
-	urlBox := uikit.URLBox{URL: a.onboardingAuthURL, Width: urlBoxW, Theme: t}.Render()
 
-	// uikit.Spinner.View() already renders "frame  muted(text)" — no manual join needed.
+	urlBox := uikit.URLBox{URL: a.onboardingAuthURL, Width: innerW, Theme: t}.Render()
+
+	infoBox := uikit.InfoBox{
+		Title: "About these permissions",
+		Body:  "All Spotify access stays on this device — tokens live in your OS keychain.",
+		Width: innerW,
+		Theme: t,
+	}.Render()
+
+	// uikit.Spinner.View() already renders "frame  muted(text)".
 	spinnerText := a.onboardingSpinner.View()
 
 	// Center the title block within the panel inner area.
@@ -258,14 +271,17 @@ func (a *App) renderOnboardingOAuth() string {
 		Align(lipgloss.Center).
 		Render(a.onboardingTitle())
 
+	viewPermsBinding := key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "view permissions"))
 	copyBinding := key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy URL"))
 	quitBinding := key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
-	hintBar := uikit.KeyBar{Bindings: []key.Binding{copyBinding, quitBinding}, Theme: t}.Render()
+	hintBar := uikit.KeyBar{Bindings: []key.Binding{viewPermsBinding, copyBinding, quitBinding}, Theme: t}.Render()
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		centeredTitle,
 		"",
 		textStyle.Render("A browser window has been opened. Log in and click Agree."),
+		"",
+		infoBox,
 		"",
 		textStyle.Render("On a headless server or browser didn't open? Visit this URL:"),
 		urlBox,
