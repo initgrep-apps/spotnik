@@ -530,6 +530,19 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case stepOAuth:
+		// While the permissions overlay is open, route all keys to it.
+		// Esc round-trips through OnboardingPermissionsOverlayClosedMsg.
+		if a.onboardingPermissionsOverlay != nil {
+			updated, cmd := a.onboardingPermissionsOverlay.Update(m)
+			if po, ok := updated.(*panes.OnboardingPermissionsOverlay); ok {
+				a.onboardingPermissionsOverlay = po
+			}
+			return a, cmd
+		}
+		// 'v' opens the permissions overlay only on stepOAuth.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "v" {
+			return a.openOnboardingPermissions()
+		}
 		// c → copy auth URL to clipboard via OSC 52; toast is emitted by the clipboardCopiedMsg handler.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
 			return a, copyToClipboardCmd(a.onboardingAuthURL)

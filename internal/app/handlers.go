@@ -972,6 +972,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Help overlay closed via Esc — close overlay without any state change.
 		return a.closeHelp()
 
+	case panes.OnboardingPermissionsOverlayClosedMsg:
+		// Onboarding permissions overlay closed via Esc.
+		return a.closeOnboardingPermissions()
+
 	case panes.ThemeOverlayClosedMsg:
 		// Theme overlay closed via Esc — close overlay without changing theme.
 		return a.closeThemeSwitcher()
