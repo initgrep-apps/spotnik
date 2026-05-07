@@ -158,6 +158,10 @@ type App struct {
 	// helpOverlay is the floating help overlay. Populated when open.
 	helpOverlay *panes.HelpOverlay
 
+	// onboardingPermissionsOverlay is the floating permissions notice shown on
+	// Step 2 of onboarding when the user presses 'v'. Nil when closed.
+	onboardingPermissionsOverlay *panes.OnboardingPermissionsOverlay
+
 	// tickCount increments every 1s tick. Used to throttle API polling:
 	// intervals are computed dynamically by pollIntervals() based on idle state and playback.
 	tickCount int
@@ -1003,6 +1007,19 @@ func (a *App) openHelp() (*App, tea.Cmd) {
 func (a *App) closeHelp() (*App, tea.Cmd) {
 	a.helpOpen = false
 	a.helpOverlay = nil
+	return a, nil
+}
+
+// openOnboardingPermissions opens the Step 2 permissions overlay.
+func (a *App) openOnboardingPermissions() (*App, tea.Cmd) {
+	a.onboardingPermissionsOverlay = panes.NewOnboardingPermissionsOverlay(a.theme)
+	a.onboardingPermissionsOverlay.SetSize(a.width, a.height)
+	return a, nil
+}
+
+// closeOnboardingPermissions closes the Step 2 permissions overlay.
+func (a *App) closeOnboardingPermissions() (*App, tea.Cmd) {
+	a.onboardingPermissionsOverlay = nil
 	return a, nil
 }
 
