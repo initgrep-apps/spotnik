@@ -84,6 +84,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.onboardingClose()
 		a.needsAuth = false
 		a.initAPIClients(m.accessToken)
+		// Drop the permissions overlay if it was open — auth is done, the notice is no
+		// longer relevant and must not bleed through to the grid view.
+		a.onboardingPermissionsOverlay = nil
 		// Resolve the spinner to ✓; after 1.2 s SpinnerDoneMsg fires the grid transition.
 		sp, cmd := a.onboardingSpinner.Done("Authorized")
 		a.onboardingSpinner = sp
@@ -111,6 +114,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Title:  "Signed in",
 			Body:   "Welcome back to Spotnik.",
 		}))
+		// Defensive clear: if the overlay survived authSuccessMsg (e.g. tests inject
+		// SpinnerDoneMsg directly), drop it before transitioning to the grid view so
+		// it can never bleed into the main TUI.
+		a.onboardingPermissionsOverlay = nil
 		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
@@ -127,12 +134,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case uikit.SpinnerFailMsg:
 		// 2 s hold expired — show the error panel so the user can retry.
 		a.onboardingStep = stepError
+		a.onboardingPermissionsOverlay = nil
 		return a, nil
 
 	case onboardingClientIDSavedMsg:
 		a.clientID = m.clientID
 		a.onboardingStep = stepOAuth
 		a.authStatus = "Opening browser for authorization..."
+		a.onboardingPermissionsOverlay = nil
 		return a, tea.Batch(
 			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
 			a.onboardingSpinner.Init(),
@@ -264,6 +273,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.helpOverlay != nil {
 			a.helpOverlay.SetSize(m.Width, m.Height)
+		}
+		if a.onboardingPermissionsOverlay != nil {
+			a.onboardingPermissionsOverlay.SetSize(m.Width, m.Height)
 		}
 		if toastCmd != nil {
 			return a, toastCmd
@@ -944,6 +956,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.helpOverlay != nil {
 			a.helpOverlay.SetTheme(newTheme)
+		}
+		if a.onboardingPermissionsOverlay != nil {
+			a.onboardingPermissionsOverlay.SetTheme(newTheme)
 		}
 		// Close the overlay.
 		a.showThemeSwitcher = false

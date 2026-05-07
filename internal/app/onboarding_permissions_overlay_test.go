@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,4 +80,47 @@ func TestApp_PermissionsOverlay_KeysRoutedThroughOverlayWhenOpen(t *testing.T) {
 	app, ok := updated.(*App)
 	require.True(t, ok)
 	assert.Nil(t, app.onboardingPermissionsOverlay)
+}
+
+// TestApp_PermissionsOverlay_ClearedOnAuthSuccess verifies that a successful
+// auth completion drops the overlay even if it was open.
+func TestApp_PermissionsOverlay_ClearedOnAuthSuccess(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	a.openOnboardingPermissions()
+	require.NotNil(t, a.onboardingPermissionsOverlay)
+
+	_, _ = a.Update(authSuccessMsg{accessToken: "test-token"})
+	assert.Nil(t, a.onboardingPermissionsOverlay,
+		"authSuccessMsg must clear onboarding permissions overlay")
+}
+
+// TestApp_PermissionsOverlay_ClearedOnSpinnerFail verifies that the spinner
+// failure path (which transitions to stepError) drops the overlay.
+func TestApp_PermissionsOverlay_ClearedOnSpinnerFail(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	a.openOnboardingPermissions()
+	require.NotNil(t, a.onboardingPermissionsOverlay)
+
+	_, _ = a.Update(uikit.SpinnerFailMsg{})
+	assert.Nil(t, a.onboardingPermissionsOverlay,
+		"SpinnerFailMsg must clear onboarding permissions overlay")
+}
+
+// TestApp_PermissionsOverlay_WindowResizePropagatesSize verifies that
+// WindowSizeMsg propagates and the overlay continues to render.
+func TestApp_PermissionsOverlay_WindowResizePropagatesSize(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	a.openOnboardingPermissions()
+	require.NotNil(t, a.onboardingPermissionsOverlay)
+
+	_, _ = a.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	view := a.onboardingPermissionsOverlay.View()
+	require.NotEmpty(t, view, "overlay must continue to render after WindowSizeMsg")
 }
