@@ -22,14 +22,15 @@ func newTestApp(needsAuth bool) *App {
 	return New(cfg, opts)
 }
 
-func TestSplash_TransitionsToAuth_WhenNeedsAuth(t *testing.T) {
+func TestSplash_TransitionsToStepOAuth_WhenNeedsAuth(t *testing.T) {
 	a := newTestApp(true)
 	require.Equal(t, viewSplash, a.currentView)
 
 	model, cmd := a.Update(splashDismissMsg{})
 	updated := model.(*App)
 
-	assert.Equal(t, viewAuth, updated.currentView)
+	assert.Equal(t, viewOnboarding, updated.currentView)
+	assert.Equal(t, stepOAuth, updated.OnboardingStep())
 	assert.NotNil(t, cmd, "should dispatch prepareAuthCmd")
 }
 
@@ -46,11 +47,12 @@ func TestSplash_TransitionsToMain_WhenAuthenticated(t *testing.T) {
 
 func TestAuthSuccess_TransitionsToMain(t *testing.T) {
 	a := newTestApp(true)
-	a.currentView = viewAuth
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
 
 	// Step 1: authSuccessMsg wires up clients and resolves the spinner to Done.
-	// The view stays at viewAuth during the 1.2 s hold; only SpinnerDoneMsg
-	// triggers the grid transition.
+	// The view stays at viewOnboarding/stepOAuth during the 1.2 s hold; only
+	// SpinnerDoneMsg triggers the grid transition.
 	model, cmd := a.Update(authSuccessMsg{accessToken: "test-token"})
 	updated := model.(*App)
 
@@ -75,20 +77,22 @@ func TestAuthSuccess_TransitionsToMain(t *testing.T) {
 	assert.NotNil(t, cmd2, "should start data fetching batch")
 }
 
-func TestAuthError_ShowsMessage(t *testing.T) {
+func TestAuthError_ResolvesSpinnerToFail(t *testing.T) {
 	a := newTestApp(true)
-	a.currentView = viewAuth
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
 
 	model, _ := a.Update(authErrorMsg{err: assert.AnError})
 	updated := model.(*App)
 
-	assert.Equal(t, viewAuth, updated.currentView, "should stay on auth view")
-	assert.Contains(t, updated.authStatus, "Error")
+	assert.Equal(t, viewOnboarding, updated.currentView, "should stay on onboarding view")
+	assert.NotEmpty(t, updated.onboardingError, "auth error must populate onboardingError")
 }
 
-func TestAuthPrepared_SetsURLAndStatus(t *testing.T) {
+func TestAuthPrepared_SetsOnboardingAuthURL(t *testing.T) {
 	a := newTestApp(true)
-	a.currentView = viewAuth
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
 
 	model, cmd := a.Update(authPreparedMsg{
 		authURL:     "https://accounts.spotify.com/authorize?...",
@@ -99,41 +103,24 @@ func TestAuthPrepared_SetsURLAndStatus(t *testing.T) {
 	})
 	updated := model.(*App)
 
-	assert.Equal(t, "https://accounts.spotify.com/authorize?...", updated.authURL)
-	assert.Contains(t, updated.authStatus, "Waiting")
+	assert.Equal(t, "https://accounts.spotify.com/authorize?...", updated.onboardingAuthURL)
 	assert.NotNil(t, cmd, "should dispatch waitForCallbackCmd")
 }
 
-func TestAuthPrepared_BrowserFailed_ShowsURLPrompt(t *testing.T) {
-	a := newTestApp(true)
-	a.currentView = viewAuth
-
-	model, _ := a.Update(authPreparedMsg{
-		authURL:     "https://accounts.spotify.com/authorize?...",
-		codeCh:      make(chan api.CallbackResult),
-		verifier:    "test-verifier",
-		redirectURI: "http://localhost:1234/callback",
-		browserErr:  assert.AnError,
-	})
-	updated := model.(*App)
-
-	assert.Contains(t, updated.authStatus, "Browser didn't open")
-}
-
-func TestQuitDuringAuth(t *testing.T) {
+func TestQuitDuringStepOAuth(t *testing.T) {
 	tests := []struct {
 		name string
 		key  tea.KeyMsg
 	}{
 		{"q key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}},
-		{"Esc key", tea.KeyMsg{Type: tea.KeyEsc}},
 		{"Ctrl+C", tea.KeyMsg{Type: tea.KeyCtrlC}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newTestApp(true)
-			a.currentView = viewAuth
+			a.currentView = viewOnboarding
+			a.onboardingStep = stepOAuth
 
 			_, cmd := a.Update(tt.key)
 			// Execute the cmd and check it's tea.Quit
@@ -159,16 +146,17 @@ func TestSplash_TransitionsToOnboarding_WhenNeedsRegister(t *testing.T) {
 	assert.Nil(t, cmd, "no command needed for stepRegister")
 }
 
-func TestNonQuitKeysDuringAuth_Ignored(t *testing.T) {
+func TestNonQuitKeysDuringStepOAuth_Ignored(t *testing.T) {
 	a := newTestApp(true)
-	a.currentView = viewAuth
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
 
-	// Pressing '/' during auth should not open search
+	// Pressing '/' during stepOAuth should not open search
 	model, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 	updated := model.(*App)
 
-	assert.Equal(t, viewAuth, updated.currentView)
-	assert.Nil(t, cmd, "non-quit keys should be ignored during auth")
+	assert.Equal(t, viewOnboarding, updated.currentView)
+	assert.Nil(t, cmd, "non-quit keys should be ignored during stepOAuth")
 	assert.False(t, updated.searchOpen)
 }
 
@@ -201,15 +189,14 @@ func TestNonQuitKeysDuringOnboarding_Ignored(t *testing.T) {
 	assert.False(t, updated.searchOpen, "search overlay must not open during onboarding")
 }
 
-// TestQuitDuringAuth_ClosesCallbackServer verifies that the callback server is shut down
-// when the user quits from the auth screen (q, Esc, or Ctrl+C).
-func TestQuitDuringAuth_ClosesCallbackServer(t *testing.T) {
+// TestQuitDuringStepOAuth_ClosesCallbackServer verifies that the callback server is shut down
+// when the user quits from stepOAuth (q or Ctrl+C).
+func TestQuitDuringStepOAuth_ClosesCallbackServer(t *testing.T) {
 	tests := []struct {
 		name string
 		key  tea.KeyMsg
 	}{
 		{"q key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}},
-		{"Esc key", tea.KeyMsg{Type: tea.KeyEsc}},
 		{"Ctrl+C", tea.KeyMsg{Type: tea.KeyCtrlC}},
 	}
 
@@ -224,11 +211,12 @@ func TestQuitDuringAuth_ClosesCallbackServer(t *testing.T) {
 				CallbackClose: func() { closed = true },
 			}
 			a := New(cfg, opts)
-			a.currentView = viewAuth
+			a.currentView = viewOnboarding
+			a.onboardingStep = stepOAuth
 
 			a.Update(tt.key)
 
-			assert.True(t, closed, "callback server must be closed on quit during auth (%s)", tt.name)
+			assert.True(t, closed, "callback server must be closed on quit during stepOAuth (%s)", tt.name)
 		})
 	}
 }

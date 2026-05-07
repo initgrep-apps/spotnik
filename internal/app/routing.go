@@ -117,20 +117,8 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
-	// During auth, only allow quit keys and clipboard copy — ignore everything else.
-	if a.currentView == viewAuth {
-		if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") || m.Type == tea.KeyEsc {
-			// Close the callback server before quitting so it doesn't leak.
-			a.onboardingClose()
-			return a, tea.Quit
-		}
-		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
-			return a, copyToClipboardCmd(a.authURL)
-		}
-		return a, nil
-	}
-
 	// During onboarding, route all keys through the step-aware handler.
+	// This covers both first-launch (stepRegister) and returning users (stepOAuth).
 	if a.currentView == viewOnboarding {
 		return a.handleOnboardingKey(m)
 	}

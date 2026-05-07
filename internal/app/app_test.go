@@ -1168,17 +1168,15 @@ func TestApp_GridView_NoSeparateStatsView(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// App starts in splash view.
-	assert.False(t, a.AuthViewOpen(), "app should not start in auth view")
-
 	// The app has no separate stats view open — press '2' just toggles Queue pane.
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 	a = m.(*app.App)
 
-	// Even after pressing '2' (toggle Queue), we're still not in auth view.
+	// Pressing '2' (toggle Queue) is a pane visibility action; the surrounding
+	// grid lifecycle remains intact (no view-mode transition).
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 	a = m.(*app.App)
-	assert.False(t, a.AuthViewOpen(), "pressing 2 should not switch to auth view")
+	require.NotNil(t, a, "pressing 2 should not crash")
 }
 
 // TestApp_StatsView_GridRendersTopTracks verifies that the TopTracks pane renders in the grid.
@@ -1243,10 +1241,10 @@ func TestApp_PlaylistsAlwaysInGrid(t *testing.T) {
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 	a = m.(*app.App)
 
-	// Pressing '3' toggles Playlists pane — app does not enter auth view.
+	// Pressing '3' toggles Playlists pane — verify it does not crash.
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	a = m.(*app.App)
-	assert.False(t, a.AuthViewOpen(), "pressing 3 should not open auth view")
+	require.NotNil(t, a, "pressing 3 should not crash")
 }
 
 // TestApp_LibraryLoadedMsg_ForwardsToPlaylistsPane verifies that LibraryLoadedMsg
@@ -1518,8 +1516,8 @@ func TestApp_PaneToggleKeys_NoCrash(t *testing.T) {
 		require.NotNil(t, model, "pressing %c should not crash", key)
 		a = model.(*app.App)
 	}
-	// App should never enter auth view from pane toggle keys.
-	assert.False(t, a.AuthViewOpen(), "pane toggle keys should not open auth view")
+	// Pane toggle keys must not crash the app.
+	require.NotNil(t, a, "pane toggle keys should not crash")
 }
 
 // --- Error state wiring tests ---

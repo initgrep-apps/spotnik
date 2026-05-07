@@ -29,8 +29,7 @@ type viewMode int
 
 const (
 	viewSplash     viewMode = iota // Splash screen shown on startup
-	viewOnboarding                 // First-time registration + OAuth flow
-	viewAuth                       // Auth panel shown when user needs to authenticate
+	viewOnboarding                 // Registration + OAuth flow (covers first-launch and returning users)
 	viewGrid                       // Grid layout: 10 panes across 2 pages, managed by LayoutManager
 )
 
@@ -227,12 +226,6 @@ type App struct {
 	// version is the build-time injected version string (e.g. "v0.1.0").
 	// Set from AppOptions.Version; displayed on the splash screen.
 	version string
-
-	// authURL is the Spotify authorization URL shown in the auth panel.
-	authURL string
-
-	// authStatus is the status message shown in the auth panel.
-	authStatus string
 
 	// consecutivePlaybackErrors counts successive PlaybackStateFetchedMsg deliveries
 	// where Err is non-nil. A toast is emitted when this reaches 5, then the counter
@@ -485,11 +478,6 @@ func (a *App) SetPlaylistsAPI(p api.PlaylistsAPI) {
 // GridViewOpen returns true while the grid view is the active top-level view.
 func (a *App) GridViewOpen() bool {
 	return a.currentView == viewGrid
-}
-
-// AuthViewOpen returns true while the auth panel is the active view.
-func (a *App) AuthViewOpen() bool {
-	return a.currentView == viewAuth
 }
 
 // TickCount returns the current tick counter (exported for testing).

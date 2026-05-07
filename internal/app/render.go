@@ -367,15 +367,10 @@ func (a *App) buildView() string {
 		// No size yet — fall through to grid view for tests.
 	}
 
-	// Onboarding flow shown on first launch when no client_id is configured.
-	// Must be checked before viewAuth — onboarding is a superset of the auth step.
+	// Onboarding flow covers both first-launch (stepRegister) and returning users
+	// who need to re-authenticate (stepOAuth). Both share the same Step 2 UI.
 	if a.currentView == viewOnboarding {
 		return a.renderOnboarding()
-	}
-
-	// Auth panel shown when the user needs to re-authenticate (returning user).
-	if a.currentView == viewAuth {
-		return renderAuthPanel(a.theme, a.width, a.height, a.authURL, a.authStatus)
 	}
 
 	// Grid view: header + grid content + status bar.

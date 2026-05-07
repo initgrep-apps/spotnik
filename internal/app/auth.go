@@ -7,12 +7,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/keychain"
-	"github.com/initgrep-apps/spotnik/internal/ui/theme"
-	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // authPreparedMsg is sent after PKCE setup and callback server are ready.
@@ -159,62 +156,4 @@ func (a *App) initAPIClients(token string) {
 	playlistsAPI.SetHTTPClient(httpClient)
 	playlistsAPI.SetGateway(a.gateway)
 	a.playlistsAPI = playlistsAPI
-}
-
-// renderAuthPanel renders a centered re-authentication prompt box for returning users.
-// The auth URL is never truncated — wrapURL breaks it into readable lines.
-func renderAuthPanel(t theme.Theme, width, height int, authURL, status string) string {
-	// Derive a sensible inner width for URL wrapping; default to 60 when the
-	// terminal size is not yet known (width <= 0) or is too narrow to compute from.
-	innerW := 60
-	if width > 20 {
-		innerW = width - 20
-	}
-
-	outerBorder := lipgloss.NewStyle().
-		Border(uikit.RoundedBorder()).
-		BorderForeground(t.ActiveBorder()).
-		Padding(1, 2)
-
-	urlBoxStyle := lipgloss.NewStyle().
-		Border(uikit.RoundedBorder()).
-		BorderForeground(t.TextMuted()).
-		Padding(0, 1)
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(t.TextPrimary()).
-		Bold(true)
-
-	urlStyle := lipgloss.NewStyle().
-		Foreground(t.ActiveBorder())
-
-	textStyle := lipgloss.NewStyle().
-		Foreground(t.TextPrimary())
-
-	statusStyle := lipgloss.NewStyle().
-		Foreground(t.TextMuted())
-
-	hintStyle := lipgloss.NewStyle().
-		Foreground(t.TextMuted())
-
-	wrappedURL := wrapURL(authURL, innerW)
-	urlBox := urlBoxStyle.Render(urlStyle.Render(wrappedURL))
-
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		titleStyle.Render("Re-authenticate with Spotify"),
-		"",
-		textStyle.Render("Visit this URL to authorize:"),
-		urlBox,
-		"",
-		statusStyle.Render(status),
-		"",
-		hintStyle.Render("c  copy URL  "+uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())+"  q  quit"),
-	)
-
-	box := outerBorder.Render(content)
-
-	if width <= 0 || height <= 0 {
-		return box
-	}
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
 }

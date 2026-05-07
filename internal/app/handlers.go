@@ -59,9 +59,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.onboardingStep = stepRegister
 				a.onboardingField.Focus()
 			case a.needsAuth:
-				a.currentView = viewAuth
-				a.authStatus = "Opening browser for authorization..."
-				return a, prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh)
+				// Returning users with a saved Client ID but missing/expired token
+				// route directly to stepOAuth so they share the rich Step 2 UI
+				// (URL box, info box, permissions overlay) with first-launch users.
+				a.currentView = viewOnboarding
+				a.onboardingStep = stepOAuth
+				return a, tea.Batch(
+					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
+					a.onboardingSpinner.Init(),
+				)
 			default:
 				a.currentView = viewGrid
 			}
@@ -70,12 +76,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case authPreparedMsg:
 		a.onboardingAuthURL = m.authURL
-		a.authURL = m.authURL
-		if m.browserErr != nil {
-			a.authStatus = "Browser didn't open. Visit the URL above manually."
-		} else {
-			a.authStatus = "Waiting for authorization..."
-		}
 		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh)
 
 	case authSuccessMsg:
@@ -121,15 +121,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
-		if a.currentView == viewOnboarding {
-			// Resolve spinner to ✗; after 2 s SpinnerFailMsg transitions to stepError.
-			a.onboardingError = m.err.Error()
-			sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
-			a.onboardingSpinner = sp
-			return a, cmd
-		}
-		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
-		return a, nil
+		// viewAuth is gone; auth errors only happen during viewOnboarding now.
+		// Resolve spinner to ✗; after 2 s SpinnerFailMsg transitions to stepError.
+		a.onboardingError = m.err.Error()
+		sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
+		a.onboardingSpinner = sp
+		return a, cmd
 
 	case uikit.SpinnerFailMsg:
 		// 2 s hold expired — show the error panel so the user can retry.
@@ -140,7 +137,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case onboardingClientIDSavedMsg:
 		a.clientID = m.clientID
 		a.onboardingStep = stepOAuth
-		a.authStatus = "Opening browser for authorization..."
 		a.onboardingPermissionsOverlay = nil
 		return a, tea.Batch(
 			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
