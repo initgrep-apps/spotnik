@@ -78,7 +78,7 @@ user-follow-read            user-read-recently-played
 |--------|------|----------------|
 | `Player` | `player.go` | `GET /me/player`, `PUT /me/player/play`, `PUT /me/player/pause`, `POST /me/player/next`, `POST /me/player/previous`, `PUT /me/player/seek`, `PUT /me/player/volume`, `PUT /me/player/shuffle`, `PUT /me/player/repeat`, `POST /me/player/queue`, `GET /me/player/queue` |
 | `LibraryClient` | `library.go` | `GET /me/playlists`, `GET /playlists/{id}/tracks`, `GET /me/albums`, `GET /me/tracks`, `GET /me/player/recently-played`, `PUT /me/tracks`, `DELETE /me/tracks` |
-| `PlaylistsClient` | `playlists.go` | `POST /me/playlists`, `PUT /playlists/{id}`, `POST /playlists/{id}/tracks`, `DELETE /playlists/{id}/tracks`, `PUT /playlists/{id}/tracks` (reorder) |
+| `PlaylistsClient` | `playlists.go` | `POST /me/playlists`, `PUT /playlists/{id}`, `POST /playlists/{id}/items`, `DELETE /playlists/{id}/items`, `PUT /playlists/{id}/items` (reorder) |
 | `SearchClient` | `search.go` | `GET /search` |
 | `DevicesClient` | `devices.go` | `GET /me/player/devices`, `PUT /me/player` (transfer) |
 | `UserClient` | `user.go` | `GET /me/top/tracks`, `GET /me/top/artists`, `GET /me/player/recently-played` |
@@ -128,13 +128,13 @@ Every API method was traced from keybinding → command builder → API call →
 | `Library.SavedAlbums` | Init/Tab | `buildFetchAlbumsCmd` | Yes | AlbumsPane | **Full** |
 | `Library.LikedTracks` | Init/Tab | `buildFetchLikedTracksCmd` | Yes | LikedSongsPane | **Full** |
 | `Library.RecentlyPlayed` | Init/Tab | `buildFetchRecentlyPlayedCmd` | Yes | RecentlyPlayedPane | **Full** |
-| `Library.LikeTrack` | `l` | `buildToggleLikeCmd` | Yes | **No UI indicator** | **Partial** — API works but no heart icon |
-| `Library.UnlikeTrack` | `l` | `buildToggleLikeCmd` | Yes | **No UI indicator** | **Partial** — same |
-| `Playlists.CreatePlaylist` | Overlay | `buildCreatePlaylistCmd` | Yes | Toast + list refresh | **Full** |
-| `Playlists.UpdatePlaylist` | Overlay | `buildRenamePlaylistCmd` | Yes | Toast + list refresh | **Full** |
-| `Playlists.AddTracks` | Overlay | `buildAddTracksToPlaylistCmd` | Yes | Toast | **Full** |
-| `Playlists.RemoveTracks` | `x` | `buildRemovePlaylistTrackCmd` | Yes | Toast + list refresh | **Full** |
-| `Playlists.ReorderTracks` | `Shift+↑/↓` | `buildReorderPlaylistTracksCmd` | Yes | Optimistic UI update | **Full** |
+| `Library.LikeTrack` | None (no UI binding) | None (no command builder) | N/A | **Not wired** | **API client ready, UI not wired** |
+| `Library.UnlikeTrack` | None (no UI binding) | None (no command builder) | N/A | **Not wired** | **API client ready, UI not wired** |
+| `Playlists.CreatePlaylist` | None (no UI binding) | None (no command builder) | N/A | **Not wired** | **API client ready, UI not wired** |
+| `Playlists.UpdatePlaylist` | None (no UI binding) | None (no command builder) | N/A | **Not wired** | **API client ready, UI not wired** |
+| `Playlists.AddTracks` | None (no UI binding) | None (no command builder) | N/A | **Not wired** | **API client ready, UI not wired** |
+| `Playlists.RemoveTracks` | `x` registered but no-op | `buildRemovePlaylistTrackCmd` | N/A | Toast on result | **Routing wired, key handler is intentional no-op** (`playlists_pane.go:307-309`) |
+| `Playlists.ReorderTracks` | None (no UI binding) | None (no command builder) | N/A | **Not wired** | **API client ready, UI not wired** |
 | `Search.Search` | `/` (type query) | `buildSearchCmd` | Yes | SearchOverlay | **Full** — hardcoded: 4 types, limit=5, `market=from_token` |
 | `Devices.Devices` | `d` (open overlay) | `buildFetchDevicesCmd` | Yes | DeviceOverlay | **Partial** — `supports_volume`, `is_restricted` fetched but NOT sent to UI |
 | `Devices.TransferPlayback` | `Enter` (on device) | `buildTransferPlaybackCmd` | N/A | Toast | **Full** |
@@ -159,7 +159,11 @@ These fields exist in API responses but are **not parsed** into our domain types
 
 ### Partially Wired Features
 
-1. **Like/Unlike (no UI indicator):** `LikeTrack`/`UnlikeTrack` API methods work and are wired to `buildToggleLikeCmd`. The `l` key triggers them. But the result is never shown in the UI — no heart icon in NowPlaying, no "liked" state in any pane. The `CheckSavedTracks` endpoint (`GET /me/tracks/contains`) is not implemented, so we can't even check the current state.
+1. **Like/Unlike (not wired):** `LikeTrack`/`UnlikeTrack` API methods are
+   implemented and tested. There is no UI binding, no command builder, and no
+   pane reads or writes like state. The `user-library-modify` scope is held
+   for the future UI. The `CheckSavedTracks` endpoint
+   (`GET /me/tracks/contains`) is also not implemented.
 
 2. **Device overlay (missing capabilities):** `DevicesClient.Devices()` fetches the full device object including `supports_volume`, `is_restricted`, and `volume_percent`. But the conversion to `panes.DeviceInfo` only extracts `ID`, `Name`, `Type`, `IsActive`. The overlay shows no indication of restricted devices or volume-unsupported devices.
 
@@ -466,7 +470,7 @@ Scopes: `user-library-read` for GET, `user-library-modify` for PUT/DELETE.
 | Remove Saved Tracks | `DELETE` | `/me/tracks` | 50 | **Implemented** (`UnlikeTrack`) |
 | Check Saved Tracks | `GET` | `/me/tracks/contains` | 50 | **Not implemented** |
 
-**Wiring gap:** `LikeTrack`/`UnlikeTrack` are fully wired to `buildToggleLikeCmd` (triggered by `l` key), but the result is never shown in the UI. No heart icon in NowPlaying or any other pane. `CheckSavedTracks` is not implemented, so we can't query the current like state.
+**Wiring gap:** `LikeTrack`/`UnlikeTrack` API methods are implemented and tested but **not wired to any UI**. There is no command builder, no key handler, and no pane that reads or writes liked-track state. `CheckSavedTracks` is also not implemented, so liked state cannot be queried.
 
 **Special feature:** `PUT /me/tracks` supports `timestamped_ids` in body to set custom `added_at` per track.
 
@@ -531,9 +535,9 @@ These generic endpoints accept any Spotify URI and replace entity-specific save/
 | Get Playlist | `GET` | `/playlists/{id}` | `playlist-read-private` (for private) | **Not implemented** |
 | Change Playlist Details | `PUT` | `/playlists/{id}` | `playlist-modify-public/private` | **Implemented** (`UpdatePlaylist`) |
 | Get Playlist Items | `GET` | `/playlists/{id}/tracks` | `playlist-read-private` | **Implemented** (`PlaylistTracks`) |
-| Add Items to Playlist | `POST` | `/playlists/{id}/tracks` | `playlist-modify-public/private` | **Implemented** (`AddTracksToPlaylist`) |
-| Remove Items from Playlist | `DELETE` | `/playlists/{id}/tracks` | `playlist-modify-public/private` | **Implemented** (`RemoveTracksFromPlaylist`) |
-| Reorder Playlist Items | `PUT` | `/playlists/{id}/tracks` | `playlist-modify-public/private` | **Implemented** (`ReorderPlaylistTracks`) |
+| Add Items to Playlist | `POST` | `/playlists/{id}/items` | `playlist-modify-public/private` | **Implemented** (`AddTracksToPlaylist`) — Feb 2026: path renamed from `/tracks` to `/items` |
+| Remove Items from Playlist | `DELETE` | `/playlists/{id}/items` | `playlist-modify-public/private` | **Implemented** (`RemoveTracksFromPlaylist`) — Feb 2026: path + body field renamed (`tracks` → `items`) |
+| Reorder Playlist Items | `PUT` | `/playlists/{id}/items` | `playlist-modify-public/private` | **Implemented** (`ReorderPlaylistTracks`) — Feb 2026: path renamed from `/tracks` to `/items` |
 
 **Feb 2026 change:** Playlist items endpoint now only returns data for playlists the user **owns or collaborates on**. Third-party playlist track listing may return limited results.
 
