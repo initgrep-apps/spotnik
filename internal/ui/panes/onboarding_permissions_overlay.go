@@ -20,20 +20,26 @@ import (
 // the overlay state.
 type OnboardingPermissionsOverlayClosedMsg struct{}
 
-// permissionsContent is the static body rendered inside the overlay border.
+// permissionsContent returns the body rendered inside the overlay border.
 // Generic by design — no per-scope semantics, no internals — so it remains
 // accurate as the underlying scope set evolves. Users who need scope details
 // are pointed to spotify.com/account/apps in the tail line.
-const permissionsContent = `Read access
- • Playback state, queue, and devices.
- • Saved tracks, albums, and playlists.
- • Profile, listening history, and followed artists.
-
-Write access
- • Playback control — play, pause, skip, seek, volume, transfer.
- • Library and playlist edits — reserved for upcoming features.
-
-For full scope details and revoke: spotify.com/account/apps`
+//
+// Bullets are sourced from the uikit glyph catalogue so ASCII mode renders
+// them as `*` and unicode mode renders them as `•`.
+func permissionsContent() string {
+	b := uikit.GlyphFor(uikit.GlyphBullet, uikit.ActiveMode())
+	return "Read access\n" +
+		" " + b + " Playback state, queue, and devices.\n" +
+		" " + b + " Saved tracks, albums, and playlists.\n" +
+		" " + b + " Profile, listening history, and followed artists.\n" +
+		"\n" +
+		"Write access\n" +
+		" " + b + " Playback control — play, pause, skip, seek, volume, transfer.\n" +
+		" " + b + " Library and playlist edits — reserved for upcoming features.\n" +
+		"\n" +
+		"For full scope details and revoke: spotify.com/account/apps"
+}
 
 // OnboardingPermissionsOverlay is the floating permissions reference shown on
 // Step 2 of onboarding. Pressing Esc emits OnboardingPermissionsOverlayClosedMsg;
@@ -99,7 +105,7 @@ func (o *OnboardingPermissionsOverlay) View() string {
 		Width(innerW).
 		MaxWidth(innerW).
 		Padding(1, 2)
-	body := bodyStyle.Render(permissionsContent)
+	body := bodyStyle.Render(permissionsContent())
 
 	escBinding := key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "close"))
 	keyBar := uikit.KeyBar{Bindings: []key.Binding{escBinding}, Theme: o.theme}.Render()
