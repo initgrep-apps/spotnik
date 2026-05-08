@@ -673,7 +673,36 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Title:  "Spotify Premium required",
 			})
 		}
-		return a, a.buildSetVolumeCmd(m.TargetVol)
+		return a, a.buildSetVolumeCmd(m.TargetVol, m.Seq)
+
+	case panes.VolumeAppliedMsg:
+		// Always confirm or cancel the bar's pending state first, before dispatching
+		// downstream effects. This prevents concurrent polls from overriding the bar.
+		if np := a.nowPlayingPane(); np != nil {
+			updated, _ := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+		}
+		if m.Err != nil {
+			// Re-route typed errors to their existing handlers after bar is cleared.
+			var rateLimitErr *api.RateLimitError
+			if errors.As(m.Err, &rateLimitErr) {
+				return a.handleMsg(panes.RateLimitedMsg{RetryAfterSecs: rateLimitErr.RetryAfter})
+			}
+			if isUnauthorizedError(m.Err) {
+				return a.handleMsg(unauthorizedMsg{})
+			}
+			return a, tea.Batch(
+				fetchPlaybackStateCmd(a.player, api.Interactive),
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Volume change failed",
+					Body:   m.Err.Error(),
+				}),
+			)
+		}
+		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 
 	case panes.PlaybackRequestMsg:
 		return a, a.buildPlaybackAPICmd(m.Action)

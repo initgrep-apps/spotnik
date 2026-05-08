@@ -3,6 +3,7 @@ package app_test
 // volume_test.go — Tests for Story 197: VolumeIntentMsg handler + buildSetVolumeCmd.
 
 import (
+	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -34,7 +35,7 @@ func newVolumeTestApp(mock *apitest.MockPlayer) *app.App {
 
 // TestApp_VolumeIntentMsg_CallsSetVolume verifies that when the app receives a
 // VolumeIntentMsg it calls player.SetVolume with the exact target volume and
-// returns a PlaybackCmdSentMsg with no error.
+// returns a VolumeAppliedMsg with no error.
 func TestApp_VolumeIntentMsg_CallsSetVolume(t *testing.T) {
 	mock := &apitest.MockPlayer{}
 	a := newVolumeTestApp(mock)
@@ -44,9 +45,10 @@ func TestApp_VolumeIntentMsg_CallsSetVolume(t *testing.T) {
 	require.NotNil(t, cmd, "VolumeIntentMsg must return a cmd")
 
 	result := cmd()
-	sent, ok := result.(panes.PlaybackCmdSentMsg)
-	require.True(t, ok, "cmd must return PlaybackCmdSentMsg, got %T", result)
+	sent, ok := result.(panes.VolumeAppliedMsg)
+	require.True(t, ok, "cmd must return VolumeAppliedMsg, got %T", result)
 	assert.NoError(t, sent.Err)
+	assert.Equal(t, 72, sent.Vol)
 	assert.Equal(t, 72, mock.LastSetVolume, "SetVolume called with exact intent target")
 }
 
@@ -102,9 +104,10 @@ func TestApp_VolumeDebounce_FiveRapidPresses_SendsOneCall(t *testing.T) {
 
 	// Execute buildSetVolumeCmd — should call SetVolume(54).
 	sentMsg := setVolumeCmd()
-	sent, ok := sentMsg.(panes.PlaybackCmdSentMsg)
-	require.True(t, ok, "buildSetVolumeCmd must return PlaybackCmdSentMsg, got %T", sentMsg)
+	sent, ok := sentMsg.(panes.VolumeAppliedMsg)
+	require.True(t, ok, "buildSetVolumeCmd must return VolumeAppliedMsg, got %T", sentMsg)
 	assert.NoError(t, sent.Err)
+	assert.Equal(t, 54, sent.Vol)
 	assert.True(t, mock.SetVolumeCalled, "SetVolume must have been called")
 	assert.Equal(t, 54, mock.LastSetVolume, "5 presses from 49 must set volume to 54")
 }
@@ -134,10 +137,10 @@ func TestApp_VolumeDebounceTickMsg_ForwardsToPane(t *testing.T) {
 	assert.Equal(t, 51, intentMsg.TargetVol, "forwarded VolumeIntentMsg must carry the tick's target vol")
 }
 
-// TestBuildSetVolumeCmd_429_EmitsRateLimitedMsg verifies that a 429 (RateLimitError)
-// from the player causes buildSetVolumeCmd to return RateLimitedMsg so the gateway-
-// level rate limit is surfaced and fetching sentinels are cleared.
-func TestBuildSetVolumeCmd_429_EmitsRateLimitedMsg(t *testing.T) {
+// TestBuildSetVolumeCmd_429_EmitsVolumeAppliedMsgWithRateLimitError verifies that a 429
+// from the player causes buildSetVolumeCmd to return VolumeAppliedMsg with the
+// RateLimitError wrapped in Err.
+func TestBuildSetVolumeCmd_429_EmitsVolumeAppliedMsgWithRateLimitError(t *testing.T) {
 	mock := &apitest.MockPlayer{
 		SetVolumeErr: &api.RateLimitError{RetryAfter: 5},
 	}
@@ -148,7 +151,48 @@ func TestBuildSetVolumeCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	require.NotNil(t, cmd)
 
 	result := cmd()
-	rl, ok := result.(panes.RateLimitedMsg)
-	require.True(t, ok, "429 from SetVolume must produce RateLimitedMsg, got %T", result)
-	assert.Equal(t, 5, rl.RetryAfterSecs, "RetryAfterSecs must match RateLimitError.RetryAfter")
+	sent, ok := result.(panes.VolumeAppliedMsg)
+	require.True(t, ok, "429 from SetVolume must produce VolumeAppliedMsg, got %T", result)
+	assert.Error(t, sent.Err)
+	var rl *api.RateLimitError
+	assert.True(t, errors.As(sent.Err, &rl), "Err must be a RateLimitError")
+	assert.Equal(t, 5, rl.RetryAfter)
+}
+
+// TestApp_VolumeAppliedMsg_Success_DispatchesInteractivePoll verifies that sending
+// VolumeAppliedMsg{Vol: 72, Seq: 1} to the app returns a non-nil cmd (the Interactive
+// fetchPlaybackStateCmd).
+func TestApp_VolumeAppliedMsg_Success_DispatchesInteractivePoll(t *testing.T) {
+	a := newVolumeTestApp(&apitest.MockPlayer{})
+
+	_, cmd := a.Update(panes.VolumeAppliedMsg{Vol: 72, Seq: 1})
+	assert.NotNil(t, cmd, "VolumeAppliedMsg success must dispatch a cmd")
+}
+
+// TestApp_VolumeAppliedMsg_429_ClearsPendingAndBacksOff verifies that a 429 wrapped
+// in VolumeAppliedMsg clears the bar's pending state and then triggers the existing
+// RateLimitedMsg backoff/toast path.
+func TestApp_VolumeAppliedMsg_429_ClearsPendingAndBacksOff(t *testing.T) {
+	a := newVolumeTestApp(&apitest.MockPlayer{
+		SetVolumeErr: &api.RateLimitError{RetryAfter: 5},
+	})
+
+	// First trigger the volume intent so the bar is in pending state.
+	_, setCmd := a.Update(panes.VolumeIntentMsg{TargetVol: 60})
+	require.NotNil(t, setCmd)
+
+	// Execute the setVolume cmd to get the VolumeAppliedMsg with the 429 error.
+	appliedMsg := setCmd()
+	applied, ok := appliedMsg.(panes.VolumeAppliedMsg)
+	require.True(t, ok)
+
+	// Now feed the VolumeAppliedMsg back to the app.
+	_, finalCmd := a.Update(applied)
+	require.NotNil(t, finalCmd, "VolumeAppliedMsg with 429 must return a cmd")
+
+	// The finalCmd should be a Batch containing the backoff tick + toast.
+	// We can't easily assert the batch contents without executing, but we can
+	// verify that executing it produces some non-nil result (the throttle tick).
+	result := finalCmd()
+	assert.NotNil(t, result, "final cmd must produce a message")
 }

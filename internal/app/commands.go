@@ -87,10 +87,11 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 }
 
 // buildSetVolumeCmd creates a command that calls player.SetVolume with the
-// exact target volume. Unlike buildPlaybackAPICmd, it does not read from the
-// store — the target is computed by GradientVolumeBar and delivered via
-// VolumeIntentMsg after debounce resolves.
-func (a *App) buildSetVolumeCmd(targetVol int) tea.Cmd {
+// exact target volume. On completion it returns VolumeAppliedMsg so the bar's
+// pending state is confirmed or cancelled before downstream effects fire.
+// intentSeq must match the seq value from the VolumeIntentMsg that triggered
+// this command — it is forwarded to ConfirmFromAPI / CancelPending.
+func (a *App) buildSetVolumeCmd(targetVol, intentSeq int) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
@@ -99,14 +100,9 @@ func (a *App) buildSetVolumeCmd(targetVol int) tea.Cmd {
 		ctx := api.WithPriority(context.Background(), api.Interactive)
 		err := player.SetVolume(ctx, targetVol)
 		if err != nil {
-			if secs := parse429RetryAfter(err); secs > 0 {
-				return panes.RateLimitedMsg{RetryAfterSecs: secs}
-			}
-			if isUnauthorizedError(err) {
-				return unauthorizedMsg{}
-			}
+			return panes.VolumeAppliedMsg{Seq: intentSeq, Err: err}
 		}
-		return panes.PlaybackCmdSentMsg{Err: err}
+		return panes.VolumeAppliedMsg{Vol: targetVol, Seq: intentSeq}
 	}
 }
 

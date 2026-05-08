@@ -48,7 +48,8 @@ type VolumeIntentMsg struct {
 //
 // On success: Vol holds the confirmed volume, Err is nil.
 // On error:   Vol is 0, Err holds the underlying error (may be *api.RateLimitError,
-//             *api.UnauthorizedError, or a generic error).
+//
+//	*api.UnauthorizedError, or a generic error).
 type VolumeAppliedMsg struct {
 	Vol int
 	Seq int
