@@ -15,4 +15,4 @@ Everything the user sees and does to control playback. The NowPlaying pane rende
 - [ ] NowPlaying visualizer animates in sync with playback using braille or block chars
 - [ ] Context-aware playback queues the full source collection when playing any song
 - [ ] Repeat-one state shows ↻¹ superscript icon; volume shows partial-block bar
-- [ ] Open: stories 11 (playback UX), 36 (command safety errors)
+- [ ] Open: stories 11 (playback UX), 36 (command safety errors), 197 (volume debounce + queue icon cleanup)
