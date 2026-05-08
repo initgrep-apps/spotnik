@@ -62,6 +62,9 @@ func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPla
 	if ps := s.PlaybackState(); ps != nil {
 		p.localProgressMs = ps.ProgressMs
 		p.engine.SetPlaying(ps.IsPlaying)
+		if ps.Device != nil {
+			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
+		}
 	}
 	return p
 }
@@ -205,10 +208,6 @@ func (p *NowPlayingPane) View() string {
 		artistNames[i] = a.Name
 	}
 
-	volume := 0
-	if ps.Device != nil {
-		volume = ps.Device.VolumePercent
-	}
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 
 	// Compute available inner height to decide which info lines to include.
@@ -228,7 +227,7 @@ func (p *NowPlayingPane) View() string {
 			mutedStyle.Render(t.Album.Name),
 			"",
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	case innerH >= 5:
 		// Drop spacer: track, artists, album, controls, volume.
@@ -237,7 +236,7 @@ func (p *NowPlayingPane) View() string {
 			secondaryStyle.Render(strings.Join(artistNames, ", ")),
 			mutedStyle.Render(t.Album.Name),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	case innerH >= 4:
 		// Drop album: track, artists, controls, volume.
@@ -245,14 +244,14 @@ func (p *NowPlayingPane) View() string {
 			primaryStyle.Render(t.Name),
 			secondaryStyle.Render(strings.Join(artistNames, ", ")),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	case innerH >= 3:
 		// Drop artists: track, controls, volume.
 		infoLines = []string{
 			primaryStyle.Render(t.Name),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	default:
 		// Minimal: track and controls only (no room for volume bar).
@@ -442,6 +441,7 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	p.engine.SetPattern(savedPattern)
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
+	p.volumeBar.SetConfirmed(confirmedVolume(p.store))
 	// Propagate dimensions to newly created sub-components.
 	p.SetSize(p.width, p.height)
 }
@@ -452,6 +452,15 @@ func paneMax(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// confirmedVolume reads the active device's volume from the store.
+// Returns 0 when playback state or device info is unavailable.
+func confirmedVolume(s state.StateReader) int {
+	if ps := s.PlaybackState(); ps != nil && ps.Device != nil {
+		return ps.Device.VolumePercent
+	}
+	return 0
 }
 
 // DeviceName returns the currently active device name from the store.

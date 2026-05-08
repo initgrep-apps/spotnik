@@ -29,16 +29,20 @@ func TestIntegration_VolumeBar_ThresholdTransitions(t *testing.T) {
 	b.SetWidth(40)
 
 	// Just check that crossing thresholds doesn't panic and output looks correct.
-	out33 := b.Render(33)
+	b.SetConfirmed(33)
+	out33 := b.Render()
 	assert.Contains(t, out33, "33%")
 
-	out34 := b.Render(34)
+	b.SetConfirmed(34)
+	out34 := b.Render()
 	assert.Contains(t, out34, "34%")
 
-	out66 := b.Render(66)
+	b.SetConfirmed(66)
+	out66 := b.Render()
 	assert.Contains(t, out66, "66%")
 
-	out67 := b.Render(67)
+	b.SetConfirmed(67)
+	out67 := b.Render()
 	assert.Contains(t, out67, "67%")
 }
 
@@ -56,7 +60,8 @@ func TestIntegration_AllComponentsRenderWithinWidth(t *testing.T) {
 	// GradientVolumeBar — verify no panic, output has the right shape with ♪ icon.
 	vb := components.NewGradientVolumeBar(th)
 	vb.SetWidth(width)
-	volOut := vb.Render(50)
+	vb.SetConfirmed(50)
+	volOut := vb.Render()
 	assert.Contains(t, volOut, "♪")
 }
 
@@ -72,6 +77,7 @@ func TestIntegration_NoHardcodedHexInComponents(t *testing.T) {
 
 	vb := components.NewGradientVolumeBar(th)
 	vb.SetWidth(40)
-	volView := vb.Render(50)
+	vb.SetConfirmed(50)
+	volView := vb.Render()
 	assert.NotContains(t, volView, "#000000", "volume bar view should not contain raw hex")
 }

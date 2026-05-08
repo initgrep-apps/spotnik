@@ -135,7 +135,8 @@ func TestGradientSeekBar_TimeLabelPadded(t *testing.T) {
 
 func TestGradientVolumeBar_ZeroVolume(t *testing.T) {
 	b := newTestGradientVolumeBar(30)
-	out := b.Render(0)
+	b.SetConfirmed(0)
+	out := b.Render()
 	assert.Contains(t, out, "♪", "zero volume should show music note icon")
 	assert.Contains(t, out, "0%")
 	assert.NotContains(t, out, "■", "zero volume should show no filled chars (old ■ char)")
@@ -146,7 +147,8 @@ func TestGradientVolumeBar_LowVolume_Gradient1(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// 25% is in the 0-33% band — should use Gradient1 color.
 	// In no-color terminal, just verify structural output.
-	out := b.Render(25)
+	b.SetConfirmed(25)
+	out := b.Render()
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "25%")
 	assert.Contains(t, out, "█", "filled blocks use █")
@@ -157,7 +159,8 @@ func TestGradientVolumeBar_LowVolume_Gradient1(t *testing.T) {
 func TestGradientVolumeBar_MidVolume_Gradient2(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// 50% is in the 34-66% band — should use Gradient2 color.
-	out := b.Render(50)
+	b.SetConfirmed(50)
+	out := b.Render()
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "50%")
 	assert.Contains(t, out, "█", "filled blocks use █")
@@ -168,7 +171,8 @@ func TestGradientVolumeBar_MidVolume_Gradient2(t *testing.T) {
 func TestGradientVolumeBar_HighVolume_Gradient3(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// 80% is in the 67-100% band — should use Gradient3 color.
-	out := b.Render(80)
+	b.SetConfirmed(80)
+	out := b.Render()
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "80%")
 	assert.Contains(t, out, "█", "filled blocks use █")
@@ -178,7 +182,8 @@ func TestGradientVolumeBar_HighVolume_Gradient3(t *testing.T) {
 
 func TestGradientVolumeBar_FullVolume(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
-	out := b.Render(100)
+	b.SetConfirmed(100)
+	out := b.Render()
 	assert.Contains(t, out, "100%")
 	assert.NotContains(t, out, "□", "full volume should have no empty chars (old □ char)")
 	// At 100% there are no empty cells so ░ must not appear.
@@ -187,7 +192,8 @@ func TestGradientVolumeBar_FullVolume(t *testing.T) {
 
 func TestGradientVolumeBar_Format(t *testing.T) {
 	b := newTestGradientVolumeBar(30)
-	out := b.Render(50)
+	b.SetConfirmed(50)
+	out := b.Render()
 	assert.Contains(t, out, "♪", "should contain music note icon")
 	assert.Contains(t, out, "█", "should contain full block character")
 	// Empty cells now use ░ (GlyphBarEmpty) per design system §5.7.
@@ -201,7 +207,8 @@ func TestGradientVolumeBar_Format(t *testing.T) {
 func TestGradientVolumeBar_MuteIcon_Volume0(t *testing.T) {
 	b := newTestGradientVolumeBar(30)
 	// Volume = 0: ♪ still present but in muted color
-	out := b.Render(0)
+	b.SetConfirmed(0)
+	out := b.Render()
 	assert.Contains(t, out, "♪")
 	assert.Contains(t, out, "0%")
 }
@@ -209,14 +216,16 @@ func TestGradientVolumeBar_MuteIcon_Volume0(t *testing.T) {
 func TestGradientVolumeBar_ClampHigh(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// Volume > 100 should be clamped to 100.
-	out := b.Render(150)
+	b.SetConfirmed(150)
+	out := b.Render()
 	assert.Contains(t, out, "100%")
 }
 
 func TestGradientVolumeBar_ClampLow(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	// Volume < 0 should be clamped to 0.
-	out := b.Render(-5)
+	b.SetConfirmed(-5)
+	out := b.Render()
 	assert.Contains(t, out, "0%")
 }
 
@@ -224,8 +233,10 @@ func TestGradientVolumeBar_WidthChanges(t *testing.T) {
 	b30 := newTestGradientVolumeBar(30)
 	b60 := newTestGradientVolumeBar(60)
 
-	out30 := b30.Render(50)
-	out60 := b60.Render(50)
+	b30.SetConfirmed(50)
+	out30 := b30.Render()
+	b60.SetConfirmed(50)
+	out60 := b60.Render()
 
 	lines30 := strings.Split(out30, "\n")[0]
 	lines60 := strings.Split(out60, "\n")[0]
@@ -240,27 +251,31 @@ func TestGradientVolumeBar_WidthChanges(t *testing.T) {
 
 func TestGradientVolumeBar_At33_Gradient1(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
-	out := b.Render(33)
+	b.SetConfirmed(33)
+	out := b.Render()
 	// 33% should still be in band 1 (0-33%).
 	assert.Contains(t, out, "33%")
 }
 
 func TestGradientVolumeBar_At34_Gradient2(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
-	out := b.Render(34)
+	b.SetConfirmed(34)
+	out := b.Render()
 	// 34% crosses into band 2 (34-66%).
 	assert.Contains(t, out, "34%")
 }
 
 func TestGradientVolumeBar_At66_Gradient2(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
-	out := b.Render(66)
+	b.SetConfirmed(66)
+	out := b.Render()
 	assert.Contains(t, out, "66%")
 }
 
 func TestGradientVolumeBar_At67_Gradient3(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
-	out := b.Render(67)
+	b.SetConfirmed(67)
+	out := b.Render()
 	// 67% crosses into band 3 (67-100%).
 	assert.Contains(t, out, "67%")
 }
@@ -310,7 +325,8 @@ func TestGradientVolumeBar_PartialBlocks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTestGradientVolumeBar(0) // 0 → use default barWidth=14
-			out := b.Render(tt.volume)
+			b.SetConfirmed(tt.volume)
+			out := b.Render()
 
 			gotFull := strings.Count(out, "█")
 			gotEmpty := strings.Count(out, "░") // empty char is now ░ (GlyphBarEmpty §5.7)
@@ -441,7 +457,8 @@ func TestGradientVolumeBar_AsciiMode(t *testing.T) {
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
 
 	b := newTestGradientVolumeBar(40)
-	out := b.Render(50)
+	b.SetConfirmed(50)
+	out := b.Render()
 
 	// Unicode music note must not appear in ASCII mode.
 	assert.NotContains(t, out, "♪", "unicode music note ♪ must not appear in ASCII mode")

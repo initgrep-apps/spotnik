@@ -191,14 +191,14 @@ func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched boo
 	return true, m.TargetVol
 }
 
-// Render returns the volume bar string for the given volume level.
-// Volume is clamped to [0, 100].
+// Render returns the volume bar string using the bar's current volume state.
 // Format: "♪ ████▎░░░░░░░░░ 31%"
 //
 // Full cells use █ (U+2588). The fractional last cell uses the §5.7 partial-block
 // thresholds (▏▎▍▌▋▊▉) so the bar moves smoothly on every 1% step.
 // Empty cells use ░ (GlyphBarEmpty).
-func (b *GradientVolumeBar) Render(volume int) string {
+func (b *GradientVolumeBar) Render() string {
+	volume := b.currentVol
 	if volume > 100 {
 		volume = 100
 	}
