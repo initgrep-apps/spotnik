@@ -340,6 +340,99 @@ func TestGradientVolumeBar_PartialBlocks(t *testing.T) {
 	}
 }
 
+// --------------------------------------------------------------------------
+// GradientVolumeBar — smart component (debounce state)
+// --------------------------------------------------------------------------
+
+func TestVolumeBar_HandleKey_UpdatesCurrentVolImmediately(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	cmd := b.HandleKey(+1, 50)
+	assert.NotNil(t, cmd, "HandleKey must return a non-nil debounce cmd")
+	// Verify seq and hasPending via HandleDebounce.
+	b.SetConfirmed(0)
+	// If hasPending, SetConfirmed is ignored — currentVol stays at 51.
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	assert.True(t, matched)
+	assert.Equal(t, 51, vol)
+}
+
+func TestVolumeBar_HandleKey_AccumulatesFromPending(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1, currentVol=51, pending
+	b.HandleKey(+1, 50) // must use currentVol=51 as base, not confirmedVol=50 → currentVol=52, seq=2
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 52, Seq: 2})
+	assert.True(t, matched, "second keypress uses pending vol as base")
+	assert.Equal(t, 52, vol)
+}
+
+func TestVolumeBar_HandleKey_ClampsAtMax(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(100)
+	b.HandleKey(+1, 100)
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 100, Seq: 1})
+	assert.True(t, matched)
+	assert.Equal(t, 100, vol, "clamped at 100")
+}
+
+func TestVolumeBar_HandleKey_ClampsAtMin(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(0)
+	b.HandleKey(-1, 0)
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 0, Seq: 1})
+	assert.True(t, matched)
+	assert.Equal(t, 0, vol, "clamped at 0")
+}
+
+func TestVolumeBar_HandleDebounce_StaleDiscarded(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1
+	b.HandleKey(+1, 50) // seq=2 — supersedes seq=1
+	matched, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	assert.False(t, matched, "stale seq must be discarded")
+}
+
+func TestVolumeBar_HandleDebounce_ClearsPending(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50)                                             // hasPending=true
+	b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1}) // clears pending
+	b.SetConfirmed(30)                                              // now accepted
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	assert.False(t, matched, "seq already consumed — second call is stale")
+	_ = vol
+	// After pending cleared, a fresh HandleKey uses the SetConfirmed value.
+	// Note: HandleDebounce increments seq on match (double-fire guard), so seq is
+	// now 2 after the first HandleDebounce. HandleKey increments to 3.
+	b.HandleKey(+1, 30)
+	matched2, vol2 := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 31, Seq: 3})
+	assert.True(t, matched2)
+	assert.Equal(t, 31, vol2)
+}
+
+func TestVolumeBar_SetConfirmed_NoOpWhenPending(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // hasPending=true, currentVol=51
+	b.SetConfirmed(30)  // must be ignored
+	// currentVol still 51; verify via HandleDebounce
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	assert.True(t, matched)
+	assert.Equal(t, 51, vol)
+}
+
+func TestVolumeBar_SetConfirmed_UpdatesWhenNoPending(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.SetConfirmed(75) // no pending — should update
+	b.HandleKey(+1, 75)
+	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 76, Seq: 1})
+	assert.True(t, matched)
+	assert.Equal(t, 76, vol)
+}
+
 // TestGradientVolumeBar_AsciiMode verifies that in ASCII mode the music-note
 // glyph rendered by GradientVolumeBar is the ASCII fallback ("*") and NOT the
 // unicode "♪" (GlyphMusicNote).
