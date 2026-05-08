@@ -465,10 +465,18 @@ func TestVolumeBar_ConfirmFromAPI_ConfirmsOnSeqMatch(t *testing.T) {
 	// After HandleDebounce, b.seq == 2 (intentSeq+1).
 	b.ConfirmFromAPI(intentSeq, 55)
 
-	// hasPending should be cleared, currentVol should be 55.
+	// currentVol should be 55, but hasPending stays true until a matching poll arrives.
 	out := b.Render()
 	assert.Contains(t, out, "55%")
-	// SetConfirmed should now be accepted since hasPending=false.
+	// Stale poll with old volume should be blocked while hasPending is true.
+	b.SetConfirmed(50)
+	out = b.Render()
+	assert.Contains(t, out, "55%", "stale poll must not snap bar back")
+	// Matching poll clears hasPending.
+	b.SetConfirmed(55)
+	out = b.Render()
+	assert.Contains(t, out, "55%")
+	// Now SetConfirmed should be accepted since hasPending=false.
 	b.SetConfirmed(30)
 	out = b.Render()
 	assert.Contains(t, out, "30%")
@@ -533,6 +541,34 @@ func TestVolumeBar_CancelPending_NoOpOnSeqMismatch(t *testing.T) {
 	b.SetConfirmed(0)
 	out = b.Render()
 	assert.Contains(t, out, "52%")
+}
+
+// TestVolumeBar_SetConfirmed_BlocksStalePoll verifies that after ConfirmFromAPI,
+// a stale poll with the old volume is blocked, and only a matching poll clears
+// hasPending. This prevents the bar from flickering back and forth.
+func TestVolumeBar_SetConfirmed_BlocksStalePoll(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1, hasPending=true, currentVol=51
+
+	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	require.True(t, matched)
+	b.ConfirmFromAPI(intentSeq, 55) // currentVol=55, hasPending stays true
+
+	// Stale poll with old volume must be blocked.
+	b.SetConfirmed(50)
+	out := b.Render()
+	assert.Contains(t, out, "55%", "stale poll must not snap bar back")
+
+	// Matching poll clears hasPending.
+	b.SetConfirmed(55)
+	out = b.Render()
+	assert.Contains(t, out, "55%")
+
+	// Now SetConfirmed updates freely.
+	b.SetConfirmed(30)
+	out = b.Render()
+	assert.Contains(t, out, "30%")
 }
 
 // TestGradientVolumeBar_AsciiMode verifies that in ASCII mode the music-note

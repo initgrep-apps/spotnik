@@ -141,12 +141,17 @@ func (b *GradientVolumeBar) SetWidth(width int) {
 }
 
 // SetConfirmed updates currentVol from the authoritative Spotify poll value.
-// It is a no-op when hasPending is true — the optimistic pending value is shown
-// until the debounce resolves, at which point the next poll re-syncs.
+// When hasPending is true, it only clears hasPending if the poll matches the
+// API-confirmed currentVol, blocking stale polls from snapping the bar back.
+// When hasPending is false, it updates currentVol directly.
 func (b *GradientVolumeBar) SetConfirmed(vol int) {
-	if !b.hasPending {
-		b.currentVol = vol
+	if b.hasPending {
+		if vol == b.currentVol {
+			b.hasPending = false
+		}
+		return
 	}
+	b.currentVol = vol
 }
 
 // HandleKey computes the new pending volume, updates currentVol immediately so
@@ -189,14 +194,13 @@ func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched boo
 	return true, m.TargetVol, m.Seq
 }
 
-// ConfirmFromAPI sets currentVol to the API-confirmed value and clears hasPending,
-// but only when no newer burst has started. If the user pressed again while the
-// API call was in flight (b.seq > intentSeq+1), the confirmation is discarded
-// and the new burst's debounce will produce its own VolumeAppliedMsg.
+// ConfirmFromAPI sets currentVol to the API-confirmed value but keeps hasPending true.
+// hasPending is only cleared by SetConfirmed when a subsequent poll returns the same
+// volume, preventing stale in-flight polls from snapping the bar back to an old value.
 func (b *GradientVolumeBar) ConfirmFromAPI(intentSeq, vol int) {
 	if b.seq == intentSeq+1 {
 		b.currentVol = vol
-		b.hasPending = false
+		// hasPending stays true — SetConfirmed clears it when a poll matches.
 	}
 }
 

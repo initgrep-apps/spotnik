@@ -1065,11 +1065,21 @@ func TestNowPlayingPane_VolumeAppliedMsg_Success_ConfirmsBar(t *testing.T) {
 	// Send VolumeAppliedMsg confirming the API succeeded.
 	p.Update(VolumeAppliedMsg{Vol: 55, Seq: 1})
 
-	// Bar should now show 55 and hasPending should be false.
+	// Bar should now show 55, but hasPending stays true until a matching poll.
 	out := p.View()
 	assert.Contains(t, out, "55%")
 
-	// SetConfirmed should now be accepted since hasPending=false.
+	// Stale poll with old volume should be blocked while hasPending is true.
+	p.volumeBar.SetConfirmed(0)
+	out = p.View()
+	assert.Contains(t, out, "55%", "stale poll must not snap bar back")
+
+	// Matching poll clears hasPending.
+	p.volumeBar.SetConfirmed(55)
+	out = p.View()
+	assert.Contains(t, out, "55%")
+
+	// Now SetConfirmed updates freely.
 	p.volumeBar.SetConfirmed(0)
 	out = p.View()
 	assert.Contains(t, out, "0%")
