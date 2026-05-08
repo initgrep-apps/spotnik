@@ -176,9 +176,6 @@ type App struct {
 	// Decremented each tick; when >0 no polling commands are dispatched.
 	backoffTicks int
 
-	// volumeStep is the percentage change per volume up/down keypress.
-	volumeStep int
-
 	// needsAuth is true when the user is not authenticated and must go through the auth flow.
 	needsAuth bool
 
@@ -381,7 +378,6 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		profilePane:       profilePane,
 		statusKeyMap:      newAppKeyMap(),
 		currentView:       viewSplash,
-		volumeStep:        1,
 		needsAuth:         opts.NeedsAuth,
 		needsRegister:     opts.NeedsRegister,
 		onboardingField:   ff,

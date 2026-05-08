@@ -43,18 +43,13 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		return func() tea.Msg { return panes.PlaybackCmdSentMsg{Err: errNilClient} }
 	}
 	player := a.player
-	volStep := a.volumeStep
 
 	// Snapshot store values in Update() context (thread-safe).
 	// The closure uses these captured values instead of calling store.PlaybackState() later.
 	ps := a.store.PlaybackState()
-	currentVolume := 65 // default when no device info is available
 	isShuffled := false
 	repeatMode := "off"
 	if ps != nil {
-		if ps.Device != nil {
-			currentVolume = ps.Device.VolumePercent
-		}
 		isShuffled = ps.ShuffleState
 		repeatMode = ps.RepeatState
 	}
@@ -73,24 +68,36 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 			err = player.Next(ctx)
 		case panes.ActionPrevious:
 			err = player.Previous(ctx)
-		case panes.ActionVolumeUp:
-			newVol := currentVolume + volStep
-			if newVol > 100 {
-				newVol = 100
-			}
-			err = player.SetVolume(ctx, newVol)
-		case panes.ActionVolumeDown:
-			newVol := currentVolume - volStep
-			if newVol < 0 {
-				newVol = 0
-			}
-			err = player.SetVolume(ctx, newVol)
 		case panes.ActionToggleShuffle:
 			err = player.SetShuffle(ctx, !isShuffled)
 		case panes.ActionCycleRepeat:
 			err = player.SetRepeat(ctx, nextRepeatMode(repeatMode))
 		}
 
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
+		return panes.PlaybackCmdSentMsg{Err: err}
+	}
+}
+
+// buildSetVolumeCmd creates a command that calls player.SetVolume with the
+// exact target volume. Unlike buildPlaybackAPICmd, it does not read from the
+// store — the target is computed by GradientVolumeBar and delivered via
+// VolumeIntentMsg after debounce resolves.
+func (a *App) buildSetVolumeCmd(targetVol int) tea.Cmd {
+	player := a.player
+	return func() tea.Msg {
+		if player == nil {
+			return panes.PlaybackCmdSentMsg{Err: errNilClient}
+		}
+		ctx := api.WithPriority(context.Background(), api.Interactive)
+		err := player.SetVolume(ctx, targetVol)
 		if err != nil {
 			if secs := parse429RetryAfter(err); secs > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: secs}

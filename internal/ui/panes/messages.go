@@ -53,10 +53,6 @@ const (
 	ActionNext
 	// ActionPrevious goes back to the previous track.
 	ActionPrevious
-	// ActionVolumeUp raises volume by 1%.
-	ActionVolumeUp
-	// ActionVolumeDown lowers volume by 1%.
-	ActionVolumeDown
 	// ActionToggleShuffle toggles shuffle mode.
 	ActionToggleShuffle
 	// ActionCycleRepeat cycles through repeat modes (off → context → track → off).

@@ -34,22 +34,16 @@ func newSafetyTestApp() *app.App {
 // captures the volume from the store at dispatch time (in Update() context).
 // Even if the store changes after the command is built, the command uses the
 // snapshotted value — not a live store read inside the goroutine.
-func TestBuildPlaybackAPICmd_UsesSnapshotedVolume(t *testing.T) {
+// Volume is now dispatched via VolumeIntentMsg → buildSetVolumeCmd (Story 197).
+func TestBuildSetVolumeCmd_UsesIntentTarget(t *testing.T) {
 	a := newSafetyTestApp()
 
-	// Set initial playback state with volume=50.
-	a.Store().SetPlaybackState(&api.PlaybackState{
-		IsPlaying: true,
-		Device:    &api.Device{VolumePercent: 50},
-	})
+	// VolumeIntentMsg carries the exact target — no store read needed.
+	intentMsg := panes.VolumeIntentMsg{TargetVol: 63}
+	_, cmd := a.Update(intentMsg)
 
-	// Trigger a VolumeUp request. This calls buildPlaybackAPICmd inside Update().
-	// The function should snapshot volume=50 before the closure executes.
-	volumeUpMsg := panes.PlaybackRequestMsg{Action: panes.ActionVolumeUp}
-	_, cmd := a.Update(volumeUpMsg)
-
-	// Command must be non-nil (it's a tea.Cmd that will call the API).
-	require.NotNil(t, cmd, "VolumeUp request must return a command")
+	// Command must be non-nil.
+	require.NotNil(t, cmd, "VolumeIntentMsg must return a command")
 }
 
 // TestBuildPlaybackAPICmd_UsesSnapshotedShuffle verifies that buildPlaybackAPICmd
@@ -91,12 +85,10 @@ func TestBuildPlaybackAPICmd_UsesSnapshotedRepeatMode(t *testing.T) {
 // returns nil (not yet loaded), buildPlaybackAPICmd uses safe defaults (no panic).
 func TestBuildPlaybackAPICmd_NilStateDefaults(t *testing.T) {
 	a := newSafetyTestApp()
-	// Store has no playback state — both volume and shuffle use safe defaults.
+	// Store has no playback state — shuffle and repeat use safe defaults.
+	// Volume is now routed via VolumeIntentMsg → buildSetVolumeCmd (Story 197).
 
-	_, cmd := a.Update(panes.PlaybackRequestMsg{Action: panes.ActionVolumeUp})
-	require.NotNil(t, cmd, "VolumeUp with nil state must return a command (uses default)")
-
-	_, cmd = a.Update(panes.PlaybackRequestMsg{Action: panes.ActionToggleShuffle})
+	_, cmd := a.Update(panes.PlaybackRequestMsg{Action: panes.ActionToggleShuffle})
 	require.NotNil(t, cmd, "ToggleShuffle with nil state must return a command (uses default)")
 
 	_, cmd = a.Update(panes.PlaybackRequestMsg{Action: panes.ActionCycleRepeat})
