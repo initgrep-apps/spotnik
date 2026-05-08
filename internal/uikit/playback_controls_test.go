@@ -28,7 +28,7 @@ func TestPlaybackControls_RenderUnicode_Playing(t *testing.T) {
 	out := c.Render()
 
 	assert.Contains(t, out, "⏸", "playing state shows pause icon")
-	assert.Contains(t, out, "≡", "queue icon always present")
+	assert.NotContains(t, out, "≡", "queue icon removed from strip")
 	assert.Contains(t, out, "⇄", "shuffle icon always present")
 	assert.Contains(t, out, "⟳", "repeat-off shows ⟳")
 }
@@ -42,7 +42,7 @@ func TestPlaybackControls_RenderASCII_Playing(t *testing.T) {
 	out := c.Render()
 
 	assert.Contains(t, out, "||", "ASCII play-pause: ||")
-	assert.Contains(t, out, "Q", "ASCII queue: Q")
+	assert.NotContains(t, out, "Q", "ASCII queue icon removed")
 	assert.Contains(t, out, "sh", "ASCII shuffle: sh")
 	assert.Contains(t, out, "ro", "ASCII repeat-off: ro")
 
@@ -73,10 +73,9 @@ func TestPlaybackControls_RoleTokens(t *testing.T) {
 	require.NotEqual(t, th.PlayingIndicator(), th.TextSecondary(),
 		"test precondition: PlayingIndicator and TextSecondary must differ for black theme")
 
-	t.Run("all active except queue", func(t *testing.T) {
+	t.Run("all active", func(t *testing.T) {
 		// Playing=true, Shuffle=true, Repeat=RepeatAll →
 		//   shuffle, play/pause, repeat: active color
-		//   queue: always inactive
 		c := uikit.PlaybackControls{
 			Playing:    true,
 			Shuffle:    true,
@@ -87,8 +86,6 @@ func TestPlaybackControls_RoleTokens(t *testing.T) {
 
 		assert.Contains(t, out, activeANSI,
 			"active positions (shuffle/play/repeat) must use PlayingIndicator color")
-		assert.Contains(t, out, inactiveANSI,
-			"queue position must always use TextSecondary (inactive) color")
 	})
 
 	t.Run("all inactive", func(t *testing.T) {

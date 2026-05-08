@@ -17,8 +17,8 @@ const (
 	RepeatOne
 )
 
-// PlaybackControls renders the four-position transport strip:
-// shuffle  play/pause  queue  repeat
+// PlaybackControls renders the three-position transport strip:
+// shuffle  play/pause  repeat
 //
 // All glyphs are resolved through GlyphFor so the active GlyphMode
 // (unicode/ascii) is respected automatically. Active positions use
@@ -36,7 +36,7 @@ type PlaybackControls struct {
 }
 
 // Render returns the transport strip as an ANSI-styled string.
-// The strip is formatted as: <shuffle>  <play/pause>  <queue>  <repeat>
+// The strip is formatted as: <shuffle>  <play/pause>  <repeat>
 // with two-space gaps between icons.
 func (c PlaybackControls) Render() string {
 	m := ActiveMode()
@@ -59,8 +59,6 @@ func (c PlaybackControls) Render() string {
 		playPause = inactiveStyle.Render(GlyphFor(GlyphPausedPB, m))
 	}
 
-	queue := inactiveStyle.Render(GlyphFor(GlyphQueue, m))
-
 	var repeat string
 	switch c.RepeatMode {
 	case RepeatOne:
@@ -71,5 +69,5 @@ func (c PlaybackControls) Render() string {
 		repeat = inactiveStyle.Render(GlyphFor(GlyphRepeatOff, m))
 	}
 
-	return shuffle + "  " + playPause + "  " + queue + "  " + repeat
+	return shuffle + "  " + playPause + "  " + repeat
 }
