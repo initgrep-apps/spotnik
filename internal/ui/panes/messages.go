@@ -33,6 +33,13 @@ type PlaybackCmdSentMsg struct {
 	Err error
 }
 
+// VolumeIntentMsg is emitted by NowPlayingPane after the volume debounce
+// resolves. TargetVol is the exact percentage to set — the app does not
+// need to read the store. Handled by App.Update() → buildSetVolumeCmd.
+type VolumeIntentMsg struct {
+	TargetVol int
+}
+
 // PlaybackAction identifies what kind of playback command to send.
 // Used in PlaybackRequestMsg so the root app model can dispatch the right call.
 type PlaybackAction int

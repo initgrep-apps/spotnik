@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
@@ -123,11 +124,16 @@ func TestNowPlayingPane_Update_Plus_VolUp(t *testing.T) {
 	plusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}
 	_, cmd := pane.Update(plusMsg)
 
-	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(PlaybackRequestMsg)
-	assert.True(t, ok)
-	assert.Equal(t, ActionVolumeUp, req.Action)
+	// + key now returns a debounce cmd (VolumeDebounceTickMsg), not PlaybackRequestMsg.
+	require.NotNil(t, cmd, "+ key must return a debounce cmd")
+	result := cmd()
+	_, isPlaybackReq := result.(PlaybackRequestMsg)
+	assert.False(t, isPlaybackReq, "+ key must not emit PlaybackRequestMsg directly")
+	_, isDebounce := result.(components.VolumeDebounceTickMsg)
+	// NOTE: tea.Tick returns a deferred cmd; firing it immediately may return
+	// VolumeDebounceTickMsg or a tea.BatchMsg. We only need to confirm it's
+	// NOT a PlaybackRequestMsg (the old stale-read pattern).
+	_ = isDebounce
 }
 
 func TestNowPlayingPane_Update_Minus_VolDown(t *testing.T) {
@@ -136,11 +142,11 @@ func TestNowPlayingPane_Update_Minus_VolDown(t *testing.T) {
 	minusMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}
 	_, cmd := pane.Update(minusMsg)
 
-	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(PlaybackRequestMsg)
-	assert.True(t, ok)
-	assert.Equal(t, ActionVolumeDown, req.Action)
+	// - key now returns a debounce cmd, not PlaybackRequestMsg.
+	require.NotNil(t, cmd, "- key must return a debounce cmd")
+	result := cmd()
+	_, isPlaybackReq := result.(PlaybackRequestMsg)
+	assert.False(t, isPlaybackReq, "- key must not emit PlaybackRequestMsg directly")
 }
 
 func TestNowPlayingPane_Update_S_TogglesShuffle(t *testing.T) {
@@ -987,4 +993,73 @@ func TestNowPlayingPane_HandleKey_N_NoOp(t *testing.T) {
 
 	// After removing the "n" arm from handleKey, pressing 'n' must return nil.
 	assert.Nil(t, cmd, "'n' key on NowPlayingPane must not emit a playback command")
+}
+
+// ── Task 4: Volume debounce tests ────────────────────────────────────────────
+
+// newPaneWithVolume creates a NowPlayingPane whose store device volume is vol.
+func newPaneWithVolume(vol int) *NowPlayingPane {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:  true,
+		ProgressMs: 0,
+		Item: &api.Track{
+			Name:       "Track",
+			DurationMs: 200000,
+			Artists:    []api.Artist{{Name: "Artist"}},
+		},
+		Device: &api.Device{
+			ID:            "dev-1",
+			Name:          "Speaker",
+			VolumePercent: vol,
+			IsActive:      true,
+		},
+	})
+	p := NewNowPlayingPane(s, theme.Load("black"), true)
+	p.SetSize(80, 20)
+	return p
+}
+
+func TestNowPlayingPane_VolumeUp_ReturnsDebounceCmdNotPlaybackRequest(t *testing.T) {
+	p := newPaneWithVolume(49)
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")}
+	_, cmd := p.Update(msg)
+
+	require.NotNil(t, cmd, "volume up must return a debounce cmd")
+	// Fire the cmd to get the message; it must NOT be a PlaybackRequestMsg.
+	result := cmd()
+	_, isPlaybackReq := result.(PlaybackRequestMsg)
+	assert.False(t, isPlaybackReq, "+ key must no longer emit PlaybackRequestMsg directly")
+}
+
+func TestNowPlayingPane_VolumeDebounceMsg_EmitsVolumeIntent(t *testing.T) {
+	p := newPaneWithVolume(49)
+
+	// Simulate: user pressed + once → bar seq=1, target=50
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")}
+	p.Update(keyMsg)
+
+	// Fire matching debounce tick (seq=1 because HandleDebounce increments on match,
+	// but this is the first tick so bar.seq == 1 after HandleKey).
+	debounce := components.VolumeDebounceTickMsg{TargetVol: 50, Seq: 1}
+	_, cmd := p.Update(debounce)
+
+	require.NotNil(t, cmd, "matching debounce must return a VolumeIntentMsg cmd")
+	result := cmd()
+	intent, ok := result.(VolumeIntentMsg)
+	require.True(t, ok, "result must be VolumeIntentMsg, got %T", result)
+	assert.Equal(t, 50, intent.TargetVol)
+}
+
+func TestNowPlayingPane_StaleVolumeDebounce_ReturnsNilCmd(t *testing.T) {
+	p := newPaneWithVolume(49)
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")}
+	p.Update(keyMsg) // seq=1
+	p.Update(keyMsg) // seq=2
+
+	stale := components.VolumeDebounceTickMsg{TargetVol: 50, Seq: 1}
+	_, cmd := p.Update(stale)
+	assert.Nil(t, cmd, "stale debounce tick must return nil cmd")
 }

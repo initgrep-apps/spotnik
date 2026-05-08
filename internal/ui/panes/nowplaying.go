@@ -171,6 +171,12 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PlaybackStateFetchedMsg:
 		return p.handlePlaybackFetched()
 
+	case components.VolumeDebounceTickMsg:
+		if matched, vol := p.volumeBar.HandleDebounce(m); matched {
+			return p, func() tea.Msg { return VolumeIntentMsg{TargetVol: vol} }
+		}
+		return p, nil
+
 	case viz.TickMsg:
 		// Advance the animation frame, then re-arm the tick.
 		p.engine.Advance()
@@ -342,6 +348,9 @@ func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 	if ps != nil {
 		p.localProgressMs = ps.ProgressMs
 		p.engine.SetPlaying(ps.IsPlaying)
+		if ps.Device != nil {
+			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
+		}
 	} else {
 		p.localProgressMs = 0
 		p.engine.SetPlaying(false)
@@ -371,10 +380,10 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		return p, emitPlaybackRequest(ActionPrevious)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":
-		return p, emitPlaybackRequest(ActionVolumeUp)
+		return p, p.volumeBar.HandleKey(+1, confirmedVolume(p.store))
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "-":
-		return p, emitPlaybackRequest(ActionVolumeDown)
+		return p, p.volumeBar.HandleKey(-1, confirmedVolume(p.store))
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "s":
 		return p, emitPlaybackRequest(ActionToggleShuffle)
