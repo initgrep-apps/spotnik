@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -21,6 +23,22 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
+
+// volumeErrorMessage returns a user-friendly string for a volume API error.
+// Network-level errors (timeouts, connection refused, DNS failures, etc.) produce
+// "Check your connection." so the user never sees raw Go error strings.
+// All other errors fall back to a generic message.
+func volumeErrorMessage(err error) string {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return "Check your connection."
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return "Check your connection."
+	}
+	return "Volume change failed"
+}
 
 // clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
 // Called from RateLimitedMsg and unauthorizedMsg handlers, which short-circuit
@@ -711,7 +729,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.toasts.Cmd(uikit.Toast{
 					Intent: uikit.ToastError,
 					Title:  "Volume change failed",
-					Body:   m.Err.Error(),
+					Body:   volumeErrorMessage(m.Err),
 				}),
 			)
 		}

@@ -5,6 +5,7 @@ package app
 
 import (
 	"errors"
+	"net/url"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -50,4 +51,15 @@ func TestBuildSetVolumeCmd_401_EmitsVolumeAppliedMsgWithUnauthorized(t *testing.
 	assert.Error(t, sent.Err)
 	var unauth *api.UnauthorizedError
 	assert.True(t, errors.As(sent.Err, &unauth), "Err must be an UnauthorizedError")
+}
+
+// TestVolumeErrorMessage_NetworkErrors returns a user-friendly message for network
+// failures so the user never sees raw Go error strings.
+func TestVolumeErrorMessage_NetworkErrors(t *testing.T) {
+	assert.Equal(t, "Check your connection.", volumeErrorMessage(&url.Error{Op: "Post", Err: errors.New("connection refused")}))
+}
+
+// TestVolumeErrorMessage_GenericError returns a generic fallback for non-network errors.
+func TestVolumeErrorMessage_GenericError(t *testing.T) {
+	assert.Equal(t, "Volume change failed", volumeErrorMessage(errors.New("something else")))
 }
