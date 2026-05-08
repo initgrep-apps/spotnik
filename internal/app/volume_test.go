@@ -58,14 +58,15 @@ func TestApp_VolumeIntentMsg_NilPlayer_ReturnsErrNilClient(t *testing.T) {
 	// Use newVolumeTestApp with nil mock so premium is set but no player is injected.
 	a := newVolumeTestApp(nil)
 
-	intent := panes.VolumeIntentMsg{TargetVol: 50}
+	intent := panes.VolumeIntentMsg{TargetVol: 50, Seq: 7}
 	_, cmd := a.Update(intent)
 	require.NotNil(t, cmd)
 
 	result := cmd()
-	sent, ok := result.(panes.PlaybackCmdSentMsg)
+	sent, ok := result.(panes.VolumeAppliedMsg)
 	require.True(t, ok)
 	assert.Error(t, sent.Err, "nil player must return an error")
+	assert.Equal(t, 7, sent.Seq, "nil player must forward intentSeq")
 }
 
 // TestApp_VolumeDebounce_FiveRapidPresses_SendsOneCall verifies that 5 rapid '+'

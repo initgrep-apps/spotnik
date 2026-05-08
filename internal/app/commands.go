@@ -95,7 +95,7 @@ func (a *App) buildSetVolumeCmd(targetVol, intentSeq int) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackCmdSentMsg{Err: errNilClient}
+			return panes.VolumeAppliedMsg{Seq: intentSeq, Err: errNilClient}
 		}
 		ctx := api.WithPriority(context.Background(), api.Interactive)
 		err := player.SetVolume(ctx, targetVol)

@@ -685,6 +685,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
 			// Re-route typed errors to their existing handlers after bar is cleared.
 			var rateLimitErr *api.RateLimitError
 			if errors.As(m.Err, &rateLimitErr) {
@@ -692,6 +695,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if isUnauthorizedError(m.Err) {
 				return a.handleMsg(unauthorizedMsg{})
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				return a, tea.Batch(
+					fetchPlaybackStateCmd(a.player, api.Background),
+					a.toasts.Cmd(uikit.Toast{
+						Intent: uikit.ToastWarning,
+						Title:  "Spotify Premium required",
+					}),
+				)
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, api.Interactive),
