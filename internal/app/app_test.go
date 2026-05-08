@@ -413,7 +413,8 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 	}
 }
 
-// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast with the error text.
+// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a clean toast via
+// ErrorMapper — raw error strings must not appear; the body should be the friendly fallback.
 // Uses the two-pass pattern: execute the batch cmd and feed alert messages back to render the toast.
 func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
@@ -422,7 +423,8 @@ func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	a = m.(*app.App)
 
-	errMsg := panes.PlaybackCmdSentMsg{Err: fmt.Errorf("playback failed")}
+	rawErr := fmt.Errorf("playback failed")
+	errMsg := panes.PlaybackCmdSentMsg{Err: rawErr}
 	_, cmd := a.Update(errMsg)
 	require.NotNil(t, cmd, "error result should produce refetch + alert toast cmd")
 
@@ -438,7 +440,10 @@ func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	} else if batchMsg != nil {
 		a.Update(batchMsg)
 	}
-	assert.Contains(t, a.View(), "playback failed", "error toast should show the error text")
+	view := a.View()
+	// ErrorMapper maps generic errors to "Playback command failed" title and a friendly body.
+	assert.Contains(t, view, "Playback command failed", "toast should show operation-specific title")
+	assert.NotContains(t, view, rawErr.Error(), "raw error text must not be shown to the user")
 }
 
 // TestApp_PlaybackCmdSentMsg_NoError verifies that a successful playback cmd triggers refetch.

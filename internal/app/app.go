@@ -71,13 +71,14 @@ type App struct {
 	// BubbleUp's View() returns empty string by design; Render() overlays alerts.
 	// toasts wraps alerts to provide the typed Toast API. It holds a pointer to the
 	// alerts field so it automatically reflects theme-switch re-assignments.
-	toasts  *uikit.ToastManager
-	gateway *api.Gateway // centralized HTTP gateway shared across all API clients
-	player  api.PlayerAPI
-	library api.LibraryAPI
-	search  api.SearchAPI
-	devices api.DevicesAPI
-	userAPI api.UserAPI
+	toasts      *uikit.ToastManager
+	errorMapper *uikit.ErrorMapper // translates API errors to user-friendly Toast values
+	gateway     *api.Gateway       // centralized HTTP gateway shared across all API clients
+	player      api.PlayerAPI
+	library     api.LibraryAPI
+	search      api.SearchAPI
+	devices     api.DevicesAPI
+	userAPI     api.UserAPI
 
 	// layout manages the grid, focus, preset, and page system.
 	layout *layout.Manager
@@ -403,6 +404,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	// Wire the typed Toast API. ToastManager holds &a.alerts so theme-switch
 	// re-assignments to a.alerts are automatically reflected.
 	a.toasts = uikit.NewToastManager(&a.alerts)
+	// Wire the centralized error mapper — translates API errors to user-facing Toasts.
+	a.errorMapper = &uikit.ErrorMapper{}
 
 	// Apply saved layout preset (Page A only).
 	// SetPreset is a no-op for out-of-range indices; log a warning when it doesn't take.

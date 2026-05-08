@@ -73,7 +73,7 @@ type ErrorMapper struct{}
 //  3. api.RateLimitError → ToastWarning "Rate-limited" with retry-after body
 //  4. api.ForbiddenError → ToastWarning "Spotify Premium required"
 //  5. context.Canceled / context.DeadlineExceeded → ToastError "Request took too long."
-//  6. net.Error (timeout/temporary) or *url.Error → ToastError "Check your connection."
+//  6. net.Error (timeout) or *url.Error / *net.DNSError → ToastError "Check your connection."
 //  7. Everything else (5xx, generic) → ToastError "Spotify is having trouble."
 //
 // A zero Toast (Intent == 0) means silent drop or delegated path.
@@ -128,8 +128,9 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 	}
 
 	// Priority 6: Network-level errors — connection guidance.
+	// NOTE: net.Error.Temporary() is deprecated since Go 1.18; use Timeout() only.
 	var netErr net.Error
-	if errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) {
+	if errors.As(err, &netErr) && netErr.Timeout() {
 		return Toast{
 			Intent: ToastError,
 			Title:  em.titleFor(op),
