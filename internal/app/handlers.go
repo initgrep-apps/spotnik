@@ -1,6 +1,6 @@
 // central message dispatch for the root Bubble Tea model — called by
-// Update() for every non-key, non-mouse message; routes data-carrying Msg payloads to
-// Store writes and returns follow-up commands.
+// Update() for every incoming message; routes Msg payloads to Store writes
+// and returns follow-up commands.
 package app
 
 import (
@@ -59,9 +59,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.onboardingStep = stepRegister
 				a.onboardingField.Focus()
 			case a.needsAuth:
-				a.currentView = viewAuth
-				a.authStatus = "Opening browser for authorization..."
-				return a, prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh)
+				// Returning users with a saved Client ID but missing/expired token
+				// route directly to stepOAuth so they share the rich Step 2 UI
+				// (URL box, info box, permissions overlay) with first-launch users.
+				a.currentView = viewOnboarding
+				a.onboardingStep = stepOAuth
+				return a, tea.Batch(
+					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
+					a.onboardingSpinner.Init(),
+				)
 			default:
 				a.currentView = viewGrid
 			}
@@ -70,13 +76,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case authPreparedMsg:
 		a.onboardingAuthURL = m.authURL
-		a.authURL = m.authURL
+		var browserNote tea.Cmd
 		if m.browserErr != nil {
-			a.authStatus = "Browser didn't open. Visit the URL above manually."
-		} else {
-			a.authStatus = "Waiting for authorization..."
+			// Browser launch failed — surface it as an info toast so the user knows
+			// to use the URL displayed below rather than waiting for a browser window.
+			browserNote = a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Browser didn't open",
+				Body:   "Use the URL shown below to authorize manually.",
+			})
 		}
-		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh)
+		return a, tea.Batch(
+			waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh),
+			browserNote,
+		)
 
 	case authSuccessMsg:
 		// OAuth code exchange succeeded. Store the token and initialise clients so they
@@ -84,13 +97,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.onboardingClose()
 		a.needsAuth = false
 		a.initAPIClients(m.accessToken)
+		// Drop the permissions overlay if it was open — auth is done, the notice is no
+		// longer relevant and must not bleed through to the grid view.
+		a.onboardingPermissionsOverlay = nil
 		// Resolve the spinner to ✓; after 1.2 s SpinnerDoneMsg fires the grid transition.
 		sp, cmd := a.onboardingSpinner.Done("Authorized")
 		a.onboardingSpinner = sp
 		return a, cmd
 
 	case uikit.SpinnerDoneMsg:
-		// 1.2 s hold expired — switch to grid view and announce success.
+		// Spinner has finished its success-state animation — enter the grid view.
 		a.currentView = viewGrid
 		// Start data fetching and tick loop now that the view is live.
 		var paneCmds []tea.Cmd
@@ -111,28 +127,31 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Title:  "Signed in",
 			Body:   "Welcome back to Spotnik.",
 		}))
+		// Defensive clear: if the overlay survived authSuccessMsg (e.g. tests inject
+		// SpinnerDoneMsg directly), drop it before transitioning to the grid view so
+		// it can never bleed into the main TUI.
+		a.onboardingPermissionsOverlay = nil
 		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
-		if a.currentView == viewOnboarding {
-			// Resolve spinner to ✗; after 2 s SpinnerFailMsg transitions to stepError.
-			a.onboardingError = m.err.Error()
-			sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
-			a.onboardingSpinner = sp
-			return a, cmd
-		}
-		a.authStatus = fmt.Sprintf("Error: %s — press q to quit", m.err.Error())
-		return a, nil
+		// API clients are not initialised until authSuccessMsg, so this message
+		// can only arrive while viewOnboarding is active.
+		// Resolve spinner to ✗; SpinnerFailMsg then transitions to stepError.
+		a.onboardingError = m.err.Error()
+		sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
+		a.onboardingSpinner = sp
+		return a, cmd
 
 	case uikit.SpinnerFailMsg:
-		// 2 s hold expired — show the error panel so the user can retry.
+		// Spinner has finished its failure-state animation — show the error panel.
 		a.onboardingStep = stepError
+		a.onboardingPermissionsOverlay = nil
 		return a, nil
 
 	case onboardingClientIDSavedMsg:
 		a.clientID = m.clientID
 		a.onboardingStep = stepOAuth
-		a.authStatus = "Opening browser for authorization..."
+		a.onboardingPermissionsOverlay = nil
 		return a, tea.Batch(
 			prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
 			a.onboardingSpinner.Init(),
@@ -264,6 +283,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.helpOverlay != nil {
 			a.helpOverlay.SetSize(m.Width, m.Height)
+		}
+		if a.onboardingPermissionsOverlay != nil {
+			a.onboardingPermissionsOverlay.SetSize(m.Width, m.Height)
 		}
 		if toastCmd != nil {
 			return a, toastCmd
@@ -945,6 +967,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.helpOverlay != nil {
 			a.helpOverlay.SetTheme(newTheme)
 		}
+		if a.onboardingPermissionsOverlay != nil {
+			a.onboardingPermissionsOverlay.SetTheme(newTheme)
+		}
 		// Close the overlay.
 		a.showThemeSwitcher = false
 		a.themeOverlay = nil
@@ -971,6 +996,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.HelpOverlayClosedMsg:
 		// Help overlay closed via Esc — close overlay without any state change.
 		return a.closeHelp()
+
+	case panes.OnboardingPermissionsOverlayClosedMsg:
+		// Onboarding permissions overlay closed via Esc.
+		return a.closeOnboardingPermissions()
 
 	case panes.ThemeOverlayClosedMsg:
 		// Theme overlay closed via Esc — close overlay without changing theme.

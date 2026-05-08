@@ -105,15 +105,15 @@ func (p *PlaylistsClient) AddTracksToPlaylist(ctx context.Context, playlistID st
 // via DELETE /playlists/{id}/items. uris should be Spotify track URIs.
 // Errors are wrapped with context.
 func (p *PlaylistsClient) RemoveTracksFromPlaylist(ctx context.Context, playlistID string, uris []string) error {
-	type trackItem struct {
+	type item struct {
 		URI string `json:"uri"`
 	}
-	tracks := make([]trackItem, len(uris))
+	items := make([]item, len(uris))
 	for i, u := range uris {
-		tracks[i] = trackItem{URI: u}
+		items[i] = item{URI: u}
 	}
 	reqBody := map[string]interface{}{
-		"tracks": tracks,
+		"items": items,
 	}
 	encoded, err := json.Marshal(reqBody)
 	if err != nil {
@@ -127,7 +127,7 @@ func (p *PlaylistsClient) RemoveTracksFromPlaylist(ctx context.Context, playlist
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// The Spotify API returns 200 with a snapshot_id.
+	// Spotify returns 200 with a snapshot_id; we discard it.
 	var result struct {
 		SnapshotID string `json:"snapshot_id"`
 	}

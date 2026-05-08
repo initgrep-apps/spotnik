@@ -117,20 +117,8 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
-	// During auth, only allow quit keys and clipboard copy — ignore everything else.
-	if a.currentView == viewAuth {
-		if m.Type == tea.KeyCtrlC || (m.Type == tea.KeyRunes && string(m.Runes) == "q") || m.Type == tea.KeyEsc {
-			// Close the callback server before quitting so it doesn't leak.
-			a.onboardingClose()
-			return a, tea.Quit
-		}
-		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
-			return a, copyToClipboardCmd(a.authURL)
-		}
-		return a, nil
-	}
-
 	// During onboarding, route all keys through the step-aware handler.
+	// This covers both first-launch (stepRegister) and returning users (stepOAuth).
 	if a.currentView == viewOnboarding {
 		return a.handleOnboardingKey(m)
 	}
@@ -530,6 +518,19 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case stepOAuth:
+		// While the permissions overlay is open, route all keys to it.
+		// Esc round-trips through OnboardingPermissionsOverlayClosedMsg.
+		if a.onboardingPermissionsOverlay != nil {
+			updated, cmd := a.onboardingPermissionsOverlay.Update(m)
+			if po, ok := updated.(*panes.OnboardingPermissionsOverlay); ok {
+				a.onboardingPermissionsOverlay = po
+			}
+			return a, cmd
+		}
+		// 'v' opens the permissions overlay only on stepOAuth.
+		if m.Type == tea.KeyRunes && string(m.Runes) == "v" {
+			return a.openOnboardingPermissions()
+		}
 		// c → copy auth URL to clipboard via OSC 52; toast is emitted by the clipboardCopiedMsg handler.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
 			return a, copyToClipboardCmd(a.onboardingAuthURL)

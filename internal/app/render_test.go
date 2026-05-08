@@ -797,10 +797,12 @@ func TestRenderOnboardingRegister_ContainsExpectedContent(t *testing.T) {
 }
 
 // TestRenderOnboardingOAuth_ContainsExpectedContent verifies the Step 2 screen
-// contains the step title, full auth URL (never truncated), spinner output, and copy hint.
+// contains the step title, full auth URL (never truncated), spinner output,
+// the new "About these permissions" inline panel, and the v/c/q hints.
 func TestRenderOnboardingOAuth_ContainsExpectedContent(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 160
+	a.height = 50
 	a.onboardingAuthURL = "https://accounts.spotify.com/authorize?client_id=abc123&scope=user-read-playback-state"
 	result := a.renderOnboardingOAuth()
 
@@ -808,6 +810,9 @@ func TestRenderOnboardingOAuth_ContainsExpectedContent(t *testing.T) {
 	assert.Contains(t, result, "Authorize Spotnik with Spotify", "OAuth screen must contain step title")
 	assert.Contains(t, result, "https://accounts.spotify.com/authorize", "OAuth screen must show the auth URL")
 	assert.Contains(t, result, "Waiting for authorization", "OAuth screen must show spinner status text")
+	assert.Contains(t, result, "About these permissions", "OAuth screen must include the inline permissions notice")
+	assert.Contains(t, result, "All Spotify access stays on this device", "OAuth screen must include the privacy line")
+	assert.Contains(t, result, "view permissions", "OAuth screen must show the v hint")
 	assert.Contains(t, result, "copy URL", "OAuth screen must show copy URL hint")
 	assert.Contains(t, result, "╭", "OAuth screen must use rounded borders")
 }
@@ -995,6 +1000,25 @@ func TestRenderOnboardingError_panelTitle(t *testing.T) {
 	// Panel title embedded in border: "╭─ Step 2 of 2 — Authorization Failed..."
 	assert.Contains(t, view, "╭─ Step 2 of 2")
 	assert.Contains(t, view, "Authorization Failed")
+}
+
+// TestRenderOnboarding_PermissionsOverlay_Composited verifies that when the
+// onboarding permissions overlay is open on stepOAuth, the rendered output
+// shows the overlay's content on top of the Step 2 background.
+func TestRenderOnboarding_PermissionsOverlay_Composited(t *testing.T) {
+	a := newRenderTestApp()
+	a.width = 160
+	a.height = 50
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	a.onboardingAuthURL = "https://accounts.spotify.com/authorize?client_id=abc"
+	a.openOnboardingPermissions()
+
+	result := a.renderOnboarding()
+
+	assert.Contains(t, result, "Permissions Spotnik requests", "overlay border title must be present")
+	assert.Contains(t, result, "Read access", "overlay body must include Read access section")
+	assert.Contains(t, result, "Write access", "overlay body must include Write access section")
 }
 
 // stripANSI removes ANSI escape sequences from s, returning plain text.

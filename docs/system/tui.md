@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-`internal/uikit` formalises every visible surface of the Spotnik TUI into 18 typed
+`internal/uikit` formalises every visible surface of the Spotnik TUI into 20 typed
 primitives. Before it existed, every pane composed `lipgloss.NewStyle()` values inline —
 duplicating spacing, colour logic, and border geometry. The package solves three problems:
 
@@ -1082,6 +1082,61 @@ different colours). The primitive uses catalogue-intent glyphs exclusively.
 ascii output contains `||`, `Q`, `sh`, `ro`, no unicode glyphs;
 `TestPlaybackControls_RepeatModes` — all three `RepeatMode` values render correct
 glyph in both modes.
+
+---
+
+### 3.20 InfoBox
+
+**Purpose:** Inline titled bordered notice block for use inside a larger panel.
+Fills the gap between `URLBox` (single-line code/URL), `Panel` (full-viewport
+screen), and `OverlayChrome` (floating modal) — for example the "About these
+permissions" block on the OAuth onboarding screen.
+
+**Fields:**
+
+```go
+type InfoBox struct {
+    Title string       // emphasized first line inside the box
+    Body  string       // wrapped content displayed below the title
+    Width int          // total column width including borders
+    Theme theme.Theme
+}
+```
+
+**Rendering (unicode):**
+
+```
+╭─────────────────────────────────────────────╮
+│ About these permissions                     │
+│ All Spotify access stays on this device...  │
+╰─────────────────────────────────────────────╯
+```
+
+**Rendering (ascii):**
+
+```
++---------------------------------------------+
+| About these permissions                     |
+| All Spotify access stays on this device...  |
++---------------------------------------------+
+```
+
+**Roles:**
+
+| Field | Role |
+|---|---|
+| Border | Muted (`TextMuted` colour token) |
+| Title | Accent + bold |
+| Body | TextPrimary |
+
+**Glyphs:** same border set as PaneChrome (corners `╭╮╰╯` / `+`, rules `─│` / `-|`).
+
+**Lifecycle:** stateless value — call `Render()` directly from `View()`.
+
+**Tests:** `TestInfoBox_RendersTitleAndBody` — title and body appear in output, rounded
+border present in unicode mode; `TestInfoBox_WrapsLongBody` — line count increases with
+a long body (proves wrap, not truncation); `TestInfoBox_NarrowWidthGuard` — no panic at
+very small widths.
 
 ---
 

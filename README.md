@@ -225,9 +225,6 @@ automatic retry-after.
 | `f` | Toggle filter | List panes |
 | `g` | Cycle time range | TopTracks, TopArtists |
 | `A` | Add to queue | Search, list panes |
-| `i` | Like or unlike | Liked Songs |
-| `x` | Remove from playlist | Playlists track view |
-| `Shift+↑` / `Shift+↓` | Reorder track | Playlists |
 
 ### Profile overlay
 

@@ -106,9 +106,8 @@ Page B panes, and Page B number keys (`1`–`5`) do not toggle Page A panes.
 
 - Keys `1`-`8` **toggle** pane visibility on Page A; keys `1`-`5` toggle pane visibility on Page B (btop-style hide/show), not pane-jump
 - `0` toggles between Page A and Page B
-- Playback keys (`Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→`) always route to NowPlaying regardless of focus
+- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`) always route to NowPlaying regardless of focus
 - `A` for "add to queue" in search overlay and list panes
-- `i` for "like/unlike track" in Liked Songs pane
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
 ### Pane Interface

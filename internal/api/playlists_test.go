@@ -153,12 +153,12 @@ func TestRemoveTracksFromPlaylist_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "/v1/playlists/playlist-123/items", capturedPath)
-	tracks, ok := capturedBody["tracks"].([]interface{})
+	items, ok := capturedBody["items"].([]interface{})
+	require.True(t, ok, "DELETE body must use 'items' field per Spotify Feb 2026 spec, not 'tracks'")
+	require.Len(t, items, 1)
+	item, ok := items[0].(map[string]interface{})
 	require.True(t, ok)
-	require.Len(t, tracks, 1)
-	track, ok := tracks[0].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "spotify:track:abc", track["uri"])
+	assert.Equal(t, "spotify:track:abc", item["uri"])
 }
 
 // TestReorderPlaylistTracks covers success and error variants for ReorderPlaylistTracks.

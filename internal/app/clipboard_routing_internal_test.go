@@ -25,22 +25,23 @@ func decodeOSC52(t *testing.T, out string) string {
 	return string(decoded)
 }
 
-func TestHandleKeyMsg_viewAuth_c_dispatchesCopyCmd(t *testing.T) {
+func TestHandleKeyMsg_stepOAuth_c_dispatchesCopyCmd(t *testing.T) {
 	a := newTestApp(false)
-	a.currentView = viewAuth
-	a.authURL = "https://example.test/authorize"
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	a.onboardingAuthURL = "https://example.test/authorize"
 
 	_, cmd := a.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
-	require.NotNil(t, cmd, "viewAuth 'c' must dispatch copyToClipboardCmd")
+	require.NotNil(t, cmd, "stepOAuth 'c' must dispatch copyToClipboardCmd")
 
 	var msg tea.Msg
 	out := captureStderr(t, func() { msg = cmd() })
 	_, ok := msg.(clipboardCopiedMsg)
-	require.True(t, ok, "viewAuth 'c' cmd must emit clipboardCopiedMsg; got %T", msg)
+	require.True(t, ok, "stepOAuth 'c' cmd must emit clipboardCopiedMsg; got %T", msg)
 
 	// Decode the captured OSC 52 payload — proves the cmd encoded the right URL,
 	// not just that some clipboard cmd was dispatched.
-	assert.Equal(t, a.authURL, decodeOSC52(t, out))
+	assert.Equal(t, a.onboardingAuthURL, decodeOSC52(t, out))
 }
 
 func TestHandleOnboardingKey_stepRegister_c_emptyInput_dispatchesCopyCmd(t *testing.T) {
