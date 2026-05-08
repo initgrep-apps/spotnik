@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -21,6 +23,22 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
+
+// volumeErrorMessage returns a user-friendly string for a volume API error.
+// Network-level errors (timeouts, connection refused, DNS failures, etc.) produce
+// "Check your connection." so the user never sees raw Go error strings.
+// All other errors fall back to a generic message.
+func volumeErrorMessage(err error) string {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return "Check your connection."
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return "Check your connection."
+	}
+	return "Volume change failed"
+}
 
 // clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
 // Called from RateLimitedMsg and unauthorizedMsg handlers, which short-circuit
@@ -673,7 +691,49 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Title:  "Spotify Premium required",
 			})
 		}
-		return a, a.buildSetVolumeCmd(m.TargetVol)
+		return a, a.buildSetVolumeCmd(m.TargetVol, m.Seq)
+
+	case panes.VolumeAppliedMsg:
+		// Always confirm or cancel the bar's pending state first, before dispatching
+		// downstream effects. This prevents concurrent polls from overriding the bar.
+		if np := a.nowPlayingPane(); np != nil {
+			updated, _ := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+		}
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
+			// Re-route typed errors to their existing handlers after bar is cleared.
+			var rateLimitErr *api.RateLimitError
+			if errors.As(m.Err, &rateLimitErr) {
+				return a.handleMsg(panes.RateLimitedMsg{RetryAfterSecs: rateLimitErr.RetryAfter})
+			}
+			if isUnauthorizedError(m.Err) {
+				return a.handleMsg(unauthorizedMsg{})
+			}
+			var forbiddenErr *api.ForbiddenError
+			if errors.As(m.Err, &forbiddenErr) {
+				return a, tea.Batch(
+					fetchPlaybackStateCmd(a.player, api.Background),
+					a.toasts.Cmd(uikit.Toast{
+						Intent: uikit.ToastWarning,
+						Title:  "Spotify Premium required",
+					}),
+				)
+			}
+			return a, tea.Batch(
+				fetchPlaybackStateCmd(a.player, api.Interactive),
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Volume change failed",
+					Body:   volumeErrorMessage(m.Err),
+				}),
+			)
+		}
+		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 
 	case panes.PlaybackRequestMsg:
 		return a, a.buildPlaybackAPICmd(m.Action)

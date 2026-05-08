@@ -368,7 +368,7 @@ func TestVolumeBar_HandleKey_UpdatesCurrentVolImmediately(t *testing.T) {
 	// Verify seq and hasPending via HandleDebounce.
 	b.SetConfirmed(0)
 	// If hasPending, SetConfirmed is ignored — currentVol stays at 51.
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
 	assert.True(t, matched)
 	assert.Equal(t, 51, vol)
 }
@@ -378,7 +378,7 @@ func TestVolumeBar_HandleKey_AccumulatesFromPending(t *testing.T) {
 	b.SetConfirmed(50)
 	b.HandleKey(+1, 50) // seq=1, currentVol=51, pending
 	b.HandleKey(+1, 50) // must use currentVol=51 as base, not confirmedVol=50 → currentVol=52, seq=2
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 52, Seq: 2})
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 52, Seq: 2})
 	assert.True(t, matched, "second keypress uses pending vol as base")
 	assert.Equal(t, 52, vol)
 }
@@ -387,7 +387,7 @@ func TestVolumeBar_HandleKey_ClampsAtMax(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	b.SetConfirmed(100)
 	b.HandleKey(+1, 100)
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 100, Seq: 1})
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 100, Seq: 1})
 	assert.True(t, matched)
 	assert.Equal(t, 100, vol, "clamped at 100")
 }
@@ -396,7 +396,7 @@ func TestVolumeBar_HandleKey_ClampsAtMin(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	b.SetConfirmed(0)
 	b.HandleKey(-1, 0)
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 0, Seq: 1})
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 0, Seq: 1})
 	assert.True(t, matched)
 	assert.Equal(t, 0, vol, "clamped at 0")
 }
@@ -406,26 +406,28 @@ func TestVolumeBar_HandleDebounce_StaleDiscarded(t *testing.T) {
 	b.SetConfirmed(50)
 	b.HandleKey(+1, 50) // seq=1
 	b.HandleKey(+1, 50) // seq=2 — supersedes seq=1
-	matched, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	matched, _, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
 	assert.False(t, matched, "stale seq must be discarded")
 }
 
-func TestVolumeBar_HandleDebounce_ClearsPending(t *testing.T) {
+func TestVolumeBar_HandleDebounce_DoesNotClearPending(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	b.SetConfirmed(50)
-	b.HandleKey(+1, 50)                                            // hasPending=true
-	b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1}) // clears pending
-	b.SetConfirmed(30)                                             // now accepted
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	b.HandleKey(+1, 50)                                            // hasPending=true, seq=1
+	b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1}) // must NOT clear pending
+	b.SetConfirmed(30)                                             // must still be a no-op
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
 	assert.False(t, matched, "seq already consumed — second call is stale")
 	_ = vol
-	// After pending cleared, a fresh HandleKey uses the SetConfirmed value.
-	// Note: HandleDebounce increments seq on match (double-fire guard), so seq is
-	// now 2 after the first HandleDebounce. HandleKey increments to 3.
+	// Verify SetConfirmed was ignored: currentVol should still be 51.
+	out := b.Render()
+	assert.Contains(t, out, "51%", "currentVol must remain 51 after SetConfirmed(30) while pending")
+	// After pending is still true, a fresh HandleKey uses the pending value as base.
+	// HandleDebounce incremented seq to 2 on match. HandleKey increments to 3.
 	b.HandleKey(+1, 30)
-	matched2, vol2 := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 31, Seq: 3})
+	matched2, vol2, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 52, Seq: 3})
 	assert.True(t, matched2)
-	assert.Equal(t, 31, vol2)
+	assert.Equal(t, 52, vol2)
 }
 
 func TestVolumeBar_SetConfirmed_NoOpWhenPending(t *testing.T) {
@@ -434,7 +436,7 @@ func TestVolumeBar_SetConfirmed_NoOpWhenPending(t *testing.T) {
 	b.HandleKey(+1, 50) // hasPending=true, currentVol=51
 	b.SetConfirmed(30)  // must be ignored
 	// currentVol still 51; verify via HandleDebounce
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
 	assert.True(t, matched)
 	assert.Equal(t, 51, vol)
 }
@@ -444,9 +446,129 @@ func TestVolumeBar_SetConfirmed_UpdatesWhenNoPending(t *testing.T) {
 	b.SetConfirmed(50)
 	b.SetConfirmed(75) // no pending — should update
 	b.HandleKey(+1, 75)
-	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 76, Seq: 1})
+	matched, vol, _ := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 76, Seq: 1})
 	assert.True(t, matched)
 	assert.Equal(t, 76, vol)
+}
+
+// --------------------------------------------------------------------------
+// ConfirmFromAPI / CancelPending
+// --------------------------------------------------------------------------
+
+func TestVolumeBar_ConfirmFromAPI_ConfirmsOnSeqMatch(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1, hasPending=true, currentVol=51
+
+	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	require.True(t, matched)
+	// After HandleDebounce, b.seq == 2 (intentSeq+1).
+	b.ConfirmFromAPI(intentSeq, 55)
+
+	// currentVol should be 55, but hasPending stays true until a matching poll arrives.
+	out := b.Render()
+	assert.Contains(t, out, "55%")
+	// Stale poll with old volume should be blocked while hasPending is true.
+	b.SetConfirmed(50)
+	out = b.Render()
+	assert.Contains(t, out, "55%", "stale poll must not snap bar back")
+	// Matching poll clears hasPending.
+	b.SetConfirmed(55)
+	out = b.Render()
+	assert.Contains(t, out, "55%")
+	// Now SetConfirmed should be accepted since hasPending=false.
+	b.SetConfirmed(30)
+	out = b.Render()
+	assert.Contains(t, out, "30%")
+}
+
+func TestVolumeBar_ConfirmFromAPI_NoOpOnSeqMismatch(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1
+
+	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	require.True(t, matched)
+	// b.seq is now 2. Start a new burst (seq=3).
+	b.HandleKey(+1, 51) // seq=3, currentVol=52
+
+	// ConfirmFromAPI with the old intentSeq should be a no-op.
+	b.ConfirmFromAPI(intentSeq, 55)
+	// hasPending should still be true, currentVol should remain 52.
+	out := b.Render()
+	assert.Contains(t, out, "52%")
+	// SetConfirmed should still be ignored.
+	b.SetConfirmed(0)
+	out = b.Render()
+	assert.Contains(t, out, "52%")
+}
+
+func TestVolumeBar_CancelPending_ClearsOnSeqMatch(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1, hasPending=true, currentVol=51
+
+	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	require.True(t, matched)
+	// After HandleDebounce, b.seq == 2 (intentSeq+1).
+	b.CancelPending(intentSeq, 50) // revert to last confirmed store value
+
+	// hasPending should be cleared, currentVol should revert to confirmed store value.
+	out := b.Render()
+	assert.Contains(t, out, "50%", "error must revert bar to confirmed store value")
+	// SetConfirmed should now be accepted.
+	b.SetConfirmed(30)
+	out = b.Render()
+	assert.Contains(t, out, "30%")
+}
+
+func TestVolumeBar_CancelPending_NoOpOnSeqMismatch(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1
+
+	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	require.True(t, matched)
+	// b.seq is now 2. Start a new burst (seq=3).
+	b.HandleKey(+1, 51) // seq=3, currentVol=52
+
+	// CancelPending with the old intentSeq should be a no-op.
+	b.CancelPending(intentSeq, 50)
+	// hasPending should still be true, currentVol should remain 52.
+	out := b.Render()
+	assert.Contains(t, out, "52%")
+	// SetConfirmed should still be ignored.
+	b.SetConfirmed(0)
+	out = b.Render()
+	assert.Contains(t, out, "52%")
+}
+
+// TestVolumeBar_SetConfirmed_BlocksStalePoll verifies that after ConfirmFromAPI,
+// a stale poll with the old volume is blocked, and only a matching poll clears
+// hasPending. This prevents the bar from flickering back and forth.
+func TestVolumeBar_SetConfirmed_BlocksStalePoll(t *testing.T) {
+	b := newTestGradientVolumeBar(40)
+	b.SetConfirmed(50)
+	b.HandleKey(+1, 50) // seq=1, hasPending=true, currentVol=51
+
+	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+	require.True(t, matched)
+	b.ConfirmFromAPI(intentSeq, 55) // currentVol=55, hasPending stays true
+
+	// Stale poll with old volume must be blocked.
+	b.SetConfirmed(50)
+	out := b.Render()
+	assert.Contains(t, out, "55%", "stale poll must not snap bar back")
+
+	// Matching poll clears hasPending.
+	b.SetConfirmed(55)
+	out = b.Render()
+	assert.Contains(t, out, "55%")
+
+	// Now SetConfirmed updates freely.
+	b.SetConfirmed(30)
+	out = b.Render()
+	assert.Contains(t, out, "30%")
 }
 
 // TestGradientVolumeBar_AsciiMode verifies that in ASCII mode the music-note
