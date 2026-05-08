@@ -666,6 +666,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 
 	case panes.VolumeIntentMsg:
+		// Gate: free-tier users cannot control volume — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
+		}
 		return a, a.buildSetVolumeCmd(m.TargetVol)
 
 	case panes.PlaybackRequestMsg:

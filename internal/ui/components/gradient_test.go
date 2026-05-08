@@ -413,9 +413,9 @@ func TestVolumeBar_HandleDebounce_StaleDiscarded(t *testing.T) {
 func TestVolumeBar_HandleDebounce_ClearsPending(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	b.SetConfirmed(50)
-	b.HandleKey(+1, 50)                                             // hasPending=true
+	b.HandleKey(+1, 50)                                            // hasPending=true
 	b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1}) // clears pending
-	b.SetConfirmed(30)                                              // now accepted
+	b.SetConfirmed(30)                                             // now accepted
 	matched, vol := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
 	assert.False(t, matched, "seq already consumed — second call is stale")
 	_ = vol
