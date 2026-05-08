@@ -177,18 +177,37 @@ func (b *GradientVolumeBar) HandleKey(delta, confirmedVol int) tea.Cmd {
 }
 
 // HandleDebounce checks whether the debounce tick is current.
-// Returns (true, targetVol) when seq matches — the caller should emit
-// VolumeIntentMsg{TargetVol: targetVol} to trigger the API call.
-// Returns (false, 0) when the tick is stale (a newer keypress superseded it).
-// Increments seq on a successful match so duplicate ticks with the same seq
-// are discarded on subsequent calls.
-func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched bool, targetVol int) {
+// Returns (true, targetVol, intentSeq) when matched — the caller must forward
+// intentSeq through VolumeIntentMsg so ConfirmFromAPI/CancelPending can guard
+// against concurrent bursts. hasPending stays true until the API call returns.
+// Returns (false, 0, 0) when the tick is stale (newer keypress superseded it).
+func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched bool, targetVol, intentSeq int) {
 	if m.Seq != b.seq {
-		return false, 0
+		return false, 0, 0
 	}
-	b.hasPending = false
-	b.seq++ // prevent double-fire: any future tick with the same seq is now stale
-	return true, m.TargetVol
+	b.seq++ // double-fire guard: any future tick with this same seq is now stale
+	return true, m.TargetVol, m.Seq
+}
+
+// ConfirmFromAPI sets currentVol to the API-confirmed value and clears hasPending,
+// but only when no newer burst has started. If the user pressed again while the
+// API call was in flight (b.seq > intentSeq+1), the confirmation is discarded
+// and the new burst's debounce will produce its own VolumeAppliedMsg.
+func (b *GradientVolumeBar) ConfirmFromAPI(intentSeq, vol int) {
+	if b.seq == intentSeq+1 {
+		b.currentVol = vol
+		b.hasPending = false
+	}
+}
+
+// CancelPending clears hasPending without changing currentVol, only when no
+// newer burst has started. Call this on API error so the next Spotify poll can
+// reconcile the bar via SetConfirmed. If a newer burst is in flight the guard
+// fires and the bar correctly stays pending for that burst.
+func (b *GradientVolumeBar) CancelPending(intentSeq int) {
+	if b.seq == intentSeq+1 {
+		b.hasPending = false
+	}
 }
 
 // Render returns the volume bar string using the bar's current volume state.
