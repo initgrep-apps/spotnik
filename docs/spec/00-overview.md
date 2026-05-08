@@ -32,4 +32,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-05-07 — story 196 merged*
+*Last updated: 2026-05-08 — story 197 merged*

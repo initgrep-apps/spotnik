@@ -1,7 +1,7 @@
 ---
 title: "Volume Debounce & Queue Icon Cleanup"
 feature: 03-playback
-status: open
+status: done
 ---
 
 ## Background
