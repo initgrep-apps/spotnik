@@ -65,7 +65,7 @@ func TestControls_RepeatTrack(t *testing.T) {
 func TestControls_QueueIcon(t *testing.T) {
 	c := newTestControls(false, false, "off")
 	out := c.Render()
-	assert.Contains(t, out, "≡")
+	assert.NotContains(t, out, "≡", "queue icon removed from transport strip")
 }
 
 func TestControls_NoPrevNext(t *testing.T) {

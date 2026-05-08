@@ -5,7 +5,9 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
@@ -93,6 +95,15 @@ func (b *GradientSeekBar) Render(progressMs, durationMs int) string {
 	return elapsed + strings.Repeat(" ", labelPad) + sb.String() + strings.Repeat(" ", labelPad) + total
 }
 
+// VolumeDebounceTickMsg is the timer payload fired by GradientVolumeBar.HandleKey
+// after the 300 ms debounce window. Seq is a monotonically increasing counter;
+// NowPlayingPane discards the tick when Seq does not match the bar's current seq,
+// meaning a newer keypress superseded this one.
+type VolumeDebounceTickMsg struct {
+	TargetVol int
+	Seq       int
+}
+
 // GradientVolumeBar renders a volume bar with color bands and a music note icon.
 // Format: "♪ ████▎░░░░░░░░░ 31%"
 //
@@ -108,9 +119,15 @@ func (b *GradientSeekBar) Render(progressMs, durationMs int) string {
 // Icon color:
 //   - volume > 0: ♪ in Gradient1() color
 //   - volume = 0: ♪ in TextMuted() color
+//
+// The bar is a smart component: call HandleKey on volume keypresses, HandleDebounce
+// on VolumeDebounceTickMsg, and SetConfirmed when a Spotify poll resolves.
 type GradientVolumeBar struct {
-	th    theme.Theme
-	width int // total bar fill width; 0 uses default
+	th         theme.Theme
+	width      int  // total component width; 0 uses default
+	currentVol int  // displayed volume: pending value or last confirmed value
+	hasPending bool // true while a debounce tick is in flight
+	seq        int  // monotonically increasing; stale ticks have a lower seq
 }
 
 // NewGradientVolumeBar creates a gradient volume bar using theme tokens.
@@ -123,14 +140,65 @@ func (b *GradientVolumeBar) SetWidth(width int) {
 	b.width = width
 }
 
-// Render returns the volume bar string for the given volume level.
-// Volume is clamped to [0, 100].
+// SetConfirmed updates currentVol from the authoritative Spotify poll value.
+// It is a no-op when hasPending is true — the optimistic pending value is shown
+// until the debounce resolves, at which point the next poll re-syncs.
+func (b *GradientVolumeBar) SetConfirmed(vol int) {
+	if !b.hasPending {
+		b.currentVol = vol
+	}
+}
+
+// HandleKey computes the new pending volume, updates currentVol immediately so
+// the bar renders the new value on the next frame, increments seq to invalidate
+// any in-flight debounce tick, and returns a 300 ms debounce cmd.
+//
+// delta must be +1 or -1. confirmedVol is the store's current device volume,
+// used as the starting base only when no pending intent exists (hasPending == false).
+func (b *GradientVolumeBar) HandleKey(delta, confirmedVol int) tea.Cmd {
+	base := confirmedVol
+	if b.hasPending {
+		base = b.currentVol
+	}
+	newVol := base + delta
+	if newVol > 100 {
+		newVol = 100
+	}
+	if newVol < 0 {
+		newVol = 0
+	}
+	b.currentVol = newVol
+	b.hasPending = true
+	b.seq++
+	target, seq := newVol, b.seq
+	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg {
+		return VolumeDebounceTickMsg{TargetVol: target, Seq: seq}
+	})
+}
+
+// HandleDebounce checks whether the debounce tick is current.
+// Returns (true, targetVol) when seq matches — the caller should emit
+// VolumeIntentMsg{TargetVol: targetVol} to trigger the API call.
+// Returns (false, 0) when the tick is stale (a newer keypress superseded it).
+// Increments seq on a successful match so duplicate ticks with the same seq
+// are discarded on subsequent calls.
+func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched bool, targetVol int) {
+	if m.Seq != b.seq {
+		return false, 0
+	}
+	b.hasPending = false
+	b.seq++ // prevent double-fire: any future tick with the same seq is now stale
+	return true, m.TargetVol
+}
+
+// Render returns the volume bar string using the bar's current volume state.
 // Format: "♪ ████▎░░░░░░░░░ 31%"
 //
 // Full cells use █ (U+2588). The fractional last cell uses the §5.7 partial-block
 // thresholds (▏▎▍▌▋▊▉) so the bar moves smoothly on every 1% step.
 // Empty cells use ░ (GlyphBarEmpty).
-func (b *GradientVolumeBar) Render(volume int) string {
+func (b *GradientVolumeBar) Render() string {
+	volume := b.currentVol
 	if volume > 100 {
 		volume = 100
 	}

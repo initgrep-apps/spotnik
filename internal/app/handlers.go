@@ -491,6 +491,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case components.VolumeDebounceTickMsg:
+		// Forward volume debounce tick to NowPlayingPane. The pane checks the seq
+		// and either emits VolumeIntentMsg (matched) or returns nil (stale).
+		if np := a.nowPlayingPane(); np != nil {
+			updated, cmd := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+			return a, cmd
+		}
+		return a, nil
+
 	case panes.RateLimitedMsg:
 		// 429 from Spotify — activate backoff and emit a ratelimit toast.
 		backoff := m.RetryAfterSecs
@@ -652,6 +664,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// User command succeeded — use Interactive priority so the reconcile GET
 		// fires a fresh HTTP call and does not join a pre-command Background poll.
 		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
+
+	case panes.VolumeIntentMsg:
+		// Gate: free-tier users cannot control volume — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
+		}
+		return a, a.buildSetVolumeCmd(m.TargetVol)
 
 	case panes.PlaybackRequestMsg:
 		return a, a.buildPlaybackAPICmd(m.Action)

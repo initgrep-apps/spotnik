@@ -369,13 +369,13 @@ func TestApp_BuildPlaybackAPICmd_NilPlayer(t *testing.T) {
 		Device:    &api.Device{VolumePercent: 60},
 	})
 
+	// ActionVolumeUp and ActionVolumeDown are removed — volume is now handled via
+	// VolumeIntentMsg → buildSetVolumeCmd (Story 197 volume debounce).
 	actions := []panes.PlaybackAction{
 		panes.ActionPause,
 		panes.ActionPlay,
 		panes.ActionNext,
 		panes.ActionPrevious,
-		panes.ActionVolumeUp,
-		panes.ActionVolumeDown,
 		panes.ActionToggleShuffle,
 		panes.ActionCycleRepeat,
 	}

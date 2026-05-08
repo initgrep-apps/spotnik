@@ -1003,8 +1003,8 @@ after TTL; `Cancel` clears without a final line; ascii mode uses rotating `|/-\`
 
 ### 3.19 PlaybackControls
 
-**Purpose:** Stateless transport-strip primitive. Owns the four transport icon
-positions (shuffle / play-pause / queue / repeat) and resolves every glyph through
+**Purpose:** Stateless transport-strip primitive. Owns the three transport icon
+positions (shuffle / play-pause / repeat) and resolves every glyph through
 `GlyphFor` so both unicode and ASCII modes are handled automatically. The
 `components.Controls` compatibility wrapper delegates entirely to this struct.
 
@@ -1032,19 +1032,19 @@ func (c PlaybackControls) Render() string
 **Rendering (unicode, playing, shuffle off, repeat off):**
 
 ```
-⇄  ⏸  ≡  ⟳
+⇄  ⏸  ⟳
 ```
 
 **Rendering (unicode, paused, shuffle on, repeat all):**
 
 ```
-⇄  ▷  ≡  ↻
+⇄  ▷  ↻
 ```
 
 **Rendering (ascii, playing, shuffle off, repeat off):**
 
 ```
-sh  ||  Q  ro
+sh  ||  ro
 ```
 
 **Roles:**
@@ -1055,7 +1055,6 @@ sh  ||  Q  ro
 | Shuffle | shuffle off | `TextSecondary` |
 | Play/Pause | playing | `PlayingIndicator` (shows ⏸/`||`) |
 | Play/Pause | paused | `TextSecondary` (shows ▷/`|>`) |
-| Queue | always | `TextSecondary` |
 | Repeat | RepeatAll / RepeatOne | `PlayingIndicator` |
 | Repeat | RepeatOff | `TextSecondary` |
 
@@ -1066,7 +1065,6 @@ sh  ||  Q  ro
 | Shuffle | `⇄` | `sh` | `GlyphShuffle` |
 | Play (paused state) | `▷` | `\|>` | `GlyphPausedPB` |
 | Pause (playing state) | `⏸` | `\|\|` | `GlyphPaused` |
-| Queue | `≡` | `Q` | `GlyphQueue` |
 | Repeat Off | `⟳` | `ro` | `GlyphRepeatOff` |
 | Repeat All | `↻` | `rp` | `GlyphRepeatAll` |
 | Repeat One | `↻¹` | `rp1` | `GlyphRepeatOne` |
@@ -1078,8 +1076,8 @@ different colours). The primitive uses catalogue-intent glyphs exclusively.
 **Lifecycle:** stateless value — call `Render()` directly from `View()`.
 
 **Tests:** `TestPlaybackControls_RenderUnicode_Playing` — unicode output contains
-`⏸`, `≡`, `⇄`, `⟳` (off-state); `TestPlaybackControls_RenderASCII_Playing` —
-ascii output contains `||`, `Q`, `sh`, `ro`, no unicode glyphs;
+`⏸`, `⇄`, `⟳` (off-state), does not contain `≡`; `TestPlaybackControls_RenderASCII_Playing` —
+ascii output contains `||`, `sh`, `ro`, does not contain `Q` or unicode glyphs;
 `TestPlaybackControls_RepeatModes` — all three `RepeatMode` values render correct
 glyph in both modes.
 

@@ -62,6 +62,9 @@ func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPla
 	if ps := s.PlaybackState(); ps != nil {
 		p.localProgressMs = ps.ProgressMs
 		p.engine.SetPlaying(ps.IsPlaying)
+		if ps.Device != nil {
+			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
+		}
 	}
 	return p
 }
@@ -168,6 +171,12 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PlaybackStateFetchedMsg:
 		return p.handlePlaybackFetched()
 
+	case components.VolumeDebounceTickMsg:
+		if matched, vol := p.volumeBar.HandleDebounce(m); matched {
+			return p, func() tea.Msg { return VolumeIntentMsg{TargetVol: vol} }
+		}
+		return p, nil
+
 	case viz.TickMsg:
 		// Advance the animation frame, then re-arm the tick.
 		p.engine.Advance()
@@ -205,10 +214,6 @@ func (p *NowPlayingPane) View() string {
 		artistNames[i] = a.Name
 	}
 
-	volume := 0
-	if ps.Device != nil {
-		volume = ps.Device.VolumePercent
-	}
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 
 	// Compute available inner height to decide which info lines to include.
@@ -228,7 +233,7 @@ func (p *NowPlayingPane) View() string {
 			mutedStyle.Render(t.Album.Name),
 			"",
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	case innerH >= 5:
 		// Drop spacer: track, artists, album, controls, volume.
@@ -237,7 +242,7 @@ func (p *NowPlayingPane) View() string {
 			secondaryStyle.Render(strings.Join(artistNames, ", ")),
 			mutedStyle.Render(t.Album.Name),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	case innerH >= 4:
 		// Drop album: track, artists, controls, volume.
@@ -245,14 +250,14 @@ func (p *NowPlayingPane) View() string {
 			primaryStyle.Render(t.Name),
 			secondaryStyle.Render(strings.Join(artistNames, ", ")),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	case innerH >= 3:
 		// Drop artists: track, controls, volume.
 		infoLines = []string{
 			primaryStyle.Render(t.Name),
 			ctrl.Render(),
-			p.volumeBar.Render(volume),
+			p.volumeBar.Render(),
 		}
 	default:
 		// Minimal: track and controls only (no room for volume bar).
@@ -343,6 +348,9 @@ func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 	if ps != nil {
 		p.localProgressMs = ps.ProgressMs
 		p.engine.SetPlaying(ps.IsPlaying)
+		if ps.Device != nil {
+			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
+		}
 	} else {
 		p.localProgressMs = 0
 		p.engine.SetPlaying(false)
@@ -372,10 +380,10 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		return p, emitPlaybackRequest(ActionPrevious)
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":
-		return p, emitPlaybackRequest(ActionVolumeUp)
+		return p, p.volumeBar.HandleKey(+1, confirmedVolume(p.store))
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "-":
-		return p, emitPlaybackRequest(ActionVolumeDown)
+		return p, p.volumeBar.HandleKey(-1, confirmedVolume(p.store))
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "s":
 		return p, emitPlaybackRequest(ActionToggleShuffle)
@@ -442,6 +450,7 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	p.engine.SetPattern(savedPattern)
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
+	p.volumeBar.SetConfirmed(confirmedVolume(p.store))
 	// Propagate dimensions to newly created sub-components.
 	p.SetSize(p.width, p.height)
 }
@@ -452,6 +461,15 @@ func paneMax(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// confirmedVolume reads the active device's volume from the store.
+// Returns 0 when playback state or device info is unavailable.
+func confirmedVolume(s state.StateReader) int {
+	if ps := s.PlaybackState(); ps != nil && ps.Device != nil {
+		return ps.Device.VolumePercent
+	}
+	return 0
 }
 
 // DeviceName returns the currently active device name from the store.

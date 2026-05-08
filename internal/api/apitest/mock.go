@@ -30,6 +30,7 @@ type MockPlayer struct {
 	PreviousCalled   bool
 	SeekCalled       bool
 	SetVolumeCalled  bool
+	LastSetVolume    int
 	SetShuffleCalled bool
 	SetRepeatCalled  bool
 	AddToQueueCalled bool
@@ -73,9 +74,10 @@ func (m *MockPlayer) Seek(_ context.Context, _ int) error {
 	return m.SeekErr
 }
 
-// SetVolume records the call and returns the configured error.
-func (m *MockPlayer) SetVolume(_ context.Context, _ int) error {
+// SetVolume records the call, stores the volume, and returns the configured error.
+func (m *MockPlayer) SetVolume(_ context.Context, vol int) error {
 	m.SetVolumeCalled = true
+	m.LastSetVolume = vol
 	return m.SetVolumeErr
 }
 
