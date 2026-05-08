@@ -21,9 +21,10 @@ import (
 type OnboardingPermissionsOverlayClosedMsg struct{}
 
 // permissionsContent returns the body rendered inside the overlay border.
-// Generic by design — no per-scope semantics, no internals — so it remains
-// accurate as the underlying scope set evolves. Users who need scope details
-// are pointed to spotify.com/account/apps in the tail line.
+// Capabilities are described at the category level (e.g. "Playback control")
+// rather than listing individual OAuth scope strings. This keeps the copy
+// stable across scope-set changes; users who need exact scope details are
+// pointed to spotify.com/account/apps in the tail line.
 //
 // Bullets are sourced from the uikit glyph catalogue so ASCII mode renders
 // them as `*` and unicode mode renders them as `•`.

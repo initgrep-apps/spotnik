@@ -79,6 +79,10 @@ func prepareOAuthCmd(clientID string, port int, codeCh <-chan api.CallbackResult
 // does NOT close it so the server remains alive across retries (e.g. user presses 'r' or 'l').
 func waitForCallbackCmd(clientID string, store keychain.TokenStore, verifier, redirectURI string, codeCh <-chan api.CallbackResult) tea.Cmd {
 	return func() tea.Msg {
+		if codeCh == nil {
+			// Programming error: callback server was not started before the auth flow.
+			return authErrorMsg{err: fmt.Errorf("internal error: OAuth callback channel is nil — callback server may not have started")}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 

@@ -31,7 +31,9 @@ type InfoBox struct {
 // Render returns the titled box with the body inside. In unicode mode a
 // rounded border (╭╮╰╯─│) is used; in ASCII mode the border uses +/-/|.
 func (b InfoBox) Render() string {
-	// border (1 each side) + padding (1 each side) = 4 chars overhead.
+	// innerW: border (1 each side) + padding (1 each side) = 4 chars overhead.
+	// The outer style uses Width - 2 (border columns only) so lipgloss draws
+	// the border at the intended width while content flows inside the padding.
 	innerW := b.Width - 4
 	if innerW < 1 {
 		innerW = 1

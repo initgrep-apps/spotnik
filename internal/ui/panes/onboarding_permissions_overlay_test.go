@@ -1,7 +1,6 @@
 package panes_test
 
 import (
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -85,5 +84,5 @@ func TestOnboardingPermissionsOverlay_SetThemeUpdatesRender(t *testing.T) {
 	require.NotEmpty(t, before)
 	require.NotEmpty(t, after)
 	assert.Contains(t, after, "Permissions Spotnik requests")
-	_ = strings.EqualFold(before, after)
+	assert.NotEqual(t, before, after, "switching theme must change the rendered output")
 }

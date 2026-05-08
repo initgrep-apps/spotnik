@@ -124,3 +124,59 @@ func TestApp_PermissionsOverlay_WindowResizePropagatesSize(t *testing.T) {
 	view := a.onboardingPermissionsOverlay.View()
 	require.NotEmpty(t, view, "overlay must continue to render after WindowSizeMsg")
 }
+
+// TestApp_PermissionsOverlay_ClearedOnClientIDSaved verifies that the
+// onboardingClientIDSavedMsg handler (stepRegister → stepOAuth transition)
+// also clears the overlay as a defensive measure.
+func TestApp_PermissionsOverlay_ClearedOnClientIDSaved(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	// Force overlay open so the nil-clear can be observed.
+	a.openOnboardingPermissions()
+	require.NotNil(t, a.onboardingPermissionsOverlay)
+
+	_, _ = a.Update(onboardingClientIDSavedMsg{clientID: "test-client"})
+
+	assert.Nil(t, a.onboardingPermissionsOverlay,
+		"onboardingClientIDSavedMsg must clear the permissions overlay")
+}
+
+// TestApp_V_WhileOverlayOpen_DoesNotReopenOverlay verifies re-entrant 'v'
+// presses are consumed by the open overlay (modal) and do not create a second
+// overlay instance or otherwise mutate state.
+func TestApp_V_WhileOverlayOpen_DoesNotReopenOverlay(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	a.openOnboardingPermissions()
+	firstOverlay := a.onboardingPermissionsOverlay
+	require.NotNil(t, firstOverlay)
+
+	updated, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	app, ok := updated.(*App)
+	require.True(t, ok)
+
+	// 'v' is consumed by the overlay (modal) — same instance, nil cmd.
+	assert.Same(t, firstOverlay, app.onboardingPermissionsOverlay,
+		"re-entrant v must not replace the overlay instance")
+	assert.Nil(t, cmd, "v consumed by modal overlay must produce nil cmd")
+}
+
+// TestApp_Esc_OnStepOAuth_WithOverlayClosed_IsNoop verifies that pressing Esc
+// on stepOAuth when the permissions overlay is not open is a no-op — it does
+// not quit, does not open the overlay, and returns nil cmd.
+func TestApp_Esc_OnStepOAuth_WithOverlayClosed_IsNoop(t *testing.T) {
+	a := newRenderTestApp()
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepOAuth
+	require.Nil(t, a.onboardingPermissionsOverlay)
+
+	updated, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	app, ok := updated.(*App)
+	require.True(t, ok)
+
+	assert.Equal(t, viewOnboarding, app.currentView, "Esc must not change view")
+	assert.Nil(t, app.onboardingPermissionsOverlay, "Esc must not open the overlay")
+	assert.Nil(t, cmd, "Esc with overlay closed must be a no-op")
+}

@@ -1,6 +1,6 @@
 // central message dispatch for the root Bubble Tea model — called by
-// Update() for every non-key, non-mouse message; routes data-carrying Msg payloads to
-// Store writes and returns follow-up commands.
+// Update() for every incoming message; routes Msg payloads to Store writes
+// and returns follow-up commands.
 package app
 
 import (
@@ -76,7 +76,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case authPreparedMsg:
 		a.onboardingAuthURL = m.authURL
-		return a, waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh)
+		var browserNote tea.Cmd
+		if m.browserErr != nil {
+			// Browser launch failed — surface it as an info toast so the user knows
+			// to use the URL displayed below rather than waiting for a browser window.
+			browserNote = a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Browser didn't open",
+				Body:   "Use the URL shown below to authorize manually.",
+			})
+		}
+		return a, tea.Batch(
+			waitForCallbackCmd(a.clientID, a.tokenStore, m.verifier, m.redirectURI, m.codeCh),
+			browserNote,
+		)
 
 	case authSuccessMsg:
 		// OAuth code exchange succeeded. Store the token and initialise clients so they
@@ -93,7 +106,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case uikit.SpinnerDoneMsg:
-		// 1.2 s hold expired — switch to grid view and announce success.
+		// Spinner has finished its success-state animation — enter the grid view.
 		a.currentView = viewGrid
 		// Start data fetching and tick loop now that the view is live.
 		var paneCmds []tea.Cmd
@@ -121,15 +134,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(authCmds...)
 
 	case authErrorMsg:
-		// viewAuth is gone; auth errors only happen during viewOnboarding now.
-		// Resolve spinner to ✗; after 2 s SpinnerFailMsg transitions to stepError.
+		// API clients are not initialised until authSuccessMsg, so this message
+		// can only arrive while viewOnboarding is active.
+		// Resolve spinner to ✗; SpinnerFailMsg then transitions to stepError.
 		a.onboardingError = m.err.Error()
 		sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
 		a.onboardingSpinner = sp
 		return a, cmd
 
 	case uikit.SpinnerFailMsg:
-		// 2 s hold expired — show the error panel so the user can retry.
+		// Spinner has finished its failure-state animation — show the error panel.
 		a.onboardingStep = stepError
 		a.onboardingPermissionsOverlay = nil
 		return a, nil
