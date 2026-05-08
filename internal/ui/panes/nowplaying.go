@@ -172,8 +172,16 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handlePlaybackFetched()
 
 	case components.VolumeDebounceTickMsg:
-		if matched, vol := p.volumeBar.HandleDebounce(m); matched {
-			return p, func() tea.Msg { return VolumeIntentMsg{TargetVol: vol} }
+		if matched, vol, seq := p.volumeBar.HandleDebounce(m); matched {
+			return p, func() tea.Msg { return VolumeIntentMsg{TargetVol: vol, Seq: seq} }
+		}
+		return p, nil
+
+	case VolumeAppliedMsg:
+		if m.Err != nil {
+			p.volumeBar.CancelPending(m.Seq)
+		} else {
+			p.volumeBar.ConfirmFromAPI(m.Seq, m.Vol)
 		}
 		return p, nil
 

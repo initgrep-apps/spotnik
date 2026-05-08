@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -1050,6 +1051,49 @@ func TestNowPlayingPane_VolumeDebounceMsg_EmitsVolumeIntent(t *testing.T) {
 	intent, ok := result.(VolumeIntentMsg)
 	require.True(t, ok, "result must be VolumeIntentMsg, got %T", result)
 	assert.Equal(t, 50, intent.TargetVol)
+	assert.Equal(t, 1, intent.Seq)
+}
+
+func TestNowPlayingPane_VolumeAppliedMsg_Success_ConfirmsBar(t *testing.T) {
+	p := newPaneWithVolume(49)
+
+	// Prime the bar: press + once, then match the debounce tick.
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+	_, cmd := p.Update(components.VolumeDebounceTickMsg{TargetVol: 50, Seq: 1})
+	require.NotNil(t, cmd)
+
+	// Send VolumeAppliedMsg confirming the API succeeded.
+	p.Update(VolumeAppliedMsg{Vol: 55, Seq: 1})
+
+	// Bar should now show 55 and hasPending should be false.
+	out := p.View()
+	assert.Contains(t, out, "55%")
+
+	// SetConfirmed should now be accepted since hasPending=false.
+	p.volumeBar.SetConfirmed(0)
+	out = p.View()
+	assert.Contains(t, out, "0%")
+}
+
+func TestNowPlayingPane_VolumeAppliedMsg_Error_CancelsPending(t *testing.T) {
+	p := newPaneWithVolume(49)
+
+	// Prime the bar: press + once, then match the debounce tick.
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+	_, cmd := p.Update(components.VolumeDebounceTickMsg{TargetVol: 50, Seq: 1})
+	require.NotNil(t, cmd)
+
+	// Send VolumeAppliedMsg with an error.
+	p.Update(VolumeAppliedMsg{Err: errors.New("fail"), Seq: 1})
+
+	// currentVol should remain the optimistic value (50), and hasPending should be false.
+	out := p.View()
+	assert.Contains(t, out, "50%")
+
+	// SetConfirmed should now be accepted since hasPending=false.
+	p.volumeBar.SetConfirmed(0)
+	out = p.View()
+	assert.Contains(t, out, "0%")
 }
 
 func TestNowPlayingPane_StaleVolumeDebounce_ReturnsNilCmd(t *testing.T) {
