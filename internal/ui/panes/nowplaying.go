@@ -179,7 +179,7 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case VolumeAppliedMsg:
 		if m.Err != nil {
-			p.volumeBar.CancelPending(m.Seq)
+			p.volumeBar.CancelPending(m.Seq, confirmedVolume(p.store))
 		} else {
 			p.volumeBar.ConfirmFromAPI(m.Seq, m.Vol)
 		}

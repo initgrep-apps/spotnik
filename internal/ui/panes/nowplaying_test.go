@@ -1096,9 +1096,9 @@ func TestNowPlayingPane_VolumeAppliedMsg_Error_CancelsPending(t *testing.T) {
 	// Send VolumeAppliedMsg with an error.
 	p.Update(VolumeAppliedMsg{Err: errors.New("fail"), Seq: 1})
 
-	// currentVol should remain the optimistic value (50), and hasPending should be false.
+	// currentVol should revert to the store's confirmed value (49), and hasPending should be false.
 	out := p.View()
-	assert.Contains(t, out, "50%")
+	assert.Contains(t, out, "49%", "error must revert bar to store value")
 
 	// SetConfirmed should now be accepted since hasPending=false.
 	p.volumeBar.SetConfirmed(0)

@@ -204,13 +204,14 @@ func (b *GradientVolumeBar) ConfirmFromAPI(intentSeq, vol int) {
 	}
 }
 
-// CancelPending clears hasPending without changing currentVol, only when no
-// newer burst has started. Call this on API error so the next Spotify poll can
-// reconcile the bar via SetConfirmed. If a newer burst is in flight the guard
-// fires and the bar correctly stays pending for that burst.
-func (b *GradientVolumeBar) CancelPending(intentSeq int) {
+// CancelPending reverts currentVol to the last confirmed store value and clears
+// hasPending, but only when no newer burst has started. Call this on API error
+// so the bar immediately snaps back to the real server-side volume instead of
+// leaving the user at an optimistic value that was never applied.
+func (b *GradientVolumeBar) CancelPending(intentSeq, confirmedVol int) {
 	if b.seq == intentSeq+1 {
 		b.hasPending = false
+		b.currentVol = confirmedVol
 	}
 }
 

@@ -511,11 +511,11 @@ func TestVolumeBar_CancelPending_ClearsOnSeqMatch(t *testing.T) {
 	matched, _, intentSeq := b.HandleDebounce(VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
 	require.True(t, matched)
 	// After HandleDebounce, b.seq == 2 (intentSeq+1).
-	b.CancelPending(intentSeq)
+	b.CancelPending(intentSeq, 50) // revert to last confirmed store value
 
-	// hasPending should be cleared, currentVol should remain 51 (unchanged).
+	// hasPending should be cleared, currentVol should revert to confirmed store value.
 	out := b.Render()
-	assert.Contains(t, out, "51%")
+	assert.Contains(t, out, "50%", "error must revert bar to confirmed store value")
 	// SetConfirmed should now be accepted.
 	b.SetConfirmed(30)
 	out = b.Render()
@@ -533,7 +533,7 @@ func TestVolumeBar_CancelPending_NoOpOnSeqMismatch(t *testing.T) {
 	b.HandleKey(+1, 51) // seq=3, currentVol=52
 
 	// CancelPending with the old intentSeq should be a no-op.
-	b.CancelPending(intentSeq)
+	b.CancelPending(intentSeq, 50)
 	// hasPending should still be true, currentVol should remain 52.
 	out := b.Render()
 	assert.Contains(t, out, "52%")
