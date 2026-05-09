@@ -446,33 +446,6 @@ func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	assert.NotContains(t, view, rawErr.Error(), "raw error text must not be shown to the user")
 }
 
-// TestApp_PlaybackCmdSentMsg_VolumeError verifies that a volume error uses OpVolume title.
-func TestApp_PlaybackCmdSentMsg_VolumeError(t *testing.T) {
-	cfg := &config.Config{}
-	a := app.New(cfg, app.AppOptions{})
-	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	a = m.(*app.App)
-
-	rawErr := fmt.Errorf("volume api failed")
-	errMsg := panes.PlaybackCmdSentMsg{Err: rawErr, Source: "volume"}
-	_, cmd := a.Update(errMsg)
-	require.NotNil(t, cmd)
-
-	batchMsg := cmd()
-	if bm, ok := batchMsg.(tea.BatchMsg); ok {
-		for _, c := range bm {
-			if msg := c(); msg != nil {
-				a.Update(msg)
-			}
-		}
-	} else if batchMsg != nil {
-		a.Update(batchMsg)
-	}
-	view := a.View()
-	assert.Contains(t, view, "Volume change failed", "volume error should show OpVolume title")
-	assert.NotContains(t, view, rawErr.Error(), "raw error text must not be shown")
-}
-
 // TestApp_PlaybackCmdSentMsg_NoError verifies that a successful playback cmd triggers refetch.
 func TestApp_PlaybackCmdSentMsg_NoError(t *testing.T) {
 	cfg := &config.Config{}

@@ -37,10 +37,26 @@ type PlaybackCmdSentMsg struct {
 }
 
 // VolumeIntentMsg is emitted by NowPlayingPane after the volume debounce
-// resolves. TargetVol is the exact percentage to set — the app does not
-// need to read the store. Handled by App.Update() → buildSetVolumeCmd.
+// resolves. TargetVol is the exact percentage to set. Seq is the debounce
+// sequence number; it is threaded through to VolumeAppliedMsg so the bar
+// can guard ConfirmFromAPI / CancelPending against concurrent bursts.
 type VolumeIntentMsg struct {
 	TargetVol int
+	Seq       int // intentSeq returned by HandleDebounce
+}
+
+// VolumeAppliedMsg is returned by buildSetVolumeCmd after the Spotify volume
+// API call completes (success or failure). It replaces PlaybackCmdSentMsg for
+// the volume-specific path so the bar's pending state is managed correctly.
+//
+// On success: Vol holds the confirmed volume, Err is nil.
+// On error:   Vol is 0, Err holds the underlying error (may be *api.RateLimitError,
+//
+//	*api.UnauthorizedError, or a generic error).
+type VolumeAppliedMsg struct {
+	Vol int
+	Seq int
+	Err error
 }
 
 // PlaybackAction identifies what kind of playback command to send.

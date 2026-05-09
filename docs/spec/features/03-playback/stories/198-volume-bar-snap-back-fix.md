@@ -1,7 +1,7 @@
 ---
 title: "Fix: Volume bar snaps back during rapid presses after debounce fires"
 feature: 03-playback
-status: open
+status: done
 ---
 
 ## Background
