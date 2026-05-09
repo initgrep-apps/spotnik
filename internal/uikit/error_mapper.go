@@ -10,6 +10,26 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/api"
 )
 
+// RecoveryHint is a reusable user-facing recovery instruction for error toasts.
+// These are referenced by handlers so the vocabulary stays consistent across
+// the application (spec §3.15).
+type RecoveryHint string
+
+const (
+	// RecoveryCheckConnection is shown for network-level failures.
+	RecoveryCheckConnection RecoveryHint = "Check your connection."
+	// RecoveryRetryInMoment is the generic fallback for Spotify service errors.
+	RecoveryRetryInMoment RecoveryHint = "Spotify is having trouble. Try again in a moment."
+	// RecoveryPressTabRetry is shown for library-pane fetch failures.
+	RecoveryPressTabRetry RecoveryHint = "Press Tab to retry."
+	// RecoveryPressEnterRetry is shown for playlist/album track sub-view failures.
+	RecoveryPressEnterRetry RecoveryHint = "Press Enter to retry."
+	// RecoveryPressFRetry is shown for stats fetch failures.
+	RecoveryPressFRetry RecoveryHint = "Press f to retry."
+	// RecoveryRunAuth is shown when the session has expired.
+	RecoveryRunAuth RecoveryHint = "Run: spotnik auth."
+)
+
 // Operation identifies the user-facing domain that failed. It is used by
 // ErrorMapper.Map to produce an operation-specific title in the returned Toast.
 type Operation string
@@ -103,10 +123,10 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 	var forbiddenErr *api.ForbiddenError
 	if errors.As(err, &forbiddenErr) {
 		body := forbiddenErr.Message
-		// Omit body when it is empty or the default "Spotify Premium required" string
-		// (title already covers the same information, so the body would be redundant).
+		// When the API returns an empty or default message, provide a concrete
+		// body so the toast always carries actionable information.
 		if body == "" || body == "Spotify Premium required" {
-			body = ""
+			body = "A Premium subscription is required for this feature."
 		}
 		return Toast{
 			Intent: ToastWarning,
@@ -134,7 +154,7 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 		return Toast{
 			Intent: ToastError,
 			Title:  em.titleFor(op),
-			Body:   "Check your connection.",
+			Body:   string(RecoveryCheckConnection),
 		}
 	}
 	var urlErr *url.Error
@@ -142,7 +162,7 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 		return Toast{
 			Intent: ToastError,
 			Title:  em.titleFor(op),
-			Body:   "Check your connection.",
+			Body:   string(RecoveryCheckConnection),
 		}
 	}
 	// DNS errors implement net.Error but may not set Timeout/Temporary on all Go versions;
@@ -152,7 +172,7 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 		return Toast{
 			Intent: ToastError,
 			Title:  em.titleFor(op),
-			Body:   "Check your connection.",
+			Body:   string(RecoveryCheckConnection),
 		}
 	}
 
@@ -160,7 +180,7 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 	return Toast{
 		Intent: ToastError,
 		Title:  em.titleFor(op),
-		Body:   "Spotify is having trouble. Try again in a moment.",
+		Body:   string(RecoveryRetryInMoment),
 	}
 }
 
