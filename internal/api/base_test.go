@@ -105,6 +105,48 @@ func TestBaseClient_DoJSON_Returns403(t *testing.T) {
 	assert.ErrorAs(t, err, &forbErr, "expected *ForbiddenError for 403")
 }
 
+func TestBaseClient_DoJSON_Returns403_JSONBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"status":403,"message":"Premium required to use this endpoint."}}`))
+	}))
+	defer srv.Close()
+
+	bc := newTestBaseClient(srv.URL, "token")
+
+	req, err := bc.newRequest(context.Background(), http.MethodGet, "/v1/me", nil)
+	require.NoError(t, err)
+
+	var out struct{}
+	err = bc.doJSON(req, &out)
+	require.Error(t, err)
+
+	var forbErr *ForbiddenError
+	require.ErrorAs(t, err, &forbErr, "expected *ForbiddenError for 403")
+	assert.Equal(t, "Premium required to use this endpoint.", forbErr.Message, "must extract message from JSON envelope")
+}
+
+func TestBaseClient_DoJSON_Returns403_JSONBody_EmptyMessage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"status":403}}`))
+	}))
+	defer srv.Close()
+
+	bc := newTestBaseClient(srv.URL, "token")
+
+	req, err := bc.newRequest(context.Background(), http.MethodGet, "/v1/me", nil)
+	require.NoError(t, err)
+
+	var out struct{}
+	err = bc.doJSON(req, &out)
+	require.Error(t, err)
+
+	var forbErr *ForbiddenError
+	require.ErrorAs(t, err, &forbErr)
+	assert.Equal(t, "Spotify Premium required", forbErr.Message, "empty JSON message must yield default")
+}
+
 func TestBaseClient_DoJSON_Returns429(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "30")

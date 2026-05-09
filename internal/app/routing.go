@@ -412,11 +412,14 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				a.panes[layout.PanePlaylists] = ppu
 			}
 			if m.Err != nil {
-				return a, tea.Batch(cmd, a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastError,
-					Title:  "Remove track failed",
-					Body:   m.Err.Error(),
-				})), true
+				if errors.Is(m.Err, errNilClient) {
+					return a, nil, true
+				}
+				toast := a.errorMapper.Map(uikit.OpPlaylists, m.Err)
+				if toast.Intent == uikit.ToastNone {
+					return a, cmd, true
+				}
+				return a, tea.Batch(cmd, a.toasts.Cmd(toast)), true
 			}
 			return a, cmd, true
 		}

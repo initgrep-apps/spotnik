@@ -7,8 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -23,22 +21,6 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
-
-// volumeErrorMessage returns a user-friendly string for a volume API error.
-// Network-level errors (timeouts, connection refused, DNS failures, etc.) produce
-// "Check your connection." so the user never sees raw Go error strings.
-// All other errors fall back to a generic message.
-func volumeErrorMessage(err error) string {
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return "Check your connection."
-	}
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return "Check your connection."
-	}
-	return "Volume change failed"
-}
 
 // clearAllFetchingSentinels resets every in-flight fetch sentinel to false.
 // Called from RateLimitedMsg and unauthorizedMsg handlers, which short-circuit
@@ -252,11 +234,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if sp, ok := updated.(*panes.SearchOverlay); ok {
 				a.searchPane = sp
 			}
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastWarning,
-				Title:  "Search failed",
-				Body:   m.Err.Error(),
-			})
+			toast := a.errorMapper.Map(uikit.OpSearch, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				// UnauthorizedError — the unauthorizedMsg handler is invoked upstream;
+				// no additional toast needed here.
+				return a, nil
+			}
+			return a, a.toasts.Cmd(toast)
 		}
 		a.searchLoading = false
 		// Forward to the search pane so it can update its local display state.
@@ -576,6 +560,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Queue update failed",
+				Body:   "Check your connection.",
 			})
 		}
 		a.store.ClearQueueError()
@@ -660,23 +645,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Body:   fmt.Sprintf("Wait %ds before retrying.", rateLimitErr.RetryAfter),
 				})
 			}
-			var forbiddenErr *api.ForbiddenError
-			if errors.As(m.Err, &forbiddenErr) {
-				return a, tea.Batch(
-					fetchPlaybackStateCmd(a.player, api.Background),
-					a.toasts.Cmd(uikit.Toast{
-						Intent: uikit.ToastWarning,
-						Title:  "Spotify Premium required",
-					}),
-				)
+			toast := a.errorMapper.Map(uikit.OpPlayback, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, fetchPlaybackStateCmd(a.player, api.Background)
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, api.Background),
-				a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastError,
-					Title:  "Playback command failed",
-					Body:   m.Err.Error(),
-				}),
+				a.toasts.Cmd(toast),
 			)
 		}
 		// User command succeeded — use Interactive priority so the reconcile GET
@@ -714,23 +689,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if isUnauthorizedError(m.Err) {
 				return a.handleMsg(unauthorizedMsg{})
 			}
-			var forbiddenErr *api.ForbiddenError
-			if errors.As(m.Err, &forbiddenErr) {
-				return a, tea.Batch(
-					fetchPlaybackStateCmd(a.player, api.Background),
-					a.toasts.Cmd(uikit.Toast{
-						Intent: uikit.ToastWarning,
-						Title:  "Spotify Premium required",
-					}),
-				)
+			toast := a.errorMapper.Map(uikit.OpVolume, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, api.Interactive),
-				a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastError,
-					Title:  "Volume change failed",
-					Body:   volumeErrorMessage(m.Err),
-				}),
+				a.toasts.Cmd(toast),
 			)
 		}
 		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
@@ -766,19 +731,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
-			var forbiddenErr *api.ForbiddenError
-			if errors.As(m.Err, &forbiddenErr) {
-				return a, a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastError,
-					Title:  "Add to queue failed",
-					Body:   forbiddenErr.Message,
-				})
+			toast := a.errorMapper.Map(uikit.OpAddToQueue, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, nil
 			}
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Add to queue failed",
-				Body:   m.Err.Error(),
-			})
+			return a, a.toasts.Cmd(toast)
 		}
 		if m.TrackName != "" {
 			return a, a.toasts.Cmd(uikit.Toast{
@@ -1128,11 +1085,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.devicePane = dp
 				}
 			}
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load devices",
-				Body:   m.Err.Error(),
-			})
+			toast := a.errorMapper.Map(uikit.OpDevices, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, nil
+			}
+			return a, a.toasts.Cmd(toast)
 		}
 		a.store.ClearDevicesError()
 		a.store.SetDevicesFetchedAt(time.Now())
@@ -1181,13 +1138,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			toast := a.errorMapper.Map(uikit.OpTransfer, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, fetchPlaybackStateCmd(a.player, api.Background)
+			}
 			return a, tea.Batch(
 				fetchPlaybackStateCmd(a.player, api.Background),
-				a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastError,
-					Title:  "Device transfer failed",
-					Body:   m.Err.Error(),
-				}),
+				a.toasts.Cmd(toast),
 			)
 		}
 		// Transfer succeeded — use Interactive priority so the reconcile GET fires

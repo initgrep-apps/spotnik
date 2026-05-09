@@ -29,8 +29,11 @@ type PlaybackStateFetchedMsg struct {
 
 // PlaybackCmdSentMsg is returned after any playback control command completes.
 // Err is non-nil if the API returned an error.
+// Source identifies the originating command (e.g. "playback", "volume") so the
+// handler can select the correct Operation for error mapping.
 type PlaybackCmdSentMsg struct {
-	Err error
+	Err    error
+	Source string
 }
 
 // VolumeIntentMsg is emitted by NowPlayingPane after the volume debounce

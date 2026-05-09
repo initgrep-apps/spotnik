@@ -5,7 +5,6 @@ package app
 
 import (
 	"errors"
-	"net/url"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,13 +52,39 @@ func TestBuildSetVolumeCmd_401_EmitsVolumeAppliedMsgWithUnauthorized(t *testing.
 	assert.True(t, errors.As(sent.Err, &unauth), "Err must be an UnauthorizedError")
 }
 
-// TestVolumeErrorMessage_NetworkErrors returns a user-friendly message for network
-// failures so the user never sees raw Go error strings.
-func TestVolumeErrorMessage_NetworkErrors(t *testing.T) {
-	assert.Equal(t, "Check your connection.", volumeErrorMessage(&url.Error{Op: "Post", Err: errors.New("connection refused")}))
-}
+// TestVolumeAppliedMsg_Error_RoutesThroughErrorMapper verifies that a generic error
+// in VolumeAppliedMsg is mapped via ErrorMapper using OpVolume.
+func TestVolumeAppliedMsg_Error_RoutesThroughErrorMapper(t *testing.T) {
+	mock := &apitest.MockPlayer{
+		SetVolumeErr: errors.New("volume api exploded"),
+	}
+	a := newVolumeInternalTestApp(mock)
 
-// TestVolumeErrorMessage_GenericError returns a generic fallback for non-network errors.
-func TestVolumeErrorMessage_GenericError(t *testing.T) {
-	assert.Equal(t, "Volume change failed", volumeErrorMessage(errors.New("something else")))
+	intent := panes.VolumeIntentMsg{TargetVol: 60, Seq: 1}
+	_, cmd := a.Update(intent)
+	require.NotNil(t, cmd)
+
+	result := cmd()
+	sent, ok := result.(panes.VolumeAppliedMsg)
+	require.True(t, ok, "error from SetVolume must produce VolumeAppliedMsg, got %T", result)
+	require.Error(t, sent.Err)
+
+	// Feed the VolumeAppliedMsg back into Update to trigger the handler.
+	_, handlerCmd := a.Update(sent)
+	require.NotNil(t, handlerCmd)
+
+	// Two-pass: execute alert cmd to render toast.
+	alertMsg := handlerCmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "Volume change failed", "toast should show OpVolume title")
+	assert.NotContains(t, view, "volume api exploded", "raw error text must not be shown")
 }
