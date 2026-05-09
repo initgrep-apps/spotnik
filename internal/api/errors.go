@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -43,7 +44,7 @@ func checkResponseStatus(resp *http.Response, body []byte) error {
 		return &UnauthorizedError{}
 
 	case http.StatusForbidden:
-		msg := string(body)
+		msg := parseSpotifyErrorMessage(body)
 		if msg == "" {
 			msg = "Spotify Premium required"
 		}
@@ -55,4 +56,25 @@ func checkResponseStatus(resp *http.Response, body []byte) error {
 	default:
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
+}
+
+// parseSpotifyErrorMessage attempts to extract the human-readable message from
+// a Spotify JSON error envelope ({"error":{"status":403,"message":"..."}}).
+// If the body is not valid JSON or the message field is empty, it falls back
+// to returning the raw body string (trimmed).
+func parseSpotifyErrorMessage(body []byte) string {
+	var envelope struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Error.Message != "" {
+		return envelope.Error.Message
+	}
+	// Fallback: return plain-text body if present.
+	s := string(body)
+	if s != "" {
+		return s
+	}
+	return ""
 }

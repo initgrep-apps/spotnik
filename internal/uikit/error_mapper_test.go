@@ -18,7 +18,7 @@ import (
 func TestErrorMapper_NilError(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	toast := em.Map(uikit.OpSearch, nil)
-	assert.Equal(t, uikit.ToastIntent(0), toast.Intent, "nil error must return zero Toast")
+	assert.Equal(t, uikit.ToastNone, toast.Intent, "nil error must return ToastNone")
 	assert.Empty(t, toast.Title)
 	assert.Empty(t, toast.Body)
 }
@@ -29,7 +29,7 @@ func TestErrorMapper_UnauthorizedError(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	err := &api.UnauthorizedError{}
 	toast := em.Map(uikit.OpPlayback, err)
-	assert.Equal(t, uikit.ToastIntent(0), toast.Intent, "UnauthorizedError must return zero Toast")
+	assert.Equal(t, uikit.ToastNone, toast.Intent, "UnauthorizedError must return ToastNone")
 	assert.Empty(t, toast.Title)
 	assert.Empty(t, toast.Body)
 }
@@ -156,7 +156,7 @@ func TestErrorMapper_NeverExposesRawError(t *testing.T) {
 	}
 	for _, err := range rawErrors {
 		toast := em.Map(uikit.OpStats, err)
-		if toast.Intent == 0 {
+		if toast.Intent == uikit.ToastNone {
 			continue // silent drop — acceptable
 		}
 		assert.NotEqual(t, err.Error(), toast.Body,

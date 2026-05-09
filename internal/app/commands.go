@@ -94,7 +94,7 @@ func (a *App) buildSetVolumeCmd(targetVol int) tea.Cmd {
 	player := a.player
 	return func() tea.Msg {
 		if player == nil {
-			return panes.PlaybackCmdSentMsg{Err: errNilClient}
+			return panes.PlaybackCmdSentMsg{Err: errNilClient, Source: "volume"}
 		}
 		ctx := api.WithPriority(context.Background(), api.Interactive)
 		err := player.SetVolume(ctx, targetVol)
@@ -106,7 +106,7 @@ func (a *App) buildSetVolumeCmd(targetVol int) tea.Cmd {
 				return unauthorizedMsg{}
 			}
 		}
-		return panes.PlaybackCmdSentMsg{Err: err}
+		return panes.PlaybackCmdSentMsg{Err: err, Source: "volume"}
 	}
 }
 

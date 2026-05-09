@@ -68,25 +68,25 @@ type ErrorMapper struct{}
 // vocabulary of messages. The caller may override TTL or append context.
 //
 // Classification priority:
-//  1. nil error → zero Toast (no notification needed)
-//  2. api.UnauthorizedError → zero Toast (caller routes to unauthorizedMsg handler)
+//  1. nil error → ToastNone (no notification needed)
+//  2. api.UnauthorizedError → ToastNone (caller routes to unauthorizedMsg handler)
 //  3. api.RateLimitError → ToastWarning "Rate-limited" with retry-after body
 //  4. api.ForbiddenError → ToastWarning "Spotify Premium required"
 //  5. context.Canceled / context.DeadlineExceeded → ToastError "Request took too long."
 //  6. net.Error (timeout) or *url.Error / *net.DNSError → ToastError "Check your connection."
 //  7. Everything else (5xx, generic) → ToastError "Spotify is having trouble."
 //
-// A zero Toast (Intent == 0) means silent drop or delegated path.
-// Callers should check `toast.Intent == 0` before dispatching.
+// A Toast with Intent == ToastNone means silent drop or delegated path.
+// Callers should check `toast.Intent == ToastNone` before dispatching.
 func (em *ErrorMapper) Map(op Operation, err error) Toast {
 	if err == nil {
-		return Toast{}
+		return Toast{Intent: ToastNone}
 	}
 
 	// Priority 2: UnauthorizedError — delegated to the unauthorizedMsg handler.
 	var unauthorizedErr *api.UnauthorizedError
 	if errors.As(err, &unauthorizedErr) {
-		return Toast{}
+		return Toast{Intent: ToastNone}
 	}
 
 	// Priority 3: RateLimitError — advisory warning with retry-after.

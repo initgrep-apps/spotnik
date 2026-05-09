@@ -14,6 +14,13 @@ import (
 type ToastIntent int
 
 const (
+	// ToastNone is the sentinel value returned by ErrorMapper.Map when no toast
+	// should be dispatched (nil error or UnauthorizedError). It is outside the
+	// valid range of dispatchable intents so ToastManager.Cmd silently drops it.
+	ToastNone ToastIntent = -1
+)
+
+const (
 	// ToastSuccess indicates a successful completion (e.g. "Saved", "Added").
 	ToastSuccess ToastIntent = iota
 	// ToastError indicates a failure that requires user attention.

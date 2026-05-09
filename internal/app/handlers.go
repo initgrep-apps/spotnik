@@ -235,7 +235,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchPane = sp
 			}
 			toast := a.errorMapper.Map(uikit.OpSearch, m.Err)
-			if toast.Intent == 0 {
+			if toast.Intent == uikit.ToastNone {
 				// UnauthorizedError — the unauthorizedMsg handler is invoked upstream;
 				// no additional toast needed here.
 				return a, nil
@@ -560,6 +560,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Queue update failed",
+				Body:   "Check your connection.",
 			})
 		}
 		a.store.ClearQueueError()
@@ -644,18 +645,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Body:   fmt.Sprintf("Wait %ds before retrying.", rateLimitErr.RetryAfter),
 				})
 			}
-			var forbiddenErr *api.ForbiddenError
-			if errors.As(m.Err, &forbiddenErr) {
-				return a, tea.Batch(
-					fetchPlaybackStateCmd(a.player, api.Background),
-					a.toasts.Cmd(uikit.Toast{
-						Intent: uikit.ToastWarning,
-						Title:  "Spotify Premium required",
-					}),
-				)
+			op := uikit.OpPlayback
+			if m.Source == "volume" {
+				op = uikit.OpVolume
 			}
-			toast := a.errorMapper.Map(uikit.OpPlayback, m.Err)
-			if toast.Intent == 0 {
+			toast := a.errorMapper.Map(op, m.Err)
+			if toast.Intent == uikit.ToastNone {
 				return a, fetchPlaybackStateCmd(a.player, api.Background)
 			}
 			return a, tea.Batch(
@@ -709,7 +704,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			toast := a.errorMapper.Map(uikit.OpAddToQueue, m.Err)
-			if toast.Intent == 0 {
+			if toast.Intent == uikit.ToastNone {
 				return a, nil
 			}
 			return a, a.toasts.Cmd(toast)
@@ -1063,7 +1058,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			toast := a.errorMapper.Map(uikit.OpDevices, m.Err)
-			if toast.Intent == 0 {
+			if toast.Intent == uikit.ToastNone {
 				return a, nil
 			}
 			return a, a.toasts.Cmd(toast)
@@ -1116,7 +1111,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			toast := a.errorMapper.Map(uikit.OpTransfer, m.Err)
-			if toast.Intent == 0 {
+			if toast.Intent == uikit.ToastNone {
 				return a, fetchPlaybackStateCmd(a.player, api.Background)
 			}
 			return a, tea.Batch(
