@@ -1,6 +1,7 @@
 package uikit
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,37 +36,16 @@ const (
 )
 
 // RegisterBubbleupAlerts builds the bubbleup AlertDefinition slice for the five
-// toast intents. Glyph prefixes are resolved via GlyphFor at call time so the
-// result honours ActiveMode(). Call this after uikit.Use() to ensure the correct
-// mode is active.
+// toast intents. Prefix is set to "" because ToastManager.Cmd renders the glyph
+// inline via renderToastMessage as a vertically-centred left column.
+// Call this after uikit.Use() to ensure the correct mode is active.
 func RegisterBubbleupAlerts(t theme.Theme) []bubbleup.AlertDefinition {
-	m := ActiveMode()
 	return []bubbleup.AlertDefinition{
-		{
-			Key:       "success",
-			ForeColor: string(t.Success()),
-			Prefix:    GlyphFor(GlyphSuccess, m),
-		},
-		{
-			Key:       "error",
-			ForeColor: string(t.Error()),
-			Prefix:    GlyphFor(GlyphError, m),
-		},
-		{
-			Key:       "warning",
-			ForeColor: string(t.Warning()),
-			Prefix:    GlyphFor(GlyphWarning, m),
-		},
-		{
-			Key:       "info",
-			ForeColor: string(t.Info()),
-			Prefix:    GlyphFor(GlyphInfo, m),
-		},
-		{
-			Key:       "ratelimit",
-			ForeColor: string(t.Warning()),
-			Prefix:    GlyphFor(GlyphRateLimit, m),
-		},
+		{Key: "success", ForeColor: string(t.Success()), Prefix: ""},
+		{Key: "error", ForeColor: string(t.Error()), Prefix: ""},
+		{Key: "warning", ForeColor: string(t.Warning()), Prefix: ""},
+		{Key: "info", ForeColor: string(t.Info()), Prefix: ""},
+		{Key: "ratelimit", ForeColor: string(t.Warning()), Prefix: ""},
 	}
 }
 
@@ -145,6 +125,38 @@ func (t Toast) Normalize() Toast {
 	return t
 }
 
+// renderToastMessage builds the multi-line interior string for bubbleup with a
+// two-column layout: a 4-char left column containing the glyph on the
+// vertically-centred row, and the right column containing title + optional body.
+func renderToastMessage(glyph, title, body string) string {
+	right := []string{title}
+	if body != "" {
+		right = append(right, body)
+	}
+	lines := len(right)
+
+	// Determine glyph row (0-indexed). For even line counts this places the glyph
+	// on the upper-middle line (e.g. line 0 of 2, line 1 of 4). True centre across
+	// an even number of rows is impossible in a character grid; this convention is
+	// the standard TUI approximation.
+	glyphRow := (lines - 1) / 2
+
+	const leftWidth = 4 // " " + glyph(1) + " " + gap(1)
+	var sb strings.Builder
+	for i := 0; i < lines; i++ {
+		if i == glyphRow {
+			sb.WriteString(" " + glyph + "  ")
+		} else {
+			sb.WriteString(strings.Repeat(" ", leftWidth))
+		}
+		sb.WriteString(right[i])
+		if i < lines-1 {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
 // truncateRunes truncates s to at most max runes. If len([]rune(s)) > max,
 // the last N runes (where N = len(ellipsis runes)) are replaced with the
 // ellipsis glyph (unicode "…" = 1 rune, ascii "..." = 3 runes) so the result
@@ -195,10 +207,8 @@ func (tm *ToastManager) Cmd(t Toast) tea.Cmd {
 		return nil
 	}
 	t = t.Normalize()
+	glyph := ToastGlyph(t.Intent, ActiveMode())
+	msg := renderToastMessage(glyph, t.Title, t.Body)
 	key := intentKey[t.Intent]
-	msg := t.Title
-	if t.Body != "" {
-		msg = t.Title + "\n" + t.Body
-	}
 	return tm.model.NewAlertCmd(key, msg)
 }

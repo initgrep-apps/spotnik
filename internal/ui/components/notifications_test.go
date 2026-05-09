@@ -190,7 +190,7 @@ func TestNewNotifications_WarningPrefixIsCircleTriangle(t *testing.T) {
 	model := NewNotifications(th)
 
 	// Activate a warning alert and verify ◬ appears in the rendered output.
-	cmd := model.NewAlertCmd("warning", "Premium required")
+	cmd := model.NewAlertCmd("warning", " ◬  Premium required")
 	require.NotNil(t, cmd)
 	msg := cmd()
 	updated, _ := model.Update(msg)
@@ -205,7 +205,7 @@ func TestNewNotifications_WarningPrefixIsCircleTriangle(t *testing.T) {
 	content := strings.Join(contentLines, "\n")
 	rendered := am.Render(content)
 	assert.Contains(t, rendered, "◬",
-		"warning toast must use ◬ (U+25EC) prefix, not U+26A0")
+		"warning toast must render inline ◬ glyph (two-column layout)")
 	assert.NotContains(t, rendered, "\u26A0",
 		"warning toast must not use old U+26A0 glyph")
 }
@@ -234,7 +234,7 @@ func TestNewNotifications_WarningPrefixIsExclamation_ASCII(t *testing.T) {
 	th := theme.Load(theme.DefaultThemeID)
 	model := NewNotifications(th)
 
-	cmd := model.NewAlertCmd("warning", "Premium required")
+	cmd := model.NewAlertCmd("warning", " !  Premium required")
 	require.NotNil(t, cmd)
 	msg := cmd()
 	updated, _ := model.Update(msg)
@@ -250,7 +250,7 @@ func TestNewNotifications_WarningPrefixIsExclamation_ASCII(t *testing.T) {
 	rendered := am.Render(content)
 
 	assert.Contains(t, rendered, "!",
-		"warning toast in ASCII mode must use '!' prefix")
+		"warning toast in ASCII mode must render inline ! glyph (two-column layout)")
 	assert.NotContains(t, rendered, "◬",
 		"warning toast in ASCII mode must not use unicode ◬ glyph")
 }
