@@ -70,25 +70,25 @@ func TestErrorMapper_ForbiddenError_WithMessage(t *testing.T) {
 
 // TestErrorMapper_ForbiddenError_DefaultMessage verifies that when the
 // ForbiddenError message is the default "Spotify Premium required" string,
-// it is omitted from the body to avoid redundancy.
+// a concrete recovery body is substituted so the toast is never empty.
 func TestErrorMapper_ForbiddenError_DefaultMessage(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	err := &api.ForbiddenError{Message: "Spotify Premium required"}
 	toast := em.Map(uikit.OpPlayback, err)
 	require.Equal(t, uikit.ToastWarning, toast.Intent)
 	assert.Equal(t, "Spotify Premium required", toast.Title)
-	assert.Empty(t, toast.Body, "default ForbiddenError message must be omitted from body")
+	assert.Equal(t, "A Premium subscription is required for this feature.", toast.Body)
 }
 
 // TestErrorMapper_ForbiddenError_EmptyMessage verifies that an empty
-// ForbiddenError.Message is also omitted from the body.
+// ForbiddenError.Message receives the default recovery body.
 func TestErrorMapper_ForbiddenError_EmptyMessage(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	err := &api.ForbiddenError{Message: ""}
 	toast := em.Map(uikit.OpQueue, err)
 	require.Equal(t, uikit.ToastWarning, toast.Intent)
 	assert.Equal(t, "Spotify Premium required", toast.Title)
-	assert.Empty(t, toast.Body)
+	assert.Equal(t, "A Premium subscription is required for this feature.", toast.Body)
 }
 
 // TestErrorMapper_NetworkTimeout verifies that a net.Error with Timeout()=true

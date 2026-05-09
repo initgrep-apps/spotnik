@@ -330,7 +330,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Failed to load stats",
-				Body:   "Press f to retry.",
+				Body:   string(uikit.RecoveryPressFRetry),
 			})
 		}
 		a.store.ClearStatsError()
@@ -543,7 +543,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Session expired",
-				Body:   "Run: spotnik auth.",
+				Body:   string(uikit.RecoveryRunAuth),
 			})
 		}
 		// Refresh succeeded — re-initialize all API clients with the new token.
@@ -560,7 +560,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Queue update failed",
-				Body:   "Check your connection.",
+				Body:   string(uikit.RecoveryCheckConnection),
 			})
 		}
 		a.store.ClearQueueError()
@@ -590,7 +590,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, a.toasts.Cmd(uikit.Toast{
 					Intent: uikit.ToastWarning,
 					Title:  "Playback updates failing",
-					Body:   "Check your connection.",
+					Body:   string(uikit.RecoveryCheckConnection),
 				})
 			}
 			return a, nil
@@ -800,7 +800,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Failed to load playlists",
-				Body:   "Press Tab to retry.",
+				Body:   string(uikit.RecoveryPressTabRetry),
 			})
 		}
 		a.store.ClearPlaylistsFetchError()
@@ -856,7 +856,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Failed to load albums",
-				Body:   "Press Tab to retry.",
+				Body:   string(uikit.RecoveryPressTabRetry),
 			})
 		}
 		a.store.ClearAlbumsFetchError()
@@ -904,7 +904,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Failed to load liked tracks",
-				Body:   "Press Tab to retry.",
+				Body:   string(uikit.RecoveryPressTabRetry),
 			})
 		}
 		a.store.ClearLikedTracksFetchError()
@@ -946,7 +946,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastError,
 				Title:  "Failed to load recently played",
-				Body:   "Press Tab to retry.",
+				Body:   string(uikit.RecoveryPressTabRetry),
 			})
 		}
 		a.store.ClearRecentPlayedFetchError()

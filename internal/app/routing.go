@@ -345,7 +345,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				a.toasts.Cmd(uikit.Toast{
 					Intent: uikit.ToastError,
 					Title:  "Failed to load playlist tracks",
-					Body:   "Press Enter to retry.",
+					Body:   string(uikit.RecoveryPressEnterRetry),
 				}),
 			), true
 		}
@@ -467,7 +467,7 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				a.toasts.Cmd(uikit.Toast{
 					Intent: uikit.ToastError,
 					Title:  "Failed to load album tracks",
-					Body:   "Press Enter to retry.",
+					Body:   string(uikit.RecoveryPressEnterRetry),
 				}),
 			), true
 		}
