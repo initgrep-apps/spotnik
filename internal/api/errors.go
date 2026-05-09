@@ -68,7 +68,7 @@ func parseSpotifyErrorMessage(body []byte) string {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Error.Message != "" {
+	if err := json.Unmarshal(body, &envelope); err == nil {
 		return envelope.Error.Message
 	}
 	// Fallback: return plain-text body if present.
