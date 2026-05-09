@@ -4,6 +4,7 @@ package app
 // Must be package app (not app_test) because unauthorizedMsg is unexported.
 
 import (
+	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,10 +31,10 @@ func newVolumeInternalTestApp(mock *apitest.MockPlayer) *App {
 	return a
 }
 
-// TestBuildSetVolumeCmd_401_EmitsUnauthorized verifies that an UnauthorizedError
-// (401) from the player causes buildSetVolumeCmd to return an unauthorizedMsg so
-// the token refresh flow is triggered.
-func TestBuildSetVolumeCmd_401_EmitsUnauthorized(t *testing.T) {
+// TestBuildSetVolumeCmd_401_EmitsVolumeAppliedMsgWithUnauthorized verifies that an
+// UnauthorizedError (401) from the player causes buildSetVolumeCmd to return
+// VolumeAppliedMsg with the unauthorized error wrapped in Err.
+func TestBuildSetVolumeCmd_401_EmitsVolumeAppliedMsgWithUnauthorized(t *testing.T) {
 	mock := &apitest.MockPlayer{
 		SetVolumeErr: &api.UnauthorizedError{},
 	}
@@ -44,6 +45,46 @@ func TestBuildSetVolumeCmd_401_EmitsUnauthorized(t *testing.T) {
 	require.NotNil(t, cmd)
 
 	result := cmd()
-	_, ok := result.(unauthorizedMsg)
-	assert.True(t, ok, "401 from SetVolume must produce unauthorizedMsg, got %T", result)
+	sent, ok := result.(panes.VolumeAppliedMsg)
+	require.True(t, ok, "401 from SetVolume must produce VolumeAppliedMsg, got %T", result)
+	assert.Error(t, sent.Err)
+	var unauth *api.UnauthorizedError
+	assert.True(t, errors.As(sent.Err, &unauth), "Err must be an UnauthorizedError")
+}
+
+// TestVolumeAppliedMsg_Error_RoutesThroughErrorMapper verifies that a generic error
+// in VolumeAppliedMsg is mapped via ErrorMapper using OpVolume.
+func TestVolumeAppliedMsg_Error_RoutesThroughErrorMapper(t *testing.T) {
+	mock := &apitest.MockPlayer{
+		SetVolumeErr: errors.New("volume api exploded"),
+	}
+	a := newVolumeInternalTestApp(mock)
+
+	intent := panes.VolumeIntentMsg{TargetVol: 60, Seq: 1}
+	_, cmd := a.Update(intent)
+	require.NotNil(t, cmd)
+
+	result := cmd()
+	sent, ok := result.(panes.VolumeAppliedMsg)
+	require.True(t, ok, "error from SetVolume must produce VolumeAppliedMsg, got %T", result)
+	require.Error(t, sent.Err)
+
+	// Feed the VolumeAppliedMsg back into Update to trigger the handler.
+	_, handlerCmd := a.Update(sent)
+	require.NotNil(t, handlerCmd)
+
+	// Two-pass: execute alert cmd to render toast.
+	alertMsg := handlerCmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "Volume change failed", "toast should show OpVolume title")
+	assert.NotContains(t, view, "volume api exploded", "raw error text must not be shown")
 }

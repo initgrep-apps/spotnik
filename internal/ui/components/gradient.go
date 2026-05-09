@@ -141,12 +141,17 @@ func (b *GradientVolumeBar) SetWidth(width int) {
 }
 
 // SetConfirmed updates currentVol from the authoritative Spotify poll value.
-// It is a no-op when hasPending is true — the optimistic pending value is shown
-// until the debounce resolves, at which point the next poll re-syncs.
+// When hasPending is true, it only clears hasPending if the poll matches the
+// API-confirmed currentVol, blocking stale polls from snapping the bar back.
+// When hasPending is false, it updates currentVol directly.
 func (b *GradientVolumeBar) SetConfirmed(vol int) {
-	if !b.hasPending {
-		b.currentVol = vol
+	if b.hasPending {
+		if vol == b.currentVol {
+			b.hasPending = false
+		}
+		return
 	}
+	b.currentVol = vol
 }
 
 // HandleKey computes the new pending volume, updates currentVol immediately so
@@ -177,18 +182,37 @@ func (b *GradientVolumeBar) HandleKey(delta, confirmedVol int) tea.Cmd {
 }
 
 // HandleDebounce checks whether the debounce tick is current.
-// Returns (true, targetVol) when seq matches — the caller should emit
-// VolumeIntentMsg{TargetVol: targetVol} to trigger the API call.
-// Returns (false, 0) when the tick is stale (a newer keypress superseded it).
-// Increments seq on a successful match so duplicate ticks with the same seq
-// are discarded on subsequent calls.
-func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched bool, targetVol int) {
+// Returns (true, targetVol, intentSeq) when matched — the caller must forward
+// intentSeq through VolumeIntentMsg so ConfirmFromAPI/CancelPending can guard
+// against concurrent bursts. hasPending stays true until the API call returns.
+// Returns (false, 0, 0) when the tick is stale (newer keypress superseded it).
+func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched bool, targetVol, intentSeq int) {
 	if m.Seq != b.seq {
-		return false, 0
+		return false, 0, 0
 	}
-	b.hasPending = false
-	b.seq++ // prevent double-fire: any future tick with the same seq is now stale
-	return true, m.TargetVol
+	b.seq++ // double-fire guard: any future tick with this same seq is now stale
+	return true, m.TargetVol, m.Seq
+}
+
+// ConfirmFromAPI sets currentVol to the API-confirmed value but keeps hasPending true.
+// hasPending is only cleared by SetConfirmed when a subsequent poll returns the same
+// volume, preventing stale in-flight polls from snapping the bar back to an old value.
+func (b *GradientVolumeBar) ConfirmFromAPI(intentSeq, vol int) {
+	if b.seq == intentSeq+1 {
+		b.currentVol = vol
+		// hasPending stays true — SetConfirmed clears it when a poll matches.
+	}
+}
+
+// CancelPending reverts currentVol to the last confirmed store value and clears
+// hasPending, but only when no newer burst has started. Call this on API error
+// so the bar immediately snaps back to the real server-side volume instead of
+// leaving the user at an optimistic value that was never applied.
+func (b *GradientVolumeBar) CancelPending(intentSeq, confirmedVol int) {
+	if b.seq == intentSeq+1 {
+		b.hasPending = false
+		b.currentVol = confirmedVol
+	}
 }
 
 // Render returns the volume bar string using the bar's current volume state.

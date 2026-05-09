@@ -413,7 +413,8 @@ func TestApp_BuildFetchCmds_NilLibrary(t *testing.T) {
 	}
 }
 
-// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a toast with the error text.
+// TestApp_PlaybackCmdSentMsg_WithError verifies that a playback error emits a clean toast via
+// ErrorMapper — raw error strings must not appear; the body should be the friendly fallback.
 // Uses the two-pass pattern: execute the batch cmd and feed alert messages back to render the toast.
 func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	cfg := &config.Config{}
@@ -422,7 +423,8 @@ func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	a = m.(*app.App)
 
-	errMsg := panes.PlaybackCmdSentMsg{Err: fmt.Errorf("playback failed")}
+	rawErr := fmt.Errorf("playback failed")
+	errMsg := panes.PlaybackCmdSentMsg{Err: rawErr}
 	_, cmd := a.Update(errMsg)
 	require.NotNil(t, cmd, "error result should produce refetch + alert toast cmd")
 
@@ -438,7 +440,10 @@ func TestApp_PlaybackCmdSentMsg_WithError(t *testing.T) {
 	} else if batchMsg != nil {
 		a.Update(batchMsg)
 	}
-	assert.Contains(t, a.View(), "playback failed", "error toast should show the error text")
+	view := a.View()
+	// ErrorMapper maps generic errors to "Playback command failed" title and a friendly body.
+	assert.Contains(t, view, "Playback command failed", "toast should show operation-specific title")
+	assert.NotContains(t, view, rawErr.Error(), "raw error text must not be shown to the user")
 }
 
 // TestApp_PlaybackCmdSentMsg_NoError verifies that a successful playback cmd triggers refetch.
@@ -605,7 +610,7 @@ func TestApp_AddToQueueResultMsg_Success(t *testing.T) {
 	assert.Contains(t, a.View(), "Added to queue", "success toast should mention queue addition")
 }
 
-// TestApp_AddToQueueResultMsg_Error verifies error emits a toast with the error text.
+// TestApp_AddToQueueResultMsg_Error verifies error emits a clean toast via ErrorMapper.
 // Uses the two-pass pattern: execute the alert cmd then verify text appears in View().
 func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
@@ -614,14 +619,17 @@ func TestApp_AddToQueueResultMsg_Error(t *testing.T) {
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	a = m.(*app.App)
 
-	errMsg := panes.AddToQueueResultMsg{Err: fmt.Errorf("queue failed")}
+	rawErr := fmt.Errorf("internal-queue-api-exploded-500")
+	errMsg := panes.AddToQueueResultMsg{Err: rawErr}
 	_, cmd := a.Update(errMsg)
 	require.NotNil(t, cmd, "error result should emit an alert toast cmd")
 
 	// Two-pass: execute the alert cmd, feed the resulting message back to render the toast.
 	alertMsg := cmd()
 	_, _ = a.Update(alertMsg)
-	assert.Contains(t, a.View(), "queue failed", "error toast should show the error text")
+	view := a.View()
+	assert.Contains(t, view, "Add to queue failed", "toast should show operation-specific title")
+	assert.NotContains(t, view, rawErr.Error(), "raw error text must not be shown to the user")
 }
 
 // TestApp_SlashOpensSearch verifies '/' opens the search overlay.
@@ -1395,7 +1403,7 @@ func TestApp_PlaylistViewHandlesFetchTracksRequest(t *testing.T) {
 	_ = a
 }
 
-// TestApp_PlaylistRemoveResultMsg_Error verifies remove error is forwarded to playlist pane.
+// TestApp_PlaylistRemoveResultMsg_Error verifies remove error routes through ErrorMapper.
 func TestApp_PlaylistRemoveResultMsg_Error(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -1406,11 +1414,30 @@ func TestApp_PlaylistRemoveResultMsg_Error(t *testing.T) {
 		{ID: "t1", Name: "Track A", URI: "spotify:track:t1", DurationMs: 180000, Artists: []api.Artist{{Name: "Artist A"}}},
 	})
 
-	msg := panes.PlaylistRemoveResultMsg{PlaylistID: "pl-1", Err: fmt.Errorf("remove failed")}
+	// Set window size so alerts render.
+	m, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(*app.App)
+
+	rawErr := fmt.Errorf("remove failed")
+	msg := panes.PlaylistRemoveResultMsg{PlaylistID: "pl-1", Err: rawErr}
 	model, cmd := a.Update(msg)
 	a = model.(*app.App)
-	require.NotNil(t, cmd, "should return dismiss timer on error")
-	_ = a
+	require.NotNil(t, cmd, "should return dismiss timer + toast on error")
+
+	// Two-pass: execute alert cmd to render toast.
+	alertMsg := cmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "Failed to load playlists", "toast should show operation-specific title from ErrorMapper")
+	assert.NotContains(t, view, rawErr.Error(), "raw error text must not be shown")
 }
 
 // TestApp_PlaylistTracksLoadedMsg_Forwarded verifies PlaylistTracksLoadedMsg is forwarded

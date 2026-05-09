@@ -45,3 +45,45 @@ Items to log:
    other Msg, (b) let routing tests assert the URL without redirecting
    stderr, and (c) document the "what was copied" semantics in the type
    itself.
+
+---
+
+## Volume bar snap-back — review polish
+
+**Found:** 2026-05-08 | **Source:** PR #271 Review
+**Feature:** 03-playback
+
+Suggestion-tier follow-ups from the PR #271 multi-agent review. None
+block merge; bundle into a single small story when convenient.
+
+Items to log:
+
+1. Missing app-level test for `VolumeAppliedMsg` with 401 Unauthorized —
+   verify the handler routes to `unauthorizedMsg{}` token-refresh path.
+2. Missing app-level test for `VolumeAppliedMsg` with generic (non-429,
+   non-401) error — verify the `tea.Batch` dispatches both
+   `fetchPlaybackStateCmd` and the "Volume change failed" toast.
+3. `TestApp_VolumeDebounce_FiveRapidPresses_SendsOneCall` — `MockPlayer`
+   uses a boolean `SetVolumeCalled` flag, so the test proves "at least one
+   call" not "exactly one call". Add `SetVolumeCallCount int` to the mock
+   and assert equality.
+4. `TestApp_VolumeAppliedMsg_429_ClearsPendingAndBacksOff` — executes the
+   final command but never inspects the `NowPlayingPane` to confirm
+   `hasPending` was cleared. Assert via `View()` that the bar is no longer
+   pending after the message is handled.
+5. Missing `NowPlayingPane` test for stale `VolumeAppliedMsg` (seq mismatch)
+   — prime a burst, start a second burst, feed the first burst's
+   `VolumeAppliedMsg`, assert the bar stays in the second burst's pending
+   state.
+6. `TestApp_VolumeAppliedMsg_Success_DispatchesInteractivePoll` — only
+   asserts `NotNil`. Execute the returned command and verify it produces
+   a `PlaybackStateFetchedMsg` (or at least is not a no-op).
+7. `VolumeAppliedMsg` handler in `handlers.go` discards the pane command
+   with `updated, _ := np.Update(m)`. Today harmless (pane returns nil),
+   but a latent bug if a future refactor adds a command to the pane's
+   `VolumeAppliedMsg` handler. Capture `cmd` and batch it with downstream
+   effects.
+8. `VolumeAppliedMsg` zero-value ambiguity — `VolumeAppliedMsg{}` reads as
+   "volume successfully set to 0%". Consider adding constructor functions
+   `NewVolumeAppliedMsg(vol, seq int)` and `NewVolumeAppliedError(seq int,
+   err error)` to make the success/failure duality explicit at call sites.
