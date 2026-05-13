@@ -573,9 +573,12 @@ func (a *App) pollIntervals() (playbackInterval, queueInterval int) {
 // Isolated from the global 429 backoff — a failed library fetch does not
 // affect playback polling intervals.
 type pollState struct {
-	backoffTicks int  // ticks remaining before next retry after an error
-	errorCount   int  // consecutive errors; drives exponential backoff calculation
-	hasData      bool // true after first successful load; switches interval regime
+	backoffTicks int // ticks remaining before next retry after an error
+	// errorCount is incremented on each consecutive error and drives the
+	// exponential backoff calculation in calcBackoffTicks. Reset to 0 on success.
+	// Written by error handlers in Story 200; defined here so the type is complete.
+	errorCount int  //nolint:unused
+	hasData    bool // true after first successful load; switches interval regime
 }
 
 // libraryIntervals defines the polling cadence (seconds) for a library data type.
