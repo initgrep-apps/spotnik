@@ -126,9 +126,10 @@ func TestBuildSearchPageCmd_PageOne_UsesOffset0(t *testing.T) {
 	assert.Equal(t, "0", capturedOffset, "page 1 should use offset=0")
 }
 
-// TestBuildSearchPageCmd_OffsetAtCap_ReturnsNil verifies that page=101 (offset=1000)
-// returns nil because Spotify rejects offset >= 1000.
-func TestBuildSearchPageCmd_OffsetAtCap_ReturnsNil(t *testing.T) {
+// TestBuildSearchPageCmd_OffsetAtLimit_ReturnsError verifies that page=101
+// (offset=1000) returns SearchPageLoadedMsg with a non-nil Err explaining
+// the Spotify limit — no silent nil drop.
+func TestBuildSearchPageCmd_OffsetAtLimit_ReturnsError(t *testing.T) {
 	hit := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hit = true
@@ -138,13 +139,20 @@ func TestBuildSearchPageCmd_OffsetAtCap_ReturnsNil(t *testing.T) {
 
 	ctx := context.Background()
 	client := api.NewSearchClient(srv.URL, "test-token")
-	// page=101 → offset=(101-1)*10=1000 → guard fires → nil
+	// page=101 → offset=(101-1)*10=1000 → guard fires → error msg
 	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 101)
 	require.NotNil(t, cmd, "BuildSearchPageCmd should return a non-nil tea.Cmd")
 
 	msg := cmd()
-	assert.Nil(t, msg, "cmd should return nil when offset reaches the Spotify cap of 1000")
+	require.NotNil(t, msg, "cmd should return a non-nil message when offset reaches 1000")
 	assert.False(t, hit, "HTTP server should NOT be hit when offset guard fires")
+
+	pageMsg, ok := msg.(panes.SearchPageLoadedMsg)
+	require.True(t, ok, "expected SearchPageLoadedMsg, got %T", msg)
+	assert.Equal(t, "jazz", pageMsg.Query, "Query should be preserved in error msg")
+	assert.Equal(t, 101, pageMsg.Page, "Page should be preserved in error msg")
+	require.Error(t, pageMsg.Err, "offset guard should set Err")
+	assert.Contains(t, pageMsg.Err.Error(), "1000", "error message should mention the limit")
 }
 
 // TestBuildSearchPageCmd_OffsetJustUnderCap_DoesNotReturnNil verifies that page=100

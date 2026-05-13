@@ -295,10 +295,14 @@ func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string,
 			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: errNilClient}
 		}
 		offset := (page - 1) * SearchPageSize
-		// Spotify rejects any request with offset >= 1000; return nil so Bubble Tea
-		// drops the message silently rather than surfacing an API error to the user.
+		// Spotify rejects any request with offset >= 1000. Return an error message
+		// so the user sees a toast instead of a silent no-op on PgDn.
 		if offset >= 1000 {
-			return nil
+			return panes.SearchPageLoadedMsg{
+				Query: query,
+				Page:  page,
+				Err:   errors.New("no more results: Spotify limits search to 1000 items per query"),
+			}
 		}
 		// Search is user-triggered (debounce fires after keypress) — Interactive priority skips in-flight dedup.
 		result, err := client.Search(
