@@ -87,3 +87,25 @@ Items to log:
    "volume successfully set to 0%". Consider adding constructor functions
    `NewVolumeAppliedMsg(vol, seq int)` and `NewVolumeAppliedError(seq int,
    err error)` to make the success/failure duality explicit at call sites.
+
+---
+
+## Story 199 polling tests — review polish
+
+**Found:** 2026-05-13 | **Source:** PR #278 Review
+**Feature:** 15-error-resilience
+
+Suggestion-tier follow-ups from the PR #278 multi-agent review. None
+block merge; bundle into a future story when convenient.
+
+Items to log:
+
+1. `internal/app/poll_test.go` `collectAllMsgs` only resolves one level of
+   batch nesting. Currently safe (TickMsg handler returns a flat batch), but
+   fragile if a future story wraps fetch commands in an inner batch. Make it
+   recursive like `collectInitMsgs` in `app_test.go`.
+2. `internal/app/poll_test.go` `TestApp_TickMsg_LibraryPollDispatchesAtTick0`
+   uses a disjunctive `hasLibraryMsg` helper that passes if any one of the
+   five library message types appears — four panes could silently fail. Change
+   to count distinct dispatched message types (or check all five explicitly)
+   to prove the full dispatch table fires.
