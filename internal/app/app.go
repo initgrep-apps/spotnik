@@ -231,6 +231,15 @@ type App struct {
 	// The counter resets to 0 on any successful fetch.
 	consecutivePlaybackErrors int
 
+	// Per-pane polling health — each pane tracks backoff and first-load status
+	// independently from the global 429 backoff (a.backoffTicks).
+	playlistsPoll    pollState
+	albumsPoll       pollState
+	likedSongsPoll   pollState
+	recentPlayedPoll pollState
+	statsPoll        pollState
+	devicesPoll      pollState
+
 	// nilPlaybackStateTicks counts successive PlaybackStateFetchedMsg deliveries where
 	// State is nil and Err is nil. After 30 consecutive nil states a warning toast fires
 	// once to surface a possible stuck/disconnected state. The counter resets to 0 when
@@ -558,6 +567,54 @@ func (a *App) pollIntervals() (playbackInterval, queueInterval int) {
 	default: // idle && !playing
 		return idlePlaybackInterval, idleQueueInterval
 	}
+}
+
+// pollState tracks per-pane polling health.
+// Isolated from the global 429 backoff — a failed library fetch does not
+// affect playback polling intervals.
+type pollState struct {
+	backoffTicks int  // ticks remaining before next retry after an error
+	errorCount   int  // consecutive errors; drives exponential backoff calculation
+	hasData      bool // true after first successful load; switches interval regime
+}
+
+// libraryIntervals defines the polling cadence (seconds) for a library data type.
+type libraryIntervals struct {
+	playing, paused, idle int
+}
+
+var (
+	recentPlayedIntervals = libraryIntervals{playing: 30, paused: 60, idle: 120}
+	likedSongsIntervals   = libraryIntervals{playing: 60, paused: 120, idle: 300}
+	playlistsIntervals    = libraryIntervals{playing: 60, paused: 120, idle: 300}
+	albumsIntervals       = libraryIntervals{playing: 120, paused: 300, idle: 600}
+	statsIntervals        = libraryIntervals{playing: 3600, paused: 3600, idle: 3600}
+)
+
+// calcBackoffTicks computes per-pane exponential backoff: min(5 * 2^(errorCount-1), 60).
+func calcBackoffTicks(errorCount int) int {
+	if ticks := 5 * (1 << uint(errorCount-1)); ticks < 60 {
+		return ticks
+	}
+	return 60
+}
+
+// libraryInterval returns the polling interval in seconds for the given pane.
+// Returns 5 if the pane has never loaded data (retry mode).
+// Music playing → Playing interval regardless of user activity.
+// Idle only applies when paused.
+func (a *App) libraryInterval(p *pollState, iv libraryIntervals) int {
+	if !p.hasData {
+		return 5
+	}
+	state := a.store.PlaybackState()
+	if state != nil && state.IsPlaying {
+		return iv.playing
+	}
+	if a.isIdle() {
+		return iv.idle
+	}
+	return iv.paused
 }
 
 // SearchOpen returns true while the search overlay is visible.
