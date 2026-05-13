@@ -1,7 +1,7 @@
 ---
 title: "Universal Polling Infrastructure"
 feature: 15-error-resilience
-status: open
+status: done
 ---
 
 ## Background
