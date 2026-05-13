@@ -1,7 +1,7 @@
 ---
 title: "Per-Pane Error State in Loaded-Message Handlers"
 feature: 15-error-resilience
-status: open
+status: done
 ---
 
 ## Background
