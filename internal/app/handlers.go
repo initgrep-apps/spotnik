@@ -326,15 +326,23 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.statsPoll.errorCount++
+			a.statsPoll.backoffTicks = calcBackoffTicks(a.statsPoll.errorCount)
 			a.store.SetStatsError(m.Err)
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load stats",
-				Body:   string(uikit.RecoveryPressFRetry),
-			})
+			if a.statsPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load stats",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
 		}
-		a.store.ClearStatsError()
+		wasErr := a.statsPoll.errorCount > 0
+		a.statsPoll.errorCount = 0
+		a.statsPoll.backoffTicks = 0
 		a.statsPoll.hasData = true
+		a.store.ClearStatsError()
 		if m.TimeRange != "" {
 			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
 			a.store.SetTopArtists(m.TimeRange, m.TopArtists)
@@ -345,6 +353,12 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Forward to TopTracks and TopArtists panes.
 		var cmds []tea.Cmd
+		if wasErr {
+			cmds = append(cmds, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Stats loaded",
+			}))
+		}
 		if tp := a.topTracksPane(); tp != nil {
 			updated, cmd := tp.Update(m)
 			if tpu, ok := updated.(*panes.TopTracksPane); ok {
@@ -624,10 +638,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			a.consecutivePlaybackErrors++
-			// Emit a warning toast only on the exact 5th consecutive failure to avoid
+			// Emit a warning toast only on the 3rd consecutive failure to avoid
 			// flooding the user with toasts at 1-3s polling intervals. The counter
-			// continues to increment after 5 so subsequent errors don't re-toast.
-			if a.consecutivePlaybackErrors == 5 {
+			// continues to increment after 3 so subsequent errors don't re-toast.
+			if a.consecutivePlaybackErrors == 3 {
 				return a, a.toasts.Cmd(uikit.Toast{
 					Intent: uikit.ToastWarning,
 					Title:  "Playback updates failing",
@@ -830,6 +844,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.playlistsPoll.errorCount++
+			a.playlistsPoll.backoffTicks = calcBackoffTicks(a.playlistsPoll.errorCount)
 			a.store.SetPlaylistsFetchError(m.Err)
 			// Forward to PlaylistsPane for error display.
 			if pp := a.playlistsPane(); pp != nil {
@@ -838,14 +854,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.panes[layout.PanePlaylists] = ppu
 				}
 			}
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load playlists",
-				Body:   string(uikit.RecoveryPressTabRetry),
-			})
+			if a.playlistsPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load playlists",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
 		}
-		a.store.ClearPlaylistsFetchError()
+		wasErr := a.playlistsPoll.errorCount > 0
+		a.playlistsPoll.errorCount = 0
+		a.playlistsPoll.backoffTicks = 0
 		a.playlistsPoll.hasData = true
+		a.store.ClearPlaylistsFetchError()
 		if m.Offset == 0 {
 			a.store.SetPlaylists(m.Items)
 		} else {
@@ -853,12 +875,24 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.store.SetPlaylistsTotal(len(a.store.Playlists()))
 		// Forward to PlaylistsPane so it can refresh from store.
+		var cmds []tea.Cmd
+		if wasErr {
+			cmds = append(cmds, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Playlists loaded",
+			}))
+		}
 		if pp := a.playlistsPane(); pp != nil {
 			updated, cmd := pp.Update(m)
 			if ppu, ok := updated.(*panes.PlaylistsPane); ok {
 				a.panes[layout.PanePlaylists] = ppu
 			}
-			return a, cmd
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
 		}
 		return a, nil
 
@@ -887,6 +921,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.albumsPoll.errorCount++
+			a.albumsPoll.backoffTicks = calcBackoffTicks(a.albumsPoll.errorCount)
 			a.store.SetAlbumsFetchError(m.Err)
 			// Forward to AlbumsPane for error display.
 			if ap := a.albumsPane(); ap != nil {
@@ -895,26 +931,44 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.panes[layout.PaneAlbums] = apu
 				}
 			}
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load albums",
-				Body:   string(uikit.RecoveryPressTabRetry),
-			})
+			if a.albumsPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load albums",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
 		}
-		a.store.ClearAlbumsFetchError()
+		wasErr := a.albumsPoll.errorCount > 0
+		a.albumsPoll.errorCount = 0
+		a.albumsPoll.backoffTicks = 0
 		a.albumsPoll.hasData = true
+		a.store.ClearAlbumsFetchError()
 		if m.Offset == 0 {
 			a.store.SetSavedAlbums(m.Items)
 		} else {
 			a.store.SetSavedAlbums(append(a.store.SavedAlbums(), m.Items...))
 		}
 		// Forward to AlbumsPane.
+		var cmds []tea.Cmd
+		if wasErr {
+			cmds = append(cmds, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Albums loaded",
+			}))
+		}
 		if ap := a.albumsPane(); ap != nil {
 			updated, cmd := ap.Update(m)
 			if apu, ok := updated.(*panes.AlbumsPane); ok {
 				a.panes[layout.PaneAlbums] = apu
 			}
-			return a, cmd
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
 		}
 		return a, nil
 
@@ -943,22 +997,42 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.likedSongsPoll.errorCount++
+			a.likedSongsPoll.backoffTicks = calcBackoffTicks(a.likedSongsPoll.errorCount)
 			a.store.SetLikedTracksFetchError(m.Err)
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load liked tracks",
-				Body:   string(uikit.RecoveryPressTabRetry),
-			})
+			if a.likedSongsPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load liked tracks",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
 		}
-		a.store.ClearLikedTracksFetchError()
+		wasErr := a.likedSongsPoll.errorCount > 0
+		a.likedSongsPoll.errorCount = 0
+		a.likedSongsPoll.backoffTicks = 0
 		a.likedSongsPoll.hasData = true
+		a.store.ClearLikedTracksFetchError()
 		a.store.SetLikedTracks(m.Items)
 		a.store.SetLikedTotal(len(m.Items) + m.Offset)
 		// LikedSongsPane reads from store on RefreshRows — forward message to trigger refresh.
+		var cmds []tea.Cmd
+		if wasErr {
+			cmds = append(cmds, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Liked tracks loaded",
+			}))
+		}
 		if lsp, ok := a.panes[layout.PaneLikedSongs]; ok {
 			updated, cmd := lsp.Update(m)
 			a.panes[layout.PaneLikedSongs] = updated.(layout.Pane)
-			return a, cmd
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
 		}
 		return a, nil
 
@@ -986,23 +1060,43 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.recentPlayedPoll.errorCount++
+			a.recentPlayedPoll.backoffTicks = calcBackoffTicks(a.recentPlayedPoll.errorCount)
 			a.store.SetRecentPlayedFetchError(m.Err)
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load recently played",
-				Body:   string(uikit.RecoveryPressTabRetry),
-			})
+			if a.recentPlayedPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load recently played",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
 		}
-		a.store.ClearRecentPlayedFetchError()
+		wasErr := a.recentPlayedPoll.errorCount > 0
+		a.recentPlayedPoll.errorCount = 0
+		a.recentPlayedPoll.backoffTicks = 0
 		a.recentPlayedPoll.hasData = true
+		a.store.ClearRecentPlayedFetchError()
 		a.store.SetRecentlyPlayed(m.Items)
 		// Forward to RecentlyPlayedPane.
+		var cmds []tea.Cmd
+		if wasErr {
+			cmds = append(cmds, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastInfo,
+				Title:  "Recently played loaded",
+			}))
+		}
 		if rp := a.recentlyPlayedPane(); rp != nil {
 			updated, cmd := rp.Update(m)
 			if rpu, ok := updated.(*panes.RecentlyPlayedPane); ok {
 				a.panes[layout.PaneRecentlyPlayed] = rpu
 			}
-			return a, cmd
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
 		}
 		return a, nil
 
@@ -1122,6 +1216,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.devicesPoll.errorCount++
+			a.devicesPoll.backoffTicks = calcBackoffTicks(a.devicesPoll.errorCount)
 			a.store.SetDevicesError(m.Err)
 			// Forward to overlay so it can update its render state.
 			if a.deviceOverlayOpen {
@@ -1130,12 +1226,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.devicePane = dp
 				}
 			}
-			toast := a.errorMapper.Map(uikit.OpDevices, m.Err)
-			if toast.Intent == uikit.ToastNone {
-				return a, nil
+			// Devices: update error/success state only — no recovery toast.
+			// The overlay auto-refreshes visually, so a toast would be noisy.
+			if a.devicesPoll.errorCount == 1 {
+				toast := a.errorMapper.Map(uikit.OpDevices, m.Err)
+				if toast.Intent != uikit.ToastNone {
+					return a, a.toasts.Cmd(toast)
+				}
 			}
-			return a, a.toasts.Cmd(toast)
+			return a, nil
 		}
+		a.devicesPoll.errorCount = 0
+		a.devicesPoll.backoffTicks = 0
 		a.store.ClearDevicesError()
 		a.devicesPoll.hasData = true
 		a.store.SetDevicesFetchedAt(time.Now())

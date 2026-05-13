@@ -20,12 +20,8 @@ const (
 	RecoveryCheckConnection RecoveryHint = "Check your connection."
 	// RecoveryRetryInMoment is the generic fallback for Spotify service errors.
 	RecoveryRetryInMoment RecoveryHint = "Spotify is having trouble. Try again in a moment."
-	// RecoveryPressTabRetry is shown for library-pane fetch failures.
-	RecoveryPressTabRetry RecoveryHint = "Press Tab to retry."
 	// RecoveryPressEnterRetry is shown for playlist/album track sub-view failures.
 	RecoveryPressEnterRetry RecoveryHint = "Press Enter to retry."
-	// RecoveryPressFRetry is shown for stats fetch failures.
-	RecoveryPressFRetry RecoveryHint = "Press f to retry."
 	// RecoveryRunAuth is shown when the session has expired.
 	RecoveryRunAuth RecoveryHint = "Run: spotnik auth."
 )
