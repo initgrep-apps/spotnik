@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 // BaseClient provides shared HTTP functionality for all API clients.
@@ -44,13 +45,22 @@ func NewBaseClientWithProvider(baseURL string, tp TokenProvider) BaseClient {
 	return BaseClient{
 		baseURL: strings.TrimRight(base, "/"),
 		token:   tp,
-		http:    &http.Client{},
+		http:    &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
 // setHTTPClient overrides the default HTTP client used for API calls.
 func (b *BaseClient) setHTTPClient(c *http.Client) {
 	b.http = c
+}
+
+// HTTPTimeout returns the configured request timeout for the internal HTTP client.
+// Exported for testing only — production code should not depend on this value.
+func (b *BaseClient) HTTPTimeout() time.Duration {
+	if b.http == nil {
+		return 0
+	}
+	return b.http.Timeout
 }
 
 // SetGateway attaches a Gateway to the BaseClient. When set, all requests

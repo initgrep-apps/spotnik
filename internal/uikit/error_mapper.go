@@ -57,23 +57,40 @@ const (
 	OpRecent Operation = "recently-played"
 	// OpAddToQueue covers add-to-queue commands.
 	OpAddToQueue Operation = "add-to-queue"
+	// OpPlaylistTracks covers playlist track list fetches.
+	OpPlaylistTracks Operation = "playlist-tracks"
 )
 
 // opTitle maps an Operation to its sentence-case user-facing title for error toasts.
 var opTitle = map[Operation]string{
-	OpPlayback:    "Playback command failed",
-	OpVolume:      "Volume change failed",
-	OpSearch:      "Search failed",
-	OpQueue:       "Queue update failed",
-	OpDevices:     "Failed to load devices",
-	OpTransfer:    "Device transfer failed",
-	OpStats:       "Failed to load stats",
-	OpLibrary:     "Failed to load library",
-	OpPlaylists:   "Failed to load playlists",
-	OpAlbums:      "Failed to load albums",
-	OpLikedTracks: "Failed to load liked tracks",
-	OpRecent:      "Failed to load recently played",
-	OpAddToQueue:  "Add to queue failed",
+	OpPlayback:       "Playback command failed",
+	OpVolume:         "Volume change failed",
+	OpSearch:         "Search failed",
+	OpQueue:          "Queue update failed",
+	OpDevices:        "Failed to load devices",
+	OpTransfer:       "Device transfer failed",
+	OpStats:          "Failed to load stats",
+	OpLibrary:        "Failed to load library",
+	OpPlaylists:      "Failed to load playlists",
+	OpAlbums:         "Failed to load albums",
+	OpLikedTracks:    "Failed to load liked tracks",
+	OpRecent:         "Failed to load recently played",
+	OpAddToQueue:     "Add to queue failed",
+	OpPlaylistTracks: "Failed to load playlist tracks",
+}
+
+// opForbiddenBody maps an Operation to its 403-specific recovery hint.
+// OpQueue and OpAddToQueue return a "no active device" hint because Spotify
+// returns 403 for queue actions when no device is active, not for Premium.
+var opForbiddenBody = map[Operation]string{
+	OpPlayback:       "Premium required for this action.",
+	OpVolume:         "Premium required for volume control.",
+	OpSearch:         "Premium required for search.",
+	OpQueue:          "No active device. Open Spotify first.",
+	OpAddToQueue:     "No active device. Open Spotify first.",
+	OpTransfer:       "Premium required for device control.",
+	OpAlbums:         "Premium required to view album tracks.",
+	OpPlaylistTracks: "No permission to view this playlist.",
 }
 
 // ErrorMapper turns any API-layer error into a user-friendly Toast.
@@ -87,7 +104,7 @@ type ErrorMapper struct{}
 //  1. nil error → ToastNone (no notification needed)
 //  2. api.UnauthorizedError → ToastNone (caller routes to unauthorizedMsg handler)
 //  3. api.RateLimitError → ToastWarning "Rate-limited" with retry-after body
-//  4. api.ForbiddenError → ToastWarning "Spotify Premium required"
+//  4. api.ForbiddenError → ToastWarning with operation-specific title and body
 //  5. context.Canceled / context.DeadlineExceeded → ToastError "Request took too long."
 //  6. net.Error (timeout) or *url.Error / *net.DNSError → ToastError "Check your connection."
 //  7. Everything else (5xx, generic) → ToastError "Spotify is having trouble."
@@ -115,18 +132,16 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 		}
 	}
 
-	// Priority 4: ForbiddenError — Premium required advisory.
+	// Priority 4: ForbiddenError — operation-specific advisory.
 	var forbiddenErr *api.ForbiddenError
 	if errors.As(err, &forbiddenErr) {
 		body := forbiddenErr.Message
-		// When the API returns an empty or default message, provide a concrete
-		// body so the toast always carries actionable information.
 		if body == "" || body == "Spotify Premium required" {
-			body = "A Premium subscription is required for this feature."
+			body = em.forbiddenBodyFor(op)
 		}
 		return Toast{
 			Intent: ToastWarning,
-			Title:  "Spotify Premium required",
+			Title:  em.titleFor(op),
 			Body:   body,
 		}
 	}
@@ -187,4 +202,14 @@ func (em *ErrorMapper) titleFor(op Operation) string {
 		return t
 	}
 	return "Operation failed"
+}
+
+// forbiddenBodyFor returns the operation-specific body text for a 403 response.
+// Falls back to the generic Premium subscription message for operations not listed
+// in opForbiddenBody.
+func (em *ErrorMapper) forbiddenBodyFor(op Operation) string {
+	if b, ok := opForbiddenBody[op]; ok {
+		return b
+	}
+	return "A Premium subscription is required for this feature."
 }

@@ -279,7 +279,7 @@ func TestPremiumGate_PremiumUser_AddToQueueDispatches(t *testing.T) {
 }
 
 // TestPlaybackCmdSentMsg_ForbiddenEmitsWarningToast verifies that a 403 ForbiddenError
-// wrapped in PlaybackCmdSentMsg emits "Spotify Premium required" in the toast overlay
+// wrapped in PlaybackCmdSentMsg emits the operation-specific toast for playback 403s
 // and does NOT show a generic "not available" message that would confuse users.
 func TestPlaybackCmdSentMsg_ForbiddenEmitsWarningToast(t *testing.T) {
 	cfg := &config.Config{}
@@ -312,8 +312,8 @@ func TestPlaybackCmdSentMsg_ForbiddenEmitsWarningToast(t *testing.T) {
 	}
 
 	output := a.View()
-	assert.Contains(t, output, "Spotify Premium required",
-		"403 PlaybackCmdSentMsg toast must show 'Spotify Premium required'")
+	assert.Contains(t, output, "Premium required for this action",
+		"403 PlaybackCmdSentMsg toast must show operation-specific body")
 	assert.NotContains(t, output, "not available",
 		"403 PlaybackCmdSentMsg toast must NOT show generic 'not available' text")
 }
