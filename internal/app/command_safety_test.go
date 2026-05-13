@@ -246,23 +246,23 @@ func TestPlaybackErrors_NoToastOnFirstError(t *testing.T) {
 	assert.Nil(t, cmd, "first consecutive playback error must not emit a toast")
 }
 
-// TestPlaybackErrors_ToastOnFifthConsecutiveError verifies that the 5th consecutive
+// TestPlaybackErrors_ToastOnThirdConsecutiveError verifies that the 3rd consecutive
 // PlaybackStateFetchedMsg error emits a warning toast.
-func TestPlaybackErrors_ToastOnFifthConsecutiveError(t *testing.T) {
+func TestPlaybackErrors_ToastOnThirdConsecutiveError(t *testing.T) {
 	a := newSafetyTestApp()
 
 	someErr := errors.New("transient network error")
 
-	// First 4 errors — no toast.
+	// First 2 errors — no toast.
 	var lastCmd tea.Cmd
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 2; i++ {
 		_, lastCmd = a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
-		assert.Nil(t, lastCmd, "errors 1-4 must not emit a toast (got non-nil on error %d)", i)
+		assert.Nil(t, lastCmd, "errors 1-2 must not emit a toast (got non-nil on error %d)", i)
 	}
 
-	// 5th consecutive error — must emit a toast.
+	// 3rd consecutive error — must emit a toast.
 	_, cmd := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
-	assert.NotNil(t, cmd, "5th consecutive playback error must emit a warning toast")
+	assert.NotNil(t, cmd, "3rd consecutive playback error must emit a warning toast")
 }
 
 // TestPlaybackErrors_CounterResetsOnSuccess verifies that a successful fetch
@@ -272,8 +272,8 @@ func TestPlaybackErrors_CounterResetsOnSuccess(t *testing.T) {
 
 	someErr := errors.New("transient network error")
 
-	// Send 4 errors — counter reaches 4.
-	for i := 1; i <= 4; i++ {
+	// Send 2 errors — counter reaches 2.
+	for i := 1; i <= 2; i++ {
 		_, cmd := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
 		assert.Nil(t, cmd)
 	}
@@ -288,10 +288,10 @@ func TestPlaybackErrors_CounterResetsOnSuccess(t *testing.T) {
 	// Success may or may not produce a cmd (NowPlayingPane.Update may return one). Just no error toast.
 	_ = cmd
 
-	// Now send 4 more errors — should still not toast (counter was reset to 0).
-	for i := 1; i <= 4; i++ {
+	// Now send 2 more errors — should still not toast (counter was reset to 0).
+	for i := 1; i <= 2; i++ {
 		_, errCmd := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
-		assert.Nil(t, errCmd, "after reset, errors 1-4 must not toast (got non-nil on error %d)", i)
+		assert.Nil(t, errCmd, "after reset, errors 1-2 must not toast (got non-nil on error %d)", i)
 	}
 }
 
@@ -312,27 +312,27 @@ func TestPlaybackErrors_NoToastOnNilError(t *testing.T) {
 	assert.Nil(t, cmd, "first error after successes must not emit toast")
 }
 
-// TestPlaybackErrors_CounterDoesNotExceedThreshold verifies that after exactly 5
-// errors, further errors do not keep toasting (or do — verify consistent behavior).
-// Per spec: only the EXACT 5th error toasts (== 5 check, not >= 5).
-func TestPlaybackErrors_ExactlyFifthErrorToasts(t *testing.T) {
+// TestPlaybackErrors_ExactlyThirdErrorToasts verifies that after exactly 3
+// errors, further errors do not keep toasting.
+// Per spec: only the EXACT 3rd error toasts (== 3 check, not >= 3).
+func TestPlaybackErrors_ExactlyThirdErrorToasts(t *testing.T) {
 	a := newSafetyTestApp()
 
 	someErr := errors.New("error")
 
-	// Errors 1-4: no toast.
-	for i := 1; i <= 4; i++ {
+	// Errors 1-2: no toast.
+	for i := 1; i <= 2; i++ {
 		_, cmd := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
 		require.Nil(t, cmd, "error %d must not toast", i)
 	}
 
-	// Error 5: toast.
-	_, cmd5 := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
-	require.NotNil(t, cmd5, "5th error must emit toast")
+	// Error 3: toast.
+	_, cmd3 := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
+	require.NotNil(t, cmd3, "3rd error must emit toast")
 
-	// Error 6: no toast (counter is 6, not == 5).
-	_, cmd6 := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
-	assert.Nil(t, cmd6, "6th error must not re-toast (== 5 check)")
+	// Error 4: no toast (counter is 4, not == 3).
+	_, cmd4 := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
+	assert.Nil(t, cmd4, "4th error must not re-toast (== 3 check)")
 }
 
 // --- errNilClient guard tests for handlers added in PR #41 review ---
@@ -360,7 +360,7 @@ func TestErrNilClientGuard_PlaybackCmdSentMsg(t *testing.T) {
 
 // TestErrNilClientGuard_PlaybackStateFetchedMsg_NoCounterIncrement verifies that
 // PlaybackStateFetchedMsg with errNilClient does NOT increment consecutivePlaybackErrors.
-// This means even 10 such messages never trigger the 5th-error toast.
+// This means even 10 such messages never trigger the 3rd-error toast.
 // We use the Init() tick path: with no player injected, the first tick dispatches
 // fetchPlaybackStateCmd(nil, api.Background) which returns PlaybackStateFetchedMsg{Err: errNilClient}.
 func TestErrNilClientGuard_PlaybackStateFetchedMsg_NoCounterIncrement(t *testing.T) {
@@ -388,12 +388,12 @@ func TestErrNilClientGuard_PlaybackStateFetchedMsg_NoCounterIncrement(t *testing
 		_ = tickCmd
 	}
 
-	// Now manually inject 4 real errors — they should NOT yet toast
+	// Now manually inject 2 real errors — they should NOT yet toast
 	// (counter must be 0 since errNilClient msgs don't increment it).
 	someErr := errors.New("real transient error")
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 2; i++ {
 		_, errCmd := a.Update(panes.PlaybackStateFetchedMsg{Err: someErr})
-		assert.Nil(t, errCmd, "after errNilClient ticks, error %d of 4 must not toast", i)
+		assert.Nil(t, errCmd, "after errNilClient ticks, error %d of 2 must not toast", i)
 	}
 }
 
