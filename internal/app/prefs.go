@@ -4,13 +4,12 @@
 package app
 
 import (
-	"fmt"
-	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/prefs"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // prefsFlushTickMsg is sent by the debounce timer started in schedulePrefsFlush.
@@ -50,7 +49,7 @@ func (a *App) PrefsDirtyGen() int {
 // for prefsFlushTickMsg, prefs.FlushedMsg, and panes.VisualizerPatternChangedMsg.
 //
 // prefsFlushTickMsg: debounce timer fired — flush only if generation matches.
-// prefs.FlushedMsg: log error to stderr on failure (non-critical, no toast).
+// prefs.FlushedMsg: show ToastWarning on failure and re-queue retry.
 // panes.VisualizerPatternChangedMsg: persist new visualizer index via PreferenceStore.
 func (a *App) handlePrefsMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch m := msg.(type) {
@@ -63,11 +62,17 @@ func (a *App) handlePrefsMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case prefs.FlushedMsg:
 		if m.Err != nil {
-			// Non-critical — log to stderr; no user toast (a failed flush is invisible).
-			// Re-queue retry: re-queued changes sit in pending map (done by FlushCmd on
-			// error), and schedulePrefsFlush arms a new debounce timer to flush them.
-			fmt.Fprintf(os.Stderr, "spotnik: prefs flush failed: %v\n", m.Err)
-			return a, a.schedulePrefsFlush(), true
+			// Flush failed — show user-visible toast and re-queue retry.
+			// Re-queued changes sit in the pending map (set by FlushCmd on error);
+			// schedulePrefsFlush arms a new debounce timer to flush them.
+			return a, tea.Batch(
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastWarning,
+					Title:  "Preferences not saved",
+					Body:   "Check available disk space.",
+				}),
+				a.schedulePrefsFlush(),
+			), true
 		}
 		return a, nil, true
 
