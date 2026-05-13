@@ -334,6 +334,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 		a.store.ClearStatsError()
+		a.statsPoll.hasData = true
 		if m.TimeRange != "" {
 			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
 			a.store.SetTopArtists(m.TimeRange, m.TopArtists)
@@ -468,30 +469,29 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Library pane polling — per-pane exponential backoff, isolated from global 429.
-		if a.backoffTicks <= 0 {
-			for _, entry := range []struct {
-				p        *pollState
-				iv       libraryIntervals
-				fetching func() bool
-				setFetch func(bool)
-				cmd      func() tea.Cmd
-			}{
-				{&a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
-				{&a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
-				{&a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
-				{&a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
-				{&a.statsPoll, statsIntervals, nil, nil, func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
-			} {
-				p := entry.p
-				if p.backoffTicks > 0 {
-					p.backoffTicks--
-				} else if interval := a.libraryInterval(p, entry.iv); a.tickCount%interval == 0 {
-					if entry.fetching == nil || !entry.fetching() {
-						if entry.setFetch != nil {
-							entry.setFetch(true)
-						}
-						cmds = append(cmds, entry.cmd())
-					}
+		for _, entry := range []struct {
+			p        *pollState
+			iv       libraryIntervals
+			fetching func() bool
+			setFetch func(bool)
+			cmd      func() tea.Cmd
+		}{
+			{&a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
+			{&a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
+			{&a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
+			{&a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
+			{&a.statsPoll, statsIntervals,
+				func() bool { return a.store.StatsFetching("short_term") },
+				func(b bool) { a.store.SetStatsFetching("short_term", b) },
+				func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
+		} {
+			p := entry.p
+			if p.backoffTicks > 0 {
+				p.backoffTicks--
+			} else if interval := a.libraryInterval(p, entry.iv); a.tickCount%interval == 0 {
+				if !entry.fetching() {
+					entry.setFetch(true)
+					cmds = append(cmds, entry.cmd())
 				}
 			}
 		}
@@ -501,7 +501,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p := &a.devicesPoll
 			if p.backoffTicks > 0 {
 				p.backoffTicks--
-			} else if a.tickCount%devicePollInterval == 0 {
+			} else if a.tickCount%devicePollInterval == 0 && !a.store.DevicesFetching() {
+				a.store.SetDevicesFetching(true)
 				cmds = append(cmds, a.buildFetchDevicesCmd())
 			}
 		}
@@ -844,6 +845,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 		a.store.ClearPlaylistsFetchError()
+		a.playlistsPoll.hasData = true
 		if m.Offset == 0 {
 			a.store.SetPlaylists(m.Items)
 		} else {
@@ -900,6 +902,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 		a.store.ClearAlbumsFetchError()
+		a.albumsPoll.hasData = true
 		if m.Offset == 0 {
 			a.store.SetSavedAlbums(m.Items)
 		} else {
@@ -948,6 +951,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 		a.store.ClearLikedTracksFetchError()
+		a.likedSongsPoll.hasData = true
 		a.store.SetLikedTracks(m.Items)
 		a.store.SetLikedTotal(len(m.Items) + m.Offset)
 		// LikedSongsPane reads from store on RefreshRows — forward message to trigger refresh.
@@ -990,6 +994,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 		a.store.ClearRecentPlayedFetchError()
+		a.recentPlayedPoll.hasData = true
 		a.store.SetRecentlyPlayed(m.Items)
 		// Forward to RecentlyPlayedPane.
 		if rp := a.recentlyPlayedPane(); rp != nil {
@@ -1132,6 +1137,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.toasts.Cmd(toast)
 		}
 		a.store.ClearDevicesError()
+		a.devicesPoll.hasData = true
 		a.store.SetDevicesFetchedAt(time.Now())
 		// Cache the raw domain device list in the store and stamp fetchedAt.
 		// Reverse-convert panes.DeviceInfo → domain.Device (same fields, lossless).
