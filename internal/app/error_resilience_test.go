@@ -287,8 +287,8 @@ func TestApp_RateLimitedMsg_ActivatesBackoff(t *testing.T) {
 // --- Task 3: 403 handling for AddToQueueResultMsg ---
 
 // TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage verifies that
-// a 403 ForbiddenError from AddToQueue emits an error toast with ForbiddenError.Message
-// (not the raw ForbiddenError.Error() string with "forbidden:" prefix).
+// a 403 ForbiddenError from AddToQueue emits an error toast with the operation-specific
+// body for queue actions ("No active device") rather than a raw error string.
 func TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -308,9 +308,9 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage(t *testing.T
 	updated, _ := a.Update(alertMsg)
 	appModel := updated.(*app.App)
 	output := appModel.View()
-	// Alert should show "Spotify Premium required" from ForbiddenError.Message,
-	// NOT the raw "forbidden: Spotify Premium required" from ForbiddenError.Error().
-	assert.Contains(t, output, "Spotify Premium required", "toast should show ForbiddenError.Message on 403")
+	// Alert should show the operation-specific body for queue 403
+	// ("No active device. Open Spotify first.") since the default message is replaced.
+	assert.Contains(t, output, "No active device", "toast should show operation-specific 403 body for queue")
 	assert.NotContains(t, output, "forbidden:", "toast should NOT use the raw ForbiddenError.Error() prefix")
 }
 
@@ -346,7 +346,7 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer(t *testing.T) {
 	updated, _ := a.Update(alertMsg)
 	appModel := updated.(*app.App)
 	output := appModel.View()
-	assert.Contains(t, output, "Premium", "403 AddToQueue should show Premium message in toast overlay")
+	assert.Contains(t, output, "No active device", "403 AddToQueue should show operation-specific body in toast overlay")
 }
 
 // --- Task 1: 401 token refresh ---
