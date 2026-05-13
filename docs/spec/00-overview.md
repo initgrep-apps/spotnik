@@ -23,7 +23,7 @@
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | `internal/cliout` package, typed message taxonomy, palette config, TTY-guarded spinner, validated prompt |
 | 13 | TUI Design System | `features/13-tui-design-system/` | done | 150–172, 183–193 | `internal/uikit` package (18 primitives), frozen glyph catalogue with ASCII fallback, role-to-token matrix, glyph-fallback CI guards |
 | 14 | Page B Redesign (Nerd Status) | `features/14-page-b-redesign/` | done | 173–182 | Stacked Page B layout, GatewayHealth/PollingTraffic/GatewayLive panes, universal filter border + Esc-clear, TableBasedPane consolidation |
-| 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | open | 199–203 | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
+| 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | in-progress | 199 ✓, 200–203 | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
 
 ---
 
