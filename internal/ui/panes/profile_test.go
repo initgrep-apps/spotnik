@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -289,11 +290,41 @@ func TestProfileOverlay_differentKeyAfterFirstPress_cancelsAndArmsNew(t *testing
 	assert.Contains(t, toast.Text, "confirm forget")
 }
 
-// TestProfileOverlay_Init_ReturnsNil verifies that Init() returns nil.
-func TestProfileOverlay_Init_ReturnsNil(t *testing.T) {
+// TestFetchCurrentUserRequestMsg_Exists verifies that FetchCurrentUserRequestMsg
+// is defined and can be instantiated as a tea.Msg.
+func TestFetchCurrentUserRequestMsg_Exists(t *testing.T) {
+	msg := FetchCurrentUserRequestMsg{}
+	var _ tea.Msg = msg // must satisfy the tea.Msg interface
+}
+
+// TestUserProfileLoadedMsg_Exists verifies that UserProfileLoadedMsg
+// is defined and its Err field can be set.
+func TestUserProfileLoadedMsg_Exists(t *testing.T) {
+	msg := UserProfileLoadedMsg{Err: nil}
+	var _ tea.Msg = msg
+	msg = UserProfileLoadedMsg{Err: errors.New("fail")}
+	assert.NotNil(t, msg.Err)
+}
+
+// TestProfileOverlay_Init_EmitsFetchWhenStoreEmpty verifies that Init() returns
+// a FetchCurrentUserRequestMsg command when the store has no user profile loaded.
+func TestProfileOverlay_Init_EmitsFetchWhenStoreEmpty(t *testing.T) {
 	overlay, _ := newTestProfileOverlay()
+	// Store has zero-value UserProfile (ID == "")
 	cmd := overlay.Init()
-	assert.Nil(t, cmd, "Init() should return nil — data is already in the store")
+	require.NotNil(t, cmd, "Init() should return a non-nil command when profile is empty")
+	msg := cmd()
+	_, ok := msg.(FetchCurrentUserRequestMsg)
+	require.True(t, ok, "Init() command should produce FetchCurrentUserRequestMsg, got %T", msg)
+}
+
+// TestProfileOverlay_Init_NilWhenProfilePresent verifies that Init() returns nil
+// when the store already has a user profile loaded.
+func TestProfileOverlay_Init_NilWhenProfilePresent(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	store.SetUserProfile(domain.UserProfile{ID: "user1", DisplayName: "Test"})
+	cmd := overlay.Init()
+	assert.Nil(t, cmd, "Init() should return nil when profile is already loaded")
 }
 
 // TestProfileOverlay_SetSize verifies that SetSize stores the dimensions.
