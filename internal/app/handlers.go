@@ -1141,6 +1141,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_ = config.ClearClientID(config.DefaultConfigPath())
 		return a, tea.Quit
 
+	case panes.FetchCurrentUserRequestMsg:
+		// Profile overlay is requesting a user profile fetch (store was empty on Init).
+		return a, a.buildFetchCurrentUserCmd()
+
 	case panes.ThemeSwitchMsg:
 		// User selected a theme in the overlay — load new theme, propagate to all panes.
 		newTheme := theme.Load(m.ThemeID)
