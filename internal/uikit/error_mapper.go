@@ -89,6 +89,7 @@ var opForbiddenBody = map[Operation]string{
 	OpQueue:          "No active device. Open Spotify first.",
 	OpAddToQueue:     "No active device. Open Spotify first.",
 	OpTransfer:       "Premium required for device control.",
+	OpAlbums:         "Premium required to view album tracks.",
 	OpPlaylistTracks: "No permission to view this playlist.",
 }
 
