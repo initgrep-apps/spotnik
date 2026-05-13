@@ -5,7 +5,7 @@ package app_test
 // Task 1: buildPlaybackAPICmd snapshots store values in Update() context, not inside closure.
 //         Validates the snapshot is used (old value) even if store changes before cmd runs.
 // Task 2: Nil-client fallbacks include errNilClient in returned message Err fields.
-// Task 3: consecutivePlaybackErrors counter triggers a toast on the 5th consecutive error.
+// Task 3: consecutivePlaybackErrors counter triggers a toast on the 3rd consecutive error.
 
 import (
 	"errors"

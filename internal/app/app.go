@@ -226,8 +226,8 @@ type App struct {
 	version string
 
 	// consecutivePlaybackErrors counts successive PlaybackStateFetchedMsg deliveries
-	// where Err is non-nil. A toast is emitted when this reaches 5, then the counter
-	// continues to increment (so exactly the 5th triggers the toast, not subsequent ones).
+	// where Err is non-nil. A toast is emitted when this reaches 3, then the counter
+	// continues to increment (so exactly the 3rd triggers the toast, not subsequent ones).
 	// The counter resets to 0 on any successful fetch.
 	consecutivePlaybackErrors int
 
