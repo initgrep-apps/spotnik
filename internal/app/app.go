@@ -226,8 +226,8 @@ type App struct {
 	version string
 
 	// consecutivePlaybackErrors counts successive PlaybackStateFetchedMsg deliveries
-	// where Err is non-nil. A toast is emitted when this reaches 5, then the counter
-	// continues to increment (so exactly the 5th triggers the toast, not subsequent ones).
+	// where Err is non-nil. A toast is emitted when this reaches 3, then the counter
+	// continues to increment (so exactly the 3rd triggers the toast, not subsequent ones).
 	// The counter resets to 0 on any successful fetch.
 	consecutivePlaybackErrors int
 
@@ -576,8 +576,7 @@ type pollState struct {
 	backoffTicks int // ticks remaining before next retry after an error
 	// errorCount is incremented on each consecutive error and drives the
 	// exponential backoff calculation in calcBackoffTicks. Reset to 0 on success.
-	// Written by error handlers in Story 200; defined here so the type is complete.
-	errorCount int  //nolint:unused
+	errorCount int
 	hasData    bool // true after first successful load; switches interval regime
 }
 
