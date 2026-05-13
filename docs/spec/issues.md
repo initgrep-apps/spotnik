@@ -109,3 +109,23 @@ Items to log:
    five library message types appears — four panes could silently fail. Change
    to count distinct dispatched message types (or check all five explicitly)
    to prove the full dispatch table fires.
+
+---
+
+## Story 200 review — minor follow-ups
+
+**Found:** 2026-05-13 | **Source:** PR #279 Review
+**Feature:** 15-error-resilience
+
+Minor issues from PR #279 review. None block merge.
+
+Items to log:
+
+1. `calcBackoffTicks(0)` returns 0 — no guard against errorCount <= 0. Currently
+   safe (all callers increment before calling), but add a guard clause and test
+   for defensive correctness.
+2. Queue errors toast on every failure with no suppression — not in per-pane
+   backoff scope, but could produce toast spam at 1s intervals during persistent
+   failures. Consider adding `errorCount == 1` gating in a future story.
+3. Playback has no backoff on persistent errors (intentional — most important
+   data), but no comment documents this decision. Add a NOTE in the handler.
