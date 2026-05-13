@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -211,6 +212,12 @@ func TestNewBaseClient_DefaultsToSpotifyURL(t *testing.T) {
 func TestNewBaseClient_UsesProvidedURL(t *testing.T) {
 	bc := NewBaseClient("https://mock.example.com", "my-token")
 	assert.Equal(t, "https://mock.example.com", bc.baseURL)
+}
+
+func TestNewBaseClient_HasTimeout(t *testing.T) {
+	bc := NewBaseClient("", "my-token")
+	require.NotNil(t, bc.http, "http.Client must be initialised")
+	assert.Equal(t, 30*time.Second, bc.HTTPTimeout(), "HTTP client timeout must be 30s")
 }
 
 // --- Gateway integration into BaseClient ---
