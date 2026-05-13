@@ -287,8 +287,8 @@ func TestApp_RateLimitedMsg_ActivatesBackoff(t *testing.T) {
 // --- Task 3: 403 handling for AddToQueueResultMsg ---
 
 // TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage verifies that
-// a 403 ForbiddenError from AddToQueue emits an error toast with ForbiddenError.Message
-// (not the raw ForbiddenError.Error() string with "forbidden:" prefix).
+// a 403 ForbiddenError from AddToQueue emits an error toast with the operation-specific
+// body for queue actions ("No active device") rather than a raw error string.
 func TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
@@ -308,9 +308,9 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_ShowsPremiumMessage(t *testing.T
 	updated, _ := a.Update(alertMsg)
 	appModel := updated.(*app.App)
 	output := appModel.View()
-	// Alert should show "Spotify Premium required" from ForbiddenError.Message,
-	// NOT the raw "forbidden: Spotify Premium required" from ForbiddenError.Error().
-	assert.Contains(t, output, "Spotify Premium required", "toast should show ForbiddenError.Message on 403")
+	// Alert should show the operation-specific body for queue 403
+	// ("No active device. Open Spotify first.") since the default message is replaced.
+	assert.Contains(t, output, "No active device", "toast should show operation-specific 403 body for queue")
 	assert.NotContains(t, output, "forbidden:", "toast should NOT use the raw ForbiddenError.Error() prefix")
 }
 
@@ -346,7 +346,7 @@ func TestApp_AddToQueueResultMsg_ForbiddenError_WithLiveServer(t *testing.T) {
 	updated, _ := a.Update(alertMsg)
 	appModel := updated.(*app.App)
 	output := appModel.View()
-	assert.Contains(t, output, "Premium", "403 AddToQueue should show Premium message in toast overlay")
+	assert.Contains(t, output, "No active device", "403 AddToQueue should show operation-specific body in toast overlay")
 }
 
 // --- Task 1: 401 token refresh ---
@@ -668,9 +668,9 @@ func TestBuildFetchAlbumTracksCmd_401_ShowsSessionExpired(t *testing.T) {
 	assert.Contains(t, output, "Session expired", "401 from album tracks with no refresh token should show session expired toast")
 }
 
-// TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast verifies that a 403 from
-// the album tracks endpoint causes the router to emit a "Spotify Premium required" toast.
-func TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast(t *testing.T) {
+// TestBuildFetchAlbumTracksCmd_403_EmitsForbiddenToast verifies that a 403 from
+// the album tracks endpoint causes the router to emit a toast with an operation-specific body.
+func TestBuildFetchAlbumTracksCmd_403_EmitsForbiddenToast(t *testing.T) {
 	srv := forbiddenServer()
 	defer srv.Close()
 
@@ -689,7 +689,7 @@ func TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast(t *testing.T) {
 	require.True(t, ok, "expected AlbumTracksLoadedMsg, got %T", resultMsg)
 	require.Error(t, atMsg.Err, "403 should surface as an error in AlbumTracksLoadedMsg")
 
-	// Step 3: Feed the loaded msg back to Update — router should emit a "Spotify Premium required" toast.
+	// Step 3: Feed the loaded msg back to Update — router should emit a toast via ErrorMapper.
 	model, alertCmd := a.Update(resultMsg)
 	require.NotNil(t, model)
 	require.NotNil(t, alertCmd, "403 AlbumTracks should emit an alert toast cmd")
@@ -699,7 +699,8 @@ func TestBuildFetchAlbumTracksCmd_403_EmitsPremiumToast(t *testing.T) {
 	updated, _ := a.Update(alertMsg)
 	appModel := updated.(*app.App)
 	output := appModel.View()
-	assert.Contains(t, output, "Spotify Premium required", "403 album tracks should show Premium required toast")
+	assert.Contains(t, output, "Failed to load albums", "403 album tracks should show albums-specific title")
+	assert.Contains(t, output, "Premium required to view album tracks", "403 album tracks should show operation-specific body")
 }
 
 // ---------------------------------------------------------------------------

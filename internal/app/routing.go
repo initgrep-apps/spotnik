@@ -331,13 +331,10 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
+				toast := a.errorMapper.Map(uikit.OpPlaylistTracks, m.Err)
 				return a, tea.Batch(
 					a.forwardToPane(layout.PanePlaylists, m),
-					a.toasts.Cmd(uikit.Toast{
-						Intent: uikit.ToastWarning,
-						Title:  "Playlist access denied",
-						Body:   "Spotify Premium required or playlist access denied.",
-					}),
+					a.toasts.Cmd(toast),
 				), true
 			}
 			return a, tea.Batch(
@@ -368,10 +365,8 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.err, &forbiddenErr) {
-				return a, a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastWarning,
-					Title:  "Spotify Premium required",
-				}), true
+				toast := a.errorMapper.Map(uikit.OpPlayback, m.err)
+				return a, a.toasts.Cmd(toast), true
 			}
 			// Surface the failure so the user knows ownership detection is degraded.
 			return a, a.toasts.Cmd(uikit.Toast{
@@ -454,12 +449,10 @@ func (a *App) routeAlbumMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.Err, &forbiddenErr) {
+				toast := a.errorMapper.Map(uikit.OpAlbums, m.Err)
 				return a, tea.Batch(
 					a.forwardToPane(layout.PaneAlbums, m),
-					a.toasts.Cmd(uikit.Toast{
-						Intent: uikit.ToastWarning,
-						Title:  "Spotify Premium required",
-					}),
+					a.toasts.Cmd(toast),
 				), true
 			}
 			return a, tea.Batch(

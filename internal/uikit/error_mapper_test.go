@@ -58,37 +58,37 @@ func TestErrorMapper_RateLimitError_WrappedError(t *testing.T) {
 }
 
 // TestErrorMapper_ForbiddenError_WithMessage verifies Map returns ToastWarning
-// with "Spotify Premium required" and the server-supplied message as the body.
+// with the operation-specific title and the server-supplied message as the body.
 func TestErrorMapper_ForbiddenError_WithMessage(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	err := &api.ForbiddenError{Message: "Premium required to use this endpoint."}
 	toast := em.Map(uikit.OpVolume, err)
 	require.Equal(t, uikit.ToastWarning, toast.Intent)
-	assert.Equal(t, "Spotify Premium required", toast.Title)
+	assert.Equal(t, "Volume change failed", toast.Title)
 	assert.Equal(t, "Premium required to use this endpoint.", toast.Body)
 }
 
 // TestErrorMapper_ForbiddenError_DefaultMessage verifies that when the
 // ForbiddenError message is the default "Spotify Premium required" string,
-// a concrete recovery body is substituted so the toast is never empty.
+// the operation-specific body is substituted so the toast is never empty.
 func TestErrorMapper_ForbiddenError_DefaultMessage(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	err := &api.ForbiddenError{Message: "Spotify Premium required"}
 	toast := em.Map(uikit.OpPlayback, err)
 	require.Equal(t, uikit.ToastWarning, toast.Intent)
-	assert.Equal(t, "Spotify Premium required", toast.Title)
-	assert.Equal(t, "A Premium subscription is required for this feature.", toast.Body)
+	assert.Equal(t, "Playback command failed", toast.Title)
+	assert.Equal(t, "Premium required for this action.", toast.Body)
 }
 
 // TestErrorMapper_ForbiddenError_EmptyMessage verifies that an empty
-// ForbiddenError.Message receives the default recovery body.
+// ForbiddenError.Message receives the operation-specific recovery body.
 func TestErrorMapper_ForbiddenError_EmptyMessage(t *testing.T) {
 	em := &uikit.ErrorMapper{}
 	err := &api.ForbiddenError{Message: ""}
 	toast := em.Map(uikit.OpQueue, err)
 	require.Equal(t, uikit.ToastWarning, toast.Intent)
-	assert.Equal(t, "Spotify Premium required", toast.Title)
-	assert.Equal(t, "A Premium subscription is required for this feature.", toast.Body)
+	assert.Equal(t, "Queue update failed", toast.Title)
+	assert.Equal(t, "No active device. Open Spotify first.", toast.Body)
 }
 
 // TestErrorMapper_NetworkTimeout verifies that a net.Error with Timeout()=true
@@ -184,6 +184,7 @@ func TestErrorMapper_OperationTitles(t *testing.T) {
 		{uikit.OpAlbums, "Failed to load albums"},
 		{uikit.OpLikedTracks, "Failed to load liked tracks"},
 		{uikit.OpRecent, "Failed to load recently played"},
+		{uikit.OpPlaylistTracks, "Failed to load playlist tracks"},
 	}
 	em := &uikit.ErrorMapper{}
 	genericErr := fmt.Errorf("unexpected status 503: service unavailable")
@@ -225,3 +226,113 @@ type mockNetError struct {
 func (e *mockNetError) Error() string   { return "mock net error" }
 func (e *mockNetError) Timeout() bool   { return e.timeout }
 func (e *mockNetError) Temporary() bool { return e.temporary }
+
+// ---------------------------------------------------------------------------
+// Story 201: per-operation 403 bodies
+// ---------------------------------------------------------------------------
+
+// TestErrorMapper_Forbidden_PlaybackBody verifies that OpPlayback returns
+// a Premium-specific body for 403 errors.
+func TestErrorMapper_Forbidden_PlaybackBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpPlayback, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "Premium required for this action.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_QueueBody verifies that OpQueue returns
+// a "no active device" body for 403 errors (Spotify returns 403 for
+// queue actions when no device is active, not for Premium).
+func TestErrorMapper_Forbidden_QueueBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpQueue, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "No active device. Open Spotify first.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_AddToQueueBody verifies that OpAddToQueue returns
+// a "no active device" body for 403 errors.
+func TestErrorMapper_Forbidden_AddToQueueBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpAddToQueue, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "No active device. Open Spotify first.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_TransferBody verifies that OpTransfer returns
+// a Premium-specific body for 403 errors.
+func TestErrorMapper_Forbidden_TransferBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpTransfer, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "Premium required for device control.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_VolumeBody verifies that OpVolume returns
+// a Premium-specific body for 403 errors.
+func TestErrorMapper_Forbidden_VolumeBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpVolume, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "Premium required for volume control.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_SearchBody verifies that OpSearch returns
+// a Premium-specific body for 403 errors.
+func TestErrorMapper_Forbidden_SearchBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpSearch, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "Premium required for search.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_PlaylistTracksBody verifies that OpPlaylistTracks
+// returns a playlist-specific body for 403 errors.
+func TestErrorMapper_Forbidden_PlaylistTracksBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpPlaylistTracks, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "No permission to view this playlist.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_GenericFallback verifies that an operation
+// not listed in opForbiddenBody falls back to the generic Premium message.
+func TestErrorMapper_Forbidden_GenericFallback(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpPlaylists, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "A Premium subscription is required for this feature.", toast.Body)
+}
+
+// TestErrorMapper_Forbidden_OpSpecificTitle verifies that 403 toasts use
+// the operation-specific title (via titleFor) instead of the old hardcoded
+// "Spotify Premium required" string.
+func TestErrorMapper_Forbidden_OpSpecificTitle(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpPlayback, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "Playback command failed", toast.Title)
+}
+
+// TestErrorMapper_Forbidden_WithMessage_StillOverridesBody verifies that when
+// the API returns a non-empty, non-default message, it still takes precedence
+// over the operation-specific body. This preserves the existing behavior for
+// servers that send meaningful 403 bodies.
+func TestErrorMapper_Forbidden_WithMessage_StillOverridesBody(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: "Premium required to use this endpoint."}
+	toast := em.Map(uikit.OpQueue, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	// When the server provides a meaningful message, it takes precedence
+	// over the operation-specific default.
+	assert.Equal(t, "Premium required to use this endpoint.", toast.Body)
+}

@@ -129,7 +129,7 @@ func (a *App) initAPIClients(token string) {
 	// pane read from this single authoritative event source.
 	a.gateway.SetRecorder(a.store)
 
-	httpClient := &http.Client{}
+	httpClient := &http.Client{Timeout: 30 * time.Second}
 
 	player := api.NewPlayer("", token)
 	player.SetHTTPClient(httpClient)

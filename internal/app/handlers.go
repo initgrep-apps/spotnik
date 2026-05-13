@@ -225,6 +225,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		if m.Err != nil {
+			// Offset-limit errors are a known API ceiling, not a service failure.
+			// Show a specific message so the user doesn't think Spotify is down.
+			if errors.Is(m.Err, errSearchOffsetLimit) {
+				a.searchLoading = false
+				updated, _ := a.searchPane.Update(m)
+				if sp, ok := updated.(*panes.SearchOverlay); ok {
+					a.searchPane = sp
+				}
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastInfo,
+					Title:  "No more results",
+					Body:   "Spotify limits search to 1000 items per query.",
+				})
+			}
 			// Clear app-level loading flag so the overlay's spinner can be dismissed.
 			a.searchLoading = false
 			// Forward the error msg to overlay so it can clear its loading flags

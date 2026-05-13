@@ -139,6 +139,35 @@ func TestApp_FlushedMsg_WithError_SchedulesRetry(t *testing.T) {
 	assert.NotNil(t, cmd, "error path should return a retry Cmd")
 }
 
+// TestApp_PrefsFlush_ErrorProducesToastWarning verifies that when a
+// prefs.FlushedMsg carries a non-nil error, the handler emits a
+// ToastWarning with title "Preferences not saved" and body
+// "Check available disk space." — no stderr write.
+func TestApp_PrefsFlush_ErrorProducesToastWarning(t *testing.T) {
+	a := newPrefsTestApp(t)
+
+	// Send a FlushedMsg with a simulated flush error.
+	model, cmd := a.Update(prefs.FlushedMsg{Err: fmt.Errorf("permission denied")})
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "error path must return a non-nil Cmd (batch of toast + retry)")
+
+	// Execute the batch cmd to activate the toast, then feed it back.
+	msgs := collectAllMsgs(cmd)
+	var toastFound bool
+	for _, m := range msgs {
+		// Process each msg through Update so the toast is rendered.
+		updated, _ := a.Update(m)
+		a = updated.(*app.App)
+		toastFound = true
+	}
+	require.True(t, toastFound, "batch should contain at least one msg")
+
+	// Check that View contains the toast text.
+	output := a.View()
+	assert.Contains(t, output, "Preferences not saved", "error path should show toast title")
+	assert.Contains(t, output, "Check available disk space", "error path should show toast body")
+}
+
 // ---------------------------------------------------------------------------
 // Story 80: startup preference loading and persistence wiring
 // ---------------------------------------------------------------------------

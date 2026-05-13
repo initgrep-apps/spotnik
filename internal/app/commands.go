@@ -29,6 +29,11 @@ import (
 // expected startup condition, not a user-facing failure.
 var errNilClient = fmt.Errorf("API client not initialized")
 
+// errSearchOffsetLimit is returned when the search offset reaches Spotify's hard limit
+// of 1000 items per query. The handler emits a user-friendly toast instead of routing
+// through the generic ErrorMapper (which would produce a misleading "Spotify is having trouble" body).
+var errSearchOffsetLimit = errors.New("no more results: Spotify limits search to 1000 items per query")
+
 // SearchPageSize is the number of results fetched per page.
 // Matches Spotify's recommended default; named for test clarity.
 const SearchPageSize = 10
@@ -295,10 +300,14 @@ func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string,
 			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: errNilClient}
 		}
 		offset := (page - 1) * SearchPageSize
-		// Spotify rejects any request with offset >= 1000; return nil so Bubble Tea
-		// drops the message silently rather than surfacing an API error to the user.
+		// Spotify rejects any request with offset >= 1000. Return an error message
+		// so the user sees a toast instead of a silent no-op on PgDn.
 		if offset >= 1000 {
-			return nil
+			return panes.SearchPageLoadedMsg{
+				Query: query,
+				Page:  page,
+				Err:   errSearchOffsetLimit,
+			}
 		}
 		// Search is user-triggered (debounce fires after keypress) — Interactive priority skips in-flight dedup.
 		result, err := client.Search(
