@@ -26,6 +26,9 @@ type DeviceOverlay struct {
 
 	// statusMsg is a transient message shown in the overlay (e.g. "Already playing").
 	statusMsg string
+	// err is set when a DevicesLoadedMsg carries an error; cleared on success.
+	// When non-nil, View() renders the error state instead of device list or empty state.
+	err error
 }
 
 // NewDeviceOverlay constructs a DeviceOverlay wired to the given store and theme.
@@ -40,6 +43,12 @@ func NewDeviceOverlay(store state.StateReader, t theme.Theme) *DeviceOverlay {
 func (d *DeviceOverlay) SetSize(width, height int) {
 	d.width = width
 	d.height = height
+}
+
+// Err returns the last fetch error, or nil if the devices loaded successfully.
+// Exported for test helpers.
+func (d *DeviceOverlay) Err() error {
+	return d.err
 }
 
 // Init returns a command that fetches the current device list from the store.
@@ -59,6 +68,7 @@ func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// handled by root app.Update() per Elm purity rule — panes must not mutate store.
 		// This handler only updates the local devices list for rendering.
 		if m.Err == nil {
+			d.err = nil
 			d.devices = m.Devices
 			// Clamp the cursor so it stays in bounds when the list shrinks
 			// (e.g. a device goes offline between refreshes). Without this,
@@ -68,6 +78,8 @@ func (d *DeviceOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if d.cursor >= len(d.devices) {
 				d.cursor = len(d.devices) - 1
 			}
+		} else {
+			d.err = m.Err // preserve last known device list; show error state
 		}
 		return d, nil
 
@@ -139,29 +151,13 @@ func (d *DeviceOverlay) View() string {
 		lines = append(lines, msgStyle.Render(d.statusMsg))
 	}
 
-	// NOTE: Device errors are routed through toast notifications (app.go).
-	// store.DevicesError() is preserved for retry logic but never read in View().
+	// Error state takes priority: shows "Failed to load devices" with a connection hint,
+	// distinct from the legitimate empty-devices state.
+	if d.err != nil {
+		return d.renderEmptyChrome("Failed to load devices", "Check your connection.")
+	}
 	if len(d.devices) == 0 {
-		innerW := totalWidth - 2
-		if innerW < 2 {
-			innerW = 2
-		}
-		// Reserve enough height for the empty-state content (2 text lines + padding).
-		const emptyStateHeight = 6
-		inner := uikit.EmptyState{
-			Text:   "No devices found",
-			Hint:   "Open Spotify on a device to see it here",
-			Width:  innerW,
-			Height: emptyStateHeight - 2, // subtract border rows from inner height
-			Theme:  d.theme,
-		}.Render()
-		chrome := uikit.OverlayChrome{
-			Width:  totalWidth,
-			Height: emptyStateHeight,
-			Title:  "Devices",
-			Theme:  d.theme,
-		}
-		return chrome.Render(inner)
+		return d.renderEmptyChrome("No devices found", "Open Spotify on a device to see it here")
 	}
 	for i, dev := range d.devices {
 		lines = append(lines, d.renderDevice(i, dev))
@@ -182,6 +178,32 @@ func (d *DeviceOverlay) View() string {
 	chrome := uikit.OverlayChrome{
 		Width:  totalWidth,
 		Height: totalHeight,
+		Title:  "Devices",
+		Theme:  d.theme,
+	}
+	return chrome.Render(inner)
+}
+
+// renderEmptyChrome renders the overlay chrome around an EmptyState with the
+// given text and hint. Used for both error and empty states to avoid duplication.
+func (d *DeviceOverlay) renderEmptyChrome(text, hint string) string {
+	totalWidth := d.overlayWidth()
+	innerW := totalWidth - 2
+	if innerW < 2 {
+		innerW = 2
+	}
+	// Reserve enough height for the empty-state content (2 text lines + padding).
+	const emptyStateHeight = 6
+	inner := uikit.EmptyState{
+		Text:   text,
+		Hint:   hint,
+		Width:  innerW,
+		Height: emptyStateHeight - 2, // subtract border rows from inner height
+		Theme:  d.theme,
+	}.Render()
+	chrome := uikit.OverlayChrome{
+		Width:  totalWidth,
+		Height: emptyStateHeight,
 		Title:  "Devices",
 		Theme:  d.theme,
 	}
