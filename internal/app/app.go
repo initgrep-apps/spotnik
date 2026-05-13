@@ -959,23 +959,9 @@ func (a *App) Init() tea.Cmd {
 		}),
 		splashTimer,
 		alertsInitCmd,
-	)
-	initCmds = append(initCmds, a.initialFetchCmds()...)
-	return tea.Batch(initCmds...)
-}
-
-// initialFetchCmds returns commands that trigger the initial data load for all
-// library and stats panes. Each command emits a Fetch*RequestMsg which flows
-// through the existing staleness/dedup guards in handleMsg.
-func (a *App) initialFetchCmds() []tea.Cmd {
-	return []tea.Cmd{
 		a.buildFetchCurrentUserCmd(), // fetch user ID for playlist ownership checks
-		func() tea.Msg { return panes.FetchPlaylistsRequestMsg{Offset: 0} },
-		func() tea.Msg { return panes.FetchAlbumsRequestMsg{Offset: 0} },
-		func() tea.Msg { return panes.FetchLikedTracksRequestMsg{Offset: 0} },
-		func() tea.Msg { return panes.FetchRecentlyPlayedRequestMsg{} },
-		func() tea.Msg { return panes.FetchStatsMsg{TimeRange: "short_term"} },
-	}
+	)
+	return tea.Batch(initCmds...)
 }
 
 // openSearch opens the search overlay. Reset() is called before Init() so

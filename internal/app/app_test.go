@@ -75,6 +75,56 @@ func TestApp_Init_ReturnsBatch(t *testing.T) {
 	assert.NotNil(t, cmd, "Init should return a non-nil batch command")
 }
 
+// collectInitMsgs executes a tea.Cmd (which may be a BatchMsg) and recursively
+// collects all resulting tea.Msg values. Used to inspect what Init() dispatches.
+func collectInitMsgs(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			if c != nil {
+				msgs = append(msgs, collectInitMsgs(c)...)
+			}
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
+
+// TestApp_Init_NoInitialFetchCmds asserts that Init() batch does not contain
+// any library or stats fetch request messages. These are now driven by polling
+// in the TickMsg handler; initialFetchCmds() must not be called from Init().
+func TestApp_Init_NoInitialFetchCmds(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	cmd := a.Init()
+	require.NotNil(t, cmd, "Init should return a non-nil cmd")
+
+	msgs := collectInitMsgs(cmd)
+
+	for _, msg := range msgs {
+		switch msg.(type) {
+		case panes.FetchPlaylistsRequestMsg:
+			t.Errorf("Init() must not dispatch FetchPlaylistsRequestMsg; got %T", msg)
+		case panes.FetchAlbumsRequestMsg:
+			t.Errorf("Init() must not dispatch FetchAlbumsRequestMsg; got %T", msg)
+		case panes.FetchLikedTracksRequestMsg:
+			t.Errorf("Init() must not dispatch FetchLikedTracksRequestMsg; got %T", msg)
+		case panes.FetchRecentlyPlayedRequestMsg:
+			t.Errorf("Init() must not dispatch FetchRecentlyPlayedRequestMsg; got %T", msg)
+		case panes.FetchStatsMsg:
+			t.Errorf("Init() must not dispatch FetchStatsMsg; got %T", msg)
+		}
+	}
+}
+
 // TestApp_Update_TickMsg_DispatchesFetch verifies that a TickMsg causes the app
 // to produce a fetchPlaybackState command (returns a PlaybackStateFetchedMsg).
 func TestApp_Update_TickMsg_DispatchesFetch(t *testing.T) {

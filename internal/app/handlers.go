@@ -120,8 +120,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 				return panes.TickMsg{}
 			}),
+			a.buildFetchCurrentUserCmd(), // fetch user ID for playlist ownership checks
 		)
-		authCmds = append(authCmds, a.initialFetchCmds()...)
 		authCmds = append(authCmds, a.toasts.Cmd(uikit.Toast{
 			Intent: uikit.ToastSuccess,
 			Title:  "Signed in",
