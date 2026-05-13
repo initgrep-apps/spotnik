@@ -327,6 +327,68 @@ func TestProfileOverlay_Init_NilWhenProfilePresent(t *testing.T) {
 	assert.Nil(t, cmd, "Init() should return nil when profile is already loaded")
 }
 
+// TestProfileOverlay_Update_StoresError verifies that Update() handles
+// UserProfileLoadedMsg by storing the error on the overlay.
+func TestProfileOverlay_Update_StoresError(t *testing.T) {
+	overlay, _ := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+
+	testErr := errors.New("network error")
+	updated, cmd := overlay.Update(UserProfileLoadedMsg{Err: testErr})
+	p, ok := updated.(*ProfileOverlay)
+	require.True(t, ok, "Update should return *ProfileOverlay")
+	assert.NotNil(t, p.Err(), "Err() should be non-nil after error message")
+	assert.Equal(t, testErr, p.Err(), "Err() should match the error from the message")
+	assert.Nil(t, cmd, "Update should return nil command for UserProfileLoadedMsg")
+}
+
+// TestProfileOverlay_Update_ClearsErrorOnSuccess verifies that receiving a
+// UserProfileLoadedMsg with nil error clears a previously stored error.
+func TestProfileOverlay_Update_ClearsErrorOnSuccess(t *testing.T) {
+	overlay, store := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+
+	// Set error first.
+	updated, _ := overlay.Update(UserProfileLoadedMsg{Err: errors.New("fail")})
+	overlay = updated.(*ProfileOverlay)
+	assert.NotNil(t, overlay.Err(), "should have error after failed load")
+
+	// Now store the profile and send success.
+	store.SetUserProfile(domain.UserProfile{ID: "user1", DisplayName: "Test"})
+	updated, _ = overlay.Update(UserProfileLoadedMsg{Err: nil})
+	overlay = updated.(*ProfileOverlay)
+	assert.Nil(t, overlay.Err(), "Err() should be nil after successful load")
+}
+
+// TestProfileOverlay_View_ErrorState verifies that View() renders
+// "Profile unavailable" and "Check your connection." when err is set.
+func TestProfileOverlay_View_ErrorState(t *testing.T) {
+	overlay, _ := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+
+	updated, _ := overlay.Update(UserProfileLoadedMsg{Err: errors.New("network error")})
+	p := updated.(*ProfileOverlay)
+
+	view := p.View()
+	plain := stripANSI(view)
+	assert.Contains(t, plain, "Profile unavailable", "View should show 'Profile unavailable' on error")
+	assert.Contains(t, plain, "Check your connection", "View should show hint on error")
+}
+
+// TestProfileOverlay_View_NoInfiniteLoading verifies that View() does NOT show
+// "Loading profile..." when err is set — the error state takes precedence.
+func TestProfileOverlay_View_NoInfiniteLoading(t *testing.T) {
+	overlay, _ := newTestProfileOverlay()
+	overlay.SetSize(40, 12)
+
+	updated, _ := overlay.Update(UserProfileLoadedMsg{Err: errors.New("network error")})
+	p := updated.(*ProfileOverlay)
+
+	view := p.View()
+	assert.NotContains(t, view, "Loading profile", "View must not show 'Loading profile' when err is set")
+	assert.NotContains(t, view, "Loading", "View must not show any 'Loading' text when err is set")
+}
+
 // TestProfileOverlay_SetSize verifies that SetSize stores the dimensions.
 func TestProfileOverlay_SetSize(t *testing.T) {
 	overlay, _ := newTestProfileOverlay()
