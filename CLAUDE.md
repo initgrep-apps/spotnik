@@ -192,12 +192,28 @@ Never commit: non-compiling code · failing tests · lint failures · hardcoded 
 
 ## Feature Development Workflow
 
-Follow this sequence exactly for every feature — no shortcuts.
+### Orchestrate-driven (standard)
+
+The orchestrator manages branch and worktree creation. Feature-implementer receives
+them pre-created and works within the worktree.
 
 ```
-1. git checkout main && git pull origin main
-2. git checkout -b feat/NN-feature-name   (e.g. feat/03-playback)
-3. Implement tasks from the feature spec, one commit per completed task
+Branch per feature:  feat/NN-feature-name      (e.g. feat/10-error-resilience)
+Fix story (post-merge): fix/NNN-story-name     (e.g. fix/150-devices-error-state)
+Worktree per active feature: ../spotnik-feat-NN (sibling of repo root, outside repo)
+Stories = commits on the feature branch (no sub-branches)
+One PR per feature (not per story)
+```
+
+Orchestrator Step 1.5 creates the worktree. Feature-implementer Phase 1 Mode A cds into
+it. Orchestrator Step 4b removes it after merge.
+
+### Standalone / manual
+
+```
+1. git pull origin main
+2. git checkout -b feat/NN-feature-name
+3. Implement — one commit per completed task
 4. make ci   ← must pass fully (lint + tests + 80% coverage)
 5. git push origin feat/NN-feature-name
 6. Open a PR: title = "feat(name): brief description"  body = tasks completed + test summary
@@ -210,6 +226,8 @@ Follow this sequence exactly for every feature — no shortcuts.
 - Never merge your own PR — unless you are the orchestrator after external review passes
 - A failing `make ci` blocks the PR step — fix before pushing
 - One feature per branch — never mix features in a branch
+- Never create sub-branches within a feature branch — stories are commits, not branches
+- Post-merge fix stories use `fix/NNN-story-name` from main — never reopen a merged feature branch
 
 ---
 
