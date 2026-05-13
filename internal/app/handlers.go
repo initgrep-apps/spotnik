@@ -466,6 +466,46 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.tickCount%queueInterval == 0 {
 			cmds = append(cmds, fetchQueueCmd(a.player))
 		}
+
+		// Library pane polling — per-pane exponential backoff, isolated from global 429.
+		if a.backoffTicks <= 0 {
+			for _, entry := range []struct {
+				p        *pollState
+				iv       libraryIntervals
+				fetching func() bool
+				setFetch func(bool)
+				cmd      func() tea.Cmd
+			}{
+				{&a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
+				{&a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
+				{&a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
+				{&a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
+				{&a.statsPoll, statsIntervals, nil, nil, func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
+			} {
+				p := entry.p
+				if p.backoffTicks > 0 {
+					p.backoffTicks--
+				} else if interval := a.libraryInterval(p, entry.iv); a.tickCount%interval == 0 {
+					if entry.fetching == nil || !entry.fetching() {
+						if entry.setFetch != nil {
+							entry.setFetch(true)
+						}
+						cmds = append(cmds, entry.cmd())
+					}
+				}
+			}
+		}
+		// Devices overlay polling (10s) — only while the overlay is open.
+		if a.deviceOverlayOpen {
+			const devicePollInterval = 10
+			p := &a.devicesPoll
+			if p.backoffTicks > 0 {
+				p.backoffTicks--
+			} else if a.tickCount%devicePollInterval == 0 {
+				cmds = append(cmds, a.buildFetchDevicesCmd())
+			}
+		}
+
 		a.tickCount++
 		return a, tea.Batch(cmds...)
 
