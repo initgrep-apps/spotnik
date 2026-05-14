@@ -44,11 +44,11 @@ func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
 func assertAllLibraryMsgs(t *testing.T, msgs []tea.Msg) {
 	t.Helper()
 	types := map[string]bool{
-		"LibraryLoadedMsg":          false,
-		"AlbumsLoadedMsg":           false,
-		"LikedTracksLoadedMsg":      false,
-		"RecentlyPlayedLoadedMsg":   false,
-		"StatsLoadedMsg":            false,
+		"LibraryLoadedMsg":        false,
+		"AlbumsLoadedMsg":         false,
+		"LikedTracksLoadedMsg":    false,
+		"RecentlyPlayedLoadedMsg": false,
+		"StatsLoadedMsg":          false,
 	}
 	for _, m := range msgs {
 		switch m.(type) {
