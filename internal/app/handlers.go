@@ -640,7 +640,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.queuePoll.errorCount = 0
-		a.queuePoll.backoffTicks = 0
 		a.store.ClearQueueError()
 		a.store.SetQueue(m.Tracks)
 		if qp := a.queuePane(); qp != nil {

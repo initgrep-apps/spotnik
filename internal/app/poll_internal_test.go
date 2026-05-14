@@ -621,6 +621,5 @@ func TestApp_QueueLoaded_SuccessResetsPollState(t *testing.T) {
 	model, cmd := a.Update(msg)
 	a = model.(*App)
 	assert.Equal(t, 0, a.queuePoll.errorCount, "success should reset errorCount")
-	assert.Equal(t, 0, a.queuePoll.backoffTicks, "success should reset backoffTicks")
 	assert.Nil(t, cmd, "success should not emit toast")
 }
