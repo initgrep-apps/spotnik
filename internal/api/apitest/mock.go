@@ -24,16 +24,17 @@ type MockPlayer struct {
 	QueueResult         *api.QueueResponse
 	QueueErr            error
 
-	PlayCalled       bool
-	PauseCalled      bool
-	NextCalled       bool
-	PreviousCalled   bool
-	SeekCalled       bool
-	SetVolumeCalled  bool
-	LastSetVolume    int
-	SetShuffleCalled bool
-	SetRepeatCalled  bool
-	AddToQueueCalled bool
+	PlayCalled         bool
+	PauseCalled        bool
+	NextCalled         bool
+	PreviousCalled     bool
+	SeekCalled         bool
+	SetVolumeCalled    bool
+	SetVolumeCallCount int
+	LastSetVolume      int
+	SetShuffleCalled   bool
+	SetRepeatCalled    bool
+	AddToQueueCalled   bool
 }
 
 // Compile-time assertion: *MockPlayer must implement PlayerAPI.
@@ -77,6 +78,7 @@ func (m *MockPlayer) Seek(_ context.Context, _ int) error {
 // SetVolume records the call, stores the volume, and returns the configured error.
 func (m *MockPlayer) SetVolume(_ context.Context, vol int) error {
 	m.SetVolumeCalled = true
+	m.SetVolumeCallCount++
 	m.LastSetVolume = vol
 	return m.SetVolumeErr
 }

@@ -1,7 +1,7 @@
 ---
 title: "Fix: Volume bar review polish"
 feature: 03-playback
-status: open
+status: done
 ---
 
 ## Background

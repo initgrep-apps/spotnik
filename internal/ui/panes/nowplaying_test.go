@@ -1117,3 +1117,33 @@ func TestNowPlayingPane_StaleVolumeDebounce_ReturnsNilCmd(t *testing.T) {
 	_, cmd := p.Update(stale)
 	assert.Nil(t, cmd, "stale debounce tick must return nil cmd")
 }
+
+// TestNowPlayingPane_VolumeAppliedMsg_StaleSeq_BarStaysInSecondBurst verifies that a
+// VolumeAppliedMsg from the first burst does not snap the bar back when the user has
+// already started a second burst. The seq guard in ConfirmFromAPI prevents the stale
+// confirmation from overwriting the second burst's pending value.
+//
+// Seq progression:
+//   - HandleKey(+1, 50): seq=1, currentVol=51
+//   - HandleDebounce({Seq:1}): seq advances to 2 (double-fire guard), matched
+//   - HandleKey(+1, 51): seq=3, currentVol=52
+//   - ConfirmFromAPI(intentSeq=1, vol=51): checks seq(3) == 1+1(2) → false → no snap
+func TestNowPlayingPane_VolumeAppliedMsg_StaleSeq_BarStaysInSecondBurst(t *testing.T) {
+	p := newPaneWithVolume(50)
+
+	// First burst: press + (seq=1, currentVol=51).
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+
+	// Resolve the first burst's debounce tick — seq advances to 2 inside HandleDebounce.
+	p.Update(components.VolumeDebounceTickMsg{TargetVol: 51, Seq: 1})
+
+	// Second burst starts: press + again (seq=3, currentVol=52).
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+
+	// The first burst's API result arrives with intentSeq=1 (stale).
+	// ConfirmFromAPI(1, 51) checks: b.seq(3) == 1+1(2) → false → no snap.
+	p.Update(VolumeAppliedMsg{Vol: 51, Seq: 1})
+
+	out := p.View()
+	assert.Contains(t, out, "52%", "stale ConfirmFromAPI must not snap bar back from second burst value")
+}
