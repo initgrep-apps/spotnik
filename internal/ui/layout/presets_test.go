@@ -27,7 +27,7 @@ func TestPreset_GridConsistency(t *testing.T) {
 		layout.PresetListening,
 		layout.PresetLibrary,
 		layout.PresetDiscovery,
-		layout.PresetNerdStatus,
+		layout.PresetStats,
 	}
 
 	for _, p := range presets {
@@ -96,10 +96,10 @@ func TestPresetDiscovery(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneRecentlyPlayed])
 }
 
-// TestPresetNerdStatus_HasFivePanes verifies the new 5-pane Page B preset.
-func TestPresetNerdStatus_HasFivePanes(t *testing.T) {
-	p := layout.PresetNerdStatus
-	assert.Equal(t, "Nerd Status", p.Name)
+// TestPresetStats_HasFivePanes verifies the new 5-pane Stats page preset.
+func TestPresetStats_HasFivePanes(t *testing.T) {
+	p := layout.PresetStats
+	assert.Equal(t, "Stats", p.Name)
 	assert.Len(t, p.Visible, 5, "should have 5 visible panes")
 
 	assert.True(t, p.Visible[layout.PaneNowPlaying])
@@ -109,13 +109,13 @@ func TestPresetNerdStatus_HasFivePanes(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneNetworkLog])
 }
 
-// TestPresetNerdStatus_FlatThreeRows verifies the flat grid structure (story 181):
+// TestPresetStats_FlatThreeRows verifies the flat grid structure (story 181):
 // NowPlaying strip, single middle row with Health+Traffic+Live (1:1:3),
 // NetworkLog full-width row.
-func TestPresetNerdStatus_FlatThreeRows(t *testing.T) {
-	require.Len(t, layout.PresetNerdStatus.Grid, 3)
+func TestPresetStats_FlatThreeRows(t *testing.T) {
+	require.Len(t, layout.PresetStats.Grid, 3)
 
-	p := layout.PresetNerdStatus
+	p := layout.PresetStats
 
 	// Row 0: NowPlaying strip
 	assert.Equal(t, 1, p.Grid[0].HeightWeight)
@@ -139,6 +139,6 @@ func TestPresetNerdStatus_FlatThreeRows(t *testing.T) {
 }
 
 func TestPagePresets_Counts(t *testing.T) {
-	assert.Len(t, layout.PageAPresets, 4, "PageAPresets should have 4 entries")
-	assert.Len(t, layout.PageBPresets, 1, "PageBPresets should have 1 entry")
+	assert.Len(t, layout.PageMusicPresets, 4, "PageMusicPresets should have 4 entries")
+	assert.Len(t, layout.PageStatsPresets, 1, "PageStatsPresets should have 1 entry")
 }

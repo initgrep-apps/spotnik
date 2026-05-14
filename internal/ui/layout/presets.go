@@ -19,9 +19,9 @@ type Preset struct {
 	Grid    []Row
 }
 
-// Page A presets (DESIGN.md §4)
+// Music page presets (DESIGN.md §4)
 
-// PresetDashboard shows all 8 Page A panes across 3 rows.
+// PresetDashboard shows all 8 Music page panes across 3 rows.
 var PresetDashboard = Preset{
 	Name: "Full Dashboard",
 	Visible: map[PaneID]bool{
@@ -92,13 +92,13 @@ var PresetDiscovery = Preset{
 	},
 }
 
-// Page B preset
+// Stats page preset
 
-// PresetNerdStatus shows NowPlaying strip, three diagnostic panes side-by-side
+// PresetStats shows NowPlaying strip, three diagnostic panes side-by-side
 // (Health, Traffic, Live with weights 1:1:3 → ~20%/20%/60%), and NetworkLog
 // full-width below. All five panes are individually toggleable via keys 1-5.
-var PresetNerdStatus = Preset{
-	Name: "Nerd Status",
+var PresetStats = Preset{
+	Name: "Stats",
 	Visible: map[PaneID]bool{
 		PaneNowPlaying:     true,
 		PaneGatewayHealth:  true,
@@ -121,9 +121,9 @@ var PresetNerdStatus = Preset{
 	},
 }
 
-// PageAPresets is the ordered list of presets for Page A (Music).
+// PageMusicPresets is the ordered list of presets for the Music page.
 // Index 0 is the default (Full Dashboard).
-var PageAPresets = []Preset{PresetDashboard, PresetListening, PresetLibrary, PresetDiscovery}
+var PageMusicPresets = []Preset{PresetDashboard, PresetListening, PresetLibrary, PresetDiscovery}
 
-// PageBPresets is the ordered list of presets for Page B (Nerd Status).
-var PageBPresets = []Preset{PresetNerdStatus}
+// PageStatsPresets is the ordered list of presets for the Stats page.
+var PageStatsPresets = []Preset{PresetStats}

@@ -22,9 +22,9 @@ func TestPaneID_IotaValues(t *testing.T) {
 	assert.Equal(t, layout.PaneID(11), layout.PaneGatewayLive)
 }
 
-// TestPaneIDs_PageBConstants_AreDistinct verifies that the four Page B PaneID constants
-// are distinct from each other and from all Page A constants.
-func TestPaneIDs_PageBConstants_AreDistinct(t *testing.T) {
+// TestPaneIDs_StatsPageConstants_AreDistinct verifies that the four Stats page PaneID constants
+// are distinct from each other and from all Music page constants.
+func TestPaneIDs_StatsPageConstants_AreDistinct(t *testing.T) {
 	pageB := []layout.PaneID{
 		layout.PaneNetworkLog,
 		layout.PaneGatewayHealth,
@@ -33,10 +33,10 @@ func TestPaneIDs_PageBConstants_AreDistinct(t *testing.T) {
 	}
 	seen := make(map[layout.PaneID]bool)
 	for _, id := range pageB {
-		assert.False(t, seen[id], "PaneID %d appears more than once in Page B constants", id)
+		assert.False(t, seen[id], "PaneID %d appears more than once in Stats page constants", id)
 		seen[id] = true
 	}
-	// None of the Page B constants should collide with Page A constants.
+	// None of the Stats page constants should collide with Music page constants.
 	pageA := []layout.PaneID{
 		layout.PaneNowPlaying,
 		layout.PaneQueue,
@@ -48,13 +48,13 @@ func TestPaneIDs_PageBConstants_AreDistinct(t *testing.T) {
 		layout.PaneTopArtists,
 	}
 	for _, id := range pageA {
-		assert.False(t, seen[id], "Page A PaneID %d collides with a Page B constant", id)
+		assert.False(t, seen[id], "Music page PaneID %d collides with a Stats page constant", id)
 	}
 }
 
 func TestPageID_Constants(t *testing.T) {
-	assert.Equal(t, layout.PageID(0), layout.PageA)
-	assert.Equal(t, layout.PageID(1), layout.PageB)
+	assert.Equal(t, layout.PageID(0), layout.PageMusic)
+	assert.Equal(t, layout.PageID(1), layout.PageStats)
 }
 
 func TestRect_ContentWidth(t *testing.T) {
