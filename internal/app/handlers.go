@@ -625,13 +625,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			a.queuePoll.errorCount++
+			a.queuePoll.backoffTicks = calcBackoffTicks(a.queuePoll.errorCount)
 			a.store.SetQueueError(m.Err)
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Queue update failed",
-				Body:   string(uikit.RecoveryCheckConnection),
-			})
+			if a.queuePoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Queue update failed",
+					Body:   string(uikit.RecoveryCheckConnection),
+				})
+			}
+			return a, nil
 		}
+		a.queuePoll.errorCount = 0
 		a.store.ClearQueueError()
 		a.store.SetQueue(m.Tracks)
 		if qp := a.queuePane(); qp != nil {
@@ -651,6 +657,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			// NOTE: Playback intentionally has no per-pane backoff. It is the most
+			// important data stream (transport state, progress bar) and must always
+			// poll at the 1s interval regardless of consecutive errors.
 			a.consecutivePlaybackErrors++
 			// Emit a warning toast only on the 3rd consecutive failure to avoid
 			// flooding the user with toasts at 1-3s polling intervals. The counter

@@ -30,6 +30,7 @@ func TestCalcBackoffTicks(t *testing.T) {
 		errorCount int
 		want       int
 	}{
+		{0, 5},   // guard: errorCount <= 0 returns minimum
 		{1, 5},   // 5 * 2^0 = 5
 		{2, 10},  // 5 * 2^1 = 10
 		{3, 20},  // 5 * 2^2 = 20

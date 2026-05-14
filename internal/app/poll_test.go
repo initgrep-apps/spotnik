@@ -16,8 +16,9 @@ import (
 )
 
 // collectAllMsgs executes a tea.Cmd (possibly a batch) and collects every
-// resulting tea.Msg by executing each sub-command in the batch.
-// Only one level of nesting is resolved (batch-within-batch is not expected here).
+// resulting tea.Msg by executing each sub-command recursively. This mirrors
+// the collectInitMsgs pattern in app_test.go so nested batches are resolved
+// regardless of depth.
 func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
 	if cmd == nil {
 		return nil
@@ -30,10 +31,7 @@ func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
 		var msgs []tea.Msg
 		for _, c := range batch {
 			if c != nil {
-				m := c()
-				if m != nil {
-					msgs = append(msgs, m)
-				}
+				msgs = append(msgs, collectAllMsgs(c)...)
 			}
 		}
 		return msgs
@@ -41,22 +39,34 @@ func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
 	return []tea.Msg{msg}
 }
 
-// hasLibraryMsg returns true if msgs contains any of the library-loaded message types
-// (LibraryLoadedMsg, AlbumsLoadedMsg, LikedTracksLoadedMsg, RecentlyPlayedLoadedMsg,
-// StatsLoadedMsg). These are the messages returned by the fetch commands when the
-// API client is nil (errNilClient path), which confirms the command was dispatched.
-func hasLibraryMsg(msgs []tea.Msg) bool {
+// assertAllLibraryMsgs fails the test if any of the five library fetch message
+// types is absent from msgs.
+func assertAllLibraryMsgs(t *testing.T, msgs []tea.Msg) {
+	t.Helper()
+	types := map[string]bool{
+		"LibraryLoadedMsg":          false,
+		"AlbumsLoadedMsg":           false,
+		"LikedTracksLoadedMsg":      false,
+		"RecentlyPlayedLoadedMsg":   false,
+		"StatsLoadedMsg":            false,
+	}
 	for _, m := range msgs {
 		switch m.(type) {
-		case panes.LibraryLoadedMsg,
-			panes.AlbumsLoadedMsg,
-			panes.LikedTracksLoadedMsg,
-			panes.RecentlyPlayedLoadedMsg,
-			panes.StatsLoadedMsg:
-			return true
+		case panes.LibraryLoadedMsg:
+			types["LibraryLoadedMsg"] = true
+		case panes.AlbumsLoadedMsg:
+			types["AlbumsLoadedMsg"] = true
+		case panes.LikedTracksLoadedMsg:
+			types["LikedTracksLoadedMsg"] = true
+		case panes.RecentlyPlayedLoadedMsg:
+			types["RecentlyPlayedLoadedMsg"] = true
+		case panes.StatsLoadedMsg:
+			types["StatsLoadedMsg"] = true
 		}
 	}
-	return false
+	for name, found := range types {
+		assert.True(t, found, "TickMsg at tick 0 must dispatch %s", name)
+	}
 }
 
 // TestApp_TickMsg_LibraryPollDispatchesAtTick0 verifies that the TickMsg handler
@@ -71,8 +81,7 @@ func TestApp_TickMsg_LibraryPollDispatchesAtTick0(t *testing.T) {
 	require.NotNil(t, cmd, "TickMsg at tick 0 must return a batch command")
 
 	msgs := collectAllMsgs(cmd)
-	assert.True(t, hasLibraryMsg(msgs),
-		"TickMsg at tick 0 must dispatch at least one library fetch cmd; got msgs: %T", msgs)
+	assertAllLibraryMsgs(t, msgs)
 }
 
 // TestApp_TickMsg_DevicesPollWhileOverlayOpen verifies that the devices overlay is
