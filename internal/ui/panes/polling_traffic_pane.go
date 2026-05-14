@@ -38,7 +38,7 @@ func (p *PollingTrafficPane) ID() layout.PaneID { return layout.PanePollingTraff
 // Title returns the display title shown in the pane border.
 func (p *PollingTrafficPane) Title() string { return "Polling Traffic" }
 
-// ToggleKey returns 3 — the Page B toggle key for this pane.
+// ToggleKey returns 3 — the Stats page toggle key for this pane.
 func (p *PollingTrafficPane) ToggleKey() int { return 3 }
 
 // Actions returns nil — this pane has no interactive shortcuts.

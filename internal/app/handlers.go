@@ -425,7 +425,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Forward TickMsg to Page B panes so they refresh their data.
+		// Forward TickMsg to Stats page panes so they refresh their data.
 		if ghp := a.GatewayHealthPane(); ghp != nil {
 			updated, _ := ghp.Update(m)
 			if p, ok := updated.(*panes.GatewayHealthPane); ok {
@@ -545,7 +545,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.gateway.CheckAndEmitRefill()
 		a.gateway.CheckAndEmitBackoffExpiry()
 		// Forward viz.TickMsg to NowPlayingPane for animation.
-		// The new Page B panes (GatewayHealth, GatewayLive, PollingTraffic) do not
+		// The new Stats page panes (GatewayHealth, GatewayLive, PollingTraffic) do not
 		// consume viz.TickMsg — they react to the 1s TickMsg instead.
 		var visCmds []tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {

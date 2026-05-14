@@ -89,8 +89,8 @@ func TestStatusBar_PageAwareBindings(t *testing.T) {
 	resultA := uikit.StatusBar{Width: 160, Bindings: kmA, Theme: th}.Render()
 	resultB := uikit.StatusBar{Width: 160, Bindings: kmB, Theme: th}.Render()
 
-	assert.Contains(t, resultA, "preset", "Page A must show preset binding")
-	assert.NotContains(t, resultB, "preset", "Page B must not show preset binding")
+	assert.Contains(t, resultA, "preset", "Music page must show preset binding")
+	assert.NotContains(t, resultB, "preset", "Stats page must not show preset binding")
 }
 
 // TestStatusBar_AsciiBorder verifies that in ASCII mode the StatusBar border uses

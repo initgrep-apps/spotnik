@@ -1,5 +1,5 @@
 // Package panes — BasePane is an embedded struct providing the five fields and four
-// trivial Pane interface methods shared by all 8 table-based Page A panes.
+// trivial Pane interface methods shared by all 8 table-based Music page panes.
 package panes
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 // BasePane holds the fields and trivial Pane interface methods shared by all 8
-// table-based Page A panes. Embed this struct in each pane to eliminate repeated
+// table-based Music page panes. Embed this struct in each pane to eliminate repeated
 // declarations.
 //
 // What BasePane provides: store, theme, focused, width, height fields;

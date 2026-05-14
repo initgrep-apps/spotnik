@@ -87,7 +87,7 @@ type App struct {
 	// activePage is set per render call via a copy so renderStatusBar() stays pure.
 	statusKeyMap appKeyMap
 
-	// panes holds all 8 Page A panes (Page B panes added in Feature 51).
+	// panes holds all 8 Music page panes (Stats page panes added in Feature 51).
 	panes map[layout.PaneID]layout.Pane
 
 	// searchPane and devicePane are overlay panes — they float above the grid.
@@ -312,7 +312,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	s := state.New()
 	gw := api.NewGateway()
 
-	// Create all 8 Page A panes.
+	// Create all 8 Music page panes.
 	nowPlayingPane := panes.NewNowPlayingPane(s, t, true)
 	queuePane := panes.NewQueuePane(s, t, false)
 	playlistsPane := panes.NewPlaylistsPane(s, t, false)
@@ -322,7 +322,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	topTracksPane := panes.NewTopTracksPane(s, t, false)
 	topArtistsPane := panes.NewTopArtistsPane(s, t, false)
 
-	// Create Page B panes. All three read gateway events from the store's event
+	// Create Stats page panes. All three read gateway events from the store's event
 	// journal, preserving the ui/ → state/ dependency direction (no gateway reference).
 	gatewayHealthPane := panes.NewGatewayHealthPane(s, t)
 	pollingTrafficPane := panes.NewPollingTrafficPane(s, t)
@@ -416,7 +416,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	// Wire the centralized error mapper — translates API errors to user-facing Toasts.
 	a.errorMapper = &uikit.ErrorMapper{}
 
-	// Apply saved layout preset (Page A only).
+	// Apply saved layout preset (Music page only).
 	// SetPreset is a no-op for out-of-range indices; log a warning when it doesn't take.
 	if cfg.Preferences.Preset > 0 {
 		a.layout.SetPreset(cfg.Preferences.Preset)
