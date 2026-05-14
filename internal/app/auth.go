@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -39,6 +40,33 @@ type authSuccessMsg struct {
 type authErrorMsg struct {
 	err error
 }
+
+// authErrorMessages maps Spotify OAuth error codes to user-friendly strings.
+var authErrorMessages = map[string]string{
+	"invalid_grant":          "Authorization expired. Please sign in again.",
+	"invalid_client":         "Client ID is invalid. Check your config file.",
+	"invalid_request":        "Sign-in failed. Please try again.",
+	"access_denied":          "Authorization denied. Please allow access when prompted.",
+	"unsupported_grant_type": "Sign-in configuration error. Please file a bug report.",
+}
+
+// friendlyAuthError maps a raw OAuth error to a user-friendly string.
+// Returns a generic fallback for unknown codes or nil errors.
+func friendlyAuthError(err error) string {
+	if err == nil {
+		return "Sign-in failed. Please run 'spotnik auth' to try again."
+	}
+	msg := err.Error()
+	for code, friendly := range authErrorMessages {
+		if strings.Contains(msg, code) {
+			return friendly
+		}
+	}
+	return "Sign-in failed. Please run 'spotnik auth' to try again."
+}
+
+// FriendlyAuthError is an exported wrapper around friendlyAuthError for testing.
+func FriendlyAuthError(err error) string { return friendlyAuthError(err) }
 
 // saveClientIDCmd writes clientID to the config file at path, then returns
 // onboardingClientIDSavedMsg on success or authErrorMsg on failure.
