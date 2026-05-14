@@ -107,3 +107,33 @@ func TestHandleOnboardingKey_stepOAuth_c_dispatchesCopyCmd(t *testing.T) {
 	// Decode the OSC 52 payload — confirms the OAuth URL is the one wired in.
 	assert.Equal(t, a.onboardingAuthURL, decodeOSC52(t, out))
 }
+
+// TestHandleOnboardingKey_stepError_c_noCopyAndNoPanic confirms that 'c' in
+// stepError dispatches no command and does not panic.
+func TestHandleOnboardingKey_stepError_c_noCopyAndNoPanic(t *testing.T) {
+	a := newTestApp(false)
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepError
+
+	_, cmd := a.handleOnboardingKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	assert.Nil(t, cmd)
+}
+
+// TestHandleOnboardingKey_stepRegister_c_afterDeleteAll_dispatchesCopy confirms that
+// 'c' still copies after the user typed and then deleted all input.
+func TestHandleOnboardingKey_stepRegister_c_afterDeleteAll_dispatchesCopy(t *testing.T) {
+	a := newTestApp(false)
+	a.currentView = viewOnboarding
+	a.onboardingStep = stepRegister
+	a.onboardingPort = 9090
+	a.onboardingField.SetValue("abc123")
+	a.onboardingField.SetValue("")
+
+	_, cmd := a.handleOnboardingKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	require.NotNil(t, cmd, "stepRegister 'c' on empty field (after delete-all) must dispatch copy")
+	var msg tea.Msg
+	captureStderr(t, func() { msg = cmd() })
+	copied, ok := msg.(clipboardCopiedMsg)
+	require.True(t, ok)
+	assert.NoError(t, copied.Err)
+}

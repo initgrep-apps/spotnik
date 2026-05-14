@@ -1,7 +1,7 @@
 ---
 title: "Fix: Clipboard OSC 52 review polish"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background

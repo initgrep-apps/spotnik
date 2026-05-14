@@ -30,10 +30,11 @@ func captureStderr(t *testing.T, fn func()) string {
 		done <- buf.String()
 	}()
 
-	fn()
-
-	require.NoError(t, w.Close())
-	os.Stderr = orig
+	defer func() { os.Stderr = orig }()
+	func() {
+		defer func() { _ = w.Close() }()
+		fn()
+	}()
 	return <-done
 }
 
@@ -71,7 +72,6 @@ func TestCopyToClipboardCmd_emptyText_emitsResetSequence(t *testing.T) {
 	require.True(t, ok)
 	assert.NoError(t, copied.Err)
 
-	// Reset form per upstream: ESC ] 52 ; c ; BEL with empty payload.
 	assert.Equal(t, "\x1b]52;c;\x07", out)
 }
 
@@ -90,6 +90,8 @@ func TestCopyToClipboardCmd_brokenStderr_returnsError(t *testing.T) {
 	copied, ok := msg.(clipboardCopiedMsg)
 	require.True(t, ok)
 	assert.Error(t, copied.Err)
+	assert.True(t, strings.Contains(copied.Err.Error(), "emitting OSC 52"),
+		"Err must include wrap prefix; got: %v", copied.Err)
 }
 
 func TestUpdate_clipboardCopiedMsg_success_returnsToastCmd(t *testing.T) {
