@@ -239,6 +239,7 @@ type App struct {
 	recentPlayedPoll pollState
 	statsPoll        pollState
 	devicesPoll      pollState
+	queuePoll        pollState
 
 	// nilPlaybackStateTicks counts successive PlaybackStateFetchedMsg deliveries where
 	// State is nil and Err is nil. After 30 consecutive nil states a warning toast fires
@@ -595,6 +596,9 @@ var (
 
 // calcBackoffTicks computes per-pane exponential backoff: min(5 * 2^(errorCount-1), 60).
 func calcBackoffTicks(errorCount int) int {
+	if errorCount <= 0 {
+		return 5 // minimum backoff interval
+	}
 	if ticks := 5 * (1 << uint(errorCount-1)); ticks < 60 {
 		return ticks
 	}

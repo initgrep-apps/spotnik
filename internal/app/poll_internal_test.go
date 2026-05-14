@@ -30,6 +30,7 @@ func TestCalcBackoffTicks(t *testing.T) {
 		errorCount int
 		want       int
 	}{
+		{0, 5},   // guard: errorCount <= 0 returns minimum
 		{1, 5},   // 5 * 2^0 = 5
 		{2, 10},  // 5 * 2^1 = 10
 		{3, 20},  // 5 * 2^2 = 20
@@ -565,4 +566,60 @@ func TestApp_PlaybackErrors_ResetOnSuccess(t *testing.T) {
 	model, _ = a.Update(successMsg)
 	a = model.(*App)
 	assert.Equal(t, 0, a.consecutivePlaybackErrors, "success should reset consecutivePlaybackErrors to 0")
+}
+
+// --- QueueLoadedMsg ---
+
+// TestApp_QueueLoaded_ErrorFirstEmitsToast verifies that the first queue error
+// increments errorCount and emits a toast. Subsequent errors are silent.
+func TestApp_QueueLoaded_ErrorFirstEmitsToast(t *testing.T) {
+	a := newTestAppInternal()
+	a.currentView = viewGrid
+
+	errMsg := panes.QueueLoadedMsg{Err: fmt.Errorf("network error")}
+
+	// First error: toast.
+	model, cmd := a.Update(errMsg)
+	a = model.(*App)
+	assert.Equal(t, 1, a.queuePoll.errorCount, "first error should set errorCount=1")
+	require.NotNil(t, cmd, "first error should emit a toast")
+
+	// Second error: silent.
+	model2, cmd2 := a.Update(errMsg)
+	a = model2.(*App)
+	assert.Equal(t, 2, a.queuePoll.errorCount, "second error should set errorCount=2")
+	assert.Nil(t, cmd2, "second error should NOT emit a toast")
+}
+
+// TestApp_QueueLoaded_errNilClient_SilentlyIgnored verifies that errNilClient
+// in QueueLoadedMsg is silently ignored, leaving errorCount untouched.
+func TestApp_QueueLoaded_errNilClient_SilentlyIgnored(t *testing.T) {
+	a := newTestAppInternal()
+	a.currentView = viewGrid
+
+	msg := panes.QueueLoadedMsg{Err: errNilClient}
+	_, cmd := a.Update(msg)
+	assert.Nil(t, cmd, "errNilClient should not emit toast")
+	assert.Equal(t, 0, a.queuePoll.errorCount, "errNilClient should not increment errorCount")
+}
+
+// TestApp_QueueLoaded_SuccessResetsPollState verifies that a successful
+// QueueLoadedMsg resets errorCount and backoffTicks.
+func TestApp_QueueLoaded_SuccessResetsPollState(t *testing.T) {
+	a := newTestAppInternal()
+	a.currentView = viewGrid
+	a.width = 120
+	a.height = 40
+
+	// Prime error state.
+	errMsg := panes.QueueLoadedMsg{Err: fmt.Errorf("network error")}
+	a.Update(errMsg)
+	assert.Equal(t, 1, a.queuePoll.errorCount)
+
+	// Success resets.
+	msg := panes.QueueLoadedMsg{Tracks: []domain.Track{}}
+	model, cmd := a.Update(msg)
+	a = model.(*App)
+	assert.Equal(t, 0, a.queuePoll.errorCount, "success should reset errorCount")
+	assert.Nil(t, cmd, "success should not emit toast")
 }
