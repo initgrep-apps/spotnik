@@ -25,19 +25,19 @@ func TestPaneID_IotaValues(t *testing.T) {
 // TestPaneIDs_StatsPageConstants_AreDistinct verifies that the four Stats page PaneID constants
 // are distinct from each other and from all Music page constants.
 func TestPaneIDs_StatsPageConstants_AreDistinct(t *testing.T) {
-	pageB := []layout.PaneID{
+	statsPage := []layout.PaneID{
 		layout.PaneNetworkLog,
 		layout.PaneGatewayHealth,
 		layout.PanePollingTraffic,
 		layout.PaneGatewayLive,
 	}
 	seen := make(map[layout.PaneID]bool)
-	for _, id := range pageB {
+	for _, id := range statsPage {
 		assert.False(t, seen[id], "PaneID %d appears more than once in Stats page constants", id)
 		seen[id] = true
 	}
 	// None of the Stats page constants should collide with Music page constants.
-	pageA := []layout.PaneID{
+	musicPage := []layout.PaneID{
 		layout.PaneNowPlaying,
 		layout.PaneQueue,
 		layout.PanePlaylists,
@@ -47,7 +47,7 @@ func TestPaneIDs_StatsPageConstants_AreDistinct(t *testing.T) {
 		layout.PaneTopTracks,
 		layout.PaneTopArtists,
 	}
-	for _, id := range pageA {
+	for _, id := range musicPage {
 		assert.False(t, seen[id], "Music page PaneID %d collides with a Stats page constant", id)
 	}
 }

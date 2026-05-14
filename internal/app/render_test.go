@@ -65,6 +65,13 @@ func TestRenderHeader_ContainsPageIndicator(t *testing.T) {
 	assert.Contains(t, result, "Music", "header should show current page")
 }
 
+func TestRenderHeader_StatsPage_ContainsStatsLabel(t *testing.T) {
+	a := newRenderTestApp()
+	a.layout.TogglePage()
+	result := a.renderHeader()
+	assert.Contains(t, result, "Stats", "header should show 'Stats' on Stats page")
+}
+
 func TestRenderHeader_ContainsPresetIndex(t *testing.T) {
 	a := newRenderTestApp()
 	result := a.renderHeader()
@@ -581,8 +588,8 @@ func TestRenderStatusBar_ShowsAllMusicPageBindings(t *testing.T) {
 // status bar on both Music page and Stats page — fix for story 117.
 func TestRenderStatusBar_ContainsProfileHint(t *testing.T) {
 	tests := []struct {
-		name  string
-		pageB bool
+		name      string
+		statsPage bool
 	}{
 		{"Music page", false},
 		{"Stats page", true},
@@ -591,7 +598,7 @@ func TestRenderStatusBar_ContainsProfileHint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newRenderTestApp()
 			a.width = 200
-			if tt.pageB {
+			if tt.statsPage {
 				a.layout.TogglePage()
 			}
 			result := a.renderStatusBar()
@@ -606,7 +613,7 @@ func TestRenderStatusBar_ContainsProfileHint(t *testing.T) {
 func TestRenderStatusBar_ProfileAdjacentToDevices(t *testing.T) {
 	tests := []struct {
 		name  string
-		pageB bool
+		statsPage bool
 	}{
 		{"Music page", false},
 		{"Stats page", true},
@@ -615,7 +622,7 @@ func TestRenderStatusBar_ProfileAdjacentToDevices(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newRenderTestApp()
 			a.width = 200
-			if tt.pageB {
+			if tt.statsPage {
 				a.layout.TogglePage()
 			}
 			result := a.renderStatusBar()

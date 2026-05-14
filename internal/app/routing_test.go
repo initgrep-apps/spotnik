@@ -338,7 +338,7 @@ func TestIsPlaybackKey_N_NotPlaybackKey(t *testing.T) {
 }
 
 // TestStatsPageNumberKeys_ToggleStatsPanes verifies that keys '2'-'5' on Stats page toggle
-// the correct Stats page pane, and that a transpose in pageBToggleKeyMap would be caught.
+// the correct Stats page pane, and that a transpose in statsToggleKeyMap would be caught.
 func TestStatsPageNumberKeys_ToggleStatsPanes(t *testing.T) {
 	cases := []struct {
 		key    rune

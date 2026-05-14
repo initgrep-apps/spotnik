@@ -32,9 +32,9 @@ var toggleKeyMap = map[rune]layout.PaneID{
 	'8': layout.PaneTopArtists,
 }
 
-// pageBToggleKeyMap maps rune keys '1'-'5' to Stats page PaneIDs.
+// statsToggleKeyMap maps rune keys '1'-'5' to Stats page PaneIDs.
 // This is used for btop-style pane visibility toggling on the Stats page.
-var pageBToggleKeyMap = map[rune]layout.PaneID{
+var statsToggleKeyMap = map[rune]layout.PaneID{
 	'1': layout.PaneNowPlaying,
 	'2': layout.PaneGatewayHealth,
 	'3': layout.PanePollingTraffic,
@@ -194,7 +194,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.Type == tea.KeyRunes && len(m.Runes) == 1 {
 		keyMap := toggleKeyMap
 		if a.layout.ActivePage() == layout.PageStats {
-			keyMap = pageBToggleKeyMap
+			keyMap = statsToggleKeyMap
 		}
 		if id, ok := keyMap[m.Runes[0]]; ok {
 			a.layout.TogglePane(id)
