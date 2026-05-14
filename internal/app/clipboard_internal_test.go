@@ -90,6 +90,8 @@ func TestCopyToClipboardCmd_brokenStderr_returnsError(t *testing.T) {
 	copied, ok := msg.(clipboardCopiedMsg)
 	require.True(t, ok)
 	assert.Error(t, copied.Err)
+	assert.True(t, strings.Contains(copied.Err.Error(), "emitting OSC 52"),
+		"Err must include wrap prefix; got: %v", copied.Err)
 }
 
 func TestUpdate_clipboardCopiedMsg_success_returnsToastCmd(t *testing.T) {
