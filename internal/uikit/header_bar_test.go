@@ -10,40 +10,40 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestHeaderBar_LeftSegment_PageA verifies that a Page-A bar renders
-// "spotnik", "Page A", and "preset N" in the left segment.
-func TestHeaderBar_LeftSegment_PageA(t *testing.T) {
+// TestHeaderBar_LeftSegment_Music verifies that a Music bar renders
+// "spotnik", "Music", and "preset N" in the left segment.
+func TestHeaderBar_LeftSegment_Music(t *testing.T) {
 	th := theme.Load("black")
 	h := uikit.HeaderBar{
 		Width:      160,
 		AppName:    "spotnik",
-		Page:       "A",
+		Page:       "Music",
 		Preset:     0,
 		RightChips: []string{},
 		Theme:      th,
 	}
 	plain := uikit.Capture(h.Render())[0]
 	assert.Contains(t, plain, "spotnik", "left segment must contain app name")
-	assert.Contains(t, plain, "Page A", "left segment must contain page indicator")
+	assert.Contains(t, plain, "Music", "left segment must contain page indicator")
 	assert.Contains(t, plain, "preset 0", "left segment must contain preset index")
 }
 
-// TestHeaderBar_LeftSegment_PageB_NoPreset verifies that when Preset == -1,
+// TestHeaderBar_LeftSegment_Stats_NoPreset verifies that when Preset == -1,
 // the preset segment is hidden.
-func TestHeaderBar_LeftSegment_PageB_NoPreset(t *testing.T) {
+func TestHeaderBar_LeftSegment_Stats_NoPreset(t *testing.T) {
 	th := theme.Load("black")
 	h := uikit.HeaderBar{
 		Width:      160,
 		AppName:    "spotnik",
-		Page:       "B",
+		Page:       "Stats",
 		Preset:     -1,
 		RightChips: []string{},
 		Theme:      th,
 	}
 	plain := uikit.Capture(h.Render())[0]
 	assert.Contains(t, plain, "spotnik", "left segment must contain app name")
-	assert.Contains(t, plain, "Page B", "left segment must contain page indicator")
-	assert.NotContains(t, plain, "preset", "Page B bar must not contain preset segment")
+	assert.Contains(t, plain, "Stats", "left segment must contain page indicator")
+	assert.NotContains(t, plain, "preset", "Stats page bar must not contain preset segment")
 }
 
 // TestHeaderBar_RightChips_Rendered verifies that pre-rendered chip strings are
@@ -55,7 +55,7 @@ func TestHeaderBar_RightChips_Rendered(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:      160,
 		AppName:    "spotnik",
-		Page:       "A",
+		Page:       "Music",
 		Preset:     1,
 		RightChips: []string{chip1, chip2},
 		Theme:      th,
@@ -72,7 +72,7 @@ func TestHeaderBar_FillsExactWidth(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:      160,
 		AppName:    "spotnik",
-		Page:       "A",
+		Page:       "Music",
 		Preset:     0,
 		RightChips: []string{},
 		Theme:      th,
@@ -88,7 +88,7 @@ func TestHeaderBar_FillsExactWidth_Narrow(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:      120,
 		AppName:    "spotnik",
-		Page:       "A",
+		Page:       "Music",
 		Preset:     0,
 		RightChips: []string{},
 		Theme:      th,
@@ -105,7 +105,7 @@ func TestHeaderBar_ZeroWidth_FallsBack(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:   0,
 		AppName: "spotnik",
-		Page:    "A",
+		Page:    "Music",
 		Preset:  0,
 		Theme:   th,
 	}
@@ -124,7 +124,7 @@ func TestHeaderBar_GapAtLeastOne(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:      120,
 		AppName:    "spotnik",
-		Page:       "A",
+		Page:       "Music",
 		Preset:     0,
 		RightChips: []string{longChip},
 		Theme:      th,
@@ -142,7 +142,7 @@ func TestHeaderBar_AsciiSeparator(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:   160,
 		AppName: "spotnik",
-		Page:    "A",
+		Page:    "Music",
 		Preset:  0,
 		Theme:   th,
 	}
@@ -157,7 +157,7 @@ func TestHeaderBar_PresetN_ShowsIndex(t *testing.T) {
 	h := uikit.HeaderBar{
 		Width:   160,
 		AppName: "spotnik",
-		Page:    "A",
+		Page:    "Music",
 		Preset:  3,
 		Theme:   th,
 	}

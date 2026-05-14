@@ -18,12 +18,12 @@ import (
 // appKeyMap implements help.KeyMap for the app-level status bar.
 // activePage is set via a copy per render call so renderStatusBar() stays pure.
 //
-// Page A (10 bindings, 5 columns × 2 rows):
+// Music page (10 bindings, 5 columns × 2 rows):
 //
 //	/ search   p preset   Tab pane    t theme    q quit
 //	0 page     1-8 toggle  d devices   u profile  ? help
 //
-// Page B (8 bindings, 4 columns × 2 rows):
+// Stats page (8 bindings, 4 columns × 2 rows):
 //
 //	/ search   Tab pane    t theme    q quit
 //	0 page     d devices   u profile  ? help
@@ -36,7 +36,7 @@ type appKeyMap struct {
 // StatusBar.Render() uses bubbles/help in short-help mode (ShowAll stays false)
 // so this method drives the single-row output seen at the bottom of the app.
 func (k appKeyMap) ShortHelp() []key.Binding {
-	if k.activePage == layout.PageA {
+	if k.activePage == layout.PageMusic {
 		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
 	}
 	return []key.Binding{k.Search, k.Page, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
@@ -46,7 +46,7 @@ func (k appKeyMap) ShortHelp() []key.Binding {
 // Each inner slice is one column rendered vertically; columns are joined horizontally.
 // Column 3 (Pane/Devices/Profile) has 3 entries — Devices and Profile are overlay shortcuts.
 func (k appKeyMap) FullHelp() [][]key.Binding {
-	if k.activePage == layout.PageA {
+	if k.activePage == layout.PageMusic {
 		return [][]key.Binding{
 			{k.Search, k.Page},
 			{k.Preset, k.Toggle},
@@ -544,13 +544,13 @@ func truncateDeviceName(name string) string {
 	return name
 }
 
-// pageLabel converts a layout.PageID to its display label ("A" or "B").
+// pageLabel converts a layout.PageID to its display label ("Music" or "Stats").
 func pageLabel(page layout.PageID) string {
 	switch page {
-	case layout.PageA:
-		return "A"
-	case layout.PageB:
-		return "B"
+	case layout.PageMusic:
+		return "Music"
+	case layout.PageStats:
+		return "Stats"
 	default:
 		return "?"
 	}
@@ -573,8 +573,8 @@ func truncateProfileName(name string) string {
 }
 
 // renderHeader renders the btop-style header bar containing:
-// Page A — Left: spotnik ─ Page A ─ preset 0    Right: ◉ DeviceName   ♛ DisplayName
-// Page B — Left: spotnik ─ Page B               Right: ◉ DeviceName   ♛ DisplayName
+// Music page — Left: spotnik ─ Music ─ preset 0    Right: ◉ DeviceName   ♛ DisplayName
+// Stats page — Left: spotnik ─ Stats               Right: ◉ DeviceName   ♛ DisplayName
 //
 // The profile chip (name + tier badge) appears to the right of the device chip.
 // The profile chip is absent when the profile has not yet been loaded.
@@ -584,8 +584,8 @@ func truncateProfileName(name string) string {
 // Rendering is delegated to uikit.HeaderBar + uikit.Chip.
 func (a *App) renderHeader() string {
 	preset := a.layout.ActivePresetIndex()
-	if a.layout.ActivePage() == layout.PageB {
-		// Page B has no user-selectable presets — hide the segment.
+	if a.layout.ActivePage() == layout.PageStats {
+		// Stats page has no user-selectable presets — hide the segment.
 		preset = -1
 	}
 
@@ -633,7 +633,7 @@ func (a *App) renderHeader() string {
 
 // renderStatusBar renders the global bottom status bar as a bubbles/help panel.
 // Delegates to uikit.StatusBar which owns the layout: 3 lines tall (top border +
-// 1 content row + bottom border). Page A shows all 10 bindings; Page B omits preset/toggle.
+// 1 content row + bottom border). Music page shows all 10 bindings; Stats page omits preset/toggle.
 func (a *App) renderStatusBar() string {
 	// Copy the keymap so we can set activePage without mutating App state.
 	// renderStatusBar() must remain a pure render function.

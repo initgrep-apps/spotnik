@@ -35,7 +35,7 @@ The redesign draws from **btop** — a system monitor beloved by terminal enthus
 |--------|---------------------|---------------------|
 | Layout | Fixed 3-column (22/50/28%) | 3-row responsive grid, 10 panes across 2 pages |
 | Panes | 3 fixed + 2 alternative views | 8 music panes + 2 nerd status panes, toggleable |
-| Pages | None | Page A (Music) + Page B (Nerd Status), toggled by `0` |
+| Pages | None | Music page (Music) + Stats page (Stats), toggled by `0` |
 | Presets | None (view switching via 1/2/3) | `p` cycles preset layouts within current page |
 | Pane toggle | None | Keys `1`-`8` hide/show individual panes (btop-style) |
 | Shortcuts | All in status bar | Embedded in pane borders (btop-style) |
@@ -77,7 +77,7 @@ Note: for these features and existing featues a lot of componetns are available 
 
 ## 2. Pane Definitions
 
-### Page A — Music (8 panes)
+### Music page — Music (8 panes)
 
 | # | Pane | ID | API Source | Toggle Key | Border Accent |
 |---|------|----|-----------|------------|---------------|
@@ -90,7 +90,7 @@ Note: for these features and existing featues a lot of componetns are available 
 | 7 | Top Tracks | `PaneTopTracks` | `GET /me/top/tracks` | `7` | `KeyHint()` purple |
 | 8 | Top Artists | `PaneTopArtists` | `GET /me/top/artists` | `8` | `Error()` pink/red |
 
-### Page B — Nerd Status (4 panes)
+### Stats page — Stats (4 panes)
 
 | # | Pane | ID | Data Source | Toggle Key | Border Accent |
 |---|------|----|-------------|------------|---------------|
@@ -99,13 +99,13 @@ Note: for these features and existing featues a lot of componetns are available 
 | — | Gateway Live | `PaneGatewayLive` | `store.ReadEventsFrom(cursor)` — 500-entry event stream | `4` | `PaneBorderRequestFlow()` orange/amber |
 | — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (200-entry buffer) | `5` | `PaneBorderNetworkLog()` warm grey |
 
-Toggle keys `2`–`5` are only active on Page B. Page A number keys (`1`–`8`) do not toggle
-Page B panes, and Page B number keys (`1`–`5`) do not toggle Page A panes.
+Toggle keys `2`–`5` are only active on Stats page. Music page number keys (`1`–`8`) do not toggle
+Stats page panes, and Stats page number keys (`1`–`5`) do not toggle Music page panes.
 
 ### Key Notes
 
-- Keys `1`-`8` **toggle** pane visibility on Page A; keys `1`-`5` toggle pane visibility on Page B (btop-style hide/show), not pane-jump
-- `0` toggles between Page A and Page B
+- Keys `1`-`8` **toggle** pane visibility on Music page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
+- `0` toggles between Music and Stats
 - Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`) always route to NowPlaying regardless of focus
 - `A` for "add to queue" in search overlay and list panes
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
@@ -173,13 +173,13 @@ Each pane's content area is `Rect.Width - 2` x `Rect.Height - 2` (borders consum
 
 ### Page Switching
 
-- `0` toggles between **Page A** (Music) and **Page B** (Nerd Status)
+- `0` toggles between **Music page** (Music) and **Stats page** (Stats)
 - Each page has its own preset cycle
 - Switching pages preserves pane state on both sides
 
 ### Pane Toggling (btop-style)
 
-Keys `1`-`8` toggle the corresponding pane's visibility on Page A; keys `1`-`5` toggle panes on Page B:
+Keys `1`-`8` toggle the corresponding pane's visibility on Music page; keys `1`-`5` toggle panes on Stats page:
 - When a pane hides, siblings in the same row expand to fill its space
 - When all panes in a row hide, the row collapses and other rows expand
 - When a hidden pane is toggled back, it reappears in its original grid position
@@ -192,7 +192,7 @@ Keys `1`-`8` toggle the corresponding pane's visibility on Page A; keys `1`-`5` 
 - After the last preset, wraps to the first (full layout)
 - Switching preset resets all manual toggles
 
-### Page A Presets
+### Music page Presets
 
 #### Preset 0 — Full Dashboard (default)
 
@@ -311,7 +311,7 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 
 **Visible panes:** NowPlaying (small strip, height < 8), TopTracks, TopArtists, RecentlyPlayed
 
-### Page A Preset Summary
+### Music page Preset Summary
 
 | Preset | Name | Visible Panes |
 |--------|------|---------------|
@@ -320,7 +320,7 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 | 2 | Library | NowPlaying (small strip, height < 8), Playlists, Albums, LikedSongs |
 | 3 | Discovery | NowPlaying (small strip, height < 8), TopTracks, TopArtists, RecentlyPlayed |
 
-### Page B Layout
+### Stats page Layout
 
 Four-pane, three-row layout: NowPlaying compact strip (row 1) + three diagnostic panes
 side-by-side (row 2) + Network Log full-width (row 3).
@@ -356,7 +356,7 @@ When switching presets:
 - All pane states (scroll position, selected item, filter text) are preserved
 - Focus moves to the first visible pane if the currently focused pane becomes hidden
 - The `renderGrid()` function re-assembles the layout immediately
-- Manual pane toggles (keys `1`-`8` on Page A, `1`-`5` on Page B) are reset when switching presets
+- Manual pane toggles (keys `1`-`8` on Music page, `1`-`5` on Stats page) are reset when switching presets
 
 ---
 
@@ -704,7 +704,7 @@ descriptions in Muted role.
 
 ### Pane Toggle (replaces Direct Pane Jump)
 
-Keys `1`-`8` toggle pane visibility on Page A; keys `1`-`5` toggle pane visibility on Page B. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
+Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`5` toggle pane visibility on Stats page. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
 
 ### Playback Keys (Always Route to NowPlaying)
 
@@ -736,10 +736,10 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | Key | Action | Scope |
 |-----|--------|-------|
 | **Pages** | | |
-| `0` | Toggle Page A / Page B | Global |
+| `0` | Toggle Music / Stats | Global |
 | **Pane Toggle** | | |
-| `1`-`8` | Toggle pane 1-8 visibility | Page A |
-| `1`-`5` | Toggle pane 1-5 visibility | Page B |
+| `1`-`8` | Toggle pane 1-8 visibility | Music page |
+| `1`-`5` | Toggle pane 1-5 visibility | Stats page |
 | **Presets** | | |
 | `p` | Cycle to next preset | Current page |
 | **Playback (always route to NowPlaying)** | | |
@@ -1048,13 +1048,13 @@ solarized, synthwave, tokyonight) implement these tokens.
 
 ---
 
-## 19. Page B — Nerd Status Specification
+## 19. Stats page — Stats Specification
 
-Page B provides live visibility into Spotnik's internal request pipeline. No Spotify API calls needed — all data is read from existing internal structures (`*Gateway`, `*Store`).
+Stats page provides live visibility into Spotnik's internal request pipeline. No Spotify API calls needed — all data is read from existing internal structures (`*Gateway`, `*Store`).
 
-Page B has **four panes** below the NowPlaying compact strip: three diagnostic panes in a side-by-side row (GatewayHealth, PollingTraffic, GatewayLive) and a full-width NetworkLog row.
+Stats page has **four panes** below the NowPlaying compact strip: three diagnostic panes in a side-by-side row (GatewayHealth, PollingTraffic, GatewayLive) and a full-width NetworkLog row.
 
-### Toggle Key Table (Page B)
+### Toggle Key Table (Stats page)
 
 | Key | Pane |
 |-----|------|
@@ -1147,8 +1147,8 @@ Scrollable reverse-chronological log of completed API requests (200-entry buffer
 
 | Tick | Rate | Purpose |
 |------|------|---------|
-| App tick | 1000ms | All four Page B panes refresh via `TickMsg`; `PollingSnapshotMsg` sent to PollingTrafficPane |
-| Animation tick | 200ms | NowPlaying visualizer only — Page B panes do not consume `viz.TickMsg` |
+| App tick | 1000ms | All four Stats page panes refresh via `TickMsg`; `PollingSnapshotMsg` sent to PollingTrafficPane |
+| Animation tick | 200ms | NowPlaying visualizer only — Stats page panes do not consume `viz.TickMsg` |
 
 ### Data Sources (all internal — no new API calls)
 
@@ -1219,7 +1219,7 @@ Not in initial implementation. Future enhancement: automatically hide lower-prio
 |------|---------|
 | `layout.go` | `Manager` struct, `Resize()`, `recompute()`, `PaneRect()`, `PaneAt()`, `SetPreset()`, `CyclePreset()`, `TogglePage()`, `TogglePane()`, `RotateFocus()`, `FocusedPane()` |
 | `pane.go` | `Pane` interface, `PaneID` enum (`PaneGatewayHealth`, `PanePollingTraffic`, `PaneGatewayLive`, `PaneNetworkLog`), `PageID` enum, `Action` struct |
-| `presets.go` | `PresetDashboard`, `PresetListening`, `PresetLibrary`, `PresetDiscovery`, `PresetNerdStatus` definitions |
+| `presets.go` | `PresetDashboard`, `PresetListening`, `PresetLibrary`, `PresetDiscovery`, `PresetStats` definitions |
 | `border.go` | `RenderPaneBorder()` — custom border with btop-style title + actions |
 | `truncate.go` | `Truncate()`, `PadRight()`, `TruncateOrPad()` — rune-aware text utilities |
 | `*_test.go` | Full table-driven test coverage |
@@ -1228,7 +1228,7 @@ Not in initial implementation. Future enhancement: automatically hide lower-prio
 
 ```go
 type Manager struct {
-    activePage   PageID           // PageA (Music) or PageB (Nerd Status)
+    activePage   PageID           // PageA (Music) or PageB (Stats)
     presets      map[PageID][]Preset
     activePreset map[PageID]int
     hidden       map[PaneID]bool
@@ -1256,7 +1256,7 @@ type App struct {
 
     // Removed: playerPane, libraryPane, queuePane, statsPane, playlistPane
     // Removed: focus focusedPane, currentView viewMode
-    // Page B components read directly from Gateway + Store (no separate logger needed — uses store.ReadEventsFrom(cursor))
+    // Stats page components read directly from Gateway + Store (no separate logger needed — uses store.ReadEventsFrom(cursor))
 }
 ```
 
@@ -1273,10 +1273,10 @@ type App struct {
 | `QueuePane` | `QueuePane` (add Pane interface, dense table) |
 | `StatsView` | Split into `TopTracksPane` + `TopArtistsPane` (separate panes). RecentlyPlayed section → `RecentlyPlayedPane` |
 | `PlaylistManager` | Merged into `PlaylistsPane` (Enter=track sub-view, n=new, r=rename, x=delete, Shift+arrow=reorder as border actions) |
-| — (new) | `GatewayHealthPane` (Page B, token/slot/backoff/dedup grid from `store.ReadEventsFrom`) |
-| — (new) | `PollingTrafficPane` (Page B, poll cadence + library cache freshness from store sentinels) |
-| — (new) | `GatewayLivePane` (Page B, 500-entry gateway event stream, scrollable + filterable) |
-| — (new) | `NetworkLogPane` (Page B, reads from `store.ReadEventsFrom(cursor)` — scrollable API log) |
+| — (new) | `GatewayHealthPane` (Stats page, token/slot/backoff/dedup grid from `store.ReadEventsFrom`) |
+| — (new) | `PollingTrafficPane` (Stats page, poll cadence + library cache freshness from store sentinels) |
+| — (new) | `GatewayLivePane` (Stats page, 500-entry gateway event stream, scrollable + filterable) |
+| — (new) | `NetworkLogPane` (Stats page, reads from `store.ReadEventsFrom(cursor)` — scrollable API log) |
 
 ### Pane Interface Migration Checklist
 
@@ -1295,10 +1295,10 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 | → `TopTracksPane` | `PaneTopTracks` | "Top Tracks" | `7` | filter, 4wk/6mo/all | Top tracks extracted |
 | → `TopArtistsPane` | `PaneTopArtists` | "Top Artists" | `8` | filter, 4wk/6mo/all | Top artists extracted |
 | `PlaylistManager` | — | — | — | — | Merge into PlaylistsPane |
-| — (new) | `PaneGatewayHealth` | "Gateway Health" | `2` | — | Page B, token/slot/backoff/dedup grid |
-| — (new) | `PanePollingTraffic` | "Polling Traffic" | `3` | — | Page B, playback poll cadence + library cache freshness |
-| — (new) | `PaneGatewayLive` | "Gateway Live" | `4` | f filter | Page B, scrollable 500-entry gateway event stream |
-| — (new) | `PaneNetworkLog` | "Network Log" | `5` | f filter | Page B, scrollable API request history (200-entry buffer) |
+| — (new) | `PaneGatewayHealth` | "Gateway Health" | `2` | — | Stats page, token/slot/backoff/dedup grid |
+| — (new) | `PanePollingTraffic` | "Polling Traffic" | `3` | — | Stats page, playback poll cadence + library cache freshness |
+| — (new) | `PaneGatewayLive` | "Gateway Live" | `4` | f filter | Stats page, scrollable 500-entry gateway event stream |
+| — (new) | `PaneNetworkLog` | "Network Log" | `5` | f filter | Stats page, scrollable API request history (200-entry buffer) |
 
 ### Code Migration Notes
 

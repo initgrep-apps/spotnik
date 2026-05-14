@@ -22,7 +22,7 @@ type BorderConfig struct {
 	// Title is the pane title shown in the top border (e.g., "Playlists").
 	Title string
 	// ToggleKey is the number key (1-8) shown as a superscript before the title.
-	// Pass 0 for panes that have no toggle key (e.g. Page B panes).
+	// Pass 0 for panes that have no toggle key (e.g. Stats page panes).
 	ToggleKey int
 	// Actions are pane-specific shortcuts shown in the top-right of the border.
 	// Displayed in corner-notch format: ╮key label╭, separated by ─.

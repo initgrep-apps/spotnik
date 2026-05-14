@@ -13,7 +13,7 @@ import (
 func TestNewManager_Defaults(t *testing.T) {
 	m := layout.NewManager()
 	require.NotNil(t, m)
-	assert.Equal(t, layout.PageA, m.ActivePage())
+	assert.Equal(t, layout.PageMusic, m.ActivePage())
 	assert.Equal(t, 0, m.ActivePresetIndex())
 	assert.Equal(t, "Full Dashboard", m.ActivePresetName())
 }
@@ -123,7 +123,7 @@ func TestPaneRect_HiddenPaneReturnsZero(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	// PaneNetworkLog is a Page B pane — not visible on Page A
+	// PaneNetworkLog is a Stats page pane — not visible on Music page
 	r := m.PaneRect(layout.PaneNetworkLog)
 	assert.Equal(t, layout.Rect{}, r, "hidden pane should return zero Rect")
 }
@@ -157,22 +157,22 @@ func TestTogglePage_SwitchesBetweenPages(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	assert.Equal(t, layout.PageA, m.ActivePage())
+	assert.Equal(t, layout.PageMusic, m.ActivePage())
 	m.TogglePage()
-	assert.Equal(t, layout.PageB, m.ActivePage())
+	assert.Equal(t, layout.PageStats, m.ActivePage())
 	m.TogglePage()
-	assert.Equal(t, layout.PageA, m.ActivePage())
+	assert.Equal(t, layout.PageMusic, m.ActivePage())
 }
 
 func TestTogglePage_ClearsHiddenState(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	// Hide a pane on Page A
+	// Hide a pane on Music page
 	m.TogglePane(layout.PanePlaylists)
 	assert.False(t, m.IsPaneVisible(layout.PanePlaylists))
 
-	// Switch to Page B and back
+	// Switch to Stats page and back
 	m.TogglePage()
 	m.TogglePage()
 
@@ -279,26 +279,26 @@ func TestTogglePane_CannotHideLastVisible(t *testing.T) {
 		"last visible pane must not be hideable")
 }
 
-func TestTogglePane_PageB_TogglesNowPlaying(t *testing.T) {
+func TestTogglePane_StatsPage_TogglesNowPlaying(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Page B
+	m.TogglePage() // switch to Stats page
 
-	// NowPlaying (key 1) is in PresetNerdStatus and must be toggleable on Page B.
+	// NowPlaying (key 1) is in PresetStats and must be toggleable on Stats page.
 	require.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
 	m.TogglePane(layout.PaneNowPlaying)
-	assert.False(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must hide after toggle on Page B")
+	assert.False(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must hide after toggle on Stats page")
 
 	m.TogglePane(layout.PaneNowPlaying)
-	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must show after second toggle on Page B")
+	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must show after second toggle on Stats page")
 }
 
-func TestTogglePane_PageB_TogglesPageBPanes(t *testing.T) {
+func TestTogglePane_StatsPage_TogglesStatsPanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Page B
+	m.TogglePage() // switch to Stats page
 
-	// GatewayHealth (key 2) should be toggleable on Page B
+	// GatewayHealth (key 2) should be toggleable on Stats page
 	require.True(t, m.IsPaneVisible(layout.PaneGatewayHealth))
 	m.TogglePane(layout.PaneGatewayHealth)
 	assert.False(t, m.IsPaneVisible(layout.PaneGatewayHealth), "GatewayHealth must hide after toggle")
@@ -307,29 +307,29 @@ func TestTogglePane_PageB_TogglesPageBPanes(t *testing.T) {
 	assert.True(t, m.IsPaneVisible(layout.PaneGatewayHealth), "GatewayHealth must show after second toggle")
 }
 
-func TestTogglePane_PageB_IgnoresPageAPanes(t *testing.T) {
+func TestTogglePane_StatsPage_IgnoresMusicPagePanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Page B
+	m.TogglePage() // switch to Stats page
 
-	// Page A panes must not be toggleable while on Page B
-	m.TogglePane(layout.PaneQueue) // PaneQueue < PaneNetworkLog — Page A pane
+	// Music page panes must not be toggleable while on Stats page
+	m.TogglePane(layout.PaneQueue) // PaneQueue < PaneNetworkLog — Music page pane
 	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must still be visible")
 }
 
-func TestTogglePane_PageA_IgnoresPageBPanes(t *testing.T) {
+func TestTogglePane_MusicPage_IgnoresStatsPagePanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	// Still on Page A — attempting to toggle a Page B pane must be a no-op
+	// Still on Music page — attempting to toggle a Stats page pane must be a no-op
 	m.TogglePane(layout.PaneGatewayHealth)
-	// NowPlaying is a Page A pane and must remain visible (no change to Page A state)
+	// NowPlaying is a Music page pane and must remain visible (no change to Music page state)
 	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
 }
 
-func TestTogglePane_PageB_CannotHideLastPane(t *testing.T) {
+func TestTogglePane_StatsPage_CannotHideLastPane(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // Page B — PresetNerdStatus has 5 panes
+	m.TogglePage() // Stats page — PresetStats has 5 panes
 
 	// Hide 4 of 5 panes — only NowPlaying remains
 	m.TogglePane(layout.PaneGatewayHealth)
@@ -340,7 +340,7 @@ func TestTogglePane_PageB_CannotHideLastPane(t *testing.T) {
 	require.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "NowPlaying must be the last visible pane")
 	// Attempt to hide the last pane must be rejected
 	m.TogglePane(layout.PaneNowPlaying)
-	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "cannot-hide-last guard must reject on Page B")
+	assert.True(t, m.IsPaneVisible(layout.PaneNowPlaying), "cannot-hide-last guard must reject on Stats page")
 }
 
 func TestIsPaneVisible_ReflectsToggleState(t *testing.T) {
@@ -528,8 +528,8 @@ func TestFullLifecycle(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	// Start: Page A, Dashboard
-	assert.Equal(t, layout.PageA, m.ActivePage())
+	// Start: Music page, Dashboard
+	assert.Equal(t, layout.PageMusic, m.ActivePage())
 	assert.Len(t, m.VisiblePanes(), 8)
 
 	// Cycle preset
@@ -543,13 +543,13 @@ func TestFullLifecycle(t *testing.T) {
 
 	// Switch page
 	m.TogglePage()
-	assert.Equal(t, layout.PageB, m.ActivePage())
-	assert.Len(t, m.VisiblePanes(), 5) // PresetNerdStatus has 5 panes
+	assert.Equal(t, layout.PageStats, m.ActivePage())
+	assert.Len(t, m.VisiblePanes(), 5) // PresetStats has 5 panes
 
 	// Switch back
 	m.TogglePage()
-	assert.Equal(t, layout.PageA, m.ActivePage())
-	// Hidden state was cleared when we toggled to Page B and back
+	assert.Equal(t, layout.PageMusic, m.ActivePage())
+	// Hidden state was cleared when we toggled to Stats page and back
 	// so we cycle to Listening again manually
 	m.SetPreset(1) // Listening
 	// Manual toggles were reset when we switched pages, so Queue should be visible again
@@ -646,12 +646,12 @@ func TestFocusRotation_AfterHideWrapsCorrectly(t *testing.T) {
 	assert.Equal(t, first, m.FocusedPane())
 }
 
-// ── Story 181: flat Page B layout (RowSpan retired) ─────────────────────────
+// ── Story 181: flat Stats page layout (RowSpan retired) ─────────────────────────
 
-func TestRecompute_PageBFlat_ThreeRows(t *testing.T) {
+func TestRecompute_StatsPageFlat_ThreeRows(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Page B (flat 3-row PresetNerdStatus)
+	m.TogglePage() // switch to Stats page (flat 3-row PresetStats)
 
 	np := m.PaneRect(layout.PaneNowPlaying)
 	h := m.PaneRect(layout.PaneGatewayHealth)
@@ -675,7 +675,7 @@ func TestRecompute_PageBFlat_ThreeRows(t *testing.T) {
 	assert.Equal(t, 200, h.Width+pt.Width+gl.Width, "row width sums to terminal width")
 }
 
-func TestTogglePane_PageB_HealthHidden_TrafficLiveExpand(t *testing.T) {
+func TestTogglePane_StatsPage_HealthHidden_TrafficLiveExpand(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
 	m.TogglePage()
@@ -692,7 +692,7 @@ func TestTogglePane_PageB_HealthHidden_TrafficLiveExpand(t *testing.T) {
 	assert.Equal(t, 200, pt.Width+gl.Width, "remaining cells fill the row width")
 }
 
-func TestTogglePane_PageB_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
+func TestTogglePane_StatsPage_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
 	m.TogglePage()
@@ -704,7 +704,7 @@ func TestTogglePane_PageB_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 	assert.Equal(t, 200, gl.Width, "Live fills full row when both siblings hidden")
 }
 
-func TestTogglePane_PageB_LiveHidden_HealthTrafficExpand(t *testing.T) {
+func TestTogglePane_StatsPage_LiveHidden_HealthTrafficExpand(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
 	m.TogglePage()
@@ -717,7 +717,7 @@ func TestTogglePane_PageB_LiveHidden_HealthTrafficExpand(t *testing.T) {
 	assert.Equal(t, 200, h.Width+pt.Width, "they fill the full row")
 }
 
-func TestRecompute_PageB_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
+func TestRecompute_StatsPage_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
 	// Flat layout: focus order is purely visual reading order.
 	m := layout.NewManager()
 	m.Resize(200, 50)
@@ -731,7 +731,7 @@ func TestRecompute_PageB_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
 		layout.PaneNetworkLog,
 	}
 	assert.Equal(t, expected, m.VisiblePanes(),
-		"Page B focus order: NowPlaying → Health → Traffic → Live → NetworkLog")
+		"Stats page focus order: NowPlaying → Health → Traffic → Live → NetworkLog")
 
 	for i, want := range expected {
 		assert.Equal(t, want, m.FocusedPane(),
@@ -741,7 +741,7 @@ func TestRecompute_PageB_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
 	assert.Equal(t, expected[0], m.FocusedPane(), "rotation must wrap to first pane")
 }
 
-func TestRecompute_PageB_RectsNonOverlapping(t *testing.T) {
+func TestRecompute_StatsPage_RectsNonOverlapping(t *testing.T) {
 	// Use odd dimensions to exercise rounding-remainder paths.
 	m := layout.NewManager()
 	m.Resize(201, 79)

@@ -2117,24 +2117,24 @@ func TestApp_NilPlaybackState_WarnAtTick30(t *testing.T) {
 	assert.Contains(t, a.View(), "No playback state", "warning toast should be visible at tick 30")
 }
 
-// --- Page B (Nerd Status) registration tests ---
+// --- Stats page (Stats) registration tests ---
 
-// TestApp_PageB_Panes_Registered verifies that all Page B panes are created
+// TestApp_StatsPage_Panes_Registered verifies that all Stats page panes are created
 // and present in the panes map after App.New().
-func TestApp_PageB_Panes_Registered(t *testing.T) {
+func TestApp_StatsPage_Panes_Registered(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 	require.NotNil(t, a)
 
-	// All three new Page B panes and NetworkLogPane should be accessible.
+	// All three new Stats page panes and NetworkLogPane should be accessible.
 	assert.NotNil(t, a.GatewayHealthPane(), "GatewayHealthPane should be registered")
 	assert.NotNil(t, a.PollingTrafficPane(), "PollingTrafficPane should be registered")
 	assert.NotNil(t, a.GatewayLivePane(), "GatewayLivePane should be registered")
 	assert.NotNil(t, a.NetworkLogPane(), "NetworkLogPane should be registered")
 }
 
-// TestApp_PageB_Toggle_SwitchesPage verifies that pressing '0' switches to Page B.
-func TestApp_PageB_Toggle_SwitchesPage(t *testing.T) {
+// TestApp_StatsPage_Toggle_SwitchesPage verifies that pressing '0' switches to Stats page.
+func TestApp_StatsPage_Toggle_SwitchesPage(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -2142,17 +2142,17 @@ func TestApp_PageB_Toggle_SwitchesPage(t *testing.T) {
 	m, _ := a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 	a = m.(*app.App)
 
-	// Press '0' to toggle to Page B.
+	// Press '0' to toggle to Stats page.
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
 	a = m.(*app.App)
 
-	assert.False(t, a.GridViewOpen(), "Page A should not be the 'grid view' on Page B")
+	assert.False(t, a.GridViewOpen(), "Music page should not be the 'grid view' on Stats page")
 }
 
-// TestApp_PageB_TickMsg_ReachesGatewayHealthPane verifies that TickMsg is dispatched
+// TestApp_StatsPage_TickMsg_ReachesGatewayHealthPane verifies that TickMsg is dispatched
 // to GatewayHealthPane and that the pane actually drains gateway events (behavioral,
 // not just a nil-check).
-func TestApp_PageB_TickMsg_ReachesGatewayHealthPane(t *testing.T) {
+func TestApp_StatsPage_TickMsg_ReachesGatewayHealthPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -2177,9 +2177,9 @@ func TestApp_PageB_TickMsg_ReachesGatewayHealthPane(t *testing.T) {
 		"GatewayHealthPane must drain events on TickMsg (cursor must advance)")
 }
 
-// TestApp_PageB_TickMsg_ReachesNetworkLogPane verifies TickMsg is dispatched to
+// TestApp_StatsPage_TickMsg_ReachesNetworkLogPane verifies TickMsg is dispatched to
 // NetworkLogPane and that the pane actually drains gateway events (behavioral).
-func TestApp_PageB_TickMsg_ReachesNetworkLogPane(t *testing.T) {
+func TestApp_StatsPage_TickMsg_ReachesNetworkLogPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -2204,10 +2204,10 @@ func TestApp_PageB_TickMsg_ReachesNetworkLogPane(t *testing.T) {
 		"NetworkLogPane must process HttpCompleted events on TickMsg")
 }
 
-// TestApp_PageB_TickMsg_DispatchesPollingSnapshot verifies that TickMsg causes the
+// TestApp_StatsPage_TickMsg_DispatchesPollingSnapshot verifies that TickMsg causes the
 // handler to build and forward a PollingSnapshotMsg to PollingTrafficPane. Driving
 // the app to idle state ensures IsIdle is set in the snapshot.
-func TestApp_PageB_TickMsg_DispatchesPollingSnapshot(t *testing.T) {
+func TestApp_StatsPage_TickMsg_DispatchesPollingSnapshot(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -2232,10 +2232,10 @@ func TestApp_PageB_TickMsg_DispatchesPollingSnapshot(t *testing.T) {
 		"Playback row must show idle status — proves PollingSnapshotMsg{IsIdle:true} was dispatched")
 }
 
-// TestApp_PageB_TickMsg_ReachesGatewayLivePane verifies that TickMsg is dispatched to
+// TestApp_StatsPage_TickMsg_ReachesGatewayLivePane verifies that TickMsg is dispatched to
 // GatewayLivePane and that the pane absorbs recorded gateway events into its buffer.
 // Without the dispatch block in handlers.go the buffer stays empty.
-func TestApp_PageB_TickMsg_ReachesGatewayLivePane(t *testing.T) {
+func TestApp_StatsPage_TickMsg_ReachesGatewayLivePane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
@@ -2258,13 +2258,13 @@ func TestApp_PageB_TickMsg_ReachesGatewayLivePane(t *testing.T) {
 		"GatewayLivePane must absorb gateway events on TickMsg (BufferedEventCount must be > 0)")
 }
 
-// TestApp_PageB_VizTick_ReachesNowPlayingPane verifies viz.TickMsg
-// reaches the NowPlayingPane for animation. Page B panes do not consume viz.TickMsg.
-func TestApp_PageB_VizTick_ReachesNowPlayingPane(t *testing.T) {
+// TestApp_StatsPage_VizTick_ReachesNowPlayingPane verifies viz.TickMsg
+// reaches the NowPlayingPane for animation. Stats page panes do not consume viz.TickMsg.
+func TestApp_StatsPage_VizTick_ReachesNowPlayingPane(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	// viz.TickMsg should not panic and all Page B panes should remain accessible.
+	// viz.TickMsg should not panic and all Stats page panes should remain accessible.
 	m, _ := a.Update(viz.TickMsg(time.Now()))
 	a = m.(*app.App)
 

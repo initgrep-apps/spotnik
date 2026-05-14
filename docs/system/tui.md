@@ -390,7 +390,7 @@ at call time, matching the `ListRow` pattern.
 ### 3.7 SectionLabel
 
 **Purpose:** Caps label marking a sub-section inside a pane, underlined by a `─` rule.
-Used for Page B labels (GATEWAY, APP, SPOTIFY, POLLING, STORE).
+Used for Stats page labels (GATEWAY, APP, SPOTIFY, POLLING, STORE).
 
 **Fields:**
 
@@ -537,7 +537,7 @@ type HeaderBar struct {
     Width      int
     AppName    string
     Page       string     // "A" or "B"
-    Preset     int        // -1 hides preset segment (Page B); >= 0 shows preset N
+    Preset     int        // -1 hides preset segment (Stats page); >= 0 shows preset N
     RightChips []string   // pre-rendered chip strings from Chip.Render()
     Theme      theme.Theme
 }
@@ -546,13 +546,13 @@ type HeaderBar struct {
 **Rendering (unicode):**
 
 ```
- spotnik ─ Page A ─ preset 0 ──────────────────── ◉ iPhone
+ spotnik ─ Music ─ preset 0 ─────────────────────── ◉ iPhone
 ```
 
 **Rendering (ascii):**
 
 ```
- spotnik - Page A - preset 0 -------------------------------- (*) iPhone
+ spotnik - Music - preset 0 ---------------------------------- (*) iPhone
 ```
 
 **Roles:**

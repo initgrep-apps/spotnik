@@ -702,13 +702,13 @@ func TestRenderPaneBorder_QueueWithActiveFilter(t *testing.T) {
 	}
 }
 
-func TestRenderPaneBorder_PageBRequestFlowNoToggleKey(t *testing.T) {
+func TestRenderPaneBorder_StatsPageRequestFlowNoToggleKey(t *testing.T) {
 	th := theme.Load("black")
 	cfg := layout.BorderConfig{
 		Width:       70,
 		Height:      12,
 		Title:       "Request Flow",
-		ToggleKey:   0, // Page B — no toggle key
+		ToggleKey:   0, // Stats page — no toggle key
 		AccentColor: th.PaneBorderRequestFlow(),
 		Focused:     true,
 		Theme:       th,

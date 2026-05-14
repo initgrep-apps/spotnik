@@ -89,7 +89,7 @@ func (p *NetworkLogPane) ID() layout.PaneID { return layout.PaneNetworkLog }
 // Title returns the display title shown in the pane border.
 func (p *NetworkLogPane) Title() string { return "Network Log" }
 
-// ToggleKey returns 5 — the Page B toggle key for the Network Log pane.
+// ToggleKey returns 5 — the Stats page toggle key for the Network Log pane.
 func (p *NetworkLogPane) ToggleKey() int { return 5 }
 
 // SetSize updates the content area dimensions.

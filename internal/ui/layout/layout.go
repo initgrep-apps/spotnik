@@ -17,17 +17,17 @@ type Manager struct {
 	statusHeight int // 3 lines (bubbles/help bar: border + 1 content row + border)
 }
 
-// NewManager creates a Manager with default presets and Page A active.
+// NewManager creates a Manager with default presets and Music page active.
 func NewManager() *Manager {
 	m := &Manager{
-		activePage: PageA,
+		activePage: PageMusic,
 		presets: map[PageID][]Preset{
-			PageA: PageAPresets,
-			PageB: PageBPresets,
+			PageMusic: PageMusicPresets,
+			PageStats: PageStatsPresets,
 		},
 		activePreset: map[PageID]int{
-			PageA: 0,
-			PageB: 0,
+			PageMusic: 0,
+			PageStats: 0,
 		},
 		hidden:       make(map[PaneID]bool),
 		rects:        make(map[PaneID]Rect),
@@ -223,13 +223,13 @@ func (m *Manager) ActivePresetName() string {
 	return presets[idx].Name
 }
 
-// TogglePage switches between PageA and PageB.
+// TogglePage switches between PageMusic and PageStats.
 // Resets hidden map and recomputes layout.
 func (m *Manager) TogglePage() {
-	if m.activePage == PageA {
-		m.activePage = PageB
+	if m.activePage == PageMusic {
+		m.activePage = PageStats
 	} else {
-		m.activePage = PageA
+		m.activePage = PageMusic
 	}
 	m.hidden = make(map[PaneID]bool)
 	m.focusIndex = 0
@@ -260,12 +260,12 @@ func (m *Manager) SetPreset(index int) {
 	m.recompute()
 }
 
-// TogglePane toggles visibility of a pane (keys 1-8 on Page A, 1-5 on Page B).
+// TogglePane toggles visibility of a pane (keys 1-8 on Music page, 1-5 on Stats page).
 // Does nothing if the pane is not part of the current preset.
 // If toggling would hide ALL panes, the toggle is rejected.
 // NOTE: Preset membership is the sole authority for whether a pane is toggleable.
 // This naturally handles cross-page safety: panes not in the active preset are rejected,
-// including Page A panes on Page B and vice versa (with the exception of PaneNowPlaying
+// including Music page panes on Stats page and vice versa (with the exception of PaneNowPlaying
 // which appears in both pages' presets and is intentionally toggleable on both).
 func (m *Manager) TogglePane(id PaneID) {
 	// Check that the pane is in the current preset

@@ -49,7 +49,7 @@ func (p *GatewayHealthPane) ID() layout.PaneID { return layout.PaneGatewayHealth
 // Title returns the display title shown in the pane border.
 func (p *GatewayHealthPane) Title() string { return "Gateway Health" }
 
-// ToggleKey returns 2 — the Page B toggle key for this pane.
+// ToggleKey returns 2 — the Stats page toggle key for this pane.
 func (p *GatewayHealthPane) ToggleKey() int { return 2 }
 
 // Actions returns nil — this pane has no interactive shortcuts.

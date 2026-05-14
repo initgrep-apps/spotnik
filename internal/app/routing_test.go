@@ -337,9 +337,9 @@ func TestIsPlaybackKey_N_NotPlaybackKey(t *testing.T) {
 		"'n' must not produce PlaybackRequestMsg — it must fall through to the focused pane")
 }
 
-// TestPageBNumberKeys_TogglePageBPanes verifies that keys '2'-'5' on Page B toggle
-// the correct Page B pane, and that a transpose in pageBToggleKeyMap would be caught.
-func TestPageBNumberKeys_TogglePageBPanes(t *testing.T) {
+// TestStatsPageNumberKeys_ToggleStatsPanes verifies that keys '2'-'5' on Stats page toggle
+// the correct Stats page pane, and that a transpose in statsToggleKeyMap would be caught.
+func TestStatsPageNumberKeys_ToggleStatsPanes(t *testing.T) {
 	cases := []struct {
 		key    rune
 		paneID layout.PaneID
@@ -354,12 +354,12 @@ func TestPageBNumberKeys_TogglePageBPanes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := app.New(&config.Config{}, app.AppOptions{})
 			a.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
-			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}) // switch to Page B
+			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}) // switch to Stats page
 			require.True(t, a.Layout().IsPaneVisible(tc.paneID),
-				"%s must be visible on Page B before toggle", tc.name)
+				"%s must be visible on Stats page before toggle", tc.name)
 			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tc.key}})
 			assert.False(t, a.Layout().IsPaneVisible(tc.paneID),
-				"%s must be hidden after pressing '%c' on Page B", tc.name, tc.key)
+				"%s must be hidden after pressing '%c' on Stats page", tc.name, tc.key)
 		})
 	}
 }

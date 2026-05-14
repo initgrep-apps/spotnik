@@ -74,7 +74,7 @@ func (p *GatewayLivePane) ID() layout.PaneID { return layout.PaneGatewayLive }
 // Title returns the display title shown in the pane border.
 func (p *GatewayLivePane) Title() string { return "Gateway Live" }
 
-// ToggleKey returns 4 — the Page B toggle key for this pane.
+// ToggleKey returns 4 — the Stats page toggle key for this pane.
 func (p *GatewayLivePane) ToggleKey() int { return 4 }
 
 // SetFocused updates the keyboard focus state.

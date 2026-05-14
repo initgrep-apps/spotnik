@@ -60,11 +60,11 @@ Spotnik follows the **Elm Architecture** as enforced by Bubble Tea. The entire a
 └────────┘    └───────────┘   └─────────┘
 
 PANES (10 total):
-  Page A (Music, 8 panes):
+  Music page (Music, 8 panes):
     NowPlayingPane, QueuePane, PlaylistsPane, AlbumsPane,
     LikedSongsPane, RecentlyPlayedPane, TopTracksPane, TopArtistsPane
-  Page B (Nerd Status, 2 panes):
-    RequestFlowPane, NetworkLogPane
+  Stats page (Stats, 5 panes):
+    NowPlayingPane, GatewayHealthPane, PollingTrafficPane, GatewayLivePane, NetworkLogPane
   Floating overlays (not in grid):
     SearchOverlay, DeviceOverlay
 ```
@@ -161,9 +161,9 @@ The grid layout has two pages and a preset system for switching between curated 
 
 ### Pages
 
-- **Page A (Music)** — 8 panes: NowPlaying, Queue, Playlists, Albums, LikedSongs,
+- **Music page (Music)** — 8 panes: NowPlaying, Queue, Playlists, Albums, LikedSongs,
   RecentlyPlayed, TopTracks, TopArtists
-- **Page B (Nerd Status)** — 2 panes: RequestFlow, NetworkLog
+- **Stats page (Stats)** — 5 panes: NowPlaying, GatewayHealth, PollingTraffic, GatewayLive, NetworkLog
 
 `TogglePage()` switches between pages. The current page is stored as `currentPage` in `App`.
 Key: `0`.
@@ -173,21 +173,21 @@ Key: `0`.
 `CyclePreset()` advances to the next preset within the current page and wraps around.
 Key: `p`.
 
-- **Page A** has 4 presets (Full Dashboard, Listening, Library, Stats)
-- **Page B** has 1 preset
+- **Music page** has 4 presets (Full Dashboard, Listening, Library, Stats)
+- **Stats page** has 1 preset
 
 Each preset is a `[]Row` grid definition. Switching a preset resets all manual pane toggles.
 Preset index is persisted via `PreferenceStore` so it survives restarts.
 
 ### Pane Toggling
 
-`TogglePane(id layout.PaneID)` hides or shows an individual pane on Page A.
-Keys: `1`–`8` (one per Page A pane).
+`TogglePane(id layout.PaneID)` hides or shows an individual pane on Music page.
+Keys: `1`–`8` (one per Music page pane).
 
 - When a pane hides, its siblings in the same row expand to fill the space
 - When all panes in a row hide, the row collapses and other rows expand
 - Toggle state is independent of presets — switching preset resets manual toggles
-- Page B panes are not individually toggleable
+- Stats page panes are not individually toggleable
 
 ---
 
@@ -724,7 +724,7 @@ and does not join a pre-command Background poll carrying stale state.
 
 ### Gateway Observability
 
-`RequestFlowPane` (Page B) reads gateway events from the store's event journal using a
+`RequestFlowPane` (Stats page) reads gateway events from the store's event journal using a
 cursor-based replay model. The pane never holds a gateway reference — it only reads from
 `*state.Store`, preserving the `ui/ → state/` dependency direction.
 
@@ -806,7 +806,7 @@ reached HTTP are now visible (status 0, "✗ blocked"). PRIORITY and DECISION co
 
 ### Network Logging (Feature 69+)
 
-All HTTP requests are logged to the `GatewayEventLog` for the NetworkLogPane (Page B).
+All HTTP requests are logged to the `GatewayEventLog` for the NetworkLogPane (Stats page).
 `NetLog`, `NetLogEntry`, `RecordNetCall`, and `LoggingTransport` were retired in Feature 69
 — `GatewayEventLog` is the single authoritative source for both NetworkLogPane and
 RequestFlowPane.

@@ -1,7 +1,7 @@
 ---
 title: "Add mono-dark and mono-light themes"
 feature: 16-mono-themes-page-rename
-status: open
+status: done
 ---
 
 ## Background

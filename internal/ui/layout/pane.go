@@ -13,26 +13,26 @@ import (
 type PaneID int
 
 const (
-	PaneNowPlaying     PaneID = iota // Page A pane 1 (toggle key 1)
-	PaneQueue                        // Page A pane 2 (toggle key 2)
-	PanePlaylists                    // Page A pane 3 (toggle key 3)
-	PaneAlbums                       // Page A pane 4 (toggle key 4)
-	PaneLikedSongs                   // Page A pane 5 (toggle key 5)
-	PaneRecentlyPlayed               // Page A pane 6 (toggle key 6)
-	PaneTopTracks                    // Page A pane 7 (toggle key 7)
-	PaneTopArtists                   // Page A pane 8 (toggle key 8)
-	PaneNetworkLog                   // Page B pane 5 (toggle key 5)
-	PaneGatewayHealth                // Page B pane 2 (toggle key 2)
-	PanePollingTraffic               // Page B pane 3 (toggle key 3)
-	PaneGatewayLive                  // Page B pane 4 (toggle key 4)
+	PaneNowPlaying     PaneID = iota // Music pane 1 (toggle key 1)
+	PaneQueue                        // Music pane 2 (toggle key 2)
+	PanePlaylists                    // Music pane 3 (toggle key 3)
+	PaneAlbums                       // Music pane 4 (toggle key 4)
+	PaneLikedSongs                   // Music pane 5 (toggle key 5)
+	PaneRecentlyPlayed               // Music pane 6 (toggle key 6)
+	PaneTopTracks                    // Music pane 7 (toggle key 7)
+	PaneTopArtists                   // Music pane 8 (toggle key 8)
+	PaneNetworkLog                   // Stats pane 5 (toggle key 5)
+	PaneGatewayHealth                // Stats pane 2 (toggle key 2)
+	PanePollingTraffic               // Stats pane 3 (toggle key 3)
+	PaneGatewayLive                  // Stats pane 4 (toggle key 4)
 )
 
 // PageID identifies a page (group of panes).
 type PageID int
 
 const (
-	PageA PageID = iota // Music (8 panes)
-	PageB               // Nerd Status (2 panes)
+	PageMusic PageID = iota // Music (8 panes)
+	PageStats               // Stats (5 panes)
 )
 
 // Rect describes a pane's position and size in terminal cells.
@@ -80,7 +80,7 @@ type Pane interface {
 	// Title returns the display title shown in the pane border.
 	Title() string
 	// ToggleKey returns the number key for btop-style pane toggling
-	// (1-8 on Page A, 1-5 on Page B). Returns 0 for panes that are not
+	// (1-8 on Music page, 1-5 on Stats page). Returns 0 for panes that are not
 	// individually toggleable.
 	ToggleKey() int
 	// Actions returns pane-specific shortcut hints displayed in the border.
