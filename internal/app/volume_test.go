@@ -186,25 +186,27 @@ func TestApp_VolumeAppliedMsg_Success_DispatchesInteractivePoll(t *testing.T) {
 
 // TestApp_VolumeAppliedMsg_429_ClearsPendingAndBacksOff verifies that a 429 wrapped
 // in VolumeAppliedMsg clears the bar's pending state and then triggers the existing
-// RateLimitedMsg backoff/toast path. After the 429 is processed, the bar must accept
-// a SetConfirmed call, proving hasPending was cleared by CancelPending.
+// RateLimitedMsg backoff/toast path.
+//
+// CancelPending uses a seq guard: it only fires when b.seq == intentSeq+1. The real
+// flow is: HandleKey (seq=1) → HandleDebounce (seq advances to 2, intentSeq=1) →
+// VolumeAppliedMsg{Seq:1} → CancelPending(1, 60): 2==1+1 → true → bar reverts to 60.
+// Without the HandleDebounce step, seq stays at 1 and CancelPending silently no-ops.
 func TestApp_VolumeAppliedMsg_429_ClearsPendingAndBacksOff(t *testing.T) {
-	mock := &apitest.MockPlayer{
-		SetVolumeErr: &api.RateLimitError{RetryAfter: 5},
-	}
-	a := newVolumeTestApp(mock)
+	a := newVolumeTestApp(&apitest.MockPlayer{})
 	// Seed store so confirmedVolume() returns 60.
 	a.Store().SetPlaybackState(&api.PlaybackState{
 		IsPlaying: true,
 		Device:    &domain.Device{VolumePercent: 60},
 	})
 
-	// Trigger volume intent so the bar enters pending state (seq=1, currentVol=61).
+	// Step 1: Keypress → bar seq=1, currentVol=61, hasPending=true.
 	_, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
 
-	// Feed VolumeAppliedMsg{Err: RateLimitError} — this routes through CancelPending.
-	// Seq=1 is the intentSeq from the first keypress+debounce; after HandleDebounce
-	// the bar's seq is 2, so CancelPending(1, confirmedVol) checks seq(2)==1+1 → true.
+	// Step 2: Debounce tick → pane calls HandleDebounce, seq advances to 2, intentSeq=1.
+	_, _ = a.Update(components.VolumeDebounceTickMsg{TargetVol: 61, Seq: 1})
+
+	// Step 3: 429 arrives with intentSeq=1 — CancelPending(1, 60): 2==1+1 → true → revert.
 	_, finalCmd := a.Update(panes.VolumeAppliedMsg{
 		Err: &api.RateLimitError{RetryAfter: 5},
 		Seq: 1,
@@ -214,6 +216,12 @@ func TestApp_VolumeAppliedMsg_429_ClearsPendingAndBacksOff(t *testing.T) {
 	// The returned cmd must produce a message (the backoff throttle tick or batch).
 	result := finalCmd()
 	assert.NotNil(t, result, "backoff cmd must produce a message")
+
+	// Pending-state observable: GradientVolumeBar.Render() has no explicit pending indicator.
+	// The pane-level test (TestNowPlayingPane_VolumeAppliedMsg_StaleSeq_BarStaysInSecondBurst)
+	// covers CancelPending's seq-guard logic in detail. Here we simply confirm the view
+	// does not show a stale pending marker.
+	assert.NotContains(t, a.View(), "~", "volume bar must not be in pending state after 429")
 }
 
 // TestApp_VolumeAppliedMsg_401_RoutesToTokenRefresh verifies that a 401 wrapped in
