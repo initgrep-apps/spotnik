@@ -239,6 +239,17 @@ type DeviceOverlayClosedMsg struct{}
 // signalling the root app model to close the profile overlay.
 type ProfileOverlayClosedMsg struct{}
 
+// FetchCurrentUserRequestMsg is emitted by ProfileOverlay.Init() when the store
+// has no user profile loaded, triggering a fetch from the app layer.
+type FetchCurrentUserRequestMsg struct{}
+
+// UserProfileLoadedMsg is forwarded to ProfileOverlay after a fetch triggered by
+// FetchCurrentUserRequestMsg completes. Err is nil on success; the overlay reads
+// the profile from the store.
+type UserProfileLoadedMsg struct {
+	Err error
+}
+
 // ProfileConfirmToastMsg is emitted when the user arms a logout or forget action
 // (first keypress). The app converts it into a warning alert via the notifications system.
 type ProfileConfirmToastMsg struct {

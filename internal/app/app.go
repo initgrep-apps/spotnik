@@ -961,7 +961,6 @@ func (a *App) Init() tea.Cmd {
 		}),
 		splashTimer,
 		alertsInitCmd,
-		a.buildFetchCurrentUserCmd(), // fetch user ID for playlist ownership checks
 	)
 	return tea.Batch(initCmds...)
 }
@@ -1000,6 +999,14 @@ func (a *App) closeSearch() (*App, tea.Cmd) {
 func (a *App) openDeviceOverlay() (*App, tea.Cmd) {
 	a.deviceOverlayOpen = true
 	cmd := a.devicePane.Init()
+	return a, cmd
+}
+
+// openProfileOverlay opens the profile overlay and triggers a self-fetch if the
+// store has no user profile, so the overlay never shows "Loading..." forever.
+func (a *App) openProfileOverlay() (*App, tea.Cmd) {
+	a.profileOverlayOpen = true
+	cmd := a.profilePane.Init()
 	return a, cmd
 }
 
