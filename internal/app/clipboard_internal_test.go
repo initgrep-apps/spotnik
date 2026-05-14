@@ -30,10 +30,11 @@ func captureStderr(t *testing.T, fn func()) string {
 		done <- buf.String()
 	}()
 
-	fn()
-
-	require.NoError(t, w.Close())
-	os.Stderr = orig
+	defer func() { os.Stderr = orig }()
+	func() {
+		defer w.Close()
+		fn()
+	}()
 	return <-done
 }
 
@@ -71,7 +72,6 @@ func TestCopyToClipboardCmd_emptyText_emitsResetSequence(t *testing.T) {
 	require.True(t, ok)
 	assert.NoError(t, copied.Err)
 
-	// Reset form per upstream: ESC ] 52 ; c ; BEL with empty payload.
 	assert.Equal(t, "\x1b]52;c;\x07", out)
 }
 
