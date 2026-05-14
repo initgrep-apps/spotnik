@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +95,31 @@ func TestHandleOnboardingKey_validClientID_clearsError(t *testing.T) {
 
 	assert.Empty(t, updated.onboardingField.ValidationError(), "error should clear on valid input")
 	assert.NotNil(t, emittedCmd, "should emit save command for valid input")
+}
+
+func TestFriendlyAuthError_InvalidGrant(t *testing.T) {
+	got := FriendlyAuthError(errors.New("invalid_grant: The authorization code expired"))
+	assert.Equal(t, "Authorization expired. Please sign in again.", got)
+}
+
+func TestFriendlyAuthError_InvalidClient(t *testing.T) {
+	got := FriendlyAuthError(errors.New("invalid_client: bad client secret"))
+	assert.Equal(t, "Client ID is invalid. Check your config file.", got)
+}
+
+func TestFriendlyAuthError_AccessDenied(t *testing.T) {
+	got := FriendlyAuthError(errors.New("access_denied"))
+	assert.Equal(t, "Authorization denied. Please allow access when prompted.", got)
+}
+
+func TestFriendlyAuthError_Unknown(t *testing.T) {
+	got := FriendlyAuthError(errors.New("something_unexpected"))
+	assert.Equal(t, "Sign-in failed. Please run 'spotnik auth' to try again.", got)
+}
+
+func TestFriendlyAuthError_Nil(t *testing.T) {
+	got := FriendlyAuthError(nil)
+	assert.Equal(t, "Sign-in failed. Please run 'spotnik auth' to try again.", got)
 }
 
 func TestHandleOnboardingKey_keypress_forwardsToField(t *testing.T) {
