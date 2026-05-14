@@ -612,7 +612,7 @@ func TestRenderStatusBar_ContainsProfileHint(t *testing.T) {
 // appear in the status bar on both pages and that devices comes before profile.
 func TestRenderStatusBar_ProfileAdjacentToDevices(t *testing.T) {
 	tests := []struct {
-		name  string
+		name      string
 		statsPage bool
 	}{
 		{"Music page", false},
