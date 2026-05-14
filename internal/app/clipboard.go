@@ -9,11 +9,13 @@ import (
 )
 
 // clipboardCopiedMsg is emitted after copyToClipboardCmd attempts a write.
+// Text holds the string that was copied; it is empty for clipboard-reset sequences.
 // Err is non-nil only when emitting the OSC 52 sequence to stderr failed
 // (broken stderr pipe). A nil Err does NOT guarantee the terminal actually
 // wrote to the system clipboard — OSC 52 has no acknowledgement protocol.
 type clipboardCopiedMsg struct {
-	Err error
+	Text string // populated with the copied string; empty for clipboard-reset sequences
+	Err  error
 }
 
 // copyToClipboardCmd returns a tea.Cmd that copies text to the user's
@@ -37,6 +39,6 @@ func copyToClipboardCmd(text string) tea.Cmd {
 		if err != nil {
 			return clipboardCopiedMsg{Err: fmt.Errorf("emitting OSC 52: %w", err)}
 		}
-		return clipboardCopiedMsg{}
+		return clipboardCopiedMsg{Text: text}
 	}
 }
