@@ -32,12 +32,13 @@ func TestLoad_DefaultTheme(t *testing.T) {
 	assert.Equal(t, "black", got.ID())
 }
 
-func TestAvailable_Returns11Entries(t *testing.T) {
+func TestAvailable_Returns13Entries(t *testing.T) {
 	entries := theme.Available()
 	// Available() returns sorted IDs — order is alphabetical.
 	assert.Equal(t, []string{
 		"black", "catppuccin", "dracula", "gruvbox", "light",
-		"monokai", "nord", "rosepine", "solarized", "synthwave", "tokyonight",
+		"mono-dark", "mono-light", "monokai", "nord", "rosepine",
+		"solarized", "synthwave", "tokyonight",
 	}, entries)
 }
 
@@ -336,6 +337,7 @@ func TestLoad_UnknownID_HasAllNewTokens(t *testing.T) {
 // TestAllThemes_NetworkLogBorderIsVibrant verifies that every theme's network_log
 // pane border color has a saturation > 20% (i.e. not a desaturated grey).
 // Saturation is approximated as: max(r,g,b) - min(r,g,b) > 50 on a 0-255 scale.
+// Mono themes are exempt — they are intentionally grayscale.
 // This prevents regression back to the grey values (#8a8a8a etc.) that existed before.
 func TestAllThemes_NetworkLogBorderIsVibrant(t *testing.T) {
 	for _, id := range theme.Available() {
@@ -352,6 +354,12 @@ func TestAllThemes_NetworkLogBorderIsVibrant(t *testing.T) {
 			maxC := max3(r, g, b)
 			minC := min3(r, g, b)
 			saturation := int(maxC) - int(minC)
+			if strings.HasPrefix(id, "mono-") {
+				assert.LessOrEqual(t, saturation, 50,
+					"mono theme network_log border for %s should be grayscale (saturation %d)",
+					id, saturation)
+				return
+			}
 			assert.Greater(t, saturation, 50,
 				"network_log border for %s (%s) is too grey (saturation %d ≤ 50); use a vibrant color",
 				id, "#"+hex, saturation)
@@ -898,11 +906,11 @@ func TestSynthwaveTheme_Base(t *testing.T) {
 	assert.Equal(t, "#262335", string(th.Base()))
 }
 
-// TestAllThemes_HaveAllTokens iterates all 11 themes and verifies no color token
-// is an empty string. This is 11 × 50 = 550 assertions in total.
+// TestAllThemes_HaveAllTokens iterates all 13 themes and verifies no color token
+// is an empty string. This is 13 × 50 = 650 assertions in total.
 func TestAllThemes_HaveAllTokens(t *testing.T) {
 	ids := theme.Available()
-	assert.Len(t, ids, 11, "expect exactly 11 built-in themes")
+	assert.Len(t, ids, 13, "expect exactly 13 built-in themes")
 	for _, id := range ids {
 		id := id
 		t.Run(id, func(t *testing.T) {
