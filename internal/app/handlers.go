@@ -740,15 +740,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.VolumeAppliedMsg:
 		// Always confirm or cancel the bar's pending state first, before dispatching
 		// downstream effects. This prevents concurrent polls from overriding the bar.
+		var paneCmd tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {
-			updated, _ := np.Update(m)
+			updated, pc := np.Update(m)
+			paneCmd = pc
 			if pp, ok := updated.(*panes.NowPlayingPane); ok {
 				a.panes[layout.PaneNowPlaying] = pp
 			}
 		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
-				return a, nil
+				return a, paneCmd
 			}
 			// Re-route typed errors to their existing handlers after bar is cleared.
 			var rateLimitErr *api.RateLimitError
@@ -760,14 +762,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			toast := a.errorMapper.Map(uikit.OpVolume, m.Err)
 			if toast.Intent == uikit.ToastNone {
-				return a, fetchPlaybackStateCmd(a.player, api.Interactive)
+				return a, tea.Batch(paneCmd, fetchPlaybackStateCmd(a.player, api.Interactive))
 			}
 			return a, tea.Batch(
+				paneCmd,
 				fetchPlaybackStateCmd(a.player, api.Interactive),
 				a.toasts.Cmd(toast),
 			)
 		}
-		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
+		return a, tea.Batch(paneCmd, fetchPlaybackStateCmd(a.player, api.Interactive))
 
 	case panes.PlaybackRequestMsg:
 		return a, a.buildPlaybackAPICmd(m.Action)
