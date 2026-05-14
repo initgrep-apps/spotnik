@@ -152,7 +152,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 'u' opens the user profile overlay — only if no other overlay is already open.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "u" {
 		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen {
-			a.profileOverlayOpen = true
+			return a.openProfileOverlay()
 		}
 		return a, nil
 	}
@@ -358,9 +358,15 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case userProfileLoadedMsg:
 		// Forward result to profile overlay when open so it can show/clear error state.
+		// errNilClient is a programming error (nil userAPI) — don't surface it to the
+		// overlay, which would show a misleading "Check your connection" message.
+		overlayErr := m.err
+		if errors.Is(m.err, errNilClient) {
+			overlayErr = nil
+		}
 		var overlayCmd tea.Cmd
 		if a.profileOverlayOpen && a.profilePane != nil {
-			updated, cmd := a.profilePane.Update(panes.UserProfileLoadedMsg{Err: m.err})
+			updated, cmd := a.profilePane.Update(panes.UserProfileLoadedMsg{Err: overlayErr})
 			if pu, ok := updated.(*panes.ProfileOverlay); ok {
 				a.profilePane = pu
 			}

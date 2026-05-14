@@ -1119,8 +1119,11 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeDeviceOverlay()
 
 	case panes.ProfileOverlayClosedMsg:
-		// Profile overlay closed via Esc — clear flag.
+		// Profile overlay closed via Esc — clear flag and reset overlay state
+		// so a stale error does not persist across close-and-reopen cycles.
 		a.profileOverlayOpen = false
+		a.profilePane = panes.NewProfileOverlay(a.store, a.theme)
+		a.profilePane.SetSize(a.width, a.height)
 		return a, nil
 
 	case panes.ProfileConfirmToastMsg:
