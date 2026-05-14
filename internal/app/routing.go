@@ -152,7 +152,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 'u' opens the user profile overlay — only if no other overlay is already open.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "u" {
 		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen {
-			a.profileOverlayOpen = true
+			return a.openProfileOverlay()
 		}
 		return a, nil
 	}
@@ -357,35 +357,52 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return a, nil, true
 
 	case userProfileLoadedMsg:
+		// Forward result to profile overlay when open so it can show/clear error state.
+		// errNilClient is a programming error (nil userAPI) — don't surface it to the
+		// overlay, which would show a misleading "Check your connection" message.
+		overlayErr := m.err
+		if errors.Is(m.err, errNilClient) {
+			overlayErr = nil
+		}
+		var overlayCmd tea.Cmd
+		if a.profileOverlayOpen && a.profilePane != nil {
+			updated, cmd := a.profilePane.Update(panes.UserProfileLoadedMsg{Err: overlayErr})
+			if pu, ok := updated.(*panes.ProfileOverlay); ok {
+				a.profilePane = pu
+			}
+			overlayCmd = cmd
+		}
+
 		if m.err != nil {
 			if errors.Is(m.err, errNilClient) {
 				// Programming error — userAPI was nil at startup; log to stderr but no toast.
 				fmt.Fprintf(os.Stderr, "spotnik: userProfileLoadedMsg: userAPI is nil — profile fetch skipped\n")
-				return a, nil, true
+				return a, overlayCmd, true
 			}
 			var forbiddenErr *api.ForbiddenError
 			if errors.As(m.err, &forbiddenErr) {
 				toast := a.errorMapper.Map(uikit.OpPlayback, m.err)
-				return a, a.toasts.Cmd(toast), true
+				return a, tea.Batch(overlayCmd, a.toasts.Cmd(toast)), true
 			}
 			// Surface the failure so the user knows ownership detection is degraded.
-			return a, a.toasts.Cmd(uikit.Toast{
+			return a, tea.Batch(overlayCmd, a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastWarning,
 				Title:  "Profile load failed",
 				Body:   "Playlist ownership markers may be incorrect.",
-			}), true
+			})), true
 		}
 		if m.profile.ID != "" {
 			a.store.SetUserProfile(m.profile)
 			// Refresh playlist rows so the ~ prefix appears immediately.
-			return a, a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{}), true
+			playlistCmd := a.forwardToPane(layout.PanePlaylists, panes.UserProfileReadyMsg{})
+			return a, tea.Batch(overlayCmd, playlistCmd), true
 		}
 		fmt.Fprintf(os.Stderr, "spotnik: userProfileLoadedMsg: profile loaded with empty ID (unexpected)\n")
-		return a, a.toasts.Cmd(uikit.Toast{
+		return a, tea.Batch(overlayCmd, a.toasts.Cmd(uikit.Toast{
 			Intent: uikit.ToastWarning,
 			Title:  "Profile load failed",
 			Body:   "Playlist ownership markers may be incorrect.",
-		}), true
+		})), true
 
 	case panes.PlaylistAccessDeniedMsg:
 		return a, a.toasts.Cmd(uikit.Toast{

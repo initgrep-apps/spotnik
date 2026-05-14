@@ -1,7 +1,7 @@
 ---
 title: "Overlay Self-Sufficiency"
 feature: 15-error-resilience
-status: open
+status: done
 ---
 
 ## Background

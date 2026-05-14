@@ -237,9 +237,14 @@ func TestDeviceOverlay_DevicesLoadedMsg_ErrorDoesNotPopulateDevices(t *testing.T
 	// On error, devices should remain as they were (not wiped, not updated).
 	assert.Len(t, updated.devices, 3, "devices should be unchanged on error")
 	assert.Nil(t, cmd, "DeviceOverlay should not return a command on error")
+	// Error state should be set for View() to render the error message.
+	assert.NotNil(t, updated.Err(), "Err() should be non-nil after error load")
 }
 
 func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
+	// When store.DevicesError() is set (but overlay.err is not), the View()
+	// shows the empty state, not the error state. Store errors are for retry
+	// logic only — the overlay's err field drives the error rendering.
 	s := state.New()
 	s.SetDevicesError(errMake("API error"))
 	th := theme.Load("black")
@@ -247,10 +252,9 @@ func TestDeviceOverlay_View_ShowsErrorOnAPIFailure(t *testing.T) {
 	overlay.SetSize(60, 20)
 
 	output := overlay.View()
-	// Errors route through toast notifications, not inline pane rendering.
-	// Store error is preserved for retry logic but never read in View().
-	assert.NotContains(t, output, "Failed to load devices", "inline error rendering removed — toasts handle this")
-	// With no devices loaded, the empty state renders normally.
+	// Store errors are NOT rendered inline; they route through toast notifications.
+	assert.NotContains(t, output, "Failed to load devices", "store error must not render inline")
+	// With no devices loaded and no overlay.err, the empty state renders.
 	assert.Contains(t, output, "No devices found", "empty state shows when no devices loaded")
 }
 
@@ -277,6 +281,62 @@ func TestDeviceOverlay_View_ShowsDevicesWhenNoError(t *testing.T) {
 	output := overlay.View()
 	assert.Contains(t, output, "MacBook Pro")
 	assert.NotContains(t, output, "Failed to load devices")
+}
+
+// TestDeviceOverlay_View_ErrorState_Distinct verifies that when DeviceOverlay
+// has an err set (from a failed DevicesLoadedMsg), View() shows "Failed to load
+// devices" with a connection hint — distinct from the legitimate empty state.
+func TestDeviceOverlay_View_ErrorState_Distinct(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.SetSize(60, 20)
+
+	// Simulate a failed load by sending DevicesLoadedMsg with an error.
+	_, _ = overlay.Update(DevicesLoadedMsg{Devices: nil, Err: errMake("network timeout")})
+
+	view := overlay.View()
+	plain := stripANSI(view)
+	assert.Contains(t, plain, "Failed to load devices", "error state should show 'Failed to load devices'")
+	assert.Contains(t, plain, "Check your connection", "error state should show hint text")
+	// Must NOT show the legitimate empty state text.
+	assert.NotContains(t, plain, "No devices found", "error state must not show empty-state text")
+}
+
+// TestDeviceOverlay_View_EmptyState_Distinct verifies that when DeviceOverlay
+// has no error and no devices, View() shows "No devices found" with the
+// open-Spotify hint — distinct from the error state.
+func TestDeviceOverlay_View_EmptyState_Distinct(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.SetSize(60, 20)
+	// No error, no devices (default state).
+	overlay.devices = nil
+
+	view := overlay.View()
+	plain := stripANSI(view)
+	assert.Contains(t, plain, "No devices found", "empty state should show 'No devices found'")
+	assert.Contains(t, plain, "Open Spotify", "empty state should show the open-Spotify hint")
+	// Must NOT show error-state text.
+	assert.NotContains(t, plain, "Failed to load devices", "empty state must not show error text")
+	assert.NotContains(t, plain, "Check your connection", "empty state must not show error hint")
+}
+
+// TestDeviceOverlay_View_ErrorClearedOnSuccess verifies that receiving a
+// successful DevicesLoadedMsg clears a previous error state.
+func TestDeviceOverlay_View_ErrorClearedOnSuccess(t *testing.T) {
+	overlay := newTestDeviceOverlay()
+	overlay.SetSize(60, 20)
+
+	// First: fail to load devices.
+	_, _ = overlay.Update(DevicesLoadedMsg{Devices: nil, Err: errMake("network timeout")})
+	assert.NotNil(t, overlay.Err(), "overlay should have error after failed load")
+	view := overlay.View()
+	assert.Contains(t, stripANSI(view), "Failed to load devices", "should show error state")
+
+	// Now: successfully load devices.
+	_, _ = overlay.Update(DevicesLoadedMsg{Devices: testDevices()})
+	assert.Nil(t, overlay.Err(), "error should be cleared after successful load")
+	view = overlay.View()
+	assert.NotContains(t, stripANSI(view), "Failed to load devices", "error state should be gone after success")
+	assert.Contains(t, stripANSI(view), "MacBook Pro", "should show loaded device names")
 }
 
 // --- F50 Task 5: btop-style border in device overlay ---

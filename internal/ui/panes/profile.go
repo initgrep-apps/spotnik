@@ -41,6 +41,7 @@ type ProfileOverlay struct {
 	width         int
 	height        int
 	pendingAction profileAction
+	err           error // set when a self-triggered fetch fails; cleared on success
 }
 
 // NewProfileOverlay constructs a ProfileOverlay wired to the given store and theme.
@@ -51,8 +52,13 @@ func NewProfileOverlay(store state.StateReader, t theme.Theme) *ProfileOverlay {
 	}
 }
 
-// Init returns nil — data is already in the store before the user can press 'u'.
+// Init returns a FetchCurrentUserRequestMsg command when the store has no user
+// profile loaded, triggering a fetch from the app layer. Returns nil when the
+// profile is already available.
 func (p *ProfileOverlay) Init() tea.Cmd {
+	if p.store.UserProfile().ID == "" {
+		return func() tea.Msg { return FetchCurrentUserRequestMsg{} }
+	}
 	return nil
 }
 
@@ -61,7 +67,14 @@ func (p *ProfileOverlay) Init() tea.Cmd {
 // 'l' and 'f' use double-key confirmation: first press arms the action (pendingAction is set),
 // second press of the same key executes it. Any other key resets the pending action and arms
 // the new key if it is 'l' or 'f'.
+// UserProfileLoadedMsg stores or clears the error field for the error/loading state.
 func (p *ProfileOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle UserProfileLoadedMsg — stores error or clears it on success.
+	if m, ok := msg.(UserProfileLoadedMsg); ok {
+		p.err = m.Err
+		return p, nil
+	}
+
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return p, nil
@@ -117,7 +130,13 @@ func (p *ProfileOverlay) View() string {
 
 	var lines []string
 
-	if profile.ID == "" {
+	if p.err != nil {
+		// Error state — distinct from loading and from legitimate empty profile.
+		errStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
+		hintStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+		lines = append(lines, errStyle.Render("Profile unavailable"))
+		lines = append(lines, hintStyle.Render("Check your connection."))
+	} else if profile.ID == "" {
 		loadingStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 		lines = append(lines, loadingStyle.Render("Loading profile..."))
 	} else {
@@ -188,6 +207,13 @@ func (p *ProfileOverlay) View() string {
 func (p *ProfileOverlay) SetSize(width, height int) {
 	p.width = width
 	p.height = height
+}
+
+// Err returns the last fetch error, or nil if the profile loaded successfully.
+// Exported for test helpers; the overlay uses this to decide whether to show
+// the error state in View().
+func (p *ProfileOverlay) Err() error {
+	return p.err
 }
 
 // SetTheme updates the theme reference for runtime theme switching.

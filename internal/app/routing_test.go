@@ -5,6 +5,7 @@ package app_test
 // bypassed so keystrokes reach the filter text input.
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -222,6 +223,58 @@ func TestFilterActive_U_DoesNotOpenProfileOverlay(t *testing.T) {
 
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
 	assert.False(t, a.ProfileOverlayOpen(), "'u' with active filter should not open profile overlay")
+}
+
+// --- Profile self-sufficiency routing tests (Story 202) ---
+
+// TestApp_FetchCurrentUserRequestMsg_Dispatches verifies that when the app receives
+// a FetchCurrentUserRequestMsg, it dispatches buildFetchCurrentUserCmd.
+func TestApp_FetchCurrentUserRequestMsg_Dispatches(t *testing.T) {
+	a := newProfileTestApp(t)
+
+	// Send the FetchCurrentUserRequestMsg that ProfileOverlay.Init() would emit.
+	_, cmd := a.Update(panes.FetchCurrentUserRequestMsg{})
+
+	// The command must be non-nil — it should produce a userProfileLoadedMsg.
+	require.NotNil(t, cmd, "FetchCurrentUserRequestMsg should dispatch buildFetchCurrentUserCmd")
+	msg := cmd()
+	// The command must produce a non-nil message (even if it's an error like errNilClient).
+	assert.NotNil(t, msg, "command result must be a non-nil message")
+}
+
+// TestApp_UserProfileLoaded_ForwardsToOverlayWhenOpen verifies that when the profile
+// overlay is open and a userProfileLoadedMsg arrives with an error, the error is
+// forwarded to the overlay so it can display the error state.
+func TestApp_UserProfileLoaded_ForwardsToOverlayWhenOpen(t *testing.T) {
+	a := newProfileTestApp(t)
+
+	// Open the profile overlay.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	require.True(t, a.ProfileOverlayOpen(), "profile overlay should be open")
+
+	// Simulate a failed user profile load forwarded to the overlay.
+	a.InjectUserProfileLoadedErr(fmt.Errorf("network error"))
+
+	// Verify the overlay received the error.
+	assert.NotNil(t, a.ProfilePaneErr(), "overlay should have a non-nil error after failed load")
+}
+
+// TestApp_UserProfileLoaded_ClearsErrorOnSuccess verifies that when a UserProfileLoadedMsg
+// with nil error arrives, any previous error on the overlay is cleared.
+func TestApp_UserProfileLoaded_ClearsErrorOnSuccess(t *testing.T) {
+	a := newProfileTestApp(t)
+
+	// Open the profile overlay.
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	require.True(t, a.ProfileOverlayOpen(), "profile overlay should be open")
+
+	// First: inject an error.
+	a.InjectUserProfileLoadedErr(fmt.Errorf("network error"))
+	assert.NotNil(t, a.ProfilePaneErr(), "overlay should have error after failed load")
+
+	// Now: inject success (nil error).
+	a.InjectUserProfileLoadedErr(nil)
+	assert.Nil(t, a.ProfilePaneErr(), "overlay error should be cleared after successful load")
 }
 
 // --- Playback key routing tests ---
