@@ -1,6 +1,6 @@
 ---
 title: "Mono Themes + Page Rename"
-status: open
+status: done
 ---
 
 ## Description

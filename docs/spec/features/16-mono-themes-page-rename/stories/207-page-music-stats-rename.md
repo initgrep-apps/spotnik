@@ -1,7 +1,7 @@
 ---
 title: "Rename Page A/B and Nerd Status to Music/Stats"
 feature: 16-mono-themes-page-rename
-status: open
+status: done
 ---
 
 ## Background
