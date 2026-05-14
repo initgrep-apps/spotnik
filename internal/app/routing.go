@@ -508,7 +508,7 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch a.onboardingStep {
 	case stepRegister:
 		// 'c' copies the redirect URI — only when the input field is empty.
-		// Once the user starts typing, 'c' is a valid hex character and must pass through.
+		// Once the user starts typing, treat 'c' as ordinary input so they can edit freely.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" && a.onboardingField.Value() == "" {
 			return a, copyToClipboardCmd(fmt.Sprintf("http://127.0.0.1:%d/callback", a.onboardingPort))
 		}
@@ -544,7 +544,7 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.Type == tea.KeyRunes && string(m.Runes) == "v" {
 			return a.openOnboardingPermissions()
 		}
-		// c → copy auth URL to clipboard via OSC 52; toast is emitted by the clipboardCopiedMsg handler.
+		// c → copy auth URL to clipboard; toast is emitted by the clipboardCopiedMsg handler.
 		if m.Type == tea.KeyRunes && string(m.Runes) == "c" {
 			return a, copyToClipboardCmd(a.onboardingAuthURL)
 		}
