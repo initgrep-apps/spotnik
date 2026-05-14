@@ -19,8 +19,8 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// toggleKeyMap maps rune keys '1'-'8' to their corresponding Page A PaneID.
-// This is used for btop-style pane visibility toggling on Page A.
+// toggleKeyMap maps rune keys '1'-'8' to their corresponding Music page PaneID.
+// This is used for btop-style pane visibility toggling on the Music page.
 var toggleKeyMap = map[rune]layout.PaneID{
 	'1': layout.PaneNowPlaying,
 	'2': layout.PaneQueue,
@@ -32,8 +32,8 @@ var toggleKeyMap = map[rune]layout.PaneID{
 	'8': layout.PaneTopArtists,
 }
 
-// pageBToggleKeyMap maps rune keys '1'-'5' to Page B PaneIDs.
-// This is used for btop-style pane visibility toggling on Page B.
+// pageBToggleKeyMap maps rune keys '1'-'5' to Stats page PaneIDs.
+// This is used for btop-style pane visibility toggling on the Stats page.
 var pageBToggleKeyMap = map[rune]layout.PaneID{
 	'1': layout.PaneNowPlaying,
 	'2': layout.PaneGatewayHealth,
@@ -173,7 +173,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// '0' toggles between Page A and Page B.
+	// '0' toggles between Music and Stats.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "0" {
 		a.layout.TogglePage()
 		a.propagateSizes()
@@ -190,10 +190,10 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.schedulePrefsFlush()
 	}
 
-	// '1'-'8' (Page A) or '1'-'5' (Page B) toggle pane visibility.
+	// '1'-'8' (Music) or '1'-'5' (Stats) toggle pane visibility.
 	if m.Type == tea.KeyRunes && len(m.Runes) == 1 {
 		keyMap := toggleKeyMap
-		if a.layout.ActivePage() == layout.PageB {
+		if a.layout.ActivePage() == layout.PageStats {
 			keyMap = pageBToggleKeyMap
 		}
 		if id, ok := keyMap[m.Runes[0]]; ok {
