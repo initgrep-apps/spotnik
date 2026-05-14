@@ -137,7 +137,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// API clients are not initialised until authSuccessMsg, so this message
 		// can only arrive while viewOnboarding is active.
 		// Resolve spinner to ✗; SpinnerFailMsg then transitions to stepError.
-		a.onboardingError = m.err.Error()
+		a.onboardingError = friendlyAuthError(m.err)
 		sp, cmd := a.onboardingSpinner.Fail("Authorization failed")
 		a.onboardingSpinner = sp
 		return a, cmd
