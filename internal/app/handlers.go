@@ -625,8 +625,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
+			// NOTE: Queue has no per-pane backoff. errorCount is used only to suppress
+			// repeated toasts during persistent failures. Queue polling is always
+			// driven by the adaptive interval from pollIntervals().
 			a.queuePoll.errorCount++
-			a.queuePoll.backoffTicks = calcBackoffTicks(a.queuePoll.errorCount)
 			a.store.SetQueueError(m.Err)
 			if a.queuePoll.errorCount == 1 {
 				return a, a.toasts.Cmd(uikit.Toast{
@@ -638,6 +640,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.queuePoll.errorCount = 0
+		a.queuePoll.backoffTicks = 0
 		a.store.ClearQueueError()
 		a.store.SetQueue(m.Tracks)
 		if qp := a.queuePane(); qp != nil {

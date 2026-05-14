@@ -64,8 +64,8 @@ func assertAllLibraryMsgs(t *testing.T, msgs []tea.Msg) {
 			types["StatsLoadedMsg"] = true
 		}
 	}
-	for name, found := range types {
-		assert.True(t, found, "TickMsg at tick 0 must dispatch %s", name)
+	for _, name := range []string{"LibraryLoadedMsg", "AlbumsLoadedMsg", "LikedTracksLoadedMsg", "RecentlyPlayedLoadedMsg", "StatsLoadedMsg"} {
+		assert.True(t, types[name], "TickMsg at tick 0 must dispatch %s", name)
 	}
 }
 
