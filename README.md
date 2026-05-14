@@ -125,12 +125,12 @@ for the full list and revocation steps.
 ## Features
 
 Spotnik organises the TUI into two pages with a btop-style, pane-based layout.
-Page A holds the everyday Spotify panes; Page B is a live developer view of the
+Music page holds the everyday Spotify panes; Stats page is a live developer view of the
 API gateway.
 
 ### How to use
 
-* Press `0` to switch between Page A and Page B.
+* Press `0` to switch between Music and Stats.
 * Press `1` through `8` to toggle individual panes. Each pane title shows a
   small superscript number indicating its toggle key.
 * Press `Tab` (or `Shift+Tab`) to move focus between visible panes.
@@ -142,7 +142,7 @@ API gateway.
 
 See [Keybindings](#keybindings) for the full reference.
 
-### Page A: Spotify
+### Music page: Spotify
 
 * **Now Playing**: current track, braille visualizer, gradient seek bar, and volume bar.
 * **Queue**: upcoming tracks.
@@ -168,7 +168,7 @@ See [Keybindings](#keybindings) for the full reference.
 * **Auth**: `spotnik auth {register, login, logout, forget, status}`.
 * **PKCE OAuth**: no client secret required. Tokens are stored in the OS keychain.
 
-### Page B: Developer
+### Stats page: Developer
 
 Live observability for the underlying API gateway.
 
@@ -192,9 +192,9 @@ automatic retry-after.
 | `t` | Theme switcher |
 | `?` | Help overlay |
 | `q` | Quit |
-| `0` | Toggle Page A / Page B |
-| `1`–`8` | Toggle pane visibility (Page A) |
-| `1`–`5` | Toggle pane visibility (Page B) |
+| `0` | Toggle Music / Stats |
+| `1`–`8` | Toggle pane visibility (Music page) |
+| `1`–`5` | Toggle pane visibility (Stats page) |
 | `p` | Cycle preset layout |
 
 ### Playback (always active)
@@ -260,7 +260,7 @@ with defaults:
 
 [preferences]
 theme = "black"
-# preset = 0          # Page A layout preset index (0-based)
+# preset = 0          # Music page layout preset index (0-based)
 # visualizer = 0      # Visualizer pattern index (0-6)
 
 [cli]

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0-rc1] - 2026-05-01
 
 
-### Spotify (Page A)
+### Spotify (Music page)
 
 - Now Playing pane: current track, braille visualizer, gradient seek bar, volume bar
 - Queue: upcoming tracks
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimistic playback updates
 - API gateway with rate limiting, request dedup, adaptive polling, and automatic retry-after
 
-### Developer view (Page B)
+### Developer view (Stats page)
 
 - Gateway Health pane: token bucket, backoff, and rate-limit state
 - Polling Traffic pane: per-pane request volume
@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Layout
 
-- Two-page btop-style pane layout (Page A: Spotify, Page B: Developer)
+- Two-page btop-style pane layout (Music page: Spotify, Stats page: Developer)
 - Per-pane visibility toggles (`1`–`8`)
 - Preset layouts cycled with `p`
 - Universal filter on list panes (`f`, `Esc` to clear)

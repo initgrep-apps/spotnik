@@ -18,11 +18,11 @@
 | 07 | Stats & Listening History | `features/07-stats/` | done | 08, 14, 48, 55 | Top tracks, top artists, recently played with time-range cycling |
 | 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79 | Token-based themes, TOML config, runtime switcher, 11 built-in themes |
 | 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | in-progress | 02, 17, 76, 79, 80, 114–117, 134–145, 196, 204 | PKCE OAuth, config-first client ID, TUI onboarding, auth CLI subcommands, profile overlay |
-| 10 | Developer Visibility (Page B) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
+| 10 | Developer Visibility (Stats page) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113 | Request flow pane, network log, developer foundations |
 | 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133, 194 | GitHub Actions, GoReleaser, release-please, multi-platform distribution, curl/PS1 installer scripts |
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | `internal/cliout` package, typed message taxonomy, palette config, TTY-guarded spinner, validated prompt |
 | 13 | TUI Design System | `features/13-tui-design-system/` | done | 150–172, 183–193 | `internal/uikit` package (18 primitives), frozen glyph catalogue with ASCII fallback, role-to-token matrix, glyph-fallback CI guards |
-| 14 | Page B Redesign (Nerd Status) | `features/14-page-b-redesign/` | done | 173–182 | Stacked Page B layout, GatewayHealth/PollingTraffic/GatewayLive panes, universal filter border + Esc-clear, TableBasedPane consolidation |
+| 14 | Stats Page Redesign | `features/14-page-b-redesign/` | done | 173–182 | Stacked Stats page layout, GatewayHealth/PollingTraffic/GatewayLive panes, universal filter border + Esc-clear, TableBasedPane consolidation |
 | 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | done | 199 ✓, 200 ✓, 201 ✓, 202 ✓, 203 ✓, 206 | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
 | 16 | Mono Themes + Page Rename | `features/16-mono-themes-page-rename/` | open | 207, 208 | Rename Page A/B → Music/Stats, add mono-dark/mono-light themes |
 
