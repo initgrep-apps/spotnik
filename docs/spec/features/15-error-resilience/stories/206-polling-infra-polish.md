@@ -1,7 +1,7 @@
 ---
 title: "Fix: Polling infra test robustness + backoff guard"
 feature: 15-error-resilience
-status: open
+status: done
 ---
 
 ## Background
