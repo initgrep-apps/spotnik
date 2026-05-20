@@ -253,11 +253,11 @@ func TestGatewayHealthPane_FreshPane_FullTokenBar(t *testing.T) {
 		t.Fatal("expected non-empty view")
 	}
 	tokenLine := lines[0]
-	// Full bar (TokensAvailable == TokensMax == 10) renders 10 ● filled-dot glyphs; no □ empty squares.
+	// Full bar (TokensAvailable == TokensMax == 10) renders 10 ● bar glyphs + 1 ● row icon = 11 total; no □ empty squares.
 	filled := strings.Count(tokenLine, "●")
 	empty := strings.Count(tokenLine, "□")
-	assert.Equal(t, 10, filled,
-		"fresh pane tokens row must show 10 filled dots (TokensAvailable = TokensMax = 10), got %d", filled)
+	assert.Equal(t, 11, filled,
+		"fresh pane tokens row must show 11 filled dots (10 bar + 1 icon, TokensAvailable = TokensMax = 10), got %d", filled)
 	assert.Equal(t, 0, empty,
 		"fresh pane tokens row must show 0 empty squares when bucket is full, got %d", empty)
 }
