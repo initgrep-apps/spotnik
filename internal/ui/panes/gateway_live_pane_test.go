@@ -791,6 +791,47 @@ func TestGatewayLivePane_View_ColumnAlignmentMatchesNetworkLog(t *testing.T) {
 	}
 }
 
+// TestGatewayLivePane_SetSize_EagerDrain verifies that transitioning from width=0 to a
+// non-zero width triggers an immediate drain (no TickMsg needed). Events recorded
+// before SetSize must be visible in the buffer after SetSize.
+func TestGatewayLivePane_SetSize_EagerDrain(t *testing.T) {
+	store := state.New()
+	store.RecordEvent(makeGatewayLiveEvent(domain.EventRequestAllowed))
+
+	p := panes.NewGatewayLivePane(store, theme.Load("black"))
+	// Width is still 0 here — buffer must be empty.
+	if got := p.BufferedEventCount(); got != 0 {
+		t.Fatalf("BufferedEventCount() before SetSize = %d, want 0", got)
+	}
+
+	// Transition 0 → non-zero; should drain immediately.
+	p.SetSize(80, 20)
+
+	if got := p.BufferedEventCount(); got != 1 {
+		t.Errorf("BufferedEventCount() after SetSize(80,20) = %d, want 1 (eager drain)", got)
+	}
+}
+
+// TestGatewayLivePane_SetSize_EagerDrain_NoReDrainOnSecondCall verifies that a second
+// SetSize call with a non-zero width does NOT re-drain (the drain gate is only on the
+// 0→nonzero transition, not on every resize).
+func TestGatewayLivePane_SetSize_EagerDrain_NoReDrainOnSecondCall(t *testing.T) {
+	store := state.New()
+	p := panes.NewGatewayLivePane(store, theme.Load("black"))
+	p.SetSize(80, 20) // first non-zero: drains (empty store)
+
+	// Add an event then resize again. Cursor should already be advanced past the first
+	// drain; the second SetSize (non-zero → non-zero) must NOT re-read from cursor 0.
+	store.RecordEvent(makeGatewayLiveEvent(domain.EventRequestAllowed))
+	p.SetSize(100, 24) // second non-zero: must not drain again
+
+	// Still 0 because no TickMsg has fired yet — only the eager drain on first SetSize
+	// could have caught this event, but the first SetSize ran before the event was recorded.
+	if got := p.BufferedEventCount(); got != 0 {
+		t.Errorf("BufferedEventCount() after second SetSize = %d, want 0 (no re-drain)", got)
+	}
+}
+
 // stripANSI removes ANSI escape sequences for width-measurement in table alignment tests.
 func stripANSI(s string) string {
 	var out strings.Builder
