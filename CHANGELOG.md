@@ -5,6 +5,45 @@ All notable changes to Spotnik are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-rc4] - 2026-05-21
+
+### Added
+- Universal polling infra with per-pane backoff, error state, and auto-recovery
+- Centralized API error mapper and two-column toast layout
+- Overlay self-sufficiency (survives parent pane failures)
+- OAuth error code → user-friendly message mapping
+- Mono theme variants; page labels renamed Music→Spotify, Stats→Developer
+
+### Fixed
+- Volume bar snap-back race after debounce
+- Gateway Health/Live panes: eager drain on resize, per-slot dot bar
+- Polling Traffic pane: missing Stats row
+- User profile not fetched for returning authenticated sessions
+- Silent gap fixes in error paths (nil guards, missing fallbacks)
+
+### Chores
+- Polling infra test robustness and backoff guard
+- Worktree-based feature branch workflow
+- Bump `golang.org/x/term`
+
+## [0.1.0-rc3] - 2026-05-08
+
+### Added
+- Onboarding screen with permissions messaging, InfoBox, and overlay
+- Consolidated auth screens into single flow
+
+## [0.1.0-rc2] - 2026-05-07
+
+### Added
+- Rustup-style PATH integration for installer scripts
+
+### Changed
+- OSC 52 cross-platform clipboard (replaces `pbcopy`/`xclip` shelling)
+
+### Chores
+- Bump `actions/setup-go`, `actions/checkout`, `release-please-action`
+- Bump Go minor-patch group
+
 ## [0.1.0-rc1] - 2026-05-01
 
 
@@ -74,4 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB and RPM packages
 - Pre-built binaries for linux, darwin, and windows on amd64 and arm64
 
-[0.1.0]: https://github.com/initgrep-apps/spotnik/releases/tag/v0.1.0
+[0.1.0-rc4]: https://github.com/initgrep-apps/spotnik/releases/tag/v0.1.0-rc4
+[0.1.0-rc3]: https://github.com/initgrep-apps/spotnik/releases/tag/v0.1.0-rc3
+[0.1.0-rc2]: https://github.com/initgrep-apps/spotnik/releases/tag/v0.1.0-rc2
+[0.1.0-rc1]: https://github.com/initgrep-apps/spotnik/releases/tag/v0.1.0-rc1
