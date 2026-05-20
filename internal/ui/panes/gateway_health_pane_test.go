@@ -94,9 +94,9 @@ func TestGatewayHealthPane_FreshPane_NotWarningColor(t *testing.T) {
 // ticks once, records event B (TokensAvailable=8), ticks again, and asserts the
 // rendered token bar reflects event B's higher fill (not A's lower fill).
 //
-// The token bar now uses uikit.ProgressBar which renders fill blocks (█ in unicode
-// mode). A higher TokensAvailable fraction produces more filled blocks, so viewAfterB
-// must contain more "█" characters than viewAfterA in the tokens row.
+// The token bar now uses per-slot dot glyphs (● filled, □ empty). A higher
+// TokensAvailable produces more ● and fewer □, so viewAfterB must contain more
+// "●" characters than viewAfterA in the tokens row.
 func TestGatewayHealthPane_Update_DrainsCursor(t *testing.T) {
 	store := state.New()
 	p := panes.NewGatewayHealthPane(store, theme.Load("black"))
@@ -122,12 +122,12 @@ func TestGatewayHealthPane_Update_DrainsCursor(t *testing.T) {
 	p.Update(panes.TickMsg{})
 	viewAfterB := strings.Split(p.View(), "\n")[0]
 
-	// ProgressBar fill: event B (80%) must contain more filled blocks than A (50%).
-	// Count "█" (unicode fill glyph) — only bar fill cells use this glyph.
-	fillA := strings.Count(viewAfterA, "█")
-	fillB := strings.Count(viewAfterB, "█")
+	// Per-slot dot bar: event B (8/10) must show more filled dots than A (5/10).
+	// Count "●" (unicode filled-dot glyph) — only filled token slots use this glyph.
+	fillA := strings.Count(viewAfterA, "●")
+	fillB := strings.Count(viewAfterB, "●")
 	assert.Greater(t, fillB, fillA,
-		"event B (8/10 tokens) must show more fill blocks than event A (5/10 tokens): A=%d B=%d", fillA, fillB)
+		"event B (8/10 tokens) must show more filled dots than event A (5/10 tokens): A=%d B=%d", fillA, fillB)
 	// The rendered lines for A and B must differ (different fill fractions).
 	assert.NotEqual(t, viewAfterA, viewAfterB,
 		"different TokensAvailable must produce different token bar output")
@@ -207,8 +207,8 @@ func TestGatewayHealthPane_Threshold_Backoff(t *testing.T) {
 }
 
 // TestGatewayHealthPane_View_TokensData asserts that more TokensAvailable produces
-// more filled blocks in the ProgressBar-based token row. Higher availability → higher
-// fill fraction → more "█" fill glyphs in the rendered tokens line.
+// more filled dot glyphs in the per-slot token bar. Higher availability → more ●
+// filled dots and fewer □ empty squares in the rendered tokens line.
 func TestGatewayHealthPane_View_TokensData(t *testing.T) {
 	makeTokenLine := func(available int) string {
 		store := state.New()
@@ -228,22 +228,22 @@ func TestGatewayHealthPane_View_TokensData(t *testing.T) {
 		return lines[0]
 	}
 
-	// 3 < 7 < 10 — fill blocks must be strictly ordered.
+	// 3 < 7 < 10 — filled dot count must be strictly ordered.
 	line3 := makeTokenLine(3)
 	line7 := makeTokenLine(7)
 	line10 := makeTokenLine(10)
 
-	fill3 := strings.Count(line3, "█")
-	fill7 := strings.Count(line7, "█")
-	fill10 := strings.Count(line10, "█")
+	fill3 := strings.Count(line3, "●")
+	fill7 := strings.Count(line7, "●")
+	fill10 := strings.Count(line10, "●")
 
-	assert.Greater(t, fill7, fill3, "7 available must show more fill than 3 available")
-	assert.Greater(t, fill10, fill7, "10 available (full) must show more fill than 7 available")
+	assert.Greater(t, fill7, fill3, "7 available must show more filled dots than 3 available")
+	assert.Greater(t, fill10, fill7, "10 available (full) must show more filled dots than 7 available")
 }
 
 // TestGatewayHealthPane_FreshPane_FullTokenBar asserts that a newly created pane
-// (TokensAvailable == TokensMax == 10) renders a fully filled ProgressBar in the
-// tokens row: all bar cells show the "█" fill glyph (bar width = TokensMax = 10).
+// (TokensAvailable == TokensMax == 10) renders a fully filled per-slot dot bar:
+// all 10 slots show the ● filled-dot glyph and no □ empty-square glyph.
 func TestGatewayHealthPane_FreshPane_FullTokenBar(t *testing.T) {
 	p := newTestGatewayHealthPane(t)
 	p.SetSize(80, 10)
@@ -253,13 +253,13 @@ func TestGatewayHealthPane_FreshPane_FullTokenBar(t *testing.T) {
 		t.Fatal("expected non-empty view")
 	}
 	tokenLine := lines[0]
-	// Full bar (progress = 1.0) renders TokensMax (10) "█" fill blocks; no empty "░".
-	filled := strings.Count(tokenLine, "█")
-	empty := strings.Count(tokenLine, "░")
+	// Full bar (TokensAvailable == TokensMax == 10) renders 10 ● filled-dot glyphs; no □ empty squares.
+	filled := strings.Count(tokenLine, "●")
+	empty := strings.Count(tokenLine, "□")
 	assert.Equal(t, 10, filled,
-		"fresh pane tokens row must show 10 filled blocks (bar width = TokensMax = 10), got %d", filled)
+		"fresh pane tokens row must show 10 filled dots (TokensAvailable = TokensMax = 10), got %d", filled)
 	assert.Equal(t, 0, empty,
-		"fresh pane tokens row must show 0 empty blocks when bucket is full, got %d", empty)
+		"fresh pane tokens row must show 0 empty squares when bucket is full, got %d", empty)
 }
 
 // TestGatewayHealthPane_PollingSnapshotMsg_Ignored asserts the pane ignores
@@ -298,4 +298,78 @@ func TestGatewayHealthPane_FreshPane_DateDerived(t *testing.T) {
 	view := p.View()
 
 	assert.Contains(t, view, "none", "fresh pane must show 'none' for backoff (zero) and dedup (zero)")
+}
+
+// TestGatewayHealthPane_SetSize_EagerDrain verifies that transitioning from width=0 to a
+// non-zero width triggers an immediate snapshot update (no TickMsg needed). The snapshot
+// recorded before SetSize must be reflected in View() after SetSize.
+func TestGatewayHealthPane_SetSize_EagerDrain(t *testing.T) {
+	store := state.New()
+	store.RecordEvent(domain.GatewayEvent{
+		Kind: domain.EventTokenConsumed,
+		Snapshot: domain.GatewayStateSnapshot{
+			TokensAvailable: 3, TokensMax: 10,
+		},
+	})
+
+	p := panes.NewGatewayHealthPane(store, theme.Load("black"))
+	// Before SetSize, width==0, View() returns "".
+	assert.Equal(t, "", p.View(), "View() before SetSize must be empty")
+
+	// Transition 0 → non-zero; should drain immediately and expose the event's snapshot.
+	p.SetSize(80, 10)
+
+	// After eager drain the EventCursor must have advanced past the seeded event.
+	assert.Greater(t, p.EventCursor(), uint64(0), "EventCursor must advance after eager drain in SetSize")
+}
+
+// TestGatewayHealthPane_SetSize_EagerDrain_NoReDrainOnSecondCall verifies that a second
+// SetSize call (non-zero → non-zero) does NOT re-read from the cursor.
+func TestGatewayHealthPane_SetSize_EagerDrain_NoReDrainOnSecondCall(t *testing.T) {
+	store := state.New()
+	p := panes.NewGatewayHealthPane(store, theme.Load("black"))
+	p.SetSize(80, 10) // first non-zero: drains (store empty, cursor stays 0)
+
+	cursorAfterFirst := p.EventCursor()
+
+	store.RecordEvent(domain.GatewayEvent{
+		Kind: domain.EventTokenConsumed,
+		Snapshot: domain.GatewayStateSnapshot{
+			TokensAvailable: 5, TokensMax: 10,
+		},
+	})
+	p.SetSize(100, 12) // second non-zero: must NOT drain again
+
+	// Cursor must not have advanced (only TickMsg should do that now).
+	assert.Equal(t, cursorAfterFirst, p.EventCursor(),
+		"cursor must not advance on second (non-zero→non-zero) SetSize call")
+}
+
+// TestGatewayHealthPane_View_DotBarGlyphs verifies that after the renderDotBar fix,
+// View() renders per-slot dot/square glyphs (● or ■ and □) instead of ProgressBar
+// fill characters (█ and ░). The Tokens row uses GlyphFilledDot (●) for filled slots
+// and GlyphEmptySquare (□) for empty; the Slots row uses GlyphFilledSquare (■) for
+// filled and GlyphEmptySquare (□) for empty.
+func TestGatewayHealthPane_View_DotBarGlyphs(t *testing.T) {
+	store := state.New()
+	// 5 tokens available out of 10, 3 slots active out of 5.
+	store.RecordEvent(domain.GatewayEvent{
+		Kind: domain.EventTokenConsumed,
+		Snapshot: domain.GatewayStateSnapshot{
+			TokensAvailable:  5,
+			TokensMax:        10,
+			ConcurrentActive: 3,
+			ConcurrentMax:    5,
+		},
+	})
+	p := panes.NewGatewayHealthPane(store, theme.Load("black"))
+	p.SetSize(80, 10)
+	p.Update(panes.TickMsg{})
+
+	view := p.View()
+	// Filled dot glyph (token bar) or filled square glyph (slot bar) must appear.
+	assert.True(t, strings.Contains(view, "●") || strings.Contains(view, "■"),
+		"view must contain filled dot ● or filled square ■ glyph (renderDotBar per-slot output)")
+	// Empty square glyph must appear for the unfilled portion of both bars.
+	assert.Contains(t, view, "□", "view must contain empty square □ glyph (renderDotBar empty slot)")
 }

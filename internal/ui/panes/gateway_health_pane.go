@@ -64,8 +64,17 @@ func (p *GatewayHealthPane) SetFocused(f bool) { p.focused = f }
 // Init returns nil — GatewayHealthPane reacts to TickMsg from the app.
 func (p *GatewayHealthPane) Init() tea.Cmd { return nil }
 
-// SetSize updates the content area dimensions.
-func (p *GatewayHealthPane) SetSize(w, h int) { p.width = w; p.height = h }
+// SetSize updates the content area dimensions. When transitioning from zero width
+// (hidden/first-show) to a non-zero width, drainEvents is called eagerly so the
+// snapshot is current without waiting for the next TickMsg.
+func (p *GatewayHealthPane) SetSize(w, h int) {
+	firstShow := p.width == 0 && w > 0
+	p.width = w
+	p.height = h
+	if firstShow {
+		p.drainEvents()
+	}
+}
 
 // SetTheme updates the theme reference for runtime theme switching.
 func (p *GatewayHealthPane) SetTheme(th theme.Theme) { p.theme = th }
@@ -115,11 +124,11 @@ func (p *GatewayHealthPane) View() string {
 	}
 	tokenStyle := lipgloss.NewStyle().Foreground(tokenColor)
 	tokenIcon := tokenStyle.Render(uikit.GlyphFor(uikit.GlyphFilledDot, mode))
-	var tokenProgress float64
-	if snap.TokensMax > 0 {
-		tokenProgress = float64(snap.TokensAvailable) / float64(snap.TokensMax)
-	}
-	tokenBar := p.renderDotBar(tokenProgress, snap.TokensMax, th)
+	tokenBar := renderDotBar(
+		snap.TokensAvailable, snap.TokensMax,
+		uikit.GlyphFilledDot, uikit.GlyphEmptySquare,
+		tokenStyle, mutedStyle, mode,
+	)
 	tokenRow := p.renderRow(tokenIcon, "Tokens", tokenBar, labelWidth, mutedStyle)
 
 	// Slot row
@@ -129,11 +138,11 @@ func (p *GatewayHealthPane) View() string {
 	}
 	slotStyle := lipgloss.NewStyle().Foreground(slotColor)
 	slotIcon := slotStyle.Render(uikit.GlyphFor(uikit.GlyphFilledSquare, mode))
-	var slotProgress float64
-	if snap.ConcurrentMax > 0 {
-		slotProgress = float64(snap.ConcurrentActive) / float64(snap.ConcurrentMax)
-	}
-	slotBar := p.renderDotBar(slotProgress, snap.ConcurrentMax, th)
+	slotBar := renderDotBar(
+		snap.ConcurrentActive, snap.ConcurrentMax,
+		uikit.GlyphFilledSquare, uikit.GlyphEmptySquare,
+		slotStyle, mutedStyle, mode,
+	)
 	slotRow := p.renderRow(slotIcon, "Slots", slotBar, labelWidth, mutedStyle)
 
 	// Backoff row
@@ -169,15 +178,19 @@ func (p *GatewayHealthPane) renderRow(icon, label, data string, labelWidth int, 
 	return icon + "  " + labelStyle.Render(uikit.PadOrTruncate(label, labelWidth)) + "  " + data
 }
 
-// renderDotBar renders a capacity bar using uikit.ProgressBar.
-// progress is the fill fraction in [0,1]; width is the bar's column width; th is the theme.
-func (p *GatewayHealthPane) renderDotBar(progress float64, width int, th theme.Theme) string {
-	if width <= 0 {
-		return ""
+// renderDotBar renders a capacity bar as individual per-slot glyphs.
+// It iterates 0..total, rendering filledRole for filled slots (i < filled)
+// and emptyRole for the remainder. filledStyle and emptyStyle control foreground
+// colour for each class; mode selects unicode vs ASCII glyphs.
+func renderDotBar(filled, total int, filledRole, emptyRole uikit.GlyphRole,
+	filledStyle, emptyStyle lipgloss.Style, mode uikit.GlyphMode) string {
+	var sb strings.Builder
+	for i := 0; i < total; i++ {
+		if i < filled {
+			sb.WriteString(filledStyle.Render(uikit.GlyphFor(filledRole, mode)))
+		} else {
+			sb.WriteString(emptyStyle.Render(uikit.GlyphFor(emptyRole, mode)))
+		}
 	}
-	return uikit.ProgressBar{
-		Progress: progress,
-		Width:    width,
-		Theme:    th,
-	}.Render()
+	return sb.String()
 }
