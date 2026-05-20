@@ -14,7 +14,7 @@
 | 03 | Playback & NowPlaying | `features/03-playback/` | done | 03, 11, 36, 45, 58–60, 105–107, 118–125, 197–198, 205 | Transport controls, NowPlaying display, visualizer |
 | 04 | Queue & Device Switching | `features/04-queue-and-devices/` | done | 06, 07, 12, 13, 46 | Queue viewer pane, Spotify Connect device selection |
 | 05 | Library Browser & Playlists | `features/05-library/` | done | 04, 09, 10, 47 | Browse playlists/albums/liked songs, full playlist management |
-| 06 | Search | `features/06-search/` | done | 05, 16, 81–104 | Full-screen overlay, multi-tab results, prefix autocomplete, pagination |
+| 06 | Search | `features/06-search/` | in-progress | 05, 16, 81–104, 212–213 | Full-screen overlay, multi-tab results, prefix autocomplete, pagination |
 | 07 | Stats & Listening History | `features/07-stats/` | done | 08, 14, 48, 55 | Top tracks, top artists, recently played with time-range cycling |
 | 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79 | Token-based themes, TOML config, runtime switcher, 11 built-in themes |
 | 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | done | 02, 17, 76, 79, 80, 114–117, 134–145, 196, 204, 209 | PKCE OAuth, config-first client ID, TUI onboarding, auth CLI subcommands, profile overlay |

@@ -1,6 +1,6 @@
 ---
 title: "Search"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -16,4 +16,7 @@ Full-screen search overlay opened with `/`. Queries Spotify across four tabs (Al
 - [ ] Ctrl+←/→ pages through results for the current tab
 - [ ] Stale in-flight requests cancelled when a new search supersedes them
 - [ ] Enter plays selected item; Ctrl+a adds to queue
-- [ ] Open: story 16 (search result fixes)
+- [ ] Overlay renders as 2 panels (Search + Results) with no bottom keybar
+- [ ] Prefix hint pills removed; placeholder drives prefix discovery via pill Prompt
+- [ ] Results panel border shows action notches: ctrl+a queue, tab filter, pgdn prev, pgup next
+- [ ] Open: stories 212–213 (overlay layout cleanup + placeholder redesign)
