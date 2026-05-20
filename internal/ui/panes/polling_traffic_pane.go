@@ -67,7 +67,7 @@ func (p *PollingTrafficPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-// View renders the 5-row polling traffic grid. Pure — no side effects.
+// View renders the 6-row polling traffic grid. Pure — no side effects.
 func (p *PollingTrafficPane) View() string {
 	if p.width == 0 || p.height == 0 {
 		return ""
