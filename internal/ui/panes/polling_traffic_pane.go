@@ -115,9 +115,10 @@ func (p *PollingTrafficPane) View() string {
 		{uikit.GlyphDoubleNote, "Albums", p.store.AlbumsFetchedAt(), state.AlbumsTTL},
 		{uikit.GlyphPinned, "Liked", p.store.LikedTracksFetchedAt(), state.LikedTracksTTL},
 		{uikit.GlyphDeadline, "Recent", p.store.RecentPlayedFetchedAt(), state.RecentlyPlayedTTL},
+		{uikit.GlyphMusicNote, "Stats", p.store.StatsFetchedAt("short_term"), state.StatsTTL},
 	}
 
-	renderedRows := make([]string, 0, 5)
+	renderedRows := make([]string, 0, 6)
 	renderedRows = append(renderedRows, playRow)
 
 	for _, cr := range cacheRows {
