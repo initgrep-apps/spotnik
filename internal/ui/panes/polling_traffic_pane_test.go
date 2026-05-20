@@ -45,6 +45,35 @@ func TestPollingTrafficPane_View_ContainsAllRows(t *testing.T) {
 	assert.Contains(t, view, "Albums")
 	assert.Contains(t, view, "Liked")
 	assert.Contains(t, view, "Recent")
+	assert.Contains(t, view, "Stats")
+}
+
+// TestPollingTrafficPane_View_StatsRow_NeverFetched verifies that when
+// StatsFetchedAt returns zero time the Stats row shows "never fetched".
+func TestPollingTrafficPane_View_StatsRow_NeverFetched(t *testing.T) {
+	// state.New() has statsFetchedAt = zero (never fetched)
+	p := newTestPollingTrafficPane(t)
+	p.SetSize(80, 10)
+	view := p.View()
+	assert.Contains(t, view, "Stats",
+		"Stats row label must appear in view")
+	assert.Contains(t, view, "never fetched",
+		"Stats row must show 'never fetched' when StatsFetchedAt returns zero time")
+}
+
+// TestPollingTrafficPane_View_StatsRow_Fresh verifies that when
+// StatsFetchedAt returns a recent time the Stats row shows "fresh".
+func TestPollingTrafficPane_View_StatsRow_Fresh(t *testing.T) {
+	st := state.New()
+	// StampStatsFetchedAt sets statsFetchedAt["short_term"] = time.Now()
+	st.StampStatsFetchedAt("short_term")
+	p := panes.NewPollingTrafficPane(st, theme.Load("black"))
+	p.SetSize(80, 10)
+	view := p.View()
+	assert.Contains(t, view, "Stats",
+		"Stats row label must appear in view")
+	assert.Contains(t, view, "fresh",
+		"Stats row must show 'fresh' when StatsFetchedAt returns a recent time")
 }
 
 func TestPollingTrafficPane_View_NoBorder(t *testing.T) {

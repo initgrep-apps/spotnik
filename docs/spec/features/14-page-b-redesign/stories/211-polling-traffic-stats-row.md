@@ -1,7 +1,7 @@
 ---
 title: "Fix: PollingTrafficPane missing Stats row"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background

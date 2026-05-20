@@ -78,6 +78,9 @@ type StateReader interface {
 	TopTracks(timeRange string) []domain.Track
 	// TopArtists returns cached top artists for the given time range.
 	TopArtists(timeRange string) []domain.FullArtist
+	// StatsFetchedAt returns the time stats for the given time range were last
+	// successfully fetched. Returns zero time if never fetched.
+	StatsFetchedAt(timeRange string) time.Time
 
 	// --- Devices ---
 
