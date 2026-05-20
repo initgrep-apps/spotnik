@@ -67,7 +67,7 @@ func (p *PollingTrafficPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-// View renders the 5-row polling traffic grid. Pure — no side effects.
+// View renders the 6-row polling traffic grid. Pure — no side effects.
 func (p *PollingTrafficPane) View() string {
 	if p.width == 0 || p.height == 0 {
 		return ""
@@ -115,9 +115,10 @@ func (p *PollingTrafficPane) View() string {
 		{uikit.GlyphDoubleNote, "Albums", p.store.AlbumsFetchedAt(), state.AlbumsTTL},
 		{uikit.GlyphPinned, "Liked", p.store.LikedTracksFetchedAt(), state.LikedTracksTTL},
 		{uikit.GlyphDeadline, "Recent", p.store.RecentPlayedFetchedAt(), state.RecentlyPlayedTTL},
+		{uikit.GlyphMusicNote, "Stats", p.store.StatsFetchedAt("short_term"), state.StatsTTL},
 	}
 
-	renderedRows := make([]string, 0, 5)
+	renderedRows := make([]string, 0, 6)
 	renderedRows = append(renderedRows, playRow)
 
 	for _, cr := range cacheRows {

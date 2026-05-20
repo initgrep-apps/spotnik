@@ -965,6 +965,7 @@ func (a *App) Init() tea.Cmd {
 		}),
 		splashTimer,
 		alertsInitCmd,
+		a.buildFetchCurrentUserCmd(), // fetch user tier so premium gates work for returning users
 	)
 	return tea.Batch(initCmds...)
 }

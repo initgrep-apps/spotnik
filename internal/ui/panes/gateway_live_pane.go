@@ -86,11 +86,18 @@ func (p *GatewayLivePane) SetFocused(f bool) {
 // Init returns nil — GatewayLivePane reacts to TickMsg from the app.
 func (p *GatewayLivePane) Init() tea.Cmd { return nil }
 
-// SetSize updates the content area dimensions.
+// SetSize updates the content area dimensions. When transitioning from zero width
+// (hidden/first-show) to a non-zero width, drainEvents is called eagerly so the
+// pane is populated immediately without waiting for the next TickMsg.
 func (p *GatewayLivePane) SetSize(w, h int) {
+	firstShow := p.width == 0 && w > 0
 	p.TableBasedPane.SetSize(w, h)
 	p.Filter().SetWidth(w)
 	p.resizeTable()
+	if firstShow {
+		p.drainEvents()
+		p.buildTableRows()
+	}
 }
 
 // SetTheme updates the theme reference and rebuilds the table with new column colors.
