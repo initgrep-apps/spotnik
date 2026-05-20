@@ -400,3 +400,79 @@ func TestBuildFetchCurrentUserCmd(t *testing.T) {
 		})
 	}
 }
+
+// collectInitMsgsInternal is a package-level copy of the collectInitMsgs helper
+// used in app_test.go (external package). Defined here so internal tests in
+// package app can inspect the Init() batch without crossing package boundaries.
+func collectInitMsgsInternal(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			if c != nil {
+				msgs = append(msgs, collectInitMsgsInternal(c)...)
+			}
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
+
+// TestApp_Init_AuthenticatedPath_FetchesUserProfile verifies that the authenticated
+// Init() path (needsAuth=false, needsRegister=false) appends buildFetchCurrentUserCmd
+// to the batch so returning users receive their profile on startup — fixing the
+// IsPremium false-positive bug for sessions that skip the OAuth flow.
+func TestApp_Init_AuthenticatedPath_FetchesUserProfile(t *testing.T) {
+	// Positive case: authenticated user → batch must contain userProfileLoadedMsg.
+	t.Run("authenticated user Init fetches user profile", func(t *testing.T) {
+		cfg := &config.Config{}
+		a := New(cfg, AppOptions{NeedsAuth: false, NeedsRegister: false})
+		a.userAPI = &apitest.MockUser{
+			ProfileResult: domain.UserProfile{ID: "user-1", Product: "premium"},
+		}
+
+		cmd := a.Init()
+		require.NotNil(t, cmd, "Init() must return a non-nil cmd")
+
+		msgs := collectInitMsgsInternal(cmd)
+
+		var found *userProfileLoadedMsg
+		for _, m := range msgs {
+			if p, ok := m.(userProfileLoadedMsg); ok {
+				found = &p
+				break
+			}
+		}
+		require.NotNil(t, found,
+			"authenticated Init() must include userProfileLoadedMsg in batch; got msgs: %v", msgs)
+		assert.NotEmpty(t, found.profile.ID,
+			"userProfileLoadedMsg must carry a non-empty profile ID")
+	})
+
+	// Negative case: unauthenticated user → batch must NOT contain userProfileLoadedMsg
+	// (profile fetch is deferred to the OAuth flow via SpinnerDoneMsg).
+	t.Run("unauthenticated user Init does not fetch user profile", func(t *testing.T) {
+		cfg := &config.Config{}
+		a := New(cfg, AppOptions{NeedsAuth: true, NeedsRegister: false})
+		a.userAPI = &apitest.MockUser{
+			ProfileResult: domain.UserProfile{ID: "user-1", Product: "premium"},
+		}
+
+		cmd := a.Init()
+		require.NotNil(t, cmd, "Init() must return a non-nil cmd even for unauthenticated path")
+
+		msgs := collectInitMsgsInternal(cmd)
+
+		for _, m := range msgs {
+			if _, ok := m.(userProfileLoadedMsg); ok {
+				t.Errorf("unauthenticated Init() must NOT include userProfileLoadedMsg; got one in batch")
+			}
+		}
+	})
+}
