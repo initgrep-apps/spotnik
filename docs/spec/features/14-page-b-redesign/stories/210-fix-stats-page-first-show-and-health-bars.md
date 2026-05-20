@@ -1,7 +1,7 @@
 ---
 title: "Fix: Stats page first-show emptiness + GatewayHealth dot bars"
 feature: 14-page-b-redesign
-status: open
+status: done
 ---
 
 ## Background
