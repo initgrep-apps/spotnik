@@ -192,9 +192,9 @@ func TestActiveAPITypes_NoPrefix(t *testing.T) {
 	assert.Equal(t, []string{"track", "artist", "album", "playlist"}, types)
 }
 
-// --- Task 4: renderPrefixHints() — redesigned as styled pills ---
+// --- Task 4: renderPrefixHints() — removed in story 212 (always returns "") ---
 
-// TestRenderPrefixHints_EmptyInput shows all 4 pills in their badge colors.
+// TestRenderPrefixHints_EmptyInput returns empty since hints are removed.
 func TestRenderPrefixHints_EmptyInput(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -202,14 +202,11 @@ func TestRenderPrefixHints_EmptyInput(t *testing.T) {
 	require.Equal(t, panes.PrefixNone, o.PrefixState())
 	require.Equal(t, "", o.Query())
 	hint := o.RenderPrefixHints(80)
-	// All 4 pills should be present.
-	assert.Contains(t, hint, ":songs")
-	assert.Contains(t, hint, ":artists")
-	assert.Contains(t, hint, ":albums")
-	assert.Contains(t, hint, ":playlists")
+	// Hints removed in story 212.
+	assert.Empty(t, hint, "renderPrefixHints should return empty string (hints removed)")
 }
 
-// TestRenderPrefixHints_SingleMatch shows all pills; matching (:songs) is highlighted, others dimmed.
+// TestRenderPrefixHints_SingleMatch returns empty since hints are removed.
 func TestRenderPrefixHints_SingleMatch(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -219,14 +216,10 @@ func TestRenderPrefixHints_SingleMatch(t *testing.T) {
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
-	// All 4 pills are present (non-matching ones are dimmed, not hidden).
-	assert.Contains(t, hint, ":songs", "hint should contain :songs for :s input")
-	assert.Contains(t, hint, ":artists", "non-matching prefixes appear dimmed, not hidden")
-	assert.Contains(t, hint, ":albums", "non-matching prefixes appear dimmed, not hidden")
-	assert.Contains(t, hint, ":playlists", "non-matching prefixes appear dimmed, not hidden")
+	assert.Empty(t, hint, "renderPrefixHints should return empty string even during prefix typing")
 }
 
-// TestRenderPrefixHints_MultipleMatches shows both :artists and :albums highlighted for :a input.
+// TestRenderPrefixHints_MultipleMatches returns empty since hints are removed.
 func TestRenderPrefixHints_MultipleMatches(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -236,11 +229,10 @@ func TestRenderPrefixHints_MultipleMatches(t *testing.T) {
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
-	assert.Contains(t, hint, ":artists")
-	assert.Contains(t, hint, ":albums")
+	assert.Empty(t, hint, "renderPrefixHints should return empty string")
 }
 
-// TestRenderPrefixHints_ExactMatch shows the exact prefix highlighted when typed fully.
+// TestRenderPrefixHints_ExactMatch returns empty since hints are removed.
 func TestRenderPrefixHints_ExactMatch(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -251,25 +243,20 @@ func TestRenderPrefixHints_ExactMatch(t *testing.T) {
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
-	assert.Contains(t, hint, ":songs")
+	assert.Empty(t, hint, "renderPrefixHints should return empty string")
 }
 
-// TestRenderPrefixHints_NoMatch shows all pills dimmed when no prefix matches.
-// ":z" doesn't match any prefix, so all 4 are shown in muted color.
+// TestRenderPrefixHints_NoMatch returns empty since hints are removed.
 func TestRenderPrefixHints_NoMatch(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
 
-	// Type ":z" — no prefix starts with z. Still PrefixTyping (colon present, no space).
 	o, _ = sendKey(t, o, ":")
 	o, _ = sendKey(t, o, "z")
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 	hint := o.RenderPrefixHints(80)
-	// All 4 pills are shown but dimmed (non-matching).
-	assert.Contains(t, hint, ":songs", "dimmed pills still appear in the row")
-	assert.Contains(t, hint, ":artists", "dimmed pills still appear in the row")
-	assert.NotEmpty(t, hint, "pills row is present even when no prefix matches")
+	assert.Empty(t, hint, "renderPrefixHints should return empty string even with no-match typing")
 }
 
 // TestRenderPrefixHints_NormalInput returns empty for non-prefix input (PrefixNone, non-empty).

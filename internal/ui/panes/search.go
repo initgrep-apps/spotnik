@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
@@ -110,44 +110,15 @@ type SearchRequestMsg struct {
 	Page  int // 1-based page number; reflects intent.page at debounce fire time
 }
 
-// searchKeyMap holds only the bindings advertised in the search overlay's
-// bottom keybar. Enter (play) and Esc (close) are handled in Update() but
-// not advertised — they are universal overlay conventions. Ctrl+U is no
-// longer wired (see the 2026-04-28 overlay-keybinding-cleanup spec).
-type searchKeyMap struct {
-	Queue    key.Binding
-	TabNext  key.Binding
-	TabPrev  key.Binding
-	nextPage key.Binding
-	prevPage key.Binding
-}
-
-// NewSearchKeyMap creates the default keybindings for the search overlay.
-// Exported for tests. Only includes bindings shown in the bottom keybar.
-func NewSearchKeyMap() searchKeyMap {
-	return searchKeyMap{
-		Queue: key.NewBinding(
-			key.WithKeys("ctrl+a"),
-			key.WithHelp("ctrl+a", "queue"),
-		),
-		TabNext: key.NewBinding(
-			key.WithKeys("tab"),
-			key.WithHelp("tab", "category"),
-		),
-		TabPrev: key.NewBinding(
-			key.WithKeys("shift+tab"),
-			key.WithHelp("shift+tab", "prev"),
-		),
-		nextPage: key.NewBinding(
-			// pgdown is the sole pagination key. ctrl+right was removed because macOS
-			// intercepts it at the OS level for Spaces/Desktop navigation.
-			key.WithKeys("pgdown"),
-			key.WithHelp("pgdn", "next"),
-		),
-		prevPage: key.NewBinding(
-			key.WithKeys("pgup"),
-			key.WithHelp("pgup", "prev"),
-		),
+// resultActions returns the 4 shortcut actions displayed as corner-notches
+// in the top border of the Results panel. Key bindings are handled by
+// handleKey() in the overlay Update() — these are display-only hints.
+func (o *SearchOverlay) resultActions() []layout.Action {
+	return []layout.Action{
+		{Key: "ctrl+a", Label: "queue"},
+		{Key: "tab", Label: "filter"},
+		{Key: "pgdn", Label: "prev"},
+		{Key: "pgup", Label: "next"},
 	}
 }
 
@@ -162,10 +133,9 @@ func NewSearchKeyMap() searchKeyMap {
 //   - Panel 2 (Results): tab bar + separator + scrollable results list
 //   - Panel 3 (Keys): uikit.KeyBar single-line keybinding strip
 type SearchOverlay struct {
-	theme  theme.Theme
-	input  textinput.Model
-	sp     *uikit.Spinner
-	keyMap searchKeyMap
+	theme theme.Theme
+	input textinput.Model
+	sp    *uikit.Spinner
 
 	// resultList is the bubbles/list model used in the results panel.
 	// Story 84 will wire actual items into it; here it is initialized and sized.
@@ -230,8 +200,6 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti.CompletionStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
 	ti.Focus()
 
-	km := NewSearchKeyMap()
-
 	// Initialize the list.Model with the custom SearchItemDelegate.
 	// All built-in chrome is disabled since we render our own tab bar, separator,
 	// and help bar outside the list.
@@ -255,7 +223,6 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 		// uikit.Spinner.View() returns "frame " (frame + space) when text is empty,
 		// so callers append their label directly: sp.View() + "Searching…".
 		sp:         uikit.NewSpinner("", t),
-		keyMap:     km,
 		resultList: rl,
 		intent:     searchIntent{query: "", tab: TabAll, page: 1},
 	}
@@ -353,14 +320,11 @@ func (o *SearchOverlay) Reset() {
 	o.resultList.SetItems(nil)
 }
 
-// panelHeights returns the computed heights for the three overlay panels:
-// searchH (3 or 4 depending on hint line), resultsH (fills remaining), helpH (always 3).
+// panelHeights returns the computed heights for the two overlay panels:
+// searchH (always 3), resultsH (fills remaining), helpH (always 0 — bottom key bar removed).
 func (o *SearchOverlay) panelHeights() (searchH, resultsH, helpH int) {
 	searchH = 3
-	if o.showHintLine() {
-		searchH = 4
-	}
-	helpH = 3 // 1 content row (single-line KeyBar) + top/bottom border
+	helpH = 0 // bottom key bar removed in story 212
 	totalH := o.overlayHeight()
 	resultsH = totalH - searchH - helpH
 	if resultsH < 5 {
@@ -741,54 +705,36 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	return o, o.scheduleDebounce()
 }
 
-// View renders the search overlay as three separate bordered panels stacked vertically:
-//   - Panel 1 (Search): text input + optional prefix hint line (inside the border)
-//   - Panel 2 (Results): tab bar + separator + scrollable results list
-//   - Panel 3 (Keys): help keybinding bar (no title)
-//
-// All three panels sit flush — no margin lines between them. The ╰╯ of one panel
-// directly touches the ╭╮ of the next. Hints render inside Panel 1, not between panels.
+// View renders the search overlay as two bordered panels stacked vertically:
+//   - Panel 1 (Search): text input
+//   - Panel 2 (Results): tab bar + separator + scrollable results list with action notches
 func (o *SearchOverlay) View() string {
 	w := o.overlayWidth()
 
-	searchBarH, resultsH, helpH := o.panelHeights()
+	searchBarH, resultsH, _ := o.panelHeights()
 	searchPanel := o.renderSearchPanel(w, searchBarH)
-	helpPanel := o.renderHelpPanel(w, helpH)
 	resultsPanel := o.renderResultsPanel(w, resultsH)
 
-	// Compose: all three panels flush (no margin between them).
+	// Compose: 2 panels flush (no margin between them).
 	return lipgloss.JoinVertical(lipgloss.Left,
 		searchPanel,
 		resultsPanel,
-		helpPanel,
 	)
 }
 
 // renderSearchPanel builds Panel 1: the search input box.
-// Height is 3 lines (border top + input + border bottom) when no hints are showing,
-// or 4 lines (border top + input + hint line + border bottom) when hints are visible.
-// The prefix hint line renders INSIDE the panel border, not between panels.
+// Height is fixed at 3 lines (border top + input + border bottom).
 func (o *SearchOverlay) renderSearchPanel(w, h int) string {
 	innerWidth := w - 2
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
 
-	// Build inner content: text input + optional hint line.
 	inputView := o.input.View()
-	hintLine := o.renderPrefixHints(innerWidth)
-
-	var inner string
-	if hintLine != "" {
-		// 4-line panel: input row + hint row inside the border.
-		inner = lipgloss.JoinVertical(lipgloss.Left, inputView, hintLine)
-	} else {
-		inner = inputView
-	}
-	inner = lipgloss.NewStyle().
+	inner := lipgloss.NewStyle().
 		Width(innerWidth).MaxWidth(innerWidth).
 		Height(h - 2).MaxHeight(h - 2).
-		Render(inner)
+		Render(inputView)
 
 	chrome := uikit.OverlayChrome{
 		Width:  w,
@@ -887,14 +833,14 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		Height(innerHeight).MaxHeight(innerHeight).
 		Render(inner)
 
-	// NOTE: OverlayChrome uses Accent() and Focused=true, consolidating the three panels
-	// under a uniform glyph-aware border. The former SeekBar()/TextMuted() accent distinction
-	// was a visual-hierarchy hint; OverlayChrome is the canonical overlay primitive.
+	// NOTE: OverlayChrome uses Accent() and Focused=true.
+	// Actions are displayed as corner-notches in the top-right of the Results border.
 	chrome := uikit.OverlayChrome{
-		Width:  w,
-		Height: h,
-		Title:  "Results",
-		Theme:  o.theme,
+		Width:   w,
+		Height:  h,
+		Title:   "Results",
+		Actions: o.resultActions(),
+		Theme:   o.theme,
 	}
 	return chrome.Render(inner)
 }
@@ -927,48 +873,6 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 
 	// Pad/truncate to exactly innerWidth.
 	return lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(tabLine)
-}
-
-// renderHelpPanel builds Panel 3: the keybinding hint bar.
-// Height is fixed at 3 (top border + single content line + bottom border).
-// Renders a uikit.KeyBar over the visible binding subset. Title is empty
-// because the binding content is self-explanatory, and the dim TextMuted
-// border lets the panel recede.
-func (o *SearchOverlay) renderHelpPanel(w, h int) string {
-	innerWidth := w - 2
-	if innerWidth < 1 {
-		innerWidth = 1
-	}
-
-	bar := uikit.KeyBar{
-		Bindings: o.hintBindings(),
-		Theme:    o.theme,
-	}.Render()
-
-	inner := lipgloss.NewStyle().
-		Width(innerWidth).MaxWidth(innerWidth).
-		Height(h - 2).MaxHeight(h - 2).
-		Render(bar)
-
-	chrome := uikit.OverlayChrome{
-		Width:  w,
-		Height: h,
-		Title:  "",
-		Theme:  o.theme,
-	}
-	return chrome.Render(inner)
-}
-
-// hintBindings returns the synthetic key.Binding list rendered by the bottom
-// keybar. The composite Key strings ("tab/shift+tab", "pgdn/pgup") exist
-// purely for display and are NEVER matched against tea.KeyMsg input — real
-// key handling lives in handleKey().
-func (o *SearchOverlay) hintBindings() []key.Binding {
-	return []key.Binding{
-		o.keyMap.Queue,
-		key.NewBinding(key.WithHelp("tab/shift+tab", "category")),
-		key.NewBinding(key.WithHelp("pgdn/pgup", "page")),
-	}
 }
 
 // renderPaginationBar renders the [ ←  page N of M  → ] line.
@@ -1103,16 +1007,10 @@ func NewSearchOverlayForTest(t theme.Theme) *SearchOverlay {
 	return NewSearchOverlay(t)
 }
 
-// ResultsBorderAccentColor returns the AccentColor that renderResultsPanel() uses
-// in its BorderConfig. Exported for tests verifying per-panel border color assignments.
-func (o *SearchOverlay) ResultsBorderAccentColor() lipgloss.Color {
-	return o.theme.SeekBar()
-}
-
-// KeysPanelTitle returns the Title string used in renderHelpPanel()'s BorderConfig.
-// Exported for tests verifying that the Keys panel has no title label.
-func (o *SearchOverlay) KeysPanelTitle() string {
-	return "" // Keys panel title is always empty (self-explanatory keybinding content)
+// ResultActions returns the action hints displayed in the Results panel border.
+// Exported for tests.
+func (o *SearchOverlay) ResultActions() []layout.Action {
+	return o.resultActions()
 }
 
 // SearchDebounceMsgForTest creates a searchDebounceMsg for use in tests.

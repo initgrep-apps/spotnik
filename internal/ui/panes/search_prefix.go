@@ -137,15 +137,11 @@ func (o *SearchOverlay) activeAPITypes() []string {
 }
 
 // showHintLine reports whether the prefix hint row should be rendered inside the
-// Search panel. It returns true when the input is empty and no prefix is locked
-// (show all prefixes as placeholder guidance) or when the user is actively typing
-// a prefix (PrefixTyping). Returns false when a prefix is locked (the Prompt tag
-// is enough) or a normal query is active.
+// Search panel. As of story 212, prefix hint pills and the variable-height search
+// panel have been removed — the search panel is always 3 lines tall and hints are
+// communicated via the cycling placeholder instead.
 func (o *SearchOverlay) showHintLine() bool {
-	if o.prefixState == PrefixLocked {
-		return false
-	}
-	return o.input.Value() == "" || o.prefixState == PrefixTyping
+	return false
 }
 
 // ShowHintLine is the exported accessor for showHintLine — used by tests.
@@ -153,64 +149,11 @@ func (o *SearchOverlay) ShowHintLine() bool {
 	return o.showHintLine()
 }
 
-// prefixToCategory maps a command prefix to its Spotify API category name.
-// Used by renderPrefixHints() to look up the badge color for each pill.
-func prefixToCategory(prefix string) string {
-	switch prefix {
-	case ":songs":
-		return "track"
-	case ":artists":
-		return "artist"
-	case ":albums":
-		return "album"
-	case ":playlists":
-		return "playlist"
-	default:
-		return ""
-	}
-}
-
 // renderPrefixHints renders the hint row below the text input as styled pills.
-// Each pill shows a command prefix in its category badge color.
-//
-// Visibility rules:
-//   - Empty input (PrefixNone, value==""): all 4 pills in their badge colors
-//   - Typing a prefix (PrefixTyping): matching pills highlighted, others dimmed
-//   - Prefix locked (PrefixLocked): returns "" — the Prompt tag is visible enough
-//   - Normal query (PrefixNone, value!="" and no ":"): returns "" — hide pills
+// As of story 212, prefix hint pills have been removed — hints are communicated
+// exclusively via the cycling placeholder in the text input.
 func (o *SearchOverlay) renderPrefixHints(width int) string {
-	// Hide when prefix is locked — the Prompt tag is visible enough.
-	if o.prefixState == PrefixLocked {
-		return ""
-	}
-
-	partial := o.input.Value()
-
-	// Hide for normal (non-prefix) queries — pills are not relevant.
-	if partial != "" && o.prefixState == PrefixNone {
-		return ""
-	}
-
-	delegate := NewSearchItemDelegate(o.theme)
-
-	var pills []string
-	for _, prefix := range SearchPrefixes {
-		category := prefixToCategory(prefix)
-		color := delegate.badgeColor(category)
-
-		var style lipgloss.Style
-		if partial == "" || strings.HasPrefix(prefix, partial) {
-			// Empty input or matching prefix — show in category color, bold.
-			style = lipgloss.NewStyle().Foreground(color).Bold(true)
-		} else {
-			// Non-matching — dim.
-			style = lipgloss.NewStyle().Foreground(o.theme.TextMuted())
-		}
-		pills = append(pills, style.Render(prefix))
-	}
-
-	hint := "  " + strings.Join(pills, "   ")
-	return lipgloss.NewStyle().MaxWidth(width).Render(hint)
+	return ""
 }
 
 // buildPromptTag returns a styled lipgloss string for the prefix tag shown in the Prompt field.

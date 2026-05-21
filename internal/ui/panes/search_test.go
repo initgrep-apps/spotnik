@@ -721,14 +721,27 @@ func TestSearchOverlay_Tab_EmitsSearchRequestMsg(t *testing.T) {
 	assert.Equal(t, 1, reqMsg.Page, "SearchRequestMsg page should default to 1")
 }
 
-// TestSearchOverlay_View_ThreePanels verifies View() contains three ╭ border starts.
-func TestSearchOverlay_View_ThreePanels(t *testing.T) {
+// TestSearchOverlay_View_TwoPanels verifies View() contains exactly 2 panels (Search + Results).
+// Uses findPanelBounds to count panels by their titled borders rather than raw ╭ count
+// (which includes corner-notch glyphs in the border).
+func TestSearchOverlay_View_TwoPanels(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
 
 	view := o.View()
-	count := strings.Count(view, "╭")
-	assert.GreaterOrEqual(t, count, 3, "view should contain at least 3 panel borders (╭)")
+	lines := strings.Split(view, "\n")
+
+	searchStart, searchEnd := findPanelBounds(lines, "Search")
+	require.Greater(t, searchStart, -1, "Search panel top border not found")
+	require.Greater(t, searchEnd, -1, "Search panel bottom border not found")
+
+	resultsStart, resultsEnd := findPanelBounds(lines, "Results")
+	require.Greater(t, resultsStart, -1, "Results panel top border not found")
+	require.Greater(t, resultsEnd, -1, "Results panel bottom border not found")
+
+	// No third panel (Keys) should be present.
+	_, keysEnd := findPanelBounds(lines, "Keys")
+	assert.Equal(t, -1, keysEnd, "Keys panel should not be present (removed in story 212)")
 }
 
 // TestSearchOverlay_View_SearchPanelTitle verifies Panel 1 has "Search" title.
@@ -747,14 +760,13 @@ func TestSearchOverlay_View_ResultsPanelTitle(t *testing.T) {
 	assert.Contains(t, view, "Results", "Panel 2 border should have 'Results' title")
 }
 
-// TestSearchOverlay_View_KeysPanelTitle_NoTitle verifies Panel 3 has no title label.
-// Story 90: Keys panel title removed — keybinding content is self-explanatory.
-func TestSearchOverlay_View_KeysPanelTitle_NoTitle(t *testing.T) {
+// TestSearchOverlay_View_KeysPanel_Removed verifies the bottom Keys panel is not present.
+// Story 212: The 3rd panel (Keys) was removed entirely — only Search + Results remain.
+func TestSearchOverlay_View_KeysPanel_Removed(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
 	view := o.View()
-	// "Keys" label should NOT appear in the border — it was removed in Story 90.
-	assert.NotContains(t, view, "─ Keys", "Panel 3 border should NOT have 'Keys' title label")
+	assert.NotContains(t, view, "─ Keys", "Keys panel border should not be present (removed in story 212)")
 }
 
 // TestSearchOverlay_View_TabBarPresent verifies tab labels appear in the results panel.
@@ -778,17 +790,19 @@ func TestSearchOverlay_View_TabBarActiveHighlight(t *testing.T) {
 	assert.Contains(t, view, "[All]", "active tab should be shown with brackets")
 }
 
-// TestSearchOverlay_View_HelpPanelContent verifies the Keys panel renders
-// the uikit.KeyBar with the visible binding set.
+// TestSearchOverlay_View_HelpPanelContent verifies that the bottom keybar panel
+// is gone and action hints appear as Results border notches instead.
 func TestSearchOverlay_View_HelpPanelContent(t *testing.T) {
 	o := newTestSearchOverlay()
-	// Use a wide terminal so the help bar has room to show keybinding text.
 	o.SetSize(150, 40)
 	view := o.View()
-	// Keys panel must advertise ctrl+a queue (the Queue binding).
-	assert.Contains(t, view, "ctrl+a", "help bar should show ctrl+a keybinding")
-	// Enter (play) and Esc (close) are no longer advertised in the keybar.
-	assert.NotContains(t, stripANSI(view), "esc close", "esc close must not appear in keybar")
+	plain := stripANSI(view)
+	// Old bottom-bar composite key strings must NOT appear.
+	assert.NotContains(t, plain, "tab/shift+tab", "old composite bottom-bar text must not appear")
+	assert.NotContains(t, plain, "pgdn/pgup", "old composite bottom-bar text must not appear")
+	// Action notches in the Results border ARE present.
+	assert.Contains(t, plain, "ctrl+a queue", "action notch 'ctrl+a queue' must appear in Results border")
+	assert.Contains(t, plain, "tab filter", "action notch 'tab filter' must appear in Results border")
 }
 
 // TestSearchOverlay_OverlayWidth_70Pct verifies overlayWidth returns 70% of terminal width.
@@ -1334,10 +1348,8 @@ func TestSearchOverlay_Placeholder_TabSwitchBackToAll(t *testing.T) {
 
 // --- Story 90: Flush panels, interior hints, per-panel border colors ---
 
-// TestSearchOverlay_View_FlushPanels verifies no blank line exists between consecutive panel borders.
-// Between the first two panels and the second and third panel, the ╰ of one panel must be
-// directly adjacent to the ╭ of the next (no empty lines between).
-// Lines may contain ANSI escape codes so we use strings.Contains for matching.
+// TestSearchOverlay_View_FlushPanels verifies no blank line exists between the two panel borders.
+// The ╰ of the Search panel must be directly adjacent to the ╭ of the Results panel.
 func TestSearchOverlay_View_FlushPanels(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
@@ -1355,47 +1367,42 @@ func TestSearchOverlay_View_FlushPanels(t *testing.T) {
 			endLines = append(endLines, i)
 		}
 	}
-	require.Len(t, startLines, 3, "should have 3 panel top borders")
-	require.Len(t, endLines, 3, "should have 3 panel bottom borders")
+	require.Len(t, startLines, 2, "should have 2 panel top borders")
+	require.Len(t, endLines, 2, "should have 2 panel bottom borders")
 
-	// For each consecutive pair of panels, the end of panel N must be immediately
-	// followed by the start of panel N+1.
-	for i := 0; i < 2; i++ {
-		endLine := endLines[i]
-		nextStartLine := startLines[i+1]
-		assert.Equal(t, endLine+1, nextStartLine,
-			"panel %d end (line %d) must be immediately followed by panel %d start (line %d), got %d",
-			i+1, endLine, i+2, nextStartLine, nextStartLine,
-		)
-	}
+	// The end of panel 1 must be immediately followed by the start of panel 2.
+	endLine := endLines[0]
+	nextStartLine := startLines[1]
+	assert.Equal(t, endLine+1, nextStartLine,
+		"Search panel end (line %d) must be immediately followed by Results panel start (line %d)",
+		endLine, nextStartLine,
+	)
 }
 
-// TestSearchOverlay_View_ThreePanelBorderCount verifies exactly 3 panel start borders.
-// Lines may contain ANSI escape codes so we use strings.Contains for matching.
-func TestSearchOverlay_View_ThreePanelBorderCount(t *testing.T) {
+// TestSearchOverlay_View_TwoPanelBorderCount verifies exactly 2 panel start borders.
+func TestSearchOverlay_View_TwoPanelBorderCount(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
 
 	view := o.View()
 	lines := strings.Split(view, "\n")
 
-	// Count lines that contain ╭ (panel top borders).
 	count := 0
 	for _, line := range lines {
 		if strings.Contains(line, "╭") {
 			count++
 		}
 	}
-	assert.Equal(t, 3, count, "view should have exactly 3 panel top borders (╭)")
+	assert.Equal(t, 2, count, "view should have exactly 2 panel top borders (╭) — Search + Results")
 }
 
-// TestSearchOverlay_ShowHintLine_EmptyInput returns true when input is empty.
+// TestSearchOverlay_ShowHintLine_EmptyInput returns false — hints removed in story 212.
 func TestSearchOverlay_ShowHintLine_EmptyInput(t *testing.T) {
 	o := newTestSearchOverlay()
-	assert.True(t, o.ShowHintLine(), "empty input should show hint line")
+	assert.False(t, o.ShowHintLine(), "empty input should not show hint line (hints removed)")
 }
 
-// TestSearchOverlay_ShowHintLine_PrefixTyping returns true during prefix typing.
+// TestSearchOverlay_ShowHintLine_PrefixTyping returns false — hints removed in story 212.
 func TestSearchOverlay_ShowHintLine_PrefixTyping(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -1404,7 +1411,7 @@ func TestSearchOverlay_ShowHintLine_PrefixTyping(t *testing.T) {
 	o, _ = sendKey(t, o, "s")
 	o, _ = sendKey(t, o, "o")
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
-	assert.True(t, o.ShowHintLine(), "PrefixTyping should show hint line")
+	assert.False(t, o.ShowHintLine(), "PrefixTyping should not show hint line (hints removed)")
 }
 
 // TestSearchOverlay_ShowHintLine_PrefixLocked returns false when prefix is locked.
@@ -1431,62 +1438,31 @@ func TestSearchOverlay_ShowHintLine_NormalQuery(t *testing.T) {
 	assert.False(t, o.ShowHintLine(), "normal query should not show hint line")
 }
 
-// TestSearchOverlay_View_HintInsideSearchPanel verifies hint text appears inside
-// the Search panel border (between ╭─ Search and ╰─), not floating between panels.
-// Lines may contain ANSI escape codes so we use strings.Contains for all matching.
-func TestSearchOverlay_View_HintInsideSearchPanel(t *testing.T) {
+// TestSearchOverlay_View_HintRemoved verifies that the renderPrefixHints output is empty
+// (the hint pills between input and border are gone in story 212).
+// Ghost suggestions in the textinput may show prefix strings — those are unrelated to hints.
+func TestSearchOverlay_View_HintRemoved(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
-	// Type ":so" to trigger PrefixTyping (hints visible).
+	// Type ":so" to trigger PrefixTyping — hints would previously appear here.
 	o, _ = sendKey(t, o, ":")
 	o, _ = sendKey(t, o, "s")
 	o, _ = sendKey(t, o, "o")
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
 
-	view := o.View()
-	lines := strings.Split(view, "\n")
-
-	searchStart, searchEnd := findPanelBounds(lines, "Search")
-	require.Greater(t, searchStart, -1, "Search panel top border not found in view")
-	require.Greater(t, searchEnd, -1, "Search panel bottom border not found in view")
-
-	// The hint text ":songs" should appear INSIDE the search panel boundaries.
-	hintFound := false
-	for i := searchStart + 1; i < searchEnd; i++ {
-		if strings.Contains(lines[i], ":songs") {
-			hintFound = true
-			break
-		}
-	}
-	assert.True(t, hintFound, "hint text ':songs' should appear inside the Search panel border (lines %d to %d)", searchStart, searchEnd)
-
-	// The hint text must NOT appear outside the search panel (between ╰ and the next ╭).
-	outsideHint := false
-	inGap := false
-	for i, line := range lines {
-		if i == searchEnd {
-			inGap = true
-		}
-		if inGap && strings.Contains(line, "╭") && i > searchEnd {
-			break // reached next panel — stop checking gap
-		}
-		if inGap && i > searchEnd && strings.Contains(line, ":songs") {
-			outsideHint = true
-		}
-	}
-	assert.False(t, outsideHint, "hint text ':songs' must NOT appear outside the Search panel border")
+	// renderPrefixHints returns "" — the hint pills line is gone.
+	assert.Empty(t, o.RenderPrefixHints(100), "prefix hints line must be empty")
 }
 
-// TestSearchOverlay_View_SearchPanelHeight_WithHints verifies Search panel is 4 lines when hints visible.
-// Lines may contain ANSI escape codes so we use strings.Contains for matching.
-func TestSearchOverlay_View_SearchPanelHeight_WithHints(t *testing.T) {
+// TestSearchOverlay_View_SearchPanelHeight_Always3 verifies Search panel is always 3 lines
+// since hints were removed in story 212. The panel height is stable regardless of input state.
+func TestSearchOverlay_View_SearchPanelHeight_Always3(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
-	// Type ":so" to trigger PrefixTyping (hints visible).
+	// Type ":so" to trigger PrefixTyping.
 	o, _ = sendKey(t, o, ":")
 	o, _ = sendKey(t, o, "s")
 	require.Equal(t, panes.PrefixTyping, o.PrefixState())
-	require.True(t, o.ShowHintLine())
 
 	view := o.View()
 	lines := strings.Split(view, "\n")
@@ -1496,7 +1472,7 @@ func TestSearchOverlay_View_SearchPanelHeight_WithHints(t *testing.T) {
 	require.Greater(t, searchEnd, -1, "Search panel bottom border not found")
 
 	panelHeight := searchEnd - searchStart + 1
-	assert.Equal(t, 4, panelHeight, "Search panel should be 4 lines tall when hints are visible (border top + input + hint + border bottom)")
+	assert.Equal(t, 3, panelHeight, "Search panel should always be 3 lines tall (border top + input + border bottom)")
 }
 
 // TestSearchOverlay_View_SearchPanelHeight_WithoutHints verifies Search panel is 3 lines when no hints.
@@ -1522,20 +1498,21 @@ func TestSearchOverlay_View_SearchPanelHeight_WithoutHints(t *testing.T) {
 	assert.Equal(t, 3, panelHeight, "Search panel should be 3 lines tall when no hints (border top + input + border bottom)")
 }
 
-// TestSearchOverlay_ResultsBorderColor_UsesSeekBar verifies Results panel uses SeekBar color token.
-func TestSearchOverlay_ResultsBorderColor_UsesSeekBar(t *testing.T) {
+// TestSearchOverlay_ResultActions_ReturnsExpectedActions verifies resultActions()
+// returns 4 actions with correct keys and labels for the Results panel border notches.
+func TestSearchOverlay_ResultActions_ReturnsExpectedActions(t *testing.T) {
 	th := theme.Load("black")
-	o2 := panes.NewSearchOverlayForTest(th)
-	assert.Equal(t, th.SeekBar(), o2.ResultsBorderAccentColor(),
-		"Results panel should use theme.SeekBar() as its AccentColor")
-}
-
-// TestSearchOverlay_KeysBorderHasNoTitle verifies Keys panel has no title in its border config.
-func TestSearchOverlay_KeysBorderHasNoTitle(t *testing.T) {
-	th := theme.Load("black")
-	o2 := panes.NewSearchOverlayForTest(th)
-	assert.Equal(t, "", o2.KeysPanelTitle(),
-		"Keys panel should have empty Title in border config")
+	o := panes.NewSearchOverlayForTest(th)
+	actions := o.ResultActions()
+	require.Len(t, actions, 4, "resultActions() should return 4 actions")
+	assert.Equal(t, "ctrl+a", actions[0].Key)
+	assert.Equal(t, "queue", actions[0].Label)
+	assert.Equal(t, "tab", actions[1].Key)
+	assert.Equal(t, "filter", actions[1].Label)
+	assert.Equal(t, "pgdn", actions[2].Key)
+	assert.Equal(t, "prev", actions[2].Label)
+	assert.Equal(t, "pgup", actions[3].Key)
+	assert.Equal(t, "next", actions[3].Label)
 }
 
 // TestSearchOverlay_Resize_PropagatesListAndHelp verifies that SetSize correctly
@@ -1585,32 +1562,26 @@ func countViewLines(view string) int {
 //
 // With resizeList(), the list is always sized to match the current panelHeights(),
 // so the total view height stays constant regardless of hint visibility.
-func TestResizeList_ViewHeightStableAcrossHintToggle(t *testing.T) {
+func TestResizeList_ViewHeightStable(t *testing.T) {
+	// With hints and bottom keybar removed (story 212), the search panel is always 3 lines
+	// and there is no help panel. View height is stable regardless of input state.
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
 
-	// Baseline: empty input → hint visible.
-	require.True(t, o.ShowHintLine(), "pre-condition: hint must be visible")
 	baseView := o.View()
 	baseLines := countViewLines(baseView)
 
-	// Type 'j' → hint hides → searchH changes from 4 to 3.
-	// resultsH gains 1 extra line. resizeList() must increase listH by 1 to absorb it.
+	// Typing should not change the total view height.
 	o, _ = sendKey(t, o, "j")
-	require.False(t, o.ShowHintLine(), "hint must be hidden after typing")
 	afterTypingLines := countViewLines(o.View())
 	assert.Equal(t, baseLines, afterTypingLines,
-		"view line count must be stable after typing (hint toggled off); resizeList() must have been called")
+		"view line count must be stable after typing; resizeList() must have been called")
 
-	// Press Backspace → hint reappears → searchH goes back to 4.
-	// resultsH loses 1 line. resizeList() must decrease listH by 1.
-	// NOTE: Ctrl+U is no longer a supported clear shortcut (2026-04-28 overlay-keybinding-cleanup).
-	// We use Backspace here as the canonical input-editing path that restores the empty state.
+	// Backspace to empty should not change the total view height.
 	o, _ = sendKey(t, o, "backspace")
-	require.True(t, o.ShowHintLine(), "hint must reappear after clearing input via backspace")
 	afterClearLines := countViewLines(o.View())
 	assert.Equal(t, baseLines, afterClearLines,
-		"view line count must be stable after clearing input (hint toggled on); resizeList() must have been called")
+		"view line count must be stable after clearing input; resizeList() must have been called")
 }
 
 // TestResizeList_ViewHeightStableAfterBackspace verifies view height stability when
@@ -1622,16 +1593,14 @@ func TestResizeList_ViewHeightStableAfterBackspace(t *testing.T) {
 	baseView := o.View()
 	baseLines := countViewLines(baseView)
 
-	// Type single char → hint hides.
+	// Type single char.
 	o, _ = sendKey(t, o, "j")
-	require.False(t, o.ShowHintLine(), "hint must hide after typing")
 	afterTypingLines := countViewLines(o.View())
 	assert.Equal(t, baseLines, afterTypingLines, "line count must be stable after typing")
 
-	// Backspace → empty input → hint visible again.
+	// Backspace → empty input.
 	o, _ = sendKey(t, o, "backspace")
 	require.Equal(t, "", o.Query(), "backspace must empty input")
-	require.True(t, o.ShowHintLine(), "hint must reappear after backspace to empty")
 	afterBackspaceLines := countViewLines(o.View())
 	assert.Equal(t, baseLines, afterBackspaceLines,
 		"view line count must be stable after backspace to empty; resizeList() must have been called")
@@ -1645,20 +1614,17 @@ func TestResizeList_ViewHeightStableAfterTabCycle(t *testing.T) {
 
 	baseView := o.View()
 	baseLines := countViewLines(baseView)
-	require.True(t, o.ShowHintLine(), "pre-condition: hint visible on All tab")
 
-	// Tab to Songs → PrefixLocked → hint hides.
+	// Tab to Songs → PrefixLocked.
 	o, _ = sendKey(t, o, "tab")
 	require.Equal(t, panes.TabSongs, o.ActiveTab())
-	require.False(t, o.ShowHintLine(), "hint must hide when Songs tab active")
 	afterTabLines := countViewLines(o.View())
 	assert.Equal(t, baseLines, afterTabLines,
 		"view line count must be stable after cycling to Songs tab; resizeList() must have been called")
 
-	// Shift+Tab back to All → hint reappears.
+	// Shift+Tab back to All.
 	o, _ = sendKey(t, o, "shift+tab")
 	require.Equal(t, panes.TabAll, o.ActiveTab())
-	require.True(t, o.ShowHintLine(), "hint must reappear on All tab")
 	afterShiftTabLines := countViewLines(o.View())
 	assert.Equal(t, baseLines, afterShiftTabLines,
 		"view line count must be stable after cycling back to All tab; resizeList() must have been called")
@@ -1670,9 +1636,7 @@ func TestResizeList_SearchClearedMsg(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(100, 40)
 
-	// Get baseline with hint visible.
 	baseLines := countViewLines(o.View())
-	require.True(t, o.ShowHintLine(), "pre-condition: hint visible on empty overlay")
 
 	// Send SearchClearedMsg directly (as the root app does when opening the overlay).
 	model, _ := o.Update(panes.SearchClearedMsg{})
@@ -1692,26 +1656,19 @@ func TestResizeList_ListHeightMatchesPanelFormula(t *testing.T) {
 	o.SetSize(100, 40)
 	h := o.OverlayHeight()
 
-	// Hint visible: searchH=4, helpH=3, resultsH = h-4-3, listH = resultsH-4.
-	require.True(t, o.ShowHintLine())
-	wantHintVisible := (h - 4 - 3) - 4
-	if wantHintVisible < 1 {
-		wantHintVisible = 1
+	// With hints and bottom keybar removed (story 212): searchH=3, helpH=0,
+	// resultsH = h - 3 - 0, listH = resultsH - 4.
+	want := (h - 3 - 0) - 4
+	if want < 1 {
+		want = 1
 	}
-	assert.Equal(t, wantHintVisible, o.ListHeight(),
-		"list height with hint visible must be overlayH - 4 - 3 - 4 = %d", wantHintVisible)
+	assert.Equal(t, want, o.ListHeight(),
+		"list height must be overlayH - 3 - 0 - 4 = %d", want)
 
-	// Type 'j' → hint hides: searchH=3, helpH=3, resultsH = h-3-3, listH = resultsH-4.
+	// Typing a character should keep the same formula — hint visibility is always false.
 	o, _ = sendKey(t, o, "j")
-	require.False(t, o.ShowHintLine())
-	wantHintHidden := (h - 3 - 3) - 4
-	if wantHintHidden < 1 {
-		wantHintHidden = 1
-	}
-	assert.Equal(t, wantHintHidden, o.ListHeight(),
-		"list height with hint hidden must be overlayH - 3 - 3 - 4 = %d", wantHintHidden)
-	assert.Equal(t, wantHintVisible+1, wantHintHidden,
-		"hint-hidden list must be 1 taller than hint-visible list")
+	assert.Equal(t, want, o.ListHeight(),
+		"list height must remain stable after typing (no hint toggle)")
 }
 
 // TestResizeList_ViewHeightStableAfterDemote verifies that list height is correct
@@ -2995,57 +2952,23 @@ func TestPgUp_PrevPage(t *testing.T) {
 	assert.False(t, isReq, "pgup cmd must not immediately emit SearchRequestMsg (debounced)")
 }
 
-// TestSearchKeyMap_OnlyVisibleBindings verifies the keymap exposes exactly
-// the 5 bindings advertised in the bottom keybar after the cleanup:
-// Queue, TabNext, TabPrev, nextPage, prevPage. Play/Close/Clear are removed
-// from the map (Enter/Esc behavior remains in Update() but is not advertised;
-// Ctrl+U clear is gone entirely).
-func TestSearchKeyMap_OnlyVisibleBindings(t *testing.T) {
-	km := panes.NewSearchKeyMap()
-
-	assert.Equal(t, []string{"ctrl+a"}, km.Queue.Keys(), "Queue → ctrl+a")
-	assert.Equal(t, "ctrl+a", km.Queue.Help().Key)
-	assert.Equal(t, "queue", km.Queue.Help().Desc)
-
-	assert.Equal(t, []string{"tab"}, km.TabNext.Keys())
-	assert.Equal(t, "tab", km.TabNext.Help().Key)
-	assert.Equal(t, "category", km.TabNext.Help().Desc, "Tab help should read 'category', not 'filter'")
-
-	assert.Equal(t, []string{"shift+tab"}, km.TabPrev.Keys())
-}
-
-// TestSearchOverlay_View_KeysPanel_SingleLine verifies the Keys panel renders
-// a single-line uikit.KeyBar with the cleaned binding set, and that the dead
-// bindings (Enter play, Esc close, Ctrl+U clear) are absent.
-func TestSearchOverlay_View_KeysPanel_SingleLine(t *testing.T) {
+// TestSearchOverlay_View_ResultsPanel_ActionNotches verifies the Results panel
+// border now carries action notches (story 212): ctrl+a queue, tab filter, pgdn prev, pgup next.
+func TestSearchOverlay_View_ResultsPanel_ActionNotches(t *testing.T) {
 	o := newTestSearchOverlay()
-	o.SetSize(80, 40)
+	o.SetSize(150, 40)
 	view := o.View()
 
 	plain := stripANSI(view)
 
-	assert.Contains(t, plain, "ctrl+a queue", "ctrl+a queue must appear")
-	assert.Contains(t, plain, "tab/shift+tab category", "tab/shift+tab category must appear")
-	assert.Contains(t, plain, "pgdn/pgup page", "pgdn/pgup page must appear")
+	// Action notches should appear in the Results panel border.
+	assert.Contains(t, plain, "ctrl+a queue", "action notch 'ctrl+a queue' must appear in Results border")
+	assert.Contains(t, plain, "tab filter", "action notch 'tab filter' must appear in Results border")
+	assert.Contains(t, plain, "pgdn prev", "action notch 'pgdn prev' must appear in Results border")
+	assert.Contains(t, plain, "pgup next", "action notch 'pgup next' must appear in Results border")
 
-	assert.NotContains(t, plain, "enter play", "Enter play must not be advertised")
-	assert.NotContains(t, plain, "esc close", "Esc close must not be advertised")
-	assert.NotContains(t, plain, "ctrl+u clear", "Ctrl+U must not be advertised")
-}
-
-// TestSearchOverlay_View_ResultsPanel_NoCornerActions verifies the Results
-// panel border no longer carries the "Enter play / Ctrl+A queue" corner-notch
-// actions. The bottom keybar is the single source of truth for visible
-// bindings.
-func TestSearchOverlay_View_ResultsPanel_NoCornerActions(t *testing.T) {
-	o := newTestSearchOverlay()
-	o.SetSize(80, 40)
-	view := o.View()
-
-	plain := stripANSI(view)
-
-	assert.NotContains(t, plain, "Enter play", "corner-notch 'Enter play' must be removed")
-	assert.NotContains(t, plain, "Ctrl+A queue", "corner-notch 'Ctrl+A queue' must be removed")
+	// Old bottom-bar content must NOT appear.
+	assert.NotContains(t, plain, "tab/shift+tab", "old bottom-bar text must not appear")
 }
 
 // TestSearchOverlay_AsciiBorder_Idle verifies that the search overlay (idle/no
