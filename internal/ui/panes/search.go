@@ -200,8 +200,8 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti.Focus()
 
 	// Initialize the list.Model with the custom SearchItemDelegate.
-	// All built-in chrome is disabled since we render our own tab bar, separator,
-	// and help bar outside the list.
+	// All built-in chrome is disabled since we render our own tab bar and
+	// separator outside the list.
 	delegate := NewSearchItemDelegate(t)
 	rl := list.New(nil, delegate, 0, 0)
 	rl.SetShowTitle(false)
@@ -343,11 +343,10 @@ func (o *SearchOverlay) SetSize(width, height int) {
 
 // resizeList recomputes the list dimensions from the current panelHeights() and
 // applies them via resultList.SetSize(). Must be called after any state change that
-// could affect showHintLine() (typing, backspace, tab cycle, SearchClearedMsg),
-// total (which controls whether the pagination bar occupies a line), or loading state
-// (which controls whether the spinner line occupies a line above the list).
-// Without this call, the list renders at a stale height whenever the hint line toggles,
-// causing visual artifacts (duplicate lines, misaligned borders).
+// could affect total (which controls whether the pagination bar occupies a line)
+// or loading state (which controls whether the spinner line occupies a line above
+// the list). As of story 212, searchH is always 3 and helpH is always 0 —
+// the variable hint line and bottom key bar have been removed.
 func (o *SearchOverlay) resizeList() {
 	w := o.overlayWidth()
 	_, resultsH, _ := o.panelHeights()
@@ -413,9 +412,7 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		o.loadingFirstPage = false
 		o.loadingNextPage = false
 		o.resultList.SetItems(nil)
-		// Re-apply list dimensions: clearing the input makes showHintLine() return
-		// true (searchH=4), shrinking resultsH by 1. resizeList() keeps the list
-		// height in sync so the panel layout does not overflow.
+		// Re-apply list dimensions in case loading state or total changed.
 		o.resizeList()
 		return o, nil
 
@@ -564,8 +561,7 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// demote the tag back into the input value so the user can edit the prefix.
 		if o.prefixState == PrefixLocked && o.input.Position() == 0 {
 			o.demoteFromPromptTag()
-			// Re-apply list dimensions after demotion: the prefix tag is removed,
-			// which may change showHintLine() (PrefixNone, empty input → hint visible).
+			// Re-apply list dimensions after demotion.
 			o.resizeList()
 			return o, nil
 		}
@@ -583,8 +579,7 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if o.prefixState == PrefixLocked && o.input.Prompt == "> " {
 			o.promoteToPromptTag()
 		}
-		// Re-apply list dimensions: backspace may change showHintLine() (e.g. input
-		// cleared → hint reappears → searchH changes from 3 to 4 → resultsH shrinks).
+		// Re-apply list dimensions in case loading state or total changed.
 		o.resizeList()
 		// Update intent.query to reflect the current input value, then update page to 1.
 		o.intent.query = o.input.Value()
@@ -610,9 +605,7 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// tag hasn't been applied yet — promote the prefix to the Prompt field.
 			o.promoteToPromptTag()
 		}
-		// Re-apply list dimensions: typing may change showHintLine() (e.g. first
-		// char typed on empty input → hint hides → searchH changes from 4 to 3 →
-		// resultsH gains 1 line). resizeList() keeps the list height in sync.
+		// Re-apply list dimensions in case loading state or total changed.
 		o.resizeList()
 		// Update intent.query to reflect the current input value, then reset page to 1.
 		o.intent.query = o.input.Value()
@@ -684,8 +677,7 @@ func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.intent.page = 1
 	o.syncInputToTab()
 	o.rebuildListItems()
-	// Re-apply list dimensions: tab cycling changes prefixState (and therefore
-	// showHintLine()), which changes searchH and hence resultsH.
+	// Re-apply list dimensions in case loading state or total changed.
 	o.resizeList()
 	return o, o.scheduleDebounce()
 }
@@ -698,8 +690,7 @@ func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.intent.page = 1
 	o.syncInputToTab()
 	o.rebuildListItems()
-	// Re-apply list dimensions: tab cycling changes prefixState (and therefore
-	// showHintLine()), which changes searchH and hence resultsH.
+	// Re-apply list dimensions in case loading state or total changed.
 	o.resizeList()
 	return o, o.scheduleDebounce()
 }
