@@ -49,7 +49,8 @@ func (m *Manager) Resize(width, height int) {
 //
 // The layout engine is a simple flat two-pass algorithm:
 //  1. Filter rows/cells to only those that are visible (preset.Visible && !hidden).
-//  2. Distribute height proportionally by HeightWeight; last row gets remainder.
+//  2. Reserve MinHeight for each row, then distribute remaining height
+//     proportionally by HeightWeight; last row gets remainder.
 //  3. Within each row distribute width proportionally by WidthWeight; last cell gets remainder.
 //
 // Toggle redistribution is automatic: removing a cell from a row expands surviving

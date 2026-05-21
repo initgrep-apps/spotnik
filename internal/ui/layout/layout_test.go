@@ -645,7 +645,7 @@ func TestLayoutManager_MinHeight_ZeroRegression(t *testing.T) {
 }
 
 // TestLayoutManager_MinHeight_Overflow verifies no panic when MinHeight sum
-// exceeds content height; last row absorbs the deficit.
+// exceeds content height; earlier rows get their MinHeight, last row clamped to 0.
 func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
 	oldPresets := layout.PageStatsPresets
 	defer func() { layout.PageStatsPresets = oldPresets }()
@@ -668,6 +668,12 @@ func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
 	assert.NotPanics(t, func() {
 		m.Resize(120, 10) // contentH = 6, reserved = 20 > 6
 	})
+
+	// earlier row gets its MinHeight; last row clamped to 0
+	npRect := m.PaneRect(layout.PaneNowPlaying)
+	queueRect := m.PaneRect(layout.PaneQueue)
+	assert.Equal(t, 10, npRect.Height)
+	assert.Equal(t, 0, queueRect.Height)
 }
 
 // TestPresetStats_NowPlayingRowHeight verifies that with the real PresetStats,
