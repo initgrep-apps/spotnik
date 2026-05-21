@@ -117,8 +117,8 @@ func (o *SearchOverlay) resultActions() []layout.Action {
 	return []layout.Action{
 		{Key: "ctrl+a", Label: "queue"},
 		{Key: "tab", Label: "filter"},
-		{Key: "pgdn", Label: "prev"},
-		{Key: "pgup", Label: "next"},
+		{Key: "pgdn", Label: "next"},
+		{Key: "pgup", Label: "prev"},
 	}
 }
 

@@ -1511,9 +1511,9 @@ func TestSearchOverlay_ResultActions_ReturnsExpectedActions(t *testing.T) {
 	assert.Equal(t, "tab", actions[1].Key)
 	assert.Equal(t, "filter", actions[1].Label)
 	assert.Equal(t, "pgdn", actions[2].Key)
-	assert.Equal(t, "prev", actions[2].Label)
+	assert.Equal(t, "next", actions[2].Label)
 	assert.Equal(t, "pgup", actions[3].Key)
-	assert.Equal(t, "next", actions[3].Label)
+	assert.Equal(t, "prev", actions[3].Label)
 }
 
 // TestSearchOverlay_Resize_PropagatesListAndHelp verifies that SetSize correctly
@@ -1873,6 +1873,51 @@ func TestRenderTabBar_ShowsSpinnerWhenLoading(t *testing.T) {
 
 	tabBar := panes.RenderTabBarForTest(o, 76)
 	assert.NotEmpty(t, tabBar, "tab bar must render without panic")
+}
+
+// --- Story 213: Prompt pill resets/restores on keystroke and backspace ---
+
+// TestFirstKeystroke_ResetsPillPromptToDefault verifies that typing the very first
+// character into a fresh overlay (which starts with a pill Prompt) resets the Prompt
+// to the plain "> " default. This is the handleKey default-case behavior: when
+// wasEmpty && input is now non-empty && PrefixState != Locked → Prompt = "> ".
+func TestFirstKeystroke_ResetsPillPromptToDefault(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Fresh overlay starts with pill Prompt (contains ":songs").
+	require.Contains(t, o.PromptTag(), ":songs", "fresh overlay must start with pill Prompt")
+
+	// Type first character.
+	o, _ = sendKey(t, o, "a")
+
+	assert.Equal(t, "> ", o.PromptTag(), "first keystroke must reset Prompt from pill to '> '")
+	assert.Equal(t, "a", o.Query(), "input must contain the typed character")
+}
+
+// TestBackspaceClearingInput_RestoresPillAndPlaceholder verifies that backspacing the
+// last character of a non-empty, non-locked input restores the pill Prompt and the
+// cycling placeholder text. This is the handleKey KeyBackspace behavior: when
+// Value() becomes empty && PrefixState == PrefixNone → restore pill + placeholder.
+func TestBackspaceClearingInput_RestoresPillAndPlaceholder(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Type one character — Prompt becomes plain "> ".
+	o, _ = sendKey(t, o, "a")
+	require.Equal(t, "> ", o.PromptTag(), "after typing, Prompt should be '> '")
+	require.Equal(t, "a", o.Query())
+
+	// Backspace to empty.
+	o, _ = sendKey(t, o, "backspace")
+
+	require.Equal(t, "", o.Query(), "input must be empty after backspace")
+	// Prompt should be restored to a pill (contains ":").
+	assert.Contains(t, o.PromptTag(), ":", "backspace-to-empty must restore pill Prompt")
+	// Placeholder should match the current cycling placeholder text.
+	currentIdx := o.PlaceholderIdx()
+	assert.Equal(t, panes.SearchPlaceholders[currentIdx].Text, o.Placeholder(),
+		"backspace-to-empty must restore cycling placeholder text")
 }
 
 // TestSearchOverlay_Spinner_AsciiRunningFrames verifies that in ASCII mode the search
@@ -2954,7 +2999,7 @@ func TestPgUp_PrevPage(t *testing.T) {
 }
 
 // TestSearchOverlay_View_ResultsPanel_ActionNotches verifies the Results panel
-// border now carries action notches (story 212): ctrl+a queue, tab filter, pgdn prev, pgup next.
+// border now carries action notches (story 212): ctrl+a queue, tab filter, pgdn next, pgup prev.
 func TestSearchOverlay_View_ResultsPanel_ActionNotches(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(150, 40)
@@ -2965,8 +3010,8 @@ func TestSearchOverlay_View_ResultsPanel_ActionNotches(t *testing.T) {
 	// Action notches should appear in the Results panel border.
 	assert.Contains(t, plain, "ctrl+a queue", "action notch 'ctrl+a queue' must appear in Results border")
 	assert.Contains(t, plain, "tab filter", "action notch 'tab filter' must appear in Results border")
-	assert.Contains(t, plain, "pgdn prev", "action notch 'pgdn prev' must appear in Results border")
-	assert.Contains(t, plain, "pgup next", "action notch 'pgup next' must appear in Results border")
+	assert.Contains(t, plain, "pgdn next", "action notch 'pgdn next' must appear in Results border")
+	assert.Contains(t, plain, "pgup prev", "action notch 'pgup prev' must appear in Results border")
 
 	// Old bottom-bar content must NOT appear.
 	assert.NotContains(t, plain, "tab/shift+tab", "old bottom-bar text must not appear")

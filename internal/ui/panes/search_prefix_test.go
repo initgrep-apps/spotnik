@@ -515,6 +515,7 @@ func TestPlaceholderTick_AdvancesIdx(t *testing.T) {
 	expectedIdx := (initialIdx + 1) % len(panes.SearchPlaceholders)
 	assert.Equal(t, expectedIdx, updated.PlaceholderIdx(), "tick should advance placeholderIdx")
 	assert.Equal(t, panes.SearchPlaceholders[expectedIdx].Text, updated.Placeholder(), "placeholder text should update to action text")
+	assert.Contains(t, updated.PromptTag(), panes.SearchPlaceholders[expectedIdx].Prefix, "tick should update Prompt tag to new prefix pill")
 	assert.NotNil(t, cmd, "tick should re-arm another tick")
 }
 
@@ -741,6 +742,28 @@ func TestSyncInputToTab_PreservesQuery(t *testing.T) {
 	assert.Equal(t, "kk", o.Query(), "clean query preserved after tab cycle")
 	assert.Equal(t, panes.PrefixLocked, o.PrefixState())
 	assert.Equal(t, ":artists", o.LockedPrefix())
+}
+
+// TestSyncInputToTab_AllWithEmptyInput_ShowsPillPrompt verifies that cycling back to
+// TabAll with an empty input restores the pill Prompt (not the plain "> " prompt).
+// This ensures the animated placeholder resumes correctly after a prefix is cleared.
+func TestSyncInputToTab_AllWithEmptyInput_ShowsPillPrompt(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Cycle to TabSongs — no query typed.
+	o, _ = sendKey(t, o, "tab")
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+
+	// Cycle all the way back to TabAll.
+	for o.ActiveTab() != panes.TabAll {
+		o, _ = sendKey(t, o, "tab")
+	}
+
+	// Input is empty.
+	assert.Equal(t, "", o.Query(), "input should be empty")
+	// Prompt should be a pill (contains ":"), not the plain "> ".
+	assert.Contains(t, o.PromptTag(), ":", "TabAll with empty input should show pill Prompt")
 }
 
 // --- Part 6: SetTheme propagation ---
