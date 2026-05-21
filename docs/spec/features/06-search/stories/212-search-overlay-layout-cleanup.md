@@ -22,7 +22,7 @@ This story removes all three problems: hints gone, bottom panel gone, heights st
 ╭─ Search ───────────────────────────────────────────────────────╮
 │ [ :songs ] search tracks                                       │
 ╰────────────────────────────────────────────────────────────────╯
-╭─ Results ─────────── ctrl+a queue ─╮─ tab filter ─╮─ pgdn prev ─╮─ pgup next ─╭
+╭─ Results ─────────── ctrl+a queue ─╮─ tab filter ─╮─ pgdn next ─╮─ pgup prev ─╭
 │ [All]  Songs  Artists  Albums  Playlists                        │
 │ ────────────────────────────────────────────────────────────── │
 │                                                                │
@@ -38,7 +38,7 @@ This story removes all three problems: hints gone, bottom panel gone, heights st
 2. **`showHintLine()`** returns `false` unconditionally.
 3. **`panelHeights()`** always returns `searchH = 3`, `helpH = 0`.
 4. **Remove** `searchKeyMap` type, `NewSearchKeyMap()`, `renderHelpPanel()`, `hintBindings()`.
-5. **`resultActions()`** returns `[]layout.Action` for the Results panel border: `ctrl+a queue`, `tab filter`, `pgdn prev`, `pgup next`.
+5. **`resultActions()`** returns `[]layout.Action` for the Results panel border: `ctrl+a queue`, `tab filter`, `pgdn next`, `pgup prev`.
 6. **`renderResultsPanel()`** passes `Actions: o.resultActions()` into `OverlayChrome`.
 7. **`View()`** joins only 2 panels (Search + Results).
 

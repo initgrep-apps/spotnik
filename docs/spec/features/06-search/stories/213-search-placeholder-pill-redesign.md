@@ -1,7 +1,7 @@
 ---
 title: "Search Placeholder Redesign: Colored Pill Prompt + Action Text"
 feature: 06-search
-status: open
+status: done
 ---
 
 ## Background
