@@ -27,7 +27,11 @@ go get github.com/eliukblau/pixterm@latest
 
 Add to `go.mod` / `go.sum`. Import path used: `github.com/eliukblau/pixterm/pkg/ansimage`.
 
-### `internal/ui/panes/messages.go` — new message type
+### `internal/ui/components/albumart.go` — new file
+
+Declares `AlbumArtFetchedMsg` here (in `components`, not `panes`) to keep the
+message type co-located with the component that produces it and avoid an import
+cycle (`components` must not import `panes`).
 
 ```go
 // AlbumArtFetchedMsg carries the pixterm-rendered rows for the current track's
@@ -38,8 +42,6 @@ type AlbumArtFetchedMsg struct {
     Err     error
 }
 ```
-
-### `internal/ui/components/albumart.go` — new file
 
 ```go
 package components
@@ -76,25 +78,6 @@ func (a *AlbumArtRenderer) NeedsRefresh(trackID string) bool {
     return a.lastTrackID != trackID
 }
 
-// HandleFetched updates the renderer state from an AlbumArtFetchedMsg.
-// It is idempotent — stale messages (wrong track ID) are ignored.
-func (a *AlbumArtRenderer) HandleFetched(msg AlbumArtFetchedMsg) {
-    // Import cycle avoided: AlbumArtFetchedMsg is declared in panes/messages.go;
-    // the component package does not import panes. Callers (nowplaying.go) call
-    // HandleFetched after type-asserting the tea.Msg — see wiring section below.
-}
-```
-
-**Cycle note:** `components` must not import `panes` (would create a cycle).
-`AlbumArtFetchedMsg` is declared in `panes/messages.go`. The pane's `Update()`
-type-asserts the message and calls `a.artRenderer.HandleFetched(...)` passing
-only the fields it needs. Alternatively, move the message type to a shared
-`internal/ui/msgs` sub-package — whichever approach avoids the cycle is fine;
-prefer the simpler one. The recommended path: keep `AlbumArtFetchedMsg` in
-`panes/messages.go` and pass the fields explicitly to `AlbumArtRenderer`:
-
-```go
-// In AlbumArtRenderer:
 func (a *AlbumArtRenderer) SetLoading(trackID string) {
     a.lastTrackID = trackID
     a.loading = true
@@ -145,17 +128,15 @@ func renderFromReader(trackID string, r io.Reader, rows, cols int) tea.Msg {
     return albumArtResult(trackID, strings.Split(strings.TrimRight(rendered, "\n"), "\n"), nil)
 }
 
-// albumArtResult is the internal constructor for AlbumArtFetchedMsg.
-// Declared here to avoid importing panes — the caller wraps or re-uses
-// the same struct fields. See wiring below for the actual return type used.
+func albumArtResult(trackID string, rows []string, err error) AlbumArtFetchedMsg {
+    return AlbumArtFetchedMsg{TrackID: trackID, Rows: rows, Err: err}
+}
 ```
 
-The return type of `FetchAlbumArtCmd` is `tea.Msg` — at the pane level the
-`Update()` switch case receives it as `AlbumArtFetchedMsg`. To avoid the
-import cycle, `FetchAlbumArtCmd` can return a locally-defined result struct
-and the pane wraps it, OR `AlbumArtFetchedMsg` is moved to a shared package.
-**Implementer decision:** choose whichever compiles cleanly without a cycle.
-Document the choice in a `// NOTE:` comment.
+`AlbumArtFetchedMsg` is declared in the same file (`components/albumart.go`), so
+`FetchAlbumArtCmd` returns it directly. The pane's `Update()` switch case receives
+it as `components.AlbumArtFetchedMsg` — no import cycle because `panes` imports
+`components`, not the other way around.
 
 ### Wiring into `NowPlayingPane`
 
@@ -215,7 +196,7 @@ signals to the user that art is incoming without showing broken layout.
 ## Acceptance Criteria
 
 - [ ] `github.com/eliukblau/pixterm` added to `go.mod` / `go.sum`
-- [ ] `AlbumArtFetchedMsg` declared (location: panes/messages.go or shared msgs package)
+- [ ] `AlbumArtFetchedMsg` declared in `internal/ui/components/albumart.go`
 - [ ] `AlbumArtRenderer` struct with `HasImage`, `IsLoading`, `NeedsRefresh`, `SetLoading`, `SetResult`, `Rows` methods
 - [ ] `FetchAlbumArtCmd` returns a `tea.Cmd`; renders via pixterm; splits output by `\n`
 - [ ] Stale `AlbumArtFetchedMsg` (wrong track ID) ignored by `SetResult`
@@ -229,8 +210,8 @@ signals to the user that art is incoming without showing broken layout.
 - [ ] Run `go get github.com/eliukblau/pixterm@latest` and commit `go.mod` / `go.sum`
       - test: `go build ./...` compiles with new dependency
 
-- [ ] Declare `AlbumArtFetchedMsg` in `internal/ui/panes/messages.go`
-      - test: `go build ./internal/ui/panes/...` compiles
+- [ ] Declare `AlbumArtFetchedMsg` in `internal/ui/components/albumart.go` (same file as `AlbumArtRenderer`)
+      - test: `go build ./internal/ui/components/...` compiles; `go build ./...` has no import cycle
 
 - [ ] Implement `AlbumArtRenderer` in `internal/ui/components/albumart.go`
       with `HasImage`, `IsLoading`, `NeedsRefresh`, `SetLoading`, `SetResult`, `Rows`

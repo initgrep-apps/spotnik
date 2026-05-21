@@ -37,8 +37,8 @@ Add a new `AlbumImage` struct and extend `Album`:
 // AlbumImage is a single size variant of an album's cover art from Spotify.
 type AlbumImage struct {
     URL    string `json:"url"`
-    Height int    `json:"height"`
     Width  int    `json:"width"`
+    Height int    `json:"height"`
 }
 
 // Album — add the Images field alongside existing ID and Name:
@@ -51,16 +51,16 @@ type Album struct {
 
 Add a `BestImage` helper on `Album`. Spotify always returns images sorted
 largest-first. For terminal rendering we want the smallest image that is still
-≥ 64 px wide (avoids thumbnails too small for pixterm to work with):
+≥ minSize px in both dimensions (avoids thumbnails too small for pixterm):
 
 ```go
-// BestImage returns the smallest image with Width >= minWidth, falling back to
-// the last image in the slice (smallest available). Returns nil if Images is empty.
-func (a Album) BestImage(minWidth int) *AlbumImage {
+// BestImage returns the smallest image where both Width and Height are >= minSize,
+// falling back to the explicitly largest image. Returns nil if Images is empty.
+func (a Album) BestImage(minSize int) *AlbumImage {
     var best *AlbumImage
     for i := range a.Images {
         img := &a.Images[i]
-        if img.Width >= minWidth {
+        if img.Width >= minSize && img.Height >= minSize {
             if best == nil || img.Width < best.Width {
                 best = img
             }
@@ -69,15 +69,20 @@ func (a Album) BestImage(minWidth int) *AlbumImage {
     if best != nil {
         return best
     }
-    if len(a.Images) > 0 {
-        return &a.Images[len(a.Images)-1]
+    // fallback: return explicitly largest
+    var largest *AlbumImage
+    for i := range a.Images {
+        img := &a.Images[i]
+        if largest == nil || img.Width > largest.Width {
+            largest = img
+        }
     }
-    return nil
+    return largest
 }
 ```
 
 `BestImage(100)` is the call site default — picks the smallest image ≥ 100 px
-wide, which at terminal scale (16–48 char columns) still has plenty of detail.
+in both dimensions, which at terminal scale (16–48 char columns) still has plenty of detail.
 
 ### No changes needed elsewhere
 
@@ -88,9 +93,9 @@ changes needed in `api/models.go` (it re-exports domain types as-is).
 
 ## Acceptance Criteria
 
-- [ ] `AlbumImage{URL, Height, Width}` exists in `domain/types.go`
+- [ ] `AlbumImage{URL, Width, Height}` exists in `domain/types.go`
 - [ ] `Album.Images []AlbumImage` is populated from Spotify JSON on unmarshal
-- [ ] `Album.BestImage(minWidth)` returns the correct variant (smallest ≥ minWidth, fallback to last, nil on empty)
+- [ ] `Album.BestImage(minSize)` returns smallest image where both dims ≥ minSize; falls back to explicitly largest; nil on empty
 - [ ] Existing domain tests unaffected; `make ci` passes
 
 ## Tasks
@@ -100,10 +105,11 @@ changes needed in `api/models.go` (it re-exports domain types as-is).
       - test: unmarshal a fixture JSON containing `album.images` array; assert
         `album.Images` has 3 entries with correct URLs, heights, widths
 
-- [ ] Add `BestImage(minWidth int) *AlbumImage` method on `Album` in `internal/domain/types.go`
-      - test: table-driven — empty Images → nil; all images < minWidth → returns last;
-        multiple images ≥ minWidth → returns the one with smallest Width;
-        exactly one image ≥ minWidth → returns it
+- [ ] Add `BestImage(minSize int) *AlbumImage` method on `Album` in `internal/domain/types.go`
+      - test: table-driven — empty Images → nil; all images < minSize → returns explicitly largest;
+        multiple images ≥ minSize → returns the one with smallest Width;
+        exactly one image ≥ minSize → returns it;
+        image where only Width ≥ minSize (Height too small) → skipped, falls back to largest
 
 - [ ] Add fixture `testdata/fixtures/playback_with_images.json` — copy of a real
       `/me/player` response with a 3-entry `album.images` array
