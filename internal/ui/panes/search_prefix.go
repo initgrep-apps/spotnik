@@ -264,7 +264,12 @@ func (o *SearchOverlay) syncInputToTab() {
 
 	if o.intent.tab == TabAll {
 		// Strip the prefix tag — restore default prompt and cycling placeholder.
-		o.input.Prompt = "> "
+		// When the input is empty, show the pill Prompt so the placeholder cycle resumes.
+		if query == "" {
+			o.input.Prompt = BuildPromptTag(o.theme, searchPlaceholders[o.placeholderIdx].Prefix)
+		} else {
+			o.input.Prompt = "> "
+		}
 		o.input.SetValue(query)
 		o.lockedPrefix = ""
 		o.prefixState = PrefixNone
