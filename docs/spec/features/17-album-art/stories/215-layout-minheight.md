@@ -81,10 +81,10 @@ var PresetStats = Preset{
 | NetworkLog | 0 | +4 (2/6 × 12) | **4** |
 | **Total** | | | **26** ✓ |
 
-NowPlaying at 16 rows → `bodyHeight ≈ 12` → enters mid tier in story 217.
+NowPlaying at 16 rows → `bodyHeight = 12` → enters base tier in story 217 (bodyH ≤ 18).
 
 At a 50-row terminal (`contentH = 46`, reserved=14, remaining=32):
-- NowPlaying: 14 + 5 = **19** → mid tier
+- NowPlaying: 14 + 5 = **19** → bodyHeight = 15 → base tier
 - Gateway: 0 + 16 = **16**
 - NetworkLog: 0 + 11 = **11** (last row absorbs rounding remainder)
 
