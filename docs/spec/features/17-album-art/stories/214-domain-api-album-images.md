@@ -1,7 +1,7 @@
 ---
 title: "Domain + API: AlbumImage type and player JSON mapping"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background

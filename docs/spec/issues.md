@@ -57,3 +57,20 @@ Minor items from stories 212–213 PR review:
 3. **Vestigial private `buildPromptTag` wrapper**: The `(o *SearchOverlay) buildPromptTag(prefix string)` method only delegates to the exported `BuildPromptTag(o.theme, prefix)`. All call sites could call `BuildPromptTag` directly. Safe to remove in a cleanup pass. Location: `internal/ui/panes/search_prefix.go` ~line 194.
 
 4. **Exported no-op accessors `RenderPrefixHints` / `ShowHintLine`**: Both always return `""` / `false` after story 212. Their test coverage documents the always-false contract, but the exported surface is dead code. Safe to remove in a cleanup pass. Location: `internal/ui/panes/search_prefix.go`.
+
+---
+
+### Album Art: minor review items
+
+**Found:** 2026-05-22 | **Source:** PR #299 Review
+**Feature:** 17-album-art
+
+Minor items from story 214 PR review:
+
+1. **BestImage interior pointer escape**: `BestImage` returns `*AlbumImage` from a value receiver, allowing callers to mutate the original `Album` data via the slice backing array. Consider `(AlbumImage, bool)` return pattern in a future refactor.
+
+2. **BestImage dual-dimension fallback gap**: No test case covers the scenario where some images exceed `minSize` in one dimension but not both, and fallback must still select largest width. Add to `TestAlbum_BestImage`.
+
+3. **BestImage boundary test gap**: No test for `Width == minSize && Height == minSize` exact boundary. An off-by-one refactor would not be caught.
+
+4. **BestImage doc precision**: Comment says "smallest image" but tie-breaking is by width only. Height is not considered. Clarify in doc comment.
