@@ -446,3 +446,35 @@ func TestQueueResponse_Parse(t *testing.T) {
 	require.Len(t, qr.Queue, 2)
 	assert.Equal(t, "The Weeknd", qr.Queue[0].Artists[0].Name)
 }
+
+// TestPlayerClient_GetPlaybackState_ImagesPopulated verifies that the PlaybackState
+// response from /me/player correctly populates Album.Images through the JSON pipeline.
+func TestPlayerClient_GetPlaybackState_ImagesPopulated(t *testing.T) {
+	fixture := testhelpers.LoadFixture(t, "playback_with_images.json")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/me/player", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	player := newTestPlayer(srv.URL, "test-token")
+	state, err := player.PlaybackState(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, state)
+	require.NotNil(t, state.Item)
+	assert.Equal(t, "After Hours", state.Item.Album.Name)
+	require.Len(t, state.Item.Album.Images, 3)
+	assert.Equal(t, "https://i.scdn.co/image/ab640", state.Item.Album.Images[0].URL)
+	assert.Equal(t, 640, state.Item.Album.Images[0].Width)
+	assert.Equal(t, 640, state.Item.Album.Images[0].Height)
+	assert.Equal(t, "https://i.scdn.co/image/ab300", state.Item.Album.Images[1].URL)
+	assert.Equal(t, 300, state.Item.Album.Images[1].Width)
+	assert.Equal(t, 300, state.Item.Album.Images[1].Height)
+	assert.Equal(t, "https://i.scdn.co/image/ab64", state.Item.Album.Images[2].URL)
+	assert.Equal(t, 64, state.Item.Album.Images[2].Width)
+	assert.Equal(t, 64, state.Item.Album.Images[2].Height)
+}
