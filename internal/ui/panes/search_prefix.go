@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
 // prefixState tracks where the user is in the command-prefix input flow.
@@ -156,16 +157,24 @@ func (o *SearchOverlay) renderPrefixHints(width int) string {
 	return ""
 }
 
-// buildPromptTag returns a styled lipgloss string for the prefix tag shown in the Prompt field.
+// BuildPromptTag returns a styled lipgloss string for the prefix tag shown in the Prompt field.
 // Uses SelectedBg()/SelectedFg() colors with bold and padding.
-func (o *SearchOverlay) buildPromptTag(prefix string) string {
+// Exported so it can be called from NewSearchOverlay (before the SearchOverlay struct exists)
+// and from tests.
+func BuildPromptTag(th theme.Theme, prefix string) string {
 	tagStyle := lipgloss.NewStyle().
-		Background(o.theme.SelectedBg()).
-		Foreground(o.theme.SelectedFg()).
+		Background(th.SelectedBg()).
+		Foreground(th.SelectedFg()).
 		Bold(true).
 		PaddingLeft(1).
 		PaddingRight(1)
 	return tagStyle.Render(prefix) + " "
+}
+
+// buildPromptTag returns a styled lipgloss string for the prefix tag shown in the Prompt field.
+// Delegates to the exported BuildPromptTag with the overlay's theme.
+func (o *SearchOverlay) buildPromptTag(prefix string) string {
+	return BuildPromptTag(o.theme, prefix)
 }
 
 // promoteToPromptTag moves the locked prefix from the input Value into the textinput

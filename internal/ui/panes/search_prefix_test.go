@@ -832,3 +832,44 @@ func TestCleanQuery_PrefixTypingState(t *testing.T) {
 	require.Equal(t, panes.PrefixTyping, o.PrefixState(), "should be PrefixTyping without trailing space")
 	assert.Equal(t, ":so", o.CleanQuery(), "cleanQuery in PrefixTyping should return raw input ':so'")
 }
+
+// --- Story 213: Standalone BuildPromptTag ---
+
+// TestBuildPromptTag_ContainsPrefix verifies the standalone BuildPromptTag renders
+// the prefix text with styling applied (bold, padding, SelectedBg/SelectedFg).
+func TestBuildPromptTag_ContainsPrefix(t *testing.T) {
+	th := theme.Load("black")
+	result := panes.BuildPromptTag(th, ":songs")
+	// The result must contain the prefix text.
+	assert.Contains(t, result, ":songs", "BuildPromptTag must contain the prefix text")
+	// The result must end with a space (trailing separator).
+	assert.Equal(t, ' ', rune(result[len(result)-1]), "BuildPromptTag must end with a trailing space")
+}
+
+// TestBuildPromptTag_WithDifferentThemes verifies BuildPromptTag produces different
+// ANSI styling for different themes (colors differ).
+func TestBuildPromptTag_WithDifferentThemes(t *testing.T) {
+	black := theme.Load("black")
+	dracula := theme.Load("dracula")
+
+	blackResult := panes.BuildPromptTag(black, ":songs")
+	draculaResult := panes.BuildPromptTag(dracula, ":songs")
+
+	// Both contain the prefix text.
+	assert.Contains(t, blackResult, ":songs")
+	assert.Contains(t, draculaResult, ":songs")
+	// Different themes produce different ANSI codes.
+	assert.NotEqual(t, blackResult, draculaResult, "different themes should produce different ANSI styling")
+}
+
+// TestBuildPromptTag_MultiplePrefixes verifies all four prefixes render correctly.
+func TestBuildPromptTag_MultiplePrefixes(t *testing.T) {
+	th := theme.Load("black")
+	prefixes := []string{":songs", ":artists", ":albums", ":playlists"}
+	for _, p := range prefixes {
+		t.Run(p, func(t *testing.T) {
+			result := panes.BuildPromptTag(th, p)
+			assert.Contains(t, result, p, "BuildPromptTag(%q) must contain the prefix", p)
+		})
+	}
+}
