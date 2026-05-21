@@ -1,7 +1,7 @@
 ---
 title: "Search Overlay Layout Cleanup: Remove Hints, Bottom Panel, Stabilize Heights"
 feature: 06-search
-status: open
+status: done
 ---
 
 ## Background
