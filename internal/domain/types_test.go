@@ -197,6 +197,102 @@ func TestQueueResponse_Fields(t *testing.T) {
 	assert.Equal(t, "Next Song", qr.Queue[0].Name)
 }
 
+// TestAlbumImage_Unmarshal verifies that AlbumImage fields and the nested
+// album.images array unmarshal correctly from JSON.
+func TestAlbumImage_Unmarshal(t *testing.T) {
+	raw := `{
+		"id": "album-after-hours",
+		"name": "After Hours",
+		"images": [
+			{"url": "https://i.scdn.co/image/ab640", "height": 640, "width": 640},
+			{"url": "https://i.scdn.co/image/ab300", "height": 300, "width": 300},
+			{"url": "https://i.scdn.co/image/ab64", "height": 64, "width": 64}
+		]
+	}`
+
+	var album Album
+	require.NoError(t, json.Unmarshal([]byte(raw), &album))
+	assert.Equal(t, "album-after-hours", album.ID)
+	assert.Equal(t, "After Hours", album.Name)
+	require.Len(t, album.Images, 3)
+	assert.Equal(t, "https://i.scdn.co/image/ab640", album.Images[0].URL)
+	assert.Equal(t, 640, album.Images[0].Width)
+	assert.Equal(t, 640, album.Images[0].Height)
+	assert.Equal(t, "https://i.scdn.co/image/ab300", album.Images[1].URL)
+	assert.Equal(t, 300, album.Images[1].Width)
+	assert.Equal(t, 300, album.Images[1].Height)
+	assert.Equal(t, "https://i.scdn.co/image/ab64", album.Images[2].URL)
+	assert.Equal(t, 64, album.Images[2].Width)
+	assert.Equal(t, 64, album.Images[2].Height)
+}
+
+// TestAlbum_BestImage verifies the BestImage selection logic.
+func TestAlbum_BestImage(t *testing.T) {
+	tests := []struct {
+		name       string
+		images     []AlbumImage
+		minSize    int
+		wantNil    bool
+		wantURL    string
+		wantWidth  int
+		wantHeight int
+	}{
+		{
+			name:    "empty images returns nil",
+			images:  []AlbumImage{},
+			minSize: 100,
+			wantNil: true,
+		},
+		{
+			name:       "all images below minSize falls back to largest",
+			images:     []AlbumImage{{URL: "s", Width: 50, Height: 50}, {URL: "m", Width: 80, Height: 80}},
+			minSize:    100,
+			wantURL:    "m",
+			wantWidth:  80,
+			wantHeight: 80,
+		},
+		{
+			name:       "multiple images above minSize returns smallest width",
+			images:     []AlbumImage{{URL: "l", Width: 640, Height: 640}, {URL: "m", Width: 300, Height: 300}, {URL: "s", Width: 64, Height: 64}},
+			minSize:    100,
+			wantURL:    "m",
+			wantWidth:  300,
+			wantHeight: 300,
+		},
+		{
+			name:       "exactly one image above minSize returns it",
+			images:     []AlbumImage{{URL: "only", Width: 200, Height: 200}},
+			minSize:    100,
+			wantURL:    "only",
+			wantWidth:  200,
+			wantHeight: 200,
+		},
+		{
+			name:       "image with only width above minSize but height too small is skipped",
+			images:     []AlbumImage{{URL: "wide", Width: 200, Height: 50}, {URL: "tall", Width: 50, Height: 200}, {URL: "ok", Width: 150, Height: 150}},
+			minSize:    100,
+			wantURL:    "ok",
+			wantWidth:  150,
+			wantHeight: 150,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := Album{Images: tt.images}
+			got := a.BestImage(tt.minSize)
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			assert.Equal(t, tt.wantURL, got.URL)
+			assert.Equal(t, tt.wantWidth, got.Width)
+			assert.Equal(t, tt.wantHeight, got.Height)
+		})
+	}
+}
+
 // TestPlayOptions_JSON verifies PlayOptions marshals omitempty correctly.
 func TestPlayOptions_JSON(t *testing.T) {
 	// Only ContextURI set

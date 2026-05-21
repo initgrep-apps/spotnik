@@ -84,6 +84,18 @@ type Artist struct {
 	Name string `json:"name"`
 }
 
+// AlbumImage is a single size variant of an album's cover art from Spotify.
+type AlbumImage struct {
+	// URL is the direct HTTPS URL to the cover art image.
+	URL string `json:"url"`
+
+	// Width is the image width in pixels.
+	Width int `json:"width"`
+
+	// Height is the image height in pixels.
+	Height int `json:"height"`
+}
+
 // Album represents a simplified Spotify album (as returned within track objects).
 type Album struct {
 	// ID is the Spotify album ID.
@@ -91,6 +103,35 @@ type Album struct {
 
 	// Name is the display name of the album.
 	Name string `json:"name"`
+
+	// Images is the list of cover art size variants for this album.
+	Images []AlbumImage `json:"images"`
+}
+
+// BestImage returns the smallest image where both Width and Height are >= minSize,
+// falling back to the explicitly largest image. Returns nil if Images is empty.
+func (a Album) BestImage(minSize int) *AlbumImage {
+	var best *AlbumImage
+	for i := range a.Images {
+		img := &a.Images[i]
+		if img.Width >= minSize && img.Height >= minSize {
+			if best == nil || img.Width < best.Width {
+				best = img
+			}
+		}
+	}
+	if best != nil {
+		return best
+	}
+	// fallback: return explicitly largest
+	var largest *AlbumImage
+	for i := range a.Images {
+		img := &a.Images[i]
+		if largest == nil || img.Width > largest.Width {
+			largest = img
+		}
+	}
+	return largest
 }
 
 // SimplePlaylistOwner represents the owner of a playlist.
