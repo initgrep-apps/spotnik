@@ -126,12 +126,11 @@ func (o *SearchOverlay) resultActions() []layout.Action {
 // all other shared message types used between the app layer and the overlay.
 
 // SearchOverlay is the floating search UI model. It is layered above the
-// three-pane view while open — it does not replace any pane.
+// pane grid while open — it does not replace any pane.
 //
-// The overlay renders as three separate bordered panels stacked vertically:
+// The overlay renders as two bordered panels stacked vertically:
 //   - Panel 1 (Search): text input
-//   - Panel 2 (Results): tab bar + separator + scrollable results list
-//   - Panel 3 (Keys): uikit.KeyBar single-line keybinding strip
+//   - Panel 2 (Results): tab bar + separator + scrollable results list with action notches
 type SearchOverlay struct {
 	theme theme.Theme
 	input textinput.Model
