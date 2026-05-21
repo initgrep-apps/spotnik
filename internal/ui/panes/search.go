@@ -186,7 +186,7 @@ type SearchOverlay struct {
 func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti := textinput.New()
 	// Start with the first cycling placeholder — the tick will advance it every 2s.
-	ti.Placeholder = searchPlaceholders[0]
+	ti.Placeholder = searchPlaceholders[0].Text
 	// Placeholder uses Info() color so it looks like an actionable suggestion,
 	// not a passive muted hint.
 	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.Info())
@@ -307,7 +307,7 @@ func (o *SearchOverlay) hasNextPage() bool {
 func (o *SearchOverlay) Reset() {
 	o.input.SetValue("")
 	o.input.Prompt = "> "
-	o.input.Placeholder = searchPlaceholders[0]
+	o.input.Placeholder = searchPlaceholders[0].Text
 	o.placeholderIdx = 0
 	o.intent = searchIntent{query: "", tab: TabAll, page: 1}
 	o.prefixState = PrefixNone
@@ -395,7 +395,7 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Re-arming resumes naturally when the user clears the input by editing (backspace, etc.).
 		if o.input.Value() == "" && o.prefixState == PrefixNone {
 			o.placeholderIdx = (o.placeholderIdx + 1) % len(searchPlaceholders)
-			o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
+			o.input.Placeholder = searchPlaceholders[o.placeholderIdx].Text
 			return o, searchPlaceholderTick()
 		}
 		return o, nil

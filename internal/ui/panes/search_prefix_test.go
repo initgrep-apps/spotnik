@@ -484,18 +484,19 @@ func TestSearchPlaceholders_FourEntries(t *testing.T) {
 	require.Len(t, panes.SearchPlaceholders, 4, "should have exactly 4 placeholder messages")
 }
 
-// TestSearchPlaceholders_EachStartsWithPrefix verifies each placeholder starts with a valid prefix command.
+// TestSearchPlaceholders_EachStartsWithPrefix verifies each placeholder entry's
+// prefix field holds a valid command prefix.
 func TestSearchPlaceholders_EachStartsWithPrefix(t *testing.T) {
 	for i, ph := range panes.SearchPlaceholders {
-		t.Run(ph, func(t *testing.T) {
+		t.Run(ph.Prefix, func(t *testing.T) {
 			var found bool
 			for _, p := range panes.SearchPrefixes {
-				if len(ph) >= len(p) && ph[:len(p)] == p {
+				if ph.Prefix == p {
 					found = true
 					break
 				}
 			}
-			assert.True(t, found, "placeholder[%d] %q should start with a valid prefix command", i, ph)
+			assert.True(t, found, "placeholder[%d] prefix %q should be a valid prefix command", i, ph.Prefix)
 		})
 	}
 }
@@ -513,7 +514,7 @@ func TestPlaceholderTick_AdvancesIdx(t *testing.T) {
 
 	expectedIdx := (initialIdx + 1) % len(panes.SearchPlaceholders)
 	assert.Equal(t, expectedIdx, updated.PlaceholderIdx(), "tick should advance placeholderIdx")
-	assert.Equal(t, panes.SearchPlaceholders[expectedIdx], updated.Placeholder(), "placeholder text should update")
+	assert.Equal(t, panes.SearchPlaceholders[expectedIdx].Text, updated.Placeholder(), "placeholder text should update to action text")
 	assert.NotNil(t, cmd, "tick should re-arm another tick")
 }
 

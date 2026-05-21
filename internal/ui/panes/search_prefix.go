@@ -27,17 +27,35 @@ const (
 // Exported so tests and the help text can reference them.
 var SearchPrefixes = []string{":songs", ":artists", ":albums", ":playlists"}
 
-// searchPlaceholders cycles through animated placeholder messages that demonstrate
+// searchPlaceholder holds a single cycling placeholder entry with a prefix (e.g. ":songs")
+// and an action text (e.g. "search tracks") that visually separates the filter command
+// from the description text in the search input.
+type searchPlaceholder struct {
+	Prefix string // e.g. ":songs" — rendered as a styled pill in the Prompt
+	Text   string // e.g. "search tracks" — rendered as dim placeholder
+}
+
+// searchPlaceholders cycles through animated placeholder entries that demonstrate
 // the command prefix syntax. One entry per prefix, shown in order on a 2s tick.
-var searchPlaceholders = []string{
-	":songs search for tracks...",
-	":artists find your favorite artists...",
-	":albums browse albums...",
-	":playlists discover playlists...",
+var searchPlaceholders = []searchPlaceholder{
+	{":songs", "search tracks"},
+	{":artists", "find artists"},
+	{":albums", "browse albums"},
+	{":playlists", "discover playlists"},
 }
 
 // SearchPlaceholders exposes the placeholder list for tests.
 var SearchPlaceholders = searchPlaceholders
+
+// SearchPlaceholderTexts returns just the action text strings from all placeholders.
+// Used by tests that need to check if a Placeholder string is one of the cycling values.
+func SearchPlaceholderTexts() []string {
+	texts := make([]string, len(searchPlaceholders))
+	for i, ph := range searchPlaceholders {
+		texts[i] = ph.Text
+	}
+	return texts
+}
 
 // searchPlaceholderTickMsg fires every 2 seconds to advance the cycling placeholder.
 type searchPlaceholderTickMsg struct{}
@@ -234,7 +252,7 @@ func (o *SearchOverlay) demoteFromPromptTag() {
 
 	// Restore the cycling placeholder — the prefix tag is gone so the animated hints
 	// should resume when the input is cleared.
-	o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
+	o.input.Placeholder = searchPlaceholders[o.placeholderIdx].Text
 }
 
 // syncInputToTab updates the Prompt tag and prefix state to match the newly-selected tab.
@@ -251,7 +269,7 @@ func (o *SearchOverlay) syncInputToTab() {
 		o.lockedPrefix = ""
 		o.prefixState = PrefixNone
 		// Restore cycling placeholder — we're back to normal input mode.
-		o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
+		o.input.Placeholder = searchPlaceholders[o.placeholderIdx].Text
 	} else if prefix, ok := tabToPrefixMap[o.intent.tab]; ok {
 		// Set the prefix tag in the Prompt.
 		o.lockedPrefix = prefix

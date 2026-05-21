@@ -1313,7 +1313,7 @@ func TestSearchOverlay_Placeholder_DemoteRestoresCycling(t *testing.T) {
 	// After demotion, prefix state should be None.
 	require.Equal(t, panes.PrefixNone, o.PrefixState())
 	// Placeholder should be back to a cycling placeholder, not "search...".
-	assert.Contains(t, panes.SearchPlaceholders, o.Placeholder(),
+	assert.Contains(t, panes.SearchPlaceholderTexts(), o.Placeholder(),
 		"placeholder should be a cycling placeholder after demotion, not 'search...'")
 }
 
@@ -1342,7 +1342,7 @@ func TestSearchOverlay_Placeholder_TabSwitchBackToAll(t *testing.T) {
 	o, _ = sendKey(t, o, "shift+tab")
 	require.Equal(t, panes.TabAll, o.ActiveTab())
 
-	assert.Contains(t, panes.SearchPlaceholders, o.Placeholder(),
+	assert.Contains(t, panes.SearchPlaceholderTexts(), o.Placeholder(),
 		"placeholder should be a cycling placeholder when back on All tab")
 }
 
