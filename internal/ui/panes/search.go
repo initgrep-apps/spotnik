@@ -117,8 +117,8 @@ func (o *SearchOverlay) resultActions() []layout.Action {
 	return []layout.Action{
 		{Key: "ctrl+a", Label: "queue"},
 		{Key: "tab", Label: "filter"},
-		{Key: "pgdn", Label: "prev"},
-		{Key: "pgup", Label: "next"},
+		{Key: "pgdn", Label: "next"},
+		{Key: "pgup", Label: "prev"},
 	}
 }
 
@@ -185,11 +185,12 @@ type SearchOverlay struct {
 // The text input is focused by default.
 func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti := textinput.New()
-	// Start with the first cycling placeholder — the tick will advance it every 2s.
-	ti.Placeholder = searchPlaceholders[0]
-	// Placeholder uses Info() color so it looks like an actionable suggestion,
+	// Start with the first cycling pill + action text — the tick will advance every 2s.
+	ti.Prompt = BuildPromptTag(t, searchPlaceholders[0].Prefix)
+	ti.Placeholder = searchPlaceholders[0].Text
+	// Placeholder uses TextMuted() color so it looks like an actionable suggestion,
 	// not a passive muted hint.
-	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.Info())
+	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
 	// Enable native inline ghost completion for command prefixes.
 	// Each suggestion has a trailing space so that acceptance immediately
 	// triggers parsePrefix() and the lock + Prompt-tag promotion.
@@ -306,8 +307,8 @@ func (o *SearchOverlay) hasNextPage() bool {
 // list correctly.
 func (o *SearchOverlay) Reset() {
 	o.input.SetValue("")
-	o.input.Prompt = "> "
-	o.input.Placeholder = searchPlaceholders[0]
+	o.input.Prompt = BuildPromptTag(o.theme, searchPlaceholders[0].Prefix)
+	o.input.Placeholder = searchPlaceholders[0].Text
 	o.placeholderIdx = 0
 	o.intent = searchIntent{query: "", tab: TabAll, page: 1}
 	o.prefixState = PrefixNone
@@ -395,7 +396,9 @@ func (o *SearchOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Re-arming resumes naturally when the user clears the input by editing (backspace, etc.).
 		if o.input.Value() == "" && o.prefixState == PrefixNone {
 			o.placeholderIdx = (o.placeholderIdx + 1) % len(searchPlaceholders)
-			o.input.Placeholder = searchPlaceholders[o.placeholderIdx]
+			ph := searchPlaceholders[o.placeholderIdx]
+			o.input.Prompt = BuildPromptTag(o.theme, ph.Prefix)
+			o.input.Placeholder = ph.Text
 			return o, searchPlaceholderTick()
 		}
 		return o, nil
@@ -589,16 +592,23 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return o, cmd
 		}
 		debounceCmd := o.scheduleDebounce()
-		// Restart placeholder tick when backspace clears input to empty.
+		// When backspace clears input to empty, immediately restore the pill
+		// Prompt + cycling Placeholder, then re-arm the placeholder tick.
 		if o.input.Value() == "" && o.prefixState == PrefixNone {
+			o.input.Prompt = BuildPromptTag(o.theme, searchPlaceholders[o.placeholderIdx].Prefix)
+			o.input.Placeholder = searchPlaceholders[o.placeholderIdx].Text
 			return o, tea.Batch(cmd, debounceCmd, searchPlaceholderTick())
 		}
 		return o, tea.Batch(cmd, debounceCmd)
 
 	default:
 		// Regular typing — update input, re-parse prefix, schedule debounce.
+		wasEmpty := o.input.Value() == ""
 		var cmd tea.Cmd
 		o.input, cmd = o.input.Update(m)
+		if wasEmpty && o.input.Value() != "" && o.prefixState != PrefixLocked {
+			o.input.Prompt = "> "
+		}
 		o.parsePrefix()
 		if o.prefixState == PrefixLocked && o.input.Prompt == "> " {
 			// Prefix just locked (e.g. user typed the trailing space) and the Prompt
@@ -979,8 +989,8 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	// Reconstruct spinner so loading indicator uses the new theme's colors.
 	// Empty text: each render site appends its own context label.
 	o.sp = uikit.NewSpinner("", th)
-	// Update placeholder style so the cycling hints use the new Info() color.
-	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
+	// Update placeholder style so the cycling hints use the new TextMuted() color.
+	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
 	o.input.CompletionStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Re-render the Prompt tag if a prefix is locked, applying the new theme colors.

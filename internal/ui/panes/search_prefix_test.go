@@ -484,18 +484,19 @@ func TestSearchPlaceholders_FourEntries(t *testing.T) {
 	require.Len(t, panes.SearchPlaceholders, 4, "should have exactly 4 placeholder messages")
 }
 
-// TestSearchPlaceholders_EachStartsWithPrefix verifies each placeholder starts with a valid prefix command.
+// TestSearchPlaceholders_EachStartsWithPrefix verifies each placeholder entry's
+// prefix field holds a valid command prefix.
 func TestSearchPlaceholders_EachStartsWithPrefix(t *testing.T) {
 	for i, ph := range panes.SearchPlaceholders {
-		t.Run(ph, func(t *testing.T) {
+		t.Run(ph.Prefix, func(t *testing.T) {
 			var found bool
 			for _, p := range panes.SearchPrefixes {
-				if len(ph) >= len(p) && ph[:len(p)] == p {
+				if ph.Prefix == p {
 					found = true
 					break
 				}
 			}
-			assert.True(t, found, "placeholder[%d] %q should start with a valid prefix command", i, ph)
+			assert.True(t, found, "placeholder[%d] prefix %q should be a valid prefix command", i, ph.Prefix)
 		})
 	}
 }
@@ -513,7 +514,8 @@ func TestPlaceholderTick_AdvancesIdx(t *testing.T) {
 
 	expectedIdx := (initialIdx + 1) % len(panes.SearchPlaceholders)
 	assert.Equal(t, expectedIdx, updated.PlaceholderIdx(), "tick should advance placeholderIdx")
-	assert.Equal(t, panes.SearchPlaceholders[expectedIdx], updated.Placeholder(), "placeholder text should update")
+	assert.Equal(t, panes.SearchPlaceholders[expectedIdx].Text, updated.Placeholder(), "placeholder text should update to action text")
+	assert.Contains(t, updated.PromptTag(), panes.SearchPlaceholders[expectedIdx].Prefix, "tick should update Prompt tag to new prefix pill")
 	assert.NotNil(t, cmd, "tick should re-arm another tick")
 }
 
@@ -568,11 +570,12 @@ func TestNewSearchOverlay_SuggestionsContainAllPrefixes(t *testing.T) {
 	assert.Contains(t, suggestions, ":playlists ")
 }
 
-// TestNewSearchOverlay_PlaceholderStyleIsInfo verifies PlaceholderStyle uses Info() color.
-func TestNewSearchOverlay_PlaceholderStyleIsInfo(t *testing.T) {
+// TestNewSearchOverlay_PlaceholderStyleIsTextMuted verifies PlaceholderStyle uses TextMuted() color.
+// Story 213 changed from Info() to TextMuted() so the action text renders dim against the pill Prompt.
+func TestNewSearchOverlay_PlaceholderStyleIsTextMuted(t *testing.T) {
 	o := newTestSearchOverlay()
 	th := theme.Load("black")
-	assert.Equal(t, th.Info(), o.PlaceholderStyleFg(), "PlaceholderStyle foreground should match theme Info()")
+	assert.Equal(t, th.TextMuted(), o.PlaceholderStyleFg(), "PlaceholderStyle foreground should match theme TextMuted()")
 }
 
 // TestNewSearchOverlay_CompletionStyleIsTextMuted verifies CompletionStyle uses TextMuted() color.
@@ -741,6 +744,28 @@ func TestSyncInputToTab_PreservesQuery(t *testing.T) {
 	assert.Equal(t, ":artists", o.LockedPrefix())
 }
 
+// TestSyncInputToTab_AllWithEmptyInput_ShowsPillPrompt verifies that cycling back to
+// TabAll with an empty input restores the pill Prompt (not the plain "> " prompt).
+// This ensures the animated placeholder resumes correctly after a prefix is cleared.
+func TestSyncInputToTab_AllWithEmptyInput_ShowsPillPrompt(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	// Cycle to TabSongs — no query typed.
+	o, _ = sendKey(t, o, "tab")
+	require.Equal(t, panes.TabSongs, o.ActiveTab())
+
+	// Cycle all the way back to TabAll.
+	for o.ActiveTab() != panes.TabAll {
+		o, _ = sendKey(t, o, "tab")
+	}
+
+	// Input is empty.
+	assert.Equal(t, "", o.Query(), "input should be empty")
+	// Prompt should be a pill (contains ":"), not the plain "> ".
+	assert.Contains(t, o.PromptTag(), ":", "TabAll with empty input should show pill Prompt")
+}
+
 // --- Part 6: SetTheme propagation ---
 
 // TestSetTheme_UpdatesPlaceholderStyle verifies PlaceholderStyle changes with new theme.
@@ -751,8 +776,8 @@ func TestSetTheme_UpdatesPlaceholderStyle(t *testing.T) {
 	newTheme := theme.Load("dracula")
 	o.SetTheme(newTheme)
 
-	assert.Equal(t, newTheme.Info(), o.PlaceholderStyleFg(),
-		"PlaceholderStyle foreground should match new theme Info()")
+	assert.Equal(t, newTheme.TextMuted(), o.PlaceholderStyleFg(),
+		"PlaceholderStyle foreground should match new theme TextMuted()")
 }
 
 // TestSetTheme_UpdatesCompletionStyle verifies CompletionStyle changes with new theme.
@@ -831,4 +856,45 @@ func TestCleanQuery_PrefixTypingState(t *testing.T) {
 
 	require.Equal(t, panes.PrefixTyping, o.PrefixState(), "should be PrefixTyping without trailing space")
 	assert.Equal(t, ":so", o.CleanQuery(), "cleanQuery in PrefixTyping should return raw input ':so'")
+}
+
+// --- Story 213: Standalone BuildPromptTag ---
+
+// TestBuildPromptTag_ContainsPrefix verifies the standalone BuildPromptTag renders
+// the prefix text with styling applied (bold, padding, SelectedBg/SelectedFg).
+func TestBuildPromptTag_ContainsPrefix(t *testing.T) {
+	th := theme.Load("black")
+	result := panes.BuildPromptTag(th, ":songs")
+	// The result must contain the prefix text.
+	assert.Contains(t, result, ":songs", "BuildPromptTag must contain the prefix text")
+	// The result must end with a space (trailing separator).
+	assert.Equal(t, ' ', rune(result[len(result)-1]), "BuildPromptTag must end with a trailing space")
+}
+
+// TestBuildPromptTag_WithDifferentThemes verifies BuildPromptTag produces different
+// ANSI styling for different themes (colors differ).
+func TestBuildPromptTag_WithDifferentThemes(t *testing.T) {
+	black := theme.Load("black")
+	dracula := theme.Load("dracula")
+
+	blackResult := panes.BuildPromptTag(black, ":songs")
+	draculaResult := panes.BuildPromptTag(dracula, ":songs")
+
+	// Both contain the prefix text.
+	assert.Contains(t, blackResult, ":songs")
+	assert.Contains(t, draculaResult, ":songs")
+	// Different themes produce different ANSI codes.
+	assert.NotEqual(t, blackResult, draculaResult, "different themes should produce different ANSI styling")
+}
+
+// TestBuildPromptTag_MultiplePrefixes verifies all four prefixes render correctly.
+func TestBuildPromptTag_MultiplePrefixes(t *testing.T) {
+	th := theme.Load("black")
+	prefixes := []string{":songs", ":artists", ":albums", ":playlists"}
+	for _, p := range prefixes {
+		t.Run(p, func(t *testing.T) {
+			result := panes.BuildPromptTag(th, p)
+			assert.Contains(t, result, p, "BuildPromptTag(%q) must contain the prefix", p)
+		})
+	}
 }
