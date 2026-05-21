@@ -588,6 +588,108 @@ func TestEdge_VerySmallTerminal(t *testing.T) {
 	})
 }
 
+// TestLayoutManager_MinHeight verifies the two-step height distribution:
+// reserve MinHeight first, then distribute remaining by weight.
+func TestLayoutManager_MinHeight(t *testing.T) {
+	// Temporarily replace PageStatsPresets with a 3-row test preset
+	oldPresets := layout.PageStatsPresets
+	defer func() { layout.PageStatsPresets = oldPresets }()
+
+	layout.PageStatsPresets = []layout.Preset{{
+		Name: "TestMinHeight",
+		Visible: map[layout.PaneID]bool{
+			layout.PaneNowPlaying:     true,
+			layout.PaneQueue:          true,
+			layout.PaneRecentlyPlayed: true,
+		},
+		Grid: []layout.Row{
+			{HeightWeight: 1, MinHeight: 10, Cells: []layout.Cell{{PaneID: layout.PaneNowPlaying, WidthWeight: 1}}},
+			{HeightWeight: 1, Cells: []layout.Cell{{PaneID: layout.PaneQueue, WidthWeight: 1}}},
+			{HeightWeight: 1, Cells: []layout.Cell{{PaneID: layout.PaneRecentlyPlayed, WidthWeight: 1}}},
+		},
+	}}
+
+	m := layout.NewManager()
+	m.TogglePage()    // switch to Stats page
+	m.Resize(120, 34) // contentH = 30
+
+	// reserved = 10, remaining = 20, totalW = 3
+	// Row 0: 10 + 20*1/3 = 16, Row 1: 0 + 20*1/3 = 6, Row 2 (last): 30 - 22 = 8
+	np := m.PaneRect(layout.PaneNowPlaying)
+	q := m.PaneRect(layout.PaneQueue)
+	rp := m.PaneRect(layout.PaneRecentlyPlayed)
+
+	assert.Equal(t, 16, np.Height, "row with MinHeight=10 should get 10 + proportional share")
+	assert.Equal(t, 6, q.Height, "row without MinHeight should get only proportional share")
+	assert.Equal(t, 8, rp.Height, "last row absorbs rounding remainder")
+	assert.Equal(t, 30, np.Height+q.Height+rp.Height, "total must equal content height")
+}
+
+// TestLayoutManager_MinHeight_ZeroRegression verifies that rows without MinHeight
+// distribute identically to the pre-MinHeight algorithm.
+func TestLayoutManager_MinHeight_ZeroRegression(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30) // contentH = 26
+
+	// Dashboard: weights 2:3:3 over 26 content rows
+	// Row 1 (weight 2): 26*2/8 = 6
+	// Row 2 (weight 3): 26*3/8 = 9
+	// Row 3 (weight 3, last): 26 - 15 = 11
+	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
+	playlistsRect := m.PaneRect(layout.PanePlaylists)
+	queueRect := m.PaneRect(layout.PaneQueue)
+
+	assert.Equal(t, 6, nowPlayingRect.Height)
+	assert.Equal(t, 9, playlistsRect.Height)
+	assert.Equal(t, 11, queueRect.Height)
+}
+
+// TestLayoutManager_MinHeight_Overflow verifies no panic when MinHeight sum
+// exceeds content height; last row absorbs the deficit.
+func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
+	oldPresets := layout.PageStatsPresets
+	defer func() { layout.PageStatsPresets = oldPresets }()
+
+	layout.PageStatsPresets = []layout.Preset{{
+		Name: "TestOverflow",
+		Visible: map[layout.PaneID]bool{
+			layout.PaneNowPlaying: true,
+			layout.PaneQueue:      true,
+		},
+		Grid: []layout.Row{
+			{HeightWeight: 1, MinHeight: 10, Cells: []layout.Cell{{PaneID: layout.PaneNowPlaying, WidthWeight: 1}}},
+			{HeightWeight: 1, MinHeight: 10, Cells: []layout.Cell{{PaneID: layout.PaneQueue, WidthWeight: 1}}},
+		},
+	}}
+
+	m := layout.NewManager()
+	m.TogglePage()
+
+	assert.NotPanics(t, func() {
+		m.Resize(120, 10) // contentH = 6, reserved = 20 > 6
+	})
+}
+
+// TestPresetStats_NowPlayingRowHeight verifies that with the real PresetStats,
+// the NowPlaying row gets the correct height at different terminal sizes.
+func TestPresetStats_NowPlayingRowHeight(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+	m.TogglePage() // Stats page
+
+	// PresetStats: MinHeight=14, weights 1:3:2, contentH=26
+	// reserved=14, remaining=12, totalW=6
+	// NowPlaying: 14 + 12*1/6 = 16
+	np := m.PaneRect(layout.PaneNowPlaying)
+	assert.Equal(t, 16, np.Height, "at 30-row terminal NowPlaying should get 16 rows")
+
+	// At 50-row terminal: contentH=46, reserved=14, remaining=32, totalW=6
+	// NowPlaying: 14 + 32*1/6 = 14 + 5 = 19 (last row absorbs rounding)
+	m.Resize(120, 50)
+	np = m.PaneRect(layout.PaneNowPlaying)
+	assert.Equal(t, 19, np.Height, "at 50-row terminal NowPlaying should get 19 rows")
+}
+
 func TestPresetCycleFullLoop(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
