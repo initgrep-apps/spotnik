@@ -569,11 +569,12 @@ func TestNewSearchOverlay_SuggestionsContainAllPrefixes(t *testing.T) {
 	assert.Contains(t, suggestions, ":playlists ")
 }
 
-// TestNewSearchOverlay_PlaceholderStyleIsInfo verifies PlaceholderStyle uses Info() color.
-func TestNewSearchOverlay_PlaceholderStyleIsInfo(t *testing.T) {
+// TestNewSearchOverlay_PlaceholderStyleIsTextMuted verifies PlaceholderStyle uses TextMuted() color.
+// Story 213 changed from Info() to TextMuted() so the action text renders dim against the pill Prompt.
+func TestNewSearchOverlay_PlaceholderStyleIsTextMuted(t *testing.T) {
 	o := newTestSearchOverlay()
 	th := theme.Load("black")
-	assert.Equal(t, th.Info(), o.PlaceholderStyleFg(), "PlaceholderStyle foreground should match theme Info()")
+	assert.Equal(t, th.TextMuted(), o.PlaceholderStyleFg(), "PlaceholderStyle foreground should match theme TextMuted()")
 }
 
 // TestNewSearchOverlay_CompletionStyleIsTextMuted verifies CompletionStyle uses TextMuted() color.
@@ -752,8 +753,8 @@ func TestSetTheme_UpdatesPlaceholderStyle(t *testing.T) {
 	newTheme := theme.Load("dracula")
 	o.SetTheme(newTheme)
 
-	assert.Equal(t, newTheme.Info(), o.PlaceholderStyleFg(),
-		"PlaceholderStyle foreground should match new theme Info()")
+	assert.Equal(t, newTheme.TextMuted(), o.PlaceholderStyleFg(),
+		"PlaceholderStyle foreground should match new theme TextMuted()")
 }
 
 // TestSetTheme_UpdatesCompletionStyle verifies CompletionStyle changes with new theme.

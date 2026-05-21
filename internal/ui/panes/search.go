@@ -187,9 +187,9 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti := textinput.New()
 	// Start with the first cycling placeholder — the tick will advance it every 2s.
 	ti.Placeholder = searchPlaceholders[0].Text
-	// Placeholder uses Info() color so it looks like an actionable suggestion,
+	// Placeholder uses TextMuted() color so it looks like an actionable suggestion,
 	// not a passive muted hint.
-	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.Info())
+	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
 	// Enable native inline ghost completion for command prefixes.
 	// Each suggestion has a trailing space so that acceptance immediately
 	// triggers parsePrefix() and the lock + Prompt-tag promotion.
@@ -979,8 +979,8 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	// Reconstruct spinner so loading indicator uses the new theme's colors.
 	// Empty text: each render site appends its own context label.
 	o.sp = uikit.NewSpinner("", th)
-	// Update placeholder style so the cycling hints use the new Info() color.
-	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.Info())
+	// Update placeholder style so the cycling hints use the new TextMuted() color.
+	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
 	o.input.CompletionStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Re-render the Prompt tag if a prefix is locked, applying the new theme colors.
