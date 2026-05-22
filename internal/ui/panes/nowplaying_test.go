@@ -1,7 +1,14 @@
 package panes
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +55,13 @@ func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) (*NowPlayingPa
 			Name:       "Blinding Lights",
 			DurationMs: 252000,
 			Artists:    []api.Artist{{ID: "a1", Name: "The Weeknd"}},
-			Album:      api.Album{ID: "alb1", Name: "After Hours"},
+			Album: api.Album{
+				ID:   "alb1",
+				Name: "After Hours",
+				Images: []api.AlbumImage{
+					{URL: "https://i.scdn.co/image/after-hours-640", Width: 640, Height: 640},
+				},
+			},
 		},
 		Device: &api.Device{
 			ID:            "dev-1",
@@ -1146,4 +1159,508 @@ func TestNowPlayingPane_VolumeAppliedMsg_StaleSeq_BarStaysInSecondBurst(t *testi
 
 	out := p.View()
 	assert.Contains(t, out, "52%", "stale ConfirmFromAPI must not snap bar back from second burst value")
+}
+
+// ── Story 216: Album Art Fetch Component ───────────────────────────────────
+
+// tinyPNG returns a 1x1 red PNG encoded as bytes.
+func tinyPNG() []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
+// execCmdTimeout calls cmd in a goroutine and returns its message or nil on timeout.
+func execCmdTimeout(cmd tea.Cmd, timeout time.Duration) tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	select {
+	case msg := <-ch:
+		return msg
+	case <-time.After(timeout):
+		return nil
+	}
+}
+
+// canBindLocalhost checks whether the test environment allows binding to
+// 127.0.0.1 (required for httptest). Sandbox environments often block this.
+func canBindLocalhost() bool {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return false
+	}
+	_ = l.Close()
+	return true
+}
+
+// newLocalServer creates an httptest.Server bound to 127.0.0.1 instead of [::1]
+// to work around sandbox IPv6 restrictions.
+func newLocalServer(handler http.Handler) *httptest.Server {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	srv := httptest.NewUnstartedServer(handler)
+	srv.Listener = l
+	srv.Start()
+	return srv
+}
+
+// findAlbumArtMsg searches a tea.BatchMsg for an AlbumArtFetchedMsg by executing
+// each sub-command with a timeout. Returns nil if not found.
+func findAlbumArtMsg(batch tea.BatchMsg) *components.AlbumArtFetchedMsg {
+	for _, c := range batch {
+		msg := execCmdTimeout(c, 2*time.Second)
+		if m, ok := msg.(components.AlbumArtFetchedMsg); ok {
+			return &m
+		}
+	}
+	return nil
+}
+
+// TestNowPlayingPane_Init_FetchesArtWhenPlaying verifies that Init() returns a
+// tea.Batch containing an album art fetch when the store has an active track with images.
+// Skipped in sandbox environments that block localhost binding.
+func TestNowPlayingPane_Init_FetchesArtWhenPlaying(t *testing.T) {
+	if !canBindLocalhost() {
+		t.Skip("localhost binding not available in this environment")
+	}
+	server := newLocalServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(tinyPNG())
+	}))
+	defer server.Close()
+
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:   "track-1",
+			Name: "Blinding Lights",
+			Album: api.Album{
+				ID: "alb1",
+				Images: []api.AlbumImage{
+					{URL: server.URL, Width: 640, Height: 640},
+				},
+			},
+		},
+	})
+	pane := NewNowPlayingPane(s, theme.Load("black"), true)
+	pane.SetSize(80, 24)
+
+	cmd := pane.Init()
+	require.NotNil(t, cmd, "Init should return a command")
+	assert.True(t, pane.artRenderer.IsLoading(), "Init should set loading for the current track")
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "Init should return tea.BatchMsg, got %T", msg)
+	require.GreaterOrEqual(t, len(batch), 2, "Init batch should contain engine tick + art fetch")
+
+	artMsg := findAlbumArtMsg(batch)
+	require.NotNil(t, artMsg, "Init batch should produce an AlbumArtFetchedMsg")
+	assert.Equal(t, "track-1", artMsg.TrackID)
+	assert.NotNil(t, artMsg.Rows)
+	assert.Nil(t, artMsg.Err)
+}
+
+// TestNowPlayingPane_Init_NoFetchWithoutTrack verifies that Init() does not
+// dispatch an art fetch when the store has no track item.
+func TestNowPlayingPane_Init_NoFetchWithoutTrack(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		// no Item
+	})
+	pane := NewNowPlayingPane(s, theme.Load("black"), true)
+	pane.SetSize(80, 24)
+
+	cmd := pane.Init()
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	// When no track is present, Init returns only the engine tick command
+	// (tea.Batch with one element returns the element directly).
+	assert.False(t, pane.artRenderer.IsLoading(), "no track → no loading state")
+	_, isBatch := msg.(tea.BatchMsg)
+	assert.False(t, isBatch, "no track → no BatchMsg, just engine tick")
+}
+
+// TestNowPlayingPane_HandlePlaybackFetched_FetchesArtOnTrackChange verifies that
+// a PlaybackStateFetchedMsg carrying a different track ID dispatches an art fetch.
+// Skipped in sandbox environments that block localhost binding.
+func TestNowPlayingPane_HandlePlaybackFetched_FetchesArtOnTrackChange(t *testing.T) {
+	if !canBindLocalhost() {
+		t.Skip("localhost binding not available in this environment")
+	}
+	server := newLocalServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(tinyPNG())
+	}))
+	defer server.Close()
+
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	newState := &api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:   "track-2",
+			Name: "Save Your Tears",
+			Album: api.Album{
+				ID: "alb2",
+				Images: []api.AlbumImage{
+					{URL: server.URL, Width: 640, Height: 640},
+				},
+			},
+		},
+		Device: &api.Device{VolumePercent: 70},
+	}
+	w.SetPlaybackState(newState)
+
+	_, cmd := pane.Update(PlaybackStateFetchedMsg{State: newState})
+	require.NotNil(t, cmd, "track change should dispatch art fetch cmd")
+
+	msg := cmd()
+	artMsg, ok := msg.(components.AlbumArtFetchedMsg)
+	require.True(t, ok, "cmd should return AlbumArtFetchedMsg, got %T", msg)
+	assert.Equal(t, "track-2", artMsg.TrackID)
+}
+
+// TestNowPlayingPane_HandlePlaybackFetched_SkipsSameTrack verifies that
+// re-sending the same track does not dispatch a redundant art fetch.
+func TestNowPlayingPane_HandlePlaybackFetched_SkipsSameTrack(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	ps := pane.store.PlaybackState()
+	require.NotNil(t, ps)
+	require.NotNil(t, ps.Item)
+
+	// Prime the renderer so the current track is already known.
+	pane.artRenderer.SetLoading(ps.Item.ID)
+
+	_, cmd := pane.Update(PlaybackStateFetchedMsg{State: ps})
+	assert.Nil(t, cmd, "same track should not dispatch art fetch")
+}
+
+// TestNowPlayingPane_HandlePlaybackFetched_ClearsArtOnNoImageTrack verifies that
+// changing to a track with no album images clears the renderer so View() falls back.
+func TestNowPlayingPane_HandlePlaybackFetched_ClearsArtOnNoImageTrack(t *testing.T) {
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	// Prime renderer with art for the initial track.
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"row1", "row2"})
+	assert.True(t, pane.artRenderer.HasImage())
+
+	newState := &api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:   "track-2",
+			Name: "Save Your Tears",
+			Album: api.Album{
+				ID:     "alb2",
+				Images: []api.AlbumImage{}, // no images
+			},
+		},
+	}
+	w.SetPlaybackState(newState)
+
+	_, cmd := pane.Update(PlaybackStateFetchedMsg{State: newState})
+	assert.Nil(t, cmd, "no images → no fetch cmd dispatched")
+	assert.False(t, pane.artRenderer.HasImage(), "stale art should be cleared")
+	assert.False(t, pane.artRenderer.IsLoading(), "loading should be cleared")
+}
+
+// TestNowPlayingPane_AlbumArtFetchedMsg_SetsImage verifies that a valid
+// AlbumArtFetchedMsg populates the renderer.
+func TestNowPlayingPane_AlbumArtFetchedMsg_SetsImage(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.artRenderer.SetLoading("track-1")
+
+	_, _ = pane.Update(components.AlbumArtFetchedMsg{
+		TrackID: "track-1",
+		Rows:    []string{"row1", "row2"},
+	})
+
+	assert.True(t, pane.artRenderer.HasImage(), "valid msg should populate rows")
+	assert.Equal(t, []string{"row1", "row2"}, pane.artRenderer.Rows())
+}
+
+// TestNowPlayingPane_AlbumArtFetchedMsg_StaleTrackID verifies that a result
+// for a different track ID is ignored and does not overwrite current state.
+func TestNowPlayingPane_AlbumArtFetchedMsg_StaleTrackID(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.artRenderer.SetLoading("track-1")
+
+	_, _ = pane.Update(components.AlbumArtFetchedMsg{
+		TrackID: "track-2",
+		Rows:    []string{"row1", "row2"},
+	})
+
+	assert.False(t, pane.artRenderer.HasImage(), "stale msg should not populate rows")
+	assert.True(t, pane.artRenderer.IsLoading(), "stale msg should not clear loading")
+}
+
+// ── Story 217: Responsive 3-tier layout ───────────────────────────────────────
+
+// TestNowPlayingPane_RenderTier verifies tier dispatch for various body heights.
+func TestNowPlayingPane_RenderTier(t *testing.T) {
+	tests := []struct {
+		name   string
+		width  int
+		height int
+		want   renderTier
+	}{
+		{"base at bodyH 10", 120, 14, tierBase}, // 14-4=10
+		{"base at bodyH 15", 120, 19, tierBase}, // 19-4=15
+		{"base at bodyH 18", 120, 22, tierBase}, // 22-4=18
+		{"mid at bodyH 19", 120, 23, tierMid},   // 23-4=19
+		{"mid at bodyH 25", 120, 29, tierMid},   // 29-4=25
+		{"mid at bodyH 30", 120, 34, tierMid},   // 34-4=30
+		{"full at bodyH 31", 120, 35, tierFull}, // 35-4=31
+		{"full at bodyH 45", 120, 49, tierFull}, // 49-4=45
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pane := newTestNowPlayingPane(true)
+			pane.SetSize(tt.width, tt.height)
+			assert.Equal(t, tt.want, pane.renderTier())
+		})
+	}
+}
+
+// TestNowPlayingPane_View_BaseTier verifies the 3-column base-tier layout.
+func TestNowPlayingPane_View_BaseTier(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(120, 16) // bodyH = 12 (base tier)
+
+	// Simulate loaded album art
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"\x1b[31mimg-row-1\x1b[0m", "\x1b[31mimg-row-2\x1b[0m"})
+
+	output := pane.View()
+
+	// InfoBox content must be present
+	assert.Contains(t, output, "Blinding Lights")
+	assert.Contains(t, output, "The Weeknd")
+	assert.Contains(t, output, "After Hours")
+
+	// Viz braille characters must be present
+	hasBraille := false
+	for _, r := range output {
+		if r >= '⠀' && r <= '⣿' {
+			hasBraille = true
+			break
+		}
+	}
+	assert.True(t, hasBraille, "base tier should contain braille characters")
+
+	// Album art ANSI sequences must appear in the output
+	assert.Contains(t, output, "\x1b[31m", "album art ANSI sequences should be present")
+}
+
+// TestNowPlayingPane_View_MidTier verifies the mid-tier 2-section layout.
+func TestNowPlayingPane_View_MidTier(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(120, 25) // bodyH = 21 (mid tier)
+
+	// Simulate loaded album art
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"\x1b[31mimg1\x1b[0m", "\x1b[31mimg2\x1b[0m", "\x1b[31mimg3\x1b[0m", "\x1b[31mimg4\x1b[0m", "\x1b[31mimg5\x1b[0m", "\x1b[31mimg6\x1b[0m", "\x1b[31mimg7\x1b[0m", "\x1b[31mimg8\x1b[0m", "\x1b[31mimg9\x1b[0m", "\x1b[31mimg10\x1b[0m"})
+
+	output := pane.View()
+
+	// InfoBox content must be present
+	assert.Contains(t, output, "Blinding Lights")
+	assert.Contains(t, output, "The Weeknd")
+
+	// Braille viz chars must be present
+	hasBraille := false
+	for _, r := range output {
+		if r >= '⠀' && r <= '⣿' {
+			hasBraille = true
+			break
+		}
+	}
+	assert.True(t, hasBraille, "mid tier should contain braille characters")
+
+	// Album art ANSI sequences must appear
+	assert.Contains(t, output, "\x1b[31m", "album art ANSI sequences should be present")
+}
+
+// TestNowPlayingPane_View_FullTier verifies the full-tier 2-section layout.
+func TestNowPlayingPane_View_FullTier(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(120, 45) // bodyH = 41 (full tier)
+
+	// Simulate loaded album art
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"\x1b[31mimg1\x1b[0m", "\x1b[31mimg2\x1b[0m", "\x1b[31mimg3\x1b[0m", "\x1b[31mimg4\x1b[0m", "\x1b[31mimg5\x1b[0m", "\x1b[31mimg6\x1b[0m", "\x1b[31mimg7\x1b[0m", "\x1b[31mimg8\x1b[0m", "\x1b[31mimg9\x1b[0m", "\x1b[31mimg10\x1b[0m", "\x1b[31mimg11\x1b[0m", "\x1b[31mimg12\x1b[0m", "\x1b[31mimg13\x1b[0m", "\x1b[31mimg14\x1b[0m", "\x1b[31mimg15\x1b[0m", "\x1b[31mimg16\x1b[0m", "\x1b[31mimg17\x1b[0m", "\x1b[31mimg18\x1b[0m"})
+
+	output := pane.View()
+
+	// InfoBox content must be present
+	assert.Contains(t, output, "Blinding Lights")
+	assert.Contains(t, output, "The Weeknd")
+
+	// Braille viz chars must be present
+	hasBraille := false
+	for _, r := range output {
+		if r >= '⠀' && r <= '⣿' {
+			hasBraille = true
+			break
+		}
+	}
+	assert.True(t, hasBraille, "full tier should contain braille characters")
+
+	// Album art ANSI sequences must appear
+	assert.Contains(t, output, "\x1b[31m", "album art ANSI sequences should be present")
+}
+
+// TestNowPlayingPane_View_Fallback_NoImage verifies that when no image is loaded
+// and the renderer is not loading, all tiers fall back to the pre-feature 2-col layout.
+func TestNowPlayingPane_View_Fallback_NoImage(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+
+	// Ensure no image and not loading
+	pane.artRenderer = components.AlbumArtRenderer{}
+
+	// Test multiple tiers
+	tiers := []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{"base tier", 120, 16},
+		{"mid tier", 120, 25},
+		{"full tier", 120, 45},
+	}
+
+	for _, tt := range tiers {
+		t.Run(tt.name, func(t *testing.T) {
+			pane.SetSize(tt.width, tt.height)
+			output := pane.View()
+
+			// Should still show track info (InfoBox left)
+			assert.Contains(t, output, "Blinding Lights")
+			assert.Contains(t, output, "The Weeknd")
+
+			// Should contain braille (viz right) — no empty image column
+			hasBraille := false
+			for _, r := range output {
+				if r >= '⠀' && r <= '⣿' {
+					hasBraille = true
+					break
+				}
+			}
+			assert.True(t, hasBraille, "fallback should contain braille characters")
+
+			// Should NOT contain album art ANSI sequences
+			assert.NotContains(t, output, "\x1b[31m", "fallback should not contain album art ANSI")
+		})
+	}
+}
+
+// TestNowPlayingPane_View_LoadingPlaceholder verifies that when the renderer is
+// loading, a muted placeholder block appears in the image column position.
+func TestNowPlayingPane_View_LoadingPlaceholder(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(120, 16) // base tier
+
+	// Set loading without a result
+	pane.artRenderer.SetLoading("track-1")
+
+	output := pane.View()
+
+	// Should still show track info
+	assert.Contains(t, output, "Blinding Lights")
+
+	// Should contain braille (viz right)
+	hasBraille := false
+	for _, r := range output {
+		if r >= '⠀' && r <= '⣿' {
+			hasBraille = true
+			break
+		}
+	}
+	assert.True(t, hasBraille, "loading state should contain braille characters")
+
+	// Placeholder should not contain album art ANSI sequences
+	assert.NotContains(t, output, "\x1b[31m", "placeholder should not contain album art ANSI")
+}
+
+// TestNowPlayingPane_SetSize_NoNegativeDimensions verifies that SetSize never
+// assigns a zero or negative dimension to any sub-component in any tier.
+func TestNowPlayingPane_SetSize_NoNegativeDimensions(t *testing.T) {
+	sizes := []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{"tiny", 10, 10},
+		{"narrow", 20, 40},
+		{"short", 120, 10},
+		{"base tier", 120, 16},
+		{"mid tier", 120, 25},
+		{"full tier", 120, 45},
+		{"large", 200, 60},
+	}
+
+	for _, tt := range sizes {
+		t.Run(tt.name, func(t *testing.T) {
+			pane, _ := newTestNowPlayingPaneWithState(true, true)
+			// Ensure no panic and View returns non-empty.
+			pane.SetSize(tt.width, tt.height)
+			output := pane.View()
+			assert.NotEmpty(t, output, "View should not be empty after SetSize")
+		})
+	}
+}
+
+// TestNowPlayingPane_WindowSizeMsg_RefetchesArt verifies that when SetSize
+// changes imageRows by more than 2, a subsequent WindowSizeMsg triggers a
+// non-nil album-art fetch command.
+func TestNowPlayingPane_WindowSizeMsg_RefetchesArt(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+
+	// Pre-load art so HasImage() is true and View() uses tiered layout.
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"img1", "img2", "img3", "img4", "img5", "img6", "img7", "img8", "img9", "img10", "img11", "img12", "img13", "img14", "img15", "img16"})
+
+	// First size: base tier, imageRows ≈ bodyHeight = 16
+	pane.SetSize(100, 20)
+
+	// Second size: full tier, imageRows ≈ paneMin(31, 44) = 31
+	// Difference = 15 > 2 → pendingArtRefresh should be set.
+	pane.SetSize(100, 40)
+
+	// WindowSizeMsg should dispatch a fetch and clear the flag.
+	_, cmd := pane.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	assert.NotNil(t, cmd, "WindowSizeMsg after large resize should return non-nil cmd")
+
+	// The returned cmd must be a FetchAlbumArtCmd (executed it returns AlbumArtFetchedMsg).
+	msg := cmd()
+	_, ok := msg.(components.AlbumArtFetchedMsg)
+	assert.True(t, ok, "cmd should return AlbumArtFetchedMsg, got %T", msg)
+}
+
+// TestNowPlayingPane_WindowSizeMsg_NoRefetchWhenSmallChange verifies that a
+// small resize (≤2 rows difference) does not trigger a re-fetch.
+func TestNowPlayingPane_WindowSizeMsg_NoRefetchWhenSmallChange(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"img1", "img2", "img3", "img4", "img5", "img6", "img7", "img8", "img9", "img10", "img11", "img12", "img13", "img14", "img15", "img16"})
+
+	// Base tier both times: bodyHeight changes from 16 → 18, imageRows from 16 → 18.
+	// Difference = 2, which is NOT > 2, so no refresh.
+	pane.SetSize(100, 20)
+	pane.SetSize(100, 22)
+
+	_, cmd := pane.Update(tea.WindowSizeMsg{Width: 100, Height: 22})
+	assert.Nil(t, cmd, "small resize should not trigger art re-fetch")
 }

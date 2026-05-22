@@ -78,21 +78,22 @@ func TestResize_TilesContentArea(t *testing.T) {
 
 func TestResize_HeightWeightDistribution(t *testing.T) {
 	// Dashboard: weights 2:3:3 over 26 content rows (30 - 1 header - 3 status)
-	// 2/8 * 26 = 6, 3/8 * 26 = 9, last row absorbs remainder = 26-6-9 = 11
+	// NowPlaying row has MinHeight: 14.
+	// reserved = 14, remaining = 12, totalW = 8
+	// Row 0: 14 + 12*2/8 = 17
+	// Row 1: 0 + 12*3/8 = 4
+	// Row 2 (last): 26 - 21 = 5
 	m := layout.NewManager()
 	m.Resize(120, 30) // content height = 26
 
-	// NowPlaying is in row 1 (weight 2) — expect height 6
 	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 6, nowPlayingRect.Height)
+	assert.Equal(t, 17, nowPlayingRect.Height)
 
-	// Playlists is in row 2 (weight 3) — expect height 9
 	playlistsRect := m.PaneRect(layout.PanePlaylists)
-	assert.Equal(t, 9, playlistsRect.Height)
+	assert.Equal(t, 4, playlistsRect.Height)
 
-	// Queue is in row 3 (weight 3, last row absorbs remainder) — expect 26-6-9=11
 	queueRect := m.PaneRect(layout.PaneQueue)
-	assert.Equal(t, 11, queueRect.Height)
+	assert.Equal(t, 5, queueRect.Height)
 }
 
 func TestResize_WidthWeightDistribution(t *testing.T) {
@@ -628,20 +629,39 @@ func TestLayoutManager_MinHeight(t *testing.T) {
 // TestLayoutManager_MinHeight_ZeroRegression verifies that rows without MinHeight
 // distribute identically to the pre-MinHeight algorithm.
 func TestLayoutManager_MinHeight_ZeroRegression(t *testing.T) {
+	// Use a custom preset with no MinHeight so the pure weight-based
+	// distribution can be verified independently of the Dashboard preset.
+	oldPresets := layout.PageMusicPresets
+	defer func() { layout.PageMusicPresets = oldPresets }()
+
+	layout.PageMusicPresets = []layout.Preset{{
+		Name: "TestNoMinHeight",
+		Visible: map[layout.PaneID]bool{
+			layout.PaneNowPlaying: true,
+			layout.PaneQueue:      true,
+			layout.PanePlaylists:  true,
+		},
+		Grid: []layout.Row{
+			{HeightWeight: 2, Cells: []layout.Cell{{PaneID: layout.PaneNowPlaying, WidthWeight: 1}}},
+			{HeightWeight: 3, Cells: []layout.Cell{{PaneID: layout.PaneQueue, WidthWeight: 1}}},
+			{HeightWeight: 3, Cells: []layout.Cell{{PaneID: layout.PanePlaylists, WidthWeight: 1}}},
+		},
+	}}
+
 	m := layout.NewManager()
 	m.Resize(120, 30) // contentH = 26
 
-	// Dashboard: weights 2:3:3 over 26 content rows
-	// Row 1 (weight 2): 26*2/8 = 6
-	// Row 2 (weight 3): 26*3/8 = 9
-	// Row 3 (weight 3, last): 26 - 15 = 11
+	// weights 2:3:3 over 26 content rows
+	// Row 0 (weight 2): 26*2/8 = 6
+	// Row 1 (weight 3): 26*3/8 = 9
+	// Row 2 (weight 3, last): 26 - 15 = 11
 	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
-	playlistsRect := m.PaneRect(layout.PanePlaylists)
 	queueRect := m.PaneRect(layout.PaneQueue)
+	playlistsRect := m.PaneRect(layout.PanePlaylists)
 
 	assert.Equal(t, 6, nowPlayingRect.Height)
-	assert.Equal(t, 9, playlistsRect.Height)
-	assert.Equal(t, 11, queueRect.Height)
+	assert.Equal(t, 9, queueRect.Height)
+	assert.Equal(t, 11, playlistsRect.Height)
 }
 
 // TestLayoutManager_MinHeight_Overflow verifies no panic when MinHeight sum

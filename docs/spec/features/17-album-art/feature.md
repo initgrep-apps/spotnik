@@ -1,6 +1,6 @@
 ---
 title: "Album Art & Responsive NowPlaying"
-status: open
+status: done
 ---
 
 ## Description

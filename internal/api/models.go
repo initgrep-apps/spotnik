@@ -23,6 +23,9 @@ type Artist = domain.Artist
 // Album re-exports domain.Album for backward compatibility.
 type Album = domain.Album
 
+// AlbumImage re-exports domain.AlbumImage for backward compatibility.
+type AlbumImage = domain.AlbumImage
+
 // SimplePlaylistOwner re-exports domain.SimplePlaylistOwner for backward compatibility.
 type SimplePlaylistOwner = domain.SimplePlaylistOwner
 
