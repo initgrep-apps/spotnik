@@ -150,3 +150,28 @@ func TestPagePresets_Counts(t *testing.T) {
 	assert.Len(t, layout.PageMusicPresets, 4, "PageMusicPresets should have 4 entries")
 	assert.Len(t, layout.PageStatsPresets, 1, "PageStatsPresets should have 1 entry")
 }
+
+// TestPreset_MusicPage_NowPlayingMinHeight verifies that every Music page preset
+// reserves at least 14 rows for the NowPlaying pane so tier-aware layout works.
+func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
+	presets := []struct {
+		name   string
+		preset layout.Preset
+	}{
+		{"Dashboard", layout.PresetDashboard},
+		{"Listening", layout.PresetListening},
+		{"Library", layout.PresetLibrary},
+		{"Discovery", layout.PresetDiscovery},
+	}
+
+	for _, tt := range presets {
+		t.Run(tt.name, func(t *testing.T) {
+			require.GreaterOrEqual(t, len(tt.preset.Grid), 1, "preset must have at least one row")
+			nowPlayingRow := tt.preset.Grid[0]
+			assert.Equal(t, layout.PaneNowPlaying, nowPlayingRow.Cells[0].PaneID,
+				"first row must contain NowPlaying")
+			assert.Equal(t, 14, nowPlayingRow.MinHeight,
+				"NowPlaying row must have MinHeight 14")
+		})
+	}
+}
