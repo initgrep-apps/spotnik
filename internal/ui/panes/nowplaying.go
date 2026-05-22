@@ -43,6 +43,9 @@ type NowPlayingPane struct {
 
 	// volumeBar is the gradient volume bar rendered inside the InfoBox.
 	volumeBar *components.GradientVolumeBar
+
+	// artRenderer caches pixterm-rendered album art rows and tracks loading state.
+	artRenderer components.AlbumArtRenderer
 }
 
 // Compile-time check: NowPlayingPane implements layout.Pane.
@@ -157,9 +160,23 @@ func (p *NowPlayingPane) SetFocused(focused bool) {
 	p.BasePane.SetFocused(focused)
 }
 
-// Init starts the viz engine animation tick loop.
+// Init starts the viz engine animation tick loop and dispatches an album art fetch
+// if playback is active at startup. Image dimensions use conservative defaults
+// (8x16) since SetSize() will not have run yet; the art is re-fetched after the
+// first resize with correct dimensions.
 func (p *NowPlayingPane) Init() tea.Cmd {
-	return p.engine.Init()
+	var cmds []tea.Cmd
+	cmds = append(cmds, p.engine.Init())
+
+	ps := p.store.PlaybackState()
+	if ps != nil && ps.Item != nil {
+		if img := ps.Item.Album.BestImage(100); img != nil {
+			cmds = append(cmds, components.FetchAlbumArtCmd(ps.Item.ID, img.URL, 8, 16))
+			p.artRenderer.SetLoading(ps.Item.ID)
+		}
+	}
+
+	return tea.Batch(cmds...)
 }
 
 // Update handles all messages for the NowPlayingPane.
@@ -169,7 +186,11 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleTick()
 
 	case PlaybackStateFetchedMsg:
-		return p.handlePlaybackFetched()
+		return p.handlePlaybackFetched(m)
+
+	case components.AlbumArtFetchedMsg:
+		p.artRenderer.SetResult(m.TrackID, m.Rows)
+		return p, nil
 
 	case components.VolumeDebounceTickMsg:
 		if matched, vol, seq := p.volumeBar.HandleDebounce(m); matched {
@@ -350,8 +371,9 @@ func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 }
 
 // handlePlaybackFetched processes notification that the store has fresh playback state.
-// It resets localProgressMs to the server value and syncs engine playing state.
-func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
+// It resets localProgressMs to the server value, syncs engine playing state, and
+// dispatches an album art fetch when the track has changed.
+func (p *NowPlayingPane) handlePlaybackFetched(msg PlaybackStateFetchedMsg) (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil {
 		p.localProgressMs = ps.ProgressMs
@@ -363,6 +385,17 @@ func (p *NowPlayingPane) handlePlaybackFetched() (*NowPlayingPane, tea.Cmd) {
 		p.localProgressMs = 0
 		p.engine.SetPlaying(false)
 	}
+
+	if msg.State != nil && msg.State.Item != nil {
+		track := msg.State.Item
+		if p.artRenderer.NeedsRefresh(track.ID) {
+			if img := track.Album.BestImage(100); img != nil {
+				p.artRenderer.SetLoading(track.ID)
+				return p, components.FetchAlbumArtCmd(track.ID, img.URL, p.imageRows(), p.imageCols())
+			}
+		}
+	}
+
 	return p, nil
 }
 
@@ -462,6 +495,18 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	// Propagate dimensions to newly created sub-components.
 	p.SetSize(p.width, p.height)
 }
+
+// bodyHeight returns the inner content height (pane height minus border chrome).
+func (p *NowPlayingPane) bodyHeight() int { return paneMax(p.height-4, 0) }
+
+// imageRows returns the number of terminal rows allocated to the album art block.
+// This is a conservative default used during fetching; the responsive layout in
+// story 217 overrides this with tier-aware formulas.
+func (p *NowPlayingPane) imageRows() int { return paneMax(p.bodyHeight()-4, 4) }
+
+// imageCols returns the number of terminal columns allocated to the album art block.
+// Terminal chars are ~2:1 height:width, so cols = rows*2 produces a square image.
+func (p *NowPlayingPane) imageCols() int { return p.imageRows() * 2 }
 
 // paneMax returns the larger of two ints.
 func paneMax(a, b int) int {

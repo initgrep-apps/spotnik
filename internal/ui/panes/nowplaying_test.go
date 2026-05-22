@@ -1,7 +1,13 @@
 package panes
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +54,13 @@ func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) (*NowPlayingPa
 			Name:       "Blinding Lights",
 			DurationMs: 252000,
 			Artists:    []api.Artist{{ID: "a1", Name: "The Weeknd"}},
-			Album:      api.Album{ID: "alb1", Name: "After Hours"},
+			Album: api.Album{
+				ID:   "alb1",
+				Name: "After Hours",
+				Images: []api.AlbumImage{
+					{URL: "https://i.scdn.co/image/after-hours-640", Width: 640, Height: 640},
+				},
+			},
 		},
 		Device: &api.Device{
 			ID:            "dev-1",
@@ -1146,4 +1158,190 @@ func TestNowPlayingPane_VolumeAppliedMsg_StaleSeq_BarStaysInSecondBurst(t *testi
 
 	out := p.View()
 	assert.Contains(t, out, "52%", "stale ConfirmFromAPI must not snap bar back from second burst value")
+}
+
+// ── Story 216: Album Art Fetch Component ───────────────────────────────────
+
+// tinyPNG returns a 1x1 red PNG encoded as bytes.
+func tinyPNG() []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
+// execCmdTimeout calls cmd in a goroutine and returns its message or nil on timeout.
+func execCmdTimeout(cmd tea.Cmd, timeout time.Duration) tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	select {
+	case msg := <-ch:
+		return msg
+	case <-time.After(timeout):
+		return nil
+	}
+}
+
+// findAlbumArtMsg searches a tea.BatchMsg for an AlbumArtFetchedMsg by executing
+// each sub-command with a timeout. Returns nil if not found.
+func findAlbumArtMsg(batch tea.BatchMsg) *components.AlbumArtFetchedMsg {
+	for _, c := range batch {
+		msg := execCmdTimeout(c, 2*time.Second)
+		if m, ok := msg.(components.AlbumArtFetchedMsg); ok {
+			return &m
+		}
+	}
+	return nil
+}
+
+// TestNowPlayingPane_Init_FetchesArtWhenPlaying verifies that Init() returns a
+// tea.Batch containing an album art fetch when the store has an active track with images.
+func TestNowPlayingPane_Init_FetchesArtWhenPlaying(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(tinyPNG())
+	}))
+	defer server.Close()
+
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:   "track-1",
+			Name: "Blinding Lights",
+			Album: api.Album{
+				ID: "alb1",
+				Images: []api.AlbumImage{
+					{URL: server.URL, Width: 640, Height: 640},
+				},
+			},
+		},
+	})
+	pane := NewNowPlayingPane(s, theme.Load("black"), true)
+	pane.SetSize(80, 24)
+
+	cmd := pane.Init()
+	require.NotNil(t, cmd, "Init should return a command")
+	assert.True(t, pane.artRenderer.IsLoading(), "Init should set loading for the current track")
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	require.True(t, ok, "Init should return tea.BatchMsg, got %T", msg)
+	require.GreaterOrEqual(t, len(batch), 2, "Init batch should contain engine tick + art fetch")
+
+	artMsg := findAlbumArtMsg(batch)
+	require.NotNil(t, artMsg, "Init batch should produce an AlbumArtFetchedMsg")
+	assert.Equal(t, "track-1", artMsg.TrackID)
+	assert.NotNil(t, artMsg.Rows)
+	assert.Nil(t, artMsg.Err)
+}
+
+// TestNowPlayingPane_Init_NoFetchWithoutTrack verifies that Init() does not
+// dispatch an art fetch when the store has no track item.
+func TestNowPlayingPane_Init_NoFetchWithoutTrack(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying: true,
+		// no Item
+	})
+	pane := NewNowPlayingPane(s, theme.Load("black"), true)
+	pane.SetSize(80, 24)
+
+	cmd := pane.Init()
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	// When no track is present, Init returns only the engine tick command
+	// (tea.Batch with one element returns the element directly).
+	assert.False(t, pane.artRenderer.IsLoading(), "no track → no loading state")
+	_, isBatch := msg.(tea.BatchMsg)
+	assert.False(t, isBatch, "no track → no BatchMsg, just engine tick")
+}
+
+// TestNowPlayingPane_HandlePlaybackFetched_FetchesArtOnTrackChange verifies that
+// a PlaybackStateFetchedMsg carrying a different track ID dispatches an art fetch.
+func TestNowPlayingPane_HandlePlaybackFetched_FetchesArtOnTrackChange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(tinyPNG())
+	}))
+	defer server.Close()
+
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	newState := &api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:   "track-2",
+			Name: "Save Your Tears",
+			Album: api.Album{
+				ID: "alb2",
+				Images: []api.AlbumImage{
+					{URL: server.URL, Width: 640, Height: 640},
+				},
+			},
+		},
+		Device: &api.Device{VolumePercent: 70},
+	}
+	w.SetPlaybackState(newState)
+
+	_, cmd := pane.Update(PlaybackStateFetchedMsg{State: newState})
+	require.NotNil(t, cmd, "track change should dispatch art fetch cmd")
+
+	msg := cmd()
+	artMsg, ok := msg.(components.AlbumArtFetchedMsg)
+	require.True(t, ok, "cmd should return AlbumArtFetchedMsg, got %T", msg)
+	assert.Equal(t, "track-2", artMsg.TrackID)
+}
+
+// TestNowPlayingPane_HandlePlaybackFetched_SkipsSameTrack verifies that
+// re-sending the same track does not dispatch a redundant art fetch.
+func TestNowPlayingPane_HandlePlaybackFetched_SkipsSameTrack(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	ps := pane.store.PlaybackState()
+	require.NotNil(t, ps)
+	require.NotNil(t, ps.Item)
+
+	// Prime the renderer so the current track is already known.
+	pane.artRenderer.SetLoading(ps.Item.ID)
+
+	_, cmd := pane.Update(PlaybackStateFetchedMsg{State: ps})
+	assert.Nil(t, cmd, "same track should not dispatch art fetch")
+}
+
+// TestNowPlayingPane_AlbumArtFetchedMsg_SetsImage verifies that a valid
+// AlbumArtFetchedMsg populates the renderer.
+func TestNowPlayingPane_AlbumArtFetchedMsg_SetsImage(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.artRenderer.SetLoading("track-1")
+
+	_, _ = pane.Update(components.AlbumArtFetchedMsg{
+		TrackID: "track-1",
+		Rows:    []string{"row1", "row2"},
+	})
+
+	assert.True(t, pane.artRenderer.HasImage(), "valid msg should populate rows")
+	assert.Equal(t, []string{"row1", "row2"}, pane.artRenderer.Rows())
+}
+
+// TestNowPlayingPane_AlbumArtFetchedMsg_StaleTrackID verifies that a result
+// for a different track ID is ignored and does not overwrite current state.
+func TestNowPlayingPane_AlbumArtFetchedMsg_StaleTrackID(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.artRenderer.SetLoading("track-1")
+
+	_, _ = pane.Update(components.AlbumArtFetchedMsg{
+		TrackID: "track-2",
+		Rows:    []string{"row1", "row2"},
+	})
+
+	assert.False(t, pane.artRenderer.HasImage(), "stale msg should not populate rows")
+	assert.True(t, pane.artRenderer.IsLoading(), "stale msg should not clear loading")
 }
