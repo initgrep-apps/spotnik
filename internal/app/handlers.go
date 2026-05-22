@@ -303,8 +303,23 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.onboardingPermissionsOverlay != nil {
 			a.onboardingPermissionsOverlay.SetSize(m.Width, m.Height)
 		}
+		// Forward WindowSizeMsg to NowPlayingPane so it can dispatch album-art
+		// re-fetches when SetSize has flagged a significant dimension change.
+		var cmds []tea.Cmd
 		if toastCmd != nil {
-			return a, toastCmd
+			cmds = append(cmds, toastCmd)
+		}
+		if np := a.nowPlayingPane(); np != nil {
+			updatedPane, artCmd := np.Update(m)
+			if up, ok := updatedPane.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = up
+			}
+			if artCmd != nil {
+				cmds = append(cmds, artCmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
 		}
 		return a, nil
 
