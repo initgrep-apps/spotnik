@@ -68,7 +68,7 @@ func FetchAlbumArtCmd(trackID, url string, rows, cols int) tea.Cmd {
 		if err != nil {
 			return albumArtResult(trackID, nil, err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return renderFromReader(trackID, resp.Body, rows, cols)
 	}
 }
