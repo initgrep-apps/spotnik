@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1186,6 +1187,27 @@ func execCmdTimeout(cmd tea.Cmd, timeout time.Duration) tea.Msg {
 	}
 }
 
+// canBindLocalhost checks whether the test environment allows binding to
+// 127.0.0.1 (required for httptest). Sandbox environments often block this.
+func canBindLocalhost() bool {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return false
+	}
+	_ = l.Close()
+	return true
+}
+
+// newLocalServer creates an httptest.Server bound to 127.0.0.1 instead of [::1]
+// to work around sandbox IPv6 restrictions.
+func newLocalServer(handler http.Handler) *httptest.Server {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	srv := httptest.NewUnstartedServer(handler)
+	srv.Listener = l
+	srv.Start()
+	return srv
+}
+
 // findAlbumArtMsg searches a tea.BatchMsg for an AlbumArtFetchedMsg by executing
 // each sub-command with a timeout. Returns nil if not found.
 func findAlbumArtMsg(batch tea.BatchMsg) *components.AlbumArtFetchedMsg {
@@ -1200,8 +1222,12 @@ func findAlbumArtMsg(batch tea.BatchMsg) *components.AlbumArtFetchedMsg {
 
 // TestNowPlayingPane_Init_FetchesArtWhenPlaying verifies that Init() returns a
 // tea.Batch containing an album art fetch when the store has an active track with images.
+// Skipped in sandbox environments that block localhost binding.
 func TestNowPlayingPane_Init_FetchesArtWhenPlaying(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if !canBindLocalhost() {
+		t.Skip("localhost binding not available in this environment")
+	}
+	server := newLocalServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(tinyPNG())
 	}))
@@ -1264,8 +1290,12 @@ func TestNowPlayingPane_Init_NoFetchWithoutTrack(t *testing.T) {
 
 // TestNowPlayingPane_HandlePlaybackFetched_FetchesArtOnTrackChange verifies that
 // a PlaybackStateFetchedMsg carrying a different track ID dispatches an art fetch.
+// Skipped in sandbox environments that block localhost binding.
 func TestNowPlayingPane_HandlePlaybackFetched_FetchesArtOnTrackChange(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if !canBindLocalhost() {
+		t.Skip("localhost binding not available in this environment")
+	}
+	server := newLocalServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(tinyPNG())
 	}))
