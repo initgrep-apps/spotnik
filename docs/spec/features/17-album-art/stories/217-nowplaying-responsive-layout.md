@@ -1,7 +1,7 @@
 ---
 title: "NowPlaying: responsive 3-tier layout with album art"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background

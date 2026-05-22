@@ -1,7 +1,7 @@
 ---
 title: "Album art fetch + pixterm render component"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background
