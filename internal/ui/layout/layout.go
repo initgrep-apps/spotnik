@@ -49,7 +49,8 @@ func (m *Manager) Resize(width, height int) {
 //
 // The layout engine is a simple flat two-pass algorithm:
 //  1. Filter rows/cells to only those that are visible (preset.Visible && !hidden).
-//  2. Distribute height proportionally by HeightWeight; last row gets remainder.
+//  2. Reserve MinHeight for each row, then distribute remaining height
+//     proportionally by HeightWeight; last row gets remainder.
 //  3. Within each row distribute width proportionally by WidthWeight; last cell gets remainder.
 //
 // Toggle redistribution is automatic: removing a cell from a row expands surviving
@@ -74,6 +75,7 @@ func (m *Manager) recompute() {
 	}
 	type liveRow struct {
 		heightWeight int
+		minHeight    int
 		cells        []liveCell
 	}
 	var liveRows []liveRow
@@ -85,7 +87,7 @@ func (m *Manager) recompute() {
 			}
 		}
 		if len(cells) > 0 {
-			liveRows = append(liveRows, liveRow{row.HeightWeight, cells})
+			liveRows = append(liveRows, liveRow{heightWeight: row.HeightWeight, minHeight: row.MinHeight, cells: cells})
 		}
 	}
 
@@ -100,9 +102,16 @@ func (m *Manager) recompute() {
 		contentH = 0
 	}
 
+	reserved := 0
 	totalHWeight := 0
 	for _, r := range liveRows {
+		reserved += r.minHeight
 		totalHWeight += r.heightWeight
+	}
+
+	remaining := contentH - reserved
+	if remaining < 0 {
+		remaining = 0
 	}
 
 	var newFocusOrder []PaneID
@@ -111,11 +120,11 @@ func (m *Manager) recompute() {
 		var h int
 		switch {
 		case totalHWeight == 0:
-			h = 0
+			h = row.minHeight
 		case i == len(liveRows)-1:
 			h = contentH - y
 		default:
-			h = contentH * row.heightWeight / totalHWeight
+			h = row.minHeight + remaining*row.heightWeight/totalHWeight
 		}
 		if h < 0 {
 			h = 0

@@ -1,7 +1,7 @@
 ---
 title: "Layout Manager: MinHeight guarantee for rows"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background

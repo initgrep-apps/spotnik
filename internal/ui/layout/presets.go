@@ -9,6 +9,7 @@ type Cell struct {
 // Row represents a horizontal strip of cells in the grid with its relative height.
 type Row struct {
 	HeightWeight int
+	MinHeight    int // if > 0, this row is guaranteed at least MinHeight rows
 	Cells        []Cell
 }
 
@@ -107,7 +108,7 @@ var PresetStats = Preset{
 		PaneNetworkLog:     true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, Cells: []Cell{
+		{HeightWeight: 1, MinHeight: 14, Cells: []Cell{
 			{PaneID: PaneNowPlaying, WidthWeight: 1},
 		}},
 		{HeightWeight: 3, Cells: []Cell{

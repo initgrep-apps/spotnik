@@ -109,6 +109,14 @@ func TestPresetStats_HasFivePanes(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneNetworkLog])
 }
 
+// TestPresetStats_NowPlayingMinHeight verifies the NowPlaying row carries
+// MinHeight: 14 so it always gets enough rows for image rendering.
+func TestPresetStats_NowPlayingMinHeight(t *testing.T) {
+	p := layout.PresetStats
+	require.Len(t, p.Grid, 3)
+	assert.Equal(t, 14, p.Grid[0].MinHeight, "NowPlaying row must have MinHeight 14")
+}
+
 // TestPresetStats_FlatThreeRows verifies the flat grid structure (story 181):
 // NowPlaying strip, single middle row with Health+Traffic+Live (1:1:3),
 // NetworkLog full-width row.
