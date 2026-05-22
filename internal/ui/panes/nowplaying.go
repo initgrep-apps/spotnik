@@ -503,7 +503,8 @@ func (p *NowPlayingPane) buildInfoLinesMid() []string {
 
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 
-	line1 := primaryStyle.Render(t.Name) + " · " + secondaryStyle.Render(strings.Join(artistNames, ", ")) + " · " + mutedStyle.Render(t.Album.Name)
+	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
+	line1 := primaryStyle.Render(t.Name) + " " + sep + " " + secondaryStyle.Render(strings.Join(artistNames, ", ")) + " " + sep + " " + mutedStyle.Render(t.Album.Name)
 	line2 := ctrl.Render() + "   " + p.volumeBar.Render()
 
 	return []string{line1, line2}
@@ -560,7 +561,8 @@ func (p *NowPlayingPane) buildInfoLinesFull(contentWidth int) []string {
 
 	line1 := primaryStyle.Render(t.Name)
 
-	left := secondaryStyle.Render(strings.Join(artistNames, ", ")) + " · " + mutedStyle.Render(t.Album.Name)
+	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
+	left := secondaryStyle.Render(strings.Join(artistNames, ", ")) + " " + sep + " " + mutedStyle.Render(t.Album.Name)
 	right := ctrl.Render() + "  " + p.volumeBar.Render()
 
 	leftW := lipgloss.Width(left)
@@ -791,9 +793,10 @@ const (
 )
 
 // renderTier selects the layout tier based on bodyHeight.
-//   base: bodyHeight ≤ 18
-//   mid:  19 – 30
-//   full: > 30
+//
+//	base: bodyHeight ≤ 18
+//	mid:  19 – 30
+//	full: > 30
 func (p *NowPlayingPane) renderTier() renderTier {
 	switch {
 	case p.bodyHeight() > 30:

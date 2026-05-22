@@ -1416,13 +1416,13 @@ func TestNowPlayingPane_RenderTier(t *testing.T) {
 		height int
 		want   renderTier
 	}{
-		{"base at bodyH 10", 120, 14, tierBase},  // 14-4=10
-		{"base at bodyH 15", 120, 19, tierBase},  // 19-4=15
-		{"base at bodyH 18", 120, 22, tierBase},  // 22-4=18
-		{"mid at bodyH 19", 120, 23, tierMid},    // 23-4=19
-		{"mid at bodyH 25", 120, 29, tierMid},    // 29-4=25
-		{"mid at bodyH 30", 120, 34, tierMid},    // 34-4=30
-		{"full at bodyH 31", 120, 35, tierFull},  // 35-4=31
+		{"base at bodyH 10", 120, 14, tierBase}, // 14-4=10
+		{"base at bodyH 15", 120, 19, tierBase}, // 19-4=15
+		{"base at bodyH 18", 120, 22, tierBase}, // 22-4=18
+		{"mid at bodyH 19", 120, 23, tierMid},   // 23-4=19
+		{"mid at bodyH 25", 120, 29, tierMid},   // 29-4=25
+		{"mid at bodyH 30", 120, 34, tierMid},   // 34-4=30
+		{"full at bodyH 31", 120, 35, tierFull}, // 35-4=31
 		{"full at bodyH 45", 120, 49, tierFull}, // 49-4=45
 	}
 	for _, tt := range tests {
