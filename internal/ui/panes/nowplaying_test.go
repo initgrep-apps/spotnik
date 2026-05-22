@@ -1346,6 +1346,36 @@ func TestNowPlayingPane_HandlePlaybackFetched_SkipsSameTrack(t *testing.T) {
 	assert.Nil(t, cmd, "same track should not dispatch art fetch")
 }
 
+// TestNowPlayingPane_HandlePlaybackFetched_ClearsArtOnNoImageTrack verifies that
+// changing to a track with no album images clears the renderer so View() falls back.
+func TestNowPlayingPane_HandlePlaybackFetched_ClearsArtOnNoImageTrack(t *testing.T) {
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	// Prime renderer with art for the initial track.
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", []string{"row1", "row2"})
+	assert.True(t, pane.artRenderer.HasImage())
+
+	newState := &api.PlaybackState{
+		IsPlaying: true,
+		Item: &api.Track{
+			ID:   "track-2",
+			Name: "Save Your Tears",
+			Album: api.Album{
+				ID:     "alb2",
+				Images: []api.AlbumImage{}, // no images
+			},
+		},
+	}
+	w.SetPlaybackState(newState)
+
+	_, cmd := pane.Update(PlaybackStateFetchedMsg{State: newState})
+	assert.Nil(t, cmd, "no images → no fetch cmd dispatched")
+	assert.False(t, pane.artRenderer.HasImage(), "stale art should be cleared")
+	assert.False(t, pane.artRenderer.IsLoading(), "loading should be cleared")
+}
+
 // TestNowPlayingPane_AlbumArtFetchedMsg_SetsImage verifies that a valid
 // AlbumArtFetchedMsg populates the renderer.
 func TestNowPlayingPane_AlbumArtFetchedMsg_SetsImage(t *testing.T) {

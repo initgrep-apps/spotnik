@@ -18,12 +18,13 @@ import (
 )
 
 // NowPlayingPane is the center pane Bubble Tea model.
-// It renders the currently playing track and handles playback key events.
+// It renders the currently playing track, album art, and visualizer.
 // It reads all state from the Store; it never stores API data in its own fields.
 // It implements the layout.Pane interface for integration with the layout manager.
 //
-// Layout: horizontal split with InfoBox (left, ~1/3 width) and viz engine (right, ~2/3 width).
-// The right panel contains: top viz rows, seek bar, bottom viz rows.
+// Layout is tier-aware: base (bodyH <= 18) shows 3-col inline image | info | viz;
+// mid (19-30) and full (>30) show 2-col upper image+vz with full-width InfoBox below.
+// Falls back to pre-feature 2-col layout when no album art is available.
 // When height < 8, Title() embeds compact track info in the pane title bar instead.
 type NowPlayingPane struct {
 	BasePane
@@ -175,7 +176,7 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 		p.volumeBar.SetWidth(cw - 4)
 	}
 
-	p.pendingArtRefresh = abs(p.imageRows()-prevRows) > 2
+	p.pendingArtRefresh = abs(p.imageRows()-prevRows) > artResizeThreshold
 }
 
 // SetFocused updates the focused state.
@@ -212,6 +213,8 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handlePlaybackFetched(m)
 
 	case components.AlbumArtFetchedMsg:
+		// When m.Err != nil, m.Rows is nil. SetResult stores nil rows and clears
+		// loading, which causes View() to fall back to the no-art layout.
 		p.artRenderer.SetResult(m.TrackID, m.Rows)
 		return p, nil
 
@@ -244,6 +247,9 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					p.artRenderer.SetLoading(ps.Item.ID)
 					return p, components.FetchAlbumArtCmd(ps.Item.ID, img.URL, p.imageRows(), p.imageCols())
 				}
+				// Current track has no images — clear stale art so View() falls back.
+				p.artRenderer.SetLoading(ps.Item.ID)
+				p.artRenderer.SetResult(ps.Item.ID, nil)
 			}
 		}
 		return p, nil
@@ -669,6 +675,9 @@ func (p *NowPlayingPane) handlePlaybackFetched(msg PlaybackStateFetchedMsg) (*No
 				p.artRenderer.SetLoading(track.ID)
 				return p, components.FetchAlbumArtCmd(track.ID, img.URL, p.imageRows(), p.imageCols())
 			}
+			// New track has no images — clear stale art so View() falls back.
+			p.artRenderer.SetLoading(track.ID)
+			p.artRenderer.SetResult(track.ID, nil)
 		}
 	}
 
@@ -845,6 +854,11 @@ func abs(n int) int {
 	}
 	return n
 }
+
+// artResizeThreshold is the minimum row-delta that triggers a re-fetch of album
+// art after a resize. Re-rendering via pixterm is expensive; ignoring sub-pixel
+// jitter avoids spamming the CDN on every minor terminal resize.
+const artResizeThreshold = 2
 
 // confirmedVolume reads the active device's volume from the store.
 // Returns 0 when playback state or device info is unavailable.
