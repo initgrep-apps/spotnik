@@ -1,7 +1,7 @@
 ---
 title: "Layout: reduce NowPlaying row weights, remove MinHeight, rename Dashboard preset"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background
