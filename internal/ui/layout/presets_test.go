@@ -110,11 +110,11 @@ func TestPresetStats_HasFivePanes(t *testing.T) {
 }
 
 // TestPresetStats_NowPlayingMinHeight verifies the NowPlaying row carries
-// MinHeight: 14 so it always gets enough rows for image rendering.
+// MinHeight: 10 so it always gets enough rows for image rendering.
 func TestPresetStats_NowPlayingMinHeight(t *testing.T) {
 	p := layout.PresetStats
 	require.Len(t, p.Grid, 3)
-	assert.Equal(t, 14, p.Grid[0].MinHeight, "NowPlaying row must have MinHeight 14")
+	assert.Equal(t, 9, p.Grid[0].MinHeight, "NowPlaying row must have MinHeight 9")
 }
 
 // TestPresetStats_FlatThreeRows verifies the flat grid structure (story 181):
@@ -126,7 +126,7 @@ func TestPresetStats_FlatThreeRows(t *testing.T) {
 	p := layout.PresetStats
 
 	// Row 0: NowPlaying strip
-	assert.Equal(t, 1, p.Grid[0].HeightWeight)
+	assert.Equal(t, 2, p.Grid[0].HeightWeight)
 	assert.Len(t, p.Grid[0].Cells, 1)
 	assert.Equal(t, layout.PaneNowPlaying, p.Grid[0].Cells[0].PaneID)
 
@@ -151,17 +151,18 @@ func TestPagePresets_Counts(t *testing.T) {
 	assert.Len(t, layout.PageStatsPresets, 1, "PageStatsPresets should have 1 entry")
 }
 
-// TestPreset_MusicPage_NowPlayingMinHeight verifies that every Music page preset
-// reserves at least 14 rows for the NowPlaying pane so tier-aware layout works.
+// TestPreset_MusicPage_NowPlayingMinHeight verifies that Music page presets
+// reserve the correct MinHeight for the NowPlaying pane.
 func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
 	presets := []struct {
-		name   string
-		preset layout.Preset
+		name      string
+		preset    layout.Preset
+		minHeight int
 	}{
-		{"Dashboard", layout.PresetDashboard},
-		{"Listening", layout.PresetListening},
-		{"Library", layout.PresetLibrary},
-		{"Discovery", layout.PresetDiscovery},
+		{"Dashboard", layout.PresetDashboard, 9},
+		{"Listening", layout.PresetListening, 9},
+		{"Library", layout.PresetLibrary, 9},
+		{"Discovery", layout.PresetDiscovery, 9},
 	}
 
 	for _, tt := range presets {
@@ -170,8 +171,8 @@ func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
 			nowPlayingRow := tt.preset.Grid[0]
 			assert.Equal(t, layout.PaneNowPlaying, nowPlayingRow.Cells[0].PaneID,
 				"first row must contain NowPlaying")
-			assert.Equal(t, 14, nowPlayingRow.MinHeight,
-				"NowPlaying row must have MinHeight 14")
+			assert.Equal(t, tt.minHeight, nowPlayingRow.MinHeight,
+				"NowPlaying row must have correct MinHeight")
 		})
 	}
 }

@@ -47,3 +47,5 @@ docs/superpowers/
 .claude/skills/
 .claude/settings.local.json
 .agents/
+.env
+.mcp.json

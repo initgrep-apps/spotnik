@@ -78,22 +78,22 @@ func TestResize_TilesContentArea(t *testing.T) {
 
 func TestResize_HeightWeightDistribution(t *testing.T) {
 	// Dashboard: weights 2:3:3 over 26 content rows (30 - 1 header - 3 status)
-	// NowPlaying row has MinHeight: 14.
-	// reserved = 14, remaining = 12, totalW = 8
-	// Row 0: 14 + 12*2/8 = 17
-	// Row 1: 0 + 12*3/8 = 4
-	// Row 2 (last): 26 - 21 = 5
+	// NowPlaying row has MinHeight: 9.
+	// reserved = 9, remaining = 17, totalW = 8
+	// Row 0: 9 + 17*2/8 = 13
+	// Row 1: 0 + 17*3/8 = 6
+	// Row 2 (last): 26 - 19 = 7
 	m := layout.NewManager()
 	m.Resize(120, 30) // content height = 26
 
 	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 17, nowPlayingRect.Height)
+	assert.Equal(t, 13, nowPlayingRect.Height)
 
 	playlistsRect := m.PaneRect(layout.PanePlaylists)
-	assert.Equal(t, 4, playlistsRect.Height)
+	assert.Equal(t, 6, playlistsRect.Height)
 
 	queueRect := m.PaneRect(layout.PaneQueue)
-	assert.Equal(t, 5, queueRect.Height)
+	assert.Equal(t, 7, queueRect.Height)
 }
 
 func TestResize_WidthWeightDistribution(t *testing.T) {
@@ -703,14 +703,14 @@ func TestPresetStats_NowPlayingRowHeight(t *testing.T) {
 	m.Resize(120, 30)
 	m.TogglePage() // Stats page
 
-	// PresetStats: MinHeight=14, weights 1:3:2, contentH=26
-	// reserved=14, remaining=12, totalW=6
-	// NowPlaying: 14 + 12*1/6 = 16
+	// PresetStats: MinHeight=9, weights 2:3:2, contentH=26
+	// reserved=9, remaining=17, totalW=7
+	// NowPlaying: 9 + 17*2/7 = 13
 	np := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 16, np.Height, "at 30-row terminal NowPlaying should get 16 rows")
+	assert.Equal(t, 13, np.Height, "at 30-row terminal NowPlaying should get 13 rows")
 
-	// At 50-row terminal: contentH=46, reserved=14, remaining=32, totalW=6
-	// NowPlaying: 14 + 32*1/6 = 14 + 5 = 19 (last row absorbs rounding)
+	// At 50-row terminal: contentH=46, reserved=9, remaining=37, totalW=7
+	// NowPlaying: 9 + 37*2/7 = 19
 	m.Resize(120, 50)
 	np = m.PaneRect(layout.PaneNowPlaying)
 	assert.Equal(t, 19, np.Height, "at 50-row terminal NowPlaying should get 19 rows")

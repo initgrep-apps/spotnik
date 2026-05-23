@@ -589,6 +589,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case components.AlbumArtFetchedMsg:
+		// Forward album-art fetch result to NowPlayingPane so it can cache the
+		// rendered rows and switch from the grey placeholder to the actual image.
+		if np := a.nowPlayingPane(); np != nil {
+			updated, cmd := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+			return a, cmd
+		}
+		return a, nil
+
 	case panes.RateLimitedMsg:
 		// 429 from Spotify — activate backoff and emit a ratelimit toast.
 		backoff := m.RetryAfterSecs

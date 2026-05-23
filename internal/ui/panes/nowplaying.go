@@ -141,7 +141,6 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 	p.BasePane.SetSize(width, height)
 
 	cw := p.contentWidth()
-	bh := p.bodyHeight()
 
 	switch p.renderTier() {
 	case tierBase:
@@ -150,7 +149,7 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 		cols := rows * 2
 		remaining := paneMax(cw-cols-2, 10)
 
-		infoWidth := paneMax(remaining/2, 14)
+		infoWidth := paneMax(remaining*40/100, 14)
 		vizWidth := remaining - infoWidth - 1
 		if vizWidth < 1 {
 			vizWidth = 1
@@ -161,7 +160,7 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 		p.seekBar.SetWidth(vizWidth)
 		p.volumeBar.SetWidth(infoWidth - 4)
 
-	case tierMid, tierFull:
+	case tierFull:
 		// 2-col upper: image | viz
 		rows := p.imageRows()
 		cols := rows * 2
@@ -170,9 +169,8 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 		p.engine.SetSize(vizWidth, paneMax(rows-1, 1))
 		p.seekBar.SetWidth(vizWidth)
 
-		// Lower section: full-width InfoBox
-		infoHeight := paneMax(bh-rows, 2)
-		p.infoBox.SetSize(cw, infoHeight)
+		// Lower section: full-width InfoBox (exactly 4 rows: 2 border + 2 content)
+		p.infoBox.SetSize(cw, 4)
 		p.volumeBar.SetWidth(cw - 4)
 	}
 
@@ -280,8 +278,6 @@ func (p *NowPlayingPane) View() string {
 	switch p.renderTier() {
 	case tierBase:
 		return p.renderBase()
-	case tierMid:
-		return p.renderMid()
 	case tierFull:
 		return p.renderFull()
 	}
@@ -310,8 +306,8 @@ func (p *NowPlayingPane) renderFallback() string {
 
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 
-	contentWidth := paneMax(p.width-4, 10)
-	bodyHeight := paneMax(p.height-4, 4)
+	contentWidth := paneMax(p.width-2, 10)
+	bodyHeight := paneMax(p.height-2, 0)
 	innerH := bodyHeight - 2
 
 	var infoLines []string
@@ -412,11 +408,26 @@ func (p *NowPlayingPane) renderBase() string {
 
 	composite := lipgloss.JoinHorizontal(lipgloss.Top, imageBlock, " ", infoView, " ", rightPanel)
 
+	// Cap vertical padding to 1 line top and 1 line bottom.
 	contentHeight := lipgloss.Height(composite)
-	availableHeight := paneMax(p.height-2, 1)
-	if contentHeight < availableHeight {
-		composite = lipgloss.Place(cw, availableHeight,
-			lipgloss.Center, lipgloss.Center, composite)
+	if contentHeight < p.height {
+		pad := p.height - contentHeight
+		topPad := 1
+		bottomPad := pad - topPad
+		if bottomPad > 1 {
+			bottomPad = 1
+		}
+		if bottomPad < 0 {
+			bottomPad = 0
+			topPad = pad
+			if topPad > 1 {
+				topPad = 1
+			}
+		}
+		composite = strings.Repeat("\n", topPad) + composite
+		if bottomPad > 0 {
+			composite += strings.Repeat("\n", bottomPad)
+		}
 	}
 
 	return composite
@@ -457,61 +468,9 @@ func (p *NowPlayingPane) buildInfoLinesBase(bodyHeight int) []string {
 	return lines
 }
 
-// renderMid renders the mid-tier layout: image+viz side-by-side above a full-width
-// 2-line InfoBox with no title.
-func (p *NowPlayingPane) renderMid() string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return p.renderEmpty()
-	}
-	t := ps.Item
-	rows := p.imageRows()
-	cols := p.imageCols()
-
-	imageBlock := p.renderImageBlock(rows, cols)
-
-	frame := p.engine.CurrentFrame()
-	topRows, bottomRows := splitFrame(frame)
-	topView := renderStyledLines(topRows)
-	bottomView := renderStyledLines(bottomRows)
-	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-	vizBlock := lipgloss.JoinVertical(lipgloss.Left, topView, seekBar, bottomView)
-
-	upperSection := lipgloss.JoinHorizontal(lipgloss.Top, imageBlock, " ", vizBlock)
-
-	infoLines := p.buildInfoLinesMid()
-	infoView := p.infoBox.Render("", infoLines, p.focused)
-
-	return lipgloss.JoinVertical(lipgloss.Left, upperSection, infoView)
-}
-
-// buildInfoLinesMid builds the compact 2-line InfoBox content for the mid tier.
-func (p *NowPlayingPane) buildInfoLinesMid() []string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return nil
-	}
-	t := ps.Item
-	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	artistNames := make([]string, len(t.Artists))
-	for i, a := range t.Artists {
-		artistNames[i] = a.Name
-	}
-
-	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-
-	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
-	line1 := primaryStyle.Render(t.Name) + " " + sep + " " + secondaryStyle.Render(strings.Join(artistNames, ", ")) + " " + sep + " " + mutedStyle.Render(t.Album.Name)
-	line2 := ctrl.Render() + "   " + p.volumeBar.Render()
-
-	return []string{line1, line2}
-}
-
 // renderFull renders the full-tier layout: image+viz side-by-side above a full-width
-// 5-row InfoBox titled "Track Info" with 3 content lines.
+// 5-row InfoBox titled "Track Info" with 3 content lines. The entire content block
+// is limited to ~60 % of bodyHeight and centred vertically with generous padding.
 func (p *NowPlayingPane) renderFull() string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
@@ -519,6 +478,7 @@ func (p *NowPlayingPane) renderFull() string {
 	}
 	t := ps.Item
 	cw := p.contentWidth()
+	bh := p.bodyHeight()
 	rows := p.imageRows()
 	cols := p.imageCols()
 
@@ -536,7 +496,8 @@ func (p *NowPlayingPane) renderFull() string {
 	infoLines := p.buildInfoLinesFull(cw)
 	infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
 
-	return lipgloss.JoinVertical(lipgloss.Left, upperSection, infoView)
+	content := lipgloss.JoinVertical(lipgloss.Left, upperSection, infoView)
+	return lipgloss.Place(cw, bh, lipgloss.Center, lipgloss.Center, content)
 }
 
 // buildInfoLinesFull builds the rich 3-line InfoBox content for the full tier.
@@ -573,7 +534,7 @@ func (p *NowPlayingPane) buildInfoLinesFull(contentWidth int) []string {
 	}
 	line2 := left + strings.Repeat(" ", gap) + right
 
-	return []string{line1, line2, ""}
+	return []string{line1, line2}
 }
 
 // renderImageBlock returns the album art image as a rows×cols block, a muted
@@ -788,46 +749,39 @@ type renderTier int
 
 const (
 	tierBase renderTier = iota
-	tierMid
 	tierFull
 )
 
 // renderTier selects the layout tier based on bodyHeight.
 //
-//	base: bodyHeight ≤ 18
-//	mid:  19 – 30
+//	base: bodyHeight ≤ 30
 //	full: > 30
 func (p *NowPlayingPane) renderTier() renderTier {
-	switch {
-	case p.bodyHeight() > 30:
+	if p.bodyHeight() > 30 {
 		return tierFull
-	case p.bodyHeight() > 18:
-		return tierMid
-	default:
-		return tierBase
 	}
+	return tierBase
 }
 
-// bodyHeight returns the inner content height (pane height minus border chrome).
-func (p *NowPlayingPane) bodyHeight() int { return paneMax(p.height-4, 0) }
+// bodyHeight returns the inner content height (pane height minus 1 line padding each side).
+func (p *NowPlayingPane) bodyHeight() int { return paneMax(p.height-2, 0) }
 
-// contentWidth returns the inner content width (pane width minus border chrome).
-func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width-4, 10) }
+// contentWidth returns the inner content width (pane width minus 1 col padding each side).
+func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width-2, 10) }
 
 // imageRows returns the number of terminal rows allocated to the album art block.
-// The formula is tier-aware: base uses the full body height, mid/full cap rows so
-// the viz column never falls below 10 chars and reserve space for the InfoBox.
+// The formula is tier-aware: base uses the full body height, full caps rows so
+// the viz column never falls below 10 chars and reserves space for the InfoBox.
+// Full-tier content is capped to ~60 % of bodyHeight so it can be centred
+// vertically with comfortable padding.
 func (p *NowPlayingPane) imageRows() int {
 	bh := p.bodyHeight()
 	cw := p.contentWidth()
-	switch p.renderTier() {
-	case tierMid:
-		return paneMax(paneMin(bh-4, (cw-11)/2), 4)
-	case tierFull:
-		return paneMax(paneMin(bh-5, (cw-11)/2), 4)
-	default:
-		return paneMax(bh, 4)
+	if p.renderTier() == tierFull {
+		targetH := int(float64(bh) * 0.6)
+		return paneMax(paneMin(targetH-5, (cw-11)/2), 4)
 	}
+	return paneMax(bh, 4)
 }
 
 // imageCols returns the number of terminal columns allocated to the album art block.

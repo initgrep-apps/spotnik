@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/eliukblau/pixterm/pkg/ansimage"
@@ -64,7 +65,8 @@ func (a *AlbumArtRenderer) SetResult(trackID string, rows []string) {
 // The cmd must be dispatched via tea.Batch or returned from Update().
 func FetchAlbumArtCmd(trackID, url string, rows, cols int) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := http.Get(url) //nolint:gosec // public CDN, no user-controlled input
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Get(url) //nolint:gosec // public CDN, no user-controlled input
 		if err != nil {
 			return albumArtResult(trackID, nil, err)
 		}
