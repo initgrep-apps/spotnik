@@ -15,7 +15,7 @@ func TestNewManager_Defaults(t *testing.T) {
 	require.NotNil(t, m)
 	assert.Equal(t, layout.PageMusic, m.ActivePage())
 	assert.Equal(t, 0, m.ActivePresetIndex())
-	assert.Equal(t, "Full Dashboard", m.ActivePresetName())
+	assert.Equal(t, "Dashboard", m.ActivePresetName())
 }
 
 func TestResize_ComputesRectsForDashboard(t *testing.T) {
@@ -77,23 +77,23 @@ func TestResize_TilesContentArea(t *testing.T) {
 }
 
 func TestResize_HeightWeightDistribution(t *testing.T) {
-	// Dashboard: weights 2:3:3 over 26 content rows (30 - 1 header - 3 status)
-	// NowPlaying row has MinHeight: 14.
-	// reserved = 14, remaining = 12, totalW = 8
-	// Row 0: 14 + 12*2/8 = 17
-	// Row 1: 0 + 12*3/8 = 4
-	// Row 2 (last): 26 - 21 = 5
+	// Dashboard: weights 1:3:3 over 26 content rows (30 - 1 header - 3 status)
+	// No MinHeight.
+	// totalW = 7, remaining = 26
+	// Row 0: 26*1/7 = 3
+	// Row 1: 26*3/7 = 11
+	// Row 2 (last): 26 - 14 = 12
 	m := layout.NewManager()
 	m.Resize(120, 30) // content height = 26
 
 	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 17, nowPlayingRect.Height)
+	assert.Equal(t, 3, nowPlayingRect.Height)
 
 	playlistsRect := m.PaneRect(layout.PanePlaylists)
-	assert.Equal(t, 4, playlistsRect.Height)
+	assert.Equal(t, 11, playlistsRect.Height)
 
 	queueRect := m.PaneRect(layout.PaneQueue)
-	assert.Equal(t, 5, queueRect.Height)
+	assert.Equal(t, 12, queueRect.Height)
 }
 
 func TestResize_WidthWeightDistribution(t *testing.T) {
@@ -703,24 +703,24 @@ func TestPresetStats_NowPlayingRowHeight(t *testing.T) {
 	m.Resize(120, 30)
 	m.TogglePage() // Stats page
 
-	// PresetStats: MinHeight=14, weights 1:3:2, contentH=26
-	// reserved=14, remaining=12, totalW=6
-	// NowPlaying: 14 + 12*1/6 = 16
+	// PresetStats: weights 1:3:3, contentH=26
+	// totalW=7, remaining=26
+	// NowPlaying: 26*1/7 = 3
 	np := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 16, np.Height, "at 30-row terminal NowPlaying should get 16 rows")
+	assert.Equal(t, 3, np.Height, "at 30-row terminal NowPlaying should get 3 rows")
 
-	// At 50-row terminal: contentH=46, reserved=14, remaining=32, totalW=6
-	// NowPlaying: 14 + 32*1/6 = 14 + 5 = 19 (last row absorbs rounding)
+	// At 50-row terminal: contentH=46, totalW=7, remaining=46
+	// NowPlaying: 46*1/7 = 6
 	m.Resize(120, 50)
 	np = m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 19, np.Height, "at 50-row terminal NowPlaying should get 19 rows")
+	assert.Equal(t, 6, np.Height, "at 50-row terminal NowPlaying should get 6 rows")
 }
 
 func TestPresetCycleFullLoop(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	expectedNames := []string{"Full Dashboard", "Listening", "Library", "Discovery"}
+	expectedNames := []string{"Dashboard", "Listening", "Library", "Discovery"}
 	expectedVisible := []int{8, 3, 4, 4}
 
 	for i := 0; i < len(expectedNames); i++ {
@@ -729,12 +729,12 @@ func TestPresetCycleFullLoop(t *testing.T) {
 		m.CyclePreset()
 	}
 	// Back to Dashboard
-	assert.Equal(t, "Full Dashboard", m.ActivePresetName())
+	assert.Equal(t, "Dashboard", m.ActivePresetName())
 }
 
 func TestRowCollapseHeightRedistributed(t *testing.T) {
 	// Hide all panes in row 2 (Playlists, Albums, LikedSongs) on Dashboard.
-	// Remaining content height should be split between rows 1 and 3 (weights 2:3).
+	// Remaining content height should be split between rows 1 and 3 (weights 1:3).
 	m := layout.NewManager()
 	const W, H = 120, 30
 	m.Resize(W, H)
@@ -745,8 +745,8 @@ func TestRowCollapseHeightRedistributed(t *testing.T) {
 	m.TogglePane(layout.PaneAlbums)
 	m.TogglePane(layout.PaneLikedSongs)
 
-	// Active rows: weight 2 and weight 3 → totalWeight 5
-	// Row 1: 2/5 * 26 = 10, Row 3: 3/5 * 26 = 16 (last absorbs 26 - 10 = 16)
+	// Active rows: weight 1 and weight 3 → totalWeight 4
+	// Row 1: 1/4 * 26 = 6, Row 3: 3/4 * 26 = 20 (last absorbs 26 - 6 = 20)
 	nowH := m.PaneRect(layout.PaneNowPlaying).Height
 	queueH := m.PaneRect(layout.PaneQueue).Height
 

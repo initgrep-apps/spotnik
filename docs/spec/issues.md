@@ -91,3 +91,16 @@ Minor items from story 215 PR review:
 3. **No `totalHWeight == 0` branch test**: If all visible rows have HeightWeight 0, the switch falls through to `h = row.minHeight`. No preset uses this, but the branch is reachable.
 
 4. **Type-design: anemic Row/Cell structs**: No constructors or validation. Negative weights and MinHeight are representable and silently clamped by recompute rather than rejected at construction time. Consider a `Preset.Validate()` method.
+
+---
+
+### Album Art: HTTP timeout and renderer race condition
+
+**Found:** 2026-05-24 | **Source:** PR #305 Review
+**Feature:** 17-album-art
+
+Minor items from story 218 PR review (pre-existing from stories 216/217):
+
+1. **`FetchAlbumArtCmd` uses `http.Get` with no timeout**: Deviates from project HTTP client pattern (`api/base.go` uses `Timeout: 30s`). A slow CDN image URL will cause the Bubble Tea command goroutine to hang indefinitely. Fix: use `&http.Client{Timeout: 30 * time.Second}`.
+
+2. **`AlbumArtRenderer.SetResult` race on same-track/different-dimension fetches**: `Init()` dispatches a conservative-size fetch and `WindowSizeMsg` dispatches a resize-size fetch. Both target the same track ID, so the first to complete wins regardless of whether its dimensions match the current pane. Fix: add a monotonic sequence number to `AlbumArtRenderer` and `AlbumArtFetchedMsg`; reject stale results.
