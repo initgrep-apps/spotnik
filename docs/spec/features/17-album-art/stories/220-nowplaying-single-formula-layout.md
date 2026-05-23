@@ -1,7 +1,7 @@
 ---
 title: "NowPlaying: single-formula layout, remove tier system"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background
