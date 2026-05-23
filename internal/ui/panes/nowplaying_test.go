@@ -73,6 +73,17 @@ func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) (*NowPlayingPa
 	return NewNowPlayingPane(s, t, focused), w
 }
 
+// makeArtRows returns a slice of strings each filled with cols copies of the
+// block character "█", useful for simulating loaded album art in tests.
+func makeArtRows(cols, rows int) []string {
+	line := strings.Repeat("█", cols)
+	out := make([]string, rows)
+	for i := range out {
+		out[i] = line
+	}
+	return out
+}
+
 // ── Task 1: Rename tests ─────────────────────────────────────────────────────
 
 func TestNowPlayingPane_View_NowPlaying(t *testing.T) {
@@ -1408,36 +1419,10 @@ func TestNowPlayingPane_AlbumArtFetchedMsg_StaleTrackID(t *testing.T) {
 
 // ── Story 217: Responsive 3-tier layout ───────────────────────────────────────
 
-// TestNowPlayingPane_RenderTier verifies tier dispatch for various body heights.
-func TestNowPlayingPane_RenderTier(t *testing.T) {
-	tests := []struct {
-		name   string
-		width  int
-		height int
-		want   renderTier
-	}{
-		{"base at bodyH 10", 120, 14, tierBase}, // 14-4=10
-		{"base at bodyH 15", 120, 19, tierBase}, // 19-4=15
-		{"base at bodyH 18", 120, 22, tierBase}, // 22-4=18
-		{"mid at bodyH 19", 120, 23, tierMid},   // 23-4=19
-		{"mid at bodyH 25", 120, 29, tierMid},   // 29-4=25
-		{"mid at bodyH 30", 120, 34, tierMid},   // 34-4=30
-		{"full at bodyH 31", 120, 35, tierFull}, // 35-4=31
-		{"full at bodyH 45", 120, 49, tierFull}, // 49-4=45
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pane := newTestNowPlayingPane(true)
-			pane.SetSize(tt.width, tt.height)
-			assert.Equal(t, tt.want, pane.renderTier())
-		})
-	}
-}
-
-// TestNowPlayingPane_View_BaseTier verifies the 3-column base-tier layout.
-func TestNowPlayingPane_View_BaseTier(t *testing.T) {
+// TestNowPlayingPane_View_3Col verifies the 3-column layout with album art loaded.
+func TestNowPlayingPane_View_3Col(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(120, 16) // bodyH = 12 (base tier)
+	pane.SetSize(120, 16)
 
 	// Simulate loaded album art
 	pane.artRenderer.SetLoading("track-1")
@@ -1458,67 +1443,9 @@ func TestNowPlayingPane_View_BaseTier(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, hasBraille, "base tier should contain braille characters")
+	assert.True(t, hasBraille, "3-col layout should contain braille characters")
 
 	// Album art ANSI sequences must appear in the output
-	assert.Contains(t, output, "\x1b[31m", "album art ANSI sequences should be present")
-}
-
-// TestNowPlayingPane_View_MidTier verifies the mid-tier 2-section layout.
-func TestNowPlayingPane_View_MidTier(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(120, 25) // bodyH = 21 (mid tier)
-
-	// Simulate loaded album art
-	pane.artRenderer.SetLoading("track-1")
-	pane.artRenderer.SetResult("track-1", []string{"\x1b[31mimg1\x1b[0m", "\x1b[31mimg2\x1b[0m", "\x1b[31mimg3\x1b[0m", "\x1b[31mimg4\x1b[0m", "\x1b[31mimg5\x1b[0m", "\x1b[31mimg6\x1b[0m", "\x1b[31mimg7\x1b[0m", "\x1b[31mimg8\x1b[0m", "\x1b[31mimg9\x1b[0m", "\x1b[31mimg10\x1b[0m"})
-
-	output := pane.View()
-
-	// InfoBox content must be present
-	assert.Contains(t, output, "Blinding Lights")
-	assert.Contains(t, output, "The Weeknd")
-
-	// Braille viz chars must be present
-	hasBraille := false
-	for _, r := range output {
-		if r >= '⠀' && r <= '⣿' {
-			hasBraille = true
-			break
-		}
-	}
-	assert.True(t, hasBraille, "mid tier should contain braille characters")
-
-	// Album art ANSI sequences must appear
-	assert.Contains(t, output, "\x1b[31m", "album art ANSI sequences should be present")
-}
-
-// TestNowPlayingPane_View_FullTier verifies the full-tier 2-section layout.
-func TestNowPlayingPane_View_FullTier(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, true)
-	pane.SetSize(120, 45) // bodyH = 41 (full tier)
-
-	// Simulate loaded album art
-	pane.artRenderer.SetLoading("track-1")
-	pane.artRenderer.SetResult("track-1", []string{"\x1b[31mimg1\x1b[0m", "\x1b[31mimg2\x1b[0m", "\x1b[31mimg3\x1b[0m", "\x1b[31mimg4\x1b[0m", "\x1b[31mimg5\x1b[0m", "\x1b[31mimg6\x1b[0m", "\x1b[31mimg7\x1b[0m", "\x1b[31mimg8\x1b[0m", "\x1b[31mimg9\x1b[0m", "\x1b[31mimg10\x1b[0m", "\x1b[31mimg11\x1b[0m", "\x1b[31mimg12\x1b[0m", "\x1b[31mimg13\x1b[0m", "\x1b[31mimg14\x1b[0m", "\x1b[31mimg15\x1b[0m", "\x1b[31mimg16\x1b[0m", "\x1b[31mimg17\x1b[0m", "\x1b[31mimg18\x1b[0m"})
-
-	output := pane.View()
-
-	// InfoBox content must be present
-	assert.Contains(t, output, "Blinding Lights")
-	assert.Contains(t, output, "The Weeknd")
-
-	// Braille viz chars must be present
-	hasBraille := false
-	for _, r := range output {
-		if r >= '⠀' && r <= '⣿' {
-			hasBraille = true
-			break
-		}
-	}
-	assert.True(t, hasBraille, "full tier should contain braille characters")
-
-	// Album art ANSI sequences must appear
 	assert.Contains(t, output, "\x1b[31m", "album art ANSI sequences should be present")
 }
 
@@ -1663,4 +1590,57 @@ func TestNowPlayingPane_WindowSizeMsg_NoRefetchWhenSmallChange(t *testing.T) {
 
 	_, cmd := pane.Update(tea.WindowSizeMsg{Width: 100, Height: 22})
 	assert.Nil(t, cmd, "small resize should not trigger art re-fetch")
+}
+
+// ── Story 220: Single-formula layout tests ───────────────────────────────────
+
+// TestNowPlayingPane_Layout_ThreeCol_AtWideTerminal verifies that at SetSize(120, 20)
+// the pane renders a 3-column layout with InfoBox borders and track info visible.
+func TestNowPlayingPane_Layout_ThreeCol_AtWideTerminal(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(120, 20)
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", makeArtRows(36, 18))
+
+	output := pane.View()
+
+	assert.Contains(t, output, "╭", "3-col layout should contain InfoBox top-left corner")
+	assert.Contains(t, output, "╰", "3-col layout should contain InfoBox bottom-left corner")
+	assert.Contains(t, output, "Blinding Lights", "3-col layout should show track name")
+	assert.Contains(t, output, "The Weeknd", "3-col layout should show artist name")
+}
+
+// TestNowPlayingPane_Layout_TwoCol_AtNarrowTerminal verifies that at SetSize(80, 24)
+// the pane drops the InfoBox and renders a 2-column layout (image + viz).
+func TestNowPlayingPane_Layout_TwoCol_AtNarrowTerminal(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", makeArtRows(44, 22))
+
+	output := pane.View()
+
+	assert.NotContains(t, output, "╭", "2-col layout should not contain InfoBox top-left corner")
+
+	hasBraille := false
+	for _, r := range output {
+		if r >= '⠀' && r <= '⣿' {
+			hasBraille = true
+			break
+		}
+	}
+	assert.True(t, hasBraille, "2-col layout should contain braille characters from viz")
+}
+
+// TestNowPlayingPane_Layout_SeekBarVisible verifies that the seek bar is rendered
+// at SetSize(120, 20) with progress 30s showing "0:30".
+func TestNowPlayingPane_Layout_SeekBarVisible(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(120, 20)
+	pane.localProgressMs = 30000
+	pane.artRenderer.SetLoading("track-1")
+	pane.artRenderer.SetResult("track-1", makeArtRows(36, 18))
+
+	output := pane.View()
+	assert.Contains(t, output, "0:30", "seek bar should show current time")
 }
