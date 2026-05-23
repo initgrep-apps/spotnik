@@ -11,24 +11,24 @@ import (
 )
 
 // TestHeaderBar_LeftSegment_Music verifies that a Music bar renders
-// "spotnik", "Music", and "preset N" in the left segment.
+// "spotnik", "Music", and the preset name in the left segment.
 func TestHeaderBar_LeftSegment_Music(t *testing.T) {
 	th := theme.Load("black")
 	h := uikit.HeaderBar{
 		Width:      160,
 		AppName:    "spotnik",
 		Page:       "Music",
-		Preset:     0,
+		PresetName: "Dashboard",
 		RightChips: []string{},
 		Theme:      th,
 	}
 	plain := uikit.Capture(h.Render())[0]
 	assert.Contains(t, plain, "spotnik", "left segment must contain app name")
 	assert.Contains(t, plain, "Music", "left segment must contain page indicator")
-	assert.Contains(t, plain, "preset 0", "left segment must contain preset index")
+	assert.Contains(t, plain, "Dashboard", "left segment must contain preset name")
 }
 
-// TestHeaderBar_LeftSegment_Stats_NoPreset verifies that when Preset == -1,
+// TestHeaderBar_LeftSegment_Stats_NoPreset verifies that when PresetName is empty,
 // the preset segment is hidden.
 func TestHeaderBar_LeftSegment_Stats_NoPreset(t *testing.T) {
 	th := theme.Load("black")
@@ -36,14 +36,14 @@ func TestHeaderBar_LeftSegment_Stats_NoPreset(t *testing.T) {
 		Width:      160,
 		AppName:    "spotnik",
 		Page:       "Stats",
-		Preset:     -1,
+		PresetName: "",
 		RightChips: []string{},
 		Theme:      th,
 	}
 	plain := uikit.Capture(h.Render())[0]
 	assert.Contains(t, plain, "spotnik", "left segment must contain app name")
 	assert.Contains(t, plain, "Stats", "left segment must contain page indicator")
-	assert.NotContains(t, plain, "preset", "Stats page bar must not contain preset segment")
+	assert.NotContains(t, plain, "Dashboard", "Stats page bar must not contain preset segment")
 }
 
 // TestHeaderBar_RightChips_Rendered verifies that pre-rendered chip strings are
@@ -56,7 +56,7 @@ func TestHeaderBar_RightChips_Rendered(t *testing.T) {
 		Width:      160,
 		AppName:    "spotnik",
 		Page:       "Music",
-		Preset:     1,
+		PresetName: "Listening",
 		RightChips: []string{chip1, chip2},
 		Theme:      th,
 	}
@@ -73,7 +73,7 @@ func TestHeaderBar_FillsExactWidth(t *testing.T) {
 		Width:      160,
 		AppName:    "spotnik",
 		Page:       "Music",
-		Preset:     0,
+		PresetName: "Dashboard",
 		RightChips: []string{},
 		Theme:      th,
 	}
@@ -89,7 +89,7 @@ func TestHeaderBar_FillsExactWidth_Narrow(t *testing.T) {
 		Width:      120,
 		AppName:    "spotnik",
 		Page:       "Music",
-		Preset:     0,
+		PresetName: "Dashboard",
 		RightChips: []string{},
 		Theme:      th,
 	}
@@ -103,11 +103,11 @@ func TestHeaderBar_FillsExactWidth_Narrow(t *testing.T) {
 func TestHeaderBar_ZeroWidth_FallsBack(t *testing.T) {
 	th := theme.Load("black")
 	h := uikit.HeaderBar{
-		Width:   0,
-		AppName: "spotnik",
-		Page:    "Music",
-		Preset:  0,
-		Theme:   th,
+		Width:      0,
+		AppName:    "spotnik",
+		Page:       "Music",
+		PresetName: "Dashboard",
+		Theme:      th,
 	}
 	result := h.Render()
 	assert.NotEmpty(t, result, "zero-width header must return non-empty string")
@@ -125,7 +125,7 @@ func TestHeaderBar_GapAtLeastOne(t *testing.T) {
 		Width:      120,
 		AppName:    "spotnik",
 		Page:       "Music",
-		Preset:     0,
+		PresetName: "Dashboard",
 		RightChips: []string{longChip},
 		Theme:      th,
 	}
@@ -140,27 +140,27 @@ func TestHeaderBar_AsciiSeparator(t *testing.T) {
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
 	th := theme.Load("black")
 	h := uikit.HeaderBar{
-		Width:   160,
-		AppName: "spotnik",
-		Page:    "Music",
-		Preset:  0,
-		Theme:   th,
+		Width:      160,
+		AppName:    "spotnik",
+		Page:       "Music",
+		PresetName: "Dashboard",
+		Theme:      th,
 	}
 	plain := uikit.Capture(h.Render())[0]
 	assert.Contains(t, plain, " - ", "ascii mode must use hyphen separator")
 	assert.NotContains(t, plain, " ─ ", "ascii mode must not use unicode horizontal rule")
 }
 
-// TestHeaderBar_PresetN_ShowsIndex verifies that preset index > 0 is shown correctly.
-func TestHeaderBar_PresetN_ShowsIndex(t *testing.T) {
+// TestHeaderBar_PresetName_ShowsName verifies that a non-empty preset name is shown correctly.
+func TestHeaderBar_PresetName_ShowsName(t *testing.T) {
 	th := theme.Load("black")
 	h := uikit.HeaderBar{
-		Width:   160,
-		AppName: "spotnik",
-		Page:    "Music",
-		Preset:  3,
-		Theme:   th,
+		Width:      160,
+		AppName:    "spotnik",
+		Page:       "Music",
+		PresetName: "Discovery",
+		Theme:      th,
 	}
 	plain := uikit.Capture(h.Render())[0]
-	assert.Contains(t, plain, "preset 3", "must show the configured preset index")
+	assert.Contains(t, plain, "Discovery", "must show the configured preset name")
 }

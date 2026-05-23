@@ -1,7 +1,6 @@
 package uikit
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -12,8 +11,8 @@ import (
 //
 //	"spotnik ─ Music ─ preset N"  [fill]  [chip1][chip2]...
 //
-// The left segment always contains AppName and Page. When Preset >= 0 the
-// preset index is shown as well; set Preset to -1 to hide it (Stats page layout).
+// The left segment always contains AppName and Page. When PresetName is non-empty
+// the preset name is shown as well; set PresetName to "" to hide it (Stats page layout).
 // RightChips are pre-rendered strings from Chip.Render(); they are joined and
 // placed flush-right with at least one space gap between left and right.
 // The full bar is exactly Width terminal columns wide when Width > 0.
@@ -21,7 +20,7 @@ type HeaderBar struct {
 	Width      int
 	AppName    string
 	Page       string   // "Music" or "Stats"
-	Preset     int      // -1 hides the preset segment (Stats page)
+	PresetName string   // empty string hides the preset segment (Stats page)
 	RightChips []string // pre-rendered chip strings from Chip.Render()
 	Theme      theme.Theme
 }
@@ -52,9 +51,9 @@ func (h HeaderBar) Render() string {
 	sep := muted.Render(" " + GlyphFor(GlyphHRule, ActiveMode()) + " ")
 	left := appName + sep + key
 
-	// Append preset segment only when Preset >= 0 (Music page).
-	if h.Preset >= 0 {
-		left += sep + muted.Render(fmt.Sprintf("preset %d", h.Preset))
+	// Append preset segment only when PresetName is non-empty (Music page).
+	if h.PresetName != "" {
+		left += sep + muted.Render(h.PresetName)
 	}
 
 	right := strings.Join(h.RightChips, "")

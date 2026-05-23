@@ -104,3 +104,12 @@ Minor items from story 218 PR review (pre-existing from stories 216/217):
 1. **`FetchAlbumArtCmd` uses `http.Get` with no timeout**: Deviates from project HTTP client pattern (`api/base.go` uses `Timeout: 30s`). A slow CDN image URL will cause the Bubble Tea command goroutine to hang indefinitely. Fix: use `&http.Client{Timeout: 30 * time.Second}`.
 
 2. **`AlbumArtRenderer.SetResult` race on same-track/different-dimension fetches**: `Init()` dispatches a conservative-size fetch and `WindowSizeMsg` dispatches a resize-size fetch. Both target the same track ID, so the first to complete wins regardless of whether its dimensions match the current pane. Fix: add a monotonic sequence number to `AlbumArtRenderer` and `AlbumArtFetchedMsg`; reject stale results.
+
+---
+
+### HeaderBar: package doc example string stale
+
+**Found:** 2026-05-24 | **Source:** PR #306 Review
+**Feature:** 17-album-art
+
+The `internal/uikit/header_bar.go` package-level doc comment still contains the literal example string `"spotnik ─ Music ─ preset N"`. Since the actual output is now `"spotnik ─ Music ─ Dashboard"` (or whatever the active preset name is), updating that example string would keep documentation fully accurate. Trivial docstring fix. Location: `internal/uikit/header_bar.go` package comment.

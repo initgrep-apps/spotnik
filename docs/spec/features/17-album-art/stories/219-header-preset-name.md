@@ -1,7 +1,7 @@
 ---
 title: "Header: show preset name instead of raw index"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background

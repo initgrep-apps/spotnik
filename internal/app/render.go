@@ -583,10 +583,10 @@ func truncateProfileName(name string) string {
 // they already appear in the bottom status bar — the header is for contextual info only.
 // Rendering is delegated to uikit.HeaderBar + uikit.Chip.
 func (a *App) renderHeader() string {
-	preset := a.layout.ActivePresetIndex()
+	presetName := a.layout.ActivePresetName()
 	if a.layout.ActivePage() == layout.PageStats {
 		// Stats page has no user-selectable presets — hide the segment.
-		preset = -1
+		presetName = ""
 	}
 
 	// Build right-side chips: device chip first, then profile chip.
@@ -625,7 +625,7 @@ func (a *App) renderHeader() string {
 		Width:      a.width,
 		AppName:    "spotnik",
 		Page:       pageLabel(a.layout.ActivePage()),
-		Preset:     preset,
+		PresetName: presetName,
 		RightChips: chips,
 		Theme:      a.theme,
 	}.Render()
