@@ -72,12 +72,13 @@ func TestRenderHeader_StatsPage_ContainsStatsLabel(t *testing.T) {
 	assert.Contains(t, result, "Stats", "header should show 'Stats' on Stats page")
 }
 
-func TestRenderHeader_ContainsPresetIndex(t *testing.T) {
+func TestRenderHeader_ContainsPresetName(t *testing.T) {
 	a := newRenderTestApp()
 	result := a.renderHeader()
 
-	// Default preset index is 0.
-	assert.Contains(t, result, "preset 0", "header should show current preset index")
+	// Default preset name is "Dashboard".
+	assert.Contains(t, result, "Dashboard", "header should show current preset name")
+	assert.NotContains(t, result, "preset 0", "header should not show raw preset index")
 }
 
 func TestRenderHeader_ContainsActionShortcuts(t *testing.T) {
@@ -469,13 +470,13 @@ func TestRenderHeader_NoShortcutKeys(t *testing.T) {
 }
 
 // TestRenderHeader_MusicPage_ShowsPreset verifies that on Music page, the header shows
-// the preset number (e.g. "preset 0").
+// the preset name (e.g. "Dashboard").
 func TestRenderHeader_MusicPage_ShowsPreset(t *testing.T) {
 	a := newRenderTestApp()
 	// Default page is Music page.
 	result := a.renderHeader()
 
-	assert.Contains(t, result, "preset 0", "header should show 'preset 0' on Music page")
+	assert.Contains(t, result, "Dashboard", "header should show 'Dashboard' on Music page")
 }
 
 // TestRenderHeader_StatsPage_NoPreset verifies that on Stats page, the header does NOT
