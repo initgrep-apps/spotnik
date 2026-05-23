@@ -17,14 +17,23 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
+// NowPlaying layout constants.
+const (
+	npPadV      = 1  // rows of vertical padding top + bottom
+	npArtAspect = 2  // imageCols = imageRows * npArtAspect
+	npInfoMult  = 2  // infoWidth = imageRows * npInfoMult
+	npGap       = 1  // column gap between components
+	npMinViz    = 10 // minimum viz width; below this, drop info panel
+)
+
 // NowPlayingPane is the center pane Bubble Tea model.
 // It renders the currently playing track, album art, and visualizer.
 // It reads all state from the Store; it never stores API data in its own fields.
 // It implements the layout.Pane interface for integration with the layout manager.
 //
-// Layout is tier-aware: base (bodyH <= 18) shows 3-col inline image | info | viz;
-// mid (19-30) and full (>30) show 2-col upper image+vz with full-width InfoBox below.
-// Falls back to pre-feature 2-col layout when no album art is available.
+// Layout: image (x×2x) | track info (x×2x) | viz (remaining), where x = pane height − 2.
+// When width is insufficient for 3-col, the track info panel is dropped.
+// Falls back to pre-art layout when no album art is loaded.
 // When height < 8, Title() embeds compact track info in the pane title bar instead.
 type NowPlayingPane struct {
 	BasePane
@@ -141,40 +150,26 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 	p.BasePane.SetSize(width, height)
 
 	cw := p.contentWidth()
-	bh := p.bodyHeight()
+	x := p.imageRows()
+	artCols := x * npArtAspect
+	info := x * npInfoMult
+	viz := cw - artCols - info - 2*npGap
 
-	switch p.renderTier() {
-	case tierBase:
-		// 3-col inline: image | info | viz
-		rows := p.imageRows()
-		cols := rows * 2
-		remaining := paneMax(cw-cols-2, 10)
-
-		infoWidth := paneMax(remaining/2, 14)
-		vizWidth := remaining - infoWidth - 1
-		if vizWidth < 1 {
-			vizWidth = 1
-		}
-
-		p.infoBox.SetSize(infoWidth, rows)
-		p.engine.SetSize(vizWidth, paneMax(rows-1, 1))
-		p.seekBar.SetWidth(vizWidth)
-		p.volumeBar.SetWidth(infoWidth - 4)
-
-	case tierMid, tierFull:
-		// 2-col upper: image | viz
-		rows := p.imageRows()
-		cols := rows * 2
-		vizWidth := paneMax(cw-cols-1, 1)
-
-		p.engine.SetSize(vizWidth, paneMax(rows-1, 1))
-		p.seekBar.SetWidth(vizWidth)
-
-		// Lower section: full-width InfoBox
-		infoHeight := paneMax(bh-rows, 2)
-		p.infoBox.SetSize(cw, infoHeight)
-		p.volumeBar.SetWidth(cw - 4)
+	if viz < npMinViz {
+		info = 0
+		viz = paneMax(cw-artCols-npGap, npMinViz)
 	}
+
+	infoBoxWidth := info
+	if infoBoxWidth == 0 {
+		infoBoxWidth = paneMax(cw/3, 28)
+	}
+	if info > 0 {
+		p.infoBox.SetSize(info, x)
+	}
+	p.engine.SetSize(viz, paneMax(x-1, 1))
+	p.seekBar.SetWidth(viz)
+	p.volumeBar.SetWidth(paneMax(infoBoxWidth-4, 1))
 
 	p.pendingArtRefresh = abs(p.imageRows()-prevRows) > artResizeThreshold
 }
@@ -265,27 +260,17 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the NowPlaying pane. It reads from the store and never calls the API.
-// Layout is tier-aware: base (3-col inline), mid (2-col upper + compact InfoBox lower),
-// full (2-col upper + rich InfoBox lower). Falls back to pre-feature 2-col when no image.
+// Dispatches to renderBase when art is available, renderFallback when no art is loaded,
+// or renderEmpty when nothing is playing.
 func (p *NowPlayingPane) View() string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
 		return p.renderEmpty()
 	}
-
 	if !p.artRenderer.HasImage() && !p.artRenderer.IsLoading() {
 		return p.renderFallback()
 	}
-
-	switch p.renderTier() {
-	case tierBase:
-		return p.renderBase()
-	case tierMid:
-		return p.renderMid()
-	case tierFull:
-		return p.renderFull()
-	}
-	return ""
+	return p.renderBase()
 }
 
 // renderFallback renders the pre-feature 2-col layout: InfoBox left, viz+seekbar right.
@@ -379,9 +364,8 @@ func (p *NowPlayingPane) renderFallback() string {
 	return composite
 }
 
-// renderBase renders the 3-col inline layout for the base tier.
-// Columns: imageBlock · InfoBox · vizBlock.
-// Falls back to renderFallback when the remaining width after the image is < 28.
+// renderBase renders using the single-formula layout.
+// 3-col (image | info | viz) when width allows; 2-col (image | viz) otherwise.
 func (p *NowPlayingPane) renderBase() string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
@@ -390,35 +374,49 @@ func (p *NowPlayingPane) renderBase() string {
 	t := ps.Item
 	bh := p.bodyHeight()
 	cw := p.contentWidth()
-	rows := p.imageRows()
-	cols := p.imageCols()
+	x := p.imageRows()
+	artCols := x * npArtAspect
+	info := x * npInfoMult
+	viz := cw - artCols - info - 2*npGap
 
-	remaining := cw - cols - 2
-	if remaining < 28 {
-		return p.renderFallback()
-	}
-
-	imageBlock := p.renderImageBlock(rows, cols)
-
-	infoLines := p.buildInfoLinesBase(bh)
-	infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
-
+	imageBlock := p.renderImageBlock(x, artCols)
 	frame := p.engine.CurrentFrame()
 	topRows, bottomRows := splitFrame(frame)
-	topView := renderStyledLines(topRows)
-	bottomView := renderStyledLines(bottomRows)
 	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-	rightPanel := lipgloss.JoinVertical(lipgloss.Left, topView, seekBar, bottomView)
+	rightPanel := lipgloss.JoinVertical(lipgloss.Left,
+		renderStyledLines(topRows), seekBar, renderStyledLines(bottomRows))
 
-	composite := lipgloss.JoinHorizontal(lipgloss.Top, imageBlock, " ", infoView, " ", rightPanel)
-
-	contentHeight := lipgloss.Height(composite)
-	availableHeight := paneMax(p.height-2, 1)
-	if contentHeight < availableHeight {
-		composite = lipgloss.Place(cw, availableHeight,
-			lipgloss.Center, lipgloss.Center, composite)
+	var composite string
+	if viz >= npMinViz {
+		infoLines := p.buildInfoLinesBase(bh)
+		infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
+		composite = lipgloss.JoinHorizontal(lipgloss.Top,
+			imageBlock, " ", infoView, " ", rightPanel)
+	} else {
+		composite = lipgloss.JoinHorizontal(lipgloss.Top,
+			imageBlock, " ", rightPanel)
 	}
 
+	// 1 blank row top, 1 blank row bottom.
+	contentH := lipgloss.Height(composite)
+	if contentH < p.height {
+		pad := p.height - contentH
+		topPad := 1
+		bottomPad := pad - topPad
+		if bottomPad > 1 {
+			bottomPad = 1
+		}
+		if bottomPad < 0 {
+			bottomPad = 0
+			if topPad > 1 {
+				topPad = 1
+			}
+		}
+		composite = strings.Repeat("\n", topPad) + composite
+		if bottomPad > 0 {
+			composite += strings.Repeat("\n", bottomPad)
+		}
+	}
 	return composite
 }
 
@@ -455,125 +453,6 @@ func (p *NowPlayingPane) buildInfoLinesBase(bodyHeight int) []string {
 	}
 
 	return lines
-}
-
-// renderMid renders the mid-tier layout: image+viz side-by-side above a full-width
-// 2-line InfoBox with no title.
-func (p *NowPlayingPane) renderMid() string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return p.renderEmpty()
-	}
-	t := ps.Item
-	rows := p.imageRows()
-	cols := p.imageCols()
-
-	imageBlock := p.renderImageBlock(rows, cols)
-
-	frame := p.engine.CurrentFrame()
-	topRows, bottomRows := splitFrame(frame)
-	topView := renderStyledLines(topRows)
-	bottomView := renderStyledLines(bottomRows)
-	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-	vizBlock := lipgloss.JoinVertical(lipgloss.Left, topView, seekBar, bottomView)
-
-	upperSection := lipgloss.JoinHorizontal(lipgloss.Top, imageBlock, " ", vizBlock)
-
-	infoLines := p.buildInfoLinesMid()
-	infoView := p.infoBox.Render("", infoLines, p.focused)
-
-	return lipgloss.JoinVertical(lipgloss.Left, upperSection, infoView)
-}
-
-// buildInfoLinesMid builds the compact 2-line InfoBox content for the mid tier.
-func (p *NowPlayingPane) buildInfoLinesMid() []string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return nil
-	}
-	t := ps.Item
-	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	artistNames := make([]string, len(t.Artists))
-	for i, a := range t.Artists {
-		artistNames[i] = a.Name
-	}
-
-	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-
-	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
-	line1 := primaryStyle.Render(t.Name) + " " + sep + " " + secondaryStyle.Render(strings.Join(artistNames, ", ")) + " " + sep + " " + mutedStyle.Render(t.Album.Name)
-	line2 := ctrl.Render() + "   " + p.volumeBar.Render()
-
-	return []string{line1, line2}
-}
-
-// renderFull renders the full-tier layout: image+viz side-by-side above a full-width
-// 5-row InfoBox titled "Track Info" with 3 content lines.
-func (p *NowPlayingPane) renderFull() string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return p.renderEmpty()
-	}
-	t := ps.Item
-	cw := p.contentWidth()
-	rows := p.imageRows()
-	cols := p.imageCols()
-
-	imageBlock := p.renderImageBlock(rows, cols)
-
-	frame := p.engine.CurrentFrame()
-	topRows, bottomRows := splitFrame(frame)
-	topView := renderStyledLines(topRows)
-	bottomView := renderStyledLines(bottomRows)
-	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-	vizBlock := lipgloss.JoinVertical(lipgloss.Left, topView, seekBar, bottomView)
-
-	upperSection := lipgloss.JoinHorizontal(lipgloss.Top, imageBlock, " ", vizBlock)
-
-	infoLines := p.buildInfoLinesFull(cw)
-	infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
-
-	return lipgloss.JoinVertical(lipgloss.Left, upperSection, infoView)
-}
-
-// buildInfoLinesFull builds the rich 3-line InfoBox content for the full tier.
-func (p *NowPlayingPane) buildInfoLinesFull(contentWidth int) []string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return nil
-	}
-	t := ps.Item
-	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	artistNames := make([]string, len(t.Artists))
-	for i, a := range t.Artists {
-		artistNames[i] = a.Name
-	}
-
-	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-
-	innerW := contentWidth - 2
-
-	line1 := primaryStyle.Render(t.Name)
-
-	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
-	left := secondaryStyle.Render(strings.Join(artistNames, ", ")) + " " + sep + " " + mutedStyle.Render(t.Album.Name)
-	right := ctrl.Render() + "  " + p.volumeBar.Render()
-
-	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(right)
-	gap := innerW - leftW - rightW
-	if gap < 1 {
-		gap = 1
-	}
-	line2 := left + strings.Repeat(" ", gap) + right
-
-	return []string{line1, line2, ""}
 }
 
 // renderImageBlock returns the album art image as a rows×cols block, a muted
@@ -783,31 +662,6 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	p.SetSize(p.width, p.height)
 }
 
-// renderTier identifies which responsive layout tier the pane should render.
-type renderTier int
-
-const (
-	tierBase renderTier = iota
-	tierMid
-	tierFull
-)
-
-// renderTier selects the layout tier based on bodyHeight.
-//
-//	base: bodyHeight ≤ 18
-//	mid:  19 – 30
-//	full: > 30
-func (p *NowPlayingPane) renderTier() renderTier {
-	switch {
-	case p.bodyHeight() > 30:
-		return tierFull
-	case p.bodyHeight() > 18:
-		return tierMid
-	default:
-		return tierBase
-	}
-}
-
 // bodyHeight returns the inner content height (pane height minus border chrome).
 func (p *NowPlayingPane) bodyHeight() int { return paneMax(p.height-4, 0) }
 
@@ -815,19 +669,8 @@ func (p *NowPlayingPane) bodyHeight() int { return paneMax(p.height-4, 0) }
 func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width-4, 10) }
 
 // imageRows returns the number of terminal rows allocated to the album art block.
-// The formula is tier-aware: base uses the full body height, mid/full cap rows so
-// the viz column never falls below 10 chars and reserve space for the InfoBox.
 func (p *NowPlayingPane) imageRows() int {
-	bh := p.bodyHeight()
-	cw := p.contentWidth()
-	switch p.renderTier() {
-	case tierMid:
-		return paneMax(paneMin(bh-4, (cw-11)/2), 4)
-	case tierFull:
-		return paneMax(paneMin(bh-5, (cw-11)/2), 4)
-	default:
-		return paneMax(bh, 4)
-	}
+	return paneMax(p.height-2*npPadV, 4)
 }
 
 // imageCols returns the number of terminal columns allocated to the album art block.
@@ -837,14 +680,6 @@ func (p *NowPlayingPane) imageCols() int { return p.imageRows() * 2 }
 // paneMax returns the larger of two ints.
 func paneMax(a, b int) int {
 	if a > b {
-		return a
-	}
-	return b
-}
-
-// paneMin returns the smaller of two ints.
-func paneMin(a, b int) int {
-	if a < b {
 		return a
 	}
 	return b
