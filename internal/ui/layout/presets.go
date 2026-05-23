@@ -24,14 +24,14 @@ type Preset struct {
 
 // PresetDashboard shows all 8 Music page panes across 3 rows.
 var PresetDashboard = Preset{
-	Name: "Full Dashboard",
+	Name: "Dashboard",
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PaneQueue: true, PanePlaylists: true,
 		PaneAlbums: true, PaneLikedSongs: true, PaneRecentlyPlayed: true,
 		PaneTopTracks: true, PaneTopArtists: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 2, MinHeight: 14, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PanePlaylists, WidthWeight: 1},
 			{PaneID: PaneAlbums, WidthWeight: 1},
@@ -53,8 +53,8 @@ var PresetListening = Preset{
 		PaneNowPlaying: true, PaneQueue: true, PaneRecentlyPlayed: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 3, MinHeight: 14, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
-		{HeightWeight: 2, Cells: []Cell{
+		{HeightWeight: 2, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PaneQueue, WidthWeight: 1},
 			{PaneID: PaneRecentlyPlayed, WidthWeight: 1},
 		}},
@@ -68,7 +68,7 @@ var PresetLibrary = Preset{
 		PaneNowPlaying: true, PanePlaylists: true, PaneAlbums: true, PaneLikedSongs: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 14, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 4, Cells: []Cell{
 			{PaneID: PanePlaylists, WidthWeight: 1},
 			{PaneID: PaneAlbums, WidthWeight: 1},
@@ -84,12 +84,12 @@ var PresetDiscovery = Preset{
 		PaneNowPlaying: true, PaneTopTracks: true, PaneTopArtists: true, PaneRecentlyPlayed: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 14, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
-		{HeightWeight: 2, Cells: []Cell{
+		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PaneTopTracks, WidthWeight: 1},
 			{PaneID: PaneTopArtists, WidthWeight: 1},
 		}},
-		{HeightWeight: 2, Cells: []Cell{{PaneID: PaneRecentlyPlayed, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{{PaneID: PaneRecentlyPlayed, WidthWeight: 1}}},
 	},
 }
 
@@ -108,7 +108,7 @@ var PresetStats = Preset{
 		PaneNetworkLog:     true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 14, Cells: []Cell{
+		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{
 			{PaneID: PaneNowPlaying, WidthWeight: 1},
 		}},
 		{HeightWeight: 3, Cells: []Cell{
@@ -116,14 +116,14 @@ var PresetStats = Preset{
 			{PaneID: PanePollingTraffic, WidthWeight: 1},
 			{PaneID: PaneGatewayLive, WidthWeight: 3},
 		}},
-		{HeightWeight: 2, Cells: []Cell{
+		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PaneNetworkLog, WidthWeight: 1},
 		}},
 	},
 }
 
 // PageMusicPresets is the ordered list of presets for the Music page.
-// Index 0 is the default (Full Dashboard).
+// Index 0 is the default (Dashboard).
 var PageMusicPresets = []Preset{PresetDashboard, PresetListening, PresetLibrary, PresetDiscovery}
 
 // PageStatsPresets is the ordered list of presets for the Stats page.
