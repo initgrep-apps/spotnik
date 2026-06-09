@@ -22,6 +22,10 @@ type Theme interface {
 	Base() lipgloss.Color       // App canvas background
 	Surface() lipgloss.Color    // Pane interior background
 	SurfaceAlt() lipgloss.Color // Overlay backgrounds (search, devices, help)
+	// OverlayBackground is the solid background used for floating panels that
+	// sit on top of dynamic content (e.g., the NowPlaying InfoBox overlaid on
+	// the visualizer). Falls back to Base() in all built-in themes.
+	OverlayBackground() lipgloss.Color
 
 	// Borders
 	ActiveBorder() lipgloss.Color   // Focused pane border
