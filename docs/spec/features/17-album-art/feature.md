@@ -1,39 +1,49 @@
 ---
 title: "Album Art & Responsive NowPlaying"
-status: done
+status: in-progress
 ---
 
 ## Description
 
-Renders pixelated album cover art inside the NowPlaying pane using the
-`eliukblau/pixterm` library. Album images arrive from Spotify's `/me/player`
-endpoint — already present in the JSON but previously discarded on unmarshal.
+Originally shipped pixelated album cover art inside the NowPlaying pane via
+the `eliukblau/pixterm` library, with three responsive layout tiers later
+collapsed into a single-formula layout (stories 214–220).
 
-The NowPlaying pane gains three responsive layout tiers that adapt to available
-terminal height so the image always appears as a square:
+After live testing, the album art column was judged to add visual noise
+without conveying meaningful information at terminal cell sizes. Stories 221
+and 222 reverse course: album art is removed entirely, the visualizer is
+expanded to fill the full pane content area, and the InfoBox is repositioned
+as a true overlay on the left ~25% of the visualizer background.
 
-| Tier | bodyHeight | Layout |
-|------|-----------|--------|
-| Base | ≤ 18      | 3-col: image · InfoBox · viz |
-| Mid  | 19 – 30   | 2-col: image+viz side-by-side, compact InfoBox below |
-| Full | > 30      | 2-col: larger image+viz side-by-side, richer InfoBox below |
+| Phase | Stories | Outcome |
+|-------|---------|---------|
+| Build  | 214–220 | Album art renderer, responsive tiers, single-formula layout |
+| Redesign | 221, 222 | OverlayBackground token + InfoBox fill; remove album art, overlay InfoBox on viz |
 
-`bodyHeight = pane height − 4`. The Stats page and Dashboard/Library/Discovery
-NowPlaying rows all receive `MinHeight: 14` via a new LayoutManager primitive
-so they always reach at least the base tier regardless of terminal size.
+The NowPlaying pane keeps its dimensions, responsive behaviour, surrounding
+chrome, and InfoBox content (track name, artists, album, controls, volume).
+Only the internal composition and the album-art subsystem change.
 
 ## Acceptance Criteria
 
-- [ ] `domain.Album` carries `Images []AlbumImage`; Spotify `/me/player` JSON `album.images` is mapped into domain types
-- [ ] `BestImage()` helper on `Album` returns the smallest usable image URL
-- [ ] LayoutManager honours `Row.MinHeight`; Stats page NowPlaying gets ≥ 14 rows at any terminal size
-- [ ] Album art is fetched asynchronously on `Init()` (if playback already active) and on every track change detected via `PlaybackStateFetchedMsg`
-- [ ] Re-poll of the same track does not re-fetch (track ID cache)
-- [ ] NowPlaying enters base tier (3-col) when bodyHeight ≤ 18
-- [ ] NowPlaying enters mid tier (2-col + compact InfoBox) when bodyHeight 19–30
-- [ ] NowPlaying enters full tier (2-col + richer InfoBox) when bodyHeight > 30
-- [ ] Dashboard, Library, Discovery presets have `MinHeight: 14` on NowPlaying row
-- [ ] Image column is always approximately square: `imageChars ≈ imageRows × 2`
-- [ ] No image available (nothing playing, fetch error, nil Images) → pane falls back to the pre-feature 2-col layout without image column
-- [ ] Loading placeholder shown in image column while fetch is in flight
+Phase 1 (stories 214–220, shipped):
+
+- [x] `domain.Album` carries `Images []AlbumImage`; Spotify `/me/player` JSON `album.images` mapped into domain types
+- [x] `BestImage()` helper on `Album` returns the smallest usable image URL
+- [x] LayoutManager honours `Row.MinHeight`
+- [x] Album art fetched on `Init()` and on track change
+- [x] Single-formula layout replaces 3-tier system
+
+Phase 2 (stories 221–222, this redesign):
+
+- [ ] `Theme.OverlayBackground() lipgloss.Color` exists; all 11 themes return their own `Base()`
+- [ ] `InfoBox.Render` applies a solid `OverlayBackground` fill to its interior
+- [ ] `internal/ui/components/albumart.go` deleted; `pixterm` removed from `go.mod`
+- [ ] `AlbumArtRenderer`, `FetchAlbumArtCmd`, `AlbumArtFetchedMsg` removed from the codebase
+- [ ] `NowPlayingPane` has no album-art fields or methods (`artRenderer`, `imageCols`, `renderImageBlock`, `ArtHasImage`)
+- [ ] Visualizer fills the full content area
+- [ ] InfoBox overlays the left ~25% with a solid background; seek bar lives only on the right
+- [ ] Equal 1-row padding top and bottom
+- [ ] Narrow-terminal fallback: when `vizWidth < npMinViz`, InfoBox drops and viz fills the full content area
+- [ ] All album-art tests removed; overlay layout tests added
 - [ ] `make ci` passes
