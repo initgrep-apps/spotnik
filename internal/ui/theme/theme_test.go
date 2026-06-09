@@ -495,7 +495,7 @@ base = "#000000"
 func TestConfigTheme_ImplementsInterface(t *testing.T) {
 	th, err := theme.ParseTheme([]byte(minimalValidTOML))
 	require.NoError(t, err)
-	// allMethodsReturnNonEmpty already checks all 46 color-returning methods.
+	// allMethodsReturnNonEmpty already checks all 47 color-returning methods.
 	allMethodsReturnNonEmpty(t, th)
 }
 

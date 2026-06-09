@@ -247,19 +247,38 @@ func TestInfoBox_Render_UnfocusedUsesInactiveBorderColor(t *testing.T) {
 // applies the theme's OverlayBackground() as a solid fill on the interior
 // content. This ensures the InfoBox sits on top of dynamic content (e.g. the
 // NowPlaying visualizer) without the underlying animation bleeding through.
-// The prefix "\x1b[4" matches any ANSI background colour sequence
-// (truecolor 48;2;R;G;B or basic 4x codes).
+//
+// Two themes are exercised to confirm the fill tracks the active theme:
+//   - "black" — Base #000000 → ANSI background sequence "\x1b[48;2;0;0;0m"
+//   - "light" — Base #eff1f5 (rgb 239,241,245) → "\x1b[48;2;239;241;245m"
+//
+// The colour profile is pinned to TrueColor so lipgloss emits full 24-bit
+// background sequences we can assert against (mirrors the pattern in
+// TestInfoBox_Render_UnfocusedUsesInactiveBorderColor).
 func TestInfoBox_OverlayBackground_AppliedToInterior(t *testing.T) {
-	// Pin to TrueColor so lipgloss emits ANSI sequences we can match.
 	prev := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 
-	th := theme.Load("black")
-	ib := NewInfoBox(th)
-	ib.SetSize(20, 6)
-	out := ib.Render("Track Info", []string{"line1", "line2"}, true)
-	// Any ANSI background escape (48;2;... truecolor or 4x basic) is acceptable.
-	assert.Contains(t, out, "\x1b[4",
-		"InfoBox output must contain an ANSI background escape")
+	tests := []struct {
+		themeID   string
+		ansiBgSeq string
+	}{
+		{themeID: "black", ansiBgSeq: "\x1b[48;2;0;0;0m"},
+		{themeID: "light", ansiBgSeq: "\x1b[48;2;239;241;245m"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.themeID, func(t *testing.T) {
+			th := theme.Load(tc.themeID)
+			ib := NewInfoBox(th)
+			ib.SetSize(20, 6)
+			out := ib.Render("Track Info", []string{"line1", "line2"}, true)
+
+			assert.Contains(t, out, tc.ansiBgSeq,
+				"InfoBox output for theme %q must contain the OverlayBackground ANSI sequence %q",
+				tc.themeID, tc.ansiBgSeq)
+		})
+	}
 }
