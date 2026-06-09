@@ -244,9 +244,10 @@ func (p *NowPlayingPane) renderOverlay() string {
 		infoWidth = cap
 	}
 	vizWidth := cw - infoWidth - npGap
+	// If the remaining viz width is below the readability threshold, drop the
+	// InfoBox and let the visualizer fill the full content area.
 	if vizWidth < npMinViz {
 		infoWidth = 0
-		vizWidth = cw
 	}
 
 	frame := p.engine.CurrentFrame()
