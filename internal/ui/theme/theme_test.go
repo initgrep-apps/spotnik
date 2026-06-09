@@ -109,6 +109,8 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.Info()), "Info()")
 	// Story 146: Accent token (optional in TOML; falls back to SeekBar so always non-empty)
 	assert.NotEmpty(t, string(th.Accent()), "Accent()")
+	// Story 221: OverlayBackground token (aliased to Base in built-in themes)
+	assert.NotEmpty(t, string(th.OverlayBackground()), "OverlayBackground()")
 }
 
 func TestAllThemes_ImplementInterface(t *testing.T) {
@@ -493,7 +495,7 @@ base = "#000000"
 func TestConfigTheme_ImplementsInterface(t *testing.T) {
 	th, err := theme.ParseTheme([]byte(minimalValidTOML))
 	require.NoError(t, err)
-	// allMethodsReturnNonEmpty already checks all 46 color-returning methods.
+	// allMethodsReturnNonEmpty already checks all 47 color-returning methods.
 	allMethodsReturnNonEmpty(t, th)
 }
 
@@ -993,6 +995,22 @@ func TestConfigTheme_Info(t *testing.T) {
 	require.NotNil(t, th)
 	assert.Equal(t, "#00afff", string(th.Info()),
 		"black theme Info() should return canonical info color #00afff")
+}
+
+// ---- Story 221: OverlayBackground() token ----
+
+// TestTheme_OverlayBackground_EqualsBase verifies that every loaded theme
+// resolves OverlayBackground() to its own Base() colour. Story 221 ships the
+// token aliased to Base — a future story can split them per theme.
+func TestTheme_OverlayBackground_EqualsBase(t *testing.T) {
+	themes := theme.AllThemes()
+	require.NotEmpty(t, themes, "no themes loaded")
+	for _, th := range themes {
+		t.Run(th.ID(), func(t *testing.T) {
+			assert.Equal(t, th.Base(), th.OverlayBackground(),
+				"OverlayBackground() must equal Base() for theme %q", th.ID())
+		})
+	}
 }
 
 // TestAllThemes_InfoTokenNonEmpty verifies every theme has a non-empty Info() token.

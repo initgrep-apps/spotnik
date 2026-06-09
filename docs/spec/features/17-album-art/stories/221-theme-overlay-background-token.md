@@ -1,7 +1,7 @@
 ---
 title: "Theme.OverlayBackground token + InfoBox solid background fill"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background
