@@ -238,3 +238,28 @@ func TestInfoBox_Render_UnfocusedUsesInactiveBorderColor(t *testing.T) {
 	assert.NotContains(t, outFocused, "38;2;30;30;30",
 		"focused render must not contain InactiveBorder colour code")
 }
+
+// ---------------------------------------------------------------------------
+// Test: interior carries the OverlayBackground ANSI background escape (Story 221)
+// ---------------------------------------------------------------------------
+
+// TestInfoBox_OverlayBackground_AppliedToInterior verifies that InfoBox.Render
+// applies the theme's OverlayBackground() as a solid fill on the interior
+// content. This ensures the InfoBox sits on top of dynamic content (e.g. the
+// NowPlaying visualizer) without the underlying animation bleeding through.
+// The prefix "\x1b[4" matches any ANSI background colour sequence
+// (truecolor 48;2;R;G;B or basic 4x codes).
+func TestInfoBox_OverlayBackground_AppliedToInterior(t *testing.T) {
+	// Pin to TrueColor so lipgloss emits ANSI sequences we can match.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	th := theme.Load("black")
+	ib := NewInfoBox(th)
+	ib.SetSize(20, 6)
+	out := ib.Render("Track Info", []string{"line1", "line2"}, true)
+	// Any ANSI background escape (48;2;... truecolor or 4x basic) is acceptable.
+	assert.Contains(t, out, "\x1b[4",
+		"InfoBox output must contain an ANSI background escape")
+}
