@@ -78,22 +78,22 @@ func TestResize_TilesContentArea(t *testing.T) {
 
 func TestResize_HeightWeightDistribution(t *testing.T) {
 	// Dashboard: weights 1:3:3 over 26 content rows (30 - 1 header - 3 status)
-	// No MinHeight.
-	// totalW = 7, remaining = 26
-	// Row 0: 26*1/7 = 3
-	// Row 1: 26*3/7 = 11
-	// Row 2 (last): 26 - 14 = 12
+	// MinHeight sum = 6 (NowPlaying row only, story 223).
+	// totalW = 7, remaining = 26-6 = 20
+	// Row 0: 6 + 20*1/7 = 6 + 2 = 8
+	// Row 1: 0 + 20*3/7 = 8
+	// Row 2 (last): 26 - 8 - 8 = 10
 	m := layout.NewManager()
 	m.Resize(120, 30) // content height = 26
 
 	nowPlayingRect := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 3, nowPlayingRect.Height)
+	assert.Equal(t, 8, nowPlayingRect.Height)
 
 	playlistsRect := m.PaneRect(layout.PanePlaylists)
-	assert.Equal(t, 11, playlistsRect.Height)
+	assert.Equal(t, 8, playlistsRect.Height)
 
 	queueRect := m.PaneRect(layout.PaneQueue)
-	assert.Equal(t, 12, queueRect.Height)
+	assert.Equal(t, 10, queueRect.Height)
 }
 
 func TestResize_WidthWeightDistribution(t *testing.T) {
@@ -567,7 +567,10 @@ func TestResize_ReshrinkScalesRects(t *testing.T) {
 	smallRect := m.PaneRect(layout.PaneNowPlaying)
 
 	assert.Less(t, smallRect.Width, largeRect.Width, "width should shrink")
-	assert.Less(t, smallRect.Height, largeRect.Height, "height should shrink")
+	// Height: at 120x30 NowPlaying gets MinHeight=6 (story 223). At 80x24,
+	// contentH=20, MinHeight sum=6, remaining=14, so NowPlaying gets max(6, 2)=6.
+	// Heights are equal (both 6), so assert.LessOrEqual instead of Less.
+	assert.LessOrEqual(t, smallRect.Height, largeRect.Height, "height should not grow")
 }
 
 func TestEdge_ZeroSizeTerminal(t *testing.T) {
@@ -703,17 +706,18 @@ func TestPresetStats_NowPlayingRowHeight(t *testing.T) {
 	m.Resize(120, 30)
 	m.TogglePage() // Stats page
 
-	// PresetStats: weights 1:3:3, contentH=26
-	// totalW=7, remaining=26
-	// NowPlaying: 26*1/7 = 3
+	// PresetStats: weights 1:3:3, contentH=26, MinHeight sum=6
+	// totalW=7, remaining=26-6=20
+	// NowPlaying: 6 + 20*1/7 = 6 + 2 = 8
 	np := m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 3, np.Height, "at 30-row terminal NowPlaying should get 3 rows")
+	assert.Equal(t, 8, np.Height, "at 30-row terminal NowPlaying should get 8 rows")
 
-	// At 50-row terminal: contentH=46, totalW=7, remaining=46
-	// NowPlaying: 46*1/7 = 6
+	// At 50-row terminal: contentH=46, MinHeight sum=6
+	// totalW=7, remaining=46-6=40
+	// NowPlaying: 6 + 40*1/7 = 6 + 5 = 11
 	m.Resize(120, 50)
 	np = m.PaneRect(layout.PaneNowPlaying)
-	assert.Equal(t, 6, np.Height, "at 50-row terminal NowPlaying should get 6 rows")
+	assert.Equal(t, 11, np.Height, "at 50-row terminal NowPlaying should get 11 rows")
 }
 
 func TestPresetCycleFullLoop(t *testing.T) {
