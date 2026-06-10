@@ -110,10 +110,11 @@ func (p *NowPlayingPane) Title() string {
 				stateGlyph = uikit.GlyphFor(uikit.GlyphPlaying, m)
 			}
 			sep := uikit.GlyphFor(uikit.GlyphHRule, m)
+			midDot := uikit.GlyphFor(uikit.GlyphSeparator, m)
 			current := formatDurationMs(p.localProgressMs)
 			total := formatDurationMs(t.DurationMs)
-			return fmt.Sprintf("Now Playing %s %s · %s %s %s %s/%s",
-				sep, t.Name, strings.Join(artistNames, ", "), sep, stateGlyph, current, total)
+			return fmt.Sprintf("Now Playing %s %s %s %s %s %s %s/%s",
+				sep, t.Name, midDot, strings.Join(artistNames, ", "), sep, stateGlyph, current, total)
 		}
 	}
 	return "Now Playing"
