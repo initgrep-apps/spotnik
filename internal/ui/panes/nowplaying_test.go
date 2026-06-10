@@ -1387,7 +1387,7 @@ func TestNowPlayingPane_Overlay_WideCaps(t *testing.T) {
 
 	// Find the top row of the InfoBox (contains '╭' top-left corner).
 	var topLine string
-	var topLineIdx int = -1
+	var topLineIdx = -1
 	for i, line := range lines {
 		if strings.ContainsRune(line, '╭') {
 			topLine = line
