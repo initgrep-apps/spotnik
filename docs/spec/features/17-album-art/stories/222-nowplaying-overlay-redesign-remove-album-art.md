@@ -1,7 +1,7 @@
 ---
 title: "Remove album art, overlay InfoBox on full-pane visualizer"
 feature: 17-album-art
-status: open
+status: done
 ---
 
 ## Background

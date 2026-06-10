@@ -25,7 +25,7 @@
 | 14 | Stats Page Redesign | `features/14-page-b-redesign/` | done | 173–182, 210, 211 | Stacked Stats page layout, GatewayHealth/PollingTraffic/GatewayLive panes, universal filter border + Esc-clear, TableBasedPane consolidation |
 | 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | done | 199 ✓, 200 ✓, 201 ✓, 202 ✓, 203 ✓, 206 | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
 | 16 | Mono Themes + Page Rename | `features/16-mono-themes-page-rename/` | done | 207 ✓, 208 ✓ | Rename Page A/B → Music/Stats, add mono-dark/mono-light themes |
-| 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | in-progress | 214 ✓, 215 ✓, 216 ✓, 217 ✓, 218 ✓, 219 ✓, 220 ✓, 221 ✓, 222 | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight, single-formula layout. Phase 2 (in progress): 221 done — OverlayBackground theme token + InfoBox fill shipped; 222 open — remove album art, overlay InfoBox on full-pane visualizer |
+| 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | done | 214 ✓, 215 ✓, 216 ✓, 217 ✓, 218 ✓, 219 ✓, 220 ✓, 221 ✓, 222 ✓ | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight, single-formula layout. Phase 2 (shipped): OverlayBackground token + InfoBox fill (221); remove album art, overlay InfoBox on full-pane visualizer (222) |
 
 ---
 
@@ -35,4 +35,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-06-10 — feature 17 redesign: stories 221, 222 (remove album art, overlay InfoBox on full-pane visualizer)*
+*Last updated: 2026-06-10 — feature 17 complete*

@@ -113,3 +113,21 @@ Minor items from story 218 PR review (pre-existing from stories 216/217):
 **Feature:** 17-album-art
 
 The `internal/uikit/header_bar.go` package-level doc comment still contains the literal example string `"spotnik ─ Music ─ preset N"`. Since the actual output is now `"spotnik ─ Music ─ Dashboard"` (or whatever the active preset name is), updating that example string would keep documentation fully accurate. Trivial docstring fix. Location: `internal/uikit/header_bar.go` package comment.
+
+---
+
+## NowPlaying overlay: spec size table math error
+**Found:** 2026-06-10 | **Source:** PR #313 Review
+**Feature:** 17-album-art (story 222)
+
+The spec's "Size examples" table claims InfoBox drops at SetSize(60, 16).
+At cw=56, vizRows=14, the formula gives infoWidth=cw/4=14, vizWidth=41 > npMinViz=10,
+so the InfoBox is NOT dropped. The implementer shifted the test to SetSize(16, 16)
+which does trigger the fallback.
+
+Items to log:
+1. Update story 222 spec to either:
+   a) Replace the (60, 16) row with SetSize(16, 16) — matching the test, OR
+   b) Strengthen `npMaxInfoPct` to 3 so the 25% cap drops InfoBox earlier, OR
+   c) Document the actual break-point (~width ≤ 35 at height 16)
+2. Pick one and update both the spec table and the acceptance criteria.
