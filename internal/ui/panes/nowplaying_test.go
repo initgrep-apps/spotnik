@@ -1164,13 +1164,41 @@ func TestNowPlayingPane_VolumeAppliedMsg_StaleSeq_BarStaysInSecondBurst(t *testi
 
 // TestNowPlayingPane_Overlay_InfoBoxOnLeft verifies that at SetSize(120, 20)
 // the InfoBox is composited on the left and the track name + artist are visible
-// in the composite output.
+// in the composite output. The position of the top-left corner (╭) and the
+// InfoBox title "Track Info" are checked explicitly so a regression that
+// swapped JoinHorizontal order (viz first, InfoBox second) would be caught.
 func TestNowPlayingPane_Overlay_InfoBoxOnLeft(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(120, 20)
 
 	output := pane.View()
-	assert.Contains(t, output, "╭", "overlay layout should contain InfoBox top-left corner")
+	stripped := ansi.Strip(output)
+	lines := splitLines(stripped)
+	require.NotEmpty(t, lines, "View() must produce at least one line")
+
+	// "Track Info" is the literal title the InfoBox renders — the visualizer
+	// never renders it. So a positive match is a strong InfoBox signal.
+	assert.Contains(t, stripped, "Track Info", "overlay should show InfoBox title 'Track Info'")
+
+	// The first visualizer block character (▓/░) must appear to the right of
+	// the first InfoBox top-left corner (╭). A swap of JoinHorizontal order
+	// (viz first, InfoBox second) would put ╭ in the middle/right of the line
+	// and the first ▓/░ before any ╭ — caught here.
+	firstCornerLine := -1
+	firstCornerCol := -1
+	for i, line := range lines {
+		if idx := strings.Index(line, "╭"); idx >= 0 {
+			firstCornerLine = i
+			firstCornerCol = idx
+			break
+		}
+	}
+	require.GreaterOrEqual(t, firstCornerLine, 0, "InfoBox top-left corner '╭' must be present in overlay output")
+	assert.Less(t, firstCornerCol, 5,
+		"InfoBox top-left corner '╭' must appear in the first 5 columns (got column %d), indicating InfoBox is on the left",
+		firstCornerCol)
+
+	// Track + artist must be visible somewhere in the composite.
 	assert.Contains(t, output, "Blinding Lights", "overlay layout should show track name")
 	assert.Contains(t, output, "The Weeknd", "overlay layout should show artist name")
 }
@@ -1231,9 +1259,32 @@ func TestNowPlayingPane_Overlay_NarrowFallback(t *testing.T) {
 	assert.NotContains(t, output, "Track Info", "narrow fallback should not contain InfoBox title")
 }
 
+// TestNowPlayingPane_Overlay_NormalWidthIsOverlay is the paired companion
+// to TestNowPlayingPane_Overlay_NarrowFallback. It locks the threshold
+// behaviour in the OTHER direction: at a normal terminal width the InfoBox
+// IS rendered. Without this, a regression that always-takes or never-takes
+// the fallback would not be caught.
+func TestNowPlayingPane_Overlay_NormalWidthIsOverlay(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	// 120×20: cw=116, x=18, infoWidth=max(18,18)=18, cap=116/4=29,
+	// vizWidth = 116-18-1 = 97 — well above npMinViz=10.
+	pane.SetSize(120, 20)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+	assert.Contains(t, stripped, "╭",
+		"normal width (120×20) should contain InfoBox top-left corner '╭'")
+	assert.Contains(t, stripped, "Track Info",
+		"normal width (120×20) should contain InfoBox title 'Track Info'")
+}
+
 // TestNowPlayingPane_Overlay_EqualMargins verifies that the first and last
 // content rows of View() are blank after ANSI strip + TrimSpace, confirming
-// the equal 1-row top + 1-row bottom padding.
+// the equal 1-row top + 1-row bottom padding. The test goes one step further
+// to confirm the content between the padding rows is real (not a degenerate
+// fully-blank output): the lines just inside the padding must be non-blank,
+// AND the stripped output must contain at least one of the strong overlay
+// signals — "Track Info", or a visualizer block glyph ▓/░.
 func TestNowPlayingPane_Overlay_EqualMargins(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(120, 20)
@@ -1241,10 +1292,142 @@ func TestNowPlayingPane_Overlay_EqualMargins(t *testing.T) {
 	output := pane.View()
 	stripped := ansi.Strip(output)
 	lines := splitLines(stripped)
-	require.GreaterOrEqual(t, len(lines), 2, "View must produce at least 2 lines")
+	require.GreaterOrEqual(t, len(lines), 4,
+		"View must produce at least 4 lines (top pad + content + content + bottom pad)")
 
 	first := strings.TrimSpace(lines[0])
 	last := strings.TrimSpace(lines[len(lines)-1])
 	assert.Empty(t, first, "first content row must be blank (equal top padding)")
 	assert.Empty(t, last, "last content row must be blank (equal bottom padding)")
+
+	// The line just inside the top blank padding (index 1) must carry
+	// visible content. This catches a regression that produces a degenerate
+	// output with only the two padding rows.
+	firstContent := lines[1]
+	lastContent := lines[len(lines)-2]
+	assert.NotEmpty(t, strings.TrimSpace(firstContent),
+		"line just inside top padding must contain content (got %q)", firstContent)
+	assert.NotEmpty(t, strings.TrimSpace(lastContent),
+		"line just inside bottom padding must contain content (got %q)", lastContent)
+
+	// Stronger invariant: somewhere in the middle of the output, the
+	// overlay's distinctive content must be present. This catches the case
+	// where padding is correct but the composite between them is empty.
+	hasTrackInfoOrBlock := strings.Contains(stripped, "Track Info") ||
+		strings.ContainsRune(stripped, '▓') ||
+		strings.ContainsRune(stripped, '░')
+	assert.True(t, hasTrackInfoOrBlock,
+		"overlay output must contain 'Track Info' or visualizer glyph ▓/░ between the padding rows")
+}
+
+// TestNowPlayingPane_Overlay_MinimumSize locks the no-panic invariant at
+// extremely small pane sizes. The renderer must always return a non-empty
+// string and must not crash even when width/height collapse below the
+// content-area floor (contentWidth floor is 10, vizRows floor is 4).
+func TestNowPlayingPane_Overlay_MinimumSize(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+
+	for _, sz := range [][2]int{{4, 4}, {10, 6}, {1, 1}} {
+		sz := sz
+		t.Run("", func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				pane.SetSize(sz[0], sz[1])
+				out := pane.View()
+				assert.NotEmpty(t, out,
+					"View() must return a non-empty string at SetSize(%d, %d)", sz[0], sz[1])
+			}, "View() must not panic at SetSize(%d, %d)", sz[0], sz[1])
+		})
+	}
+}
+
+// TestNowPlayingPane_Overlay_WideCaps verifies that at a very wide terminal
+// (500×40) the InfoBox is still present on the left and its width is
+// approximately 25% of the content width (capped by npMaxInfoPct=4). The
+// InfoBox width is measured in CELLS (not bytes) by scanning runes, since
+// the border glyphs are multi-byte UTF-8 but single-cell terminal chars.
+//
+// At 500×40: cw=496, x=38, infoWidth raw=max(38,18)=38, cap=496/4=124,
+// so infoWidth final=38, vizWidth=496-38-1=457. The InfoBox is 38 cells
+// wide — the top-right corner '╮' is at cell column 37, the side-line
+// right border '│' aligns at cell column 37 too.
+func TestNowPlayingPane_Overlay_WideCaps(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(500, 40)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+	lines := splitLines(stripped)
+	require.NotEmpty(t, lines, "View() must produce at least one line")
+
+	// findRuneIndex returns the cell-column index of the first occurrence of
+	// r in s. Since all the border glyphs in this test are 1-cell single-rune
+	// characters, byte-counting would skew; we work in runes.
+	findRuneIndex := func(s string, r rune) int {
+		col := 0
+		for _, c := range s {
+			if c == r {
+				return col
+			}
+			col++
+		}
+		return -1
+	}
+	// findLastRuneIndex returns the cell-column of the last occurrence of r.
+	findLastRuneIndex := func(s string, r rune) int {
+		last := -1
+		col := 0
+		for _, c := range s {
+			if c == r {
+				last = col
+			}
+			col++
+		}
+		return last
+	}
+
+	// Find the top row of the InfoBox (contains '╭' top-left corner).
+	var topLine string
+	var topLineIdx int = -1
+	for i, line := range lines {
+		if strings.ContainsRune(line, '╭') {
+			topLine = line
+			topLineIdx = i
+			break
+		}
+	}
+	require.NotEmpty(t, topLine,
+		"InfoBox top-left corner '╭' must be present at wide width (500×40)")
+	require.GreaterOrEqual(t, topLineIdx, 0, "top line index must be valid")
+
+	// Find the top-left and top-right corners in cell columns.
+	topLeftIdx := findRuneIndex(topLine, '╭')
+	topRightIdx := findRuneIndex(topLine, '╮')
+	require.GreaterOrEqual(t, topLeftIdx, 0, "top line must contain '╭'")
+	require.GreaterOrEqual(t, topRightIdx, 0, "top line must contain '╮'")
+	assert.Greater(t, topRightIdx, topLeftIdx, "'╮' must be to the right of '╭'")
+
+	// InfoBox width = topRightIdx - topLeftIdx + 1 = 38 (derived infoWidth).
+	infoBoxWidth := topRightIdx - topLeftIdx + 1
+	// contentWidth = 500 - 4 = 496. 25% of 496 = 124. The derived infoWidth
+	// is min(38, 124) = 38. Allow some slack for box padding.
+	assert.Greater(t, infoBoxWidth, 25,
+		"InfoBox width should be at least the readability floor (got %d, expected ~38)",
+		infoBoxWidth)
+	assert.Less(t, infoBoxWidth, 50,
+		"InfoBox width should still respect the 25%% cap of 124 (got %d, expected ~38)",
+		infoBoxWidth)
+
+	// Verify a side line (the row just below the top) has the right border
+	// '│' aligned with the top-right '╮' column. The side line has TWO '│'
+	// characters: left at column 0, right at column 37. We assert the right
+	// one aligns with the top-right corner.
+	if topLineIdx+1 < len(lines) {
+		sideLine := lines[topLineIdx+1]
+		sideRightBorder := findLastRuneIndex(sideLine, '│')
+		require.GreaterOrEqual(t, sideRightBorder, 0,
+			"side line of InfoBox must contain at least one right border '│'")
+		assert.Equal(t, topRightIdx, sideRightBorder,
+			"side line right border '│' (cell col %d) should align with top-right '╮' (cell col %d)",
+			sideRightBorder, topRightIdx)
+	}
 }
