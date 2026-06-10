@@ -131,3 +131,23 @@ Items to log:
    b) Strengthen `npMaxInfoPct` to 3 so the 25% cap drops InfoBox earlier, OR
    c) Document the actual break-point (~width ≤ 35 at height 16)
 2. Pick one and update both the spec table and the acceptance criteria.
+
+---
+
+## Story 223 Review Follow-ups (2026-06-10)
+
+### Test coverage gaps (PR #316)
+
+1. **`buildInfoLines` `innerH < 1` branch uncovered** — At `SetSize(10, 2)`, `innerH` clamps to 1 but the truncation to `lines[:1]` is not exercised. Add stress test for height < 3.
+
+2. **Zero/negative dimension stress tests missing** — `SetSize(0, 0)` and `SetSize(-1, -1)` should be verified as no-panic with reasonable output.
+
+3. **`renderSideBySide` `keepViz < 0` branch uncovered** — When `targetH = 0`, the seek-bar-preservation guard is not hit. Add `SetSize(10, 0)` or `SetSize(10, 1)` test.
+
+4. **`TestNowPlayingPane_Adaptive_InfoBoxNoOverlayBackground` too broad** — Scans entire `View()` output for `ESC[48`; will break if visualizer patterns add background colors. Scope assertion to InfoBox interior only (lines between `╭` and `╰`).
+
+5. **Album drop not directly verified in `LibraryPreset` test** — `TestNowPlayingPane_Adaptive_LibraryPreset` asserts controls/volume visible but does not assert `After Hours` is absent from InfoBox interior.
+
+6. **`npInfoMin` capping behavior not directly tested** — At `SetSize(50, 14)`, `cw=50`, `infoWidth=50/3=16 < npInfoMin=28`, so cap to 28. No test measures this.
+
+7. **`VisualizerPattern()` uncovered** — Exported getter has 0% coverage; trivial but should have one-line test per project rules.

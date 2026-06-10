@@ -31,7 +31,7 @@ var PresetDashboard = Preset{
 		PaneTopTracks: true, PaneTopArtists: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 1, MinHeight: 6, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PanePlaylists, WidthWeight: 1},
 			{PaneID: PaneAlbums, WidthWeight: 1},
@@ -68,7 +68,7 @@ var PresetLibrary = Preset{
 		PaneNowPlaying: true, PanePlaylists: true, PaneAlbums: true, PaneLikedSongs: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 1, MinHeight: 6, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 4, Cells: []Cell{
 			{PaneID: PanePlaylists, WidthWeight: 1},
 			{PaneID: PaneAlbums, WidthWeight: 1},
@@ -84,7 +84,7 @@ var PresetDiscovery = Preset{
 		PaneNowPlaying: true, PaneTopTracks: true, PaneTopArtists: true, PaneRecentlyPlayed: true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 1, MinHeight: 6, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
 			{PaneID: PaneTopTracks, WidthWeight: 1},
 			{PaneID: PaneTopArtists, WidthWeight: 1},
@@ -108,7 +108,7 @@ var PresetStats = Preset{
 		PaneNetworkLog:     true,
 	},
 	Grid: []Row{
-		{HeightWeight: 1, MinHeight: 0, Cells: []Cell{
+		{HeightWeight: 1, MinHeight: 6, Cells: []Cell{
 			{PaneID: PaneNowPlaying, WidthWeight: 1},
 		}},
 		{HeightWeight: 3, Cells: []Cell{

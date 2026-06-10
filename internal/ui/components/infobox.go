@@ -3,7 +3,6 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
@@ -104,11 +103,6 @@ func (b *InfoBox) Render(title string, lines []string, focused bool) string {
 	}
 
 	interior := sb.String()
-
-	// Apply the overlay background fill so the InfoBox sits on top of dynamic
-	// content (e.g., the NowPlaying visualizer). PaneChrome renders the
-	// border; we only need to fill the interior (Story 221).
-	interior = lipgloss.NewStyle().Background(b.th.OverlayBackground()).Render(interior)
 
 	// -----------------------------------------------------------------------
 	// Delegate border rendering to uikit.PaneChrome so glyphs are

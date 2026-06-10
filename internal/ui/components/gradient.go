@@ -233,8 +233,8 @@ func (b *GradientVolumeBar) Render() string {
 	// Determine the fill bar width from the component width, or use the default.
 	barWidth := gradientVolumeBarWidth
 	if b.width > 0 {
-		// "♪ " = 2 chars, "  XX%" = up to 5 chars → reserve 7
-		reserved := 7
+		// "♪ " = 2 chars, "  XX%" = up to 5 chars → reserve 8 (icon(1) + space(1) + pad(2) + percent(4 for "100%"))
+		reserved := 8
 		computed := b.width - reserved
 		if computed > 0 {
 			barWidth = computed

@@ -17,17 +17,18 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// NowPlaying overlay layout constants.
+// NowPlaying side-by-side layout constants.
 //
-// The InfoBox overlays the left ~25% of the visualizer; its solid
-// OverlayBackground fill (story 221) hides the visualizer behind the box.
+// The pane is split into two columns: InfoBox on the left, visualizer on the
+// right. The seek bar lives in its own row at the bottom of the right column.
 const (
-	npPadV       = 1  // rows of vertical padding top + bottom
-	npInfoMult   = 1  // infoWidth = vizRows * npInfoMult
-	npInfoMin    = 18 // minimum InfoBox width for readability
-	npGap        = 1  // column gap between InfoBox and visualizer
-	npMinViz     = 10 // minimum viz width; below this, drop InfoBox
-	npMaxInfoPct = 4  // cap infoWidth at contentWidth / npMaxInfoPct (~25%)
+	npPadV         = 1  // vertical padding rows (top + bottom)
+	npInfoPctTall  = 3  // tall pane: InfoBox = cw / npInfoPctTall
+	npInfoPctShort = 2  // short pane: InfoBox = cw / npInfoPctShort
+	npInfoMin      = 28 // minimum InfoBox width for controls + volume
+	npGap          = 1  // column gap between InfoBox and visualizer
+	npMinViz       = 10 // below this, drop InfoBox entirely
+	npMaxContentH  = 24 // cap content height when pane is oversized
 )
 
 // NowPlayingPane is the center pane Bubble Tea model.
@@ -37,10 +38,10 @@ const (
 // It implements the layout.Pane interface for integration with the layout manager.
 //
 // Layout: visualizer fills the full content area; InfoBox overlays the left
-// ~25% with a solid OverlayBackground fill. Seek bar lives in the visualizer
-// column only (right of the gap). When width is too narrow, the InfoBox is
-// dropped and the visualizer fills the full content area. When height < 8,
-// Title() embeds compact track info in the pane title bar instead.
+// ~25-33%. Seek bar lives in the visualizer column only (right of the gap).
+// When width is too narrow, the InfoBox is dropped and the visualizer fills the
+// full content area. When height < 8, Title() embeds compact track info in the
+// pane title bar instead.
 type NowPlayingPane struct {
 	BasePane
 
@@ -140,19 +141,24 @@ func (p *NowPlayingPane) Actions() []layout.Action {
 	}
 }
 
-// SetSize updates the pane's dimensions and recomputes the overlay layout geometry.
-// infoWidth is derived from vizRows, then capped at ~25% of content width.
-// When the remaining viz width would be too narrow, the InfoBox is dropped and
-// the visualizer fills the full content area.
+// SetSize updates the pane's dimensions and recomputes the side-by-side
+// layout geometry. The InfoBox occupies the left ~33% of the content area;
+// the visualizer fills the right column with the seek bar as a single row
+// at the bottom. When the right column would be too narrow, the InfoBox is
+// dropped and the visualizer fills the full content area.
 func (p *NowPlayingPane) SetSize(width, height int) {
 	p.BasePane.SetSize(width, height)
 
+	effH := p.effectiveHeight()
 	cw := p.contentWidth()
-	x := p.vizRows()
 
-	infoWidth := paneMax(x*npInfoMult, npInfoMin)
-	if cap := cw / npMaxInfoPct; infoWidth > cap {
-		infoWidth = cap
+	// --- adaptive InfoBox width (same formula as renderSideBySide) ---
+	infoWidth := cw / npInfoPctTall
+	if effH <= 8 {
+		infoWidth = cw / npInfoPctShort
+	}
+	if infoWidth < npInfoMin {
+		infoWidth = npInfoMin
 	}
 	vizWidth := cw - infoWidth - npGap
 	if vizWidth < npMinViz {
@@ -160,9 +166,18 @@ func (p *NowPlayingPane) SetSize(width, height int) {
 		vizWidth = cw
 	}
 
-	vizHeight := paneMax(x-1, 1)
+	// --- visualizer height: reserve 1 row for seek bar ---
+	rightH := effH - 2*npPadV
+	if rightH < 1 {
+		rightH = 1
+	}
+	vizHeight := rightH - 1
+	if vizHeight < 1 {
+		vizHeight = rightH
+	}
+
 	if infoWidth > 0 {
-		p.infoBox.SetSize(infoWidth, x)
+		p.infoBox.SetSize(infoWidth, effH)
 	}
 	p.engine.SetSize(vizWidth, vizHeight)
 	p.seekBar.SetWidth(vizWidth)
@@ -220,80 +235,110 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the NowPlaying pane. It reads from the store and never calls the API.
-// Dispatches to renderEmpty when nothing is playing, otherwise renderOverlay.
+// Dispatches to renderEmpty when nothing is playing, otherwise renderSideBySide.
 func (p *NowPlayingPane) View() string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
 		return p.renderEmpty()
 	}
-	return p.renderOverlay()
+	return p.renderSideBySide()
 }
 
-// renderOverlay composes the visualizer (full content area) with the InfoBox
-// composited on top of its leading edge. The InfoBox's OverlayBackground
-// fill (from story 221) hides the visualizer behind it. When the content
-// width is too narrow, the InfoBox is dropped and only the visualizer shows.
-// The output is padded to one blank row on top and one on the bottom.
-func (p *NowPlayingPane) renderOverlay() string {
+// renderSideBySide composes the InfoBox on the left and the visualizer on
+// the right. The visualizer renders as a single block at the top of the
+// right column, with the seek bar as its own row at the bottom. When the
+// right column would be too narrow, the InfoBox is dropped.
+func (p *NowPlayingPane) renderSideBySide() string {
 	ps := p.store.PlaybackState()
 	t := ps.Item
+	effH := p.effectiveHeight()
 	cw := p.contentWidth()
-	x := p.vizRows()
 
-	infoWidth := paneMax(x*npInfoMult, npInfoMin)
-	if cap := cw / npMaxInfoPct; infoWidth > cap {
-		infoWidth = cap
+	infoWidth := cw / npInfoPctTall
+	if effH <= 8 {
+		infoWidth = cw / npInfoPctShort
+	}
+	if infoWidth < npInfoMin {
+		infoWidth = npInfoMin
 	}
 	vizWidth := cw - infoWidth - npGap
-	// If the remaining viz width is below the readability threshold, drop the
-	// InfoBox and let the visualizer fill the full content area.
 	if vizWidth < npMinViz {
 		infoWidth = 0
+		vizWidth = cw
 	}
 
 	frame := p.engine.CurrentFrame()
-	topRows, bottomRows := splitFrame(frame)
 	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-	vizPanel := lipgloss.JoinVertical(lipgloss.Left,
-		renderStyledLines(topRows), seekBar, renderStyledLines(bottomRows))
 
-	paddedViz := strings.Repeat(" ", infoWidth+npGap) + vizPanel
+	// Build right column lines.
+	rightLines := make([]string, 0, len(frame)+1)
+	for _, line := range frame {
+		style := lipgloss.NewStyle().Foreground(line.Color)
+		rightLines = append(rightLines, style.Render(line.Text))
+	}
+	rightLines = append(rightLines, seekBar)
 
-	var composite string
+	// Fit right column into effective height, clipping visualizer (not seek bar) if needed.
+	targetH := effH
+	contentH := len(rightLines)
+	padTotal := targetH - contentH
+	if padTotal < 0 {
+		keepViz := targetH - 1 // reserve exactly 1 row for seek bar
+		if keepViz < 0 {
+			keepViz = 0
+		}
+		if len(rightLines)-1 > keepViz {
+			rightLines = append(rightLines[:keepViz], seekBar)
+		}
+		padTotal = 0
+	}
+	topPad := padTotal / 2
+	botPad := padTotal - topPad
+	for i := 0; i < topPad; i++ {
+		rightLines = append([]string{""}, rightLines...)
+	}
+	for i := 0; i < botPad; i++ {
+		rightLines = append(rightLines, "")
+	}
+
+	// Compose line-by-line.
+	var lines []string
 	if infoWidth > 0 {
-		infoLines := p.buildInfoLines(x)
+		infoLines := p.buildInfoLines(effH)
 		infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
-		composite = lipgloss.JoinHorizontal(lipgloss.Top, infoView, paddedViz)
+		infoSplit := strings.Split(infoView, "\n")
+
+		// Equalise line count.
+		for len(infoSplit) < len(rightLines) {
+			infoSplit = append(infoSplit, strings.Repeat(" ", infoWidth))
+		}
+		for len(rightLines) < len(infoSplit) {
+			rightLines = append(rightLines, strings.Repeat(" ", vizWidth))
+		}
+
+		gap := strings.Repeat(" ", npGap)
+		for i := range infoSplit {
+			lines = append(lines, infoSplit[i]+gap+rightLines[i])
+		}
 	} else {
-		composite = vizPanel
+		lines = rightLines
 	}
 
-	// Equal 1-row top + 1-row bottom padding.
-	contentH := lipgloss.Height(composite)
-	if contentH < p.height {
-		pad := p.height - contentH
-		topPad := 1
-		bottomPad := pad - topPad
-		if bottomPad > 1 {
-			bottomPad = 1
-		}
-		if bottomPad < 0 {
-			bottomPad = 0
-			if topPad > 1 {
-				topPad = 1
-			}
-		}
-		composite = strings.Repeat("\n", topPad) + composite
-		if bottomPad > 0 {
-			composite += strings.Repeat("\n", bottomPad)
+	// Centre vertically within oversized pane.
+	if p.height > effH {
+		outerPad := (p.height - effH) / 2
+		for i := 0; i < outerPad; i++ {
+			lines = append([]string{""}, lines...)
+			lines = append(lines, "")
 		}
 	}
-	return composite
+
+	return strings.Join(lines, "\n")
 }
 
-// buildInfoLines builds the 5-line InfoBox content (track, artists, album,
-// controls, volume) and pads with trailing blank strings so the InfoBox
-// vertically centres to top alignment.
+// buildInfoLines builds the InfoBox content (track, artists, album, controls,
+// volume). When the body height is tight, the album line is dropped so controls
+// and volume remain visible.
 func (p *NowPlayingPane) buildInfoLines(bodyHeight int) []string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
@@ -319,23 +364,19 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int) []string {
 		p.volumeBar.Render(),
 	}
 
-	innerH := bodyHeight - 2
-	for len(lines) < innerH {
-		lines = append(lines, "")
+	innerH := bodyHeight - 2 // InfoBox borders consume 2 rows
+	if innerH < 1 {
+		innerH = 1
+	}
+	if len(lines) > innerH {
+		if innerH >= 4 {
+			// Drop album line so controls + volume remain visible.
+			lines = append(lines[:2], lines[3:]...)
+		} else {
+			lines = lines[:innerH]
+		}
 	}
 	return lines
-}
-
-// splitFrame divides a frame into top and bottom halves for display around the seek bar.
-// The engine receives vizHeight = bodyHeight - 1 (seek bar row excluded),
-// so len(f) == vizHeight. We split evenly: topRows = len/2, bottomRows = len - len/2.
-// For odd lengths (e.g. 5), bottom gets the extra row (top=2, bottom=3).
-func splitFrame(f viz.Frame) (top, bottom viz.Frame) {
-	if len(f) == 0 {
-		return nil, nil
-	}
-	mid := len(f) / 2
-	return f[:mid], f[mid:]
 }
 
 // renderStyledLines joins StyledLines into a single string with per-line coloring.
@@ -491,12 +532,15 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 }
 
 // contentWidth returns the inner content width (pane width minus border chrome).
-func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width-4, 10) }
+func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width, 10) }
 
-// vizRows returns the number of terminal rows allocated to the overlay body
-// (pane height minus 2 padding rows).
-func (p *NowPlayingPane) vizRows() int {
-	return paneMax(p.height-2*npPadV, 4)
+// effectiveHeight caps the content height at npMaxContentH so solo panes don't
+// stretch the visualizer to absurd heights.
+func (p *NowPlayingPane) effectiveHeight() int {
+	if p.height > npMaxContentH {
+		return npMaxContentH
+	}
+	return p.height
 }
 
 // paneMax returns the larger of two ints.
