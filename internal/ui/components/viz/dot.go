@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 type DotRenderer struct{}
@@ -16,10 +17,10 @@ func (r DotRenderer) RenderFrame(width, height int, colHeights []int, colors []l
 		return Frame{}
 	}
 
-	var light, medium, heavy string
-	light = "·"
-	medium = "•"
-	heavy = "●"
+	m := uikit.ActiveMode()
+	light := uikit.GlyphFor(uikit.GlyphSeparator, m)
+	medium := uikit.GlyphFor(uikit.GlyphBullet, m)
+	heavy := uikit.GlyphFor(uikit.GlyphFilledDot, m)
 
 	frame := make(Frame, height)
 

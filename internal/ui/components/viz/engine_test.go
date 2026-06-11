@@ -281,15 +281,16 @@ func TestPatterns_HeightFunc_Range(t *testing.T) {
 			// - BrailleMirror returns lobeThickness [1, maxH/2-1].
 			assert.True(t, h >= 0,
 				"pattern %d col %d: height %d out of range (negative)", i, j, h)
-			if i == 1 {
+			switch i {
+			case 1:
 				// Standing Wave
 				assert.True(t, h <= 100,
 					"pattern %d col %d: height %d out of range [0,100]", i, j, h)
-			} else if i == 3 {
+			case 3:
 				// Braille Mirror
 				assert.True(t, h <= maxH,
 					"pattern %d col %d: height %d out of range [0,%d]", i, j, h, maxH)
-			} else {
+			default:
 				assert.True(t, h <= maxH,
 					"pattern %d col %d: height %d out of range [0,%d]", i, j, h, maxH)
 			}
