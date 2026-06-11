@@ -218,7 +218,7 @@ func TestBlockRenderer_ZeroHeight(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPatterns_Count(t *testing.T) {
-	assert.Len(t, Patterns(), 3)
+	assert.Len(t, Patterns(), 6)
 }
 
 func TestPatterns_Names(t *testing.T) {
@@ -255,6 +255,26 @@ func TestPatterns_BlockRenderers(t *testing.T) {
 	}
 }
 
+func TestPatterns_DensityRenderer(t *testing.T) {
+	ps := Patterns()
+	_, ok := ps[3].Renderer.(DensityRenderer)
+	assert.True(t, ok, "pattern 3 should use DensityRenderer")
+}
+
+func TestPatterns_CharRenderer(t *testing.T) {
+	ps := Patterns()
+	cr, ok := ps[4].Renderer.(CharRenderer)
+	assert.True(t, ok, "pattern 4 should use CharRenderer")
+	assert.Equal(t, []rune{' ', '0', '1'}, cr.Chars)
+	assert.Equal(t, 1, cr.Scale)
+}
+
+func TestPatterns_SpectrumRenderer(t *testing.T) {
+	ps := Patterns()
+	_, ok := ps[5].Renderer.(SpectrumRenderer)
+	assert.True(t, ok, "pattern 5 should use SpectrumRenderer")
+}
+
 func TestPatterns_HeightFunc_Length(t *testing.T) {
 	for i, p := range Patterns() {
 		out := p.HeightFunc(20, 16, 0)
@@ -283,7 +303,7 @@ func TestPatterns_HeightFunc_Deterministic(t *testing.T) {
 
 func TestPatterns_DifferentProfiles(t *testing.T) {
 	// All patterns should produce different height profiles for the same input
-	seen := make([][]int, 0, 3)
+	seen := make([][]int, 0, 6)
 	for _, p := range Patterns() {
 		out := p.HeightFunc(40, 32, 10)
 		seen = append(seen, out)
@@ -305,7 +325,7 @@ func TestPatterns_DifferentProfiles(t *testing.T) {
 
 func TestEngine_NewEngine_PatternCount(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	assert.Equal(t, 3, e.PatternCount())
+	assert.Equal(t, 6, e.PatternCount())
 }
 
 func TestEngine_NewEngine_DefaultPattern(t *testing.T) {
@@ -395,7 +415,7 @@ func TestEngine_CyclePattern(t *testing.T) {
 func TestEngine_CyclePattern_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 6; i++ {
 		e.CyclePattern()
 	}
 	assert.Equal(t, 0, e.Pattern())
@@ -739,13 +759,13 @@ func TestFullLifecycle(t *testing.T) {
 func TestPatternCycleAll(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	seen := make([]int, 0, 4)
+	seen := make([]int, 0, 7)
 	seen = append(seen, e.Pattern())
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 6; i++ {
 		e.CyclePattern()
 		seen = append(seen, e.Pattern())
 	}
-	assert.Equal(t, 0, seen[3], "after 3 cycles should wrap to 0")
+	assert.Equal(t, 0, seen[6], "after 6 cycles should wrap to 0")
 }
 
 func TestResizeMidAnimation(t *testing.T) {
@@ -828,9 +848,9 @@ func TestSetPattern_ValidIndex(t *testing.T) {
 
 func TestSetPattern_OutOfRange_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	// 3 patterns → index 4 wraps to 4 % 3 = 1
-	e.SetPattern(4)
-	assert.Equal(t, 1, e.Pattern())
+	// 6 patterns → index 8 wraps to 8 % 6 = 2
+	e.SetPattern(8)
+	assert.Equal(t, 2, e.Pattern())
 }
 
 func TestSetPattern_Negative_ClampsToZero(t *testing.T) {

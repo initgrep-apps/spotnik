@@ -32,6 +32,9 @@ type Pattern struct {
 //
 // Indices 0-1: BrailleRenderer patterns.
 // Index 2: BlockRenderer pattern.
+// Index 3: DensityRenderer pattern.
+// Index 4: CharRenderer pattern.
+// Index 5: SpectrumRenderer pattern.
 func Patterns() []Pattern {
 	return []Pattern{
 		{
@@ -48,6 +51,21 @@ func Patterns() []Pattern {
 			Name:       "Block Sparse",
 			Renderer:   BlockRenderer{},
 			HeightFunc: heightBlockSparse,
+		},
+		{
+			Name:       "Winamp EQ",
+			Renderer:   DensityRenderer{},
+			HeightFunc: heightWinampEQ,
+		},
+		{
+			Name:       "Matrix Rain",
+			Renderer:   CharRenderer{Chars: []rune{' ', '0', '1'}, Scale: 1},
+			HeightFunc: heightMatrixRain,
+		},
+		{
+			Name:       "Spectrum Sweep",
+			Renderer:   SpectrumRenderer{},
+			HeightFunc: heightSpectrumSweep,
 		},
 	}
 }
