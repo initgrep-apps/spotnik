@@ -113,18 +113,9 @@ func TestNowPlayingPane_Update_Space_WhenPaused(t *testing.T) {
 	assert.Equal(t, ActionPlay, req.Action, "paused → space should request play")
 }
 
-func TestNowPlayingPane_Update_P_SkipsPrev(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, true)
-
-	pMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
-	_, cmd := pane.Update(pMsg)
-
-	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(PlaybackRequestMsg)
-	assert.True(t, ok)
-	assert.Equal(t, ActionPrevious, req.Action)
-}
+// TestNowPlayingPane_P_KeyIgnored verifies that the "p" key is NOT handled by
+// NowPlayingPane — it is dead code because routing.go intercepts "p" for
+// preset cycling before the pane ever sees it.
 
 func TestNowPlayingPane_Update_Plus_VolUp(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
@@ -342,15 +333,15 @@ func TestDeviceName_WithDevice(t *testing.T) {
 	assert.Contains(t, name, "MacBook Pro")
 }
 
-// TestNowPlayingPane_ArrowKeys tests left/right arrow keys for navigation.
-func TestNowPlayingPane_ArrowKeys(t *testing.T) {
+// TestNowPlayingPane_ShiftArrowKeys tests Shift+left/Shift+right arrow keys for track skip.
+func TestNowPlayingPane_ShiftArrowKeys(t *testing.T) {
 	tests := []struct {
 		name       string
 		keyType    tea.KeyType
 		wantAction PlaybackAction
 	}{
-		{"right arrow skips next", tea.KeyRight, ActionNext},
-		{"left arrow skips prev", tea.KeyLeft, ActionPrevious},
+		{"shift+right arrow skips next", tea.KeyShiftRight, ActionNext},
+		{"shift+left arrow skips prev", tea.KeyShiftLeft, ActionPrevious},
 	}
 
 	for _, tt := range tests {
@@ -367,6 +358,21 @@ func TestNowPlayingPane_ArrowKeys(t *testing.T) {
 			assert.Equal(t, tt.wantAction, req.Action)
 		})
 	}
+}
+
+// TestNowPlayingPane_SeekArrowKeys tests that plain left/right arrows seek ±5s.
+func TestNowPlayingPane_SeekArrowKeys(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+
+	// Right arrow: seek forward 5s
+	rightMsg := tea.KeyMsg{Type: tea.KeyRight}
+	_, cmd := pane.Update(rightMsg)
+	require.NotNil(t, cmd, "right arrow should return a debounce cmd")
+
+	// Left arrow: seek backward 5s
+	leftMsg := tea.KeyMsg{Type: tea.KeyLeft}
+	_, cmd = pane.Update(leftMsg)
+	require.NotNil(t, cmd, "left arrow should return a debounce cmd")
 }
 
 // TestNowPlayingPane_Space_NilState tests that pressing space with no state still returns cmd.

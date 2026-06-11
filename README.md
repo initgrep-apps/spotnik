@@ -138,7 +138,7 @@ API gateway.
 * Press `Enter` in a list pane to play the highlighted item.
 * Press `f` to filter a list pane, and `Esc` to close any overlay or clear a
   filter.
-* Playback keys (`Space`, `←`, `→`, `+`, `-`, `s`, `r`, `v`) work from any pane.
+* Playback keys (`Space`, `←`, `→`, `Shift+←`, `Shift+→`, `+`, `-`, `s`, `r`, `v`) work from any pane.
 
 See [Keybindings](#keybindings) for the full reference.
 
@@ -202,7 +202,8 @@ automatic retry-after.
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `←` / `→` | Previous / next |
+| `←` / `→` | Seek back / forward 5 s |
+| `Shift+←` / `Shift+→` | Previous / next track |
 | `+` / `-` | Volume |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat |

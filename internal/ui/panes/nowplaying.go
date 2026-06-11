@@ -82,6 +82,10 @@ func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPla
 		if ps.Device != nil {
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
 		}
+		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
+		if ps.Item != nil {
+			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		}
 	}
 	return p
 }
@@ -215,6 +219,21 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.volumeBar.CancelPending(m.Seq, confirmedVolume(p.store))
 		} else {
 			p.volumeBar.ConfirmFromAPI(m.Seq, m.Vol)
+		}
+		return p, nil
+
+	case components.SeekDebounceTickMsg:
+		if matched, targetMs, seq := p.seekBar.HandleDebounce(m); matched {
+			return p, func() tea.Msg { return SeekIntentMsg{TargetMs: targetMs, Seq: seq} }
+		}
+		return p, nil
+
+	case SeekAppliedMsg:
+		if m.Err != nil {
+			p.seekBar.CancelPending(m.Seq, confirmedProgress(p.store))
+		} else {
+			p.seekBar.ConfirmFromAPI(m.Seq, m.PosMs)
+			p.localProgressMs = m.PosMs
 		}
 		return p, nil
 
@@ -405,12 +424,17 @@ func (p *NowPlayingPane) renderEmpty() string {
 
 // handleTick processes a TickMsg: increments local progress when playing.
 // localProgressMs is clamped to DurationMs so the seek bar never overflows.
+// When a seek is pending (user pressed ←/→ but debounce hasn't resolved),
+// the tick is skipped so localProgressMs doesn't drift away from the user's
+// intended position.
 func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil && ps.IsPlaying {
-		p.localProgressMs += 1000
-		if ps.Item != nil && p.localProgressMs > ps.Item.DurationMs {
-			p.localProgressMs = ps.Item.DurationMs
+		if !p.seekBar.HasPending() {
+			p.localProgressMs += 1000
+			if ps.Item != nil && p.localProgressMs > ps.Item.DurationMs {
+				p.localProgressMs = ps.Item.DurationMs
+			}
 		}
 	}
 	return p, nil
@@ -422,11 +446,19 @@ func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 func (p *NowPlayingPane) handlePlaybackFetched(_ PlaybackStateFetchedMsg) (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil {
-		p.localProgressMs = ps.ProgressMs
+		// Preserve local progress when a seek is pending so the title bar
+		// stays in sync with the optimistic seek bar position.
+		if !p.seekBar.HasPending() {
+			p.localProgressMs = ps.ProgressMs
+		}
 		p.engine.SetPlaying(ps.IsPlaying)
 		if ps.Device != nil {
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
 		}
+		if ps.Item != nil {
+			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		}
+		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
 	} else {
 		p.localProgressMs = 0
 		p.engine.SetPlaying(false)
@@ -448,12 +480,38 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		}
 		return p, emitPlaybackRequest(ActionPlay)
 
-	case msg.Type == tea.KeyRight:
+	// Shift+arrows: previous/next track (moved from plain arrows).
+	// Bubble Tea delivers Shift+arrows as separate KeyType constants,
+	// NOT modifier flags on tea.KeyLeft/tea.KeyRight.
+	// Shift variants must be checked before plain arrows (more specific first).
+	case msg.Type == tea.KeyShiftLeft:
+		return p, emitPlaybackRequest(ActionPrevious)
+
+	case msg.Type == tea.KeyShiftRight:
 		return p, emitPlaybackRequest(ActionNext)
 
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == "p",
-		msg.Type == tea.KeyLeft:
-		return p, emitPlaybackRequest(ActionPrevious)
+	// Plain arrows: seek back/forward 5 seconds (was: previous/next track).
+	case msg.Type == tea.KeyLeft:
+		if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil && ps.Item.DurationMs > 0 {
+			confirmed := ps.ProgressMs
+			if p.seekBar.HasPending() {
+				confirmed = p.seekBar.Current()
+			}
+			cmd := p.seekBar.HandleKey(-5000, confirmed, ps.Item.DurationMs)
+			return p, cmd
+		}
+		return p, nil
+
+	case msg.Type == tea.KeyRight:
+		if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil && ps.Item.DurationMs > 0 {
+			confirmed := ps.ProgressMs
+			if p.seekBar.HasPending() {
+				confirmed = p.seekBar.Current()
+			}
+			cmd := p.seekBar.HandleKey(+5000, confirmed, ps.Item.DurationMs)
+			return p, cmd
+		}
+		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":
 		return p, p.volumeBar.HandleKey(+1, confirmedVolume(p.store))
@@ -527,6 +585,13 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
 	p.volumeBar.SetConfirmed(confirmedVolume(p.store))
+	// Restore seek bar state from the store so the new bar renders the correct position.
+	if ps := p.store.PlaybackState(); ps != nil {
+		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
+		if ps.Item != nil {
+			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		}
+	}
 	// Propagate dimensions to newly created sub-components.
 	p.SetSize(p.width, p.height)
 }
@@ -556,6 +621,15 @@ func paneMax(a, b int) int {
 func confirmedVolume(s state.StateReader) int {
 	if ps := s.PlaybackState(); ps != nil && ps.Device != nil {
 		return ps.Device.VolumePercent
+	}
+	return 0
+}
+
+// confirmedProgress reads the playback progress from the store.
+// Returns 0 when playback state is unavailable.
+func confirmedProgress(s state.StateReader) int {
+	if ps := s.PlaybackState(); ps != nil {
+		return ps.ProgressMs
 	}
 	return 0
 }

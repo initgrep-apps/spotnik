@@ -1,7 +1,7 @@
 ---
 title: "Interactive Seek Bar"
 feature: 03-playback
-status: open
+status: done
 ---
 
 ## Background
