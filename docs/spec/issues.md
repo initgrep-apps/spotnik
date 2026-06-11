@@ -169,3 +169,13 @@ Items to log:
 **Feature:** 15-error-resilience (story 225)
 
 `throttleExpiredMsg` does not re-trigger a profile fetch, so the "Profile unavailable" error state persists until the user closes and reopens the overlay. There is no periodic profile polling mechanism. Pre-existing gap — not introduced by story 225.
+
+---
+
+## Story 226 review: test coverage gaps
+**Found:** 2026-06-11 | **Source:** PR #322 Review
+**Feature:** 03-playback
+
+Two minor test gaps that don't block functionality:
+1. TestNowPlayingPane_InfoBoxLeftPadding only verifies padding on the first content line (track name), not all three padded lines (artist, album).
+2. TestNowPlayingPane_ControlsCentered uses byte-length for space counting instead of utf8.RuneCountInString — fragile if multi-byte characters appear alongside spaces.

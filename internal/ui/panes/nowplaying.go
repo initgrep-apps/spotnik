@@ -29,6 +29,7 @@ const (
 	npGap          = 1  // column gap between InfoBox and visualizer
 	npMinViz       = 10 // below this, drop InfoBox entirely
 	npMaxContentH  = 24 // cap content height when pane is oversized
+	npInfoPadLeft  = 2  // left padding columns for InfoBox text lines
 )
 
 // NowPlayingPane is the center pane Bubble Tea model.
@@ -323,7 +324,7 @@ func (p *NowPlayingPane) renderSideBySide() string {
 	// Compose line-by-line.
 	var lines []string
 	if infoWidth > 0 {
-		infoLines := p.buildInfoLines(effH)
+		infoLines := p.buildInfoLines(effH, infoWidth)
 		infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
 		infoSplit := strings.Split(infoView, "\n")
 
@@ -358,7 +359,7 @@ func (p *NowPlayingPane) renderSideBySide() string {
 // buildInfoLines builds the InfoBox content (track, artists, album, controls,
 // volume). When the body height is tight, the album line is dropped so controls
 // and volume remain visible.
-func (p *NowPlayingPane) buildInfoLines(bodyHeight int) []string {
+func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
 		return nil
@@ -373,13 +374,16 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int) []string {
 		artistNames[i] = a.Name
 	}
 
+	pad := strings.Repeat(" ", npInfoPadLeft)
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
+	innerW := infoWidth - 2
+	ctrlLine := lipgloss.NewStyle().Width(innerW).Align(lipgloss.Center).Render(ctrl.Render())
 
 	lines := []string{
-		primaryStyle.Render(t.Name),
-		secondaryStyle.Render(strings.Join(artistNames, ", ")),
-		mutedStyle.Render(t.Album.Name),
-		ctrl.Render(),
+		pad + primaryStyle.Render(t.Name),
+		pad + secondaryStyle.Render(strings.Join(artistNames, ", ")),
+		pad + mutedStyle.Render(t.Album.Name),
+		ctrlLine,
 		p.volumeBar.Render(),
 	}
 
