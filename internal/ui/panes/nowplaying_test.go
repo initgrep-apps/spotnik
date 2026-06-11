@@ -1520,3 +1520,100 @@ func TestNowPlayingPane_Adaptive_InfoBoxNoOverlayBackground(t *testing.T) {
 	hasBgCode := strings.Contains(output, "\x1b[48")
 	assert.False(t, hasBgCode, "InfoBox interior should not contain ANSI background escape codes")
 }
+
+// ── Story 226: InfoBox left padding & controls centering ────────────────────
+
+// TestNowPlayingPane_InfoBoxLeftPadding verifies that text lines inside the
+// InfoBox (track name, artist, album) have 2 columns of left padding.
+// We strip ANSI, find the InfoBox content lines (after the top border with "╭"),
+// and check that the first content characters after the left border "│" are
+// exactly 2 spaces before the styled text begins.
+func TestNowPlayingPane_InfoBoxLeftPadding(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+	lines := splitLines(stripped)
+
+	// afterRune returns the substring starting after the first occurrence of r.
+	afterRune := func(s string, r rune) string {
+		for i, c := range s {
+			if c == r {
+				return string([]rune(s)[i+1:])
+			}
+		}
+		return s
+	}
+
+	contentStarted := false
+	for _, line := range lines {
+		if strings.ContainsRune(line, '╭') {
+			contentStarted = true
+			continue
+		}
+		if !contentStarted {
+			continue
+		}
+		afterBorder := afterRune(line, '│')
+		require.GreaterOrEqual(t, len([]rune(afterBorder)), 2,
+			"first InfoBox content line must have at least 2 runes after left border")
+		runes := []rune(afterBorder)
+		assert.Equal(t, "  ", string(runes[:2]),
+			"first InfoBox content line must start with 2 spaces (left padding)")
+		break
+	}
+}
+
+// TestNowPlayingPane_ControlsCentered verifies that the transport controls row
+// is horizontally centered within the InfoBox interior. We find the line containing
+// the shuffle glyph "⇄", strip ANSI, and check that the leading and trailing
+// space counts around the controls glyphs are balanced (within ±1 cell).
+func TestNowPlayingPane_ControlsCentered(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+	lines := splitLines(stripped)
+
+	// extractRunesBetweenBorders returns the runes between the first and last '│' in the line.
+	extractRunesBetweenBorders := func(line string) []rune {
+		runes := []rune(line)
+		first := -1
+		last := -1
+		for i, r := range runes {
+			if r == '│' {
+				if first < 0 {
+					first = i
+				}
+				last = i
+			}
+		}
+		if first < 0 || last <= first {
+			return nil
+		}
+		return runes[first+1 : last]
+	}
+
+	for _, line := range lines {
+		if !strings.ContainsRune(line, '⇄') {
+			continue
+		}
+		inner := extractRunesBetweenBorders(line)
+		if inner == nil {
+			continue
+		}
+		innerStr := string(inner)
+		leadingSpace := len(innerStr) - len(strings.TrimLeft(innerStr, " "))
+		trailingSpace := len(innerStr) - len(strings.TrimRight(innerStr, " "))
+		diff := leadingSpace - trailingSpace
+		if diff < 0 {
+			diff = -diff
+		}
+		assert.LessOrEqual(t, diff, 1,
+			"controls row should be centered (leading/trailing space within ±1): leading=%d trailing=%d",
+			leadingSpace, trailingSpace)
+		break
+	}
+}
