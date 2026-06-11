@@ -1123,6 +1123,71 @@ func TestHeightSpectrumSweep_Deterministic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Task 10: Integration tests for all 6 patterns and segment verification
+// ---------------------------------------------------------------------------
+
+func TestAllPatterns_Integration(t *testing.T) {
+	th := theme.Load("black")
+	e := NewEngine(th)
+	e.SetSize(40, 8)
+	e.SetPlaying(true)
+
+	names := []string{
+		"Braille Dual Sine",
+		"Braille Pulse Ripple",
+		"Block Sparse",
+		"Winamp EQ",
+		"Matrix Rain",
+		"Spectrum Sweep",
+	}
+
+	for i, name := range names {
+		t.Run(name, func(t *testing.T) {
+			e.SetPattern(i)
+			f := e.CurrentFrame()
+			require.Len(t, f, 8, "pattern %d (%s): wrong frame height", i, name)
+			for _, line := range f {
+				assert.Equal(t, 40, utf8.RuneCountInString(line.Text),
+					"pattern %d (%s): wrong line width", i, name)
+			}
+		})
+	}
+}
+
+func TestSpectrumPattern_ProducesSegments(t *testing.T) {
+	th := theme.Load("black")
+	e := NewEngine(th)
+	e.SetSize(20, 6)
+	e.SetPlaying(true)
+	e.SetPattern(5) // Spectrum Sweep
+
+	f := e.CurrentFrame()
+	require.Len(t, f, 6)
+	for _, line := range f {
+		assert.NotEmpty(t, line.Segments,
+			"Spectrum Sweep should produce segments")
+	}
+}
+
+func TestNonSpectrumPatterns_NoSegments(t *testing.T) {
+	th := theme.Load("black")
+	for idx := 0; idx < 5; idx++ { // patterns 0-4 (not Spectrum Sweep)
+		name := Patterns()[idx].Name
+		t.Run(name, func(t *testing.T) {
+			e := NewEngine(th)
+			e.SetSize(20, 4)
+			e.SetPlaying(true)
+			e.SetPattern(idx)
+			f := e.CurrentFrame()
+			for _, line := range f {
+				assert.Nil(t, line.Segments,
+					"pattern %d (%s) should not produce segments", idx, name)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
