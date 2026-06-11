@@ -203,25 +203,54 @@ func (e *Engine) generateFrames() []Frame {
 	return frames
 }
 
-// buildColors constructs the per-row color slice for a given height.
-// Row assignment:
-//   - Top 1/3: Gradient3 (red/hot, peaks)
-//   - Middle 1/3: Gradient2 (yellow/warm)
-//   - Bottom 1/3: Gradient1 (green/cool, base)
+// buildColors constructs the per-row color slice for a given height using the
+// 7-zone visualizer gradient (VizGradient1 base through VizGradient7 peaks).
 //
-// For heights not evenly divisible by 3, extra rows go to the bottom third.
+// Row assignment divides height into 7 zones:
+//   - Zone 1 (bottom): VizGradient1
+//   - Zone 2: VizGradient2
+//   - Zone 3: VizGradient3
+//   - Zone 4 (center): VizGradient4
+//   - Zone 5: VizGradient5
+//   - Zone 6: VizGradient6
+//   - Zone 7 (top): VizGradient7
+//
+// For heights not evenly divisible by 7, extra rows go to the bottom zone.
 func (e *Engine) buildColors(height int) []lipgloss.Color {
 	colors := make([]lipgloss.Color, height)
-	third := height / 3
+	zoneSize := height / 7
+	remainder := height % 7
 
-	for i := 0; i < height; i++ {
-		switch {
-		case i < third:
-			colors[i] = e.theme.Gradient3()
-		case i < 2*third:
-			colors[i] = e.theme.Gradient2()
-		default:
-			colors[i] = e.theme.Gradient1()
+	// Build zone boundaries: each zone gets zoneSize rows,
+	// with remainder rows distributed to lower zones (zones 1-remainder).
+	zoneStart := make([]int, 9) // zoneStart[i] = first row of zone i (1-indexed)
+	row := 0
+	for zone := 1; zone <= 7; zone++ {
+		zoneStart[zone] = row
+		size := zoneSize
+		if zone <= remainder {
+			size++ // distribute extra rows to lower zones
+		}
+		row += size
+		if row > height {
+			row = height
+		}
+	}
+	zoneStart[8] = height
+
+	gradients := []lipgloss.Color{
+		e.theme.VizGradient1(),
+		e.theme.VizGradient2(),
+		e.theme.VizGradient3(),
+		e.theme.VizGradient4(),
+		e.theme.VizGradient5(),
+		e.theme.VizGradient6(),
+		e.theme.VizGradient7(),
+	}
+
+	for zone := 1; zone <= 7; zone++ {
+		for i := zoneStart[zone]; i < zoneStart[zone+1]; i++ {
+			colors[i] = gradients[zone-1]
 		}
 	}
 	return colors

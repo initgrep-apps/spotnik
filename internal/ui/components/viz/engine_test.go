@@ -218,7 +218,7 @@ func TestBlockRenderer_ZeroHeight(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPatterns_Count(t *testing.T) {
-	assert.Len(t, Patterns(), 6)
+	assert.Len(t, Patterns(), 4)
 }
 
 func TestPatterns_Names(t *testing.T) {
@@ -239,40 +239,28 @@ func TestPatterns_NonNilHeightFunc(t *testing.T) {
 	}
 }
 
-func TestPatterns_BrailleRenderers(t *testing.T) {
+func TestPatterns_GaussianRenderer(t *testing.T) {
 	ps := Patterns()
-	for _, idx := range []int{0, 1} {
-		_, ok := ps[idx].Renderer.(BrailleRenderer)
-		assert.True(t, ok, "pattern %d should use BrailleRenderer", idx)
-	}
+	_, ok := ps[0].Renderer.(GaussianRenderer)
+	assert.True(t, ok, "pattern 0 should use GaussianRenderer")
 }
 
-func TestPatterns_BlockRenderers(t *testing.T) {
+func TestPatterns_DotRenderer(t *testing.T) {
 	ps := Patterns()
-	for _, idx := range []int{2} {
-		_, ok := ps[idx].Renderer.(BlockRenderer)
-		assert.True(t, ok, "pattern %d should use BlockRenderer", idx)
-	}
+	_, ok := ps[1].Renderer.(DotRenderer)
+	assert.True(t, ok, "pattern 1 should use DotRenderer")
 }
 
-func TestPatterns_DensityRenderer(t *testing.T) {
+func TestPatterns_FloorRenderer(t *testing.T) {
 	ps := Patterns()
-	_, ok := ps[3].Renderer.(DensityRenderer)
-	assert.True(t, ok, "pattern 3 should use DensityRenderer")
+	_, ok := ps[2].Renderer.(FloorRenderer)
+	assert.True(t, ok, "pattern 2 should use FloorRenderer")
 }
 
-func TestPatterns_CharRenderer(t *testing.T) {
+func TestPatterns_BrailleMirrorRenderer(t *testing.T) {
 	ps := Patterns()
-	cr, ok := ps[4].Renderer.(CharRenderer)
-	assert.True(t, ok, "pattern 4 should use CharRenderer")
-	assert.Equal(t, []rune{' ', '0', '1'}, cr.Chars)
-	assert.Equal(t, 1, cr.Scale)
-}
-
-func TestPatterns_SpectrumRenderer(t *testing.T) {
-	ps := Patterns()
-	_, ok := ps[5].Renderer.(SpectrumRenderer)
-	assert.True(t, ok, "pattern 5 should use SpectrumRenderer")
+	_, ok := ps[3].Renderer.(BrailleMirrorRenderer)
+	assert.True(t, ok, "pattern 3 should use BrailleMirrorRenderer")
 }
 
 func TestPatterns_HeightFunc_Length(t *testing.T) {
@@ -287,8 +275,24 @@ func TestPatterns_HeightFunc_Range(t *testing.T) {
 		maxH := 16
 		out := p.HeightFunc(20, maxH, 5)
 		for j, h := range out {
-			assert.True(t, h >= 0 && h <= maxH,
-				"pattern %d col %d: height %d out of range [0,%d]", i, j, h, maxH)
+			// HeightFunc semantics vary by pattern:
+			// - Most return values in [0, maxH].
+			// - StandingWave returns [0, 100] (phase-like).
+			// - BrailleMirror returns lobeThickness [1, maxH/2-1].
+			assert.True(t, h >= 0,
+				"pattern %d col %d: height %d out of range (negative)", i, j, h)
+			if i == 1 {
+				// Standing Wave
+				assert.True(t, h <= 100,
+					"pattern %d col %d: height %d out of range [0,100]", i, j, h)
+			} else if i == 3 {
+				// Braille Mirror
+				assert.True(t, h <= maxH,
+					"pattern %d col %d: height %d out of range [0,%d]", i, j, h, maxH)
+			} else {
+				assert.True(t, h <= maxH,
+					"pattern %d col %d: height %d out of range [0,%d]", i, j, h, maxH)
+			}
 		}
 	}
 }
@@ -325,7 +329,7 @@ func TestPatterns_DifferentProfiles(t *testing.T) {
 
 func TestEngine_NewEngine_PatternCount(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	assert.Equal(t, 6, e.PatternCount())
+	assert.Equal(t, 4, e.PatternCount())
 }
 
 func TestEngine_NewEngine_DefaultPattern(t *testing.T) {
@@ -415,7 +419,7 @@ func TestEngine_CyclePattern(t *testing.T) {
 func TestEngine_CyclePattern_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 4; i++ {
 		e.CyclePattern()
 	}
 	assert.Equal(t, 0, e.Pattern())
@@ -444,41 +448,50 @@ func TestEngine_Update_TickMsg_NonNil(t *testing.T) {
 	assert.NotNil(t, cmd)
 }
 
-func TestEngine_PerRowColors_GradientAssignment(t *testing.T) {
+func TestEngine_PerRowColors_VizGradientAssignment(t *testing.T) {
 	th := theme.Load("black")
 	e := NewEngine(th)
-	height := 6
+	height := 14
 	e.SetSize(20, height)
 	e.SetPlaying(true)
 	f := e.CurrentFrame()
 	require.Len(t, f, height)
 
-	// Top third (rows 0..1) should use Gradient3
-	for i := 0; i < 2; i++ {
-		assert.Equal(t, th.Gradient3(), f[i].Color,
-			"row %d should use Gradient3 (peaks)", i)
-	}
-	// Middle third (rows 2..3) should use Gradient2
-	for i := 2; i < 4; i++ {
-		assert.Equal(t, th.Gradient2(), f[i].Color,
-			"row %d should use Gradient2 (mid)", i)
-	}
-	// Bottom third (rows 4..5) should use Gradient1
-	for i := 4; i < 6; i++ {
-		assert.Equal(t, th.Gradient1(), f[i].Color,
-			"row %d should use Gradient1 (base)", i)
-	}
+	// buildColors distributes rows from bottom (zone 1) to top (zone 7).
+	// With 14 rows: zoneSize=2, remainder=0 => each zone gets 2 rows.
+	// Zone 1 (bottom, rows 0-1): VizGradient1
+	assert.Equal(t, th.VizGradient1(), f[0].Color, "row 0 should use VizGradient1")
+	assert.Equal(t, th.VizGradient1(), f[1].Color, "row 1 should use VizGradient1")
+	// Zone 2 (rows 2-3): VizGradient2
+	assert.Equal(t, th.VizGradient2(), f[2].Color, "row 2 should use VizGradient2")
+	assert.Equal(t, th.VizGradient2(), f[3].Color, "row 3 should use VizGradient2")
+	// Zone 3 (rows 4-5): VizGradient3
+	assert.Equal(t, th.VizGradient3(), f[4].Color, "row 4 should use VizGradient3")
+	assert.Equal(t, th.VizGradient3(), f[5].Color, "row 5 should use VizGradient3")
+	// Zone 4 (rows 6-7): VizGradient4
+	assert.Equal(t, th.VizGradient4(), f[6].Color, "row 6 should use VizGradient4")
+	assert.Equal(t, th.VizGradient4(), f[7].Color, "row 7 should use VizGradient4")
+	// Zone 5 (rows 8-9): VizGradient5
+	assert.Equal(t, th.VizGradient5(), f[8].Color, "row 8 should use VizGradient5")
+	assert.Equal(t, th.VizGradient5(), f[9].Color, "row 9 should use VizGradient5")
+	// Zone 6 (rows 10-11): VizGradient6
+	assert.Equal(t, th.VizGradient6(), f[10].Color, "row 10 should use VizGradient6")
+	assert.Equal(t, th.VizGradient6(), f[11].Color, "row 11 should use VizGradient6")
+	// Zone 7 (top, rows 12-13): VizGradient7
+	assert.Equal(t, th.VizGradient7(), f[12].Color, "row 12 should use VizGradient7")
+	assert.Equal(t, th.VizGradient7(), f[13].Color, "row 13 should use VizGradient7")
 }
 
-func TestEngine_SetSize_Height1_GradientColor(t *testing.T) {
+func TestEngine_SetSize_Height1_VizGradientColor(t *testing.T) {
 	th := theme.Load("black")
 	e := NewEngine(th)
 	e.SetSize(10, 1)
 	e.SetPlaying(true)
 	f := e.CurrentFrame()
 	require.Len(t, f, 1)
-	// Single row should use Gradient1 (bottom/base)
-	assert.Equal(t, th.Gradient1(), f[0].Color)
+	// Single row should use VizGradient1 (bottom/base)
+	assert.Equal(t, th.VizGradient1(), f[0].Color,
+		"single row should use VizGradient1 (base)")
 }
 
 func TestEngine_SetSize_Height0_NoFrame(t *testing.T) {
@@ -564,63 +577,53 @@ func TestEngine_CurrentFrame_Paused_CyclePattern(t *testing.T) {
 	assert.Len(t, f, 4, "paused cycle should still produce a frame")
 }
 
-func TestBraillePatterns_OnlyBrailleRunes(t *testing.T) {
-	// Pin to unicode mode: the engine falls back to AsciiBarsRenderer in ASCII mode,
-	// so braille-pattern assertions are only meaningful in unicode mode.
+func TestBrailleMirrorPattern_OnlyBrailleRunes(t *testing.T) {
+	// Pin to unicode mode: the engine falls back to AsciiBarsRenderer in ASCII mode.
 	prev := uikit.ActiveMode()
 	uikit.SetModeForTest(uikit.GlyphUnicode)
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	braillePatterns := []int{0, 1}
-
-	for _, idx := range braillePatterns {
-		ps := Patterns()
-		p := ps[idx]
-		t.Run(p.Name, func(t *testing.T) {
-			e := NewEngine(th)
-			for e.Pattern() != idx {
-				e.CyclePattern()
-			}
-			e.SetSize(20, 4)
-			e.SetPlaying(true)
-			f := e.CurrentFrame()
-			for _, line := range f {
-				for _, ch := range line.Text {
-					assert.True(t, ch >= '\u2800' && ch <= '\u28FF',
-						"braille pattern %d: unexpected rune %U", idx, ch)
-				}
-			}
-		})
+	e := NewEngine(th)
+	e.SetPattern(3) // Braille Mirror
+	e.SetSize(20, 4)
+	e.SetPlaying(true)
+	f := e.CurrentFrame()
+	for _, line := range f {
+		for _, ch := range line.Text {
+			assert.True(t, ch >= '\u2800' && ch <= '\u28FF' || ch == ' ',
+				"braille mirror pattern: unexpected rune %U", ch)
+		}
 	}
 }
 
-func TestBlockPatterns_OnlyBlockOrSpace(t *testing.T) {
-	// Pin to unicode mode: the engine falls back to AsciiBarsRenderer in ASCII mode,
-	// so block-pattern assertions are only meaningful in unicode mode.
+func TestBlockLikePatterns_OnlyBlockOrSpace(t *testing.T) {
+	// Pin to unicode mode: the engine falls back to AsciiBarsRenderer in ASCII mode.
 	prev := uikit.ActiveMode()
 	uikit.SetModeForTest(uikit.GlyphUnicode)
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	blockPatterns := []int{2}
-	fillGlyph := []rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode()))[0]
+	// Patterns 0 (Gaussian), 1 (Dot), 2 (Floor) use block/dot glyphs.
+	blockLikePatterns := []int{0, 1, 2}
 
-	for _, idx := range blockPatterns {
+	for _, idx := range blockLikePatterns {
 		ps := Patterns()
 		p := ps[idx]
 		t.Run(p.Name, func(t *testing.T) {
 			e := NewEngine(th)
-			for e.Pattern() != idx {
-				e.CyclePattern()
-			}
+			e.SetPattern(idx)
 			e.SetSize(20, 4)
 			e.SetPlaying(true)
 			f := e.CurrentFrame()
 			for _, line := range f {
 				for _, ch := range line.Text {
-					assert.True(t, ch == fillGlyph || ch == ' ',
-						"block pattern %d: unexpected rune %U (%c)", idx, ch, ch)
+					// Gaussian and Floor use block glyphs; Dot uses dot glyphs.
+					// In unicode mode, just ensure no braille or ASCII bar chars.
+					assert.False(t, ch >= '\u2800' && ch <= '\u28FF',
+						"pattern %d should not contain braille runes, got %U", idx, ch)
+					assert.False(t, ch == '#' || ch == '=' || ch == '-' || ch == '.',
+						"pattern %d should not contain ASCII bar chars, got %c", idx, ch)
 				}
 			}
 		})
@@ -664,22 +667,20 @@ func TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars(t *testing.T) {
 func TestAllPatterns_ColorGradient(t *testing.T) {
 	th := theme.Load("black")
 	ps := Patterns()
-	height := 6
+	height := 14
 
 	for i, p := range ps {
 		t.Run(p.Name, func(t *testing.T) {
 			e := NewEngine(th)
-			for e.Pattern() != i {
-				e.CyclePattern()
-			}
+			e.SetPattern(i)
 			e.SetSize(20, height)
 			e.SetPlaying(true)
 			f := e.CurrentFrame()
 			require.Len(t, f, height)
-			// Top rows: Gradient3
-			assert.Equal(t, th.Gradient3(), f[0].Color)
-			// Bottom rows: Gradient1
-			assert.Equal(t, th.Gradient1(), f[height-1].Color)
+			// Bottom rows: VizGradient1 (zone 1)
+			assert.Equal(t, th.VizGradient1(), f[0].Color)
+			// Top rows: VizGradient7 (zone 7)
+			assert.Equal(t, th.VizGradient7(), f[height-1].Color)
 		})
 	}
 }
@@ -759,13 +760,13 @@ func TestFullLifecycle(t *testing.T) {
 func TestPatternCycleAll(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	seen := make([]int, 0, 7)
+	seen := make([]int, 0, 5)
 	seen = append(seen, e.Pattern())
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 4; i++ {
 		e.CyclePattern()
 		seen = append(seen, e.Pattern())
 	}
-	assert.Equal(t, 0, seen[6], "after 6 cycles should wrap to 0")
+	assert.Equal(t, 0, seen[4], "after 4 cycles should wrap to 0")
 }
 
 func TestResizeMidAnimation(t *testing.T) {
@@ -848,9 +849,9 @@ func TestSetPattern_ValidIndex(t *testing.T) {
 
 func TestSetPattern_OutOfRange_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	// 6 patterns → index 8 wraps to 8 % 6 = 2
+	// 4 patterns → index 8 wraps to 8 % 4 = 0
 	e.SetPattern(8)
-	assert.Equal(t, 2, e.Pattern())
+	assert.Equal(t, 0, e.Pattern())
 }
 
 func TestSetPattern_Negative_ClampsToZero(t *testing.T) {
@@ -971,7 +972,7 @@ func TestEngine_SelectsUnicodeRendererInUnicodeMode(t *testing.T) {
 	f := e.CurrentFrame()
 	require.Len(t, f, 4)
 
-	// Default pattern 0 is braille — should contain braille runes.
+	// Default pattern 0 is Gaussian (block) in unicode mode — should not contain ASCII bar chars.
 	for rowIdx, line := range f {
 		for _, ch := range line.Text {
 			assert.False(t, ch == '#' || ch == '=',
@@ -980,22 +981,20 @@ func TestEngine_SelectsUnicodeRendererInUnicodeMode(t *testing.T) {
 		}
 	}
 
-	// Positive assertion: at least one braille rune (U+2800–U+28FF) must appear.
-	// A regression that returned all-spaces would still satisfy the negative check
-	// above; this assertion catches that.
-	hasBraille := false
+	// Positive assertion: at least one non-space, non-ASCII char must appear.
+	hasContent := false
 	for _, line := range f {
 		for _, ch := range line.Text {
-			if ch >= '⠀' && ch <= '⣿' {
-				hasBraille = true
+			if ch != ' ' && ch != '#' && ch != '=' {
+				hasContent = true
 				break
 			}
 		}
-		if hasBraille {
+		if hasContent {
 			break
 		}
 	}
-	assert.True(t, hasBraille, "unicode mode should produce at least one braille rune from BrailleRenderer")
+	assert.True(t, hasContent, "unicode mode should produce at least one non-space glyph")
 }
 
 // TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern is the regression
@@ -1017,21 +1016,21 @@ func TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern(t *testing.T) {
 	e.SetSize(10, 4)
 	e.SetPlaying(true)
 
-	// Sanity: in unicode mode, the first pattern is braille.
+	// Sanity: in unicode mode, the first pattern is Gaussian (block).
 	f := e.CurrentFrame()
 	require.Len(t, f, 4)
-	hasBraille := false
+	hasBlock := false
 	for _, line := range f {
 		for _, ch := range line.Text {
-			if ch >= '⠀' && ch <= '⣿' {
-				hasBraille = true
+			if ch != ' ' && ch != '#' && ch != '=' {
+				hasBlock = true
 				break
 			}
 		}
 	}
-	assert.True(t, hasBraille, "precondition: unicode mode SetSize should produce braille frames")
+	assert.True(t, hasBlock, "precondition: unicode mode SetSize should produce block frames")
 
-	// Flip mode to ASCII without resizing — cached frames stay as braille.
+	// Flip mode to ASCII without resizing — cached frames stay as block.
 	uikit.SetModeForTest(uikit.GlyphASCII)
 
 	// Trigger regen via CyclePattern: generateFrames calls selectRenderer which
@@ -1054,72 +1053,44 @@ func TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern(t *testing.T) {
 // New HeightFunc tests
 // ---------------------------------------------------------------------------
 
-func TestHeightWinampEQ_Range(t *testing.T) {
+func TestHeightPixelSpectrum_Range(t *testing.T) {
 	for f := 0; f < 40; f++ {
-		out := heightWinampEQ(20, 16, f)
+		out := heightPixelSpectrum(20, 16, f)
 		assert.Len(t, out, 20)
 		for _, h := range out {
-			assert.True(t, h >= 0 && h <= 16, "height %d out of range", h)
+			assert.True(t, h >= 0 && h <= 16)
 		}
 	}
 }
 
-func TestHeightWinampEQ_Deterministic(t *testing.T) {
-	a := heightWinampEQ(20, 16, 7)
-	b := heightWinampEQ(20, 16, 7)
-	assert.Equal(t, a, b)
-}
-
-func TestHeightWinampEQ_DifferentFromBlockSparse(t *testing.T) {
-	wq := heightWinampEQ(40, 32, 10)
-	bs := heightBlockSparse(40, 32, 10)
-	assert.NotEqual(t, wq, bs, "Winamp EQ should have different profile than Block Sparse")
-}
-
-func TestHeightMatrixRain_Range(t *testing.T) {
+func TestHeightStandingWave_Range(t *testing.T) {
 	for f := 0; f < 40; f++ {
-		out := heightMatrixRain(20, 16, f)
+		out := heightStandingWave(20, 16, f)
 		assert.Len(t, out, 20)
 		for _, h := range out {
-			assert.True(t, h >= 1 && h <= 16,
-				"height %d out of range [1,16]", h)
+			assert.True(t, h >= 0 && h <= 100)
 		}
 	}
 }
 
-func TestHeightMatrixRain_Deterministic(t *testing.T) {
-	a := heightMatrixRain(20, 16, 7)
-	b := heightMatrixRain(20, 16, 7)
-	assert.Equal(t, a, b)
-}
-
-func TestHeightMatrixRain_ColumnStagger(t *testing.T) {
-	// Adjacent columns should have different heights (staggered phase)
-	out := heightMatrixRain(20, 16, 0)
-	differences := 0
-	for i := 1; i < len(out); i++ {
-		if out[i] != out[i-1] {
-			differences++
-		}
-	}
-	assert.Greater(t, differences, 0,
-		"adjacent columns should have different heights due to phase stagger")
-}
-
-func TestHeightSpectrumSweep_Range(t *testing.T) {
+func TestHeightFloorSpectrum_Range(t *testing.T) {
 	for f := 0; f < 40; f++ {
-		out := heightSpectrumSweep(20, 16, f)
+		out := heightFloorSpectrum(20, 16, f)
 		assert.Len(t, out, 20)
 		for _, h := range out {
-			assert.True(t, h >= 0 && h <= 16, "height %d out of range", h)
+			assert.True(t, h >= 4 && h <= 16, "floor spectrum height %d out of range [4,16]", h)
 		}
 	}
 }
 
-func TestHeightSpectrumSweep_Deterministic(t *testing.T) {
-	a := heightSpectrumSweep(20, 16, 7)
-	b := heightSpectrumSweep(20, 16, 7)
-	assert.Equal(t, a, b)
+func TestHeightBrailleMirror_Range(t *testing.T) {
+	for f := 0; f < 40; f++ {
+		out := heightBrailleMirror(20, 16, f)
+		assert.Len(t, out, 20)
+		for _, h := range out {
+			assert.True(t, h >= 1 && h <= 16, "mirror height %d out of range [1,16]", h)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1129,59 +1100,24 @@ func TestHeightSpectrumSweep_Deterministic(t *testing.T) {
 func TestAllPatterns_Integration(t *testing.T) {
 	th := theme.Load("black")
 	e := NewEngine(th)
-	e.SetSize(40, 8)
+	e.SetSize(40, 14)
 	e.SetPlaying(true)
 
 	names := []string{
-		"Braille Dual Sine",
-		"Braille Pulse Ripple",
-		"Block Sparse",
-		"Winamp EQ",
-		"Matrix Rain",
-		"Spectrum Sweep",
+		"Pixel Spectrum",
+		"Standing Wave",
+		"Floor Spectrum",
+		"Braille Mirror",
 	}
 
 	for i, name := range names {
 		t.Run(name, func(t *testing.T) {
 			e.SetPattern(i)
 			f := e.CurrentFrame()
-			require.Len(t, f, 8, "pattern %d (%s): wrong frame height", i, name)
+			require.Len(t, f, 14, "pattern %d (%s): wrong frame height", i, name)
 			for _, line := range f {
 				assert.Equal(t, 40, utf8.RuneCountInString(line.Text),
 					"pattern %d (%s): wrong line width", i, name)
-			}
-		})
-	}
-}
-
-func TestSpectrumPattern_ProducesSegments(t *testing.T) {
-	th := theme.Load("black")
-	e := NewEngine(th)
-	e.SetSize(20, 6)
-	e.SetPlaying(true)
-	e.SetPattern(5) // Spectrum Sweep
-
-	f := e.CurrentFrame()
-	require.Len(t, f, 6)
-	for _, line := range f {
-		assert.NotEmpty(t, line.Segments,
-			"Spectrum Sweep should produce segments")
-	}
-}
-
-func TestNonSpectrumPatterns_NoSegments(t *testing.T) {
-	th := theme.Load("black")
-	for idx := 0; idx < 5; idx++ { // patterns 0-4 (not Spectrum Sweep)
-		name := Patterns()[idx].Name
-		t.Run(name, func(t *testing.T) {
-			e := NewEngine(th)
-			e.SetSize(20, 4)
-			e.SetPlaying(true)
-			e.SetPattern(idx)
-			f := e.CurrentFrame()
-			for _, line := range f {
-				assert.Nil(t, line.Segments,
-					"pattern %d (%s) should not produce segments", idx, name)
 			}
 		})
 	}

@@ -502,21 +502,21 @@ func TestNowPlayingPane_PlaybackFetched_PausesEngine(t *testing.T) {
 		"engine should not animate when playing=false")
 }
 
-func TestNowPlayingPane_FullView_ContainsBrailleChars(t *testing.T) {
+func TestNowPlayingPane_FullView_ContainsVisualizerChars(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
 
-	// Braille chars used by the engine (any braille codepoint).
-	hasBraille := false
+	// Visualizer glyphs (braille or block) used by the engine.
+	hasVizGlyph := false
 	for _, r := range output {
-		if r >= '\u2800' && r <= '\u28FF' {
-			hasBraille = true
+		if (r >= '\u2800' && r <= '\u28FF') || r == '\u2588' || r == '\u2593' || r == '\u2592' || r == '\u2591' || r == '\u00B7' || r == '\u2022' || r == '\u25CF' {
+			hasVizGlyph = true
 			break
 		}
 	}
-	assert.True(t, hasBraille, "full mode View() should contain braille characters from engine")
+	assert.True(t, hasVizGlyph, "full mode View() should contain visualizer characters from engine")
 }
 
 // ── Task 4: Gradient bars tests ──────────────────────────────────────────────
@@ -637,20 +637,20 @@ func TestNowPlayingPane_SplitLayout_ContainsInfoBoxBorders(t *testing.T) {
 
 // TestNowPlayingPane_SplitLayout_ContainsBraille verifies that View() contains
 // braille characters from the engine rendered on the right side.
-func TestNowPlayingPane_SplitLayout_ContainsBraille(t *testing.T) {
+func TestNowPlayingPane_SplitLayout_ContainsVisualizerChars(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
 
 	output := pane.View()
 
-	hasBraille := false
+	hasVizGlyph := false
 	for _, r := range output {
-		if r >= '\u2800' && r <= '\u28FF' {
-			hasBraille = true
+		if (r >= '\u2800' && r <= '\u28FF') || r == '\u2588' || r == '\u2593' || r == '\u2592' || r == '\u2591' || r == '\u00B7' || r == '\u2022' || r == '\u25CF' {
+			hasVizGlyph = true
 			break
 		}
 	}
-	assert.True(t, hasBraille, "split layout should contain braille characters from engine")
+	assert.True(t, hasVizGlyph, "split layout should contain visualizer characters from engine")
 }
 
 // TestNowPlayingPane_SplitLayout_ContainsSeekBar verifies that View() contains
