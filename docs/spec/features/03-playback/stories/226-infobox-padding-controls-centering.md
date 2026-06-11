@@ -1,7 +1,7 @@
 ---
 title: "InfoBox content padding & controls centering"
 feature: 03-playback
-status: open
+status: done
 ---
 
 ## Background
