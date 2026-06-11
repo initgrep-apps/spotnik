@@ -16,11 +16,23 @@ import (
 // gradientVolumeBarWidth is the default number of fill characters in the volume bar.
 const gradientVolumeBarWidth = 14
 
+// SeekDebounceTickMsg is the timer payload fired by GradientSeekBar.HandleKey
+// after the 300 ms debounce window. Seq is a monotonically increasing counter;
+// NowPlayingPane discards the tick when Seq does not match the bar's current seq,
+// meaning a newer keypress superseded this one.
+type SeekDebounceTickMsg struct {
+	TargetMs int
+	Seq      int
+}
+
 // GradientSeekBar renders a seek bar with a gradient fill interpolated from
 // Gradient1() (left) to Gradient2() (right), with an empty portion in Surface().
+// It embeds DebounceTracker for interactive seek support (←/→ keys).
 type GradientSeekBar struct {
-	th    theme.Theme
-	width int
+	DebounceTracker
+	th            theme.Theme
+	width         int
+	trackDuration int
 }
 
 // NewGradientSeekBar creates a gradient seek bar using theme tokens.
@@ -33,10 +45,68 @@ func (b *GradientSeekBar) SetWidth(width int) {
 	b.width = width
 }
 
+// SetTrackDuration sets the maximum seek position in milliseconds.
+// Used by HandleKey as the upper clamp bound.
+func (b *GradientSeekBar) SetTrackDuration(ms int) {
+	b.trackDuration = ms
+}
+
+// SetPositionConfirmed delegates to DebounceTracker.SetConfirmed for the seek
+// position, reconciling the bar with the authoritative server value.
+func (b *GradientSeekBar) SetPositionConfirmed(posMs int) {
+	b.DebounceTracker.SetConfirmed(posMs)
+}
+
+// HandleKey computes the new pending position, updates the bar immediately so
+// the user sees the new position on the next frame, and returns a 300 ms debounce
+// cmd wrapping SeekDebounceTickMsg. Returns nil when trackDuration is 0 (no track).
+//
+// deltaMs is the seek step in milliseconds (e.g. ±5000 for 5s).
+// confirmedMs is the store's current progress.
+// durationMs is the track duration in milliseconds.
+func (b *GradientSeekBar) HandleKey(deltaMs, confirmedMs, durationMs int) tea.Cmd {
+	if durationMs == 0 {
+		return nil
+	}
+	seq := b.DebounceTracker.HandleKey(deltaMs, confirmedMs, 0, durationMs)
+	if seq == -1 {
+		return nil
+	}
+	target := b.Current()
+	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg {
+		return SeekDebounceTickMsg{TargetMs: target, Seq: seq}
+	})
+}
+
+// HandleDebounce checks whether the debounce tick is current.
+// Delegates to DebounceTracker.HandleDebounce for seq-based stale rejection.
+func (b *GradientSeekBar) HandleDebounce(m SeekDebounceTickMsg) (matched bool, targetMs, intentSeq int) {
+	return b.DebounceTracker.HandleDebounce(m.Seq)
+}
+
+// ConfirmFromAPI delegates to DebounceTracker.ConfirmFromAPI for seek position
+// confirmation after the Spotify API call succeeds.
+func (b *GradientSeekBar) ConfirmFromAPI(intentSeq, posMs int) {
+	b.DebounceTracker.ConfirmFromAPI(intentSeq, posMs)
+}
+
+// CancelPending delegates to DebounceTracker.CancelPending for seek position
+// revert on API error.
+func (b *GradientSeekBar) CancelPending(intentSeq, confirmedMs int) {
+	b.DebounceTracker.CancelPending(intentSeq, confirmedMs)
+}
+
 // Render returns the seek bar string for the given progress.
 // progressMs and durationMs are in milliseconds.
+// When a seek is pending (HasPending), the bar uses the pending position instead
+// of the parameter, so the user sees the optimistic position during debounce.
 // Format: "1:41  ████████████████░░░░░░░░░░░░░░  5:30"
 func (b *GradientSeekBar) Render(progressMs, durationMs int) string {
+	// When a seek is pending, use the optimistic position from the debounce tracker
+	// instead of the server-confirmed progress.
+	if b.HasPending() {
+		progressMs = b.Current()
+	}
 	elapsed := formatDuration(progressMs)
 	total := formatDuration(durationMs)
 

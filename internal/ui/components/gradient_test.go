@@ -588,3 +588,124 @@ func TestGradientVolumeBar_AsciiMode(t *testing.T) {
 	// ASCII fallback for GlyphMusicNote is "*" per the glyph catalogue.
 	assert.Contains(t, out, "*", "ASCII replacement '*' for ♪ (GlyphMusicNote) must appear in ASCII mode")
 }
+
+// --------------------------------------------------------------------------
+// GradientSeekBar — interactive seek state
+// --------------------------------------------------------------------------
+
+func TestSeekBar_HandleKey_UpdatesImmediately(t *testing.T) {
+	b := newTestSeekBar(50)
+	cmd := b.HandleKey(5000, 30000, 180000) // +5s from 30s position, 3min track
+	assert.NotNil(t, cmd, "HandleKey must return a non-nil debounce cmd")
+	assert.Equal(t, 35000, b.Current(), "current should be 30000+5000")
+	assert.True(t, b.HasPending(), "should have pending after HandleKey")
+}
+
+func TestSeekBar_HandleKey_SeeksBackward(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(-5000, 30000, 180000) // -5s from 30s
+	assert.Equal(t, 25000, b.Current(), "current should be 30000-5000")
+}
+
+func TestSeekBar_HandleKey_ClampsAtZero(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(-5000, 2000, 180000) // -5s from 2s → clamp to 0
+	assert.Equal(t, 0, b.Current(), "should clamp at 0")
+}
+
+func TestSeekBar_HandleKey_ClampsAtDuration(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 178000, 180000) // +5s from 178s → clamp to 180s
+	assert.Equal(t, 180000, b.Current(), "should clamp at duration")
+}
+
+func TestSeekBar_HandleKey_NoOpOnZeroDuration(t *testing.T) {
+	b := newTestSeekBar(50)
+	cmd := b.HandleKey(5000, 30000, 0) // no track loaded
+	assert.Nil(t, cmd, "HandleKey should return nil when duration is 0")
+	assert.Equal(t, 0, b.Current(), "current should not change")
+	assert.False(t, b.HasPending(), "should not set pending")
+}
+
+func TestSeekBar_HandleKey_AccumulatesFromPending(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000)  // +5s from 30s → 35s, seq=1
+	b.HandleKey(5000, 30000, 180000)  // +5s from 35s (pending) → 40s, seq=2
+	assert.Equal(t, 40000, b.Current(), "should accumulate from pending value")
+}
+
+func TestSeekBar_HandleDebounce_StaleRejected(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000)  // seq=1
+	b.HandleKey(5000, 30000, 180000)  // seq=2 — supersedes seq=1
+	matched, _, _ := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	assert.False(t, matched, "stale seq must be discarded")
+}
+
+func TestSeekBar_HandleDebounce_CurrentAccepted(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	matched, target, _ := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	assert.True(t, matched, "current seq should match")
+	assert.Equal(t, 35000, target)
+}
+
+func TestSeekBar_ConfirmFromAPI_SeqMatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	matched, _, tickSeq := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	requireTrue(t, matched)
+	b.ConfirmFromAPI(tickSeq, 35000)
+	assert.Equal(t, 35000, b.Current(), "should update to API-confirmed position")
+	assert.True(t, b.HasPending(), "hasPending stays true until SetConfirmed matches")
+}
+
+func TestSeekBar_CancelPending_SeqMatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	matched, _, tickSeq := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	requireTrue(t, matched)
+	b.CancelPending(tickSeq, 30000) // revert to confirmed store value
+	assert.Equal(t, 30000, b.Current(), "should revert to confirmed value")
+	assert.False(t, b.HasPending(), "should clear pending")
+}
+
+func TestSeekBar_SetConfirmed_ClearsPendingOnMatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // current=35000, pending
+	b.SetPositionConfirmed(35000)     // value matches current → clear pending
+	assert.Equal(t, 35000, b.Current())
+	assert.False(t, b.HasPending(), "should clear pending when value matches current")
+}
+
+func TestSeekBar_SetConfirmed_NoOpWhenPendingMismatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // current=35000, pending
+	b.SetPositionConfirmed(30000)    // value != current → ignored
+	assert.Equal(t, 35000, b.Current(), "should keep pending value")
+	assert.True(t, b.HasPending(), "should keep pending flag")
+}
+
+func TestSeekBar_SetConfirmed_UpdatesWhenNoPending(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.SetPositionConfirmed(30000) // no pending → updates directly
+	assert.Equal(t, 30000, b.Current())
+	assert.False(t, b.HasPending())
+}
+
+func TestSeekBar_Render_UsesPendingWhenActive(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.SetTrackDuration(180000)
+	b.SetPositionConfirmed(30000)
+	b.HandleKey(5000, 30000, 180000) // pending: current=35000
+	out := b.Render(30000, 180000)     // progress param is overridden by pending
+	assert.Contains(t, out, "0:35", "should show pending position (35000ms)")
+}
+
+func TestSeekBar_Render_UsesParameterWhenNotPending(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.SetTrackDuration(180000)
+	b.SetPositionConfirmed(30000)
+	out := b.Render(30000, 180000) // no pending, uses progress param
+	assert.Contains(t, out, "0:30", "should show confirmed position (30000ms)")
+}

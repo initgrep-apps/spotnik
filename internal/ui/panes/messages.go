@@ -47,6 +47,24 @@ type VolumeIntentMsg struct {
 
 // VolumeAppliedMsg is returned by buildSetVolumeCmd after the Spotify volume
 // API call completes (success or failure). It replaces PlaybackCmdSentMsg for
+
+// SeekIntentMsg is emitted by NowPlayingPane after the seek debounce resolves.
+// TargetMs is the exact position in milliseconds to seek to. Seq is the debounce
+// sequence number; it is threaded through to SeekAppliedMsg so the bar can guard
+// ConfirmFromAPI / CancelPending against concurrent bursts.
+type SeekIntentMsg struct {
+	TargetMs int
+	Seq      int // tickSeq returned by HandleDebounce
+}
+
+// SeekAppliedMsg is returned by buildSeekCmd after the Spotify seek API call
+// completes (success or failure). On success: PosMs holds the confirmed position,
+// Err is nil. On error: PosMs is 0, Err holds the underlying error.
+type SeekAppliedMsg struct {
+	PosMs int
+	Seq   int
+	Err   error
+}
 // the volume-specific path so the bar's pending state is managed correctly.
 //
 // On success: Vol holds the confirmed volume, Err is nil.
