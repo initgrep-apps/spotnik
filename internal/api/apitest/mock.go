@@ -29,6 +29,8 @@ type MockPlayer struct {
 	NextCalled         bool
 	PreviousCalled     bool
 	SeekCalled         bool
+	SeekCallCount      int
+	LastSeekMs         int
 	SetVolumeCalled    bool
 	SetVolumeCallCount int
 	LastSetVolume      int
@@ -69,9 +71,11 @@ func (m *MockPlayer) Previous(_ context.Context) error {
 	return m.PreviousErr
 }
 
-// Seek records the call and returns the configured error.
-func (m *MockPlayer) Seek(_ context.Context, _ int) error {
+// Seek records the call, stores the position, and returns the configured error.
+func (m *MockPlayer) Seek(_ context.Context, posMs int) error {
 	m.SeekCalled = true
+	m.SeekCallCount++
+	m.LastSeekMs = posMs
 	return m.SeekErr
 }
 
