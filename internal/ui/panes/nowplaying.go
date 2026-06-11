@@ -293,8 +293,17 @@ func (p *NowPlayingPane) renderSideBySide() string {
 	// Build right column lines.
 	rightLines := make([]string, 0, len(frame)+1)
 	for _, line := range frame {
-		style := lipgloss.NewStyle().Foreground(line.Color)
-		rightLines = append(rightLines, style.Render(line.Text))
+		if len(line.Segments) > 0 {
+			var sb strings.Builder
+			for _, seg := range line.Segments {
+				style := lipgloss.NewStyle().Foreground(seg.Color)
+				sb.WriteString(style.Render(seg.Text))
+			}
+			rightLines = append(rightLines, sb.String())
+		} else {
+			style := lipgloss.NewStyle().Foreground(line.Color)
+			rightLines = append(rightLines, style.Render(line.Text))
+		}
 	}
 	rightLines = append(rightLines, seekBar)
 
@@ -402,15 +411,26 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string 
 	return lines
 }
 
-// renderStyledLines joins StyledLines into a single string with per-line coloring.
+// renderStyledLines joins StyledLines into a single string.
+// When Segments is populated, each segment gets its own color;
+// otherwise the line-level Color field is used (backward compatible).
 func renderStyledLines(lines viz.Frame) string {
 	if len(lines) == 0 {
 		return ""
 	}
 	rows := make([]string, len(lines))
 	for i, line := range lines {
-		style := lipgloss.NewStyle().Foreground(line.Color)
-		rows[i] = style.Render(line.Text)
+		if len(line.Segments) > 0 {
+			var sb strings.Builder
+			for _, seg := range line.Segments {
+				style := lipgloss.NewStyle().Foreground(seg.Color)
+				sb.WriteString(style.Render(seg.Text))
+			}
+			rows[i] = sb.String()
+		} else {
+			style := lipgloss.NewStyle().Foreground(line.Color)
+			rows[i] = style.Render(line.Text)
+		}
 	}
 	return strings.Join(rows, "\n")
 }

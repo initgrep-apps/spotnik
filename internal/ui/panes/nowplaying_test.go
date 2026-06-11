@@ -754,6 +754,29 @@ func TestNowPlayingPane_RenderStyledLines_Empty(t *testing.T) {
 	assert.Empty(t, out)
 }
 
+func TestNowPlayingPane_RenderStyledLines_WithSegments(t *testing.T) {
+	lines := viz.Frame{
+		{
+			Segments: []viz.StyledSegment{
+				{Text: "red", Color: lipgloss.Color("#ff0000")},
+				{Text: "grn", Color: lipgloss.Color("#00ff00")},
+			},
+		},
+		{
+			// Line with no segments uses legacy Color field.
+			Text:  "legacy",
+			Color: lipgloss.Color("#0000ff"),
+		},
+	}
+	out := renderStyledLines(lines)
+	assert.Contains(t, out, "red")
+	assert.Contains(t, out, "grn")
+	assert.Contains(t, out, "legacy")
+	// Segments render on same line (joined, not newline-separated).
+	rows := strings.Split(out, "\n")
+	assert.Len(t, rows, 2)
+}
+
 // ── Story 222: Equal 1-row top + 1-row bottom padding (overlay) ──────────────
 
 func TestNowPlayingPane_Overlay_ExpandedHeightCapped(t *testing.T) {
