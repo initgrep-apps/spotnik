@@ -31,10 +31,12 @@ const (
 type Operation string
 
 const (
-	// OpPlayback covers playback commands (play, pause, seek, next, prev, repeat, shuffle).
+	// OpPlayback covers playback commands (play, pause, next, prev, repeat, shuffle).
 	OpPlayback Operation = "playback"
 	// OpVolume covers volume change commands.
 	OpVolume Operation = "volume"
+	// OpSeek covers seek (position) commands.
+	OpSeek Operation = "seek"
 	// OpSearch covers search page fetches.
 	OpSearch Operation = "search"
 	// OpQueue covers queue update operations.
@@ -65,6 +67,7 @@ const (
 var opTitle = map[Operation]string{
 	OpPlayback:       "Playback command failed",
 	OpVolume:         "Volume change failed",
+	OpSeek:           "Seek failed",
 	OpSearch:         "Search failed",
 	OpQueue:          "Queue update failed",
 	OpDevices:        "Failed to load devices",
@@ -85,6 +88,7 @@ var opTitle = map[Operation]string{
 var opForbiddenBody = map[Operation]string{
 	OpPlayback:       "Premium required for this action.",
 	OpVolume:         "Premium required for volume control.",
+	OpSeek:           "Premium required for seek control.",
 	OpSearch:         "Premium required for search.",
 	OpQueue:          "No active device. Open Spotify first.",
 	OpAddToQueue:     "No active device. Open Spotify first.",

@@ -113,3 +113,69 @@ Minor items from story 218 PR review (pre-existing from stories 216/217):
 **Feature:** 17-album-art
 
 The `internal/uikit/header_bar.go` package-level doc comment still contains the literal example string `"spotnik ─ Music ─ preset N"`. Since the actual output is now `"spotnik ─ Music ─ Dashboard"` (or whatever the active preset name is), updating that example string would keep documentation fully accurate. Trivial docstring fix. Location: `internal/uikit/header_bar.go` package comment.
+
+---
+
+## NowPlaying overlay: spec size table math error
+**Found:** 2026-06-10 | **Source:** PR #313 Review
+**Feature:** 17-album-art (story 222)
+
+The spec's "Size examples" table claims InfoBox drops at SetSize(60, 16).
+At cw=56, vizRows=14, the formula gives infoWidth=cw/4=14, vizWidth=41 > npMinViz=10,
+so the InfoBox is NOT dropped. The implementer shifted the test to SetSize(16, 16)
+which does trigger the fallback.
+
+Items to log:
+1. Update story 222 spec to either:
+   a) Replace the (60, 16) row with SetSize(16, 16) — matching the test, OR
+   b) Strengthen `npMaxInfoPct` to 3 so the 25% cap drops InfoBox earlier, OR
+   c) Document the actual break-point (~width ≤ 35 at height 16)
+2. Pick one and update both the spec table and the acceptance criteria.
+
+---
+
+## Story 223 Review Follow-ups (2026-06-10)
+
+### Test coverage gaps (PR #316)
+
+1. **`buildInfoLines` `innerH < 1` branch uncovered** — At `SetSize(10, 2)`, `innerH` clamps to 1 but the truncation to `lines[:1]` is not exercised. Add stress test for height < 3.
+
+2. **Zero/negative dimension stress tests missing** — `SetSize(0, 0)` and `SetSize(-1, -1)` should be verified as no-panic with reasonable output.
+
+3. **`renderSideBySide` `keepViz < 0` branch uncovered** — When `targetH = 0`, the seek-bar-preservation guard is not hit. Add `SetSize(10, 0)` or `SetSize(10, 1)` test.
+
+4. **`TestNowPlayingPane_Adaptive_InfoBoxNoOverlayBackground` too broad** — Scans entire `View()` output for `ESC[48`; will break if visualizer patterns add background colors. Scope assertion to InfoBox interior only (lines between `╭` and `╰`).
+
+5. **Album drop not directly verified in `LibraryPreset` test** — `TestNowPlayingPane_Adaptive_LibraryPreset` asserts controls/volume visible but does not assert `After Hours` is absent from InfoBox interior.
+
+6. **`npInfoMin` capping behavior not directly tested** — At `SetSize(50, 14)`, `cw=50`, `infoWidth=50/3=16 < npInfoMin=28`, so cap to 28. No test measures this.
+
+7. **`VisualizerPattern()` uncovered** — Exported getter has 0% coverage; trivial but should have one-line test per project rules.
+
+---
+
+### Device overlay stale error on reopen
+
+**Found:** 2026-06-11 | **Source:** PR #320 Review
+**Feature:** 15-error-resilience (story 225)
+
+`closeDeviceOverlay()` does not create a fresh `DeviceOverlay` (unlike `closeProfileOverlay()` which recreates on close). The `d.err` field persists across close/reopen, briefly showing a stale error state before the new fetch completes. Pre-existing issue made more visible by story 225's error-delivery fix.
+
+---
+
+### Profile overlay error persists after backoff expires
+
+**Found:** 2026-06-11 | **Source:** PR #320 Review
+**Feature:** 15-error-resilience (story 225)
+
+`throttleExpiredMsg` does not re-trigger a profile fetch, so the "Profile unavailable" error state persists until the user closes and reopens the overlay. There is no periodic profile polling mechanism. Pre-existing gap — not introduced by story 225.
+
+---
+
+## Story 226 review: test coverage gaps
+**Found:** 2026-06-11 | **Source:** PR #322 Review
+**Feature:** 03-playback
+
+Two minor test gaps that don't block functionality:
+1. TestNowPlayingPane_InfoBoxLeftPadding only verifies padding on the first content line (track name), not all three padded lines (artist, album).
+2. TestNowPlayingPane_ControlsCentered uses byte-length for space counting instead of utf8.RuneCountInString — fragile if multi-byte characters appear alongside spaces.

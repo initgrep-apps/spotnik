@@ -466,6 +466,7 @@ func TestVolumeBar_ConfirmFromAPI_ConfirmsOnSeqMatch(t *testing.T) {
 	b.ConfirmFromAPI(intentSeq, 55)
 
 	// currentVol should be 55, but hasPending stays true until a matching poll arrives.
+	assert.True(t, b.HasPending(), "hasPending should stay true until SetConfirmed matches")
 	out := b.Render()
 	assert.Contains(t, out, "55%")
 	// Stale poll with old volume should be blocked while hasPending is true.
@@ -545,7 +546,7 @@ func TestVolumeBar_CancelPending_NoOpOnSeqMismatch(t *testing.T) {
 
 // TestVolumeBar_SetConfirmed_BlocksStalePoll verifies that after ConfirmFromAPI,
 // a stale poll with the old volume is blocked, and only a matching poll clears
-// hasPending. This prevents the bar from flickering back and forth.
+// hasPending. This prevents the bar from flickering back to the old volume.
 func TestVolumeBar_SetConfirmed_BlocksStalePoll(t *testing.T) {
 	b := newTestGradientVolumeBar(40)
 	b.SetConfirmed(50)
@@ -587,4 +588,193 @@ func TestGradientVolumeBar_AsciiMode(t *testing.T) {
 
 	// ASCII fallback for GlyphMusicNote is "*" per the glyph catalogue.
 	assert.Contains(t, out, "*", "ASCII replacement '*' for ♪ (GlyphMusicNote) must appear in ASCII mode")
+}
+
+// --------------------------------------------------------------------------
+// GradientSeekBar — interactive seek state
+// --------------------------------------------------------------------------
+
+func TestSeekBar_HandleKey_UpdatesImmediately(t *testing.T) {
+	b := newTestSeekBar(50)
+	cmd := b.HandleKey(5000, 30000, 180000) // +5s from 30s position, 3min track
+	assert.NotNil(t, cmd, "HandleKey must return a non-nil debounce cmd")
+	assert.Equal(t, 35000, b.Current(), "current should be 30000+5000")
+	assert.True(t, b.HasPending(), "should have pending after HandleKey")
+}
+
+func TestSeekBar_HandleKey_SeeksBackward(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(-5000, 30000, 180000) // -5s from 30s
+	assert.Equal(t, 25000, b.Current(), "current should be 30000-5000")
+}
+
+func TestSeekBar_HandleKey_ClampsAtZero(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(-5000, 2000, 180000) // -5s from 2s → clamp to 0
+	assert.Equal(t, 0, b.Current(), "should clamp at 0")
+}
+
+func TestSeekBar_HandleKey_ClampsAtDuration(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 178000, 180000) // +5s from 178s → clamp to 180s
+	assert.Equal(t, 180000, b.Current(), "should clamp at duration")
+}
+
+func TestSeekBar_HandleKey_NoOpOnZeroDuration(t *testing.T) {
+	b := newTestSeekBar(50)
+	cmd := b.HandleKey(5000, 30000, 0) // no track loaded
+	assert.Nil(t, cmd, "HandleKey should return nil when duration is 0")
+	assert.Equal(t, 0, b.Current(), "current should not change")
+	assert.False(t, b.HasPending(), "should not set pending")
+}
+
+func TestSeekBar_HandleKey_AccumulatesFromPending(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // +5s from 30s → 35s, seq=1
+	b.HandleKey(5000, 30000, 180000) // +5s from 35s (pending) → 40s, seq=2
+	assert.Equal(t, 40000, b.Current(), "should accumulate from pending value")
+}
+
+func TestSeekBar_HandleDebounce_StaleRejected(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	b.HandleKey(5000, 30000, 180000) // seq=2 — supersedes seq=1
+	matched, _, _ := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	assert.False(t, matched, "stale seq must be discarded")
+}
+
+func TestSeekBar_HandleDebounce_CurrentAccepted(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	matched, target, _ := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	assert.True(t, matched, "current seq should match")
+	assert.Equal(t, 35000, target)
+}
+
+func TestSeekBar_ConfirmFromAPI_SeqMatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	matched, _, tickSeq := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	requireTrue(t, matched)
+	b.ConfirmFromAPI(tickSeq, 35000)
+	assert.Equal(t, 35000, b.Current(), "should update to API-confirmed position")
+	// hasPending stays true — cleared by SetPositionConfirmed using proximity check
+	assert.True(t, b.HasPending(), "hasPending stays true until SetPositionConfirmed clears via proximity")
+}
+
+func TestSeekBar_CancelPending_SeqMatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	matched, _, tickSeq := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
+	requireTrue(t, matched)
+	b.CancelPending(tickSeq, 30000) // revert to confirmed store value
+	assert.Equal(t, 30000, b.Current(), "should revert to confirmed value")
+	assert.False(t, b.HasPending(), "should clear pending")
+}
+
+func TestSeekBar_SetConfirmed_ClearsPendingOnMatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // current=35000, pending
+	b.SetPositionConfirmed(35000)    // value matches current → clear pending
+	assert.Equal(t, 35000, b.Current())
+	assert.False(t, b.HasPending(), "should clear pending when value matches current")
+}
+
+func TestSeekBar_SetConfirmed_NoOpWhenPendingMismatch(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // current=35000, pending
+	// Position below current → proximity check does NOT clear pending,
+	// and SetConfirmed exact-match check also fails → pending stays
+	b.SetPositionConfirmed(30000)
+	assert.Equal(t, 35000, b.Current(), "should keep pending value")
+	assert.True(t, b.HasPending(), "should keep pending flag when position is below current")
+}
+
+func TestSeekBar_SetPositionConfirmed_ClearsPendingOnProximity(t *testing.T) {
+	// After ConfirmFromAPI, hasPending stays true. SetPositionConfirmed uses
+	// ClearPendingOnProximity to clear pending when the poll position reaches
+	// or passes the confirmed seek target. This is the key fix for the seek bar
+	// freeze bug — playback naturally advances past the seek position.
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // current=35000, pending
+	b.ConfirmFromAPI(1, 35000)       // hasPending stays true
+	assert.True(t, b.HasPending(), "pending stays true after ConfirmFromAPI")
+
+	// Poll at exact confirmed position → clears pending (proximity check: 35000 >= 35000)
+	b.SetPositionConfirmed(35000)
+	assert.False(t, b.HasPending(), "should clear pending when poll reaches confirmed position")
+	assert.Equal(t, 35000, b.Current(), "should update current to poll value")
+
+	// Test with poll past confirmed position
+	b2 := newTestSeekBar(50)
+	b2.HandleKey(5000, 30000, 180000) // current=35000, pending
+	b2.ConfirmFromAPI(1, 35000)       // hasPending stays true
+
+	// Poll 3 seconds past confirmed position (playback advanced)
+	b2.SetPositionConfirmed(38000)
+	assert.False(t, b2.HasPending(), "should clear pending when poll passes confirmed position")
+	assert.Equal(t, 38000, b2.Current(), "should update current to poll value")
+}
+
+func TestSeekBar_SetPositionConfirmed_StalePollBelowTarget(t *testing.T) {
+	// A stale poll arriving with a position below the seek target must NOT
+	// clear pending — it would snap the bar backward.
+	b := newTestSeekBar(50)
+	b.HandleKey(5000, 30000, 180000) // current=35000, pending
+	b.ConfirmFromAPI(1, 35000)       // hasPending stays true
+
+	// Stale poll with old position (before the seek)
+	b.SetPositionConfirmed(30000)
+	assert.True(t, b.HasPending(), "stale poll below target must not clear pending")
+	assert.Equal(t, 35000, b.Current(), "current should stay at confirmed seek position")
+}
+
+func TestSeekBar_SetConfirmed_UpdatesWhenNoPending(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.SetPositionConfirmed(30000) // no pending → updates directly
+	assert.Equal(t, 30000, b.Current())
+	assert.False(t, b.HasPending())
+}
+
+func TestSeekBar_Render_UsesPendingWhenActive(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.SetTrackDuration(180000)
+	b.SetPositionConfirmed(30000)
+	b.HandleKey(5000, 30000, 180000) // pending: current=35000
+	out := b.Render(30000, 180000)   // progress param is overridden by pending
+	assert.Contains(t, out, "0:35", "should show pending position (35000ms)")
+}
+
+func TestSeekBar_Render_UsesParameterWhenNotPending(t *testing.T) {
+	b := newTestSeekBar(50)
+	b.SetTrackDuration(180000)
+	b.SetPositionConfirmed(30000)
+	out := b.Render(30000, 180000) // no pending, uses progress param
+	assert.Contains(t, out, "0:30", "should show confirmed position (30000ms)")
+}
+
+func TestSeekBar_SetPositionConfirmed_BackwardSeekStalePoll(t *testing.T) {
+	// Backward seek integration: user at 60s seeks back to 55s; a stale poll
+	// returning the old position (60123) must NOT clear pending.
+	b := newTestSeekBar(50)
+	b.HandleKey(-5000, 60000, 180000) // current=55000, confirmed=60000, pending
+	b.ConfirmFromAPI(1, 55000)        // hasPending stays true
+
+	// Stale poll at old forward position → must NOT clear pending
+	b.SetPositionConfirmed(60123)
+	assert.True(t, b.HasPending(), "stale forward poll must not clear pending on backward seek")
+	assert.Equal(t, 55000, b.Current(), "current should stay at backward-seek target")
+}
+
+func TestSeekBar_SetPositionConfirmed_BackwardSeekValidPoll(t *testing.T) {
+	// Backward seek integration: Spotify processes the seek, next poll returns
+	// a position at/near the target (below old baseline) → should clear pending.
+	b := newTestSeekBar(50)
+	b.HandleKey(-5000, 60000, 180000) // current=55000, confirmed=60000, pending
+	b.ConfirmFromAPI(1, 55000)        // hasPending stays true
+
+	// Valid poll at backward target → clears pending, updates current
+	b.SetPositionConfirmed(55234)
+	assert.False(t, b.HasPending(), "valid poll at backward-seek target should clear pending")
+	assert.Equal(t, 55234, b.Current(), "current should update to poll value")
 }

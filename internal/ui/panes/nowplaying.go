@@ -17,24 +17,32 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// NowPlaying layout constants.
+// NowPlaying side-by-side layout constants.
+//
+// The pane is split into two columns: InfoBox on the left, visualizer on the
+// right. The seek bar lives in its own row at the bottom of the right column.
 const (
-	npPadV      = 1  // rows of vertical padding top + bottom
-	npArtAspect = 2  // imageCols = imageRows * npArtAspect
-	npInfoMult  = 2  // infoWidth = imageRows * npInfoMult
-	npGap       = 1  // column gap between components
-	npMinViz    = 10 // minimum viz width; below this, drop info panel
+	npPadV         = 1  // vertical padding rows (top + bottom)
+	npInfoPctTall  = 3  // tall pane: InfoBox = cw / npInfoPctTall
+	npInfoPctShort = 2  // short pane: InfoBox = cw / npInfoPctShort
+	npInfoMin      = 28 // minimum InfoBox width for controls + volume
+	npGap          = 1  // column gap between InfoBox and visualizer
+	npMinViz       = 10 // below this, drop InfoBox entirely
+	npMaxContentH  = 24 // cap content height when pane is oversized
+	npInfoPadLeft  = 2  // left padding columns for InfoBox text lines
 )
 
 // NowPlayingPane is the center pane Bubble Tea model.
-// It renders the currently playing track, album art, and visualizer.
-// It reads all state from the Store; it never stores API data in its own fields.
+// It renders the currently playing track info overlay on top of a full-pane
+// visualizer background. It reads all state from the Store; it never stores
+// API data in its own fields.
 // It implements the layout.Pane interface for integration with the layout manager.
 //
-// Layout: image (x×2x) | track info (x×2x) | viz (remaining), where x = pane height − 2.
-// When width is insufficient for 3-col, the track info panel is dropped.
-// Falls back to pre-art layout when no album art is loaded.
-// When height < 8, Title() embeds compact track info in the pane title bar instead.
+// Layout: visualizer fills the full content area; InfoBox overlays the left
+// ~25-33%. Seek bar lives in the visualizer column only (right of the gap).
+// When width is too narrow, the InfoBox is dropped and the visualizer fills the
+// full content area. When height < 8, Title() embeds compact track info in the
+// pane title bar instead.
 type NowPlayingPane struct {
 	BasePane
 
@@ -45,21 +53,14 @@ type NowPlayingPane struct {
 	// infoBox is the bordered sub-pane on the left showing track/artist/album/controls.
 	infoBox *components.InfoBox
 
-	// engine is the animated visualization engine (right side of the split).
+	// engine is the animated visualization engine (right side of the overlay).
 	engine *viz.Engine
 
-	// seekBar is the gradient seek bar rendered inside the right panel.
+	// seekBar is the gradient seek bar rendered inside the visualizer column.
 	seekBar *components.GradientSeekBar
 
 	// volumeBar is the gradient volume bar rendered inside the InfoBox.
 	volumeBar *components.GradientVolumeBar
-
-	// artRenderer caches pixterm-rendered album art rows and tracks loading state.
-	artRenderer components.AlbumArtRenderer
-
-	// pendingArtRefresh is set by SetSize when imageRows changes by more than 2.
-	// The next WindowSizeMsg handler dispatches a re-fetch with updated dimensions.
-	pendingArtRefresh bool
 }
 
 // Compile-time check: NowPlayingPane implements layout.Pane.
@@ -82,6 +83,10 @@ func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPla
 		if ps.Device != nil {
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
 		}
+		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
+		if ps.Item != nil {
+			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		}
 	}
 	return p
 }
@@ -92,7 +97,7 @@ func (p *NowPlayingPane) ID() layout.PaneID {
 }
 
 // Title returns the display title for the border.
-// When height < 8 (pane too small for the split body), the title embeds track info
+// When height < 8 (pane too small for the overlay body), the title embeds track info
 // so the user can still see what's playing without any content area.
 func (p *NowPlayingPane) Title() string {
 	if p.height < 8 {
@@ -111,10 +116,11 @@ func (p *NowPlayingPane) Title() string {
 				stateGlyph = uikit.GlyphFor(uikit.GlyphPlaying, m)
 			}
 			sep := uikit.GlyphFor(uikit.GlyphHRule, m)
+			midDot := uikit.GlyphFor(uikit.GlyphSeparator, m)
 			current := formatDurationMs(p.localProgressMs)
 			total := formatDurationMs(t.DurationMs)
-			return fmt.Sprintf("Now Playing %s %s \u00b7 %s %s %s %s/%s",
-				sep, t.Name, strings.Join(artistNames, ", "), sep, stateGlyph, current, total)
+			return fmt.Sprintf("Now Playing %s %s %s %s %s %s %s/%s",
+				sep, t.Name, midDot, strings.Join(artistNames, ", "), sep, stateGlyph, current, total)
 		}
 	}
 	return "Now Playing"
@@ -140,38 +146,47 @@ func (p *NowPlayingPane) Actions() []layout.Action {
 	}
 }
 
-// SetSize updates the pane's dimensions and recomputes the split layout geometry.
-// Sub-component sizes are tier-aware: base uses a 3-col inline layout, mid/full use a
-// 2-col upper section with a full-width InfoBox below. When imageRows changes by
-// more than 2, pendingArtRefresh is set so the next WindowSizeMsg handler can
-// dispatch a re-fetch with the updated dimensions.
+// SetSize updates the pane's dimensions and recomputes the side-by-side
+// layout geometry. The InfoBox occupies the left ~33% of the content area;
+// the visualizer fills the right column with the seek bar as a single row
+// at the bottom. When the right column would be too narrow, the InfoBox is
+// dropped and the visualizer fills the full content area.
 func (p *NowPlayingPane) SetSize(width, height int) {
-	prevRows := p.imageRows()
 	p.BasePane.SetSize(width, height)
 
+	effH := p.effectiveHeight()
 	cw := p.contentWidth()
-	x := p.imageRows()
-	artCols := x * npArtAspect
-	info := x * npInfoMult
-	viz := cw - artCols - info - 2*npGap
 
-	if viz < npMinViz {
-		info = 0
-		viz = paneMax(cw-artCols-npGap, npMinViz)
+	// --- adaptive InfoBox width (same formula as renderSideBySide) ---
+	infoWidth := cw / npInfoPctTall
+	if effH <= 8 {
+		infoWidth = cw / npInfoPctShort
+	}
+	if infoWidth < npInfoMin {
+		infoWidth = npInfoMin
+	}
+	vizWidth := cw - infoWidth - npGap
+	if vizWidth < npMinViz {
+		infoWidth = 0
+		vizWidth = cw
 	}
 
-	infoBoxWidth := info
-	if infoBoxWidth == 0 {
-		infoBoxWidth = paneMax(cw/3, 28)
+	// --- visualizer height: reserve 1 row for seek bar ---
+	rightH := effH - 2*npPadV
+	if rightH < 1 {
+		rightH = 1
 	}
-	if info > 0 {
-		p.infoBox.SetSize(info, x)
+	vizHeight := rightH - 1
+	if vizHeight < 1 {
+		vizHeight = rightH
 	}
-	p.engine.SetSize(viz, paneMax(x-1, 1))
-	p.seekBar.SetWidth(viz)
-	p.volumeBar.SetWidth(paneMax(infoBoxWidth-4, 1))
 
-	p.pendingArtRefresh = abs(p.imageRows()-prevRows) > artResizeThreshold
+	if infoWidth > 0 {
+		p.infoBox.SetSize(infoWidth, effH)
+	}
+	p.engine.SetSize(vizWidth, vizHeight)
+	p.seekBar.SetWidth(vizWidth)
+	p.volumeBar.SetWidth(paneMax(infoWidth-4, 1))
 }
 
 // SetFocused updates the focused state.
@@ -179,23 +194,10 @@ func (p *NowPlayingPane) SetFocused(focused bool) {
 	p.BasePane.SetFocused(focused)
 }
 
-// Init starts the viz engine animation tick loop and dispatches an album art fetch
-// if playback is active at startup. Image dimensions use conservative defaults
-// (8x16) since SetSize() will not have run yet; the art is re-fetched after the
-// first resize with correct dimensions.
+// Init starts the viz engine animation tick loop. The album art fetch was
+// removed in story 222 — the visualizer fills the full content area.
 func (p *NowPlayingPane) Init() tea.Cmd {
-	var cmds []tea.Cmd
-	cmds = append(cmds, p.engine.Init())
-
-	ps := p.store.PlaybackState()
-	if ps != nil && ps.Item != nil {
-		if img := ps.Item.Album.BestImage(100); img != nil {
-			cmds = append(cmds, components.FetchAlbumArtCmd(ps.Item.ID, img.URL, 8, 16))
-			p.artRenderer.SetLoading(ps.Item.ID)
-		}
-	}
-
-	return tea.Batch(cmds...)
+	return p.engine.Init()
 }
 
 // Update handles all messages for the NowPlayingPane.
@@ -206,12 +208,6 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case PlaybackStateFetchedMsg:
 		return p.handlePlaybackFetched(m)
-
-	case components.AlbumArtFetchedMsg:
-		// When m.Err != nil, m.Rows is nil. SetResult stores nil rows and clears
-		// loading, which causes View() to fall back to the no-art layout.
-		p.artRenderer.SetResult(m.TrackID, m.Rows)
-		return p, nil
 
 	case components.VolumeDebounceTickMsg:
 		if matched, vol, seq := p.volumeBar.HandleDebounce(m); matched {
@@ -227,27 +223,26 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return p, nil
 
+	case components.SeekDebounceTickMsg:
+		if matched, targetMs, seq := p.seekBar.HandleDebounce(m); matched {
+			return p, func() tea.Msg { return SeekIntentMsg{TargetMs: targetMs, Seq: seq} }
+		}
+		return p, nil
+
+	case SeekAppliedMsg:
+		if m.Err != nil {
+			p.seekBar.CancelPending(m.Seq, confirmedProgress(p.store))
+		} else {
+			p.seekBar.ConfirmFromAPI(m.Seq, m.PosMs)
+			p.localProgressMs = m.PosMs
+		}
+		return p, nil
+
 	case viz.TickMsg:
 		// Advance the animation frame, then re-arm the tick.
 		p.engine.Advance()
 		cmd := p.engine.Update(m)
 		return p, cmd
-
-	case tea.WindowSizeMsg:
-		if p.pendingArtRefresh {
-			p.pendingArtRefresh = false
-			ps := p.store.PlaybackState()
-			if ps != nil && ps.Item != nil {
-				if img := ps.Item.Album.BestImage(100); img != nil {
-					p.artRenderer.SetLoading(ps.Item.ID)
-					return p, components.FetchAlbumArtCmd(ps.Item.ID, img.URL, p.imageRows(), p.imageCols())
-				}
-				// Current track has no images — clear stale art so View() falls back.
-				p.artRenderer.SetLoading(ps.Item.ID)
-				p.artRenderer.SetResult(ps.Item.ID, nil)
-			}
-		}
-		return p, nil
 
 	case tea.KeyMsg:
 		if !p.focused {
@@ -260,169 +255,111 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the NowPlaying pane. It reads from the store and never calls the API.
-// Dispatches to renderBase when art is available, renderFallback when no art is loaded,
-// or renderEmpty when nothing is playing.
+// Dispatches to renderEmpty when nothing is playing, otherwise renderSideBySide.
 func (p *NowPlayingPane) View() string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
 		return p.renderEmpty()
 	}
-	if !p.artRenderer.HasImage() && !p.artRenderer.IsLoading() {
-		return p.renderFallback()
-	}
-	return p.renderBase()
+	return p.renderSideBySide()
 }
 
-// renderFallback renders the pre-feature 2-col layout: InfoBox left, viz+seekbar right.
-// Used when no album art is available and none is loading.
-// A local InfoBox is created with fallback dimensions so tier-aware SetSize does not
-// leave the infoBox too short or too wide for this path.
-func (p *NowPlayingPane) renderFallback() string {
+// renderSideBySide composes the InfoBox on the left and the visualizer on
+// the right. The visualizer renders as a single block at the top of the
+// right column, with the seek bar as its own row at the bottom. When the
+// right column would be too narrow, the InfoBox is dropped.
+func (p *NowPlayingPane) renderSideBySide() string {
 	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return p.renderEmpty()
-	}
 	t := ps.Item
-
-	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
-
-	artistNames := make([]string, len(t.Artists))
-	for i, a := range t.Artists {
-		artistNames[i] = a.Name
-	}
-
-	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-
-	contentWidth := paneMax(p.width-4, 10)
-	bodyHeight := paneMax(p.height-4, 4)
-	innerH := bodyHeight - 2
-
-	var infoLines []string
-	switch {
-	case innerH >= 6:
-		infoLines = []string{
-			primaryStyle.Render(t.Name),
-			secondaryStyle.Render(strings.Join(artistNames, ", ")),
-			mutedStyle.Render(t.Album.Name),
-			"",
-			ctrl.Render(),
-			p.volumeBar.Render(),
-		}
-	case innerH >= 5:
-		infoLines = []string{
-			primaryStyle.Render(t.Name),
-			secondaryStyle.Render(strings.Join(artistNames, ", ")),
-			mutedStyle.Render(t.Album.Name),
-			ctrl.Render(),
-			p.volumeBar.Render(),
-		}
-	case innerH >= 4:
-		infoLines = []string{
-			primaryStyle.Render(t.Name),
-			secondaryStyle.Render(strings.Join(artistNames, ", ")),
-			ctrl.Render(),
-			p.volumeBar.Render(),
-		}
-	case innerH >= 3:
-		infoLines = []string{
-			primaryStyle.Render(t.Name),
-			ctrl.Render(),
-			p.volumeBar.Render(),
-		}
-	default:
-		infoLines = []string{
-			primaryStyle.Render(t.Name),
-			ctrl.Render(),
-		}
-	}
-
-	// Fallback layout: InfoBox left (~1/3 width), viz+seekbar right (~2/3 width).
-	infoWidth := paneMax(contentWidth/3, 28)
-
-	fbInfoBox := components.NewInfoBox(p.theme)
-	fbInfoBox.SetSize(infoWidth, bodyHeight)
-	infoView := fbInfoBox.Render("Track Info", infoLines, p.focused)
-
-	frame := p.engine.CurrentFrame()
-	topRows, bottomRows := splitFrame(frame)
-	topView := renderStyledLines(topRows)
-	bottomView := renderStyledLines(bottomRows)
-	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-
-	rightPanel := lipgloss.JoinVertical(lipgloss.Left, topView, seekBar, bottomView)
-	composite := lipgloss.JoinHorizontal(lipgloss.Top, infoView, " ", rightPanel)
-
-	contentHeight := lipgloss.Height(composite)
-	availableHeight := paneMax(p.height-2, 1)
-	if contentHeight < availableHeight {
-		composite = lipgloss.Place(contentWidth, availableHeight,
-			lipgloss.Center, lipgloss.Center, composite)
-	}
-
-	return composite
-}
-
-// renderBase renders using the single-formula layout.
-// 3-col (image | info | viz) when width allows; 2-col (image | viz) otherwise.
-func (p *NowPlayingPane) renderBase() string {
-	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
-		return p.renderEmpty()
-	}
-	t := ps.Item
-	bh := p.bodyHeight()
+	effH := p.effectiveHeight()
 	cw := p.contentWidth()
-	x := p.imageRows()
-	artCols := x * npArtAspect
-	info := x * npInfoMult
-	viz := cw - artCols - info - 2*npGap
 
-	imageBlock := p.renderImageBlock(x, artCols)
+	infoWidth := cw / npInfoPctTall
+	if effH <= 8 {
+		infoWidth = cw / npInfoPctShort
+	}
+	if infoWidth < npInfoMin {
+		infoWidth = npInfoMin
+	}
+	vizWidth := cw - infoWidth - npGap
+	if vizWidth < npMinViz {
+		infoWidth = 0
+		vizWidth = cw
+	}
+
 	frame := p.engine.CurrentFrame()
-	topRows, bottomRows := splitFrame(frame)
 	seekBar := p.seekBar.Render(p.localProgressMs, t.DurationMs)
-	rightPanel := lipgloss.JoinVertical(lipgloss.Left,
-		renderStyledLines(topRows), seekBar, renderStyledLines(bottomRows))
 
-	var composite string
-	if viz >= npMinViz {
-		infoLines := p.buildInfoLinesBase(bh)
+	// Build right column lines.
+	rightLines := make([]string, 0, len(frame)+1)
+	for _, line := range frame {
+		style := lipgloss.NewStyle().Foreground(line.Color)
+		rightLines = append(rightLines, style.Render(line.Text))
+	}
+	rightLines = append(rightLines, seekBar)
+
+	// Fit right column into effective height, clipping visualizer (not seek bar) if needed.
+	targetH := effH
+	contentH := len(rightLines)
+	padTotal := targetH - contentH
+	if padTotal < 0 {
+		keepViz := targetH - 1 // reserve exactly 1 row for seek bar
+		if keepViz < 0 {
+			keepViz = 0
+		}
+		if len(rightLines)-1 > keepViz {
+			rightLines = append(rightLines[:keepViz], seekBar)
+		}
+		padTotal = 0
+	}
+	topPad := padTotal / 2
+	botPad := padTotal - topPad
+	for i := 0; i < topPad; i++ {
+		rightLines = append([]string{""}, rightLines...)
+	}
+	for i := 0; i < botPad; i++ {
+		rightLines = append(rightLines, "")
+	}
+
+	// Compose line-by-line.
+	var lines []string
+	if infoWidth > 0 {
+		infoLines := p.buildInfoLines(effH, infoWidth)
 		infoView := p.infoBox.Render("Track Info", infoLines, p.focused)
-		composite = lipgloss.JoinHorizontal(lipgloss.Top,
-			imageBlock, " ", infoView, " ", rightPanel)
+		infoSplit := strings.Split(infoView, "\n")
+
+		// Equalise line count.
+		for len(infoSplit) < len(rightLines) {
+			infoSplit = append(infoSplit, strings.Repeat(" ", infoWidth))
+		}
+		for len(rightLines) < len(infoSplit) {
+			rightLines = append(rightLines, strings.Repeat(" ", vizWidth))
+		}
+
+		gap := strings.Repeat(" ", npGap)
+		for i := range infoSplit {
+			lines = append(lines, infoSplit[i]+gap+rightLines[i])
+		}
 	} else {
-		composite = lipgloss.JoinHorizontal(lipgloss.Top,
-			imageBlock, " ", rightPanel)
+		lines = rightLines
 	}
 
-	// 1 blank row top, 1 blank row bottom.
-	contentH := lipgloss.Height(composite)
-	if contentH < p.height {
-		pad := p.height - contentH
-		topPad := 1
-		bottomPad := pad - topPad
-		if bottomPad > 1 {
-			bottomPad = 1
-		}
-		if bottomPad < 0 {
-			bottomPad = 0
-			if topPad > 1 {
-				topPad = 1
-			}
-		}
-		composite = strings.Repeat("\n", topPad) + composite
-		if bottomPad > 0 {
-			composite += strings.Repeat("\n", bottomPad)
+	// Centre vertically within oversized pane.
+	if p.height > effH {
+		outerPad := (p.height - effH) / 2
+		for i := 0; i < outerPad; i++ {
+			lines = append([]string{""}, lines...)
+			lines = append(lines, "")
 		}
 	}
-	return composite
+
+	return strings.Join(lines, "\n")
 }
 
-// buildInfoLinesBase builds the 5-line InfoBox content for the base tier and pads
-// with trailing blank strings so the InfoBox vertically centres to top alignment.
-func (p *NowPlayingPane) buildInfoLinesBase(bodyHeight int) []string {
+// buildInfoLines builds the InfoBox content (track, artists, album, controls,
+// volume). When the body height is tight, the album line is dropped so controls
+// and volume remain visible.
+func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
 		return nil
@@ -437,63 +374,32 @@ func (p *NowPlayingPane) buildInfoLinesBase(bodyHeight int) []string {
 		artistNames[i] = a.Name
 	}
 
+	pad := strings.Repeat(" ", npInfoPadLeft)
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
+	innerW := infoWidth - 2
+	ctrlLine := lipgloss.NewStyle().Width(innerW).Align(lipgloss.Center).Render(ctrl.Render())
 
 	lines := []string{
-		primaryStyle.Render(t.Name),
-		secondaryStyle.Render(strings.Join(artistNames, ", ")),
-		mutedStyle.Render(t.Album.Name),
-		ctrl.Render(),
+		pad + primaryStyle.Render(t.Name),
+		pad + secondaryStyle.Render(strings.Join(artistNames, ", ")),
+		pad + mutedStyle.Render(t.Album.Name),
+		ctrlLine,
 		p.volumeBar.Render(),
 	}
 
-	innerH := bodyHeight - 2
-	for len(lines) < innerH {
-		lines = append(lines, "")
+	innerH := bodyHeight - 2 // InfoBox borders consume 2 rows
+	if innerH < 1 {
+		innerH = 1
 	}
-
+	if len(lines) > innerH {
+		if innerH >= 4 {
+			// Drop album line so controls + volume remain visible.
+			lines = append(lines[:2], lines[3:]...)
+		} else {
+			lines = lines[:innerH]
+		}
+	}
 	return lines
-}
-
-// renderImageBlock returns the album art image as a rows×cols block, a muted
-// placeholder when loading, or an empty block as last resort.
-func (p *NowPlayingPane) renderImageBlock(rows, cols int) string {
-	if p.artRenderer.HasImage() {
-		imgRows := p.artRenderer.Rows()
-		if len(imgRows) > rows {
-			imgRows = imgRows[:rows]
-		}
-		for len(imgRows) < rows {
-			imgRows = append(imgRows, strings.Repeat(" ", cols))
-		}
-		for i := range imgRows {
-			imgRows[i] = layout.TruncateOrPad(imgRows[i], cols)
-		}
-		return strings.Join(imgRows, "\n")
-	}
-
-	if p.artRenderer.IsLoading() {
-		placeholder := lipgloss.NewStyle().Background(p.theme.TextMuted()).Render(strings.Repeat(" ", cols))
-		lines := make([]string, rows)
-		for i := range lines {
-			lines[i] = placeholder
-		}
-		return strings.Join(lines, "\n")
-	}
-
-	return strings.Repeat("\n", rows-1) + strings.Repeat(" ", cols)
-}
-
-// splitFrame divides a frame into top and bottom halves for display around the seek bar.
-// The engine receives vizHeight = bodyHeight - 1 (seek bar row excluded),
-// so len(f) == vizHeight. We split evenly: topRows = len/2, bottomRows = len - len/2.
-// For odd lengths (e.g. 5), bottom gets the extra row (top=2, bottom=3).
-func splitFrame(f viz.Frame) (top, bottom viz.Frame) {
-	if len(f) == 0 {
-		return nil, nil
-	}
-	mid := len(f) / 2
-	return f[:mid], f[mid:]
 }
 
 // renderStyledLines joins StyledLines into a single string with per-line coloring.
@@ -522,46 +428,45 @@ func (p *NowPlayingPane) renderEmpty() string {
 
 // handleTick processes a TickMsg: increments local progress when playing.
 // localProgressMs is clamped to DurationMs so the seek bar never overflows.
+// When a seek is pending (user pressed ←/→ but debounce hasn't resolved),
+// the tick is skipped so localProgressMs doesn't drift away from the user's
+// intended position.
 func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil && ps.IsPlaying {
-		p.localProgressMs += 1000
-		if ps.Item != nil && p.localProgressMs > ps.Item.DurationMs {
-			p.localProgressMs = ps.Item.DurationMs
+		if !p.seekBar.HasPending() {
+			p.localProgressMs += 1000
+			if ps.Item != nil && p.localProgressMs > ps.Item.DurationMs {
+				p.localProgressMs = ps.Item.DurationMs
+			}
 		}
 	}
 	return p, nil
 }
 
 // handlePlaybackFetched processes notification that the store has fresh playback state.
-// It resets localProgressMs to the server value, syncs engine playing state, and
-// dispatches an album art fetch when the track has changed.
-func (p *NowPlayingPane) handlePlaybackFetched(msg PlaybackStateFetchedMsg) (*NowPlayingPane, tea.Cmd) {
+// It resets localProgressMs to the server value and syncs the engine playing state.
+// Album art dispatch was removed in story 222.
+func (p *NowPlayingPane) handlePlaybackFetched(_ PlaybackStateFetchedMsg) (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil {
-		p.localProgressMs = ps.ProgressMs
+		// Preserve local progress when a seek is pending so the title bar
+		// stays in sync with the optimistic seek bar position.
+		if !p.seekBar.HasPending() {
+			p.localProgressMs = ps.ProgressMs
+		}
 		p.engine.SetPlaying(ps.IsPlaying)
 		if ps.Device != nil {
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
 		}
+		if ps.Item != nil {
+			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		}
+		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
 	} else {
 		p.localProgressMs = 0
 		p.engine.SetPlaying(false)
 	}
-
-	if msg.State != nil && msg.State.Item != nil {
-		track := msg.State.Item
-		if p.artRenderer.NeedsRefresh(track.ID) {
-			if img := track.Album.BestImage(100); img != nil {
-				p.artRenderer.SetLoading(track.ID)
-				return p, components.FetchAlbumArtCmd(track.ID, img.URL, p.imageRows(), p.imageCols())
-			}
-			// New track has no images — clear stale art so View() falls back.
-			p.artRenderer.SetLoading(track.ID)
-			p.artRenderer.SetResult(track.ID, nil)
-		}
-	}
-
 	return p, nil
 }
 
@@ -579,12 +484,38 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		}
 		return p, emitPlaybackRequest(ActionPlay)
 
-	case msg.Type == tea.KeyRight:
+	// Shift+arrows: previous/next track (moved from plain arrows).
+	// Bubble Tea delivers Shift+arrows as separate KeyType constants,
+	// NOT modifier flags on tea.KeyLeft/tea.KeyRight.
+	// Shift variants must be checked before plain arrows (more specific first).
+	case msg.Type == tea.KeyShiftLeft:
+		return p, emitPlaybackRequest(ActionPrevious)
+
+	case msg.Type == tea.KeyShiftRight:
 		return p, emitPlaybackRequest(ActionNext)
 
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == "p",
-		msg.Type == tea.KeyLeft:
-		return p, emitPlaybackRequest(ActionPrevious)
+	// Plain arrows: seek back/forward 5 seconds (was: previous/next track).
+	case msg.Type == tea.KeyLeft:
+		if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil && ps.Item.DurationMs > 0 {
+			confirmed := ps.ProgressMs
+			if p.seekBar.HasPending() {
+				confirmed = p.seekBar.Current()
+			}
+			cmd := p.seekBar.HandleKey(-5000, confirmed, ps.Item.DurationMs)
+			return p, cmd
+		}
+		return p, nil
+
+	case msg.Type == tea.KeyRight:
+		if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil && ps.Item.DurationMs > 0 {
+			confirmed := ps.ProgressMs
+			if p.seekBar.HasPending() {
+				confirmed = p.seekBar.Current()
+			}
+			cmd := p.seekBar.HandleKey(+5000, confirmed, ps.Item.DurationMs)
+			return p, cmd
+		}
+		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":
 		return p, p.volumeBar.HandleKey(+1, confirmedVolume(p.store))
@@ -658,24 +589,28 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	p.seekBar = components.NewGradientSeekBar(th)
 	p.volumeBar = components.NewGradientVolumeBar(th)
 	p.volumeBar.SetConfirmed(confirmedVolume(p.store))
+	// Restore seek bar state from the store so the new bar renders the correct position.
+	if ps := p.store.PlaybackState(); ps != nil {
+		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
+		if ps.Item != nil {
+			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		}
+	}
 	// Propagate dimensions to newly created sub-components.
 	p.SetSize(p.width, p.height)
 }
 
-// bodyHeight returns the inner content height (pane height minus border chrome).
-func (p *NowPlayingPane) bodyHeight() int { return paneMax(p.height-4, 0) }
-
 // contentWidth returns the inner content width (pane width minus border chrome).
-func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width-4, 10) }
+func (p *NowPlayingPane) contentWidth() int { return paneMax(p.width, 10) }
 
-// imageRows returns the number of terminal rows allocated to the album art block.
-func (p *NowPlayingPane) imageRows() int {
-	return paneMax(p.height-2*npPadV, 4)
+// effectiveHeight caps the content height at npMaxContentH so solo panes don't
+// stretch the visualizer to absurd heights.
+func (p *NowPlayingPane) effectiveHeight() int {
+	if p.height > npMaxContentH {
+		return npMaxContentH
+	}
+	return p.height
 }
-
-// imageCols returns the number of terminal columns allocated to the album art block.
-// Terminal chars are ~2:1 height:width, so cols = rows*2 produces a square image.
-func (p *NowPlayingPane) imageCols() int { return p.imageRows() * 2 }
 
 // paneMax returns the larger of two ints.
 func paneMax(a, b int) int {
@@ -685,24 +620,20 @@ func paneMax(a, b int) int {
 	return b
 }
 
-// abs returns the absolute value of n.
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
-// artResizeThreshold is the minimum row-delta that triggers a re-fetch of album
-// art after a resize. Re-rendering via pixterm is expensive; ignoring sub-pixel
-// jitter avoids spamming the CDN on every minor terminal resize.
-const artResizeThreshold = 2
-
 // confirmedVolume reads the active device's volume from the store.
 // Returns 0 when playback state or device info is unavailable.
 func confirmedVolume(s state.StateReader) int {
 	if ps := s.PlaybackState(); ps != nil && ps.Device != nil {
 		return ps.Device.VolumePercent
+	}
+	return 0
+}
+
+// confirmedProgress reads the playback progress from the store.
+// Returns 0 when playback state is unavailable.
+func confirmedProgress(s state.StateReader) int {
+	if ps := s.PlaybackState(); ps != nil {
+		return ps.ProgressMs
 	}
 	return 0
 }

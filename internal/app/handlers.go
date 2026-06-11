@@ -589,6 +589,63 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case components.SeekDebounceTickMsg:
+		// Forward seek debounce tick to NowPlayingPane. The pane checks the seq
+		// and either emits SeekIntentMsg (matched) or returns nil (stale).
+		if np := a.nowPlayingPane(); np != nil {
+			updated, cmd := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+			return a, cmd
+		}
+		return a, nil
+
+	case panes.SeekIntentMsg:
+		// Gate: free-tier users cannot seek — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
+		}
+		return a, a.buildSeekCmd(m.TargetMs, m.Seq)
+
+	case panes.SeekAppliedMsg:
+		// Always confirm or cancel the bar'''s pending state first, before dispatching
+		// downstream effects. This prevents concurrent polls from overriding the bar.
+		var paneCmd tea.Cmd
+		if np := a.nowPlayingPane(); np != nil {
+			updated, pc := np.Update(m)
+			paneCmd = pc
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+		}
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, paneCmd
+			}
+			// Re-route typed errors to their existing handlers after bar is cleared.
+			var rateLimitErr *api.RateLimitError
+			if errors.As(m.Err, &rateLimitErr) {
+				return a.handleMsg(panes.RateLimitedMsg{RetryAfterSecs: rateLimitErr.RetryAfter})
+			}
+			if isUnauthorizedError(m.Err) {
+				return a.handleMsg(unauthorizedMsg{})
+			}
+			toast := a.errorMapper.Map(uikit.OpSeek, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, tea.Batch(paneCmd, fetchPlaybackStateCmd(a.player, api.Interactive))
+			}
+			return a, tea.Batch(
+				paneCmd,
+				fetchPlaybackStateCmd(a.player, api.Interactive),
+				a.toasts.Cmd(toast),
+			)
+		}
+		return a, tea.Batch(paneCmd, fetchPlaybackStateCmd(a.player, api.Interactive))
+
 	case panes.RateLimitedMsg:
 		// 429 from Spotify — activate backoff and emit a ratelimit toast.
 		backoff := m.RetryAfterSecs
@@ -604,14 +661,46 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Without this, any domain with a sentinel set at the time of the 429 would be
 		// permanently blocked from fetching again.
 		a.clearAllFetchingSentinels()
-		return a, tea.Batch(
+
+		// Forward rate-limit errors to overlays that are open and waiting for data.
+		// During backoff ALL requests are blocked (gateway rejects immediately), so
+		// even if the 429 came from a playback fetch, the overlay's fetch would also
+		// fail. Without this delivery, overlays hang on "Loading..." or show misleading
+		// empty states ("No devices found") instead of proper error messages.
+		var overlayCmds []tea.Cmd
+		if a.profileOverlayOpen && a.store.UserProfile().ID == "" {
+			updated, cmd := a.profilePane.Update(panes.UserProfileLoadedMsg{
+				Err: fmt.Errorf("rate limited, retry in %ds", backoff),
+			})
+			if p, ok := updated.(*panes.ProfileOverlay); ok {
+				a.profilePane = p
+			}
+			if cmd != nil {
+				overlayCmds = append(overlayCmds, cmd)
+			}
+		}
+		if a.deviceOverlayOpen && a.store.DevicesFetchedAt().IsZero() {
+			updated, cmd := a.devicePane.Update(panes.DevicesLoadedMsg{
+				Err: fmt.Errorf("rate limited"),
+			})
+			if d, ok := updated.(*panes.DeviceOverlay); ok {
+				a.devicePane = d
+			}
+			if cmd != nil {
+				overlayCmds = append(overlayCmds, cmd)
+			}
+		}
+
+		cmds := []tea.Cmd{
 			a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastRateLimit,
 				Title:  "Rate-limited",
 				Body:   fmt.Sprintf("Retrying in %ds.", backoff),
 			}),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
-		)
+		}
+		cmds = append(cmds, overlayCmds...)
+		return a, tea.Batch(cmds...)
 
 	case unauthorizedMsg:
 		// 401 from any Spotify API call — attempt a token refresh.

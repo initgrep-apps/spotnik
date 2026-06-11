@@ -47,10 +47,10 @@ func TestPresetDashboard(t *testing.T) {
 	assert.Len(t, p.Visible, 8, "should have 8 visible panes")
 	assert.Len(t, p.Grid, 3, "should have 3 rows")
 
-	// Row 0: NowPlaying full-width (weight 1)
+	// Row 0: NowPlaying full-width (weight 1, MinHeight 6 — story 223)
 	require.Len(t, p.Grid[0].Cells, 1)
 	assert.Equal(t, 1, p.Grid[0].HeightWeight)
-	assert.Equal(t, 0, p.Grid[0].MinHeight)
+	assert.Equal(t, 6, p.Grid[0].MinHeight)
 	assert.Equal(t, layout.PaneNowPlaying, p.Grid[0].Cells[0].PaneID)
 
 	// Row 1: Playlists, Albums, LikedSongs (weight 3)
@@ -72,7 +72,7 @@ func TestPresetListening(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneQueue])
 	assert.True(t, p.Visible[layout.PaneRecentlyPlayed])
 
-	// Row 0: NowPlaying (weight 2, MinHeight 0)
+	// Row 0: NowPlaying (weight 2, MinHeight 0 — story 223, Listening keeps 0)
 	assert.Equal(t, 2, p.Grid[0].HeightWeight)
 	assert.Equal(t, 0, p.Grid[0].MinHeight)
 
@@ -104,9 +104,9 @@ func TestPresetDiscovery(t *testing.T) {
 	assert.True(t, p.Visible[layout.PaneTopArtists])
 	assert.True(t, p.Visible[layout.PaneRecentlyPlayed])
 
-	// Row 0: NowPlaying (weight 1, MinHeight 0)
+	// Row 0: NowPlaying (weight 1, MinHeight 6 — story 223)
 	assert.Equal(t, 1, p.Grid[0].HeightWeight)
-	assert.Equal(t, 0, p.Grid[0].MinHeight)
+	assert.Equal(t, 6, p.Grid[0].MinHeight)
 
 	// Row 1: TopTracks + TopArtists (weight 3)
 	assert.Equal(t, 3, p.Grid[1].HeightWeight)
@@ -129,11 +129,11 @@ func TestPresetStats_HasFivePanes(t *testing.T) {
 }
 
 // TestPresetStats_NowPlayingMinHeight verifies the NowPlaying row carries
-// MinHeight: 0 (story 218 — tier system replaced).
+// MinHeight: 6 (story 223 — compact presets raised so controls+volume remain visible).
 func TestPresetStats_NowPlayingMinHeight(t *testing.T) {
 	p := layout.PresetStats
 	require.Len(t, p.Grid, 3)
-	assert.Equal(t, 0, p.Grid[0].MinHeight, "NowPlaying row must have MinHeight 0")
+	assert.Equal(t, 6, p.Grid[0].MinHeight, "NowPlaying row must have MinHeight 6")
 }
 
 // TestPresetStats_FlatThreeRows verifies the flat grid structure (story 181):
@@ -171,16 +171,18 @@ func TestPagePresets_Counts(t *testing.T) {
 }
 
 // TestPreset_MusicPage_NowPlayingMinHeight verifies that every Music page preset
-// sets NowPlaying MinHeight to 0 (story 218 — tier system replaced).
+// sets NowPlaying MinHeight to the correct value (story 223 — compact presets
+// raised to 6 so controls+volume remain visible; Listening stays at 0).
 func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
 	presets := []struct {
-		name   string
-		preset layout.Preset
+		name     string
+		preset   layout.Preset
+		wantMinH int
 	}{
-		{"Dashboard", layout.PresetDashboard},
-		{"Listening", layout.PresetListening},
-		{"Library", layout.PresetLibrary},
-		{"Discovery", layout.PresetDiscovery},
+		{"Dashboard", layout.PresetDashboard, 6},
+		{"Listening", layout.PresetListening, 0},
+		{"Library", layout.PresetLibrary, 6},
+		{"Discovery", layout.PresetDiscovery, 6},
 	}
 
 	for _, tt := range presets {
@@ -189,8 +191,8 @@ func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
 			nowPlayingRow := tt.preset.Grid[0]
 			assert.Equal(t, layout.PaneNowPlaying, nowPlayingRow.Cells[0].PaneID,
 				"first row must contain NowPlaying")
-			assert.Equal(t, 0, nowPlayingRow.MinHeight,
-				"NowPlaying row must have MinHeight 0")
+			assert.Equal(t, tt.wantMinH, nowPlayingRow.MinHeight,
+				"NowPlaying row must have MinHeight %d", tt.wantMinH)
 		})
 	}
 }

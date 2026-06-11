@@ -19,8 +19,10 @@ func TestIsPlaybackKey_Enumeration(t *testing.T) {
 		isPlayback bool
 	}{
 		{"Space", tea.KeyMsg{Type: tea.KeySpace}, true},
-		{"Left arrow", tea.KeyMsg{Type: tea.KeyLeft}, true},
-		{"Right arrow", tea.KeyMsg{Type: tea.KeyRight}, true},
+		{"Left arrow (seek)", tea.KeyMsg{Type: tea.KeyLeft}, true},
+		{"Right arrow (seek)", tea.KeyMsg{Type: tea.KeyRight}, true},
+		{"Shift+Left (prev track)", tea.KeyMsg{Type: tea.KeyShiftLeft}, true},
+		{"Shift+Right (next track)", tea.KeyMsg{Type: tea.KeyShiftRight}, true},
 		{"+ volume up", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}, true},
 		{"- volume down", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}, true},
 		{"s shuffle", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}, true},
@@ -47,8 +49,10 @@ func TestIsPremiumOnlyPlaybackKey_Enumeration(t *testing.T) {
 	}{
 		// Premium-required keys
 		{"Space play/pause", tea.KeyMsg{Type: tea.KeySpace}, true},
-		{"Left prev track", tea.KeyMsg{Type: tea.KeyLeft}, true},
-		{"Right next track", tea.KeyMsg{Type: tea.KeyRight}, true},
+		{"Left seek back", tea.KeyMsg{Type: tea.KeyLeft}, true},
+		{"Right seek forward", tea.KeyMsg{Type: tea.KeyRight}, true},
+		{"Shift+Left prev track", tea.KeyMsg{Type: tea.KeyShiftLeft}, true},
+		{"Shift+Right next track", tea.KeyMsg{Type: tea.KeyShiftRight}, true},
 		{"+ volume up", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}, true},
 		{"- volume down", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}, true},
 		{"s shuffle", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}, true},

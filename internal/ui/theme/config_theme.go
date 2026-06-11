@@ -153,6 +153,11 @@ func (t *ConfigTheme) Surface() lipgloss.Color { return lipgloss.Color(t.c.Surfa
 // SurfaceAlt returns the overlay background color.
 func (t *ConfigTheme) SurfaceAlt() lipgloss.Color { return lipgloss.Color(t.c.SurfaceAlt) }
 
+// OverlayBackground returns the solid background for floating panels overlaid
+// on dynamic content. Currently aliased to Base() — every theme uses its base
+// canvas colour (Story 221).
+func (t *ConfigTheme) OverlayBackground() lipgloss.Color { return t.Base() }
+
 // Borders
 
 // ActiveBorder returns the focused pane border color.
