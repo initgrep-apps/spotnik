@@ -31,7 +31,7 @@ const (
 type Operation string
 
 const (
-	// OpPlayback covers playback commands (play, pause, seek, next, prev, repeat, shuffle).
+	// OpPlayback covers playback commands (play, pause, next, prev, repeat, shuffle).
 	OpPlayback Operation = "playback"
 	// OpVolume covers volume change commands.
 	OpVolume Operation = "volume"

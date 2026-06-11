@@ -446,7 +446,11 @@ func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 func (p *NowPlayingPane) handlePlaybackFetched(_ PlaybackStateFetchedMsg) (*NowPlayingPane, tea.Cmd) {
 	ps := p.store.PlaybackState()
 	if ps != nil {
-		p.localProgressMs = ps.ProgressMs
+		// Preserve local progress when a seek is pending so the title bar
+		// stays in sync with the optimistic seek bar position.
+		if !p.seekBar.HasPending() {
+			p.localProgressMs = ps.ProgressMs
+		}
 		p.engine.SetPlaying(ps.IsPlaying)
 		if ps.Device != nil {
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
