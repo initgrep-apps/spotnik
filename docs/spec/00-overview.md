@@ -23,7 +23,7 @@
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | `internal/cliout` package, typed message taxonomy, palette config, TTY-guarded spinner, validated prompt |
 | 13 | TUI Design System | `features/13-tui-design-system/` | done | 150–172, 183–193 | `internal/uikit` package (18 primitives), frozen glyph catalogue with ASCII fallback, role-to-token matrix, glyph-fallback CI guards |
 | 14 | Stats Page Redesign | `features/14-page-b-redesign/` | done | 173–182, 210, 211 | Stacked Stats page layout, GatewayHealth/PollingTraffic/GatewayLive panes, universal filter border + Esc-clear, TableBasedPane consolidation |
-| 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | done | 199 ✓, 200 ✓, 201 ✓, 202 ✓, 203 ✓, 206 | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
+| 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | done | 199 ✓, 200 ✓, 201 ✓, 202 ✓, 203 ✓, 206, 225 | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
 | 16 | Mono Themes + Page Rename | `features/16-mono-themes-page-rename/` | done | 207 ✓, 208 ✓ | Rename Page A/B → Music/Stats, add mono-dark/mono-light themes |
 | 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | in-progress | 214 ✓, 215 ✓, 216 ✓, 217 ✓, 218 ✓, 219 ✓, 220 ✓, 221 ✓, 222 ✓, 223 | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight, single-formula layout. Phase 2 (shipped): OverlayBackground token + InfoBox fill (221); remove album art, overlay InfoBox on full-pane visualizer (222). Phase 3 (open): Fix layout — adaptive width, remove solid bg, centering, compact preset MinHeight (223) |
 
@@ -35,4 +35,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-06-11 — story 224 done, feature 03 done*
+*Last updated: 2026-06-11 — story 225 added for feature 15*
