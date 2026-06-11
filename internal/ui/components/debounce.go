@@ -7,18 +7,34 @@ package components
 // DebounceTracker manages the debounce state for a value that can be
 // adjusted interactively (volume, seek position). It tracks:
 //   - current: the displayed value (pending or last confirmed)
+//   - confirmed: the pre-seek baseline value (set by HandleKey's "confirmed" param)
 //   - hasPending: true while a debounce tick is in flight
 //   - seq: monotonically increasing counter for stale-tick rejection
 //
 // The typical flow is:
-//  1. HandleKey(delta, confirmed, min, max) → updates current, sets hasPending,
-//     increments seq, returns the new seq (or -1 if min ≥ max)
+//  1. HandleKey(delta, confirmed, min, max) → updates current, stores confirmed as
+//     the baseline, sets hasPending, increments seq, returns the new seq (or -1 if
+//     min ≥ max)
 //  2. A 300ms tea.Tick fires with the seq → HandleDebounce checks seq
 //  3. On match: emit an intent message; on mismatch: discard (stale)
-//  4. ConfirmFromAPI / CancelPending: guard on seq to prevent concurrent burst clobbering
-//  5. SetConfirmed: clears hasPending only when a poll matches current
+//  4. ConfirmFromAPI sets current to the API-confirmed value; hasPending stays
+//     true until SetConfirmed receives a matching poll. For volume (integer
+//     0-100) this protects against stale polls snapping the bar back. For seek
+//     (milliseconds), the call site uses ClearPendingOnForwardProximity to clear
+//     based on playback advancement rather than exact match.
+//  5. CancelPending reverts to the store value on error
+//  6. SetConfirmed: when hasPending is true, only clears on exact match (volume)
+//     or proximity (seek via ClearPendingOnForwardProximity). When false, updates
+//     current.
+//
+// The confirmed field enables direction-aware proximity clearing. After a forward
+// seek (current >= confirmed), any poll at or past current clears pending. After
+// a backward seek (current < confirmed), a poll clears pending only when it is at
+// or past current AND still below the old baseline — this prevents stale forward
+// polls (from before the backward seek) from incorrectly clearing pending.
 type DebounceTracker struct {
 	current    int
+	confirmed  int
 	hasPending bool
 	seq        int
 }
@@ -43,6 +59,11 @@ func (d *DebounceTracker) HandleKey(delta, confirmed, min, max int) int {
 	base := confirmed
 	if d.hasPending {
 		base = d.current
+	} else {
+		// Store the pre-seek baseline only on the first keypress of a burst.
+		// This is the position before the user started adjusting, enabling
+		// direction-aware proximity clearing in ClearPendingOnForwardProximity.
+		d.confirmed = confirmed
 	}
 	newVal := base + delta
 	if newVal > max {
@@ -73,12 +94,12 @@ func (d *DebounceTracker) HandleDebounce(tickSeq int) (matched bool, targetVal i
 
 // ConfirmFromAPI sets current to the API-confirmed value but keeps hasPending true.
 // hasPending is only cleared by SetConfirmed when a subsequent poll returns the same
-// value, preventing stale in-flight polls from snapping the bar back.
+// value (for volume, exact match) or by ClearPendingOnForwardProximity for seek
+// positions where exact match is unlikely.
 // Guards on seq == intentSeq+1 so concurrent bursts don't clobber each other.
 func (d *DebounceTracker) ConfirmFromAPI(intentSeq, val int) {
 	if d.seq == intentSeq+1 {
 		d.current = val
-		// hasPending stays true — SetConfirmed clears it when a poll matches.
 	}
 }
 
@@ -94,8 +115,8 @@ func (d *DebounceTracker) CancelPending(intentSeq, confirmed int) {
 
 // SetConfirmed updates current from the authoritative poll value.
 // When hasPending is true, it only clears hasPending if the poll matches current,
-// blocking stale polls from snapping the bar back.
-// When hasPending is false, it updates current directly.
+// preventing stale in-flight polls from snapping the bar back during a debounce burst.
+// When hasPending is false (normal polling), it updates current directly.
 func (d *DebounceTracker) SetConfirmed(val int) {
 	if d.hasPending {
 		if val == d.current {
@@ -104,4 +125,40 @@ func (d *DebounceTracker) SetConfirmed(val int) {
 		return
 	}
 	d.current = val
+}
+
+// ClearPendingOnForwardProximity clears hasPending when the poll value indicates
+// the seek has been processed. This is used by seek bars where the confirmed
+// position rarely matches exactly — playback naturally advances past the seek target,
+// so any poll value at or beyond the target means the seek has been processed.
+//
+// Direction awareness prevents stale polls from incorrectly clearing pending after
+// a backward seek:
+//   - Forward seek (current >= confirmed): clear when val >= current
+//   - Backward seek (current < confirmed): clear when val >= current AND val < confirmed
+//
+// The backward-seek guard prevents a stale poll at the old forward position from
+// clearing pending. For example: user at 60s seeks back to 55s; a stale poll returning
+// 60123 must NOT clear pending (60123 >= 55000 but 60123 >= 60000 = confirmed).
+//
+// When hasPending is false, this is a no-op. The "Forward" in the name signals that
+// this method assumes monotonic forward playback advancement — it should not be used
+// for controls where values can jump arbitrarily (volume bars use SetConfirmed instead).
+func (d *DebounceTracker) ClearPendingOnForwardProximity(val int) {
+	if !d.hasPending {
+		return
+	}
+	if d.current >= d.confirmed {
+		// Forward seek: any poll at or past the target clears pending.
+		if val >= d.current {
+			d.hasPending = false
+		}
+	} else {
+		// Backward seek: clear only when poll is between target and old baseline.
+		// A stale poll at or past the old baseline (before the backward seek)
+		// must not clear pending.
+		if val >= d.current && val < d.confirmed {
+			d.hasPending = false
+		}
+	}
 }

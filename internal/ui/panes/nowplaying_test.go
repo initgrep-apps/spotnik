@@ -1058,7 +1058,7 @@ func TestNowPlayingPane_VolumeAppliedMsg_Success_ConfirmsBar(t *testing.T) {
 	// Send VolumeAppliedMsg confirming the API succeeded.
 	p.Update(VolumeAppliedMsg{Vol: 55, Seq: 1})
 
-	// Bar should now show 55, but hasPending stays true until a matching poll.
+	// Bar should now show 55, but hasPending stays true until a matching poll arrives.
 	out := p.View()
 	assert.Contains(t, out, "55%")
 

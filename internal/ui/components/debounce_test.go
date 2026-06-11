@@ -135,7 +135,7 @@ func TestDebounceTracker_ConfirmFromAPI_SeqMatch(t *testing.T) {
 	requireTrue(t, matched)
 	d.ConfirmFromAPI(tickSeq, 55) // d.seq (2) == tickSeq+1 (2) → match
 	assert.Equal(t, 55, d.Current(), "should update to API-confirmed value")
-	assert.True(t, d.HasPending(), "hasPending should stay true until SetConfirmed matches")
+	assert.True(t, d.HasPending(), "hasPending stays true until SetConfirmed matches or ClearPendingOnProximity clears")
 }
 
 func TestDebounceTracker_ConfirmFromAPI_SeqMismatch(t *testing.T) {
@@ -146,6 +146,101 @@ func TestDebounceTracker_ConfirmFromAPI_SeqMismatch(t *testing.T) {
 	d.HandleKey(5, 50, 0, 100)    // seq=3 — new burst supersedes
 	d.ConfirmFromAPI(tickSeq, 55) // d.seq (4) != tickSeq+1 (2) → no-op
 	assert.True(t, d.HasPending(), "hasPending should stay true on seq mismatch")
+}
+
+// --------------------------------------------------------------------------
+// DebounceTracker — ClearPendingOnForwardProximity
+// --------------------------------------------------------------------------
+
+func TestDebounceTracker_ClearPendingOnForwardProximity_ClearsWhenAtOrPast(t *testing.T) {
+	// Seek bar scenario: after ConfirmFromAPI, hasPending stays true.
+	// A poll arriving at or past the confirmed position clears pending.
+	var d DebounceTracker
+	d.HandleKey(5000, 30000, 0, 180000) // current=35000, pending, confirmed=30000 (forward seek)
+	d.ConfirmFromAPI(1, 35000)          // hasPending stays true (volume-style)
+
+	// Poll at the exact confirmed position → clears pending
+	d.ClearPendingOnForwardProximity(35000)
+	assert.False(t, d.HasPending(), "should clear pending when poll reaches confirmed position")
+
+	// Reset and test poll past the confirmed position
+	d = DebounceTracker{}
+	d.HandleKey(5000, 30000, 0, 180000) // current=35000, pending, confirmed=30000 (forward seek)
+	d.ConfirmFromAPI(1, 35000)          // hasPending stays true
+
+	// Poll past the confirmed position (playback advanced 3s) → clears pending
+	d.ClearPendingOnForwardProximity(38000)
+	assert.False(t, d.HasPending(), "should clear pending when poll passes confirmed position")
+}
+
+func TestDebounceTracker_ClearPendingOnForwardProximity_NoOpBelowTarget(t *testing.T) {
+	// Poll has not yet reached the confirmed position → pending stays
+	var d DebounceTracker
+	d.HandleKey(5000, 30000, 0, 180000) // current=35000, pending, confirmed=30000 (forward seek)
+	d.ConfirmFromAPI(1, 35000)          // hasPending stays true
+
+	// Stale poll with old position → does NOT clear pending
+	d.ClearPendingOnForwardProximity(30000)
+	assert.True(t, d.HasPending(), "stale poll below confirmed position must not clear pending")
+	assert.Equal(t, 35000, d.Current(), "current should stay at confirmed position")
+}
+
+func TestDebounceTracker_ClearPendingOnForwardProximity_NoOpWhenNotPending(t *testing.T) {
+	// When not pending, ClearPendingOnForwardProximity is a no-op
+	var d DebounceTracker
+	d.SetConfirmed(50)
+	assert.False(t, d.HasPending())
+	d.ClearPendingOnForwardProximity(50)
+	assert.Equal(t, 50, d.Current(), "should not change current when not pending")
+	assert.False(t, d.HasPending())
+}
+
+func TestDebounceTracker_ClearPendingOnForwardProximity_BackwardSeekStaleForwardPoll(t *testing.T) {
+	// CRITICAL: Backward seek must NOT be cleared by a stale poll at the old
+	// forward position. User at 60s seeks back to 55s; stale poll returns 60123.
+	// 60123 >= 55000 (current) but 60123 >= 60000 (confirmed) → must NOT clear.
+	var d DebounceTracker
+	d.HandleKey(-5000, 60000, 0, 180000) // current=55000, confirmed=60000 (backward seek)
+	d.ConfirmFromAPI(1, 55000)           // hasPending stays true
+
+	// Stale poll at old forward position → must NOT clear pending
+	d.ClearPendingOnForwardProximity(60123)
+	assert.True(t, d.HasPending(), "stale forward poll must not clear pending on backward seek")
+	assert.Equal(t, 55000, d.Current(), "current should stay at backward-seek target")
+}
+
+func TestDebounceTracker_ClearPendingOnForwardProximity_BackwardSeekValidPoll(t *testing.T) {
+	// After a backward seek, a poll at or near the target (but below the old
+	// baseline) should clear pending. User at 60s seeks back to 55s; Spotify
+	// processes the seek and the next poll returns 55234.
+	var d DebounceTracker
+	d.HandleKey(-5000, 60000, 0, 180000) // current=55000, confirmed=60000 (backward seek)
+	d.ConfirmFromAPI(1, 55000)           // hasPending stays true
+
+	// Poll at target position, below old baseline → clears pending
+	d.ClearPendingOnForwardProximity(55234)
+	assert.False(t, d.HasPending(), "valid poll at backward-seek target should clear pending")
+
+	// Also test exact match at target
+	d2 := DebounceTracker{}
+	d2.HandleKey(-5000, 60000, 0, 180000) // current=55000, confirmed=60000
+	d2.ConfirmFromAPI(1, 55000)
+
+	d2.ClearPendingOnForwardProximity(55000)
+	assert.False(t, d2.HasPending(), "exact poll at backward-seek target should clear pending")
+}
+
+func TestDebounceTracker_ClearPendingOnForwardProximity_BackwardSeekPollAtOldBaseline(t *testing.T) {
+	// Edge case: poll returning exactly the old baseline (confirmed) value
+	// must NOT clear pending — it is at the boundary and indicates a stale poll
+	// that hasn't yet reflected the backward seek.
+	var d DebounceTracker
+	d.HandleKey(-5000, 60000, 0, 180000) // current=55000, confirmed=60000 (backward seek)
+	d.ConfirmFromAPI(1, 55000)
+
+	// Poll at exactly the old baseline → must NOT clear (val < confirmed is strict)
+	d.ClearPendingOnForwardProximity(60000)
+	assert.True(t, d.HasPending(), "poll at old baseline must not clear pending on backward seek")
 }
 
 // --------------------------------------------------------------------------
