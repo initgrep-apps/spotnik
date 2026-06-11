@@ -228,9 +228,9 @@ func TestAppNew_InvalidVisualizer_Wraps(t *testing.T) {
 		a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 		np := a.NowPlayingPane()
 		require.NotNil(t, np)
-		// Must be in [0, patternCount). 99 % 3 = 0
+		// Must be in [0, patternCount). 99 % 6 = 0
 		pat := np.VisualizerPattern()
-		assert.True(t, pat >= 0 && pat < 3, "out-of-range visualizer should wrap to valid index, got %d", pat)
+		assert.True(t, pat >= 0 && pat < 6, "out-of-range visualizer should wrap to valid index, got %d", pat)
 	})
 }
 
