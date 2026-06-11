@@ -61,10 +61,10 @@ func TestDensityRenderer_DensityHaloAboveBars(t *testing.T) {
 		[]rune(uikit.GlyphFor(uikit.GlyphBarEmpty, uikit.GlyphUnicode))[0],  // ░  distAbove=3
 		[]rune(uikit.GlyphFor(uikit.GlyphBarMedium, uikit.GlyphUnicode))[0], // ▒  distAbove=2
 		[]rune(uikit.GlyphFor(uikit.GlyphBarHeavy, uikit.GlyphUnicode))[0],  // ▓  distAbove=1
-		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],    // █  distAbove=0 (at bar top)
-		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],    // █  distAbove=-1 (below bar top)
-		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],    // █  distAbove=-2
-		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],    // █  distAbove=-3
+		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],   // █  distAbove=0 (at bar top)
+		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],   // █  distAbove=-1 (below bar top)
+		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],   // █  distAbove=-2
+		[]rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.GlyphUnicode))[0],   // █  distAbove=-3
 	}
 
 	for rowIdx, line := range frame {
