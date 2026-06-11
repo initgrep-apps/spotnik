@@ -111,6 +111,26 @@ func (a *App) buildSetVolumeCmd(targetVol, intentSeq int) tea.Cmd {
 	}
 }
 
+// buildSeekCmd creates a command that calls player.Seek with the target position.
+// On completion it returns SeekAppliedMsg so the bar's pending state is confirmed
+// or cancelled before downstream effects fire.
+// intentSeq must match the seq value from the SeekIntentMsg that triggered
+// this command — it is forwarded to ConfirmFromAPI / CancelPending.
+func (a *App) buildSeekCmd(targetMs, intentSeq int) tea.Cmd {
+	player := a.player
+	return func() tea.Msg {
+		if player == nil {
+			return panes.SeekAppliedMsg{Seq: intentSeq, Err: errNilClient}
+		}
+		ctx := api.WithPriority(context.Background(), api.Interactive)
+		err := player.Seek(ctx, targetMs)
+		if err != nil {
+			return panes.SeekAppliedMsg{Seq: intentSeq, Err: err}
+		}
+		return panes.SeekAppliedMsg{PosMs: targetMs, Seq: intentSeq}
+	}
+}
+
 // nextRepeatMode returns the next repeat mode in the cycle off→context→track→off.
 func nextRepeatMode(current string) string {
 	switch current {

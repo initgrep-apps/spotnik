@@ -589,6 +589,64 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+
+	case components.SeekDebounceTickMsg:
+		// Forward seek debounce tick to NowPlayingPane. The pane checks the seq
+		// and either emits SeekIntentMsg (matched) or returns nil (stale).
+		if np := a.nowPlayingPane(); np != nil {
+			updated, cmd := np.Update(m)
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+			return a, cmd
+		}
+		return a, nil
+
+	case panes.SeekIntentMsg:
+		// Gate: free-tier users cannot seek — block before any API call.
+		if !a.store.IsPremium() {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			})
+		}
+		return a, a.buildSeekCmd(m.TargetMs, m.Seq)
+
+	case panes.SeekAppliedMsg:
+		// Always confirm or cancel the bar'''s pending state first, before dispatching
+		// downstream effects. This prevents concurrent polls from overriding the bar.
+		var paneCmd tea.Cmd
+		if np := a.nowPlayingPane(); np != nil {
+			updated, pc := np.Update(m)
+			paneCmd = pc
+			if pp, ok := updated.(*panes.NowPlayingPane); ok {
+				a.panes[layout.PaneNowPlaying] = pp
+			}
+		}
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, paneCmd
+			}
+			// Re-route typed errors to their existing handlers after bar is cleared.
+			var rateLimitErr *api.RateLimitError
+			if errors.As(m.Err, &rateLimitErr) {
+				return a.handleMsg(panes.RateLimitedMsg{RetryAfterSecs: rateLimitErr.RetryAfter})
+			}
+			if isUnauthorizedError(m.Err) {
+				return a.handleMsg(unauthorizedMsg{})
+			}
+			toast := a.errorMapper.Map(uikit.OpSeek, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, tea.Batch(paneCmd, fetchPlaybackStateCmd(a.player, api.Interactive))
+			}
+			return a, tea.Batch(
+				paneCmd,
+				fetchPlaybackStateCmd(a.player, api.Interactive),
+				a.toasts.Cmd(toast),
+			)
+		}
+		return a, tea.Batch(paneCmd, fetchPlaybackStateCmd(a.player, api.Interactive))
+
 	case panes.RateLimitedMsg:
 		// 429 from Spotify — activate backoff and emit a ratelimit toast.
 		backoff := m.RetryAfterSecs
