@@ -11,7 +11,7 @@
 |---|---------|------|--------|---------|-------------|
 | 01 | UI Layout & Components | `features/01-ui-foundation/` | done | 15, 26, 41–44, 49, 50, 52–54, 108 | Grid layout manager, btop borders, reusable table/filter components, help overlay |
 | 02 | API Gateway & Reliability | `features/02-api-infrastructure/` | done | 18–35, 37–39, 65, 126–127 | Centralized gateway, rate limiting, dedup, error types |
-| 03 | Playback & NowPlaying | `features/03-playback/` | done | 03, 11, 36, 45, 58–60, 105–107, 118–125, 197–198, 205, 224 | Transport controls, NowPlaying display, visualizer, interactive seek bar |
+| 03 | Playback & NowPlaying | `features/03-playback/` | in-progress | 03, 11, 36, 45, 58–60, 105–107, 118–125, 197–198, 205, 224, 226 | Transport controls, NowPlaying display, visualizer, interactive seek bar, InfoBox padding & controls centering |
 | 04 | Queue & Device Switching | `features/04-queue-and-devices/` | done | 06, 07, 12, 13, 46 | Queue viewer pane, Spotify Connect device selection |
 | 05 | Library Browser & Playlists | `features/05-library/` | done | 04, 09, 10, 47 | Browse playlists/albums/liked songs, full playlist management |
 | 06 | Search | `features/06-search/` | done | 05, 16, 81–104, 212–213 | Full-screen overlay, multi-tab results, prefix autocomplete, pagination |
@@ -35,4 +35,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-06-11 — story 225 added for feature 15*
+*Last updated: 2026-06-11 — story 226 added for feature 03*
