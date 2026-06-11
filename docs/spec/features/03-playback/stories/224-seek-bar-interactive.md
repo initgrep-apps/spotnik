@@ -20,7 +20,8 @@ The `GradientVolumeBar` already implements the exact debounce pattern this featu
 | `→` | Next track | Seek forward 5s |
 | `Shift+←` | — | Previous track |
 | `Shift+→` | — | Next track |
-| `p` | Previous track | Previous track (unchanged) |
+
+**Dead code removal:** The `"p"` case in `nowplaying.go` `handleKey()` combined with `tea.KeyLeft` to trigger `ActionPrevious`. Since `"p"` is not in `isPlaybackKey()`, routing.go intercepts it for preset cycling before the pane ever sees it — making the `"p"` case dead code. Remove it. Previous track is now exclusively on `Shift+←`.
 
 **Bubble Tea key detection:** Shift+arrows are separate `KeyType` constants (`tea.KeyShiftLeft`, `tea.KeyShiftRight`) — NOT modifier flags on `tea.KeyLeft`/`tea.KeyRight`. The `handleKey` switch must check `tea.KeyShiftLeft`/`tea.KeyShiftRight` before `tea.KeyLeft`/`tea.KeyRight` (more specific first).
 
@@ -147,7 +148,7 @@ func (a *App) buildSeekCmd(targetMs, intentSeq int) tea.Cmd {
 - `tea.KeyShiftRight` → `emitPlaybackRequest(ActionNext)`
 - `tea.KeyLeft` → seek back 5s (if track duration > 0)
 - `tea.KeyRight` → seek forward 5s (if track duration > 0)
-- `"p"` → `emitPlaybackRequest(ActionPrevious)` (unchanged, now separate from Left arrow)
+- Remove dead `"p"` case (routing.go intercepts `"p"` for preset cycling)
 
 **`Update()`** — add message handlers:
 - `components.SeekDebounceTickMsg` → delegate to seekBar.HandleDebounce, emit SeekIntentMsg if matched
@@ -343,7 +344,7 @@ Changes in all 3 locations:
 - `→` → "Seek forward 5s" (was: "Next track")
 - Add `Shift+←` → "Previous track"
 - Add `Shift+→` → "Next track"
-- Keep `p` → "Cycle preset" in global keys (unchanged — `p` was never "previous track" in the keybinding table; it was only in the help overlay's playback section)
+- Remove `"p"` as a previous-track binding (it was dead code — routing.go intercepts `"p"` for preset cycling)
 
 **Important:** The help overlay currently shows `{al + " / " + ar, "Prev / Next"}` for arrows. This must change to show seek and Shift+arrows. Update to separate entries.
 
@@ -377,7 +378,7 @@ Changes in all 3 locations:
 - Right arrow seeks forward 5s visually
 - Shift+Left goes to previous track
 - Shift+Right goes to next track
-- `p` key still cycles presets (global) — NOT previous track
+- `p` key cycles presets (global) — NOT previous track (dead code removed from nowplaying)
 - Volume bar (+/-) behavior is unchanged (regression test)
 - Non-premium users see "Spotify Premium required" toast on seek
 - Rapid key presses debounce to one API call
