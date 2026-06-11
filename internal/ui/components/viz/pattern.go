@@ -30,8 +30,8 @@ type Pattern struct {
 // Patterns returns the full ordered list of available animation patterns.
 // Index is stable — callers cycle by incrementing modulo len(Patterns()).
 //
-// Indices 0-2, 6: BrailleRenderer patterns.
-// Indices 3-5: BlockRenderer patterns.
+// Indices 0-1: BrailleRenderer patterns.
+// Index 2: BlockRenderer pattern.
 func Patterns() []Pattern {
 	return []Pattern{
 		{
@@ -40,34 +40,14 @@ func Patterns() []Pattern {
 			HeightFunc: heightDualSine,
 		},
 		{
-			Name:       "Braille Standing Wave",
-			Renderer:   BrailleRenderer{},
-			HeightFunc: heightStandingWave,
-		},
-		{
 			Name:       "Braille Pulse Ripple",
 			Renderer:   BrailleRenderer{},
 			HeightFunc: heightPulseRipple,
 		},
 		{
-			Name:       "Block Dense Equalizer",
-			Renderer:   BlockRenderer{},
-			HeightFunc: heightBlockDenseEqualizer,
-		},
-		{
-			Name:       "Block Waveform",
-			Renderer:   BlockRenderer{},
-			HeightFunc: heightBlockWaveform,
-		},
-		{
 			Name:       "Block Sparse",
 			Renderer:   BlockRenderer{},
 			HeightFunc: heightBlockSparse,
-		},
-		{
-			Name:       "Braille Organic",
-			Renderer:   BrailleRenderer{},
-			HeightFunc: heightBrailleOrganic,
 		},
 	}
 }
@@ -105,24 +85,7 @@ func heightDualSine(width, maxHeight, frameIdx int) []int {
 	return out
 }
 
-// heightStandingWave — Pattern 1 (Braille): interference of two counter-propagating
-// sine waves creating stationary nodes and antinodes.
-// Ported directly from the existing visualizer.go pattern 1.
-func heightStandingWave(width, maxHeight, frameIdx int) []int {
-	out := make([]int, width)
-	phase := phaseFor(frameIdx)
-	for col := 0; col < width; col++ {
-		x := float64(col) / float64(width) * 2 * math.Pi
-		wave1 := math.Sin(x*2 + phase)
-		wave2 := math.Sin(x*2 - phase)
-		val := (wave1 + wave2 + 2.0) / 4.0
-		val = clamp01(val)
-		out[col] = int(val * float64(maxHeight))
-	}
-	return out
-}
-
-// heightPulseRipple — Pattern 2 (Braille): narrow Gaussian peak traveling left-to-right
+// heightPulseRipple — Pattern 1 (Braille): narrow Gaussian peak traveling left-to-right
 // with a trailing ripple, wrapping around the edges.
 // Ported directly from the existing visualizer.go pattern 2.
 func heightPulseRipple(width, maxHeight, frameIdx int) []int {
@@ -143,36 +106,7 @@ func heightPulseRipple(width, maxHeight, frameIdx int) []int {
 	return out
 }
 
-// heightBlockDenseEqualizer — Pattern 3 (Block): full-height bars with small
-// deterministic variation per column. Dense, heavy look.
-func heightBlockDenseEqualizer(width, maxHeight, frameIdx int) []int {
-	out := make([]int, width)
-	phase := phaseFor(frameIdx)
-	for col := 0; col < width; col++ {
-		x := float64(col) / float64(width) * 2 * math.Pi
-		// Base height near max with small oscillation
-		val := 0.75 + 0.25*math.Sin(x*3+phase)*math.Cos(x+phase*0.5)
-		val = clamp01(val)
-		out[col] = int(val * float64(maxHeight))
-	}
-	return out
-}
-
-// heightBlockWaveform — Pattern 4 (Block): smooth sine-based heights.
-// Clean, flowing appearance.
-func heightBlockWaveform(width, maxHeight, frameIdx int) []int {
-	out := make([]int, width)
-	phase := phaseFor(frameIdx)
-	for col := 0; col < width; col++ {
-		x := float64(col) / float64(width) * 2 * math.Pi
-		val := 0.5*(math.Sin(x+phase)+1) + 0.2*(math.Sin(2*x-phase*0.8)+1)*0.5
-		val = clamp01(val)
-		out[col] = int(val * float64(maxHeight))
-	}
-	return out
-}
-
-// heightBlockSparse — Pattern 5 (Block): low overall height with occasional
+// heightBlockSparse — Pattern 2 (Block): low overall height with occasional
 // deterministic spikes. Ambient, minimal feel.
 func heightBlockSparse(width, maxHeight, frameIdx int) []int {
 	out := make([]int, width)
@@ -190,24 +124,6 @@ func heightBlockSparse(width, maxHeight, frameIdx int) []int {
 		}
 		spike := 0.8 * math.Exp(-(dist*dist)/(2*0.05*0.05))
 		val := clamp01(base + spike)
-		out[col] = int(val * float64(maxHeight))
-	}
-	return out
-}
-
-// heightBrailleOrganic — Pattern 6 (Braille): multi-frequency sine composition
-// producing natural, organic movement without external randomness.
-func heightBrailleOrganic(width, maxHeight, frameIdx int) []int {
-	out := make([]int, width)
-	phase := phaseFor(frameIdx)
-	for col := 0; col < width; col++ {
-		x := float64(col) / float64(width) * 2 * math.Pi
-		// Superposition of four frequencies with different phase offsets
-		v1 := 0.35 * (math.Sin(x+phase) + 1)
-		v2 := 0.25 * (math.Sin(2.3*x+phase*1.1) + 1)
-		v3 := 0.25 * (math.Sin(3.7*x-phase*0.9) + 1)
-		v4 := 0.15 * (math.Sin(5.1*x+phase*1.4) + 1)
-		val := clamp01((v1 + v2 + v3 + v4) / 2.0)
 		out[col] = int(val * float64(maxHeight))
 	}
 	return out

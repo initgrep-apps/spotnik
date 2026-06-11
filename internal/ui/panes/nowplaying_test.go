@@ -840,8 +840,8 @@ func TestNowPlayingPane_SetVisualizerPattern(t *testing.T) {
 	pane := newTestNowPlayingPane(true)
 	pane.SetSize(80, 24)
 
-	pane.SetVisualizerPattern(3)
-	assert.Equal(t, 3, pane.engine.Pattern(), "SetVisualizerPattern should delegate to engine.SetPattern")
+	pane.SetVisualizerPattern(2)
+	assert.Equal(t, 2, pane.engine.Pattern(), "SetVisualizerPattern should delegate to engine.SetPattern")
 }
 
 // TestNowPlayingPane_VKey_EmitsVisualizerChangedMsg verifies that pressing 'v'

@@ -218,7 +218,7 @@ func TestBlockRenderer_ZeroHeight(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPatterns_Count(t *testing.T) {
-	assert.Len(t, Patterns(), 7)
+	assert.Len(t, Patterns(), 3)
 }
 
 func TestPatterns_Names(t *testing.T) {
@@ -241,7 +241,7 @@ func TestPatterns_NonNilHeightFunc(t *testing.T) {
 
 func TestPatterns_BrailleRenderers(t *testing.T) {
 	ps := Patterns()
-	for _, idx := range []int{0, 1, 2, 6} {
+	for _, idx := range []int{0, 1} {
 		_, ok := ps[idx].Renderer.(BrailleRenderer)
 		assert.True(t, ok, "pattern %d should use BrailleRenderer", idx)
 	}
@@ -249,7 +249,7 @@ func TestPatterns_BrailleRenderers(t *testing.T) {
 
 func TestPatterns_BlockRenderers(t *testing.T) {
 	ps := Patterns()
-	for _, idx := range []int{3, 4, 5} {
+	for _, idx := range []int{2} {
 		_, ok := ps[idx].Renderer.(BlockRenderer)
 		assert.True(t, ok, "pattern %d should use BlockRenderer", idx)
 	}
@@ -283,7 +283,7 @@ func TestPatterns_HeightFunc_Deterministic(t *testing.T) {
 
 func TestPatterns_DifferentProfiles(t *testing.T) {
 	// All patterns should produce different height profiles for the same input
-	seen := make([][]int, 0, 7)
+	seen := make([][]int, 0, 3)
 	for _, p := range Patterns() {
 		out := p.HeightFunc(40, 32, 10)
 		seen = append(seen, out)
@@ -305,7 +305,7 @@ func TestPatterns_DifferentProfiles(t *testing.T) {
 
 func TestEngine_NewEngine_PatternCount(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	assert.Equal(t, 7, e.PatternCount())
+	assert.Equal(t, 3, e.PatternCount())
 }
 
 func TestEngine_NewEngine_DefaultPattern(t *testing.T) {
@@ -395,7 +395,7 @@ func TestEngine_CyclePattern(t *testing.T) {
 func TestEngine_CyclePattern_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 3; i++ {
 		e.CyclePattern()
 	}
 	assert.Equal(t, 0, e.Pattern())
@@ -552,7 +552,7 @@ func TestBraillePatterns_OnlyBrailleRunes(t *testing.T) {
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	braillePatterns := []int{0, 1, 2, 6}
+	braillePatterns := []int{0, 1}
 
 	for _, idx := range braillePatterns {
 		ps := Patterns()
@@ -583,7 +583,7 @@ func TestBlockPatterns_OnlyBlockOrSpace(t *testing.T) {
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	blockPatterns := []int{3, 4, 5}
+	blockPatterns := []int{2}
 	fillGlyph := []rune(uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode()))[0]
 
 	for _, idx := range blockPatterns {
@@ -616,9 +616,9 @@ func TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars(t *testing.T) {
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	// Use block-pattern indices (3, 4, 5) as the representative set; in ASCII
+	// Use block-pattern index (2) as the representative set; in ASCII
 	// mode the engine falls back to AsciiBarsRenderer for ALL patterns.
-	blockPatterns := []int{3, 4, 5}
+	blockPatterns := []int{2}
 	for _, idx := range blockPatterns {
 		ps := Patterns()
 		p := ps[idx]
@@ -739,13 +739,13 @@ func TestFullLifecycle(t *testing.T) {
 func TestPatternCycleAll(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	seen := make([]int, 0, 8)
+	seen := make([]int, 0, 4)
 	seen = append(seen, e.Pattern())
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 3; i++ {
 		e.CyclePattern()
 		seen = append(seen, e.Pattern())
 	}
-	assert.Equal(t, 0, seen[7], "after 7 cycles should wrap to 0")
+	assert.Equal(t, 0, seen[3], "after 3 cycles should wrap to 0")
 }
 
 func TestResizeMidAnimation(t *testing.T) {
@@ -822,14 +822,14 @@ func TestEngine_SetSize_SameDimensions_NoReset(t *testing.T) {
 func TestSetPattern_ValidIndex(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	e.SetPattern(3)
-	assert.Equal(t, 3, e.Pattern())
+	e.SetPattern(2)
+	assert.Equal(t, 2, e.Pattern())
 }
 
 func TestSetPattern_OutOfRange_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	// 7 patterns → index 8 wraps to 8 % 7 = 1
-	e.SetPattern(8)
+	// 3 patterns → index 4 wraps to 4 % 3 = 1
+	e.SetPattern(4)
 	assert.Equal(t, 1, e.Pattern())
 }
 

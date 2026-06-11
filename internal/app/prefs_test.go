@@ -191,14 +191,14 @@ func TestAppNew_AppliesSavedPreset(t *testing.T) {
 func TestAppNew_AppliesSavedVisualizer(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Preferences.Theme = "black"
-	cfg.Preferences.Visualizer = 3
+	cfg.Preferences.Visualizer = 2
 
 	a := app.New(cfg, app.AppOptions{})
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 
 	np := a.NowPlayingPane()
 	require.NotNil(t, np, "NowPlayingPane should exist")
-	assert.Equal(t, 3, np.VisualizerPattern(), "App.New should apply saved visualizer to NowPlayingPane")
+	assert.Equal(t, 2, np.VisualizerPattern(), "App.New should apply saved visualizer to NowPlayingPane")
 }
 
 // TestAppNew_InvalidPreset_NoOp verifies that an out-of-range Preset in config
@@ -228,9 +228,9 @@ func TestAppNew_InvalidVisualizer_Wraps(t *testing.T) {
 		a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 		np := a.NowPlayingPane()
 		require.NotNil(t, np)
-		// Must be in [0, patternCount). 99 % 7 = 1
+		// Must be in [0, patternCount). 99 % 3 = 0
 		pat := np.VisualizerPattern()
-		assert.True(t, pat >= 0 && pat < 7, "out-of-range visualizer should wrap to valid index, got %d", pat)
+		assert.True(t, pat >= 0 && pat < 3, "out-of-range visualizer should wrap to valid index, got %d", pat)
 	})
 }
 
