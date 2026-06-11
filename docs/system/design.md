@@ -106,7 +106,7 @@ Stats page panes, and Stats page number keys (`1`–`5`) do not toggle Music pag
 
 - Keys `1`-`8` **toggle** pane visibility on Music page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
 - `0` toggles between Music and Stats
-- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`) always route to NowPlaying regardless of focus
+- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`, `Shift+←`, `Shift+→`) always route to NowPlaying regardless of focus
 - `A` for "add to queue" in search overlay and list panes
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
@@ -711,7 +711,8 @@ Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`5` toggle pane visi
 | Key | Action |
 |-----|--------|
 | `Space` | Play/pause |
-| `←` / `→` | Previous/next track |
+| `←` / `→` | Seek back/forward 5 s |
+| `Shift+←` / `Shift+→` | Previous/next track |
 | `+` / `-` | Volume up/down |
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat |
@@ -744,7 +745,8 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `p` | Cycle to next preset | Current page |
 | **Playback (always route to NowPlaying)** | | |
 | `Space` | Play/pause | Always |
-| `←` / `→` | Previous/next track | Always |
+| `←` / `→` | Seek back/forward 5 s | Always |
+| `Shift+←` / `Shift+→` | Previous/next track | Always |
 | `+` / `-` | Volume up/down | Always |
 | `s` | Toggle shuffle | Always |
 | `r` | Cycle repeat | Always |
