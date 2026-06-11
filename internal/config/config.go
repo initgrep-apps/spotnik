@@ -32,7 +32,7 @@ type PreferencesConfig struct {
 	// Negative values are clamped to 0 on load.
 	Preset int `toml:"preset"`
 
-	// Visualizer is the visualizer pattern index (0-5).
+	// Visualizer is the visualizer pattern index (0-3).
 	// Negative values are clamped to 0 on load.
 	Visualizer int `toml:"visualizer"`
 }
@@ -225,7 +225,7 @@ const defaultTemplate = `# Spotnik configuration
 [preferences]
 theme = "black"
 # preset = 0          # Music page layout preset index (0-based)
-# visualizer = 0      # Visualizer pattern index (0-5)
+# visualizer = 0      # Visualizer pattern index (0-3)
 
 [cli]
 # CLI palette: "auto" (default), "fixed", or "theme"
