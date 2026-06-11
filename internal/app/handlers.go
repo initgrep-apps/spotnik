@@ -661,14 +661,46 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Without this, any domain with a sentinel set at the time of the 429 would be
 		// permanently blocked from fetching again.
 		a.clearAllFetchingSentinels()
-		return a, tea.Batch(
+
+		// Forward rate-limit errors to overlays that are open and waiting for data.
+		// During backoff ALL requests are blocked (gateway rejects immediately), so
+		// even if the 429 came from a playback fetch, the overlay's fetch would also
+		// fail. Without this delivery, overlays hang on "Loading..." or show misleading
+		// empty states ("No devices found") instead of proper error messages.
+		var overlayCmds []tea.Cmd
+		if a.profileOverlayOpen && a.store.UserProfile().ID == "" {
+			updated, cmd := a.profilePane.Update(panes.UserProfileLoadedMsg{
+				Err: fmt.Errorf("rate limited, retry in %ds", backoff),
+			})
+			if p, ok := updated.(*panes.ProfileOverlay); ok {
+				a.profilePane = p
+			}
+			if cmd != nil {
+				overlayCmds = append(overlayCmds, cmd)
+			}
+		}
+		if a.deviceOverlayOpen && a.store.DevicesFetchedAt().IsZero() {
+			updated, cmd := a.devicePane.Update(panes.DevicesLoadedMsg{
+				Err: fmt.Errorf("rate limited"),
+			})
+			if d, ok := updated.(*panes.DeviceOverlay); ok {
+				a.devicePane = d
+			}
+			if cmd != nil {
+				overlayCmds = append(overlayCmds, cmd)
+			}
+		}
+
+		cmds := []tea.Cmd{
 			a.toasts.Cmd(uikit.Toast{
 				Intent: uikit.ToastRateLimit,
 				Title:  "Rate-limited",
 				Body:   fmt.Sprintf("Retrying in %ds.", backoff),
 			}),
 			tea.Tick(time.Duration(backoff)*time.Second, func(_ time.Time) tea.Msg { return throttleExpiredMsg{} }),
-		)
+		}
+		cmds = append(cmds, overlayCmds...)
+		return a, tea.Batch(cmds...)
 
 	case unauthorizedMsg:
 		// 401 from any Spotify API call — attempt a token refresh.
