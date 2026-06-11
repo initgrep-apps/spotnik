@@ -128,3 +128,54 @@ func heightBlockSparse(width, maxHeight, frameIdx int) []int {
 	}
 	return out
 }
+
+// heightWinampEQ — Pattern 3 (DensityRenderer): dense equalizer bars with
+// small per-column variation. Base height near max (0.75) with ±0.25 sine
+// oscillation per column. Creates the classic 90s equalizer look where every
+// bar is active with visible variation.
+func heightWinampEQ(width, maxHeight, frameIdx int) []int {
+	out := make([]int, width)
+	phase := phaseFor(frameIdx)
+	for col := 0; col < width; col++ {
+		x := float64(col) / float64(width) * 2 * math.Pi
+		val := 0.75 + 0.25*math.Sin(x*3+phase)*math.Cos(x+phase*0.5)
+		val = clamp01(val)
+		out[col] = int(val * float64(maxHeight))
+	}
+	return out
+}
+
+// heightMatrixRain — Pattern 4 (CharRenderer): column-staggered binary rain.
+// Each column has an independent fall phase offset: colPhase = (phase + col*0.3) % (2*π).
+// Stream height oscillates between 0.3 and 0.8 of maxHeight.
+// Produces heights per column that create falling streaks.
+func heightMatrixRain(width, maxHeight, frameIdx int) []int {
+	out := make([]int, width)
+	phase := phaseFor(frameIdx)
+	for col := 0; col < width; col++ {
+		colPhase := math.Mod(phase+float64(col)*0.3, 2*math.Pi)
+		// Height oscillates between 0.3 and 0.8 of maxHeight
+		h := 0.3 + 0.5*(math.Sin(colPhase)+1)/2
+		out[col] = int(h * float64(maxHeight))
+		if out[col] < 1 {
+			out[col] = 1
+		}
+	}
+	return out
+}
+
+// heightSpectrumSweep — Pattern 5 (SpectrumRenderer): smooth sine wave with
+// column-shifted color boundaries. Height function is identical to the former
+// Block Waveform pattern — the visual distinction comes from the renderer's
+// per-column gradient shift.
+func heightSpectrumSweep(width, maxHeight, frameIdx int) []int {
+	out := make([]int, width)
+	phase := phaseFor(frameIdx)
+	for col := 0; col < width; col++ {
+		x := float64(col) / float64(width) * 2 * math.Pi
+		val := 0.5*(math.Sin(x+phase)+1) + 0.2*(math.Sin(2*x-phase*0.8)+1)*0.5
+		val = clamp01(val)
+		out[col] = int(val * float64(maxHeight))
+	}
+	return out
+}

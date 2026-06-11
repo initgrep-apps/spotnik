@@ -1031,6 +1031,78 @@ func TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// New HeightFunc tests
+// ---------------------------------------------------------------------------
+
+func TestHeightWinampEQ_Range(t *testing.T) {
+	for f := 0; f < 40; f++ {
+		out := heightWinampEQ(20, 16, f)
+		assert.Len(t, out, 20)
+		for _, h := range out {
+			assert.True(t, h >= 0 && h <= 16, "height %d out of range", h)
+		}
+	}
+}
+
+func TestHeightWinampEQ_Deterministic(t *testing.T) {
+	a := heightWinampEQ(20, 16, 7)
+	b := heightWinampEQ(20, 16, 7)
+	assert.Equal(t, a, b)
+}
+
+func TestHeightWinampEQ_DifferentFromBlockSparse(t *testing.T) {
+	wq := heightWinampEQ(40, 32, 10)
+	bs := heightBlockSparse(40, 32, 10)
+	assert.NotEqual(t, wq, bs, "Winamp EQ should have different profile than Block Sparse")
+}
+
+func TestHeightMatrixRain_Range(t *testing.T) {
+	for f := 0; f < 40; f++ {
+		out := heightMatrixRain(20, 16, f)
+		assert.Len(t, out, 20)
+		for _, h := range out {
+			assert.True(t, h >= 1 && h <= 16,
+				"height %d out of range [1,16]", h)
+		}
+	}
+}
+
+func TestHeightMatrixRain_Deterministic(t *testing.T) {
+	a := heightMatrixRain(20, 16, 7)
+	b := heightMatrixRain(20, 16, 7)
+	assert.Equal(t, a, b)
+}
+
+func TestHeightMatrixRain_ColumnStagger(t *testing.T) {
+	// Adjacent columns should have different heights (staggered phase)
+	out := heightMatrixRain(20, 16, 0)
+	differences := 0
+	for i := 1; i < len(out); i++ {
+		if out[i] != out[i-1] {
+			differences++
+		}
+	}
+	assert.Greater(t, differences, 0,
+		"adjacent columns should have different heights due to phase stagger")
+}
+
+func TestHeightSpectrumSweep_Range(t *testing.T) {
+	for f := 0; f < 40; f++ {
+		out := heightSpectrumSweep(20, 16, f)
+		assert.Len(t, out, 20)
+		for _, h := range out {
+			assert.True(t, h >= 0 && h <= 16, "height %d out of range", h)
+		}
+	}
+}
+
+func TestHeightSpectrumSweep_Deterministic(t *testing.T) {
+	a := heightSpectrumSweep(20, 16, 7)
+	b := heightSpectrumSweep(20, 16, 7)
+	assert.Equal(t, a, b)
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
