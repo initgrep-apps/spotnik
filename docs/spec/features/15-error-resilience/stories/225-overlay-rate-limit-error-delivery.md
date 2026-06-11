@@ -1,7 +1,7 @@
 ---
 title: "Fix: Overlay rate-limit error delivery"
 feature: 15-error-resilience
-status: open
+status: done
 ---
 
 ## Background

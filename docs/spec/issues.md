@@ -151,3 +151,21 @@ Items to log:
 6. **`npInfoMin` capping behavior not directly tested** — At `SetSize(50, 14)`, `cw=50`, `infoWidth=50/3=16 < npInfoMin=28`, so cap to 28. No test measures this.
 
 7. **`VisualizerPattern()` uncovered** — Exported getter has 0% coverage; trivial but should have one-line test per project rules.
+
+---
+
+### Device overlay stale error on reopen
+
+**Found:** 2026-06-11 | **Source:** PR #320 Review
+**Feature:** 15-error-resilience (story 225)
+
+`closeDeviceOverlay()` does not create a fresh `DeviceOverlay` (unlike `closeProfileOverlay()` which recreates on close). The `d.err` field persists across close/reopen, briefly showing a stale error state before the new fetch completes. Pre-existing issue made more visible by story 225's error-delivery fix.
+
+---
+
+### Profile overlay error persists after backoff expires
+
+**Found:** 2026-06-11 | **Source:** PR #320 Review
+**Feature:** 15-error-resilience (story 225)
+
+`throttleExpiredMsg` does not re-trigger a profile fetch, so the "Profile unavailable" error state persists until the user closes and reopens the overlay. There is no periodic profile polling mechanism. Pre-existing gap — not introduced by story 225.
