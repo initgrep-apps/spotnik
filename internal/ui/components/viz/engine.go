@@ -77,7 +77,7 @@ func (e *Engine) SetSize(width, height int) {
 
 // SetPlaying controls animation state.
 // When playing, Advance() increments the frame index.
-// When paused, CurrentFrame() returns a blank frame.
+// When paused, CurrentFrame() returns the last frame frozen in place.
 func (e *Engine) SetPlaying(playing bool) {
 	e.playing = playing
 }
@@ -92,21 +92,11 @@ func (e *Engine) Advance() {
 }
 
 // CurrentFrame returns the current precomputed frame.
-// Returns a blank Frame (all empty StyledLines) when paused.
+// When paused, returns the last frame frozen in place (not blank).
 // Returns an empty Frame before SetSize is called.
 func (e *Engine) CurrentFrame() Frame {
 	if len(e.frames) == 0 {
 		return Frame{}
-	}
-	if !e.playing {
-		// Return a blank frame with the correct dimensions and colors,
-		// but empty text.
-		blank := make(Frame, e.height)
-		colors := e.buildColors(e.height)
-		for i := range blank {
-			blank[i] = StyledLine{Text: "", Color: colors[i]}
-		}
-		return blank
 	}
 	return e.frames[e.frameIdx]
 }

@@ -338,13 +338,21 @@ func TestEngine_Advance_Paused(t *testing.T) {
 	assert.Equal(t, 0, e.FrameIndex())
 }
 
-func TestEngine_CurrentFrame_Paused_IsBlank(t *testing.T) {
+func TestEngine_CurrentFrame_Paused_FreezesLastFrame(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
+	e.SetPlaying(true)
+	e.Advance()
+	playingFrame := e.CurrentFrame()
+	require.NotEmpty(t, playingFrame)
+
+	// Pause — frame should freeze at the same content as when playing
 	e.SetPlaying(false)
-	f := e.CurrentFrame()
-	for _, line := range f {
-		assert.Empty(t, line.Text, "paused frame should have empty text")
+	pausedFrame := e.CurrentFrame()
+	require.Len(t, pausedFrame, len(playingFrame))
+	for i := range pausedFrame {
+		assert.Equal(t, playingFrame[i].Text, pausedFrame[i].Text,
+			"paused frame row %d should match playing frame", i)
 	}
 }
 
@@ -526,25 +534,14 @@ func TestAllPatterns_PlayingNonEmpty(t *testing.T) {
 	}
 }
 
-func TestAllPatterns_PausedBlank(t *testing.T) {
-	th := theme.Load("black")
-	ps := Patterns()
-
-	for i, p := range ps {
-		t.Run(p.Name, func(t *testing.T) {
-			e := NewEngine(th)
-			for e.Pattern() != i {
-				e.CyclePattern()
-			}
-			e.SetSize(20, 4)
-			e.SetPlaying(false)
-			f := e.CurrentFrame()
-			for _, line := range f {
-				assert.Empty(t, line.Text,
-					"pattern %d (%s): paused frame should be blank", i, p.Name)
-			}
-		})
-	}
+func TestEngine_CurrentFrame_Paused_CyclePattern(t *testing.T) {
+	e := NewEngine(theme.Load("black"))
+	e.SetSize(20, 4)
+	e.SetPlaying(false)
+	// Should not panic and should return a valid frame
+	e.CyclePattern()
+	f := e.CurrentFrame()
+	assert.Len(t, f, 4, "paused cycle should still produce a frame")
 }
 
 func TestBraillePatterns_OnlyBrailleRunes(t *testing.T) {
