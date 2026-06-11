@@ -67,7 +67,7 @@ const (
 var opTitle = map[Operation]string{
 	OpPlayback:       "Playback command failed",
 	OpVolume:         "Volume change failed",
-	OpSeek:            "Seek failed",
+	OpSeek:           "Seek failed",
 	OpSearch:         "Search failed",
 	OpQueue:          "Queue update failed",
 	OpDevices:        "Failed to load devices",
@@ -88,7 +88,7 @@ var opTitle = map[Operation]string{
 var opForbiddenBody = map[Operation]string{
 	OpPlayback:       "Premium required for this action.",
 	OpVolume:         "Premium required for volume control.",
-	OpSeek:            "Premium required for seek control.",
+	OpSeek:           "Premium required for seek control.",
 	OpSearch:         "Premium required for search.",
 	OpQueue:          "No active device. Open Spotify first.",
 	OpAddToQueue:     "No active device. Open Spotify first.",

@@ -65,6 +65,7 @@ type SeekAppliedMsg struct {
 	Seq   int
 	Err   error
 }
+
 // the volume-specific path so the bar's pending state is managed correctly.
 //
 // On success: Vol holds the confirmed volume, Err is nil.

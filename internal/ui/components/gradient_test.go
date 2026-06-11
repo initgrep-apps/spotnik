@@ -629,15 +629,15 @@ func TestSeekBar_HandleKey_NoOpOnZeroDuration(t *testing.T) {
 
 func TestSeekBar_HandleKey_AccumulatesFromPending(t *testing.T) {
 	b := newTestSeekBar(50)
-	b.HandleKey(5000, 30000, 180000)  // +5s from 30s → 35s, seq=1
-	b.HandleKey(5000, 30000, 180000)  // +5s from 35s (pending) → 40s, seq=2
+	b.HandleKey(5000, 30000, 180000) // +5s from 30s → 35s, seq=1
+	b.HandleKey(5000, 30000, 180000) // +5s from 35s (pending) → 40s, seq=2
 	assert.Equal(t, 40000, b.Current(), "should accumulate from pending value")
 }
 
 func TestSeekBar_HandleDebounce_StaleRejected(t *testing.T) {
 	b := newTestSeekBar(50)
-	b.HandleKey(5000, 30000, 180000)  // seq=1
-	b.HandleKey(5000, 30000, 180000)  // seq=2 — supersedes seq=1
+	b.HandleKey(5000, 30000, 180000) // seq=1
+	b.HandleKey(5000, 30000, 180000) // seq=2 — supersedes seq=1
 	matched, _, _ := b.HandleDebounce(SeekDebounceTickMsg{TargetMs: 35000, Seq: 1})
 	assert.False(t, matched, "stale seq must be discarded")
 }
@@ -673,7 +673,7 @@ func TestSeekBar_CancelPending_SeqMatch(t *testing.T) {
 func TestSeekBar_SetConfirmed_ClearsPendingOnMatch(t *testing.T) {
 	b := newTestSeekBar(50)
 	b.HandleKey(5000, 30000, 180000) // current=35000, pending
-	b.SetPositionConfirmed(35000)     // value matches current → clear pending
+	b.SetPositionConfirmed(35000)    // value matches current → clear pending
 	assert.Equal(t, 35000, b.Current())
 	assert.False(t, b.HasPending(), "should clear pending when value matches current")
 }
@@ -698,7 +698,7 @@ func TestSeekBar_Render_UsesPendingWhenActive(t *testing.T) {
 	b.SetTrackDuration(180000)
 	b.SetPositionConfirmed(30000)
 	b.HandleKey(5000, 30000, 180000) // pending: current=35000
-	out := b.Render(30000, 180000)     // progress param is overridden by pending
+	out := b.Render(30000, 180000)   // progress param is overridden by pending
 	assert.Contains(t, out, "0:35", "should show pending position (35000ms)")
 }
 

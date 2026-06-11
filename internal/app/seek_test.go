@@ -97,8 +97,8 @@ func TestApp_SeekDebounceTickMsg_ForwardsToPane(t *testing.T) {
 	a := newSeekTestApp(mock)
 	// Seed store so confirmedProgress() returns 25000 and confirmedDuration() returns 180000.
 	a.Store().SetPlaybackState(&api.PlaybackState{
-		IsPlaying: true,
-		Item:     &domain.Track{DurationMs: 180000},
+		IsPlaying:  true,
+		Item:       &domain.Track{DurationMs: 180000},
 		ProgressMs: 25000,
 	})
 

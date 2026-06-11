@@ -589,7 +589,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
-
 	case components.SeekDebounceTickMsg:
 		// Forward seek debounce tick to NowPlayingPane. The pane checks the seq
 		// and either emits SeekIntentMsg (matched) or returns nil (stale).

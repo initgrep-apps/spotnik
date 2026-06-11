@@ -34,7 +34,7 @@ func TestDebounceTracker_HandleKey_ClampsAtMin(t *testing.T) {
 
 func TestDebounceTracker_HandleKey_AccumulatesFromPending(t *testing.T) {
 	var d DebounceTracker
-	d.HandleKey(5, 50, 0, 100) // seq=1, current=55, pending
+	d.HandleKey(5, 50, 0, 100)        // seq=1, current=55, pending
 	seq := d.HandleKey(5, 50, 0, 100) // must use current=55 as base, not confirmed=50
 	assert.Equal(t, 60, d.Current(), "should accumulate from pending value")
 	assert.Equal(t, 2, seq, "second HandleKey should return seq=2")
@@ -111,7 +111,7 @@ func TestDebounceTracker_SetConfirmed_UpdatesWhenNoPending(t *testing.T) {
 func TestDebounceTracker_SetConfirmed_BlocksWhenPendingMismatch(t *testing.T) {
 	var d DebounceTracker
 	d.HandleKey(5, 50, 0, 100) // current=55, pending
-	d.SetConfirmed(30)          // should be ignored (pending, value != current)
+	d.SetConfirmed(30)         // should be ignored (pending, value != current)
 	assert.Equal(t, 55, d.Current(), "should keep pending value")
 	assert.True(t, d.HasPending(), "should keep pending flag")
 }
@@ -119,7 +119,7 @@ func TestDebounceTracker_SetConfirmed_BlocksWhenPendingMismatch(t *testing.T) {
 func TestDebounceTracker_SetConfirmed_ClearsPendingOnMatch(t *testing.T) {
 	var d DebounceTracker
 	d.HandleKey(5, 50, 0, 100) // current=55, pending
-	d.SetConfirmed(55)          // value matches current → clear pending
+	d.SetConfirmed(55)         // value matches current → clear pending
 	assert.Equal(t, 55, d.Current())
 	assert.False(t, d.HasPending(), "should clear pending when value matches current")
 }
@@ -130,7 +130,7 @@ func TestDebounceTracker_SetConfirmed_ClearsPendingOnMatch(t *testing.T) {
 
 func TestDebounceTracker_ConfirmFromAPI_SeqMatch(t *testing.T) {
 	var d DebounceTracker
-	d.HandleKey(5, 50, 0, 100) // seq=1, current=55, pending
+	d.HandleKey(5, 50, 0, 100)                 // seq=1, current=55, pending
 	matched, _, tickSeq := d.HandleDebounce(1) // d.seq→2, tickSeq=1
 	requireTrue(t, matched)
 	d.ConfirmFromAPI(tickSeq, 55) // d.seq (2) == tickSeq+1 (2) → match
@@ -140,10 +140,10 @@ func TestDebounceTracker_ConfirmFromAPI_SeqMatch(t *testing.T) {
 
 func TestDebounceTracker_ConfirmFromAPI_SeqMismatch(t *testing.T) {
 	var d DebounceTracker
-	d.HandleKey(5, 50, 0, 100) // seq=1
+	d.HandleKey(5, 50, 0, 100)                 // seq=1
 	matched, _, tickSeq := d.HandleDebounce(1) // d.seq→2, tickSeq=1
 	requireTrue(t, matched)
-	d.HandleKey(5, 50, 0, 100) // seq=3 — new burst supersedes
+	d.HandleKey(5, 50, 0, 100)    // seq=3 — new burst supersedes
 	d.ConfirmFromAPI(tickSeq, 55) // d.seq (4) != tickSeq+1 (2) → no-op
 	assert.True(t, d.HasPending(), "hasPending should stay true on seq mismatch")
 }
@@ -154,7 +154,7 @@ func TestDebounceTracker_ConfirmFromAPI_SeqMismatch(t *testing.T) {
 
 func TestDebounceTracker_CancelPending_SeqMatch(t *testing.T) {
 	var d DebounceTracker
-	d.HandleKey(5, 50, 0, 100) // seq=1, current=55
+	d.HandleKey(5, 50, 0, 100)                 // seq=1, current=55
 	matched, _, tickSeq := d.HandleDebounce(1) // d.seq→2, tickSeq=1
 	requireTrue(t, matched)
 	d.CancelPending(tickSeq, 50) // d.seq (2) == tickSeq+1 (2) → match, revert to confirmed store value
@@ -164,10 +164,10 @@ func TestDebounceTracker_CancelPending_SeqMatch(t *testing.T) {
 
 func TestDebounceTracker_CancelPending_SeqMismatch(t *testing.T) {
 	var d DebounceTracker
-	d.HandleKey(5, 50, 0, 100) // seq=1
+	d.HandleKey(5, 50, 0, 100)                 // seq=1
 	matched, _, tickSeq := d.HandleDebounce(1) // d.seq→2, tickSeq=1
 	requireTrue(t, matched)
-	d.HandleKey(5, 50, 0, 100) // seq=3 — new burst
+	d.HandleKey(5, 50, 0, 100)   // seq=3 — new burst
 	d.CancelPending(tickSeq, 50) // d.seq (4) != tickSeq+1 (2) → no-op
 	assert.True(t, d.HasPending(), "should keep pending on seq mismatch")
 }
