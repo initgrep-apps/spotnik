@@ -51,9 +51,13 @@ func (b *GradientSeekBar) SetTrackDuration(ms int) {
 	b.trackDuration = ms
 }
 
-// SetPositionConfirmed delegates to DebounceTracker.SetConfirmed for the seek
-// position, reconciling the bar with the authoritative server value.
+// SetPositionConfirmed reconciles the seek bar with the authoritative server value.
+// For seek positions, exact match almost never happens (playback advances between
+// polls), so this uses ClearPendingOnProximity instead of SetConfirmed's exact-match
+// check. When the poll position has reached or passed the pending seek target,
+// hasPending is cleared and the bar resumes normal polling.
 func (b *GradientSeekBar) SetPositionConfirmed(posMs int) {
+	b.ClearPendingOnProximity(posMs)
 	b.SetConfirmed(posMs)
 }
 
