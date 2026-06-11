@@ -630,15 +630,6 @@ func confirmedProgress(s state.StateReader) int {
 	return 0
 }
 
-// confirmedDuration reads the track duration from the store.
-// Returns 0 when playback state or track info is unavailable.
-func confirmedDuration(s state.StateReader) int {
-	if ps := s.PlaybackState(); ps != nil && ps.Item != nil {
-		return ps.Item.DurationMs
-	}
-	return 0
-}
-
 // DeviceName returns the currently active device name from the store.
 // Used by the root app's header bar.
 func DeviceName(store state.StateReader) string {

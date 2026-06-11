@@ -54,7 +54,7 @@ func (b *GradientSeekBar) SetTrackDuration(ms int) {
 // SetPositionConfirmed delegates to DebounceTracker.SetConfirmed for the seek
 // position, reconciling the bar with the authoritative server value.
 func (b *GradientSeekBar) SetPositionConfirmed(posMs int) {
-	b.DebounceTracker.SetConfirmed(posMs)
+	b.SetConfirmed(posMs)
 }
 
 // HandleKey computes the new pending position, updates the bar immediately so
