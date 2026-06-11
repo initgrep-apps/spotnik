@@ -123,11 +123,9 @@ type VolumeDebounceTickMsg struct {
 // The bar is a smart component: call HandleKey on volume keypresses, HandleDebounce
 // on VolumeDebounceTickMsg, and SetConfirmed when a Spotify poll resolves.
 type GradientVolumeBar struct {
-	th         theme.Theme
-	width      int  // total component width; 0 uses default
-	currentVol int  // displayed volume: pending value or last confirmed value
-	hasPending bool // true while a debounce tick is in flight
-	seq        int  // monotonically increasing; stale ticks have a lower seq
+	DebounceTracker
+	th    theme.Theme
+	width int // total component width; 0 uses default
 }
 
 // NewGradientVolumeBar creates a gradient volume bar using theme tokens.
@@ -140,79 +138,42 @@ func (b *GradientVolumeBar) SetWidth(width int) {
 	b.width = width
 }
 
-// SetConfirmed updates currentVol from the authoritative Spotify poll value.
-// When hasPending is true, it only clears hasPending if the poll matches the
-// API-confirmed currentVol, blocking stale polls from snapping the bar back.
-// When hasPending is false, it updates currentVol directly.
+// SetConfirmed delegates to DebounceTracker.SetConfirmed for volume.
 func (b *GradientVolumeBar) SetConfirmed(vol int) {
-	if b.hasPending {
-		if vol == b.currentVol {
-			b.hasPending = false
-		}
-		return
-	}
-	b.currentVol = vol
+	b.DebounceTracker.SetConfirmed(vol)
 }
 
-// HandleKey computes the new pending volume, updates currentVol immediately so
-// the bar renders the new value on the next frame, increments seq to invalidate
-// any in-flight debounce tick, and returns a 300 ms debounce cmd.
+// HandleKey computes the new pending volume, updates the bar immediately so
+// the bar renders the new value on the next frame, and returns a 300 ms debounce
+// cmd wrapping VolumeDebounceTickMsg. Returns nil when the bar has no valid range.
 //
 // delta must be +1 or -1. confirmedVol is the store's current device volume,
-// used as the starting base only when no pending intent exists (hasPending == false).
+// used as the starting base only when no pending intent exists.
 func (b *GradientVolumeBar) HandleKey(delta, confirmedVol int) tea.Cmd {
-	base := confirmedVol
-	if b.hasPending {
-		base = b.currentVol
+	seq := b.DebounceTracker.HandleKey(delta, confirmedVol, 0, 100)
+	if seq == -1 {
+		return nil
 	}
-	newVol := base + delta
-	if newVol > 100 {
-		newVol = 100
-	}
-	if newVol < 0 {
-		newVol = 0
-	}
-	b.currentVol = newVol
-	b.hasPending = true
-	b.seq++
-	target, seq := newVol, b.seq
+	target := b.Current()
 	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg {
 		return VolumeDebounceTickMsg{TargetVol: target, Seq: seq}
 	})
 }
 
 // HandleDebounce checks whether the debounce tick is current.
-// Returns (true, targetVol, intentSeq) when matched — the caller must forward
-// intentSeq through VolumeIntentMsg so ConfirmFromAPI/CancelPending can guard
-// against concurrent bursts. hasPending stays true until the API call returns.
-// Returns (false, 0, 0) when the tick is stale (newer keypress superseded it).
+// Delegates to DebounceTracker.HandleDebounce for seq-based stale rejection.
 func (b *GradientVolumeBar) HandleDebounce(m VolumeDebounceTickMsg) (matched bool, targetVol, intentSeq int) {
-	if m.Seq != b.seq {
-		return false, 0, 0
-	}
-	b.seq++ // double-fire guard: any future tick with this same seq is now stale
-	return true, m.TargetVol, m.Seq
+	return b.DebounceTracker.HandleDebounce(m.Seq)
 }
 
-// ConfirmFromAPI sets currentVol to the API-confirmed value but keeps hasPending true.
-// hasPending is only cleared by SetConfirmed when a subsequent poll returns the same
-// volume, preventing stale in-flight polls from snapping the bar back to an old value.
+// ConfirmFromAPI delegates to DebounceTracker.ConfirmFromAPI.
 func (b *GradientVolumeBar) ConfirmFromAPI(intentSeq, vol int) {
-	if b.seq == intentSeq+1 {
-		b.currentVol = vol
-		// hasPending stays true — SetConfirmed clears it when a poll matches.
-	}
+	b.DebounceTracker.ConfirmFromAPI(intentSeq, vol)
 }
 
-// CancelPending reverts currentVol to the last confirmed store value and clears
-// hasPending, but only when no newer burst has started. Call this on API error
-// so the bar immediately snaps back to the real server-side volume instead of
-// leaving the user at an optimistic value that was never applied.
+// CancelPending delegates to DebounceTracker.CancelPending.
 func (b *GradientVolumeBar) CancelPending(intentSeq, confirmedVol int) {
-	if b.seq == intentSeq+1 {
-		b.hasPending = false
-		b.currentVol = confirmedVol
-	}
+	b.DebounceTracker.CancelPending(intentSeq, confirmedVol)
 }
 
 // Render returns the volume bar string using the bar's current volume state.
@@ -222,7 +183,7 @@ func (b *GradientVolumeBar) CancelPending(intentSeq, confirmedVol int) {
 // thresholds (▏▎▍▌▋▊▉) so the bar moves smoothly on every 1% step.
 // Empty cells use ░ (GlyphBarEmpty).
 func (b *GradientVolumeBar) Render() string {
-	volume := b.currentVol
+	volume := b.Current()
 	if volume > 100 {
 		volume = 100
 	}
