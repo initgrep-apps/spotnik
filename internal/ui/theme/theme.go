@@ -67,6 +67,19 @@ type Theme interface {
 	// Visualizer — braille-dot audio spectrum (Feature 44)
 	VisualizerFg() lipgloss.Color // Braille dot foreground
 
+	// VizGradient1–7 are the seven-stage gradient palette used by the
+	// visualizer renderer for per-segment / per-column colour interpolation
+	// (Story 223).  They form a continuous ramp from dark base → mid cool →
+	// bright accent → white hot, chosen so that every pattern looks good on
+	// every theme without hard-coding hex values in the renderer.
+	VizGradient1() lipgloss.Color // Darkest background stage
+	VizGradient2() lipgloss.Color // Low-mid stage
+	VizGradient3() lipgloss.Color // Mid stage
+	VizGradient4() lipgloss.Color // Bright cool accent
+	VizGradient5() lipgloss.Color // Bright warm accent
+	VizGradient6() lipgloss.Color // Near-white hot stage
+	VizGradient7() lipgloss.Color // White peak / highlight
+
 	// Tables — dense column header text (Feature 43+)
 	TableHeader() lipgloss.Color // Column header text
 

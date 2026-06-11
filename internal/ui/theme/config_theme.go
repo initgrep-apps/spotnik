@@ -53,6 +53,13 @@ type themeColors struct {
 	Gradient1        string `toml:"gradient1"`
 	Gradient2        string `toml:"gradient2"`
 	Gradient3        string `toml:"gradient3"`
+	VizGradient1     string `toml:"viz_gradient1"`
+	VizGradient2     string `toml:"viz_gradient2"`
+	VizGradient3     string `toml:"viz_gradient3"`
+	VizGradient4     string `toml:"viz_gradient4"`
+	VizGradient5     string `toml:"viz_gradient5"`
+	VizGradient6     string `toml:"viz_gradient6"`
+	VizGradient7     string `toml:"viz_gradient7"`
 	VisualizerFg     string `toml:"visualizer_fg"`
 	TableHeader      string `toml:"table_header"`
 	PresetIndicator  string `toml:"preset_indicator"`
@@ -237,6 +244,27 @@ func (t *ConfigTheme) Gradient2() lipgloss.Color { return lipgloss.Color(t.c.Gra
 
 // Gradient3 returns the high volume color.
 func (t *ConfigTheme) Gradient3() lipgloss.Color { return lipgloss.Color(t.c.Gradient3) }
+
+// VizGradient1 returns the darkest visualizer gradient stage.
+func (t *ConfigTheme) VizGradient1() lipgloss.Color { return lipgloss.Color(t.c.VizGradient1) }
+
+// VizGradient2 returns the low-mid visualizer gradient stage.
+func (t *ConfigTheme) VizGradient2() lipgloss.Color { return lipgloss.Color(t.c.VizGradient2) }
+
+// VizGradient3 returns the mid visualizer gradient stage.
+func (t *ConfigTheme) VizGradient3() lipgloss.Color { return lipgloss.Color(t.c.VizGradient3) }
+
+// VizGradient4 returns the bright cool accent visualizer gradient stage.
+func (t *ConfigTheme) VizGradient4() lipgloss.Color { return lipgloss.Color(t.c.VizGradient4) }
+
+// VizGradient5 returns the bright warm accent visualizer gradient stage.
+func (t *ConfigTheme) VizGradient5() lipgloss.Color { return lipgloss.Color(t.c.VizGradient5) }
+
+// VizGradient6 returns the near-white hot visualizer gradient stage.
+func (t *ConfigTheme) VizGradient6() lipgloss.Color { return lipgloss.Color(t.c.VizGradient6) }
+
+// VizGradient7 returns the white peak / highlight visualizer gradient stage.
+func (t *ConfigTheme) VizGradient7() lipgloss.Color { return lipgloss.Color(t.c.VizGradient7) }
 
 // Visualizer
 

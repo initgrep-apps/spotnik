@@ -56,7 +56,7 @@ func TestDefaultThemeID_IsBlack(t *testing.T) {
 // ---- Task 0b.2 tests: all five themes ----
 
 // allMethodsReturnNonEmpty verifies that every method on a Theme returns a non-empty value.
-// This covers all 43 methods: 23 original + 16 new tokens (Feature 40) + 4 column tokens (Feature 70).
+// This covers all 50 methods: 23 original + 16 new tokens (Feature 40) + 4 column tokens (Feature 70) + 7 viz_gradient tokens (Story 223).
 func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	t.Helper()
 	// Original 26 tokens
@@ -111,6 +111,14 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.Accent()), "Accent()")
 	// Story 221: OverlayBackground token (aliased to Base in built-in themes)
 	assert.NotEmpty(t, string(th.OverlayBackground()), "OverlayBackground()")
+	// Story 223: VizGradient1–7 tokens
+	assert.NotEmpty(t, string(th.VizGradient1()), "VizGradient1()")
+	assert.NotEmpty(t, string(th.VizGradient2()), "VizGradient2()")
+	assert.NotEmpty(t, string(th.VizGradient3()), "VizGradient3()")
+	assert.NotEmpty(t, string(th.VizGradient4()), "VizGradient4()")
+	assert.NotEmpty(t, string(th.VizGradient5()), "VizGradient5()")
+	assert.NotEmpty(t, string(th.VizGradient6()), "VizGradient6()")
+	assert.NotEmpty(t, string(th.VizGradient7()), "VizGradient7()")
 }
 
 func TestAllThemes_ImplementInterface(t *testing.T) {
@@ -172,6 +180,13 @@ type newTokenWant struct {
 	gradient1                string
 	gradient2                string
 	gradient3                string
+	vizGradient1             string
+	vizGradient2             string
+	vizGradient3             string
+	vizGradient4             string
+	vizGradient5             string
+	vizGradient6             string
+	vizGradient7             string
 	visualizerFg             string
 	tableHeader              string
 	presetIndicator          string
@@ -198,6 +213,13 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				gradient1:                "#00ff88",
 				gradient2:                "#ffcc00",
 				gradient3:                "#ff5555",
+				vizGradient1:             "#0a0a1a",
+				vizGradient2:             "#0a2a4a",
+				vizGradient3:             "#1a3a5a",
+				vizGradient4:             "#00afff",
+				vizGradient5:             "#00ccff",
+				vizGradient6:             "#00e5ff",
+				vizGradient7:             "#ffffff",
 				visualizerFg:             "#00afff",
 				tableHeader:              "#666666",
 				presetIndicator:          "#00afff",
@@ -219,6 +241,13 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				gradient1:                "#a6e22e",
 				gradient2:                "#e6db74",
 				gradient3:                "#f92672",
+				vizGradient1:             "#1a1a1a",
+				vizGradient2:             "#2a2a2a",
+				vizGradient3:             "#3a3a3a",
+				vizGradient4:             "#66d9ef",
+				vizGradient5:             "#a6e22e",
+				vizGradient6:             "#fd971f",
+				vizGradient7:             "#f8f8f2",
 				visualizerFg:             "#66d9ef",
 				tableHeader:              "#75715e",
 				presetIndicator:          "#66d9ef",
@@ -240,6 +269,13 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				gradient1:                "#a6e3a1",
 				gradient2:                "#f9e2af",
 				gradient3:                "#f38ba8",
+				vizGradient1:             "#1e1e2e",
+				vizGradient2:             "#313244",
+				vizGradient3:             "#45475a",
+				vizGradient4:             "#89b4fa",
+				vizGradient5:             "#b4befe",
+				vizGradient6:             "#cba6f7",
+				vizGradient7:             "#cdd6f4",
 				visualizerFg:             "#89b4fa",
 				tableHeader:              "#6c7086",
 				presetIndicator:          "#89b4fa",
@@ -261,6 +297,13 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				gradient1:                "#a3be8c",
 				gradient2:                "#ebcb8b",
 				gradient3:                "#bf616a",
+				vizGradient1:             "#2e3440",
+				vizGradient2:             "#3b4252",
+				vizGradient3:             "#4c566a",
+				vizGradient4:             "#88c0d0",
+				vizGradient5:             "#81a1c1",
+				vizGradient6:             "#a3be8c",
+				vizGradient7:             "#eceff4",
 				visualizerFg:             "#88c0d0",
 				tableHeader:              "#4c566a",
 				presetIndicator:          "#88c0d0",
@@ -282,6 +325,13 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				gradient1:                "#40a02b",
 				gradient2:                "#df8e1d",
 				gradient3:                "#d20f39",
+				vizGradient1:             "#e0e0e0",
+				vizGradient2:             "#c0c0c0",
+				vizGradient3:             "#a0a0a0",
+				vizGradient4:             "#1e66f5",
+				vizGradient5:             "#4a90e2",
+				vizGradient6:             "#7ab8ff",
+				vizGradient7:             "#0a3d91",
 				visualizerFg:             "#1e66f5",
 				tableHeader:              "#9ca0b0",
 				presetIndicator:          "#1e66f5",
@@ -308,6 +358,13 @@ func TestNewTokens_ExactValues(t *testing.T) {
 			assert.Equal(t, tt.want.gradient1, string(th.Gradient1()), "Gradient1")
 			assert.Equal(t, tt.want.gradient2, string(th.Gradient2()), "Gradient2")
 			assert.Equal(t, tt.want.gradient3, string(th.Gradient3()), "Gradient3")
+			assert.Equal(t, tt.want.vizGradient1, string(th.VizGradient1()), "VizGradient1")
+			assert.Equal(t, tt.want.vizGradient2, string(th.VizGradient2()), "VizGradient2")
+			assert.Equal(t, tt.want.vizGradient3, string(th.VizGradient3()), "VizGradient3")
+			assert.Equal(t, tt.want.vizGradient4, string(th.VizGradient4()), "VizGradient4")
+			assert.Equal(t, tt.want.vizGradient5, string(th.VizGradient5()), "VizGradient5")
+			assert.Equal(t, tt.want.vizGradient6, string(th.VizGradient6()), "VizGradient6")
+			assert.Equal(t, tt.want.vizGradient7, string(th.VizGradient7()), "VizGradient7")
 			assert.Equal(t, tt.want.visualizerFg, string(th.VisualizerFg()), "VisualizerFg")
 			assert.Equal(t, tt.want.tableHeader, string(th.TableHeader()), "TableHeader")
 			assert.Equal(t, tt.want.presetIndicator, string(th.PresetIndicator()), "PresetIndicator")
@@ -424,6 +481,13 @@ key_hint         = "#445566"
 gradient1        = "#556677"
 gradient2        = "#667788"
 gradient3        = "#778899"
+viz_gradient1    = "#111111"
+viz_gradient2    = "#222222"
+viz_gradient3    = "#333333"
+viz_gradient4    = "#444444"
+viz_gradient5    = "#555555"
+viz_gradient6    = "#666666"
+viz_gradient7    = "#777777"
 visualizer_fg    = "#889900"
 table_header     = "#990011"
 preset_indicator = "#001122"
@@ -456,6 +520,13 @@ func TestParseTheme_ValidTOML(t *testing.T) {
 	assert.Equal(t, "#bb2233", string(th.ColumnPrimary()))
 	assert.Equal(t, "#cc3344", string(th.ColumnSecondary()))
 	assert.Equal(t, "#dd4455", string(th.ColumnTertiary()))
+	assert.Equal(t, "#111111", string(th.VizGradient1()))
+	assert.Equal(t, "#222222", string(th.VizGradient2()))
+	assert.Equal(t, "#333333", string(th.VizGradient3()))
+	assert.Equal(t, "#444444", string(th.VizGradient4()))
+	assert.Equal(t, "#555555", string(th.VizGradient5()))
+	assert.Equal(t, "#666666", string(th.VizGradient6()))
+	assert.Equal(t, "#777777", string(th.VizGradient7()))
 	assert.Equal(t, "#ee5566", string(th.PaneBorderNowPlaying()))
 }
 
@@ -539,6 +610,13 @@ func TestConfigTheme_ReturnsCorrectColors(t *testing.T) {
 		{"ColumnPrimary", string(th.ColumnPrimary()), "#bb2233"},
 		{"ColumnSecondary", string(th.ColumnSecondary()), "#cc3344"},
 		{"ColumnTertiary", string(th.ColumnTertiary()), "#dd4455"},
+		{"VizGradient1", string(th.VizGradient1()), "#111111"},
+		{"VizGradient2", string(th.VizGradient2()), "#222222"},
+		{"VizGradient3", string(th.VizGradient3()), "#333333"},
+		{"VizGradient4", string(th.VizGradient4()), "#444444"},
+		{"VizGradient5", string(th.VizGradient5()), "#555555"},
+		{"VizGradient6", string(th.VizGradient6()), "#666666"},
+		{"VizGradient7", string(th.VizGradient7()), "#777777"},
 		{"PaneBorderNowPlaying", string(th.PaneBorderNowPlaying()), "#ee5566"},
 		{"PaneBorderQueue", string(th.PaneBorderQueue()), "#ff6677"},
 		{"PaneBorderPlaylists", string(th.PaneBorderPlaylists()), "#006677"},
@@ -658,6 +736,13 @@ key_hint         = "#567894"
 gradient1        = "#6789a5"
 gradient2        = "#789ab6"
 gradient3        = "#89abc7"
+viz_gradient1    = "#111111"
+viz_gradient2    = "#222222"
+viz_gradient3    = "#333333"
+viz_gradient4    = "#444444"
+viz_gradient5    = "#555555"
+viz_gradient6    = "#666666"
+viz_gradient7    = "#777777"
 visualizer_fg    = "#9abcd8"
 table_header     = "#abcde9"
 preset_indicator = "#bcdef0"
@@ -724,6 +809,13 @@ key_hint         = "#ef0123"
 gradient1        = "#f01234"
 gradient2        = "#012345"
 gradient3        = "#123450"
+viz_gradient1    = "#111111"
+viz_gradient2    = "#222222"
+viz_gradient3    = "#333333"
+viz_gradient4    = "#444444"
+viz_gradient5    = "#555555"
+viz_gradient6    = "#666666"
+viz_gradient7    = "#777777"
 visualizer_fg    = "#234561"
 table_header     = "#345672"
 preset_indicator = "#456783"
@@ -854,6 +946,13 @@ key_hint         = "#445566"
 gradient1        = "#556677"
 gradient2        = "#667788"
 gradient3        = "#778899"
+viz_gradient1    = "#111111"
+viz_gradient2    = "#222222"
+viz_gradient3    = "#333333"
+viz_gradient4    = "#444444"
+viz_gradient5    = "#555555"
+viz_gradient6    = "#666666"
+viz_gradient7    = "#777777"
 visualizer_fg    = "#889900"
 table_header     = "#990011"
 preset_indicator = "#001122"
@@ -955,6 +1054,13 @@ key_hint         = "#0b0000"
 gradient1        = "#0a0000"
 gradient2        = "#090000"
 gradient3        = "#080000"
+viz_gradient1    = "#111111"
+viz_gradient2    = "#222222"
+viz_gradient3    = "#333333"
+viz_gradient4    = "#444444"
+viz_gradient5    = "#555555"
+viz_gradient6    = "#666666"
+viz_gradient7    = "#777777"
 visualizer_fg    = "#070000"
 table_header     = "#060000"
 preset_indicator = "#050000"
