@@ -300,7 +300,7 @@ func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *dom
 		borderColor = p.theme.InactiveBorder()
 	}
 	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(uikit.RoundedBorder()).
 		BorderForeground(borderColor).
 		Width(p.infoWidth)
 
@@ -314,7 +314,8 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
 
 	durationStr := fmt.Sprintf("%dm", episode.DurationMs/60000)
-	metaLine := fmt.Sprintf("Released: %s · Duration: %s", episode.ReleaseDate, durationStr)
+	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
+	metaLine := fmt.Sprintf("Released: %s %s Duration: %s", episode.ReleaseDate, sep, durationStr)
 	lines = append(lines, primaryStyle.Width(p.detailsWidth).Render(metaLine))
 
 	if show != nil && show.Publisher != "" {
@@ -348,7 +349,7 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 		barWidth = 3
 	}
 	bar := renderProgressBar(p.localProgressMs, episode.DurationMs, barWidth)
-	progressLine := fmt.Sprintf("-- %s ·· %s ·· %s --", current, bar, total)
+	progressLine := fmt.Sprintf("-- %s %s%s %s %s%s %s --", current, sep, sep, bar, sep, sep, total)
 
 	if len(lines) > 0 {
 		lines[len(lines)-1] = mutedStyle.Width(p.detailsWidth).Render(progressLine)
@@ -378,7 +379,6 @@ func renderProgressBar(progressMs, durationMs int, width int) string {
 	return strings.Repeat("\u2588", filled) + strings.Repeat("\u2591", width-filled)
 }
 
-// truncateStr truncates a string to the given width, appending "…" if truncated.
 func truncateStr(s string, width int) string {
 	if len(s) <= width {
 		return s
@@ -386,8 +386,12 @@ func truncateStr(s string, width int) string {
 	if width < 1 {
 		return ""
 	}
-	if width <= 1 {
-		return "…"
+	ellipsis := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+	ellipsisLen := len([]rune(ellipsis))
+	if width <= ellipsisLen {
+		return ellipsis
 	}
-	return s[:width-1] + "…"
+	runes := []rune(s)
+	keep := width - ellipsisLen
+	return string(runes[:keep]) + ellipsis
 }

@@ -623,8 +623,8 @@ func TestLayoutManager_MinHeight(t *testing.T) {
 	}}
 
 	m := layout.NewManager()
-	m.TogglePage() // Music → Podcasts
-	m.TogglePage() // Podcasts → Stats page
+	m.TogglePage()    // Music → Podcasts
+	m.TogglePage()    // Podcasts → Stats page
 	m.Resize(120, 34) // contentH = 30
 
 	// reserved = 10, remaining = 20, totalW = 3

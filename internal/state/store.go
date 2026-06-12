@@ -141,17 +141,17 @@ type Store struct {
 	playlistsError       error // playlist manager (tracks, mutations)
 
 	// Podcast data
-	followedShows       []domain.SavedShow
-	savedEpisodes       []domain.SavedEpisode
-	showEpisodes        []domain.Episode
-	showEpisodesTotal   int
-	selectedShowID     string
-	selectedShow       *domain.Show
+	followedShows     []domain.SavedShow
+	savedEpisodes     []domain.SavedEpisode
+	showEpisodes      []domain.Episode
+	showEpisodesTotal int
+	selectedShowID    string
+	selectedShow      *domain.Show
 
 	// Podcast staleness tracking
-	followedShowsFetchedAt   time.Time
-	savedEpisodesFetchedAt   time.Time
-	showEpisodesFetchedAt    time.Time
+	followedShowsFetchedAt time.Time
+	savedEpisodesFetchedAt time.Time
+	showEpisodesFetchedAt  time.Time
 
 	// Podcast fetching sentinels
 	followedShowsFetching bool
@@ -159,9 +159,9 @@ type Store struct {
 	showEpisodesFetching  bool
 
 	// Podcast error state
-	followedShowsFetchErr    error
-	savedEpisodesFetchErr    error
-	showEpisodesFetchErr     error
+	followedShowsFetchErr error
+	savedEpisodesFetchErr error
+	showEpisodesFetchErr  error
 }
 
 // New returns an empty Store with no playback state.

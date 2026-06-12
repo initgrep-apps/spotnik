@@ -71,14 +71,14 @@ type App struct {
 	// BubbleUp's View() returns empty string by design; Render() overlays alerts.
 	// toasts wraps alerts to provide the typed Toast API. It holds a pointer to the
 	// alerts field so it automatically reflects theme-switch re-assignments.
-	toasts      *uikit.ToastManager
-	errorMapper *uikit.ErrorMapper // translates API errors to user-friendly Toast values
-	gateway     *api.Gateway       // centralized HTTP gateway shared across all API clients
-	player      api.PlayerAPI
-	library      api.LibraryAPI
-	search       api.SearchAPI
-	devices      api.DevicesAPI
-	userAPI      api.UserAPI
+	toasts        *uikit.ToastManager
+	errorMapper   *uikit.ErrorMapper // translates API errors to user-friendly Toast values
+	gateway       *api.Gateway       // centralized HTTP gateway shared across all API clients
+	player        api.PlayerAPI
+	library       api.LibraryAPI
+	search        api.SearchAPI
+	devices       api.DevicesAPI
+	userAPI       api.UserAPI
 	podcastClient api.PodcastAPI
 
 	// layout manages the grid, focus, preset, and page system.
@@ -234,12 +234,12 @@ type App struct {
 
 	// Per-pane polling health — each pane tracks backoff and first-load status
 	// independently from the global 429 backoff (a.backoffTicks).
-	playlistsPoll    pollState
-	albumsPoll       pollState
-	likedSongsPoll   pollState
-	recentPlayedPoll pollState
-	statsPoll        pollState
-	devicesPoll      pollState
+	playlistsPoll     pollState
+	albumsPoll        pollState
+	likedSongsPoll    pollState
+	recentPlayedPoll  pollState
+	statsPoll         pollState
+	devicesPoll       pollState
 	queuePoll         pollState
 	followedShowsPoll pollState
 	savedEpisodesPoll pollState
@@ -341,22 +341,22 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	savedEpisodesPane := panes.NewSavedEpisodesPane(s, t, false)
 
 	panesMap := map[layout.PaneID]layout.Pane{
-		layout.PaneNowPlaying:     nowPlayingPane,
-		layout.PaneQueue:          queuePane,
-		layout.PanePlaylists:      playlistsPane,
-		layout.PaneAlbums:         albumsPane,
-		layout.PaneLikedSongs:     likedSongsPane,
-		layout.PaneRecentlyPlayed: recentlyPlayedPane,
-		layout.PaneTopTracks:      topTracksPane,
-		layout.PaneTopArtists:     topArtistsPane,
-		layout.PaneGatewayHealth:  gatewayHealthPane,
-		layout.PanePollingTraffic: pollingTrafficPane,
-		layout.PaneGatewayLive:    gatewayLivePane,
+		layout.PaneNowPlaying:      nowPlayingPane,
+		layout.PaneQueue:           queuePane,
+		layout.PanePlaylists:       playlistsPane,
+		layout.PaneAlbums:          albumsPane,
+		layout.PaneLikedSongs:      likedSongsPane,
+		layout.PaneRecentlyPlayed:  recentlyPlayedPane,
+		layout.PaneTopTracks:       topTracksPane,
+		layout.PaneTopArtists:      topArtistsPane,
+		layout.PaneGatewayHealth:   gatewayHealthPane,
+		layout.PanePollingTraffic:  pollingTrafficPane,
+		layout.PaneGatewayLive:     gatewayLivePane,
 		layout.PaneNetworkLog:      networkLogPane,
-		layout.PanePodcastPlayback:  podcastPlaybackPane,
-		layout.PaneShowEpisodes:     showEpisodesPane,
-		layout.PaneFollowedShows:    followedShowsPane,
-		layout.PaneSavedEpisodes:    savedEpisodesPane,
+		layout.PanePodcastPlayback: podcastPlaybackPane,
+		layout.PaneShowEpisodes:    showEpisodesPane,
+		layout.PaneFollowedShows:   followedShowsPane,
+		layout.PaneSavedEpisodes:   savedEpisodesPane,
 	}
 
 	searchPane := panes.NewSearchOverlay(t)

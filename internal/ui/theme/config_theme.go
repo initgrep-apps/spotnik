@@ -73,14 +73,14 @@ type themeColors struct {
 
 // paneBorderColors holds per-pane border accent values from [pane_borders].
 type paneBorderColors struct {
-	NowPlaying     string `toml:"now_playing"`
-	Queue          string `toml:"queue"`
-	Playlists      string `toml:"playlists"`
-	Albums         string `toml:"albums"`
-	LikedSongs     string `toml:"liked_songs"`
-	RecentlyPlayed string `toml:"recently_played"`
-	TopTracks      string `toml:"top_tracks"`
-	TopArtists     string `toml:"top_artists"`
+	NowPlaying      string `toml:"now_playing"`
+	Queue           string `toml:"queue"`
+	Playlists       string `toml:"playlists"`
+	Albums          string `toml:"albums"`
+	LikedSongs      string `toml:"liked_songs"`
+	RecentlyPlayed  string `toml:"recently_played"`
+	TopTracks       string `toml:"top_tracks"`
+	TopArtists      string `toml:"top_artists"`
 	RequestFlow     string `toml:"request_flow"`
 	NetworkLog      string `toml:"network_log"`
 	PodcastPlayback string `toml:"podcast_playback"`

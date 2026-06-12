@@ -280,15 +280,15 @@ func TestPodcastPlaybackPane_KeyPreviousNext(t *testing.T) {
 		IsPlaying:            true,
 		ProgressMs:           30000,
 		CurrentlyPlayingType: "episode",
-		Episode: &domain.Episode{ID: "ep-1", Name: "Episode", DurationMs: 1800000},
+		Episode:              &domain.Episode{ID: "ep-1", Name: "Episode", DurationMs: 1800000},
 	})
 	th := theme.Load("black")
 	p := NewPodcastPlaybackPane(s, th, true)
 
 	tests := []struct {
-		name     string
-		key      tea.KeyType
-		want     PlaybackAction
+		name string
+		key  tea.KeyType
+		want PlaybackAction
 	}{
 		{"shift+left", tea.KeyShiftLeft, ActionPrevious},
 		{"shift+right", tea.KeyShiftRight, ActionNext},
@@ -401,9 +401,9 @@ func TestPodcastPlaybackPane_PlaybackStateFetchedMsg(t *testing.T) {
 		ProgressMs:           120000,
 		CurrentlyPlayingType: "episode",
 		Episode: &domain.Episode{
-			ID:         "ep-1",
-			Name:       "Updated Episode",
-			DurationMs: 1800000,
+			ID:          "ep-1",
+			Name:        "Updated Episode",
+			DurationMs:  1800000,
 			ReleaseDate: "2024-01-15",
 		},
 		Device: &domain.Device{ID: "dev-1", VolumePercent: 50},

@@ -22,8 +22,6 @@ type ShowEpisodesPane struct {
 	*TableBasedPane
 	loadedEpisodes []domain.Episode
 	episodesTotal  int
-	hasNext        bool
-	pendingOffset  int
 }
 
 func NewShowEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *ShowEpisodesPane {

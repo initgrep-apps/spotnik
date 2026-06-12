@@ -36,7 +36,7 @@ func (p *PodcastClient) Show(ctx context.Context, showID string) (*domain.Show, 
 	if err := p.doJSON(req, &resp); err != nil {
 		return nil, fmt.Errorf("getting show: %w", err)
 	}
-	resp.Show.TotalEpisodes = resp.Episodes.Total
+	resp.TotalEpisodes = resp.Episodes.Total
 	return &resp.Show, nil
 }
 

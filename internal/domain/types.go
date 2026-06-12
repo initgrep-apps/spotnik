@@ -69,14 +69,14 @@ type PlaybackState struct {
 // items based on the currently_playing_type field.
 func (p *PlaybackState) UnmarshalJSON(data []byte) error {
 	raw := &struct {
-		IsPlaying            bool             `json:"is_playing"`
-		ProgressMs           int              `json:"progress_ms"`
-		ShuffleState         bool             `json:"shuffle_state"`
-		RepeatState          string           `json:"repeat_state"`
-		Item                 json.RawMessage  `json:"item"`
-		Device               *Device          `json:"device"`
-		CurrentlyPlayingType string           `json:"currently_playing_type"`
-		Context              *PlayContext     `json:"context"`
+		IsPlaying            bool            `json:"is_playing"`
+		ProgressMs           int             `json:"progress_ms"`
+		ShuffleState         bool            `json:"shuffle_state"`
+		RepeatState          string          `json:"repeat_state"`
+		Item                 json.RawMessage `json:"item"`
+		Device               *Device         `json:"device"`
+		CurrentlyPlayingType string          `json:"currently_playing_type"`
+		Context              *PlayContext    `json:"context"`
 	}{}
 	if err := unmarshalJSON(data, raw); err != nil {
 		return fmt.Errorf("unmarshaling playback state: %w", err)
