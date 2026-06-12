@@ -185,7 +185,9 @@ func (e *Engine) selectRenderer() Renderer {
 }
 
 // generateFrames builds the precomputed frame table for the current pattern.
-// Precomputes numFrames frames using the current pattern's HeightFunc and Renderer.
+// Precomputes numFrames frames. If the renderer implements FrameAwareRenderer,
+// RenderFrameAt is called with the frame index directly; otherwise the
+// pattern's HeightFunc is used and RenderFrame receives column heights.
 // Per-row colors are assigned using the 7-zone gradient (VizGradient7 top, VizGradient1 bottom).
 func (e *Engine) generateFrames() []Frame {
 	if e.height <= 0 || e.width <= 0 || len(e.patterns) == 0 {
@@ -202,9 +204,15 @@ func (e *Engine) generateFrames() []Frame {
 	maxHeight := r.MaxHeight(e.height)
 
 	frames := make([]Frame, numFrames)
-	for f := 0; f < numFrames; f++ {
-		colHeights := p.HeightFunc(e.width, maxHeight, f)
-		frames[f] = r.RenderFrame(e.width, e.height, colHeights, colors)
+	if fr, ok := r.(FrameAwareRenderer); ok {
+		for f := 0; f < numFrames; f++ {
+			frames[f] = fr.RenderFrameAt(e.width, e.height, f, colors)
+		}
+	} else {
+		for f := 0; f < numFrames; f++ {
+			colHeights := p.HeightFunc(e.width, maxHeight, f)
+			frames[f] = r.RenderFrame(e.width, e.height, colHeights, colors)
+		}
 	}
 	return frames
 }

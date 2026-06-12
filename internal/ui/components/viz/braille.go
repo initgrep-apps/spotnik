@@ -21,6 +21,16 @@ type Renderer interface {
 	MaxHeight(displayHeight int) int
 }
 
+// FrameAwareRenderer is an optional interface for Renderers that need
+// to know the frame index to compute per-cell density.
+// When a Renderer implements this, the Engine calls RenderFrameAt
+// instead of RenderFrame, and the HeightFunc result is unused for
+// this pattern.
+type FrameAwareRenderer interface {
+	Renderer
+	RenderFrameAt(width, height, frameIdx int, colors []lipgloss.Color) Frame
+}
+
 // BrailleRenderer renders column heights as Unicode braille characters (U+2800 block).
 // Each character cell represents a 2×4 dot grid.
 // Column heights are expected in the range [0, height*4].
