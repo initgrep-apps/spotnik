@@ -99,8 +99,8 @@ func heightStandingWave(width, maxHeight, frameIdx int) []int {
 		x := float64(col) / float64(width) * 2 * math.Pi
 		val := 0.5 + 0.5*math.Sin(x+phase) + 0.3*math.Sin(2*x+phase*0.5)
 		val = clamp01(val)
-		// Store phase-like value (0-100) for renderer to use
-		out[col] = int(val * 100)
+		// Map sine to height range for DotRenderer
+		out[col] = int(val * float64(maxHeight))
 	}
 	return out
 }

@@ -41,6 +41,9 @@ func (r CharRenderer) RenderFrame(width, height int, colHeights []int, colors []
 	if width <= 0 || height <= 0 {
 		return Frame{}
 	}
+	if len(r.Chars) == 0 {
+		return Frame{}
+	}
 
 	scale := r.Scale
 	if scale <= 0 {

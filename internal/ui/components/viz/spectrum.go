@@ -9,14 +9,14 @@ import (
 
 // SpectrumRenderer renders block bars with per-column gradient shifting.
 // It produces StyledLines with Segments populated so that each column zone
-// can have a different color, creating a diagonal G3→G2→G1 sweep across
+// can have a different color, creating a diagonal VizGradient7→VizGradient4→VizGradient1 sweep across
 // the visualizer width.
 //
 // The color shift per column is determined by:
 //
 //	shift = (col * 2) % height
 //
-// This means column 0 uses standard G3/G2/G1 row boundaries, column 1 shifts
+// This means column 0 uses standard VizGradient1-7 row boundaries, column 1 shifts
 // them down by 2 rows, column 2 by 4, etc. The result is a diagonal color
 // sweep from upper-right to lower-left.
 type SpectrumRenderer struct{}
@@ -65,21 +65,19 @@ func (r SpectrumRenderer) RenderFrame(width, height int, colHeights []int, color
 			}
 			ch := ' '
 			if h > rowFromBottom {
-				ch = []rune(fillGlyph)[0]
+				glyphRunes := []rune(fillGlyph)
+				if len(glyphRunes) > 0 {
+					ch = glyphRunes[0]
+				}
 			}
 
-			// Start new segment if color changed
-			if segBuf.Len() == 0 {
-				prevColor = colColor
-				segBuf.WriteRune(ch)
-			} else if colColor != prevColor {
+			// Flush previous segment when color changes
+			if colColor != prevColor && segBuf.Len() > 0 {
 				segments = append(segments, StyledSegment{Text: segBuf.String(), Color: prevColor})
 				segBuf.Reset()
-				prevColor = colColor
-				segBuf.WriteRune(ch)
-			} else {
-				segBuf.WriteRune(ch)
 			}
+			prevColor = colColor
+			segBuf.WriteRune(ch)
 		}
 
 		// Flush last segment

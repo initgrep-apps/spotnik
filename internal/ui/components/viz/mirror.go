@@ -7,6 +7,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// BrailleMirrorRenderer renders column heights as a double-lobe standing wave
+// using braille density characters (⣿⢸⢰⠄⠂). The center band is always
+// filled, with lobe thickness determined by column heights.
 type BrailleMirrorRenderer struct{}
 
 func (r BrailleMirrorRenderer) MaxHeight(displayHeight int) int { return displayHeight }
@@ -33,7 +36,13 @@ func (r BrailleMirrorRenderer) RenderFrame(width, height int, colHeights []int, 
 			if centerDist <= float64(centerBand) {
 				sb.WriteRune(brailleForDensity(1.0))
 			} else if centerDist <= lobeThickness {
-				relativeDist := (centerDist - float64(centerBand)) / (lobeThickness - float64(centerBand))
+				denom := lobeThickness - float64(centerBand)
+				var relativeDist float64
+				if denom > 0 {
+					relativeDist = (centerDist - float64(centerBand)) / denom
+				} else {
+					relativeDist = 0
+				}
 				sb.WriteRune(brailleForDensity(1.0 - relativeDist))
 			} else {
 				sb.WriteRune(' ')
@@ -49,6 +58,9 @@ func (r BrailleMirrorRenderer) RenderFrame(width, height int, colHeights []int, 
 }
 
 func brailleForDensity(d float64) rune {
+	if math.IsNaN(d) || math.IsInf(d, 0) {
+		d = 0
+	}
 	switch {
 	case d >= 0.85:
 		return '⣿'

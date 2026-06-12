@@ -8,6 +8,9 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
+// DotRenderer renders column heights as a standing wave of dot characters
+// (separator, bullet, filled dot). Density varies by vertical profile and
+// horizontal phase position.
 type DotRenderer struct{}
 
 func (r DotRenderer) MaxHeight(displayHeight int) int { return displayHeight }
@@ -33,7 +36,7 @@ func (r DotRenderer) RenderFrame(width, height int, colHeights []int, colors []l
 				h = colHeights[col]
 			}
 			x := float64(col) / float64(width) * 2 * math.Pi
-			phase := float64(h) / 100.0
+			phase := float64(h) / float64(height)
 			hProfile := 0.5 + 0.5*math.Sin(x+phase)
 			density := vProfile * hProfile
 

@@ -8,6 +8,9 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
+// GaussianRenderer renders column heights as a centered Gaussian density wave
+// using block character density bands. Bars are thickest at center and taper
+// toward edges using fill/heavy/medium/empty glyph levels.
 type GaussianRenderer struct{}
 
 func (r GaussianRenderer) MaxHeight(displayHeight int) int { return displayHeight }

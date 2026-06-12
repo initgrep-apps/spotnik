@@ -104,6 +104,9 @@ func (e *Engine) CurrentFrame() Frame {
 // CyclePattern advances to the next pattern (wraps around) and regenerates frames.
 // Resets frameIdx to 0.
 func (e *Engine) CyclePattern() {
+	if len(e.patterns) == 0 {
+		return
+	}
 	e.patternIdx = (e.patternIdx + 1) % len(e.patterns)
 	e.frameIdx = 0
 	if e.width > 0 && e.height > 0 {
@@ -170,8 +173,11 @@ func (e *Engine) tickCmd() tea.Cmd {
 // When uikit.ActiveMode() reports GlyphASCII, AsciiBarsRenderer is returned
 // regardless of the configured pattern so the visualizer remains present
 // (at reduced resolution) on non-UTF-8 terminals. In unicode mode the
-// pattern's own renderer (braille or block) is used.
+// pattern's own renderer is used.
 func (e *Engine) selectRenderer() Renderer {
+	if len(e.patterns) == 0 {
+		return NewAsciiBarsRenderer()
+	}
 	if uikit.ActiveMode() == uikit.GlyphASCII {
 		return NewAsciiBarsRenderer()
 	}
@@ -180,9 +186,9 @@ func (e *Engine) selectRenderer() Renderer {
 
 // generateFrames builds the precomputed frame table for the current pattern.
 // Precomputes numFrames frames using the current pattern's HeightFunc and Renderer.
-// Per-row colors are assigned using the gradient (Gradient3 top, Gradient1 bottom).
+// Per-row colors are assigned using the 7-zone gradient (VizGradient7 top, VizGradient1 bottom).
 func (e *Engine) generateFrames() []Frame {
-	if e.height <= 0 || e.width <= 0 {
+	if e.height <= 0 || e.width <= 0 || len(e.patterns) == 0 {
 		return nil
 	}
 
@@ -190,8 +196,8 @@ func (e *Engine) generateFrames() []Frame {
 	colors := e.buildColors(e.height)
 
 	// selectRenderer chooses AsciiBarsRenderer in ASCII mode; the pattern's own
-	// renderer (braille or block) otherwise. MaxHeight is renderer-specific:
-	// braille uses height*4 (dot rows), block and ascii use height or 4.
+	// renderer otherwise. MaxHeight is renderer-specific:
+	// braille renderers use height*4 (dot rows), block renderers use height or 4.
 	r := e.selectRenderer()
 	maxHeight := r.MaxHeight(e.height)
 
@@ -221,23 +227,6 @@ func (e *Engine) buildColors(height int) []lipgloss.Color {
 	zoneSize := height / 7
 	remainder := height % 7
 
-	// Build zone boundaries: each zone gets zoneSize rows,
-	// with remainder rows distributed to lower zones (zones 1-remainder).
-	zoneStart := make([]int, 9) // zoneStart[i] = first row of zone i (1-indexed)
-	row := 0
-	for zone := 1; zone <= 7; zone++ {
-		zoneStart[zone] = row
-		size := zoneSize
-		if zone <= remainder {
-			size++ // distribute extra rows to lower zones
-		}
-		row += size
-		if row > height {
-			row = height
-		}
-	}
-	zoneStart[8] = height
-
 	gradients := []lipgloss.Color{
 		e.theme.VizGradient1(),
 		e.theme.VizGradient2(),
@@ -248,10 +237,20 @@ func (e *Engine) buildColors(height int) []lipgloss.Color {
 		e.theme.VizGradient7(),
 	}
 
-	for zone := 1; zone <= 7; zone++ {
-		for i := zoneStart[zone]; i < zoneStart[zone+1]; i++ {
-			colors[i] = gradients[zone-1]
+	row := height
+	for zone := 0; zone < 7; zone++ {
+		size := zoneSize
+		if zone < remainder {
+			size++
 		}
+		start := row - size
+		if start < 0 {
+			start = 0
+		}
+		for i := start; i < row; i++ {
+			colors[i] = gradients[zone]
+		}
+		row = start
 	}
 	return colors
 }

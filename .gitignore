@@ -46,4 +46,6 @@ docs/superpowers/
 .claude/agents/
 .claude/skills/
 .claude/settings.local.json
+*.tmp
+
 .agents/

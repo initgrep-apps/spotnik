@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,6 +70,9 @@ func TestDotRenderer_MaxHeight(t *testing.T) {
 }
 
 func TestDotRenderer_DensityMapping(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
 	// Verify that the renderer outputs the expected dot characters.
 	r := DotRenderer{}
 	width := 10

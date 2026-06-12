@@ -458,29 +458,29 @@ func TestEngine_PerRowColors_VizGradientAssignment(t *testing.T) {
 	f := e.CurrentFrame()
 	require.Len(t, f, height)
 
-	// buildColors distributes rows from bottom (zone 1) to top (zone 7).
+	// buildColors distributes rows from top (zone 7) to bottom (zone 1).
 	// With 14 rows: zoneSize=2, remainder=0 => each zone gets 2 rows.
-	// Zone 1 (bottom, rows 0-1): VizGradient1
-	assert.Equal(t, th.VizGradient1(), f[0].Color, "row 0 should use VizGradient1")
-	assert.Equal(t, th.VizGradient1(), f[1].Color, "row 1 should use VizGradient1")
-	// Zone 2 (rows 2-3): VizGradient2
-	assert.Equal(t, th.VizGradient2(), f[2].Color, "row 2 should use VizGradient2")
-	assert.Equal(t, th.VizGradient2(), f[3].Color, "row 3 should use VizGradient2")
-	// Zone 3 (rows 4-5): VizGradient3
-	assert.Equal(t, th.VizGradient3(), f[4].Color, "row 4 should use VizGradient3")
-	assert.Equal(t, th.VizGradient3(), f[5].Color, "row 5 should use VizGradient3")
+	// Zone 7 (top, rows 0-1): VizGradient7
+	assert.Equal(t, th.VizGradient7(), f[0].Color, "row 0 should use VizGradient7")
+	assert.Equal(t, th.VizGradient7(), f[1].Color, "row 1 should use VizGradient7")
+	// Zone 6 (rows 2-3): VizGradient6
+	assert.Equal(t, th.VizGradient6(), f[2].Color, "row 2 should use VizGradient6")
+	assert.Equal(t, th.VizGradient6(), f[3].Color, "row 3 should use VizGradient6")
+	// Zone 5 (rows 4-5): VizGradient5
+	assert.Equal(t, th.VizGradient5(), f[4].Color, "row 4 should use VizGradient5")
+	assert.Equal(t, th.VizGradient5(), f[5].Color, "row 5 should use VizGradient5")
 	// Zone 4 (rows 6-7): VizGradient4
 	assert.Equal(t, th.VizGradient4(), f[6].Color, "row 6 should use VizGradient4")
 	assert.Equal(t, th.VizGradient4(), f[7].Color, "row 7 should use VizGradient4")
-	// Zone 5 (rows 8-9): VizGradient5
-	assert.Equal(t, th.VizGradient5(), f[8].Color, "row 8 should use VizGradient5")
-	assert.Equal(t, th.VizGradient5(), f[9].Color, "row 9 should use VizGradient5")
-	// Zone 6 (rows 10-11): VizGradient6
-	assert.Equal(t, th.VizGradient6(), f[10].Color, "row 10 should use VizGradient6")
-	assert.Equal(t, th.VizGradient6(), f[11].Color, "row 11 should use VizGradient6")
-	// Zone 7 (top, rows 12-13): VizGradient7
-	assert.Equal(t, th.VizGradient7(), f[12].Color, "row 12 should use VizGradient7")
-	assert.Equal(t, th.VizGradient7(), f[13].Color, "row 13 should use VizGradient7")
+	// Zone 3 (rows 8-9): VizGradient3
+	assert.Equal(t, th.VizGradient3(), f[8].Color, "row 8 should use VizGradient3")
+	assert.Equal(t, th.VizGradient3(), f[9].Color, "row 9 should use VizGradient3")
+	// Zone 2 (rows 10-11): VizGradient2
+	assert.Equal(t, th.VizGradient2(), f[10].Color, "row 10 should use VizGradient2")
+	assert.Equal(t, th.VizGradient2(), f[11].Color, "row 11 should use VizGradient2")
+	// Zone 1 (bottom, rows 12-13): VizGradient1
+	assert.Equal(t, th.VizGradient1(), f[12].Color, "row 12 should use VizGradient1")
+	assert.Equal(t, th.VizGradient1(), f[13].Color, "row 13 should use VizGradient1")
 }
 
 func TestEngine_SetSize_Height1_VizGradientColor(t *testing.T) {
@@ -490,7 +490,7 @@ func TestEngine_SetSize_Height1_VizGradientColor(t *testing.T) {
 	e.SetPlaying(true)
 	f := e.CurrentFrame()
 	require.Len(t, f, 1)
-	// Single row should use VizGradient1 (bottom/base)
+	// Single row gets extra row → falls to zone 0 (VizGradient1, bottom/base)
 	assert.Equal(t, th.VizGradient1(), f[0].Color,
 		"single row should use VizGradient1 (base)")
 }
@@ -678,10 +678,10 @@ func TestAllPatterns_ColorGradient(t *testing.T) {
 			e.SetPlaying(true)
 			f := e.CurrentFrame()
 			require.Len(t, f, height)
-			// Bottom rows: VizGradient1 (zone 1)
-			assert.Equal(t, th.VizGradient1(), f[0].Color)
 			// Top rows: VizGradient7 (zone 7)
-			assert.Equal(t, th.VizGradient7(), f[height-1].Color)
+			assert.Equal(t, th.VizGradient7(), f[0].Color)
+			// Bottom rows: VizGradient1 (zone 1)
+			assert.Equal(t, th.VizGradient1(), f[height-1].Color)
 		})
 	}
 }

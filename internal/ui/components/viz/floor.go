@@ -7,6 +7,8 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
+// FloorRenderer renders column heights as block bars with a thick baseline
+// floor (bottom quarter) and variable-height bars above using fill glyphs.
 type FloorRenderer struct{}
 
 func (r FloorRenderer) MaxHeight(displayHeight int) int { return displayHeight }
