@@ -70,17 +70,16 @@ func (r BrailleMirrorRenderer) RenderFrame(width, height int, colHeights []int, 
 // dist=4: very light (⠂ or ⠄, isolated dots)
 // dist>=5: sparse edge (⢠⡄ or ⠠⠤, 2 dots decorative)
 func brailleCharForDist(dist float64) rune {
-	d := int(math.Round(dist))
-	switch {
-	case d == 0:
+	switch d := int(math.Round(dist)); d {
+	case 0:
 		return '⣿' // full solid — center peak
-	case d == 1:
+	case 1:
 		return '⢸' // dense — 3 dots
-	case d == 2:
+	case 2:
 		return '⢰' // medium — 2-3 dots
-	case d == 3:
+	case 3:
 		return '⠄' // light — 1 dot
-	case d == 4:
+	case 4:
 		return '⠂' // very light — isolated dot
 	default:
 		return '⢀' // sparse edge — 1 dot decorative

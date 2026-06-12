@@ -80,7 +80,7 @@ func TestBrailleMirrorRenderer_DiscreteDistanceMapping(t *testing.T) {
 
 	r := BrailleMirrorRenderer{}
 	width := 3
-	height := 11 // center at row 5
+	height := 11                 // center at row 5
 	colHeights := []int{6, 6, 6} // large lobe thickness
 	colors := makeColors(height)
 	frame := r.RenderFrame(width, height, colHeights, colors)
