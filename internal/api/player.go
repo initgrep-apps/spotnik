@@ -40,6 +40,11 @@ func (p *Player) PlaybackState(ctx context.Context) (*PlaybackState, error) {
 		return nil, fmt.Errorf("creating get playback state request: %w", err)
 	}
 
+	q := req.URL.Query()
+	q.Set("market", "from_token")
+	q.Set("additional_types", "episode")
+	req.URL.RawQuery = q.Encode()
+
 	var state PlaybackState
 	ok, err := p.doJSONOptional(req, &state)
 	if err != nil {

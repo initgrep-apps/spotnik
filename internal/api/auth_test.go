@@ -447,6 +447,12 @@ func TestSpotifyScopes_NotEmpty(t *testing.T) {
 	assert.Contains(t, api.SpotifyScopes, "user-read-recently-played")
 }
 
+// TestSpotifyScopes_ContainsPlaybackPosition verifies that the scopes include
+// user-read-playback-position for podcast episode resume position tracking.
+func TestSpotifyScopes_ContainsPlaybackPosition(t *testing.T) {
+	assert.Contains(t, api.SpotifyScopes, "user-read-playback-position")
+}
+
 // TestBuildTokenEndpoint_EmptyUsesProduction verifies that empty baseURL
 // returns the production Spotify token endpoint.
 func TestBuildTokenEndpoint_EmptyUsesProduction(t *testing.T) {
