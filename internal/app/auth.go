@@ -190,6 +190,7 @@ func (a *App) initAPIClients(token string) {
 	a.playlistsAPI = playlistsAPI
 
 	podcastClient := api.NewPodcastClient("", token)
+	podcastClient.SetHTTPClient(httpClient)
 	podcastClient.SetGateway(a.gateway)
 	a.podcastClient = podcastClient
 }

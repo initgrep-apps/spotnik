@@ -20,8 +20,6 @@ var _ layout.FilterQueryPane = &ShowEpisodesPane{}
 
 type ShowEpisodesPane struct {
 	*TableBasedPane
-	loadedEpisodes []domain.Episode
-	episodesTotal  int
 }
 
 func NewShowEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *ShowEpisodesPane {
@@ -42,8 +40,6 @@ func NewShowEpisodesPane(store state.StateReader, th theme.Theme, focused bool) 
 	f.SetPlaceholder("filter episodes...")
 	p := &ShowEpisodesPane{
 		TableBasedPane: NewTableBasedPane(store, th, focused, t, f),
-		loadedEpisodes: store.ShowEpisodes(),
-		episodesTotal:  len(store.ShowEpisodes()),
 	}
 	t.SetFocused(focused)
 	p.buildRows()
@@ -82,8 +78,6 @@ func (p *ShowEpisodesPane) SetSize(width, height int) {
 func (p *ShowEpisodesPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case ShowEpisodesLoadedMsg:
-		p.loadedEpisodes = p.store.ShowEpisodes()
-		p.episodesTotal = len(p.loadedEpisodes)
 		p.buildRows()
 		return p, nil
 	}

@@ -816,12 +816,27 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Data fetched during splash is stored but splash stays visible
 		// for the full 5s duration — the splashDismissMsg timer handles transition.
+		var playbackCmds []tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {
 			updatedPane, cmd := np.Update(m)
 			if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
 				a.panes[layout.PaneNowPlaying] = pp
 			}
-			return a, cmd
+			if cmd != nil {
+				playbackCmds = append(playbackCmds, cmd)
+			}
+		}
+		if ppp := a.podcastPlaybackPane(); ppp != nil {
+			updatedPane, cmd := ppp.Update(m)
+			if pp, ok := updatedPane.(*panes.PodcastPlaybackPane); ok {
+				a.panes[layout.PanePodcastPlayback] = pp
+			}
+			if cmd != nil {
+				playbackCmds = append(playbackCmds, cmd)
+			}
+		}
+		if len(playbackCmds) > 0 {
+			return a, tea.Batch(playbackCmds...)
 		}
 		return a, nil
 
@@ -1499,6 +1514,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.followedShowsPoll.hasData = true
 		a.store.ClearFollowedShowsFetchError()
 		a.store.SetFollowedShows(m.Items)
+		// Re-resolve the selected show from refreshed data so the metadata
+		// stays up-to-date when the user has a show selected.
+		if id := a.store.SelectedShowID(); id != "" {
+			for _, ss := range m.Items {
+				if ss.Show.ID == id {
+					showCopy := ss.Show
+					a.store.SetSelectedShow(&showCopy)
+					break
+				}
+			}
+		}
 		var cmds []tea.Cmd
 		if fp := a.followedShowsPane(); fp != nil {
 			updated, cmd := fp.Update(m)
@@ -1595,6 +1621,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SelectedShowChangedMsg:
 		a.store.SetSelectedShowID(m.ShowID)
+		// Resolve the full show from the followed-shows cache so the
+		// ShowEpisodesPane can show metadata immediately while episodes load.
+		for _, ss := range a.store.FollowedShows() {
+			if ss.Show.ID == m.ShowID {
+				showCopy := ss.Show
+				a.store.SetSelectedShow(&showCopy)
+				break
+			}
+		}
 		return a, a.buildFetchShowEpisodesCmd(m.ShowID)
 
 	case panes.PlayEpisodeMsg:

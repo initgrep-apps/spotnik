@@ -192,11 +192,8 @@ func TestPodcastPlaybackPane_KeySeekBackward(t *testing.T) {
 
 	msg := tea.KeyMsg{Type: tea.KeyLeft}
 	_, cmd := p.Update(msg)
-	require.NotNil(t, cmd, "left arrow should return a command")
-	result := cmd()
-	seekMsg, ok := result.(SeekIntentMsg)
-	require.True(t, ok, "left should produce SeekIntentMsg, got %T", result)
-	assert.Equal(t, 115000, seekMsg.TargetMs, "should seek backward 5s from 120000")
+	require.Nil(t, cmd, "left arrow should not return a command (local-only update)")
+	assert.Equal(t, 115000, p.localProgressMs, "should seek backward 5s from 120000")
 }
 
 func TestPodcastPlaybackPane_KeySeekForward(t *testing.T) {
@@ -217,11 +214,8 @@ func TestPodcastPlaybackPane_KeySeekForward(t *testing.T) {
 
 	msg := tea.KeyMsg{Type: tea.KeyRight}
 	_, cmd := p.Update(msg)
-	require.NotNil(t, cmd, "right arrow should return a command")
-	result := cmd()
-	seekMsg, ok := result.(SeekIntentMsg)
-	require.True(t, ok, "right should produce SeekIntentMsg, got %T", result)
-	assert.Equal(t, 125000, seekMsg.TargetMs, "should seek forward 5s from 120000")
+	require.Nil(t, cmd, "right arrow should not return a command (local-only update)")
+	assert.Equal(t, 125000, p.localProgressMs, "should seek forward 5s from 120000")
 }
 
 func TestPodcastPlaybackPane_KeySeekBackwardClamp(t *testing.T) {
@@ -242,11 +236,8 @@ func TestPodcastPlaybackPane_KeySeekBackwardClamp(t *testing.T) {
 
 	msg := tea.KeyMsg{Type: tea.KeyLeft}
 	_, cmd := p.Update(msg)
-	require.NotNil(t, cmd)
-	result := cmd()
-	seekMsg, ok := result.(SeekIntentMsg)
-	require.True(t, ok)
-	assert.Equal(t, 0, seekMsg.TargetMs, "should clamp to 0")
+	require.Nil(t, cmd, "left arrow should not return a command (local-only update)")
+	assert.Equal(t, 0, p.localProgressMs, "should clamp to 0")
 }
 
 func TestPodcastPlaybackPane_KeySeekForwardClamp(t *testing.T) {
@@ -267,11 +258,8 @@ func TestPodcastPlaybackPane_KeySeekForwardClamp(t *testing.T) {
 
 	msg := tea.KeyMsg{Type: tea.KeyRight}
 	_, cmd := p.Update(msg)
-	require.NotNil(t, cmd)
-	result := cmd()
-	seekMsg, ok := result.(SeekIntentMsg)
-	require.True(t, ok)
-	assert.Equal(t, 1800000, seekMsg.TargetMs, "should clamp to duration")
+	require.Nil(t, cmd, "right arrow should not return a command (local-only update)")
+	assert.Equal(t, 1800000, p.localProgressMs, "should clamp to duration")
 }
 
 func TestPodcastPlaybackPane_KeyPreviousNext(t *testing.T) {
@@ -322,21 +310,16 @@ func TestPodcastPlaybackPane_KeyVolume(t *testing.T) {
 	tests := []struct {
 		name string
 		key  string
-		want int
 	}{
-		{"volume up", "+", 75},
-		{"volume down", "-", 65},
+		{"volume up", "+"},
+		{"volume down", "-"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
 			_, cmd := p.Update(msg)
-			require.NotNil(t, cmd)
-			result := cmd()
-			volMsg, ok := result.(VolumeIntentMsg)
-			require.True(t, ok, "got %T", result)
-			assert.Equal(t, tt.want, volMsg.TargetVol)
+			require.Nil(t, cmd, "volume keys should not return a command (local-only updates)")
 		})
 	}
 }

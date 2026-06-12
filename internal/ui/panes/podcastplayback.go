@@ -152,9 +152,8 @@ func (p *PodcastPlaybackPane) handleKey(msg tea.KeyMsg) (*PodcastPlaybackPane, t
 			if target < 0 {
 				target = 0
 			}
-			return p, func() tea.Msg {
-				return SeekIntentMsg{TargetMs: target, Seq: 0}
-			}
+			p.localProgressMs = target
+			p.seekBar.SetPositionConfirmed(target)
 		}
 		return p, nil
 
@@ -165,39 +164,16 @@ func (p *PodcastPlaybackPane) handleKey(msg tea.KeyMsg) (*PodcastPlaybackPane, t
 			if target > ps.Episode.DurationMs {
 				target = ps.Episode.DurationMs
 			}
-			return p, func() tea.Msg {
-				return SeekIntentMsg{TargetMs: target, Seq: 0}
-			}
+			p.localProgressMs = target
+			p.seekBar.SetPositionConfirmed(target)
 		}
 		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "+":
-		ps := p.store.PlaybackState()
-		vol := 0
-		if ps != nil && ps.Device != nil {
-			vol = ps.Device.VolumePercent
-		}
-		vol += 5
-		if vol > 100 {
-			vol = 100
-		}
-		return p, func() tea.Msg {
-			return VolumeIntentMsg{TargetVol: vol, Seq: 0}
-		}
+		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "-":
-		ps := p.store.PlaybackState()
-		vol := 0
-		if ps != nil && ps.Device != nil {
-			vol = ps.Device.VolumePercent
-		}
-		vol -= 5
-		if vol < 0 {
-			vol = 0
-		}
-		return p, func() tea.Msg {
-			return VolumeIntentMsg{TargetVol: vol, Seq: 0}
-		}
+		return p, nil
 
 	case msg.Type == tea.KeyRunes && string(msg.Runes) == "s":
 		return p, emitPlaybackRequest(ActionToggleShuffle)

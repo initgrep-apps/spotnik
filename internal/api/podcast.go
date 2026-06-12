@@ -21,6 +21,11 @@ func NewPodcastClient(baseURL, accessToken string) *PodcastClient {
 	return &PodcastClient{BaseClient: NewBaseClient(baseURL, accessToken)}
 }
 
+// SetHTTPClient overrides the default HTTP client used for API calls.
+func (p *PodcastClient) SetHTTPClient(c *http.Client) {
+	p.setHTTPClient(c)
+}
+
 // Show fetches a single podcast show by ID, including its episodes.
 // Returns the show with TotalEpisodes populated from the inline episodes count.
 func (p *PodcastClient) Show(ctx context.Context, showID string) (*domain.Show, error) {
