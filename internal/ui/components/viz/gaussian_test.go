@@ -51,6 +51,30 @@ func TestGaussianRenderer_ColorsAssigned(t *testing.T) {
 	}
 }
 
+func TestGaussianRenderer_AbsoluteDensityThresholds(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	r := GaussianRenderer{}
+	width := 5
+	height := 9
+	// All columns at full wave reach so all rows are within wave
+	colHeights := []int{18, 18, 18, 18, 18}
+	colors := makeColors(height)
+	frame := r.RenderFrame(width, height, colHeights, colors)
+	require.Len(t, frame, height)
+
+	center := 4 // (height-1)/2
+	fillGlyph := "█"
+
+	// dist < 1: only center row (dist=0) gets fill
+	assert.Equal(t, fillGlyph+fillGlyph+fillGlyph+fillGlyph+fillGlyph,
+		frame[center].Text, "center row (dist=0) should be fill")
+	// dist < 2: row at dist=1 should be heavy glyph
+	assert.NotContains(t, frame[center+1].Text, " ",
+		"row at dist=1 should not be empty")
+}
+
 func TestGaussianRenderer_MaxHeight(t *testing.T) {
 	r := GaussianRenderer{}
 	tests := []struct {

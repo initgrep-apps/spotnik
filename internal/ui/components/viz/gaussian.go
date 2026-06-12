@@ -38,16 +38,17 @@ func (r GaussianRenderer) RenderFrame(width, height int, colHeights []int, color
 			}
 			waveReach := float64(h) / 2.0
 			if distFromCenter <= waveReach {
-				relativeDist := distFromCenter / waveReach
 				switch {
-				case relativeDist < 0.25:
+				case distFromCenter < 1:
 					sb.WriteString(fillGlyph)
-				case relativeDist < 0.5:
+				case distFromCenter < 2:
 					sb.WriteString(heavyGlyph)
-				case relativeDist < 0.75:
+				case distFromCenter < 3:
 					sb.WriteString(mediumGlyph)
-				default:
+				case distFromCenter < 4:
 					sb.WriteString(emptyGlyph)
+				default:
+					sb.WriteRune(' ')
 				}
 			} else {
 				sb.WriteRune(' ')
