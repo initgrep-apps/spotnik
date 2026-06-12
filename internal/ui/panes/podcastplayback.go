@@ -254,10 +254,17 @@ func (p *PodcastPlaybackPane) renderEpisode(episode *domain.Episode, ps *domain.
 }
 
 func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *domain.Show, ps *domain.PlaybackState) string {
-	lines := []string{episode.Name}
+	innerW := p.infoWidth - 2
+	var lines []string
+
 	if show != nil {
 		lines = append(lines, show.Name)
 	}
+
+	wrap := lipgloss.NewStyle().Width(innerW)
+	titleLines := strings.Split(wrap.Render(episode.Name), "\n")
+	lines = append(lines, titleLines...)
+
 	lines = append(lines, "")
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 	lines = append(lines, ctrl.Render())
@@ -288,7 +295,7 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 
 	lines = append(lines, "")
 
-	descMaxLines := p.height - len(lines) - 2
+	descMaxLines := p.height - len(lines) - 1
 	if descMaxLines < 1 {
 		descMaxLines = 1
 	}
