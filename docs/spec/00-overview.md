@@ -26,7 +26,7 @@
 | 15 | Error Resilience & Universal Polling | `features/15-error-resilience/` | done | 199 ✓, 200 ✓, 201 ✓, 202 ✓, 203 ✓, 206, 225 ✓ | Universal tick-driven polling for all data panes, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency, auth error mapping |
 | 16 | Mono Themes + Page Rename | `features/16-mono-themes-page-rename/` | done | 207 ✓, 208 ✓ | Rename Page A/B → Music/Stats, add mono-dark/mono-light themes |
 | 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | in-progress | 214 ✓, 215 ✓, 216 ✓, 217 ✓, 218 ✓, 219 ✓, 220 ✓, 221 ✓, 222 ✓, 223 | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight, single-formula layout. Phase 2 (shipped): OverlayBackground token + InfoBox fill (221); remove album art, overlay InfoBox on full-pane visualizer (222). Phase 3 (open): Fix layout — adaptive width, remove solid bg, centering, compact preset MinHeight (223) |
-| 18 | Podcasts Page | `features/18-podcasts/` | open | 227, 228, 229, 230, 231, 232 | Dedicated page for podcast listening: PodcastPlayback pane, ShowEpisodes/FollowedShows/SavedEpisodes table panes, PodcastAPI client, 4 new border tokens, 3-page cycle |
+| 18 | Podcasts Page | `features/18-podcasts/` | done | 227 ✓, 228 ✓, 229 ✓, 230 ✓, 231 ✓, 232 ✓ | Dedicated page for podcast listening: PodcastPlayback pane, ShowEpisodes/FollowedShows/SavedEpisodes table panes, PodcastAPI client, 4 new border tokens, 3-page cycle |
 
 ---
 

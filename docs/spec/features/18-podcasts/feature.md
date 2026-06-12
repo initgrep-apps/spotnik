@@ -1,6 +1,6 @@
 ---
 title: "Podcasts Page"
-status: open
+status: done
 ---
 
 ## Description
@@ -22,12 +22,12 @@ dedicated episode display surface.
 
 | Story | Title | Status |
 |-------|-------|--------|
-| 227 | Domain types + PodcastAPI client | open |
-| 228 | State store + messages | open |
-| 229 | Layout, presets, theme border tokens | open |
-| 230 | PodcastPlayback pane | open |
-| 231 | Table panes (ShowEpisodes + FollowedShows + SavedEpisodes) | open |
-| 232 | App wiring (commands, routing, handlers, docs) | open |
+| 227 | Domain types + PodcastAPI client | done |
+| 228 | State store + messages | done |
+| 229 | Layout, presets, theme border tokens | done |
+| 230 | PodcastPlayback pane | done |
+| 231 | Table panes (ShowEpisodes + FollowedShows + SavedEpisodes) | done |
+| 232 | App wiring (commands, routing, handlers, docs) | done |
 
 ## Acceptance Criteria
 

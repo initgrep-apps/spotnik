@@ -1,7 +1,7 @@
 ---
 title: "Table panes (ShowEpisodes + FollowedShows + SavedEpisodes)"
 feature: 18-podcasts
-status: open
+status: done
 ---
 
 ## Background

@@ -1,7 +1,7 @@
 ---
 title: "App wiring (commands, routing, handlers, docs)"
 feature: 18-podcasts
-status: open
+status: done
 ---
 
 ## Background

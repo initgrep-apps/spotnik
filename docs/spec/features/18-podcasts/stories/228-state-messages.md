@@ -1,7 +1,7 @@
 ---
 title: "State store + messages"
 feature: 18-podcasts
-status: open
+status: done
 ---
 
 ## Background
