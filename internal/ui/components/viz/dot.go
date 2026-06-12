@@ -15,7 +15,9 @@ type DotRenderer struct{}
 
 func (r DotRenderer) MaxHeight(displayHeight int) int { return displayHeight }
 
-func (r DotRenderer) RenderFrame(width, height int, colHeights []int, colors []lipgloss.Color) Frame {
+// RenderFrameAt computes per-cell density from the standing wave formula
+// and maps to dot characters. Implements FrameAwareRenderer.
+func (r DotRenderer) RenderFrameAt(width, height, frameIdx int, colors []lipgloss.Color) Frame {
 	if width <= 0 || height <= 0 {
 		return Frame{}
 	}
@@ -25,18 +27,14 @@ func (r DotRenderer) RenderFrame(width, height int, colHeights []int, colors []l
 	medium := uikit.GlyphFor(uikit.GlyphBullet, m)
 	heavy := uikit.GlyphFor(uikit.GlyphFilledDot, m)
 
-	frame := make(Frame, height)
+	phase := phaseFor(frameIdx)
 
+	frame := make(Frame, height)
 	for rowIdx := 0; rowIdx < height; rowIdx++ {
 		vProfile := math.Abs(math.Sin(2 * math.Pi * float64(rowIdx) / float64(height)))
 		var sb strings.Builder
 		for col := 0; col < width; col++ {
-			var h int
-			if col < len(colHeights) {
-				h = colHeights[col]
-			}
 			x := float64(col) / float64(width) * 2 * math.Pi
-			phase := float64(h) / float64(height)
 			hProfile := 0.5 + 0.5*math.Sin(x+phase)
 			density := vProfile * hProfile
 
@@ -60,4 +58,11 @@ func (r DotRenderer) RenderFrame(width, height int, colHeights []int, colors []l
 	return frame
 }
 
+// RenderFrame is required by the Renderer interface but delegates to
+// RenderFrameAt for consistency (frameIdx=0 as default).
+func (r DotRenderer) RenderFrame(width, height int, colHeights []int, colors []lipgloss.Color) Frame {
+	return r.RenderFrameAt(width, height, 0, colors)
+}
+
 var _ Renderer = DotRenderer{}
+var _ FrameAwareRenderer = DotRenderer{}

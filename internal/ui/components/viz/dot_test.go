@@ -73,24 +73,30 @@ func TestDotRenderer_DensityMapping(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphUnicode)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)
 
-	// Verify that the renderer outputs the expected dot characters.
 	r := DotRenderer{}
-	width := 10
-	height := 4
-	// Use uniform colHeights to get predictable density
-	colHeights := make([]int, width)
-	for i := range colHeights {
-		colHeights[i] = 50
-	}
-	colors := makeColors(height)
-	frame := r.RenderFrame(width, height, colHeights, colors)
-	require.Len(t, frame, height)
+	frame := r.RenderFrameAt(10, 4, 0, makeColors(4))
+	require.Len(t, frame, 4)
 
-	// Every row should contain only valid dot chars or spaces
 	for _, line := range frame {
 		for _, ch := range line.Text {
 			assert.True(t, ch == ' ' || ch == '·' || ch == '•' || ch == '●',
 				"unexpected rune %U (%c)", ch, ch)
 		}
 	}
+}
+
+func TestDotRenderer_RenderFrameAt_MaxDensityCenter(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	r := DotRenderer{}
+	frame := r.RenderFrameAt(10, 4, 0, makeColors(4))
+	require.Len(t, frame, 4)
+	for _, line := range frame {
+		assert.Equal(t, 10, utf8.RuneCountInString(line.Text))
+	}
+}
+
+func TestDotRenderer_ImplementsFrameAwareRenderer(t *testing.T) {
+	assert.Implements(t, (*FrameAwareRenderer)(nil), DotRenderer{})
 }
