@@ -52,6 +52,9 @@ func TestGaussianRenderer_ColorsAssigned(t *testing.T) {
 }
 
 func TestGaussianRenderer_ColorSegments(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
 	r := GaussianRenderer{}
 	width := 10
 	height := 6
@@ -72,6 +75,18 @@ func TestGaussianRenderer_ColorSegments(t *testing.T) {
 	}
 	assert.True(t, hasMultiSegment,
 		"at least one row should have multiple color segments due to per-column hue shift")
+
+	// Verify every segment text is valid UTF-8 (would catch byte-indexing bugs)
+	for _, line := range frame {
+		var segRunes int
+		for _, seg := range line.Segments {
+			assert.True(t, utf8.ValidString(seg.Text),
+				"segment text must be valid UTF-8, got %q", seg.Text)
+			segRunes += utf8.RuneCountInString(seg.Text)
+		}
+		assert.Equal(t, width, segRunes,
+			"total runes in segments must equal width for line %q", line.Text)
+	}
 }
 
 func TestGaussianRenderer_AbsoluteDensityThresholds(t *testing.T) {

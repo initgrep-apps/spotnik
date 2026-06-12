@@ -47,6 +47,7 @@ func (r FloorRenderer) RenderFrame(width, height int, colHeights []int, colors [
 		var segBuf strings.Builder
 		var prevColor lipgloss.Color
 		lineText := sb.String()
+		runes := []rune(lineText)
 		for col := 0; col < width; col++ {
 			zoneStep := 2
 			shift := (col * zoneStep) % height
@@ -60,7 +61,7 @@ func (r FloorRenderer) RenderFrame(width, height int, colHeights []int, colors [
 				segBuf.Reset()
 			}
 			prevColor = colColor
-			segBuf.WriteByte(lineText[col])
+			segBuf.WriteString(string(runes[col]))
 		}
 		if segBuf.Len() > 0 {
 			segments = append(segments, StyledSegment{Text: segBuf.String(), Color: prevColor})
