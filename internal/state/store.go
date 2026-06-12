@@ -42,6 +42,12 @@ const (
 	// DevicesTTL is the cache lifetime for the available device list.
 	// Short cooldown prevents rapid-fire API calls while ensuring fresh data on user request.
 	DevicesTTL = 5 * time.Second
+	// FollowedShowsTTL is the cache lifetime for the user's followed podcast shows.
+	FollowedShowsTTL = 5 * time.Minute
+	// SavedEpisodesTTL is the cache lifetime for the user's saved podcast episodes.
+	SavedEpisodesTTL = 5 * time.Minute
+	// ShowEpisodesTTL is the cache lifetime for a specific show's episode list.
+	ShowEpisodesTTL = 5 * time.Minute
 )
 
 // IsStale returns true if fetchedAt is zero (never fetched) or older than ttl.
@@ -134,6 +140,28 @@ type Store struct {
 	recentPlayedFetchErr error // recently played fetch
 	playlistsError       error // playlist manager (tracks, mutations)
 
+	// Podcast data
+	followedShows       []domain.SavedShow
+	savedEpisodes       []domain.SavedEpisode
+	showEpisodes        []domain.Episode
+	showEpisodesTotal   int
+	selectedShowID     string
+	selectedShow       *domain.Show
+
+	// Podcast staleness tracking
+	followedShowsFetchedAt   time.Time
+	savedEpisodesFetchedAt   time.Time
+	showEpisodesFetchedAt    time.Time
+
+	// Podcast fetching sentinels
+	followedShowsFetching bool
+	savedEpisodesFetching bool
+	showEpisodesFetching  bool
+
+	// Podcast error state
+	followedShowsFetchErr    error
+	savedEpisodesFetchErr    error
+	showEpisodesFetchErr     error
 }
 
 // New returns an empty Store with no playback state.
@@ -843,6 +871,296 @@ func (s *Store) ClearPlaylistsError() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.playlistsError = nil
+}
+
+// --- Podcast data accessors ---
+
+// FollowedShows returns the user's followed podcast shows.
+func (s *Store) FollowedShows() []domain.SavedShow {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.followedShows
+}
+
+// SetFollowedShows updates the followed shows in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
+func (s *Store) SetFollowedShows(items []domain.SavedShow) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.followedShows = items
+	if len(items) > 0 {
+		s.followedShowsFetchedAt = time.Now()
+	}
+}
+
+// FollowedShowsLoaded returns true if followed shows have been fetched at least once.
+func (s *Store) FollowedShowsLoaded() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return !s.followedShowsFetchedAt.IsZero()
+}
+
+// FollowedShowsFetchedAt returns the time when followed shows were last successfully fetched.
+func (s *Store) FollowedShowsFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.followedShowsFetchedAt
+}
+
+// SetFollowedShowsFetchedAt stamps the time when followed shows were last successfully loaded.
+func (s *Store) SetFollowedShowsFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.followedShowsFetchedAt = t
+}
+
+// FollowedShowsStale returns true if the followed shows are stale and should be re-fetched.
+func (s *Store) FollowedShowsStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.followedShowsFetchedAt, FollowedShowsTTL)
+}
+
+// FollowedShowsFetching returns true while a followed-shows fetch is in-flight.
+func (s *Store) FollowedShowsFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.followedShowsFetching
+}
+
+// SetFollowedShowsFetching sets or clears the in-flight followed-shows fetch sentinel.
+func (s *Store) SetFollowedShowsFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.followedShowsFetching = f
+}
+
+// FollowedShowsFetchError returns the last followed shows fetch error, or nil.
+func (s *Store) FollowedShowsFetchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.followedShowsFetchErr
+}
+
+// SetFollowedShowsFetchError records a followed shows fetch failure.
+func (s *Store) SetFollowedShowsFetchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.followedShowsFetchErr = err
+}
+
+// ClearFollowedShowsFetchError clears the followed shows fetch error on successful retry.
+func (s *Store) ClearFollowedShowsFetchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.followedShowsFetchErr = nil
+}
+
+// SavedEpisodes returns the user's saved podcast episodes.
+func (s *Store) SavedEpisodes() []domain.SavedEpisode {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.savedEpisodes
+}
+
+// SetSavedEpisodes updates the saved episodes in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
+func (s *Store) SetSavedEpisodes(items []domain.SavedEpisode) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.savedEpisodes = items
+	if len(items) > 0 {
+		s.savedEpisodesFetchedAt = time.Now()
+	}
+}
+
+// SavedEpisodesLoaded returns true if saved episodes have been fetched at least once.
+func (s *Store) SavedEpisodesLoaded() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return !s.savedEpisodesFetchedAt.IsZero()
+}
+
+// SavedEpisodesFetchedAt returns the time when saved episodes were last successfully fetched.
+func (s *Store) SavedEpisodesFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.savedEpisodesFetchedAt
+}
+
+// SetSavedEpisodesFetchedAt stamps the time when saved episodes were last successfully loaded.
+func (s *Store) SetSavedEpisodesFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.savedEpisodesFetchedAt = t
+}
+
+// SavedEpisodesStale returns true if the saved episodes are stale and should be re-fetched.
+func (s *Store) SavedEpisodesStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.savedEpisodesFetchedAt, SavedEpisodesTTL)
+}
+
+// SavedEpisodesFetching returns true while a saved-episodes fetch is in-flight.
+func (s *Store) SavedEpisodesFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.savedEpisodesFetching
+}
+
+// SetSavedEpisodesFetching sets or clears the in-flight saved-episodes fetch sentinel.
+func (s *Store) SetSavedEpisodesFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.savedEpisodesFetching = f
+}
+
+// SavedEpisodesFetchError returns the last saved episodes fetch error, or nil.
+func (s *Store) SavedEpisodesFetchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.savedEpisodesFetchErr
+}
+
+// SetSavedEpisodesFetchError records a saved episodes fetch failure.
+func (s *Store) SetSavedEpisodesFetchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.savedEpisodesFetchErr = err
+}
+
+// ClearSavedEpisodesFetchError clears the saved episodes fetch error on successful retry.
+func (s *Store) ClearSavedEpisodesFetchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.savedEpisodesFetchErr = nil
+}
+
+// ShowEpisodes returns the cached episodes for a specific show.
+func (s *Store) ShowEpisodes() []domain.Episode {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.showEpisodes
+}
+
+// SetShowEpisodes updates the show episodes in the store.
+// fetchedAt is only stamped when the slice is non-empty to avoid resetting
+// the TTL on empty/error responses and blocking retries prematurely.
+func (s *Store) SetShowEpisodes(items []domain.Episode) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showEpisodes = items
+	if len(items) > 0 {
+		s.showEpisodesFetchedAt = time.Now()
+	}
+}
+
+// ShowEpisodesTotal returns the total number of episodes for the selected show.
+func (s *Store) ShowEpisodesTotal() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.showEpisodesTotal
+}
+
+// SetShowEpisodesTotal updates the total episode count for the selected show.
+func (s *Store) SetShowEpisodesTotal(total int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showEpisodesTotal = total
+}
+
+// ShowEpisodesLoaded returns true if show episodes have been fetched at least once.
+func (s *Store) ShowEpisodesLoaded() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return !s.showEpisodesFetchedAt.IsZero()
+}
+
+// ShowEpisodesFetchedAt returns the time when show episodes were last successfully fetched.
+func (s *Store) ShowEpisodesFetchedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.showEpisodesFetchedAt
+}
+
+// SetShowEpisodesFetchedAt stamps the time when show episodes were last successfully loaded.
+func (s *Store) SetShowEpisodesFetchedAt(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showEpisodesFetchedAt = t
+}
+
+// ShowEpisodesStale returns true if the show episodes are stale and should be re-fetched.
+func (s *Store) ShowEpisodesStale() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return IsStale(s.showEpisodesFetchedAt, ShowEpisodesTTL)
+}
+
+// ShowEpisodesFetching returns true while a show-episodes fetch is in-flight.
+func (s *Store) ShowEpisodesFetching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.showEpisodesFetching
+}
+
+// SetShowEpisodesFetching sets or clears the in-flight show-episodes fetch sentinel.
+func (s *Store) SetShowEpisodesFetching(f bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showEpisodesFetching = f
+}
+
+// ShowEpisodesFetchError returns the last show episodes fetch error, or nil.
+func (s *Store) ShowEpisodesFetchError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.showEpisodesFetchErr
+}
+
+// SetShowEpisodesFetchError records a show episodes fetch failure.
+func (s *Store) SetShowEpisodesFetchError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showEpisodesFetchErr = err
+}
+
+// ClearShowEpisodesFetchError clears the show episodes fetch error on successful retry.
+func (s *Store) ClearShowEpisodesFetchError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showEpisodesFetchErr = nil
+}
+
+// SelectedShowID returns the Spotify ID of the currently selected show.
+func (s *Store) SelectedShowID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.selectedShowID
+}
+
+// SetSelectedShowID sets the Spotify ID of the currently selected show.
+func (s *Store) SetSelectedShowID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.selectedShowID = id
+}
+
+// SelectedShow returns the full show data for the currently selected show, or nil.
+func (s *Store) SelectedShow() *domain.Show {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.selectedShow
+}
+
+// SetSelectedShow sets the full show data for the currently selected show.
+func (s *Store) SetSelectedShow(show *domain.Show) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.selectedShow = show
 }
 
 // --- Gateway Event Journal ---
