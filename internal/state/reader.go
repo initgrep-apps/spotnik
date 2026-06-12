@@ -123,6 +123,19 @@ type StateReader interface {
 	// Pass cursor=0 on the first call.
 	ReadEventsFrom(cursor uint64) (uint64, []domain.GatewayEvent)
 
+	// --- Podcasts ---
+
+	// FollowedShows returns the user's followed podcast shows.
+	FollowedShows() []domain.SavedShow
+	// SavedEpisodes returns the user's saved podcast episodes.
+	SavedEpisodes() []domain.SavedEpisode
+	// ShowEpisodes returns the cached episodes for the selected show.
+	ShowEpisodes() []domain.Episode
+	// SelectedShowID returns the Spotify ID of the currently selected show.
+	SelectedShowID() string
+	// SelectedShow returns the full show data for the currently selected show, or nil.
+	SelectedShow() *domain.Show
+
 	// --- Throttle observability ---
 
 	// IsThrottled returns true if the gateway is currently in a 429 backoff period.

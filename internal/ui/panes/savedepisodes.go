@@ -1,0 +1,237 @@
+package panes
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/components"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
+	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
+)
+
+var _ layout.Pane = &SavedEpisodesPane{}
+var _ layout.FilterablePane = &SavedEpisodesPane{}
+var _ layout.FilterQueryPane = &SavedEpisodesPane{}
+
+type SavedEpisodesPane struct {
+	*TableBasedPane
+}
+
+func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *SavedEpisodesPane {
+	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
+		{Key: "saved", Header: "Saved", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
+	}
+	t := components.NewTable(components.TableConfig{
+		Columns:      columns,
+		Theme:        th,
+		PlayingIndex: -1,
+		ShowHeader:   true,
+	})
+	f := components.NewFilter(th)
+	f.SetPlaceholder("filter episodes...")
+	p := &SavedEpisodesPane{
+		TableBasedPane: NewTableBasedPane(store, th, focused, t, f),
+	}
+	t.SetFocused(focused)
+	p.buildRows()
+	return p
+}
+
+func (p *SavedEpisodesPane) ID() layout.PaneID { return layout.PaneSavedEpisodes }
+
+func (p *SavedEpisodesPane) Title() string { return "Saved Episodes" }
+
+func (p *SavedEpisodesPane) ToggleKey() int { return 4 }
+
+func (p *SavedEpisodesPane) Actions() []layout.Action {
+	return []layout.Action{p.BaseFilterAction()}
+}
+
+func (p *SavedEpisodesPane) Init() tea.Cmd { return nil }
+
+func (p *SavedEpisodesPane) SetFocused(focused bool) {
+	p.TableBasedPane.SetFocused(focused)
+	p.Table().SetFocused(focused && !p.Filter().IsActive())
+}
+
+func (p *SavedEpisodesPane) SetSize(width, height int) {
+	p.TableBasedPane.SetSize(width, height)
+	p.Filter().SetWidth(width)
+	p.resizeTable()
+}
+
+func (p *SavedEpisodesPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case SavedEpisodesLoadedMsg:
+		p.buildRows()
+		return p, nil
+	}
+
+	if !p.focused {
+		return p, nil
+	}
+
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return p, nil
+	}
+
+	if consumed, cmd := p.HandleFilterKey(keyMsg, p.buildRows, p.resizeTable); consumed {
+		return p, cmd
+	}
+
+	if keyMsg.Type == tea.KeyEnter {
+		episodes := p.filteredSavedEpisodes()
+		idx := p.Table().SelectedIndex()
+		if idx >= 0 && idx < len(episodes) {
+			se := episodes[idx]
+			if !se.Episode.IsPlayable {
+				return p, nil
+			}
+			showURI := ""
+			if se.Episode.Show != nil {
+				showURI = "spotify:show:" + se.Episode.Show.ID
+			}
+			return p, func() tea.Msg {
+				return PlayEpisodeMsg{
+					EpisodeURI:  se.Episode.URI,
+					PlaylistURI: showURI,
+				}
+			}
+		}
+		return p, nil
+	}
+
+	cmd := p.Table().Update(keyMsg)
+	return p, cmd
+}
+
+func (p *SavedEpisodesPane) View() string {
+	if len(p.store.SavedEpisodes()) == 0 && !p.Filter().IsActive() {
+		return uikit.EmptyState{
+			Text:   "No saved episodes",
+			Width:  p.width,
+			Height: p.height,
+			Theme:  p.theme,
+		}.Render()
+	}
+	var parts []string
+	if p.Filter().IsActive() {
+		parts = append(parts, p.Filter().View(p.width))
+	}
+	parts = append(parts, p.Table().View())
+	return strings.Join(parts, "\n")
+}
+
+func (p *SavedEpisodesPane) RefreshRows() { p.buildRows() }
+
+func (p *SavedEpisodesPane) buildRows() {
+	saved := p.filteredSavedEpisodes()
+	if saved == nil {
+		saved = []domain.SavedEpisode{}
+	}
+
+	rows := make([]map[string]string, len(saved))
+	mode := uikit.ActiveMode()
+	for i, se := range saved {
+		ep := se.Episode
+		var iconGlyph string
+		if !ep.IsPlayable {
+			iconGlyph = uikit.GlyphFor(uikit.GlyphBlocked, mode)
+		} else if ep.ResumePoint.ResumePositionMs > 0 && !ep.ResumePoint.FullyPlayed {
+			iconGlyph = uikit.GlyphFor(uikit.GlyphPlaying, mode)
+		}
+
+		showName := ""
+		if ep.Show != nil {
+			showName = ep.Show.Name
+		}
+
+		rows[i] = map[string]string{
+			"index":    fmt.Sprintf("%d", i+1),
+			"episode":  ep.Name,
+			"show":     showName,
+			"saved":    formatSavedDate(se.AddedAt),
+			"duration": formatDurationMsH(ep.DurationMs),
+			"icon":     iconGlyph,
+		}
+	}
+
+	playingIdx := -1
+	if ps := p.store.PlaybackState(); ps != nil && ps.Episode != nil {
+		for i, se := range saved {
+			if se.Episode.ID == ps.Episode.ID {
+				playingIdx = i
+				break
+			}
+		}
+	}
+	p.Table().SetPlayingIndex(playingIdx)
+	p.Table().SetRows(rows)
+}
+
+func (p *SavedEpisodesPane) filteredSavedEpisodes() []domain.SavedEpisode {
+	all := p.store.SavedEpisodes()
+	if p.Filter().Query() == "" {
+		return all
+	}
+	result := make([]domain.SavedEpisode, 0, len(all))
+	for _, se := range all {
+		showName := ""
+		if se.Episode.Show != nil {
+			showName = se.Episode.Show.Name
+		}
+		if p.Filter().MatchesAny(se.Episode.Name, showName) {
+			result = append(result, se)
+		}
+	}
+	return result
+}
+
+func (p *SavedEpisodesPane) resizeTable() {
+	tableHeight := p.height
+	if p.Filter().IsActive() {
+		tableHeight--
+	}
+	if tableHeight < 0 {
+		tableHeight = 0
+	}
+	p.Table().SetSize(p.width, tableHeight)
+}
+
+func (p *SavedEpisodesPane) SetTheme(th theme.Theme) {
+	p.theme = th
+	cols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
+		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
+		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
+		{Key: "saved", Header: "Saved", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
+	}
+	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
+	p.SwapTableAndFilter(newTable, newFilter)
+	p.resizeTable()
+	p.buildRows()
+}
+
+func formatSavedDate(isoStr string) string {
+	if isoStr == "" {
+		return ""
+	}
+	t, err := time.Parse(time.RFC3339, isoStr)
+	if err != nil {
+		return isoStr
+	}
+	return components.FormatRelativeTime(t)
+}
