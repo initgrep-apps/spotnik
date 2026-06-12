@@ -863,8 +863,8 @@ func TestNowPlayingPane_SetVisualizerPattern(t *testing.T) {
 	pane := newTestNowPlayingPane(true)
 	pane.SetSize(80, 24)
 
-	pane.SetVisualizerPattern(2)
-	assert.Equal(t, 2, pane.engine.Pattern(), "SetVisualizerPattern should delegate to engine.SetPattern")
+	pane.SetVisualizerPattern(1)
+	assert.Equal(t, 1, pane.engine.Pattern(), "SetVisualizerPattern should delegate to engine.SetPattern")
 }
 
 // TestNowPlayingPane_VKey_EmitsVisualizerChangedMsg verifies that pressing 'v'
@@ -891,16 +891,16 @@ func TestNowPlayingPane_SetTheme_PreservesVisualizerPattern(t *testing.T) {
 	pane := newTestNowPlayingPane(false)
 	pane.SetSize(80, 24)
 
-	// Cycle to a non-default pattern (pattern 2).
-	pane.SetVisualizerPattern(2)
-	require.Equal(t, 2, pane.engine.Pattern(), "pattern should be 2 before theme change")
+	// Cycle to the second pattern (Braille Mirror).
+	pane.SetVisualizerPattern(1)
+	require.Equal(t, 1, pane.engine.Pattern(), "pattern should be 1 before theme change")
 
 	// Switch to a different theme.
 	newTheme := theme.Load("dracula")
 	pane.SetTheme(newTheme)
 
 	// Pattern must be preserved after the theme change.
-	assert.Equal(t, 2, pane.engine.Pattern(),
+	assert.Equal(t, 1, pane.engine.Pattern(),
 		"SetTheme must not reset the visualizer pattern")
 }
 

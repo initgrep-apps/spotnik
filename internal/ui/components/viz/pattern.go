@@ -27,29 +27,17 @@ type Pattern struct {
 	HeightFunc HeightFunc
 }
 
-// Patterns returns the full ordered list of available animation patterns.
+// Patterns returns the ordered list of available animation patterns.
 // Index is stable — callers cycle by incrementing modulo len(Patterns()).
 //
-// Pattern 0: GaussianRenderer (Pixel Spectrum)
-// Pattern 1: DotRenderer (Standing Wave)
-// Pattern 2: FloorRenderer (Floor Spectrum)
-// Pattern 3: BrailleMirrorRenderer (Braille Mirror)
+// Pattern 0: DotRenderer (Standing Wave)
+// Pattern 1: BrailleMirrorRenderer (Braille Mirror)
 func Patterns() []Pattern {
 	return []Pattern{
-		{
-			Name:       "Pixel Spectrum",
-			Renderer:   GaussianRenderer{},
-			HeightFunc: heightPixelSpectrum,
-		},
 		{
 			Name:       "Standing Wave",
 			Renderer:   DotRenderer{},
 			HeightFunc: heightStandingWave,
-		},
-		{
-			Name:       "Floor Spectrum",
-			Renderer:   FloorRenderer{},
-			HeightFunc: heightFloorSpectrum,
 		},
 		{
 			Name:       "Braille Mirror",
@@ -76,21 +64,7 @@ func phaseFor(frameIdx int) float64 {
 	return float64(frameIdx) * (2 * math.Pi / float64(numFrames))
 }
 
-// heightPixelSpectrum — Pattern 0 (GaussianRenderer): centered Gaussian density
-// wave. Multi-frequency sine composition for smooth organic motion.
-func heightPixelSpectrum(width, maxHeight, frameIdx int) []int {
-	out := make([]int, width)
-	phase := phaseFor(frameIdx)
-	for col := 0; col < width; col++ {
-		x := float64(col) / float64(width) * 2 * math.Pi
-		val := 0.5 + 0.3*math.Sin(x+phase) + 0.15*math.Sin(2*x+phase*0.7) + 0.05*math.Sin(5*x)
-		val = clamp01(val)
-		out[col] = int(val * float64(maxHeight))
-	}
-	return out
-}
-
-// heightStandingWave — Pattern 1 (DotRenderer): standing wave with 2 antinodes.
+// heightStandingWave — Pattern 0 (DotRenderer): standing wave with 2 antinodes.
 // Column heights serve as phase offsets for horizontal wave.
 func heightStandingWave(width, maxHeight, frameIdx int) []int {
 	out := make([]int, width)
@@ -105,25 +79,7 @@ func heightStandingWave(width, maxHeight, frameIdx int) []int {
 	return out
 }
 
-// heightFloorSpectrum — Pattern 2 (FloorRenderer): bars with thick baseline floor.
-// Bottom quarter is floor, upper portion varies via sine.
-func heightFloorSpectrum(width, maxHeight, frameIdx int) []int {
-	out := make([]int, width)
-	phase := phaseFor(frameIdx)
-	floor := maxHeight / 4
-	if floor < 1 {
-		floor = 1
-	}
-	for col := 0; col < width; col++ {
-		x := float64(col) / float64(width) * 2 * math.Pi
-		val := 0.3 + 0.7*(0.5+0.5*math.Sin(x+phase)+0.3*math.Sin(2*x+phase*0.6))
-		val = clamp01(val)
-		out[col] = floor + int(val*float64(maxHeight-floor))
-	}
-	return out
-}
-
-// heightBrailleMirror — Pattern 3 (BrailleMirrorRenderer): double-lobe standing wave.
+// heightBrailleMirror — Pattern 1 (BrailleMirrorRenderer): double-lobe standing wave.
 // Column heights determine lobe thickness (distance from center to lobe edge).
 func heightBrailleMirror(width, maxHeight, frameIdx int) []int {
 	out := make([]int, width)
