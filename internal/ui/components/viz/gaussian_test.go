@@ -51,6 +51,29 @@ func TestGaussianRenderer_ColorsAssigned(t *testing.T) {
 	}
 }
 
+func TestGaussianRenderer_ColorSegments(t *testing.T) {
+	r := GaussianRenderer{}
+	width := 10
+	height := 6
+	colHeights := makeColHeights(width, 6)
+	// Use varied colors so hue shift creates segment boundaries
+	colors := []lipgloss.Color{
+		"#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff",
+	}
+	frame := r.RenderFrame(width, height, colHeights, colors)
+	require.Len(t, frame, height)
+
+	hasMultiSegment := false
+	for _, line := range frame {
+		if len(line.Segments) > 1 {
+			hasMultiSegment = true
+			break
+		}
+	}
+	assert.True(t, hasMultiSegment,
+		"at least one row should have multiple color segments due to per-column hue shift")
+}
+
 func TestGaussianRenderer_AbsoluteDensityThresholds(t *testing.T) {
 	uikit.SetModeForTest(uikit.GlyphUnicode)
 	defer uikit.SetModeForTest(uikit.GlyphUnicode)

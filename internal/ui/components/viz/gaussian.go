@@ -54,11 +54,35 @@ func (r GaussianRenderer) RenderFrame(width, height int, colHeights []int, color
 				sb.WriteRune(' ')
 			}
 		}
-		var color lipgloss.Color
-		if rowIdx < len(colors) {
-			color = colors[rowIdx]
+		// Build Segments for per-column hue shift
+		var segments []StyledSegment
+		var segBuf strings.Builder
+		var prevColor lipgloss.Color
+		lineText := sb.String()
+		for col := 0; col < width; col++ {
+			zoneStep := 2
+			shift := (col * zoneStep) % height
+			shiftedRow := (rowIdx + shift) % height
+			var colColor lipgloss.Color
+			if shiftedRow < len(colors) {
+				colColor = colors[shiftedRow]
+			}
+			if colColor != prevColor && segBuf.Len() > 0 {
+				segments = append(segments, StyledSegment{Text: segBuf.String(), Color: prevColor})
+				segBuf.Reset()
+			}
+			prevColor = colColor
+			segBuf.WriteByte(lineText[col])
 		}
-		frame[rowIdx] = StyledLine{Text: sb.String(), Color: color}
+		if segBuf.Len() > 0 {
+			segments = append(segments, StyledSegment{Text: segBuf.String(), Color: prevColor})
+		}
+
+		var lineColor lipgloss.Color
+		if rowIdx < len(colors) {
+			lineColor = colors[rowIdx]
+		}
+		frame[rowIdx] = StyledLine{Text: lineText, Color: lineColor, Segments: segments}
 	}
 	return frame
 }
