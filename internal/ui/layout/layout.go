@@ -22,12 +22,14 @@ func NewManager() *Manager {
 	m := &Manager{
 		activePage: PageMusic,
 		presets: map[PageID][]Preset{
-			PageMusic: PageMusicPresets,
-			PageStats: PageStatsPresets,
+			PageMusic:    PageMusicPresets,
+			PageStats:    PageStatsPresets,
+			PagePodcasts: PagePodcastsPresets,
 		},
 		activePreset: map[PageID]int{
-			PageMusic: 0,
-			PageStats: 0,
+			PageMusic:    0,
+			PageStats:    0,
+			PagePodcasts: 0,
 		},
 		hidden:       make(map[PaneID]bool),
 		rects:        make(map[PaneID]Rect),
@@ -232,12 +234,15 @@ func (m *Manager) ActivePresetName() string {
 	return presets[idx].Name
 }
 
-// TogglePage switches between PageMusic and PageStats.
+// TogglePage cycles through PageMusic, PagePodcasts, and PageStats.
 // Resets hidden map and recomputes layout.
 func (m *Manager) TogglePage() {
-	if m.activePage == PageMusic {
+	switch m.activePage {
+	case PageMusic:
+		m.activePage = PagePodcasts
+	case PagePodcasts:
 		m.activePage = PageStats
-	} else {
+	default:
 		m.activePage = PageMusic
 	}
 	m.hidden = make(map[PaneID]bool)

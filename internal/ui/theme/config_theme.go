@@ -81,8 +81,12 @@ type paneBorderColors struct {
 	RecentlyPlayed string `toml:"recently_played"`
 	TopTracks      string `toml:"top_tracks"`
 	TopArtists     string `toml:"top_artists"`
-	RequestFlow    string `toml:"request_flow"`
-	NetworkLog     string `toml:"network_log"`
+	RequestFlow     string `toml:"request_flow"`
+	NetworkLog      string `toml:"network_log"`
+	PodcastPlayback string `toml:"podcast_playback"`
+	ShowEpisodes    string `toml:"show_episodes"`
+	FollowedShows   string `toml:"followed_shows"`
+	SavedEpisodes   string `toml:"saved_episodes"`
 }
 
 // ConfigTheme implements Theme by loading color values from a parsed TOML file.
@@ -318,6 +322,26 @@ func (t *ConfigTheme) PaneBorderRequestFlow() lipgloss.Color {
 
 // PaneBorderNetworkLog returns the network log pane border accent color.
 func (t *ConfigTheme) PaneBorderNetworkLog() lipgloss.Color { return lipgloss.Color(t.pb.NetworkLog) }
+
+// PaneBorderPodcastPlayback returns the podcast playback pane border accent color.
+func (t *ConfigTheme) PaneBorderPodcastPlayback() lipgloss.Color {
+	return lipgloss.Color(t.pb.PodcastPlayback)
+}
+
+// PaneBorderShowEpisodes returns the show episodes pane border accent color.
+func (t *ConfigTheme) PaneBorderShowEpisodes() lipgloss.Color {
+	return lipgloss.Color(t.pb.ShowEpisodes)
+}
+
+// PaneBorderFollowedShows returns the followed shows pane border accent color.
+func (t *ConfigTheme) PaneBorderFollowedShows() lipgloss.Color {
+	return lipgloss.Color(t.pb.FollowedShows)
+}
+
+// PaneBorderSavedEpisodes returns the saved episodes pane border accent color.
+func (t *ConfigTheme) PaneBorderSavedEpisodes() lipgloss.Color {
+	return lipgloss.Color(t.pb.SavedEpisodes)
+}
 
 // Column colors
 

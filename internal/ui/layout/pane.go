@@ -25,14 +25,19 @@ const (
 	PaneGatewayHealth                // Stats pane 2 (toggle key 2)
 	PanePollingTraffic               // Stats pane 3 (toggle key 3)
 	PaneGatewayLive                  // Stats pane 4 (toggle key 4)
+	PanePodcastPlayback              // Podcasts pane 1 (toggle key 1)
+	PaneShowEpisodes                 // Podcasts pane 2 (toggle key 2)
+	PaneFollowedShows                // Podcasts pane 3 (toggle key 3)
+	PaneSavedEpisodes                // Podcasts pane 4 (toggle key 4)
 )
 
 // PageID identifies a page (group of panes).
 type PageID int
 
 const (
-	PageMusic PageID = iota // Music (8 panes)
-	PageStats               // Stats (5 panes)
+	PageMusic    PageID = iota // Music (8 panes)
+	PageStats                  // Stats (5 panes)
+	PagePodcasts               // Podcasts (4 panes)
 )
 
 // Rect describes a pane's position and size in terminal cells.

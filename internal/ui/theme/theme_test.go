@@ -100,6 +100,10 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.PaneBorderTopArtists()), "PaneBorderTopArtists()")
 	assert.NotEmpty(t, string(th.PaneBorderRequestFlow()), "PaneBorderRequestFlow()")
 	assert.NotEmpty(t, string(th.PaneBorderNetworkLog()), "PaneBorderNetworkLog()")
+	assert.NotEmpty(t, string(th.PaneBorderPodcastPlayback()), "PaneBorderPodcastPlayback()")
+	assert.NotEmpty(t, string(th.PaneBorderShowEpisodes()), "PaneBorderShowEpisodes()")
+	assert.NotEmpty(t, string(th.PaneBorderFollowedShows()), "PaneBorderFollowedShows()")
+	assert.NotEmpty(t, string(th.PaneBorderSavedEpisodes()), "PaneBorderSavedEpisodes()")
 	// New 4 column tokens (Feature 70)
 	assert.NotEmpty(t, string(th.ColumnIndex()), "ColumnIndex()")
 	assert.NotEmpty(t, string(th.ColumnPrimary()), "ColumnPrimary()")
@@ -198,8 +202,12 @@ type newTokenWant struct {
 	paneBorderRecentlyPlayed string
 	paneBorderTopTracks      string
 	paneBorderTopArtists     string
-	paneBorderRequestFlow    string
-	paneBorderNetworkLog     string
+	paneBorderRequestFlow      string
+	paneBorderNetworkLog       string
+	paneBorderPodcastPlayback  string
+	paneBorderShowEpisodes     string
+	paneBorderFollowedShows    string
+	paneBorderSavedEpisodes    string
 }
 
 func TestNewTokens_ExactValues(t *testing.T) {
@@ -232,7 +240,11 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#bd93f9",
 				paneBorderTopArtists:     "#ff79c6",
 				paneBorderRequestFlow:    "#ffb86c",
-				paneBorderNetworkLog:     "#ff6ac1",
+				paneBorderNetworkLog:       "#ff6ac1",
+				paneBorderPodcastPlayback:  "#ff6ac1",
+				paneBorderShowEpisodes:     "#bd93f9",
+				paneBorderFollowedShows:    "#ff9f6e",
+				paneBorderSavedEpisodes:    "#ff6e6e",
 			},
 		},
 		{
@@ -260,7 +272,11 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#ae81ff",
 				paneBorderTopArtists:     "#f92672",
 				paneBorderRequestFlow:    "#fd971f",
-				paneBorderNetworkLog:     "#f4a261",
+				paneBorderNetworkLog:       "#f4a261",
+				paneBorderPodcastPlayback:  "#ff6ac1",
+				paneBorderShowEpisodes:     "#bd93f9",
+				paneBorderFollowedShows:    "#ff9f6e",
+				paneBorderSavedEpisodes:    "#ff6e6e",
 			},
 		},
 		{
@@ -288,7 +304,11 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#cba6f7",
 				paneBorderTopArtists:     "#f38ba8",
 				paneBorderRequestFlow:    "#fab387",
-				paneBorderNetworkLog:     "#eba0ac",
+				paneBorderNetworkLog:       "#eba0ac",
+				paneBorderPodcastPlayback:  "#ff6ac1",
+				paneBorderShowEpisodes:     "#bd93f9",
+				paneBorderFollowedShows:    "#ff9f6e",
+				paneBorderSavedEpisodes:    "#ff6e6e",
 			},
 		},
 		{
@@ -316,7 +336,11 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#b48ead",
 				paneBorderTopArtists:     "#bf616a",
 				paneBorderRequestFlow:    "#d08770",
-				paneBorderNetworkLog:     "#5e81ac",
+				paneBorderNetworkLog:       "#5e81ac",
+				paneBorderPodcastPlayback:  "#ff6ac1",
+				paneBorderShowEpisodes:     "#bd93f9",
+				paneBorderFollowedShows:    "#ff9f6e",
+				paneBorderSavedEpisodes:    "#ff6e6e",
 			},
 		},
 		{
@@ -344,7 +368,11 @@ func TestNewTokens_ExactValues(t *testing.T) {
 				paneBorderTopTracks:      "#8839ef",
 				paneBorderTopArtists:     "#d20f39",
 				paneBorderRequestFlow:    "#fe640b",
-				paneBorderNetworkLog:     "#ea76cb",
+				paneBorderNetworkLog:       "#ea76cb",
+				paneBorderPodcastPlayback:  "#d63384",
+				paneBorderShowEpisodes:     "#6f42c1",
+				paneBorderFollowedShows:    "#e86a33",
+				paneBorderSavedEpisodes:    "#dc3545",
 			},
 		},
 	}
@@ -378,6 +406,10 @@ func TestNewTokens_ExactValues(t *testing.T) {
 			assert.Equal(t, tt.want.paneBorderTopArtists, string(th.PaneBorderTopArtists()), "PaneBorderTopArtists")
 			assert.Equal(t, tt.want.paneBorderRequestFlow, string(th.PaneBorderRequestFlow()), "PaneBorderRequestFlow")
 			assert.Equal(t, tt.want.paneBorderNetworkLog, string(th.PaneBorderNetworkLog()), "PaneBorderNetworkLog")
+			assert.Equal(t, tt.want.paneBorderPodcastPlayback, string(th.PaneBorderPodcastPlayback()), "PaneBorderPodcastPlayback")
+			assert.Equal(t, tt.want.paneBorderShowEpisodes, string(th.PaneBorderShowEpisodes()), "PaneBorderShowEpisodes")
+			assert.Equal(t, tt.want.paneBorderFollowedShows, string(th.PaneBorderFollowedShows()), "PaneBorderFollowedShows")
+			assert.Equal(t, tt.want.paneBorderSavedEpisodes, string(th.PaneBorderSavedEpisodes()), "PaneBorderSavedEpisodes")
 		})
 	}
 }
@@ -507,6 +539,10 @@ top_tracks      = "#00aa11"
 top_artists     = "#00bb22"
 request_flow    = "#00cc33"
 network_log     = "#00dd44"
+podcast_playback = "#11ee55"
+show_episodes    = "#22ee66"
+followed_shows   = "#33ee77"
+saved_episodes   = "#44ee88"
 `
 
 func TestParseTheme_ValidTOML(t *testing.T) {
@@ -627,6 +663,10 @@ func TestConfigTheme_ReturnsCorrectColors(t *testing.T) {
 		{"PaneBorderTopArtists", string(th.PaneBorderTopArtists()), "#00bb22"},
 		{"PaneBorderRequestFlow", string(th.PaneBorderRequestFlow()), "#00cc33"},
 		{"PaneBorderNetworkLog", string(th.PaneBorderNetworkLog()), "#00dd44"},
+		{"PaneBorderPodcastPlayback", string(th.PaneBorderPodcastPlayback()), "#11ee55"},
+		{"PaneBorderShowEpisodes", string(th.PaneBorderShowEpisodes()), "#22ee66"},
+		{"PaneBorderFollowedShows", string(th.PaneBorderFollowedShows()), "#33ee77"},
+		{"PaneBorderSavedEpisodes", string(th.PaneBorderSavedEpisodes()), "#44ee88"},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -761,6 +801,10 @@ top_tracks      = "#778899"
 top_artists     = "#8899aa"
 request_flow    = "#99aabb"
 network_log     = "#aabbcc"
+podcast_playback = "#bbccdd"
+show_episodes    = "#ccddee"
+followed_shows   = "#ddeeff"
+saved_episodes   = "#eeffaa"
 `
 	th, err := theme.ParseTheme([]byte(userTOML))
 	require.NoError(t, err)
@@ -834,6 +878,10 @@ top_tracks      = "#778899"
 top_artists     = "#8899aa"
 request_flow    = "#99aabb"
 network_log     = "#aabbcc"
+podcast_playback = "#bbccdd"
+show_episodes    = "#ccddee"
+followed_shows   = "#ddeeff"
+saved_episodes   = "#eeffaa"
 `
 	err := os.WriteFile(filepath.Join(dir, "my-custom-theme.toml"), []byte(userTOML), 0o644)
 	require.NoError(t, err)
@@ -973,7 +1021,12 @@ top_tracks      = "#00aa11"
 top_artists     = "#00bb22"
 request_flow    = "#00cc33"
 network_log     = "#00dd44"
+podcast_playback = "#11ee55"
+show_episodes    = "#22ee66"
+followed_shows   = "#33ee77"
+saved_episodes   = "#44ee88"
 `
+
 	th, err := theme.ParseTheme([]byte(withAccent))
 	require.NoError(t, err)
 	assert.Equal(t, "#00ff00", string(th.Accent()), "Accent() must return explicit value when set")
@@ -1079,10 +1132,14 @@ top_tracks      = "#770000"
 top_artists     = "#880000"
 request_flow    = "#990000"
 network_log     = "#aa0000"
+podcast_playback = "#bb0000"
+show_episodes    = "#cc0000"
+followed_shows   = "#dd0000"
+saved_episodes   = "#ee0000"
 `
+
 	err := os.WriteFile(filepath.Join(dir, "black.toml"), []byte(overrideTOML), 0o644)
 	require.NoError(t, err)
-
 	themes, err := theme.LoadAllWithUserDir(dir)
 	require.NoError(t, err)
 	th, ok := themes["black"]

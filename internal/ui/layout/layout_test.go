@@ -160,6 +160,8 @@ func TestTogglePage_SwitchesBetweenPages(t *testing.T) {
 
 	assert.Equal(t, layout.PageMusic, m.ActivePage())
 	m.TogglePage()
+	assert.Equal(t, layout.PagePodcasts, m.ActivePage())
+	m.TogglePage()
 	assert.Equal(t, layout.PageStats, m.ActivePage())
 	m.TogglePage()
 	assert.Equal(t, layout.PageMusic, m.ActivePage())
@@ -173,9 +175,10 @@ func TestTogglePage_ClearsHiddenState(t *testing.T) {
 	m.TogglePane(layout.PanePlaylists)
 	assert.False(t, m.IsPaneVisible(layout.PanePlaylists))
 
-	// Switch to Stats page and back
+	// Switch through all pages and back
 	m.TogglePage()
 	m.TogglePage()
+	m.TogglePage() // Music → Podcasts → Stats → Music
 
 	// Hidden state should be cleared
 	assert.True(t, m.IsPaneVisible(layout.PanePlaylists))
@@ -283,7 +286,8 @@ func TestTogglePane_CannotHideLastVisible(t *testing.T) {
 func TestTogglePane_StatsPage_TogglesNowPlaying(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page
 
 	// NowPlaying (key 1) is in PresetStats and must be toggleable on Stats page.
 	require.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
@@ -297,7 +301,8 @@ func TestTogglePane_StatsPage_TogglesNowPlaying(t *testing.T) {
 func TestTogglePane_StatsPage_TogglesStatsPanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page
 
 	// GatewayHealth (key 2) should be toggleable on Stats page
 	require.True(t, m.IsPaneVisible(layout.PaneGatewayHealth))
@@ -311,7 +316,8 @@ func TestTogglePane_StatsPage_TogglesStatsPanes(t *testing.T) {
 func TestTogglePane_StatsPage_IgnoresMusicPagePanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page
 
 	// Music page panes must not be toggleable while on Stats page
 	m.TogglePane(layout.PaneQueue) // PaneQueue < PaneNetworkLog — Music page pane
@@ -330,7 +336,8 @@ func TestTogglePane_MusicPage_IgnoresStatsPagePanes(t *testing.T) {
 func TestTogglePane_StatsPage_CannotHideLastPane(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // Stats page — PresetStats has 5 panes
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page — PresetStats has 5 panes
 
 	// Hide 4 of 5 panes — only NowPlaying remains
 	m.TogglePane(layout.PaneGatewayHealth)
@@ -542,15 +549,17 @@ func TestFullLifecycle(t *testing.T) {
 	m.TogglePane(layout.PaneQueue)
 	assert.False(t, m.IsPaneVisible(layout.PaneQueue))
 
-	// Switch page
+	// Switch page (Music → Podcasts → Stats)
+	m.TogglePage()
+	assert.Equal(t, layout.PagePodcasts, m.ActivePage())
 	m.TogglePage()
 	assert.Equal(t, layout.PageStats, m.ActivePage())
 	assert.Len(t, m.VisiblePanes(), 5) // PresetStats has 5 panes
 
-	// Switch back
+	// Switch back (Stats → Music)
 	m.TogglePage()
 	assert.Equal(t, layout.PageMusic, m.ActivePage())
-	// Hidden state was cleared when we toggled to Stats page and back
+	// Hidden state was cleared when we toggled through pages and back
 	// so we cycle to Listening again manually
 	m.SetPreset(1) // Listening
 	// Manual toggles were reset when we switched pages, so Queue should be visible again
@@ -614,7 +623,8 @@ func TestLayoutManager_MinHeight(t *testing.T) {
 	}}
 
 	m := layout.NewManager()
-	m.TogglePage()    // switch to Stats page
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page
 	m.Resize(120, 34) // contentH = 30
 
 	// reserved = 10, remaining = 20, totalW = 3
@@ -686,7 +696,8 @@ func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
 	}}
 
 	m := layout.NewManager()
-	m.TogglePage()
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats
 
 	assert.NotPanics(t, func() {
 		m.Resize(120, 10) // contentH = 6, reserved = 20 > 6
@@ -704,7 +715,8 @@ func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
 func TestPresetStats_NowPlayingRowHeight(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
-	m.TogglePage() // Stats page
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page
 
 	// PresetStats: weights 1:3:3, contentH=26, MinHeight sum=6
 	// totalW=7, remaining=26-6=20
@@ -783,7 +795,8 @@ func TestFocusRotation_AfterHideWrapsCorrectly(t *testing.T) {
 func TestRecompute_StatsPageFlat_ThreeRows(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page (flat 3-row PresetStats)
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats page (flat 3-row PresetStats)
 
 	np := m.PaneRect(layout.PaneNowPlaying)
 	h := m.PaneRect(layout.PaneGatewayHealth)
@@ -810,7 +823,8 @@ func TestRecompute_StatsPageFlat_ThreeRows(t *testing.T) {
 func TestTogglePane_StatsPage_HealthHidden_TrafficLiveExpand(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats
 	pre := m.PaneRect(layout.PanePollingTraffic).Width
 
 	m.TogglePane(layout.PaneGatewayHealth)
@@ -827,7 +841,8 @@ func TestTogglePane_StatsPage_HealthHidden_TrafficLiveExpand(t *testing.T) {
 func TestTogglePane_StatsPage_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats
 	m.TogglePane(layout.PaneGatewayHealth)
 	m.TogglePane(layout.PanePollingTraffic)
 
@@ -839,7 +854,8 @@ func TestTogglePane_StatsPage_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 func TestTogglePane_StatsPage_LiveHidden_HealthTrafficExpand(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats
 	m.TogglePane(layout.PaneGatewayLive)
 
 	h := m.PaneRect(layout.PaneGatewayHealth)
@@ -853,7 +869,8 @@ func TestRecompute_StatsPage_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
 	// Flat layout: focus order is purely visual reading order.
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats
 
 	expected := []layout.PaneID{
 		layout.PaneNowPlaying,
@@ -877,7 +894,8 @@ func TestRecompute_StatsPage_RectsNonOverlapping(t *testing.T) {
 	// Use odd dimensions to exercise rounding-remainder paths.
 	m := layout.NewManager()
 	m.Resize(201, 79)
-	m.TogglePage()
+	m.TogglePage() // Music → Podcasts
+	m.TogglePage() // Podcasts → Stats
 
 	visible := m.VisiblePanes()
 	for i := range visible {
@@ -890,5 +908,56 @@ func TestRecompute_StatsPage_RectsNonOverlapping(t *testing.T) {
 				"panes %d and %d must not overlap: %+v vs %+v",
 				visible[i], visible[j], a, b)
 		}
+	}
+}
+
+// ── Story 229: Podcasts page ──────────────────────────────────────────────────
+
+func TestPagePodcasts_Value(t *testing.T) {
+	assert.Equal(t, layout.PageID(2), layout.PagePodcasts)
+}
+
+func TestNewManager_HasPodcastsPage(t *testing.T) {
+	m := layout.NewManager()
+	assert.Equal(t, layout.PageMusic, m.ActivePage())
+	m.TogglePage()
+	assert.Equal(t, layout.PagePodcasts, m.ActivePage())
+	m.Resize(120, 30)
+	// Podcasts page should have visible panes
+	visible := m.VisiblePanes()
+	assert.Greater(t, len(visible), 0)
+}
+
+func TestPresetPodcastListening_Grid(t *testing.T) {
+	assert.Equal(t, "Listening", layout.PresetPodcastListening.Name)
+	// Row 2: 55/45 split
+	require.Len(t, layout.PresetPodcastListening.Grid, 2)
+	require.Len(t, layout.PresetPodcastListening.Grid[1].Cells, 2)
+	assert.Equal(t, 55, layout.PresetPodcastListening.Grid[1].Cells[0].WidthWeight)
+	assert.Equal(t, 45, layout.PresetPodcastListening.Grid[1].Cells[1].WidthWeight)
+}
+
+func TestPresetPodcastDashboard_Grid(t *testing.T) {
+	assert.Equal(t, "Dashboard", layout.PresetPodcastDashboard.Name)
+	// Row 2: 35/25/40 split
+	require.Len(t, layout.PresetPodcastDashboard.Grid, 2)
+	require.Len(t, layout.PresetPodcastDashboard.Grid[1].Cells, 3)
+	assert.Equal(t, 35, layout.PresetPodcastDashboard.Grid[1].Cells[0].WidthWeight)
+	assert.Equal(t, 25, layout.PresetPodcastDashboard.Grid[1].Cells[1].WidthWeight)
+	assert.Equal(t, 40, layout.PresetPodcastDashboard.Grid[1].Cells[2].WidthWeight)
+}
+
+func TestPodcastsPage_PaneRects(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+	m.TogglePage() // Music → Podcasts
+
+	visible := m.VisiblePanes()
+	require.Greater(t, len(visible), 0, "podcasts page should have visible panes")
+
+	for _, id := range visible {
+		r := m.PaneRect(id)
+		assert.Greater(t, r.Width, 0, "pane %d should have positive width", id)
+		assert.Greater(t, r.Height, 0, "pane %d should have positive height", id)
 	}
 }

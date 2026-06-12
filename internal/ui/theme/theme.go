@@ -95,8 +95,12 @@ type Theme interface {
 	PaneBorderRecentlyPlayed() lipgloss.Color // Teal accent
 	PaneBorderTopTracks() lipgloss.Color      // Purple accent
 	PaneBorderTopArtists() lipgloss.Color     // Pink/red accent
-	PaneBorderRequestFlow() lipgloss.Color    // Orange/amber accent
-	PaneBorderNetworkLog() lipgloss.Color     // Warm grey accent
+	PaneBorderRequestFlow() lipgloss.Color      // Orange/amber accent
+	PaneBorderNetworkLog() lipgloss.Color       // Warm grey accent
+	PaneBorderPodcastPlayback() lipgloss.Color  // Pink accent
+	PaneBorderShowEpisodes() lipgloss.Color     // Purple accent
+	PaneBorderFollowedShows() lipgloss.Color    // Orange accent
+	PaneBorderSavedEpisodes() lipgloss.Color    // Red accent
 
 	// Column colors — distinct foreground for each table column semantic (Feature 70)
 	ColumnIndex() lipgloss.Color     // # column (muted but colorful)
