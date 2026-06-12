@@ -258,11 +258,12 @@ func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *dom
 	var lines []string
 
 	if show != nil {
-		lines = append(lines, show.Name)
+		bold := lipgloss.NewStyle().Width(innerW).Foreground(p.theme.TextPrimary()).Bold(true)
+		lines = append(lines, bold.Render(show.Name))
 	}
 
-	wrap := lipgloss.NewStyle().Width(innerW)
-	titleLines := strings.Split(wrap.Render(episode.Name), "\n")
+	titleStyle := lipgloss.NewStyle().Width(innerW).Foreground(p.theme.TextPrimary())
+	titleLines := strings.Split(titleStyle.Render(episode.Name), "\n")
 	lines = append(lines, titleLines...)
 
 	lines = append(lines, "")
@@ -300,19 +301,15 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 		descMaxLines = 1
 	}
 	if episode.Description != "" && descMaxLines > 0 {
-		descLines := strings.Split(episode.Description, "\n")
-		for i, dl := range descLines {
-			if i >= descMaxLines {
-				descLines = descLines[:descMaxLines]
-				ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
-				descLines[len(descLines)-1] = truncateStr(descLines[len(descLines)-1], p.detailsWidth-len([]rune(ell))) + ell
-				break
-			}
-			descLines[i] = truncateStr(dl, p.detailsWidth)
+		wrapped := mutedStyle.Width(p.detailsWidth).Render(episode.Description)
+		descLines := strings.Split(wrapped, "\n")
+		if len(descLines) > descMaxLines {
+			descLines = descLines[:descMaxLines]
+			ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+			last := descLines[len(descLines)-1]
+			descLines[len(descLines)-1] = mutedStyle.Width(p.detailsWidth).Render(truncateStr(last, p.detailsWidth-len([]rune(ell))) + ell)
 		}
-		for _, l := range descLines {
-			lines = append(lines, mutedStyle.Width(p.detailsWidth).Render(l))
-		}
+		lines = append(lines, descLines...)
 	}
 
 	for len(lines) < p.height-1 {
