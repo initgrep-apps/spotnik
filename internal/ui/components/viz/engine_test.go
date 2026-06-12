@@ -40,7 +40,7 @@ func TestFrame(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPatterns_Count(t *testing.T) {
-	assert.Len(t, Patterns(), 4)
+	assert.Len(t, Patterns(), 2)
 }
 
 func TestPatterns_Names(t *testing.T) {
@@ -61,28 +61,16 @@ func TestPatterns_NonNilHeightFunc(t *testing.T) {
 	}
 }
 
-func TestPatterns_GaussianRenderer(t *testing.T) {
-	ps := Patterns()
-	_, ok := ps[0].Renderer.(GaussianRenderer)
-	assert.True(t, ok, "pattern 0 should use GaussianRenderer")
-}
-
 func TestPatterns_DotRenderer(t *testing.T) {
 	ps := Patterns()
-	_, ok := ps[1].Renderer.(DotRenderer)
-	assert.True(t, ok, "pattern 1 should use DotRenderer")
-}
-
-func TestPatterns_FloorRenderer(t *testing.T) {
-	ps := Patterns()
-	_, ok := ps[2].Renderer.(FloorRenderer)
-	assert.True(t, ok, "pattern 2 should use FloorRenderer")
+	_, ok := ps[0].Renderer.(DotRenderer)
+	assert.True(t, ok, "pattern 0 should use DotRenderer")
 }
 
 func TestPatterns_BrailleMirrorRenderer(t *testing.T) {
 	ps := Patterns()
-	_, ok := ps[3].Renderer.(BrailleMirrorRenderer)
-	assert.True(t, ok, "pattern 3 should use BrailleMirrorRenderer")
+	_, ok := ps[1].Renderer.(BrailleMirrorRenderer)
+	assert.True(t, ok, "pattern 1 should use BrailleMirrorRenderer")
 }
 
 func TestPatterns_HeightFunc_Length(t *testing.T) {
@@ -98,7 +86,6 @@ func TestPatterns_HeightFunc_Range(t *testing.T) {
 		out := p.HeightFunc(20, maxH, 5)
 		for j, h := range out {
 			// HeightFunc semantics vary by pattern:
-			// - Most return values in [0, maxH].
 			// - StandingWave returns [0, 100] (phase-like).
 			// - BrailleMirror returns lobeThickness [1, maxH/2-1].
 			assert.True(t, h >= 0,
@@ -152,12 +139,12 @@ func TestPatterns_DifferentProfiles(t *testing.T) {
 
 func TestEngine_NewEngine_PatternCount(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	assert.Equal(t, 4, e.PatternCount())
+	assert.Equal(t, 2, e.PatternCount())
 }
 
 func TestEngine_NewEngine_DefaultPattern(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	assert.Equal(t, 0, e.Pattern())
+	assert.Equal(t, 0, e.Pattern(), "default pattern should be Standing Wave (index 0)")
 }
 
 func TestEngine_SetSize_FrameCount(t *testing.T) {
@@ -242,7 +229,7 @@ func TestEngine_CyclePattern(t *testing.T) {
 func TestEngine_CyclePattern_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 2; i++ {
 		e.CyclePattern()
 	}
 	assert.Equal(t, 0, e.Pattern())
@@ -408,7 +395,7 @@ func TestBrailleMirrorPattern_OnlyBrailleRunes(t *testing.T) {
 
 	th := theme.Load("black")
 	e := NewEngine(th)
-	e.SetPattern(3) // Braille Mirror
+	e.SetPattern(1) // Braille Mirror
 	e.SetSize(20, 4)
 	e.SetPlaying(true)
 	f := e.CurrentFrame()
@@ -427,8 +414,8 @@ func TestBlockLikePatterns_OnlyBlockOrSpace(t *testing.T) {
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	// Patterns 0 (Gaussian), 1 (Dot), 2 (Floor) use block/dot glyphs.
-	blockLikePatterns := []int{0, 1, 2}
+	// Pattern 0 (Dot/Standing Wave) uses dot glyphs.
+	blockLikePatterns := []int{0}
 
 	for _, idx := range blockLikePatterns {
 		ps := Patterns()
@@ -462,9 +449,9 @@ func TestEngine_ASCIIMode_BlockPatterns_OnlyASCIIChars(t *testing.T) {
 	defer uikit.SetModeForTest(prev)
 
 	th := theme.Load("black")
-	// Use block-pattern index (2) as the representative set; in ASCII
+	// Use pattern 0 (Dot/Standing Wave) as representative; in ASCII
 	// mode the engine falls back to AsciiBarsRenderer for ALL patterns.
-	blockPatterns := []int{2}
+	blockPatterns := []int{0}
 	for _, idx := range blockPatterns {
 		ps := Patterns()
 		p := ps[idx]
@@ -588,13 +575,13 @@ func TestFullLifecycle(t *testing.T) {
 func TestPatternCycleAll(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	seen := make([]int, 0, 5)
+	seen := make([]int, 0, 3)
 	seen = append(seen, e.Pattern())
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 2; i++ {
 		e.CyclePattern()
 		seen = append(seen, e.Pattern())
 	}
-	assert.Equal(t, 0, seen[4], "after 4 cycles should wrap to 0")
+	assert.Equal(t, 0, seen[2], "after 2 cycles should wrap to 0")
 }
 
 func TestResizeMidAnimation(t *testing.T) {
@@ -671,13 +658,13 @@ func TestEngine_SetSize_SameDimensions_NoReset(t *testing.T) {
 func TestSetPattern_ValidIndex(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
 	e.SetSize(20, 4)
-	e.SetPattern(2)
-	assert.Equal(t, 2, e.Pattern())
+	e.SetPattern(1)
+	assert.Equal(t, 1, e.Pattern())
 }
 
 func TestSetPattern_OutOfRange_Wraps(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	// 4 patterns → index 8 wraps to 8 % 4 = 0
+	// 2 patterns → index 8 wraps to 8 % 2 = 0
 	e.SetPattern(8)
 	assert.Equal(t, 0, e.Pattern())
 }
@@ -694,7 +681,7 @@ func TestSetPattern_RegeneratesFrames(t *testing.T) {
 	e.SetPlaying(true)
 	e.Advance()
 	// After SetPattern the frame index resets to 0 and frames are regenerated.
-	e.SetPattern(2)
+	e.SetPattern(1)
 	assert.Equal(t, 0, e.FrameIndex(), "SetPattern should reset frameIdx to 0")
 	f := e.CurrentFrame()
 	assert.Len(t, f, 4, "SetPattern should regenerate frames with correct height")
@@ -702,8 +689,8 @@ func TestSetPattern_RegeneratesFrames(t *testing.T) {
 
 func TestSetPattern_NoSizeYet_NoPanic(t *testing.T) {
 	e := NewEngine(theme.Load("black"))
-	assert.NotPanics(t, func() { e.SetPattern(2) })
-	assert.Equal(t, 2, e.Pattern(), "pattern should be set even before SetSize")
+	assert.NotPanics(t, func() { e.SetPattern(1) })
+	assert.Equal(t, 1, e.Pattern(), "pattern should be set even before SetSize")
 }
 
 // ---------------------------------------------------------------------------
@@ -760,7 +747,7 @@ func TestEngine_SelectsUnicodeRendererInUnicodeMode(t *testing.T) {
 	f := e.CurrentFrame()
 	require.Len(t, f, 4)
 
-	// Default pattern 0 is Gaussian (block) in unicode mode — should not contain ASCII bar chars.
+	// Default pattern 0 is Dot (Standing Wave) in unicode mode — should not contain ASCII bar chars.
 	for rowIdx, line := range f {
 		for _, ch := range line.Text {
 			assert.False(t, ch == '#' || ch == '=',
@@ -838,18 +825,8 @@ func TestEngine_SelectsRenderer_AfterModeFlipAndCyclePattern(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// New HeightFunc tests
+// HeightFunc tests
 // ---------------------------------------------------------------------------
-
-func TestHeightPixelSpectrum_Range(t *testing.T) {
-	for f := 0; f < 40; f++ {
-		out := heightPixelSpectrum(20, 16, f)
-		assert.Len(t, out, 20)
-		for _, h := range out {
-			assert.True(t, h >= 0 && h <= 16)
-		}
-	}
-}
 
 func TestHeightStandingWave_Range(t *testing.T) {
 	for f := 0; f < 40; f++ {
@@ -857,16 +834,6 @@ func TestHeightStandingWave_Range(t *testing.T) {
 		assert.Len(t, out, 20)
 		for _, h := range out {
 			assert.True(t, h >= 0 && h <= 100)
-		}
-	}
-}
-
-func TestHeightFloorSpectrum_Range(t *testing.T) {
-	for f := 0; f < 40; f++ {
-		out := heightFloorSpectrum(20, 16, f)
-		assert.Len(t, out, 20)
-		for _, h := range out {
-			assert.True(t, h >= 4 && h <= 16, "floor spectrum height %d out of range [4,16]", h)
 		}
 	}
 }
@@ -882,7 +849,7 @@ func TestHeightBrailleMirror_Range(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Task 10: Integration tests for all 6 patterns and segment verification
+// Task 10: Integration tests for all patterns and segment verification
 // ---------------------------------------------------------------------------
 
 func TestAllPatterns_Integration(t *testing.T) {
@@ -892,9 +859,7 @@ func TestAllPatterns_Integration(t *testing.T) {
 	e.SetPlaying(true)
 
 	names := []string{
-		"Pixel Spectrum",
 		"Standing Wave",
-		"Floor Spectrum",
 		"Braille Mirror",
 	}
 
