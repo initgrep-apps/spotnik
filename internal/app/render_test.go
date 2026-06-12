@@ -67,7 +67,8 @@ func TestRenderHeader_ContainsPageIndicator(t *testing.T) {
 
 func TestRenderHeader_StatsPage_ContainsStatsLabel(t *testing.T) {
 	a := newRenderTestApp()
-	a.layout.TogglePage()
+	a.layout.TogglePage() // Music → Podcasts
+	a.layout.TogglePage() // Podcasts → Stats
 	result := a.renderHeader()
 	assert.Contains(t, result, "Stats", "header should show 'Stats' on Stats page")
 }
@@ -251,7 +252,8 @@ func TestRenderGrid_StatsPage_FlatLayoutAbsolutePlacement(t *testing.T) {
 	a.width = 200
 	a.height = 80
 	a.layout.Resize(200, 80)
-	a.layout.TogglePage() // switch to Stats page (Stats)
+	a.layout.TogglePage() // Music → Podcasts
+	a.layout.TogglePage() // Podcasts → Stats
 	a.propagateSizes()
 	a.syncFocus()
 

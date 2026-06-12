@@ -33,9 +33,9 @@ The redesign draws from **btop** — a system monitor beloved by terminal enthus
 
 | Aspect | Previous (three-column layout) | Current (this document) |
 |--------|---------------------|---------------------|
-| Layout | Fixed 3-column (22/50/28%) | 3-row responsive grid, 10 panes across 2 pages |
-| Panes | 3 fixed + 2 alternative views | 8 music panes + 2 nerd status panes, toggleable |
-| Pages | None | Music page (Music) + Stats page (Stats), toggled by `0` |
+| Layout | Fixed 3-column (22/50/28%) | 3-row responsive grid, 14 panes across 3 pages |
+| Panes | 3 fixed + 2 alternative views | 8 music panes + 4 podcast panes + 4 nerd status panes, toggleable |
+| Pages | None | Music page (Music) + Podcasts page + Stats page (Stats), cycled by `0` |
 | Presets | None (view switching via 1/2/3) | `p` cycles preset layouts within current page |
 | Pane toggle | None | Keys `1`-`8` hide/show individual panes (btop-style) |
 | Shortcuts | All in status bar | Embedded in pane borders (btop-style) |
@@ -99,14 +99,24 @@ Note: for these features and existing featues a lot of componetns are available 
 | — | Gateway Live | `PaneGatewayLive` | `store.ReadEventsFrom(cursor)` — 500-entry event stream | `4` | `PaneBorderRequestFlow()` orange/amber |
 | — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (200-entry buffer) | `5` | `PaneBorderNetworkLog()` warm grey |
 
-Toggle keys `2`–`5` are only active on Stats page. Music page number keys (`1`–`8`) do not toggle
-Stats page panes, and Stats page number keys (`1`–`5`) do not toggle Music page panes.
+### Podcasts page — Podcasts (4 panes)
+
+| # | Pane | ID | API Source | Toggle Key | Border Accent |
+|---|------|----|-----------|------------|---------------|
+| 1 | Now Playing | `PanePodcastPlayback` | `GET /me/player` + episode/show state | `1` | `PaneBorderPodcastPlayback()` |
+| 2 | Show Episodes | `PaneShowEpisodes` | `GET /shows/{id}/episodes` | `2` | `PaneBorderShowEpisodes()` |
+| 3 | Followed Shows | `PaneFollowedShows` | `GET /me/shows` | `3` | `PaneBorderFollowedShows()` |
+| 4 | Saved Episodes | `PaneSavedEpisodes` | `GET /me/episodes` | `4` | `PaneBorderSavedEpisodes()` |
+
+Toggle keys `1`–`4` are only active on Podcasts page. Music page number keys (`1`–`8`) do not toggle
+Podcasts page panes, Podcast page number keys (`1`–`4`) do not toggle Music or Stats page panes, and
+Stats page number keys (`1`–`5`) do not toggle Music or Podcasts page panes.
 
 ### Key Notes
 
-- Keys `1`-`8` **toggle** pane visibility on Music page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
-- `0` toggles between Music and Stats
-- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`, `Shift+←`, `Shift+→`) always route to NowPlaying regardless of focus
+- Keys `1`-`8` **toggle** pane visibility on Music page; keys `1`-`4` toggle pane visibility on Podcasts page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
+- `0` cycles Music → Podcasts → Stats → Music
+- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`, `Shift+←`, `Shift+→`) route to NowPlaying (Music/Stats pages) or PodcastPlayback (Podcasts page) regardless of focus
 - `A` for "add to queue" in search overlay and list panes
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
@@ -173,13 +183,13 @@ Each pane's content area is `Rect.Width - 2` x `Rect.Height - 2` (borders consum
 
 ### Page Switching
 
-- `0` toggles between **Music page** (Music) and **Stats page** (Stats)
+- `0` cycles **Music page** → **Podcasts page** → **Stats page** → **Music page** (3-cycle)
 - Each page has its own preset cycle
 - Switching pages preserves pane state on both sides
 
 ### Pane Toggling (btop-style)
 
-Keys `1`-`8` toggle the corresponding pane's visibility on Music page; keys `1`-`5` toggle panes on Stats page:
+Keys `1`-`8` toggle the corresponding pane's visibility on Music page; keys `1`-`4` toggle panes on Podcasts page; keys `1`-`5` toggle panes on Stats page:
 - When a pane hides, siblings in the same row expand to fill its space
 - When all panes in a row hide, the row collapses and other rows expand
 - When a hidden pane is toggled back, it reappears in its original grid position
@@ -704,7 +714,7 @@ descriptions in Muted role.
 
 ### Pane Toggle (replaces Direct Pane Jump)
 
-Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`5` toggle pane visibility on Stats page. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
+Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`4` toggle pane visibility on Podcasts page; keys `1`-`5` toggle pane visibility on Stats page. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
 
 ### Playback Keys (Always Route to NowPlaying)
 
@@ -718,7 +728,7 @@ Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`5` toggle pane visi
 | `r` | Cycle repeat |
 | `v` | Cycle visualizer animation pattern |
 
-These keys always route to `PaneNowPlaying` regardless of which pane is focused.
+These keys route to `PaneNowPlaying` (Music/Stats pages) or `PanePodcastPlayback` (Podcasts page) regardless of which pane is focused.
 
 ### Overlay Keys
 
@@ -737,9 +747,10 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | Key | Action | Scope |
 |-----|--------|-------|
 | **Pages** | | |
-| `0` | Toggle Music / Stats | Global |
+| `0` | Cycle Music / Podcasts / Stats | Global |
 | **Pane Toggle** | | |
 | `1`-`8` | Toggle pane 1-8 visibility | Music page |
+| `1`-`4` | Toggle pane 1-4 visibility | Podcasts page |
 | `1`-`5` | Toggle pane 1-5 visibility | Stats page |
 | **Presets** | | |
 | `p` | Cycle to next preset | Current page |
