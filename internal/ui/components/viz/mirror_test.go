@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,9 +46,14 @@ func TestBrailleMirrorRenderer_ColorsAssigned(t *testing.T) {
 	r := BrailleMirrorRenderer{}
 	colors := []lipgloss.Color{"#ff0000", "#00ff00", "#0000ff"}
 	frame := r.RenderFrame(10, 3, makeColHeights(10, 6), colors)
-	for i, line := range frame {
-		assert.Equal(t, colors[i], line.Color)
-	}
+	require.Len(t, frame, 3)
+	// Color remapping: center gets G1 (high index), edges get G7 (low index)
+	// center=(3-1)/2=1.0: row0 dist=1 zoneIdx=(2-1*2)=0 -> colors[0]
+	//                      row1 dist=0 zoneIdx=(2-0)=2 -> colors[2]
+	//                      row2 dist=1 zoneIdx=(2-1*2)=0 -> colors[0]
+	assert.Equal(t, colors[0], frame[0].Color)
+	assert.Equal(t, colors[2], frame[1].Color)
+	assert.Equal(t, colors[0], frame[2].Color)
 }
 
 func TestBrailleMirrorRenderer_MaxHeight(t *testing.T) {
@@ -66,6 +72,31 @@ func TestBrailleMirrorRenderer_MaxHeight(t *testing.T) {
 		assert.Equal(t, tt.want, got,
 			"BrailleMirrorRenderer.MaxHeight(%d) should be %d", tt.displayHeight, tt.want)
 	}
+}
+
+func TestBrailleMirrorRenderer_DiscreteDistanceMapping(t *testing.T) {
+	uikit.SetModeForTest(uikit.GlyphUnicode)
+	defer uikit.SetModeForTest(uikit.GlyphUnicode)
+
+	r := BrailleMirrorRenderer{}
+	width := 3
+	height := 11 // center at row 5
+	colHeights := []int{6, 6, 6} // large lobe thickness
+	colors := makeColors(height)
+	frame := r.RenderFrame(width, height, colHeights, colors)
+	require.Len(t, frame, height)
+
+	// Center row (dist=0): should have ⣿
+	centerRow := frame[5]
+	assert.Contains(t, centerRow.Text, "⣿",
+		"center row should contain full solid braille character")
+
+	// Row at dist=1 (row 4 or 6): should have ⢸ (not ⣿)
+	rowDist1 := frame[4]
+	assert.NotContains(t, rowDist1.Text, "⣿",
+		"row at dist=1 should NOT contain full solid character")
+	assert.Contains(t, rowDist1.Text, "⢸",
+		"row at dist=1 should contain dense braille character")
 }
 
 func TestBrailleMirrorRenderer_DensityFalloff(t *testing.T) {

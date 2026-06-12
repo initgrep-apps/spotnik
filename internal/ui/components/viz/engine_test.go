@@ -680,8 +680,13 @@ func TestAllPatterns_ColorGradient(t *testing.T) {
 			require.Len(t, f, height)
 			// Top rows: VizGradient7 (zone 7)
 			assert.Equal(t, th.VizGradient7(), f[0].Color)
-			// Bottom rows: VizGradient1 (zone 1)
-			assert.Equal(t, th.VizGradient1(), f[height-1].Color)
+			// Braille Mirror uses center→G1, edges→G7 per spec
+			if p.Name == "Braille Mirror" {
+				assert.Equal(t, th.VizGradient7(), f[height-1].Color,
+					"Braille Mirror edges should be VizGradient7")
+			} else {
+				assert.Equal(t, th.VizGradient1(), f[height-1].Color)
+			}
 		})
 	}
 }

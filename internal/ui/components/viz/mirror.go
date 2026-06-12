@@ -20,7 +20,23 @@ func (r BrailleMirrorRenderer) RenderFrame(width, height int, colHeights []int, 
 	}
 
 	center := float64(height-1) / 2.0
-	centerBand := 1
+
+	// Remap colors: center gets G1, edges get G7
+	// colors is built top-to-bottom (index 0=VizGradient7, index height-1=VizGradient1)
+	// so invert the index: center→high index(G1), edges→low index(G7)
+	remapped := make([]lipgloss.Color, height)
+	for i := 0; i < height; i++ {
+		dist := int(math.Abs(float64(i) - center))
+		zoneIdx := (height - 1) - dist*2
+		if zoneIdx < 0 {
+			zoneIdx = 0
+		}
+		if zoneIdx < len(colors) {
+			remapped[i] = colors[zoneIdx]
+		} else if len(colors) > 0 {
+			remapped[i] = colors[len(colors)-1]
+		}
+	}
 
 	frame := make(Frame, height)
 	for rowIdx := 0; rowIdx < height; rowIdx++ {
@@ -33,47 +49,41 @@ func (r BrailleMirrorRenderer) RenderFrame(width, height int, colHeights []int, 
 			lobeThickness := float64(h)
 			centerDist := math.Abs(float64(rowIdx) - center)
 
-			if centerDist <= float64(centerBand) {
-				sb.WriteRune(brailleForDensity(1.0))
-			} else if centerDist <= lobeThickness {
-				denom := lobeThickness - float64(centerBand)
-				var relativeDist float64
-				if denom > 0 {
-					relativeDist = (centerDist - float64(centerBand)) / denom
-				} else {
-					relativeDist = 0
-				}
-				sb.WriteRune(brailleForDensity(1.0 - relativeDist))
+			if centerDist <= lobeThickness {
+				sb.WriteRune(brailleCharForDist(centerDist))
 			} else {
 				sb.WriteRune(' ')
 			}
 		}
-		var color lipgloss.Color
-		if rowIdx < len(colors) {
-			color = colors[rowIdx]
-		}
-		frame[rowIdx] = StyledLine{Text: sb.String(), Color: color}
+		frame[rowIdx] = StyledLine{Text: sb.String(), Color: remapped[rowIdx]}
 	}
 	return frame
 }
 
-func brailleForDensity(d float64) rune {
-	if math.IsNaN(d) || math.IsInf(d, 0) {
-		d = 0
-	}
+// brailleCharForDist returns a braille character based on absolute
+// distance from center, matching the spec's discrete mapping table.
+//
+// dist=0: full solid (⣿)
+// dist=1: dense (⢸⡇, 3 dots)
+// dist=2: medium (⢰⡆, 3 dots, different pattern)
+// dist=3: light (⠄⠄, 1-2 dots)
+// dist=4: very light (⠂ or ⠄, isolated dots)
+// dist>=5: sparse edge (⢠⡄ or ⠠⠤, 2 dots decorative)
+func brailleCharForDist(dist float64) rune {
+	d := int(math.Round(dist))
 	switch {
-	case d >= 0.85:
-		return '⣿'
-	case d >= 0.65:
-		return '⢸'
-	case d >= 0.45:
-		return '⢰'
-	case d >= 0.25:
-		return '⠄'
-	case d >= 0.10:
-		return '⠂'
+	case d == 0:
+		return '⣿' // full solid — center peak
+	case d == 1:
+		return '⢸' // dense — 3 dots
+	case d == 2:
+		return '⢰' // medium — 2-3 dots
+	case d == 3:
+		return '⠄' // light — 1 dot
+	case d == 4:
+		return '⠂' // very light — isolated dot
 	default:
-		return '⠀'
+		return '⢀' // sparse edge — 1 dot decorative
 	}
 }
 
