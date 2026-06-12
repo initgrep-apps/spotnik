@@ -265,6 +265,7 @@ func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *dom
 	lines = append(lines, p.volumeBar.Render())
 
 	b := components.NewInfoBox(p.theme)
+	b.SetAccentColor(p.theme.PaneBorderNowPlaying())
 	b.SetSize(p.infoWidth, p.height)
 	return b.Render("Episode Info", lines, p.focused)
 }
