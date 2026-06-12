@@ -82,18 +82,28 @@ func (p *PodcastPlaybackPane) SetTheme(th theme.Theme) {
 	p.SetSize(p.width, p.height)
 }
 
-// SetSize updates the pane's dimensions and recomputes the 30/70 layout.
+// SetSize updates the pane's dimensions and recomputes the adaptive layout
+// matching NowPlaying's InfoBox sizing pattern.
 func (p *PodcastPlaybackPane) SetSize(width, height int) {
 	p.BasePane.SetSize(width, height)
 	cw := width
 	if cw < 10 {
 		cw = 10
 	}
-	p.infoWidth = cw * 30 / 100
-	if p.infoWidth < 24 {
-		p.infoWidth = 24
+	infoWidth := cw / 3
+	if height <= 8 {
+		infoWidth = cw / 2
 	}
-	p.detailsWidth = cw - p.infoWidth - 1
+	if infoWidth < 28 {
+		infoWidth = 28
+	}
+	detailsWidth := cw - infoWidth - 1
+	if detailsWidth < 10 {
+		infoWidth = 0
+		detailsWidth = cw
+	}
+	p.infoWidth = infoWidth
+	p.detailsWidth = detailsWidth
 }
 
 // Init returns nil — no initial commands for this pane.
@@ -244,43 +254,19 @@ func (p *PodcastPlaybackPane) renderEpisode(episode *domain.Episode, ps *domain.
 }
 
 func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *domain.Show, ps *domain.PlaybackState) string {
-	innerW := p.infoWidth - 2
-
-	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
-	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-
-	titleLine := primaryStyle.Render(truncateStr(episode.Name, innerW))
-	showLine := ""
+	lines := []string{episode.Name}
 	if show != nil {
-		showLine = secondaryStyle.Render(truncateStr(show.Name, innerW))
+		lines = append(lines, show.Name)
 	}
-
+	lines = append(lines, "")
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
-	ctrlLine := lipgloss.NewStyle().Width(innerW).Align(lipgloss.Center).Render(ctrl.Render())
-
+	lines = append(lines, ctrl.Render())
 	p.volumeBar.SetWidth(p.infoWidth - 4)
-	volLine := p.volumeBar.Render()
+	lines = append(lines, p.volumeBar.Render())
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		"Episode Info",
-		"",
-		titleLine,
-		showLine,
-		"",
-		ctrlLine,
-		volLine,
-	)
-
-	borderColor := p.theme.ActiveBorder()
-	if !p.focused {
-		borderColor = p.theme.InactiveBorder()
-	}
-	borderStyle := lipgloss.NewStyle().
-		Border(uikit.RoundedBorder()).
-		BorderForeground(borderColor).
-		Width(p.infoWidth)
-
-	return borderStyle.Render(content)
+	b := components.NewInfoBox(p.theme)
+	b.SetSize(p.infoWidth, p.height)
+	return b.Render("Episode Info", lines, p.focused)
 }
 
 func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *domain.Show) string {
@@ -305,27 +291,28 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 	if descMaxLines < 1 {
 		descMaxLines = 1
 	}
-	if episode.Description != "" {
-		rendered := mutedStyle.Width(p.detailsWidth).Render(episode.Description)
-		descLines := strings.Split(rendered, "\n")
-		if len(descLines) > descMaxLines {
-			descLines = descLines[:descMaxLines]
+	if episode.Description != "" && descMaxLines > 0 {
+		descLines := strings.Split(episode.Description, "\n")
+		for i, dl := range descLines {
+			if i >= descMaxLines {
+				descLines = descLines[:descMaxLines]
+				ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+				descLines[len(descLines)-1] = truncateStr(descLines[len(descLines)-1], p.detailsWidth-len([]rune(ell))) + ell
+				break
+			}
+			descLines[i] = truncateStr(dl, p.detailsWidth)
 		}
-		lines = append(lines, descLines...)
+		for _, l := range descLines {
+			lines = append(lines, mutedStyle.Width(p.detailsWidth).Render(l))
+		}
 	}
 
 	for len(lines) < p.height-1 {
 		lines = append(lines, "")
 	}
 
-	current := formatDurationMs(p.localProgressMs)
-	total := formatDurationMs(episode.DurationMs)
-	barWidth := p.detailsWidth - len(current) - len(total) - 8
-	if barWidth < 3 {
-		barWidth = 3
-	}
-	bar := renderProgressBar(p.localProgressMs, episode.DurationMs, barWidth)
-	progressLine := fmt.Sprintf("-- %s %s%s %s %s%s %s --", current, sep, sep, bar, sep, sep, total)
+	p.seekBar.SetWidth(p.detailsWidth)
+	progressLine := p.seekBar.Render(p.localProgressMs, episode.DurationMs)
 
 	if len(lines) > 0 {
 		lines[len(lines)-1] = mutedStyle.Width(p.detailsWidth).Render(progressLine)
@@ -334,25 +321,6 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-// renderProgressBar renders a simple progress bar with filled and empty blocks.
-func renderProgressBar(progressMs, durationMs int, width int) string {
-	var ratio float64
-	if durationMs > 0 {
-		ratio = float64(progressMs) / float64(durationMs)
-	}
-	if ratio < 0 {
-		ratio = 0
-	}
-	if ratio > 1.0 {
-		ratio = 1.0
-	}
-	filled := int(ratio * float64(width))
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("\u2588", filled) + strings.Repeat("\u2591", width-filled)
 }
 
 func truncateStr(s string, width int) string {

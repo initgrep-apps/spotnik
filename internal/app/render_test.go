@@ -509,7 +509,8 @@ func TestRenderStatusBar_MusicPage_IncludesPresetAndToggle(t *testing.T) {
 // bar omits "preset" and "toggle" (Stats page has a single fixed layout).
 func TestRenderStatusBar_StatsPage_OmitsPresetAndToggle(t *testing.T) {
 	a := newRenderTestApp()
-	// Switch to Stats page.
+	// Switch to Stats page (Music → Podcasts → Stats).
+	a.layout.TogglePage()
 	a.layout.TogglePage()
 	result := a.renderStatusBar()
 

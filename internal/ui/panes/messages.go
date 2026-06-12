@@ -394,6 +394,15 @@ type SearchLoadingMsg struct {
 	IsFirstPage bool
 }
 
+// SearchResultSelectedMsg is emitted by the search overlay when the user presses
+// Enter on a show or episode result. The root app model uses IsShow/IsEpisode
+// to route to the podcasts page or play the episode directly.
+type SearchResultSelectedMsg struct {
+	URI       string
+	IsShow    bool
+	IsEpisode bool
+}
+
 // SearchPageLoadedMsg is sent by the root app model after a single page of search
 // results has loaded. Query and Page are staleness keys — app.go discards this message
 // if either does not match the current search session. Results carries the pre-converted

@@ -16,7 +16,8 @@ import (
 // SearchListItem represents a single search result in the bubbles/list.
 // It implements list.Item so the list component can render and navigate it.
 type SearchListItem struct {
-	// Category is the result type: "track", "artist", "album", or "playlist".
+	// Category is the result type: "track", "artist", "album", "playlist",
+	// "show", or "episode".
 	Category string
 	// Name is the primary display name.
 	Name string
@@ -27,6 +28,10 @@ type SearchListItem struct {
 	URI string
 	// IsTrack is true for tracks (played as individual track vs. context URI).
 	IsTrack bool
+	// IsShow is true for show results.
+	IsShow bool
+	// IsEpisode is true for episode results.
+	IsEpisode bool
 
 	// Track-specific metadata.
 	ArtistNames string // All artists joined: "Artist1, Artist2"
@@ -49,6 +54,15 @@ type SearchListItem struct {
 	Owner          string // Owner display name
 	PlaylistDesc   string // Playlist description (truncated)
 	PlaylistTracks string // "245 tracks"
+
+	// Show-specific metadata.
+	Publisher     string // Show publisher name
+	TotalEpisodes string // "42 episodes"
+	ShowDesc      string // Show description (truncated)
+
+	// Episode-specific metadata.
+	ShowName    string // Show name the episode belongs to
+	ReleaseDate string // Episode release date
 }
 
 // Title returns the item's primary display name, satisfying list.Item.
@@ -73,6 +87,10 @@ func categorySymbol(category string) string {
 		return uikit.GlyphFor(uikit.GlyphInactive, m)
 	case "playlist":
 		return uikit.GlyphFor(uikit.GlyphPlaylist, m)
+	case "show":
+		return uikit.GlyphFor(uikit.GlyphDoubleNote, m)
+	case "episode":
+		return uikit.GlyphFor(uikit.GlyphMusicNote, m)
 	default:
 		return uikit.GlyphFor(uikit.GlyphSeparator, m)
 	}
@@ -136,6 +154,10 @@ func (d SearchItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		d.renderAlbum(w, si, isSelected, width)
 	case "playlist":
 		d.renderPlaylist(w, si, isSelected, width)
+	case "show":
+		d.renderShow(w, si, isSelected, width)
+	case "episode":
+		d.renderEpisode(w, si, isSelected, width)
 	default:
 		d.renderDefault(w, si, isSelected, width)
 	}
@@ -272,6 +294,70 @@ func (d SearchItemDelegate) renderPlaylist(w io.Writer, si SearchListItem, selec
 		d.wrapLine(line3Content, selected))
 }
 
+// renderShow renders a show item:
+// Line 1: ♫ bold name ......... episodeCount
+// Line 2: publisher (dimmed)
+// Line 3: description (italic)
+func (d SearchItemDelegate) renderShow(w io.Writer, si SearchListItem, selected bool, width int) {
+	badge := d.styledBadge(si.Category)
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+
+	rightMeta := lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(si.TotalEpisodes)
+
+	rightMetaPlain := plainLen(si.TotalEpisodes)
+	nameMaxW := innerW - 2 - rightMetaPlain - 1
+	if nameMaxW < 1 {
+		nameMaxW = 1
+	}
+	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
+	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
+
+	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render(si.Publisher)
+
+	desc := truncateString(si.ShowDesc, innerW)
+	line3Content := d.line3Style(selected, d.theme.TextMuted()).Italic(true).Render(desc)
+
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
+}
+
+// renderEpisode renders an episode item:
+// Line 1: ♪ bold name ......... duration
+// Line 2: show name (dimmed)
+// Line 3: release date (italic)
+func (d SearchItemDelegate) renderEpisode(w io.Writer, si SearchListItem, selected bool, width int) {
+	badge := d.styledBadge(si.Category)
+	innerW := width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+
+	durationStr := lipgloss.NewStyle().Foreground(d.theme.TextMuted()).Render(si.Duration)
+	rightMeta := durationStr
+
+	rightMetaPlain := plainLen(si.Duration)
+	nameMaxW := innerW - 2 - rightMetaPlain - 1
+	if nameMaxW < 1 {
+		nameMaxW = 1
+	}
+	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
+	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
+
+	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render(si.ShowName)
+
+	line3Content := d.line3Style(selected, d.theme.TextMuted()).Render(si.ReleaseDate)
+
+	_, _ = fmt.Fprintf(w, "%s\n%s\n%s\n",
+		d.wrapLine(line1Content, selected),
+		d.wrapLine(line2Content, selected),
+		d.wrapLine(line3Content, selected))
+}
+
 // renderDefault renders items with unknown category using a simple 3-line layout.
 func (d SearchItemDelegate) renderDefault(w io.Writer, si SearchListItem, selected bool, width int) {
 	badge := d.styledBadge(si.Category)
@@ -370,6 +456,10 @@ func (d SearchItemDelegate) badgeColor(category string) lipgloss.Color {
 		return d.theme.SeekBar()
 	case "playlist":
 		return d.theme.SectionHeader()
+	case "show":
+		return d.theme.Info()
+	case "episode":
+		return d.theme.Warning()
 	default:
 		return d.theme.TextMuted()
 	}
@@ -480,6 +570,53 @@ func PlaylistsToSearchListItems(playlists []domain.SearchPlaylist) []SearchListI
 			Owner:          p.Owner.DisplayName,
 			PlaylistTracks: tc,
 			PlaylistDesc:   desc,
+		}
+	}
+	return items
+}
+
+// ShowsToSearchListItems converts domain.SearchShow slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func ShowsToSearchListItems(shows []domain.SearchShow) []SearchListItem {
+	items := make([]SearchListItem, len(shows))
+	for i, s := range shows {
+		epCount := fmt.Sprintf("%d episodes", s.TotalEpisodes)
+		sep := subtitleSep()
+		subtitle := s.Publisher + sep + epCount
+		desc := truncateString(s.Description, 60)
+		if desc != "" {
+			subtitle += sep + desc
+		}
+		items[i] = SearchListItem{
+			Category:      "show",
+			Name:          s.Name,
+			Subtitle:      subtitle,
+			URI:           s.URI,
+			IsShow:        true,
+			Publisher:     s.Publisher,
+			TotalEpisodes: epCount,
+			ShowDesc:      desc,
+		}
+	}
+	return items
+}
+
+// EpisodesToSearchListItems converts domain.SearchEpisode slices to SearchListItem slices.
+// Used by commands.go to build SearchPageLoadedMsg.Results from the API response.
+func EpisodesToSearchListItems(episodes []domain.SearchEpisode) []SearchListItem {
+	items := make([]SearchListItem, len(episodes))
+	for i, e := range episodes {
+		dur := formatSearchDuration(e.DurationMs)
+		sep := subtitleSep()
+		subtitle := dur + sep + e.ReleaseDate
+		items[i] = SearchListItem{
+			Category:    "episode",
+			Name:        e.Name,
+			Subtitle:    subtitle,
+			URI:         e.URI,
+			IsEpisode:   true,
+			Duration:    dur,
+			ReleaseDate: e.ReleaseDate,
 		}
 	}
 	return items

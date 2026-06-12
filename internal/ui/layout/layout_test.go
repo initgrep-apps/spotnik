@@ -930,21 +930,23 @@ func TestNewManager_HasPodcastsPage(t *testing.T) {
 
 func TestPresetPodcastListening_Grid(t *testing.T) {
 	assert.Equal(t, "Listening", layout.PresetPodcastListening.Name)
-	// Row 2: 55/45 split
+	// Row 2: FollowedShows(55) / ShowEpisodes(45)
 	require.Len(t, layout.PresetPodcastListening.Grid, 2)
 	require.Len(t, layout.PresetPodcastListening.Grid[1].Cells, 2)
+	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcastListening.Grid[1].Cells[0].PaneID)
+	assert.Equal(t, layout.PaneShowEpisodes, layout.PresetPodcastListening.Grid[1].Cells[1].PaneID)
 	assert.Equal(t, 55, layout.PresetPodcastListening.Grid[1].Cells[0].WidthWeight)
 	assert.Equal(t, 45, layout.PresetPodcastListening.Grid[1].Cells[1].WidthWeight)
 }
 
 func TestPresetPodcastDashboard_Grid(t *testing.T) {
 	assert.Equal(t, "Dashboard", layout.PresetPodcastDashboard.Name)
-	// Row 2: 35/25/40 split
+	// Row 2: equal 1/1/1 split
 	require.Len(t, layout.PresetPodcastDashboard.Grid, 2)
 	require.Len(t, layout.PresetPodcastDashboard.Grid[1].Cells, 3)
-	assert.Equal(t, 35, layout.PresetPodcastDashboard.Grid[1].Cells[0].WidthWeight)
-	assert.Equal(t, 25, layout.PresetPodcastDashboard.Grid[1].Cells[1].WidthWeight)
-	assert.Equal(t, 40, layout.PresetPodcastDashboard.Grid[1].Cells[2].WidthWeight)
+	assert.Equal(t, 1, layout.PresetPodcastDashboard.Grid[1].Cells[0].WidthWeight)
+	assert.Equal(t, 1, layout.PresetPodcastDashboard.Grid[1].Cells[1].WidthWeight)
+	assert.Equal(t, 1, layout.PresetPodcastDashboard.Grid[1].Cells[2].WidthWeight)
 }
 
 func TestPodcastsPage_PaneRects(t *testing.T) {

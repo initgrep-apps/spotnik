@@ -132,7 +132,7 @@ var PageStatsPresets = []Preset{PresetStats}
 // Podcasts page presets
 
 // PresetPodcastListening shows podcast playback in the upper row and
-// show episodes + followed shows side-by-side below.
+// followed shows + show episodes side-by-side below.
 var PresetPodcastListening = Preset{
 	Name: "Listening",
 	Visible: map[PaneID]bool{
@@ -143,13 +143,13 @@ var PresetPodcastListening = Preset{
 	Grid: []Row{
 		{HeightWeight: 2, Cells: []Cell{{PaneID: PanePodcastPlayback, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
-			{PaneID: PaneShowEpisodes, WidthWeight: 55},
-			{PaneID: PaneFollowedShows, WidthWeight: 45},
+			{PaneID: PaneFollowedShows, WidthWeight: 55},
+			{PaneID: PaneShowEpisodes, WidthWeight: 45},
 		}},
 	},
 }
 
-// PresetPodcastDashboard shows all 4 podcast panes with a 35/25/40 split.
+// PresetPodcastDashboard shows all 4 podcast panes with equal-width bottom row.
 var PresetPodcastDashboard = Preset{
 	Name: "Dashboard",
 	Visible: map[PaneID]bool{
@@ -161,9 +161,9 @@ var PresetPodcastDashboard = Preset{
 	Grid: []Row{
 		{HeightWeight: 2, Cells: []Cell{{PaneID: PanePodcastPlayback, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
-			{PaneID: PaneShowEpisodes, WidthWeight: 35},
-			{PaneID: PaneFollowedShows, WidthWeight: 25},
-			{PaneID: PaneSavedEpisodes, WidthWeight: 40},
+			{PaneID: PaneShowEpisodes, WidthWeight: 1},
+			{PaneID: PaneFollowedShows, WidthWeight: 1},
+			{PaneID: PaneSavedEpisodes, WidthWeight: 1},
 		}},
 	},
 }

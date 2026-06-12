@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -381,8 +382,20 @@ func convertSearchResult(r *api.SearchResult) ([]panes.SearchListItem, int) {
 	items = append(items, panes.ArtistsToSearchListItems(r.Artists.Items)...)
 	items = append(items, panes.AlbumsToSearchListItems(r.Albums.Items)...)
 	items = append(items, panes.PlaylistsToSearchListItems(r.Playlists.Items)...)
+	if r.Shows != nil {
+		items = append(items, panes.ShowsToSearchListItems(r.Shows.Items)...)
+	}
+	if r.Episodes != nil {
+		items = append(items, panes.EpisodesToSearchListItems(r.Episodes.Items)...)
+	}
 
 	total := max(r.Tracks.Total, r.Artists.Total, r.Albums.Total, r.Playlists.Total)
+	if r.Shows != nil {
+		total = max(total, r.Shows.Total)
+	}
+	if r.Episodes != nil {
+		total = max(total, r.Episodes.Total)
+	}
 	return items, total
 }
 
@@ -847,4 +860,15 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 		}
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
 	}
+}
+
+// showIDFromURI extracts the Spotify show ID from a show URI.
+// A show URI has the format "spotify:show:<id>".
+func showIDFromURI(uri string) string {
+	// spotify:show:ID → split by ":" gives ["spotify", "show", "ID"]
+	parts := strings.Split(uri, ":")
+	if len(parts) >= 3 {
+		return parts[len(parts)-1]
+	}
+	return uri
 }
