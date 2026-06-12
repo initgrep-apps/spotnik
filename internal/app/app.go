@@ -71,14 +71,15 @@ type App struct {
 	// BubbleUp's View() returns empty string by design; Render() overlays alerts.
 	// toasts wraps alerts to provide the typed Toast API. It holds a pointer to the
 	// alerts field so it automatically reflects theme-switch re-assignments.
-	toasts      *uikit.ToastManager
-	errorMapper *uikit.ErrorMapper // translates API errors to user-friendly Toast values
-	gateway     *api.Gateway       // centralized HTTP gateway shared across all API clients
-	player      api.PlayerAPI
-	library     api.LibraryAPI
-	search      api.SearchAPI
-	devices     api.DevicesAPI
-	userAPI     api.UserAPI
+	toasts        *uikit.ToastManager
+	errorMapper   *uikit.ErrorMapper // translates API errors to user-friendly Toast values
+	gateway       *api.Gateway       // centralized HTTP gateway shared across all API clients
+	player        api.PlayerAPI
+	library       api.LibraryAPI
+	search        api.SearchAPI
+	devices       api.DevicesAPI
+	userAPI       api.UserAPI
+	podcastClient api.PodcastAPI
 
 	// layout manages the grid, focus, preset, and page system.
 	layout *layout.Manager
@@ -233,13 +234,16 @@ type App struct {
 
 	// Per-pane polling health — each pane tracks backoff and first-load status
 	// independently from the global 429 backoff (a.backoffTicks).
-	playlistsPoll    pollState
-	albumsPoll       pollState
-	likedSongsPoll   pollState
-	recentPlayedPoll pollState
-	statsPoll        pollState
-	devicesPoll      pollState
-	queuePoll        pollState
+	playlistsPoll     pollState
+	albumsPoll        pollState
+	likedSongsPoll    pollState
+	recentPlayedPoll  pollState
+	statsPoll         pollState
+	devicesPoll       pollState
+	queuePoll         pollState
+	followedShowsPoll pollState
+	savedEpisodesPoll pollState
+	showEpisodesPoll  pollState
 
 	// nilPlaybackStateTicks counts successive PlaybackStateFetchedMsg deliveries where
 	// State is nil and Err is nil. After 30 consecutive nil states a warning toast fires
@@ -330,19 +334,29 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	gatewayLivePane := panes.NewGatewayLivePane(s, t)
 	networkLogPane := panes.NewNetworkLogPane(s, t)
 
+	// Create all 4 Podcasts page panes.
+	podcastPlaybackPane := panes.NewPodcastPlaybackPane(s, t, true)
+	showEpisodesPane := panes.NewShowEpisodesPane(s, t, false)
+	followedShowsPane := panes.NewFollowedShowsPane(s, t, false)
+	savedEpisodesPane := panes.NewSavedEpisodesPane(s, t, false)
+
 	panesMap := map[layout.PaneID]layout.Pane{
-		layout.PaneNowPlaying:     nowPlayingPane,
-		layout.PaneQueue:          queuePane,
-		layout.PanePlaylists:      playlistsPane,
-		layout.PaneAlbums:         albumsPane,
-		layout.PaneLikedSongs:     likedSongsPane,
-		layout.PaneRecentlyPlayed: recentlyPlayedPane,
-		layout.PaneTopTracks:      topTracksPane,
-		layout.PaneTopArtists:     topArtistsPane,
-		layout.PaneGatewayHealth:  gatewayHealthPane,
-		layout.PanePollingTraffic: pollingTrafficPane,
-		layout.PaneGatewayLive:    gatewayLivePane,
-		layout.PaneNetworkLog:     networkLogPane,
+		layout.PaneNowPlaying:      nowPlayingPane,
+		layout.PaneQueue:           queuePane,
+		layout.PanePlaylists:       playlistsPane,
+		layout.PaneAlbums:          albumsPane,
+		layout.PaneLikedSongs:      likedSongsPane,
+		layout.PaneRecentlyPlayed:  recentlyPlayedPane,
+		layout.PaneTopTracks:       topTracksPane,
+		layout.PaneTopArtists:      topArtistsPane,
+		layout.PaneGatewayHealth:   gatewayHealthPane,
+		layout.PanePollingTraffic:  pollingTrafficPane,
+		layout.PaneGatewayLive:     gatewayLivePane,
+		layout.PaneNetworkLog:      networkLogPane,
+		layout.PanePodcastPlayback: podcastPlaybackPane,
+		layout.PaneShowEpisodes:    showEpisodesPane,
+		layout.PaneFollowedShows:   followedShowsPane,
+		layout.PaneSavedEpisodes:   savedEpisodesPane,
 	}
 
 	searchPane := panes.NewSearchOverlay(t)
@@ -484,6 +498,11 @@ func (a *App) SetPlaylistsAPI(p api.PlaylistsAPI) {
 	a.playlistsAPI = p
 }
 
+// SetPodcastClient injects the Spotify podcast API client into the app.
+func (a *App) SetPodcastClient(pc api.PodcastAPI) {
+	a.podcastClient = pc
+}
+
 // GridViewOpen returns true while the grid view is the active top-level view.
 func (a *App) GridViewOpen() bool {
 	return a.currentView == viewGrid
@@ -592,6 +611,7 @@ var (
 	playlistsIntervals    = libraryIntervals{playing: 60, paused: 120, idle: 300}
 	albumsIntervals       = libraryIntervals{playing: 120, paused: 300, idle: 600}
 	statsIntervals        = libraryIntervals{playing: 3600, paused: 3600, idle: 3600}
+	podcastIntervals      = libraryIntervals{playing: 60, paused: 120, idle: 300}
 )
 
 // calcBackoffTicks computes per-pane exponential backoff: min(5 * 2^(errorCount-1), 60).
@@ -755,6 +775,54 @@ func (a *App) nowPlayingPane() *panes.NowPlayingPane {
 	}
 	if np, ok := p.(*panes.NowPlayingPane); ok {
 		return np
+	}
+	return nil
+}
+
+// podcastPlaybackPane returns the PodcastPlaybackPane from the panes map (convenience accessor).
+func (a *App) podcastPlaybackPane() *panes.PodcastPlaybackPane {
+	p, ok := a.panes[layout.PanePodcastPlayback]
+	if !ok {
+		return nil
+	}
+	if pp, ok := p.(*panes.PodcastPlaybackPane); ok {
+		return pp
+	}
+	return nil
+}
+
+// followedShowsPane returns the FollowedShowsPane from the panes map (convenience accessor).
+func (a *App) followedShowsPane() *panes.FollowedShowsPane {
+	p, ok := a.panes[layout.PaneFollowedShows]
+	if !ok {
+		return nil
+	}
+	if fp, ok := p.(*panes.FollowedShowsPane); ok {
+		return fp
+	}
+	return nil
+}
+
+// savedEpisodesPane returns the SavedEpisodesPane from the panes map (convenience accessor).
+func (a *App) savedEpisodesPane() *panes.SavedEpisodesPane {
+	p, ok := a.panes[layout.PaneSavedEpisodes]
+	if !ok {
+		return nil
+	}
+	if sp, ok := p.(*panes.SavedEpisodesPane); ok {
+		return sp
+	}
+	return nil
+}
+
+// showEpisodesPane returns the ShowEpisodesPane from the panes map (convenience accessor).
+func (a *App) showEpisodesPane() *panes.ShowEpisodesPane {
+	p, ok := a.panes[layout.PaneShowEpisodes]
+	if !ok {
+		return nil
+	}
+	if ep, ok := p.(*panes.ShowEpisodesPane); ok {
+		return ep
 	}
 	return nil
 }

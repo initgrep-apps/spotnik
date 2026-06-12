@@ -18,6 +18,24 @@ func newTestPlayer(baseURL, token string) *Player {
 	return NewPlayer(baseURL, token)
 }
 
+// TestPlaybackState_SendsAdditionalTypes verifies that the PlaybackState request
+// includes the additional_types=episode query parameter.
+func TestPlaybackState_SendsAdditionalTypes(t *testing.T) {
+	var capturedQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	player := newTestPlayer(srv.URL, "test-token")
+	_, _ = player.PlaybackState(context.Background())
+
+	assert.Contains(t, capturedQuery, "additional_types=episode")
+	assert.Contains(t, capturedQuery, "market=from_token")
+}
+
 func TestGetPlaybackState(t *testing.T) {
 	fixture := testhelpers.LoadFixture(t, "playback_state.json")
 

@@ -731,6 +731,103 @@ func (a *App) buildFetchAlbumTracksCmd(ctx context.Context, albumID string, offs
 	}
 }
 
+// buildFetchFollowedShowsCmd creates a command that fetches the user's followed
+// podcast shows and returns them in FollowedShowsLoadedMsg.
+func (a *App) buildFetchFollowedShowsCmd() tea.Cmd {
+	client := a.podcastClient
+	return func() tea.Msg {
+		if client == nil {
+			return panes.FollowedShowsLoadedMsg{Err: errNilClient}
+		}
+		items, err := client.FollowedShows(context.Background(), 50, 0)
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.FollowedShowsLoadedMsg{Err: err}
+		}
+		return panes.FollowedShowsLoadedMsg{Items: items}
+	}
+}
+
+// buildFetchSavedEpisodesCmd creates a command that fetches the user's saved
+// podcast episodes and returns them in SavedEpisodesLoadedMsg.
+func (a *App) buildFetchSavedEpisodesCmd() tea.Cmd {
+	client := a.podcastClient
+	return func() tea.Msg {
+		if client == nil {
+			return panes.SavedEpisodesLoadedMsg{Err: errNilClient}
+		}
+		items, err := client.SavedEpisodes(context.Background(), 50, 0)
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.SavedEpisodesLoadedMsg{Err: err}
+		}
+		return panes.SavedEpisodesLoadedMsg{Items: items}
+	}
+}
+
+// buildFetchShowEpisodesCmd creates a command that fetches episodes for a specific
+// show and returns them in ShowEpisodesLoadedMsg.
+func (a *App) buildFetchShowEpisodesCmd(showID string) tea.Cmd {
+	client := a.podcastClient
+	return func() tea.Msg {
+		if client == nil {
+			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Err: errNilClient}
+		}
+		items, total, hasNext, err := client.ShowEpisodes(context.Background(), showID, 50, 0)
+		if err != nil {
+			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Err: err}
+		}
+		return panes.ShowEpisodesLoadedMsg{
+			ShowID:  showID,
+			Items:   items,
+			Total:   total,
+			HasNext: hasNext,
+		}
+	}
+}
+
+// buildPlayEpisodeCmd creates a command that plays a podcast episode. When
+// playlistURI is non-empty, the episode is played within the show context.
+func (a *App) buildPlayEpisodeCmd(episodeURI, playlistURI string) tea.Cmd {
+	player := a.player
+	return func() tea.Msg {
+		if player == nil {
+			return panes.PlaybackCmdSentMsg{Err: errNilClient, Source: "playback"}
+		}
+		opts := domain.PlayOptions{URIs: []string{episodeURI}}
+		if playlistURI != "" {
+			opts.ContextURI = playlistURI
+			opts.URIs = nil
+		}
+		err := player.Play(api.WithPriority(context.Background(), api.Interactive), opts)
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+		}
+		return panes.PlaybackCmdSentMsg{Err: err, Source: "playback"}
+	}
+}
+
 // buildRemovePlaylistTrackCmd creates a command that calls RemoveTracksFromPlaylist
 // and returns a PlaylistRemoveResultMsg.
 func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {

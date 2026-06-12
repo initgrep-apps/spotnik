@@ -1,7 +1,7 @@
 ---
 title: "Domain types + PodcastAPI client"
 feature: 18-podcasts
-status: open
+status: done
 ---
 
 ## Background

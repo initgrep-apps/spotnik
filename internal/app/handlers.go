@@ -33,6 +33,10 @@ func (a *App) clearAllFetchingSentinels() {
 	a.store.SetLikedFetching(false)
 	a.store.SetRecentFetching(false)
 	a.store.SetDevicesFetching(false)
+	// Podcast sentinels.
+	a.store.SetFollowedShowsFetching(false)
+	a.store.SetSavedEpisodesFetching(false)
+	a.store.SetShowEpisodesFetching(false)
 	// Stats sentinels are keyed by time range — clear all known ranges.
 	for _, r := range []string{"short_term", "medium_term", "long_term"} {
 		a.store.SetStatsFetching(r, false)
@@ -527,6 +531,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() bool { return a.store.StatsFetching("short_term") },
 				func(b bool) { a.store.SetStatsFetching("short_term", b) },
 				func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
+			{&a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
+			{&a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
+			{&a.showEpisodesPoll, podcastIntervals,
+				func() bool { return a.store.ShowEpisodesFetching() || a.store.SelectedShowID() == "" },
+				func(b bool) { a.store.SetShowEpisodesFetching(b) },
+				func() tea.Cmd {
+					id := a.store.SelectedShowID()
+					if id == "" {
+						return nil
+					}
+					return a.buildFetchShowEpisodesCmd(id)
+				}},
 		} {
 			p := entry.p
 			if p.backoffTicks > 0 {
@@ -800,12 +816,27 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Data fetched during splash is stored but splash stays visible
 		// for the full 5s duration — the splashDismissMsg timer handles transition.
+		var playbackCmds []tea.Cmd
 		if np := a.nowPlayingPane(); np != nil {
 			updatedPane, cmd := np.Update(m)
 			if pp, ok := updatedPane.(*panes.NowPlayingPane); ok {
 				a.panes[layout.PaneNowPlaying] = pp
 			}
-			return a, cmd
+			if cmd != nil {
+				playbackCmds = append(playbackCmds, cmd)
+			}
+		}
+		if ppp := a.podcastPlaybackPane(); ppp != nil {
+			updatedPane, cmd := ppp.Update(m)
+			if pp, ok := updatedPane.(*panes.PodcastPlaybackPane); ok {
+				a.panes[layout.PanePodcastPlayback] = pp
+			}
+			if cmd != nil {
+				playbackCmds = append(playbackCmds, cmd)
+			}
+		}
+		if len(playbackCmds) > 0 {
+			return a, tea.Batch(playbackCmds...)
 		}
 		return a, nil
 
@@ -1438,6 +1469,172 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// a fresh HTTP call and does not join a pre-transfer Background poll.
 		return a, fetchPlaybackStateCmd(a.player, api.Interactive)
 
+	case panes.FetchFollowedShowsRequestMsg:
+		if a.store.FollowedShowsStale() {
+			a.store.SetFollowedShowsFetching(true)
+			return a, a.buildFetchFollowedShowsCmd()
+		}
+		return a, nil
+
+	case panes.FetchSavedEpisodesRequestMsg:
+		if a.store.SavedEpisodesStale() {
+			a.store.SetSavedEpisodesFetching(true)
+			return a, a.buildFetchSavedEpisodesCmd()
+		}
+		return a, nil
+
+	case panes.FetchShowEpisodesRequestMsg:
+		if a.store.SelectedShowID() != m.ShowID || a.store.ShowEpisodesStale() {
+			a.store.SetShowEpisodesFetching(true)
+			a.store.SetSelectedShowID(m.ShowID)
+			return a, a.buildFetchShowEpisodesCmd(m.ShowID)
+		}
+		return a, nil
+
+	case panes.FollowedShowsLoadedMsg:
+		a.store.SetFollowedShowsFetching(false)
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
+			a.followedShowsPoll.errorCount++
+			a.followedShowsPoll.backoffTicks = calcBackoffTicks(a.followedShowsPoll.errorCount)
+			a.store.SetFollowedShowsFetchError(m.Err)
+			if a.followedShowsPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load followed shows",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
+		}
+		a.followedShowsPoll.errorCount = 0
+		a.followedShowsPoll.backoffTicks = 0
+		a.followedShowsPoll.hasData = true
+		a.store.ClearFollowedShowsFetchError()
+		a.store.SetFollowedShows(m.Items)
+		// Re-resolve the selected show from refreshed data so the metadata
+		// stays up-to-date when the user has a show selected.
+		if id := a.store.SelectedShowID(); id != "" {
+			for _, ss := range m.Items {
+				if ss.Show.ID == id {
+					showCopy := ss.Show
+					a.store.SetSelectedShow(&showCopy)
+					break
+				}
+			}
+		}
+		var cmds []tea.Cmd
+		if fp := a.followedShowsPane(); fp != nil {
+			updated, cmd := fp.Update(m)
+			if fpu, ok := updated.(*panes.FollowedShowsPane); ok {
+				a.panes[layout.PaneFollowedShows] = fpu
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
+		}
+		return a, nil
+
+	case panes.SavedEpisodesLoadedMsg:
+		a.store.SetSavedEpisodesFetching(false)
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
+			a.savedEpisodesPoll.errorCount++
+			a.savedEpisodesPoll.backoffTicks = calcBackoffTicks(a.savedEpisodesPoll.errorCount)
+			a.store.SetSavedEpisodesFetchError(m.Err)
+			if a.savedEpisodesPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load saved episodes",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
+		}
+		a.savedEpisodesPoll.errorCount = 0
+		a.savedEpisodesPoll.backoffTicks = 0
+		a.savedEpisodesPoll.hasData = true
+		a.store.ClearSavedEpisodesFetchError()
+		a.store.SetSavedEpisodes(m.Items)
+		var cmds []tea.Cmd
+		if sp := a.savedEpisodesPane(); sp != nil {
+			updated, cmd := sp.Update(m)
+			if spu, ok := updated.(*panes.SavedEpisodesPane); ok {
+				a.panes[layout.PaneSavedEpisodes] = spu
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
+		}
+		return a, nil
+
+	case panes.ShowEpisodesLoadedMsg:
+		a.store.SetShowEpisodesFetching(false)
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil
+			}
+			a.showEpisodesPoll.errorCount++
+			a.showEpisodesPoll.backoffTicks = calcBackoffTicks(a.showEpisodesPoll.errorCount)
+			a.store.SetShowEpisodesFetchError(m.Err)
+			if a.showEpisodesPoll.errorCount == 1 {
+				return a, a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load show episodes",
+					Body:   "Retrying automatically.",
+				})
+			}
+			return a, nil
+		}
+		a.showEpisodesPoll.errorCount = 0
+		a.showEpisodesPoll.backoffTicks = 0
+		a.showEpisodesPoll.hasData = true
+		a.store.ClearShowEpisodesFetchError()
+		if m.Items != nil {
+			a.store.SetShowEpisodes(m.Items)
+		}
+		a.store.SetShowEpisodesTotal(m.Total)
+		var cmds []tea.Cmd
+		if ep := a.showEpisodesPane(); ep != nil {
+			updated, cmd := ep.Update(m)
+			if epu, ok := updated.(*panes.ShowEpisodesPane); ok {
+				a.panes[layout.PaneShowEpisodes] = epu
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if len(cmds) > 0 {
+			return a, tea.Batch(cmds...)
+		}
+		return a, nil
+
+	case panes.SelectedShowChangedMsg:
+		a.store.SetSelectedShowID(m.ShowID)
+		// Resolve the full show from the followed-shows cache so the
+		// ShowEpisodesPane can show metadata immediately while episodes load.
+		for _, ss := range a.store.FollowedShows() {
+			if ss.Show.ID == m.ShowID {
+				showCopy := ss.Show
+				a.store.SetSelectedShow(&showCopy)
+				break
+			}
+		}
+		return a, a.buildFetchShowEpisodesCmd(m.ShowID)
+
+	case panes.PlayEpisodeMsg:
+		return a, a.buildPlayEpisodeCmd(m.EpisodeURI, m.PlaylistURI)
+
 	case throttleExpiredMsg:
 		// Clear throttle state in the store once the backoff period expires.
 		a.store.SetThrottle(false, 0, time.Time{})
@@ -1474,12 +1671,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	// Forward any remaining unhandled messages to the playlist and album panes.
-	// This ensures pane-internal debounce ticks (playlistDebounceMsg, albumDebounceMsg)
+	// Forward any remaining unhandled messages to the playlist, album, and podcast panes.
+	// This ensures pane-internal debounce ticks and other unexported messages
 	// reach their panes — those types are unexported so the switch above cannot match them.
-	// Both panes' Update methods safely return (p, nil) for messages they don't recognise.
+	// All panes' Update methods safely return (p, nil) for messages they don't recognise.
 	return a, tea.Batch(
 		a.forwardToPane(layout.PanePlaylists, msg),
 		a.forwardToPane(layout.PaneAlbums, msg),
+		a.forwardToPane(layout.PanePodcastPlayback, msg),
+		a.forwardToPane(layout.PaneShowEpisodes, msg),
+		a.forwardToPane(layout.PaneFollowedShows, msg),
+		a.forwardToPane(layout.PaneSavedEpisodes, msg),
 	)
 }

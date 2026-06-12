@@ -42,6 +42,15 @@ var statsToggleKeyMap = map[rune]layout.PaneID{
 	'5': layout.PaneNetworkLog,
 }
 
+// podcastToggleKeyMap maps rune keys '1'-'4' to Podcasts page PaneIDs.
+// This is used for btop-style pane visibility toggling on the Podcasts page.
+var podcastToggleKeyMap = map[rune]layout.PaneID{
+	'1': layout.PanePodcastPlayback,
+	'2': layout.PaneShowEpisodes,
+	'3': layout.PaneFollowedShows,
+	'4': layout.PaneSavedEpisodes,
+}
+
 // isPlaybackKey returns true for keys that control playback regardless of focus.
 // NOTE: Bubbletea v0.27 delivers Space as tea.KeySpace (not a rune), so tea.KeySpace
 // is checked here. Plain ←/→ seek back/forward 5s; Shift+←/Shift+→ skip to prev/next track.
@@ -190,11 +199,14 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.schedulePrefsFlush()
 	}
 
-	// '1'-'8' (Music) or '1'-'5' (Stats) toggle pane visibility.
+	// '1'-'8' (Music), '1'-'5' (Stats), or '1'-'4' (Podcasts) toggle pane visibility.
 	if m.Type == tea.KeyRunes && len(m.Runes) == 1 {
 		keyMap := toggleKeyMap
-		if a.layout.ActivePage() == layout.PageStats {
+		switch a.layout.ActivePage() {
+		case layout.PageStats:
 			keyMap = statsToggleKeyMap
+		case layout.PagePodcasts:
+			keyMap = podcastToggleKeyMap
 		}
 		if id, ok := keyMap[m.Runes[0]]; ok {
 			a.layout.TogglePane(id)
@@ -217,7 +229,8 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Playback keys always go to the NowPlaying pane regardless of focus.
+	// Playback keys route to the NowPlaying pane (Music/Stats pages) or the
+	// PodcastPlayback pane (Podcasts page), regardless of focus.
 	// Temporarily enable focus so the pane handles the key even when it isn't focused.
 	if isPlaybackKey(m) {
 		// Gate: free-tier users are blocked from Premium-only API operations.
@@ -227,6 +240,25 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 				Intent: uikit.ToastWarning,
 				Title:  "Spotify Premium required",
 			})
+		}
+		if a.layout.ActivePage() == layout.PagePodcasts {
+			pp := a.podcastPlaybackPane()
+			if pp == nil {
+				return a, nil
+			}
+			wasFocused := pp.IsFocused()
+			if !wasFocused {
+				pp.SetFocused(true)
+			}
+			updatedPane, cmd := pp.Update(m)
+			if ppp, ok := updatedPane.(*panes.PodcastPlaybackPane); ok {
+				a.panes[layout.PanePodcastPlayback] = ppp
+				pp = ppp
+			}
+			if !wasFocused {
+				pp.SetFocused(false)
+			}
+			return a, cmd
 		}
 		np := a.nowPlayingPane()
 		if np == nil {

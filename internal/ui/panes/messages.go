@@ -412,6 +412,66 @@ type SearchPageLoadedMsg struct {
 	Err error
 }
 
+// Podcast messages
+
+// FetchFollowedShowsRequestMsg is emitted by the podcasts pane when it needs to
+// load followed shows from the API.
+type FetchFollowedShowsRequestMsg struct{}
+
+// FetchSavedEpisodesRequestMsg is emitted by the podcasts pane when it needs to
+// load saved episodes from the API.
+type FetchSavedEpisodesRequestMsg struct{}
+
+// FetchShowEpisodesRequestMsg is emitted by the podcasts pane when it needs to
+// load episodes for a specific show from the API.
+type FetchShowEpisodesRequestMsg struct {
+	ShowID string
+}
+
+// FollowedShowsLoadedMsg is sent by the root app model after followed shows have
+// been fetched. Items carries the fetched shows; Err is non-nil on failure.
+// Update() writes Items to the store.
+type FollowedShowsLoadedMsg struct {
+	Items []domain.SavedShow
+	Err   error
+}
+
+// SavedEpisodesLoadedMsg is sent by the root app model after saved episodes have
+// been fetched. Items carries the fetched episodes; Err is non-nil on failure.
+// Update() writes Items to the store.
+type SavedEpisodesLoadedMsg struct {
+	Items []domain.SavedEpisode
+	Err   error
+}
+
+// ShowEpisodesLoadedMsg is sent by the root app model after episodes for a show
+// have been fetched. ShowID identifies which show's episodes arrived.
+// Items carries the fetched episodes; Total is the total episode count.
+// HasNext is true when more pages are available. Err is non-nil on failure.
+// Update() writes Items to the store.
+type ShowEpisodesLoadedMsg struct {
+	ShowID  string
+	Items   []domain.Episode
+	Total   int
+	HasNext bool
+	Err     error
+}
+
+// SelectedShowChangedMsg is emitted by the podcasts pane when the user selects
+// a different show. The root app model uses ShowID to update the store and
+// trigger an episode fetch if needed.
+type SelectedShowChangedMsg struct {
+	ShowID string
+}
+
+// PlayEpisodeMsg is emitted by the podcasts pane when the user presses Enter
+// on an episode. EpisodeURI is the URI of the episode to play. PlaylistURI
+// is the show URI for context, empty for saved episodes.
+type PlayEpisodeMsg struct {
+	EpisodeURI  string
+	PlaylistURI string
+}
+
 // PollingSnapshotMsg carries app-level polling state to the PollingTrafficPane.
 // The app sends this on each TickMsg so the pane can display polling diagnostics.
 type PollingSnapshotMsg struct {

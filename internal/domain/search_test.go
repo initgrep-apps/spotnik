@@ -142,6 +142,84 @@ func TestSearchAlbum_AlbumType(t *testing.T) {
 
 // TestSearchPlaylist_Description verifies that the Description field is extracted
 // from the JSON response.
+// TestSearchResult_UnmarshalWithShowsEpisodes verifies that SearchResult can unmarshal
+// JSON with shows and episodes fields.
+func TestSearchResult_UnmarshalWithShowsEpisodes(t *testing.T) {
+	raw := `{
+		"tracks": {"items": [], "total": 0},
+		"artists": {"items": [], "total": 0},
+		"albums": {"items": [], "total": 0},
+		"playlists": {"items": [], "total": 0},
+		"shows": {
+			"items": [
+				{
+					"id": "show-1",
+					"name": "Test Show",
+					"publisher": "Test Publisher",
+					"description": "A test show",
+					"total_episodes": 42,
+					"media_type": "audio",
+					"explicit": false,
+					"languages": ["en"],
+					"images": [],
+					"uri": "spotify:show:show-1"
+				}
+			],
+			"total": 1
+		},
+		"episodes": {
+			"items": [
+				{
+					"id": "ep-1",
+					"name": "Test Episode",
+					"description": "An episode",
+					"duration_ms": 1800000,
+					"explicit": false,
+					"is_playable": true,
+					"release_date": "2024-01-15",
+					"images": [],
+					"uri": "spotify:episode:ep-1"
+				}
+			],
+			"total": 1
+		}
+	}`
+
+	var sr SearchResult
+	err := json.Unmarshal([]byte(raw), &sr)
+	require.NoError(t, err)
+
+	require.NotNil(t, sr.Shows)
+	assert.Equal(t, 1, sr.Shows.Total)
+	require.Len(t, sr.Shows.Items, 1)
+	assert.Equal(t, "show-1", sr.Shows.Items[0].ID)
+	assert.Equal(t, "Test Show", sr.Shows.Items[0].Name)
+	assert.Equal(t, "Test Publisher", sr.Shows.Items[0].Publisher)
+
+	require.NotNil(t, sr.Episodes)
+	assert.Equal(t, 1, sr.Episodes.Total)
+	require.Len(t, sr.Episodes.Items, 1)
+	assert.Equal(t, "ep-1", sr.Episodes.Items[0].ID)
+	assert.Equal(t, "Test Episode", sr.Episodes.Items[0].Name)
+}
+
+// TestSearchResult_UnmarshalWithoutShowsEpisodes verifies that SearchResult still works
+// when shows and episodes fields are absent.
+func TestSearchResult_UnmarshalWithoutShowsEpisodes(t *testing.T) {
+	raw := `{
+		"tracks": {"items": [], "total": 0},
+		"artists": {"items": [], "total": 0},
+		"albums": {"items": [], "total": 0},
+		"playlists": {"items": [], "total": 0}
+	}`
+
+	var sr SearchResult
+	err := json.Unmarshal([]byte(raw), &sr)
+	require.NoError(t, err)
+	assert.Nil(t, sr.Shows)
+	assert.Nil(t, sr.Episodes)
+}
+
 func TestSearchPlaylist_Description(t *testing.T) {
 	tests := []struct {
 		name     string

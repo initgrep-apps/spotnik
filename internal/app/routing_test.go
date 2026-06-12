@@ -354,7 +354,8 @@ func TestStatsPageNumberKeys_ToggleStatsPanes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := app.New(&config.Config{}, app.AppOptions{})
 			a.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
-			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}) // switch to Stats page
+			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}) // Music → Podcasts
+			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}) // Podcasts → Stats
 			require.True(t, a.Layout().IsPaneVisible(tc.paneID),
 				"%s must be visible on Stats page before toggle", tc.name)
 			a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tc.key}})

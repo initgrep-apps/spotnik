@@ -128,3 +128,45 @@ var PageMusicPresets = []Preset{PresetDashboard, PresetListening, PresetLibrary,
 
 // PageStatsPresets is the ordered list of presets for the Stats page.
 var PageStatsPresets = []Preset{PresetStats}
+
+// Podcasts page presets
+
+// PresetPodcastListening shows podcast playback in the upper row and
+// show episodes + followed shows side-by-side below.
+var PresetPodcastListening = Preset{
+	Name: "Listening",
+	Visible: map[PaneID]bool{
+		PanePodcastPlayback: true,
+		PaneShowEpisodes:    true,
+		PaneFollowedShows:   true,
+	},
+	Grid: []Row{
+		{HeightWeight: 2, Cells: []Cell{{PaneID: PanePodcastPlayback, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PaneShowEpisodes, WidthWeight: 55},
+			{PaneID: PaneFollowedShows, WidthWeight: 45},
+		}},
+	},
+}
+
+// PresetPodcastDashboard shows all 4 podcast panes with a 35/25/40 split.
+var PresetPodcastDashboard = Preset{
+	Name: "Dashboard",
+	Visible: map[PaneID]bool{
+		PanePodcastPlayback: true,
+		PaneShowEpisodes:    true,
+		PaneFollowedShows:   true,
+		PaneSavedEpisodes:   true,
+	},
+	Grid: []Row{
+		{HeightWeight: 2, Cells: []Cell{{PaneID: PanePodcastPlayback, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PaneShowEpisodes, WidthWeight: 35},
+			{PaneID: PaneFollowedShows, WidthWeight: 25},
+			{PaneID: PaneSavedEpisodes, WidthWeight: 40},
+		}},
+	},
+}
+
+// PagePodcastsPresets is the ordered list of presets for the Podcasts page.
+var PagePodcastsPresets = []Preset{PresetPodcastListening, PresetPodcastDashboard}

@@ -6,7 +6,10 @@
 // api/ and ui/ to import it safely.
 package domain
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // unmarshalJSON is a package-level helper for custom UnmarshalJSON methods.
 func unmarshalJSON(data []byte, v interface{}) error {
@@ -45,10 +48,67 @@ type PlaybackState struct {
 	RepeatState string `json:"repeat_state"`
 
 	// Item is the currently playing track. May be nil if nothing is playing.
-	Item *Track `json:"item"`
+	Item *Track `json:"-"`
 
 	// Device is the currently active playback device. May be nil if no device.
 	Device *Device `json:"device"`
+
+	// CurrentlyPlayingType is the type of the currently playing item:
+	// "track", "episode", "ad", or "unknown".
+	CurrentlyPlayingType string `json:"currently_playing_type"`
+
+	// Episode is the currently playing episode. Populated via custom UnmarshalJSON
+	// when currently_playing_type is "episode". May be nil otherwise.
+	Episode *Episode `json:"-"`
+
+	// Context describes the playback context (album, playlist, show, etc.).
+	Context *PlayContext `json:"context"`
+}
+
+// UnmarshalJSON implements custom unmarshaling to handle both track and episode
+// items based on the currently_playing_type field.
+func (p *PlaybackState) UnmarshalJSON(data []byte) error {
+	raw := &struct {
+		IsPlaying            bool            `json:"is_playing"`
+		ProgressMs           int             `json:"progress_ms"`
+		ShuffleState         bool            `json:"shuffle_state"`
+		RepeatState          string          `json:"repeat_state"`
+		Item                 json.RawMessage `json:"item"`
+		Device               *Device         `json:"device"`
+		CurrentlyPlayingType string          `json:"currently_playing_type"`
+		Context              *PlayContext    `json:"context"`
+	}{}
+	if err := unmarshalJSON(data, raw); err != nil {
+		return fmt.Errorf("unmarshaling playback state: %w", err)
+	}
+
+	p.IsPlaying = raw.IsPlaying
+	p.ProgressMs = raw.ProgressMs
+	p.ShuffleState = raw.ShuffleState
+	p.RepeatState = raw.RepeatState
+	p.Device = raw.Device
+	p.CurrentlyPlayingType = raw.CurrentlyPlayingType
+	p.Context = raw.Context
+
+	if raw.Item != nil && string(raw.Item) != "null" {
+		if raw.CurrentlyPlayingType == "episode" {
+			var ep Episode
+			if err := unmarshalJSON(raw.Item, &ep); err != nil {
+				return fmt.Errorf("unmarshaling episode: %w", err)
+			}
+			p.Episode = &ep
+			p.Item = nil
+		} else {
+			var t Track
+			if err := unmarshalJSON(raw.Item, &t); err != nil {
+				return fmt.Errorf("unmarshaling track: %w", err)
+			}
+			p.Item = &t
+			p.Episode = nil
+		}
+	}
+
+	return nil
 }
 
 // Track represents a Spotify track item returned in the playback state.
@@ -300,6 +360,123 @@ type PlayOptions struct {
 type ArtistFollowers struct {
 	// Total is the number of Spotify followers for this artist.
 	Total int `json:"total"`
+}
+
+// Show represents a Spotify podcast show.
+type Show struct {
+	// ID is the Spotify show ID.
+	ID string `json:"id"`
+
+	// Name is the display name of the show.
+	Name string `json:"name"`
+
+	// Publisher is the publisher of the show.
+	Publisher string `json:"publisher"`
+
+	// Description is the show description in plain text.
+	Description string `json:"description"`
+
+	// TotalEpisodes is the total number of episodes in the show.
+	TotalEpisodes int `json:"total_episodes"`
+
+	// Images is the list of cover art size variants for this show.
+	Images []AlbumImage `json:"images"`
+
+	// MediaType is the type of media ("audio", "mixed", "video").
+	MediaType string `json:"media_type"`
+
+	// Explicit indicates whether the show contains explicit content.
+	Explicit bool `json:"explicit"`
+}
+
+// Restrictions describes reason for content restriction.
+type Restrictions struct {
+	// Reason is the restriction reason code.
+	Reason string `json:"reason"`
+}
+
+// ResumePoint represents the user's resume position in an episode.
+type ResumePoint struct {
+	// FullyPlayed indicates whether the episode has been fully played.
+	FullyPlayed bool `json:"fully_played"`
+
+	// ResumePositionMs is the position in milliseconds where playback was left off.
+	ResumePositionMs int `json:"resume_position_ms"`
+}
+
+// Episode represents a Spotify podcast episode.
+type Episode struct {
+	// ID is the Spotify episode ID.
+	ID string `json:"id"`
+
+	// Name is the display name of the episode.
+	Name string `json:"name"`
+
+	// Description is the episode description in plain text.
+	Description string `json:"description"`
+
+	// HTMLDescription is the episode description in HTML format.
+	HTMLDescription string `json:"html_description,omitempty"`
+
+	// DurationMs is the total duration in milliseconds.
+	DurationMs int `json:"duration_ms"`
+
+	// ReleaseDate is the release date of the episode.
+	ReleaseDate string `json:"release_date"`
+
+	// Explicit indicates whether the episode contains explicit content.
+	Explicit bool `json:"explicit"`
+
+	// IsPlayable indicates whether the episode is playable.
+	IsPlayable bool `json:"is_playable"`
+
+	// IsExternallyHosted indicates whether the episode is hosted externally.
+	IsExternallyHosted bool `json:"is_externally_hosted"`
+
+	// AudioPreviewURL is a 30-second preview URL for the episode.
+	AudioPreviewURL string `json:"audio_preview_url"`
+
+	// Language is the language code of the episode.
+	Language string `json:"language"`
+
+	// URI is the Spotify URI of the episode.
+	URI string `json:"uri"`
+
+	// Show is the podcast show this episode belongs to.
+	Show *Show `json:"show"`
+
+	// ResumePoint is the user's resume position for this episode.
+	ResumePoint ResumePoint `json:"resume_point"`
+
+	// Restrictions describes content restrictions for this episode.
+	Restrictions Restrictions `json:"restrictions"`
+}
+
+// SavedShow represents a show saved in the user's library.
+type SavedShow struct {
+	// AddedAt is the ISO 8601 timestamp when the show was saved.
+	AddedAt string `json:"added_at"`
+
+	// Show contains the full show details.
+	Show Show `json:"show"`
+}
+
+// SavedEpisode represents an episode saved in the user's library.
+type SavedEpisode struct {
+	// AddedAt is the ISO 8601 timestamp when the episode was saved.
+	AddedAt string `json:"added_at"`
+
+	// Episode contains the full episode details.
+	Episode Episode `json:"episode"`
+}
+
+// PlayContext describes the context in which playback is occurring.
+type PlayContext struct {
+	// Type is the context type (e.g. "album", "playlist", "show").
+	Type string `json:"type"`
+
+	// URI is the Spotify URI of the context.
+	URI string `json:"uri"`
 }
 
 // FullArtist represents a Spotify artist with full details, as returned by

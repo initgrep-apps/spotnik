@@ -100,6 +100,10 @@ func allMethodsReturnNonEmpty(t *testing.T, th theme.Theme) {
 	assert.NotEmpty(t, string(th.PaneBorderTopArtists()), "PaneBorderTopArtists()")
 	assert.NotEmpty(t, string(th.PaneBorderRequestFlow()), "PaneBorderRequestFlow()")
 	assert.NotEmpty(t, string(th.PaneBorderNetworkLog()), "PaneBorderNetworkLog()")
+	assert.NotEmpty(t, string(th.PaneBorderPodcastPlayback()), "PaneBorderPodcastPlayback()")
+	assert.NotEmpty(t, string(th.PaneBorderShowEpisodes()), "PaneBorderShowEpisodes()")
+	assert.NotEmpty(t, string(th.PaneBorderFollowedShows()), "PaneBorderFollowedShows()")
+	assert.NotEmpty(t, string(th.PaneBorderSavedEpisodes()), "PaneBorderSavedEpisodes()")
 	// New 4 column tokens (Feature 70)
 	assert.NotEmpty(t, string(th.ColumnIndex()), "ColumnIndex()")
 	assert.NotEmpty(t, string(th.ColumnPrimary()), "ColumnPrimary()")
@@ -177,29 +181,33 @@ var _ theme.Theme = &theme.ConfigTheme{}
 
 // newTokenWant holds expected hex values for one theme's new tokens.
 type newTokenWant struct {
-	gradient1                string
-	gradient2                string
-	gradient3                string
-	vizGradient1             string
-	vizGradient2             string
-	vizGradient3             string
-	vizGradient4             string
-	vizGradient5             string
-	vizGradient6             string
-	vizGradient7             string
-	visualizerFg             string
-	tableHeader              string
-	presetIndicator          string
-	paneBorderNowPlaying     string
-	paneBorderQueue          string
-	paneBorderPlaylists      string
-	paneBorderAlbums         string
-	paneBorderLikedSongs     string
-	paneBorderRecentlyPlayed string
-	paneBorderTopTracks      string
-	paneBorderTopArtists     string
-	paneBorderRequestFlow    string
-	paneBorderNetworkLog     string
+	gradient1                 string
+	gradient2                 string
+	gradient3                 string
+	vizGradient1              string
+	vizGradient2              string
+	vizGradient3              string
+	vizGradient4              string
+	vizGradient5              string
+	vizGradient6              string
+	vizGradient7              string
+	visualizerFg              string
+	tableHeader               string
+	presetIndicator           string
+	paneBorderNowPlaying      string
+	paneBorderQueue           string
+	paneBorderPlaylists       string
+	paneBorderAlbums          string
+	paneBorderLikedSongs      string
+	paneBorderRecentlyPlayed  string
+	paneBorderTopTracks       string
+	paneBorderTopArtists      string
+	paneBorderRequestFlow     string
+	paneBorderNetworkLog      string
+	paneBorderPodcastPlayback string
+	paneBorderShowEpisodes    string
+	paneBorderFollowedShows   string
+	paneBorderSavedEpisodes   string
 }
 
 func TestNewTokens_ExactValues(t *testing.T) {
@@ -210,141 +218,161 @@ func TestNewTokens_ExactValues(t *testing.T) {
 		{
 			themeID: "black",
 			want: newTokenWant{
-				gradient1:                "#00ff88",
-				gradient2:                "#ffcc00",
-				gradient3:                "#ff5555",
-				vizGradient1:             "#2a4a6a",
-				vizGradient2:             "#4a7aaa",
-				vizGradient3:             "#6a9add",
-				vizGradient4:             "#00afff",
-				vizGradient5:             "#00ccff",
-				vizGradient6:             "#00e5ff",
-				vizGradient7:             "#ffffff",
-				visualizerFg:             "#00afff",
-				tableHeader:              "#666666",
-				presetIndicator:          "#00afff",
-				paneBorderNowPlaying:     "#00ff88",
-				paneBorderQueue:          "#ffcc00",
-				paneBorderPlaylists:      "#00afff",
-				paneBorderAlbums:         "#00e5cc",
-				paneBorderLikedSongs:     "#00ff88",
-				paneBorderRecentlyPlayed: "#00ccaa",
-				paneBorderTopTracks:      "#bd93f9",
-				paneBorderTopArtists:     "#ff79c6",
-				paneBorderRequestFlow:    "#ffb86c",
-				paneBorderNetworkLog:     "#ff6ac1",
+				gradient1:                 "#00ff88",
+				gradient2:                 "#ffcc00",
+				gradient3:                 "#ff5555",
+				vizGradient1:              "#2a4a6a",
+				vizGradient2:              "#4a7aaa",
+				vizGradient3:              "#6a9add",
+				vizGradient4:              "#00afff",
+				vizGradient5:              "#00ccff",
+				vizGradient6:              "#00e5ff",
+				vizGradient7:              "#ffffff",
+				visualizerFg:              "#00afff",
+				tableHeader:               "#666666",
+				presetIndicator:           "#00afff",
+				paneBorderNowPlaying:      "#00ff88",
+				paneBorderQueue:           "#ffcc00",
+				paneBorderPlaylists:       "#00afff",
+				paneBorderAlbums:          "#00e5cc",
+				paneBorderLikedSongs:      "#00ff88",
+				paneBorderRecentlyPlayed:  "#00ccaa",
+				paneBorderTopTracks:       "#bd93f9",
+				paneBorderTopArtists:      "#ff79c6",
+				paneBorderRequestFlow:     "#ffb86c",
+				paneBorderNetworkLog:      "#ff6ac1",
+				paneBorderPodcastPlayback: "#ff6ac1",
+				paneBorderShowEpisodes:    "#bd93f9",
+				paneBorderFollowedShows:   "#ff9f6e",
+				paneBorderSavedEpisodes:   "#ff6e6e",
 			},
 		},
 		{
 			themeID: "monokai",
 			want: newTokenWant{
-				gradient1:                "#a6e22e",
-				gradient2:                "#e6db74",
-				gradient3:                "#f92672",
-				vizGradient1:             "#3a3a4a",
-				vizGradient2:             "#5a5a6a",
-				vizGradient3:             "#6a7a8a",
-				vizGradient4:             "#66d9ef",
-				vizGradient5:             "#a6e22e",
-				vizGradient6:             "#fd971f",
-				vizGradient7:             "#f8f8f2",
-				visualizerFg:             "#66d9ef",
-				tableHeader:              "#75715e",
-				presetIndicator:          "#66d9ef",
-				paneBorderNowPlaying:     "#a6e22e",
-				paneBorderQueue:          "#fd971f",
-				paneBorderPlaylists:      "#66d9ef",
-				paneBorderAlbums:         "#e6db74",
-				paneBorderLikedSongs:     "#a6e22e",
-				paneBorderRecentlyPlayed: "#4dc9b0",
-				paneBorderTopTracks:      "#ae81ff",
-				paneBorderTopArtists:     "#f92672",
-				paneBorderRequestFlow:    "#fd971f",
-				paneBorderNetworkLog:     "#f4a261",
+				gradient1:                 "#a6e22e",
+				gradient2:                 "#e6db74",
+				gradient3:                 "#f92672",
+				vizGradient1:              "#3a3a4a",
+				vizGradient2:              "#5a5a6a",
+				vizGradient3:              "#6a7a8a",
+				vizGradient4:              "#66d9ef",
+				vizGradient5:              "#a6e22e",
+				vizGradient6:              "#fd971f",
+				vizGradient7:              "#f8f8f2",
+				visualizerFg:              "#66d9ef",
+				tableHeader:               "#75715e",
+				presetIndicator:           "#66d9ef",
+				paneBorderNowPlaying:      "#a6e22e",
+				paneBorderQueue:           "#fd971f",
+				paneBorderPlaylists:       "#66d9ef",
+				paneBorderAlbums:          "#e6db74",
+				paneBorderLikedSongs:      "#a6e22e",
+				paneBorderRecentlyPlayed:  "#4dc9b0",
+				paneBorderTopTracks:       "#ae81ff",
+				paneBorderTopArtists:      "#f92672",
+				paneBorderRequestFlow:     "#fd971f",
+				paneBorderNetworkLog:      "#f4a261",
+				paneBorderPodcastPlayback: "#ff6ac1",
+				paneBorderShowEpisodes:    "#bd93f9",
+				paneBorderFollowedShows:   "#ff9f6e",
+				paneBorderSavedEpisodes:   "#ff6e6e",
 			},
 		},
 		{
 			themeID: "catppuccin",
 			want: newTokenWant{
-				gradient1:                "#a6e3a1",
-				gradient2:                "#f9e2af",
-				gradient3:                "#f38ba8",
-				vizGradient1:             "#4a5a7a",
-				vizGradient2:             "#5a7aaa",
-				vizGradient3:             "#7a9add",
-				vizGradient4:             "#89b4fa",
-				vizGradient5:             "#b4befe",
-				vizGradient6:             "#cba6f7",
-				vizGradient7:             "#cdd6f4",
-				visualizerFg:             "#89b4fa",
-				tableHeader:              "#6c7086",
-				presetIndicator:          "#89b4fa",
-				paneBorderNowPlaying:     "#a6e3a1",
-				paneBorderQueue:          "#f9e2af",
-				paneBorderPlaylists:      "#89b4fa",
-				paneBorderAlbums:         "#94e2d5",
-				paneBorderLikedSongs:     "#a6e3a1",
-				paneBorderRecentlyPlayed: "#94e2d5",
-				paneBorderTopTracks:      "#cba6f7",
-				paneBorderTopArtists:     "#f38ba8",
-				paneBorderRequestFlow:    "#fab387",
-				paneBorderNetworkLog:     "#eba0ac",
+				gradient1:                 "#a6e3a1",
+				gradient2:                 "#f9e2af",
+				gradient3:                 "#f38ba8",
+				vizGradient1:              "#4a5a7a",
+				vizGradient2:              "#5a7aaa",
+				vizGradient3:              "#7a9add",
+				vizGradient4:              "#89b4fa",
+				vizGradient5:              "#b4befe",
+				vizGradient6:              "#cba6f7",
+				vizGradient7:              "#cdd6f4",
+				visualizerFg:              "#89b4fa",
+				tableHeader:               "#6c7086",
+				presetIndicator:           "#89b4fa",
+				paneBorderNowPlaying:      "#a6e3a1",
+				paneBorderQueue:           "#f9e2af",
+				paneBorderPlaylists:       "#89b4fa",
+				paneBorderAlbums:          "#94e2d5",
+				paneBorderLikedSongs:      "#a6e3a1",
+				paneBorderRecentlyPlayed:  "#94e2d5",
+				paneBorderTopTracks:       "#cba6f7",
+				paneBorderTopArtists:      "#f38ba8",
+				paneBorderRequestFlow:     "#fab387",
+				paneBorderNetworkLog:      "#eba0ac",
+				paneBorderPodcastPlayback: "#ff6ac1",
+				paneBorderShowEpisodes:    "#bd93f9",
+				paneBorderFollowedShows:   "#ff9f6e",
+				paneBorderSavedEpisodes:   "#ff6e6e",
 			},
 		},
 		{
 			themeID: "nord",
 			want: newTokenWant{
-				gradient1:                "#a3be8c",
-				gradient2:                "#ebcb8b",
-				gradient3:                "#bf616a",
-				vizGradient1:             "#4a5a6a",
-				vizGradient2:             "#5a7a8a",
-				vizGradient3:             "#6a9aaa",
-				vizGradient4:             "#88c0d0",
-				vizGradient5:             "#81a1c1",
-				vizGradient6:             "#a3be8c",
-				vizGradient7:             "#eceff4",
-				visualizerFg:             "#88c0d0",
-				tableHeader:              "#4c566a",
-				presetIndicator:          "#88c0d0",
-				paneBorderNowPlaying:     "#a3be8c",
-				paneBorderQueue:          "#ebcb8b",
-				paneBorderPlaylists:      "#88c0d0",
-				paneBorderAlbums:         "#8fbcbb",
-				paneBorderLikedSongs:     "#a3be8c",
-				paneBorderRecentlyPlayed: "#8fbcbb",
-				paneBorderTopTracks:      "#b48ead",
-				paneBorderTopArtists:     "#bf616a",
-				paneBorderRequestFlow:    "#d08770",
-				paneBorderNetworkLog:     "#5e81ac",
+				gradient1:                 "#a3be8c",
+				gradient2:                 "#ebcb8b",
+				gradient3:                 "#bf616a",
+				vizGradient1:              "#4a5a6a",
+				vizGradient2:              "#5a7a8a",
+				vizGradient3:              "#6a9aaa",
+				vizGradient4:              "#88c0d0",
+				vizGradient5:              "#81a1c1",
+				vizGradient6:              "#a3be8c",
+				vizGradient7:              "#eceff4",
+				visualizerFg:              "#88c0d0",
+				tableHeader:               "#4c566a",
+				presetIndicator:           "#88c0d0",
+				paneBorderNowPlaying:      "#a3be8c",
+				paneBorderQueue:           "#ebcb8b",
+				paneBorderPlaylists:       "#88c0d0",
+				paneBorderAlbums:          "#8fbcbb",
+				paneBorderLikedSongs:      "#a3be8c",
+				paneBorderRecentlyPlayed:  "#8fbcbb",
+				paneBorderTopTracks:       "#b48ead",
+				paneBorderTopArtists:      "#bf616a",
+				paneBorderRequestFlow:     "#d08770",
+				paneBorderNetworkLog:      "#5e81ac",
+				paneBorderPodcastPlayback: "#ff6ac1",
+				paneBorderShowEpisodes:    "#bd93f9",
+				paneBorderFollowedShows:   "#ff9f6e",
+				paneBorderSavedEpisodes:   "#ff6e6e",
 			},
 		},
 		{
 			themeID: "light",
 			want: newTokenWant{
-				gradient1:                "#40a02b",
-				gradient2:                "#df8e1d",
-				gradient3:                "#d20f39",
-				vizGradient1:             "#e0e0e0",
-				vizGradient2:             "#c0c0c0",
-				vizGradient3:             "#a0a0a0",
-				vizGradient4:             "#1e66f5",
-				vizGradient5:             "#4a90e2",
-				vizGradient6:             "#7ab8ff",
-				vizGradient7:             "#0a3d91",
-				visualizerFg:             "#1e66f5",
-				tableHeader:              "#9ca0b0",
-				presetIndicator:          "#1e66f5",
-				paneBorderNowPlaying:     "#40a02b",
-				paneBorderQueue:          "#df8e1d",
-				paneBorderPlaylists:      "#1e66f5",
-				paneBorderAlbums:         "#179299",
-				paneBorderLikedSongs:     "#40a02b",
-				paneBorderRecentlyPlayed: "#179299",
-				paneBorderTopTracks:      "#8839ef",
-				paneBorderTopArtists:     "#d20f39",
-				paneBorderRequestFlow:    "#fe640b",
-				paneBorderNetworkLog:     "#ea76cb",
+				gradient1:                 "#40a02b",
+				gradient2:                 "#df8e1d",
+				gradient3:                 "#d20f39",
+				vizGradient1:              "#e0e0e0",
+				vizGradient2:              "#c0c0c0",
+				vizGradient3:              "#a0a0a0",
+				vizGradient4:              "#1e66f5",
+				vizGradient5:              "#4a90e2",
+				vizGradient6:              "#7ab8ff",
+				vizGradient7:              "#0a3d91",
+				visualizerFg:              "#1e66f5",
+				tableHeader:               "#9ca0b0",
+				presetIndicator:           "#1e66f5",
+				paneBorderNowPlaying:      "#40a02b",
+				paneBorderQueue:           "#df8e1d",
+				paneBorderPlaylists:       "#1e66f5",
+				paneBorderAlbums:          "#179299",
+				paneBorderLikedSongs:      "#40a02b",
+				paneBorderRecentlyPlayed:  "#179299",
+				paneBorderTopTracks:       "#8839ef",
+				paneBorderTopArtists:      "#d20f39",
+				paneBorderRequestFlow:     "#fe640b",
+				paneBorderNetworkLog:      "#ea76cb",
+				paneBorderPodcastPlayback: "#d63384",
+				paneBorderShowEpisodes:    "#6f42c1",
+				paneBorderFollowedShows:   "#e86a33",
+				paneBorderSavedEpisodes:   "#dc3545",
 			},
 		},
 	}
@@ -378,6 +406,10 @@ func TestNewTokens_ExactValues(t *testing.T) {
 			assert.Equal(t, tt.want.paneBorderTopArtists, string(th.PaneBorderTopArtists()), "PaneBorderTopArtists")
 			assert.Equal(t, tt.want.paneBorderRequestFlow, string(th.PaneBorderRequestFlow()), "PaneBorderRequestFlow")
 			assert.Equal(t, tt.want.paneBorderNetworkLog, string(th.PaneBorderNetworkLog()), "PaneBorderNetworkLog")
+			assert.Equal(t, tt.want.paneBorderPodcastPlayback, string(th.PaneBorderPodcastPlayback()), "PaneBorderPodcastPlayback")
+			assert.Equal(t, tt.want.paneBorderShowEpisodes, string(th.PaneBorderShowEpisodes()), "PaneBorderShowEpisodes")
+			assert.Equal(t, tt.want.paneBorderFollowedShows, string(th.PaneBorderFollowedShows()), "PaneBorderFollowedShows")
+			assert.Equal(t, tt.want.paneBorderSavedEpisodes, string(th.PaneBorderSavedEpisodes()), "PaneBorderSavedEpisodes")
 		})
 	}
 }
@@ -507,6 +539,10 @@ top_tracks      = "#00aa11"
 top_artists     = "#00bb22"
 request_flow    = "#00cc33"
 network_log     = "#00dd44"
+podcast_playback = "#11ee55"
+show_episodes    = "#22ee66"
+followed_shows   = "#33ee77"
+saved_episodes   = "#44ee88"
 `
 
 func TestParseTheme_ValidTOML(t *testing.T) {
@@ -627,6 +663,10 @@ func TestConfigTheme_ReturnsCorrectColors(t *testing.T) {
 		{"PaneBorderTopArtists", string(th.PaneBorderTopArtists()), "#00bb22"},
 		{"PaneBorderRequestFlow", string(th.PaneBorderRequestFlow()), "#00cc33"},
 		{"PaneBorderNetworkLog", string(th.PaneBorderNetworkLog()), "#00dd44"},
+		{"PaneBorderPodcastPlayback", string(th.PaneBorderPodcastPlayback()), "#11ee55"},
+		{"PaneBorderShowEpisodes", string(th.PaneBorderShowEpisodes()), "#22ee66"},
+		{"PaneBorderFollowedShows", string(th.PaneBorderFollowedShows()), "#33ee77"},
+		{"PaneBorderSavedEpisodes", string(th.PaneBorderSavedEpisodes()), "#44ee88"},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -761,6 +801,10 @@ top_tracks      = "#778899"
 top_artists     = "#8899aa"
 request_flow    = "#99aabb"
 network_log     = "#aabbcc"
+podcast_playback = "#bbccdd"
+show_episodes    = "#ccddee"
+followed_shows   = "#ddeeff"
+saved_episodes   = "#eeffaa"
 `
 	th, err := theme.ParseTheme([]byte(userTOML))
 	require.NoError(t, err)
@@ -834,6 +878,10 @@ top_tracks      = "#778899"
 top_artists     = "#8899aa"
 request_flow    = "#99aabb"
 network_log     = "#aabbcc"
+podcast_playback = "#bbccdd"
+show_episodes    = "#ccddee"
+followed_shows   = "#ddeeff"
+saved_episodes   = "#eeffaa"
 `
 	err := os.WriteFile(filepath.Join(dir, "my-custom-theme.toml"), []byte(userTOML), 0o644)
 	require.NoError(t, err)
@@ -973,7 +1021,12 @@ top_tracks      = "#00aa11"
 top_artists     = "#00bb22"
 request_flow    = "#00cc33"
 network_log     = "#00dd44"
+podcast_playback = "#11ee55"
+show_episodes    = "#22ee66"
+followed_shows   = "#33ee77"
+saved_episodes   = "#44ee88"
 `
+
 	th, err := theme.ParseTheme([]byte(withAccent))
 	require.NoError(t, err)
 	assert.Equal(t, "#00ff00", string(th.Accent()), "Accent() must return explicit value when set")
@@ -1079,10 +1132,14 @@ top_tracks      = "#770000"
 top_artists     = "#880000"
 request_flow    = "#990000"
 network_log     = "#aa0000"
+podcast_playback = "#bb0000"
+show_episodes    = "#cc0000"
+followed_shows   = "#dd0000"
+saved_episodes   = "#ee0000"
 `
+
 	err := os.WriteFile(filepath.Join(dir, "black.toml"), []byte(overrideTOML), 0o644)
 	require.NoError(t, err)
-
 	themes, err := theme.LoadAllWithUserDir(dir)
 	require.NoError(t, err)
 	th, ok := themes["black"]

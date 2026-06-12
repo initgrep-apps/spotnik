@@ -1,7 +1,7 @@
 ---
 title: "PodcastPlayback pane"
 feature: 18-podcasts
-status: open
+status: done
 ---
 
 ## Background
