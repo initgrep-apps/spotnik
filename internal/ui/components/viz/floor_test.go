@@ -69,6 +69,29 @@ func TestFloorRenderer_MaxHeight(t *testing.T) {
 	}
 }
 
+func TestFloorRenderer_ColorSegments(t *testing.T) {
+	r := FloorRenderer{}
+	width := 10
+	height := 6
+	colHeights := makeColHeights(width, 6)
+	// Use varied colors so hue shift creates segment boundaries
+	colors := []lipgloss.Color{
+		"#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff",
+	}
+	frame := r.RenderFrame(width, height, colHeights, colors)
+	require.Len(t, frame, height)
+
+	hasMultiSegment := false
+	for _, line := range frame {
+		if len(line.Segments) > 1 {
+			hasMultiSegment = true
+			break
+		}
+	}
+	assert.True(t, hasMultiSegment,
+		"at least one row should have multiple color segments due to per-column hue shift")
+}
+
 func TestFloorRenderer_FloorPresence(t *testing.T) {
 	// Verify that bottom rows are always filled (floor) regardless of colHeights.
 	r := FloorRenderer{}
