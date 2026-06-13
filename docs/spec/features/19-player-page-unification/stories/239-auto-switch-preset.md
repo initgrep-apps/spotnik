@@ -106,3 +106,24 @@ After `SetPreset`, the app must:
 - [ ] Auto-switch calls `SetPreset()` directly (doesn't cycle)
 - [ ] User can override auto-switch with manual `p` key at any time
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Implement `autoSwitchPreset(forContentType string)` method on `App`
+      - Modify `internal/app/handlers.go`: method that checks `isCurrentPresetPodcastOriented()` and calls `SetPreset(1)` or `SetPreset(2)` based on content type
+      - test: `TestAutoSwitchPreset_TrackOnPodcastPreset_SwitchesToListening`, `TestAutoSwitchPreset_EpisodeOnMusicPreset_SwitchesToPodcast`, `TestAutoSwitchPreset_TrackOnMusicPreset_NoSwitch`, `TestAutoSwitchPreset_EpisodeOnPodcastPreset_NoSwitch`
+- [ ] Implement `isCurrentPresetPodcastOriented()` helper
+      - Modify `internal/app/handlers.go`: checks if `PaneFollowedShows` is in active preset's Visible map
+      - test: `TestIsCurrentPresetPodcastOriented_PodcastPreset`, `TestIsCurrentPresetPodcastOriented_MusicPreset`
+- [ ] Call `autoSwitchPreset("track")` from `PlayTrackMsg` and `PlayTrackListMsg` handlers
+      - Modify `internal/app/handlers.go`: add auto-switch call after existing play logic
+      - test: `TestPlayTrackMsg_AutoSwitches_WhenOnPodcastPreset`
+- [ ] Call `autoSwitchPreset("episode")` from `PlayEpisodeMsg` handler
+      - Modify `internal/app/handlers.go`: add auto-switch call after existing play logic
+      - test: `TestPlayEpisodeMsg_AutoSwitches_WhenOnMusicPreset`
+- [ ] Call `autoSwitchPreset()` from `PlayContextMsg` handler based on URI prefix
+      - Modify `internal/app/handlers.go`: parse `spotify:show:` prefix → `"episode"`, else → `"track"`
+      - test: `TestPlayContextMsg_ShowURI_AutoSwitchesToPodcast`, `TestPlayContextMsg_AlbumURI_AutoSwitchesToListening`
+- [ ] Verify `PlaybackStateFetchedMsg` handler does NOT call `autoSwitchPreset`
+      - test: `TestPlaybackStateFetchedMsg_NoAutoSwitch`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

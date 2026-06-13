@@ -81,3 +81,16 @@ When a show is selected from search, the handler should:
 - [ ] Track/album/artist selection on music preset — no switch
 - [ ] No `TogglePage()` calls remain for podcast navigation
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Replace `TogglePage()` cycling in `SearchResultSelectedMsg` handler with `autoSwitchPreset()` calls
+      - Modify `internal/app/handlers.go`: `if m.IsShow || m.IsEpisode` → `autoSwitchPreset("episode")`, else → `autoSwitchPreset("track")`
+      - test: `TestSearchResult_TrackOnPodcastPreset_SwitchesToListening`, `TestSearchResult_EpisodeOnMusicPreset_SwitchesToPodcast`
+- [ ] Add show selection handling: set `selectedShowID`, dispatch `FetchShowEpisodesRequestMsg`, call `autoSwitchPreset("episode")`, close search
+      - Modify `internal/app/handlers.go`: when `m.IsShow`, set store state and dispatch commands
+      - test: `TestSearchResult_ShowOnMusicPreset_SwitchesToPodcastAndLoadsEpisodes`, `TestSearchResult_ShowOnPodcastPreset_NoSwitchJustLoads`
+- [ ] Remove all `TogglePage()` calls used for podcast navigation
+      - Grep for `TogglePage()` in search-related handler code and remove
+      - test: `TestSearchResult_NoTogglePageCalls`, `go build ./...`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

@@ -36,8 +36,8 @@ together to avoid intermediate broken builds.
 
 ### Deleted theme tokens
 
-- `PaneBorderPodcastPlayback()` removed from Theme interface and all 13 themes
-- `PaneBorderShowEpisodes()` removed from Theme interface and all 13 themes
+- `PaneBorderPodcastPlayback()` removed from Theme interface
+- `PaneBorderShowEpisodes()` removed from Theme interface
 - `border.go` switch case for `PanePodcastPlayback` removed
 - `border.go` switch case for `PaneShowEpisodes` removed
 
@@ -98,8 +98,8 @@ drill-down conversion (story 236) and the `i` overlay key are separate stories.
 - `internal/app/routing.go` — remove podcast toggle key map, remove podcast playback key routing, update `0` for 2-cycle, add `currentToggleKeyMap()` for contextual panes
 - `internal/app/handlers.go` — remove PodcastPlayback/ShowEpisodes message handlers, remove `SelectedShowChangedMsg` routing
 - `internal/app/commands.go` — remove `podcastClient` field (keep API method references for `buildFetchShowEpisodesCmd` etc., which will be used by FollowedShows drill-down)
-- `internal/ui/theme/theme.go` — remove `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()`
-- All 13 theme files — remove `PaneBorderPodcastPlayback` and `PaneBorderShowEpisodes` implementations
+- `internal/ui/theme/theme.go` — remove `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()` from Theme interface
+- `internal/ui/theme/config_theme.go` — remove `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()` methods and their `paneBorderColors` fields
 - `internal/ui/layout/border.go` — remove `PanePodcastPlayback` and `PaneShowEpisodes` cases
 
 ### Delete
@@ -115,7 +115,7 @@ drill-down conversion (story 236) and the `i` overlay key are separate stories.
 - [ ] `PagePodcasts` no longer exists
 - [ ] `PanePodcastPlayback` and `PaneShowEpisodes` no longer exist
 - [ ] `PodcastPlaybackPane` and `ShowEpisodesPane` files deleted
-- [ ] `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()` removed from Theme interface and all 13 themes
+- [ ] `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()` removed from Theme interface and ConfigTheme implementation
 - [ ] `0` key cycles Player → Stats → Player
 - [ ] 6 Player presets defined with correct Visible maps and grids
 - [ ] `SetPreset(index int)` method on layout Manager
@@ -124,3 +124,38 @@ drill-down conversion (story 236) and the `i` overlay key are separate stories.
 - [ ] `go build ./...` succeeds
 - [ ] `go test ./...` passes
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Define `PagePlayer` constant, remove `PagePodcasts`, rename `PageMusic` references
+      - Modify `internal/ui/layout/pane.go`: `PagePlayer` replaces `PageMusic`, remove `PagePodcasts` from iota
+      - test: `TestPageIDs`, `TestPagePlayer_Value`
+- [ ] Define `PagePlayerPresets` with 6 presets, remove `PagePodcastsPresets` and old podcast presets
+      - Modify `internal/ui/layout/presets.go`: add `PresetPodcast`, `PresetPodcastDashboard`, `PagePlayerPresets` (6 entries), remove `PagePodcastsPresets`, `PresetPodcastListening`, `PresetPodcastDashboard` (old versions)
+      - test: `TestPagePlayerPresets_HasSixEntries`, `TestPresetPodcast_Grid`, `TestPresetPodcastDashboard_Grid`
+- [ ] Update `TogglePage()` for 2-cycle (Player ↔ Stats), add `SetPreset()` and `IsPaneVisible()` methods
+      - Modify `internal/ui/layout/layout.go`
+      - test: `TestTogglePage_PlayerStatsTwoCycle`, `TestSetPreset_DirectSwitch`, `TestIsPaneVisible_CurrentPreset`
+- [ ] Remove `PanePodcastPlayback` and `PaneShowEpisodes` from PaneID iota
+      - Modify `internal/ui/layout/pane.go`: remove from iota, shift subsequent values
+      - test: `TestPaneIDs_NoPodcastPlaybackOrShowEpisodes`
+- [ ] Delete `PodcastPlaybackPane` and `ShowEpisodesPane` files
+      - Delete `internal/ui/panes/podcastplayback.go`, `internal/ui/panes/podcastplayback_test.go`, `internal/ui/panes/showepisodes.go`, `internal/ui/panes/showepisodes_test.go`
+      - test: `go build ./...` compiles
+- [ ] Remove `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()` from Theme interface and ConfigTheme
+      - Modify `internal/ui/theme/theme.go`: remove 2 method signatures from interface
+      - Modify `internal/ui/theme/config_theme.go`: remove method implementations and `paneBorderColors` fields
+      - Modify `internal/ui/layout/border.go`: remove 2 switch cases
+      - test: `TestTheme_InterfaceCompliance`, `TestBorderPane_NoneForRemovedPanes`
+- [ ] Remove podcast pane wiring from `app.go`, `routing.go`, `handlers.go`, `commands.go`
+      - Remove `podcastPlaybackPane`/`showEpisodesPane` fields and accessors from `app.go`
+      - Remove from `panesMap`, remove podcast toggle key map from `routing.go`, update `0` for 2-cycle
+      - Remove `PodcastPlaybackPane`/`ShowEpisodesPane` message handlers from `handlers.go`
+      - Remove `podcastClient` field from `commands.go`
+      - test: `go build ./...` compiles, `go test ./internal/app/...` passes
+- [ ] Add contextual toggle keys: music presets (1–8), podcast presets (1–4)
+      - Modify `internal/app/routing.go`: add `currentToggleKeyMap()` that returns keys based on active preset's Visible map
+      - test: `TestCurrentToggleKeyMap_MusicPreset`, `TestCurrentToggleKeyMap_PodcastPreset`
+- [ ] Create `internal/ui/layout/preset_player.go` with grid definitions for 6 Player presets
+      - test: `TestPresetDashboard_PlayerGrid`, `TestPresetPodcast_PlayerGrid`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

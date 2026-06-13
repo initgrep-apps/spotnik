@@ -89,3 +89,37 @@ updated to reflect these changes.
 - [ ] design.md §16 routes playback to NowPlaying only, adds `i`
 - [ ] design.md §17 updated keybinding table
 - [ ] design.md §18 removes deleted theme tokens
+
+## Tasks
+
+- [ ] Update `docs/system/architecture.md` — Page/Preset/Toggle system section
+      - Replace 3-page model with 2-page (Player/Stats), update pane lists, page cycling (`0` cycles Player ↔ Stats), update preset tables for all 6 Player presets + 1 Stats preset
+      - test: manual review (documentation-only)
+- [ ] Update `docs/system/architecture.md` — add Visibility-Gated Polling subsection
+      - Document `layout.IsPaneVisible(PaneID)` check, per-pane skip rule, preset switch staleness check, "What Polls When" table, playback/queue exemptions
+      - test: manual review
+- [ ] Update `docs/system/architecture.md` — Pane list and toggle key section
+      - Update pane count (NowPlaying content-aware, FollowedShows drill-down, PodcastPlayback/ShowEpisodes deleted), replace page-specific toggle with context-aware model
+      - test: manual review
+- [ ] Update `docs/system/design.md` §2 — Pane Definitions
+      - Replace 3-page tables with unified 2-page model (Player/Stats), remove Podcasts page table, add contextual toggle key descriptions
+      - test: manual review
+- [ ] Update `docs/system/design.md` §4 — Pages, Pane Toggling, Preset Layouts
+      - Replace 3-page cycle with 2-page cycle, replace Music presets with 6 Player presets, remove Podcasts presets, add auto-switch rules table, add contextual toggle key docs
+      - test: manual review
+- [ ] Update `docs/system/design.md` §9 — Queue column table
+      - Add `type` column (flex 1, ♪/◆), rename Track → Title (flex 7), update Artist for episodes
+      - test: manual review
+- [ ] Update `docs/system/design.md` §10 — Per-Pane Border Colors
+      - Remove `PaneBorderPodcastPlayback` and `PaneBorderShowEpisodes`, keep `PaneBorderFollowedShows` and `PaneBorderSavedEpisodes`
+      - test: manual review
+- [ ] Update `docs/system/design.md` §16 — Focus & Navigation
+      - Route playback keys to NowPlaying only (remove PodcastPlayback reference), add `i` key for Episode Details overlay
+      - test: manual review
+- [ ] Update `docs/system/design.md` §17 — Keybinding Table
+      - Replace `0` description, update toggle keys for contextual behavior, add `i` keybinding, remove Podcast page toggle keys
+      - test: manual review
+- [ ] Update `docs/system/design.md` §18 — Theme Enhancements
+      - Remove `PaneBorderPodcastPlayback` and `PaneBorderShowEpisodes` tokens, keep FollowedShows/SavedEpisodes, note ConfigTheme removal
+      - test: manual review
+- [ ] Run `make ci` — verify no broken doc links or format issues

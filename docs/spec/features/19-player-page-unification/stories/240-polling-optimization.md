@@ -97,3 +97,23 @@ that the pane hasn't been manually toggled off (`!m.hidden[id]`).
 - [ ] Fetching sentinels are not leaked when panes are hidden
 - [ ] FollowedShows pane episode data polled when in drill-down and visible
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Add `paneID` field to polling entries in `handlers.go`
+      - Modify `internal/app/handlers.go`: add `paneID layout.PaneID` to each polling entry struct
+      - test: `TestPollingEntries_HavePaneID`, `TestPollingEntries_PlaybackAndQueue_NoPaneID`
+- [ ] Add `IsPaneVisible()` check at top of library polling loop
+      - Modify `internal/app/handlers.go`: `if !a.layout.IsPaneVisible(entry.paneID) { continue }` at top of loop
+      - test: `TestPolling_SkipsInvisiblePane`, `TestPolling_PollsVisiblePane`
+- [ ] Verify `IsPaneVisible(PaneID) bool` implementation on layout Manager (added in story 233)
+      - Modify or verify `internal/ui/layout/layout.go`
+      - test: `TestIsPaneVisible_CurrentPresetPane`, `TestIsPaneVisible_HiddenPane`
+- [ ] Implement preset switch staleness check: `checkNewlyVisiblePanes()` method
+      - Modify `internal/app/app.go`: after `SetPreset()`, determine newly visible panes and dispatch fetch if stale
+      - test: `TestCheckNewlyVisiblePanes_DispatchesFetchForStalePanes`, `TestCheckNewlyVisiblePanes_SkipsFreshPanes`
+- [ ] Verify fetching sentinels are not leaked when panes are hidden
+      - test: `TestPolling_SentinelNotLeakedOnHide`, `TestPolling_SentinelClearedOnResponse`
+- [ ] Verify playback state and queue polling are NOT affected by visibility gate
+      - test: `TestPolling_PlaybackAlwaysPolled`, `TestPolling_QueueAlwaysPolled`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

@@ -58,7 +58,7 @@ column to disambiguate tracks from episodes.
 - [ ] FollowedShows Enter → episode sub-view (drill-down); Esc → show list (Level 1)
 - [ ] FollowedShows drill-down shows episodes with pagination
 - [ ] PodcastPlayback pane deleted; ShowEpisodes pane deleted
-- [ ] `PaneBorderPodcastPlayback` and `PaneBorderShowEpisodes` removed from Theme interface and all 13 themes
+- [ ] `PaneBorderPodcastPlayback` and `PaneBorderShowEpisodes` removed from Theme interface and ConfigTheme implementation
 - [ ] Queue pane shows `♪` for tracks, `◆` for episodes in new `type` column; `Track` header → `Title`
 - [ ] Auto-switch: user plays track on podcast preset → Listening; user plays episode on music preset → Podcast
 - [ ] Background playback changes do NOT trigger preset switches

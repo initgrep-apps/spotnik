@@ -56,3 +56,18 @@ same commit.
 - [ ] Podcasts page toggle keys removed from all 3 locations
 - [ ] Contextual toggle key behavior documented
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Update README.md Keybindings section
+      - Modify `README.md`: update `0` description to "Cycle Player / Stats", add `i` key for episode details, remove Podcasts page toggle keys section, update toggle key descriptions for contextual behavior
+      - test: manual review (README is documentation, not code-tested)
+- [ ] Update `docs/system/design.md` §17 keybinding table
+      - Modify `docs/system/design.md`: update `0` row for 2-page model, add `i` row, remove Podcasts toggle keys, update toggle key table for contextual behavior
+      - test: manual review
+- [ ] Update `internal/ui/panes/help_overlay.go` `helpContent`
+      - Modify `help_overlay.go`: add `i` entry to Playback section (conditionally shown when `CurrentlyPlayingType == "episode"`), update `0` description, remove Podcasts page entries
+      - test: `TestHelpOverlay_ContainsIKey`, `TestHelpOverlay_ZeroKey_PlayerStats`, `TestHelpOverlay_NoPodcastPageKeys`
+- [ ] All 3 locations updated in the same commit (per AGENTS.md rule #15)
+      - Verify: single commit contains changes to `README.md`, `design.md`, and `help_overlay.go`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

@@ -114,3 +114,29 @@ same commit** (per AGENTS.md rule #15):
 - [ ] `"No description available."` shown when both are empty
 - [ ] Keybinding added in all 3 locations (README, design.md, help_overlay.go)
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Create `EpisodeDetailsOverlay` struct with `Init()`, `Update()`, `View()` methods
+      - Create `internal/ui/panes/episode_details_overlay.go`: centered overlay, scrollable description, `Esc`/`q` close, `j`/`k`/`↑`/`↓` scroll
+      - Create `internal/ui/panes/episode_details_overlay_test.go`
+      - test: `TestEpisodeDetailsOverlay_View_ShowsEpisodeName`, `TestEpisodeDetailsOverlay_View_ShowsShowName`, `TestEpisodeDetailsOverlay_View_ShowsNoDescription`, `TestEpisodeDetailsOverlay_EscCloses`, `TestEpisodeDetailsOverlay_ScrollUpDown`
+- [ ] Add `EpisodeDetailsOpenMsg` and `EpisodeDetailsClosedMsg` message types
+      - Modify `internal/ui/panes/messages.go`
+      - test: `TestEpisodeDetailsOpenMsg_Type`, `TestEpisodeDetailsClosedMsg_Type`
+- [ ] Wire overlay into `App`: fields, open/close, rendering, input guard
+      - Modify `internal/app/app.go`: add `episodeDetailsOpen bool`, `episodeDetails *panes.EpisodeDetailsOverlay`
+      - Modify `internal/app/render.go`: render overlay when open
+      - test: `TestApp_EpisodeDetailsOpen_WhenEpisode`, `TestApp_EpisodeDetailsOpen_WhenTrack_NoOp`
+- [ ] Add `i` key handler in `routing.go` with `CurrentlyPlayingType == "episode"` guard
+      - Modify `internal/app/routing.go`: `i` key opens overlay only when episode is playing
+      - test: `TestRouting_IKey_OpensOverlay_WhenEpisode`, `TestRouting_IKey_NoOp_WhenTrack`
+- [ ] Handle `EpisodeDetailsClosedMsg` in `handlers.go`
+      - Modify `internal/app/handlers.go`: clear overlay state on close
+      - test: `TestHandler_EpisodeDetailsClosed_ClearsState`
+- [ ] Update keybindings in all 3 locations (same commit per AGENTS.md rule #15)
+      - Modify `README.md` Keybindings section: add `i` entry
+      - Modify `docs/system/design.md` §17: add `i` row
+      - Modify `internal/ui/panes/help_overlay.go` `helpContent`: add `i` entry (conditionally when episode playing)
+      - test: `TestHelpOverlay_ContainsIDetails`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

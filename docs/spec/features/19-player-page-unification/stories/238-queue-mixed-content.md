@@ -102,3 +102,31 @@ The `Artist` column header stays `Artist` but displays Show name for episodes.
 - [ ] Enter on episode row plays episode
 - [ ] Existing track-only queue tests still pass
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Add `QueueItemType` and `QueueItem` types to `internal/domain/types.go`
+      - `QueueItemType` iota (`QueueItemTypeTrack`, `QueueItemTypeEpisode`), `QueueItem` struct with `Type`, `Track *Track`, `Episode *Episode`
+      - test: `TestQueueItemType_Values`, `TestQueueItem_TrackType`, `TestQueueItem_EpisodeType`
+- [ ] Change `store.queue` field and accessors from `[]domain.Track` to `[]domain.QueueItem`
+      - Modify `internal/state/store.go`: `queue` field type, `Queue()` return type, `SetQueue()` parameter type
+      - test: `TestStore_SetGetQueue_QueueItemType`, `TestStore_Queue_TrackAndEpisode`
+- [ ] Change `QueueLoadedMsg` from `Tracks []domain.Track` to `Items []domain.QueueItem`
+      - Modify `internal/ui/panes/messages.go`
+      - test: `TestQueueLoadedMsg_ItemsField`
+- [ ] Update API queue response parsing for mixed content
+      - Modify `internal/api/player.go` or relevant client: parse both `track` and `episode` objects from queue response, wrap in `QueueItemTypeTrack`/`QueueItemTypeEpisode`
+      - test: `TestParseQueueResponse_TrackOnly`, `TestParseQueueResponse_MixedTrackEpisode`, `TestParseQueueResponse_EpisodeFields`
+- [ ] Add `type` column to Queue pane and update column definitions
+      - Modify `internal/ui/panes/queue.go`: add `type` column (flex 1, `♪`/`◆`), rename `Track` → `Title` header, show Show name for episode `Artist`
+      - test: `TestQueuePane_TypeColumn_TrackSymbol`, `TestQueuePane_TypeColumn_EpisodeSymbol`, `TestQueuePane_TitleHeader`, `TestQueuePane_ArtistColumn_EpisodeShowName`
+- [ ] Update Queue pane Enter handler for mixed content playback
+      - Modify `internal/ui/panes/queue.go`: Enter on track row `→ PlayTrackMsg`, Enter on episode row `→ PlayEpisodeMsg`
+      - test: `TestQueuePane_EnterTrack_PlaysTrack`, `TestQueuePane_EnterEpisode_PlaysEpisode`
+- [ ] Update `handlers.go` for `QueueLoadedMsg` type change
+      - Modify `internal/app/handlers.go`: handler now reads `msg.Items []domain.QueueItem` instead of `msg.Tracks`
+      - test: `TestHandler_QueueLoadedMsg_MixedItems`
+- [ ] Update queue fetch command for mixed parsing
+      - Modify `internal/app/commands.go`: update `buildFetchQueueCmd` to parse both types
+      - test: `TestBuildFetchQueueCmd_MixedContent`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass

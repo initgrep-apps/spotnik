@@ -85,3 +85,25 @@ to conditionally include `{Key: "i", Label: "details"}` when episode is playing.
 - [ ] Stats page compact strip shows episode info format
 - [ ] Track mode tests still pass
 - [ ] `make ci` passes
+
+## Tasks
+
+- [ ] Add `renderEpisodeInfo(episode *domain.Episode)` method to `NowPlayingPane`
+      - Modify `internal/ui/panes/nowplaying.go`: add method rendering episode name (`TextPrimary()` bold), show name (`TextSecondary()`), release date (`TextMuted()`), visualizer + seek bar, `⏵ Podcast` border title
+      - test: `TestNowPlayingPane_RenderEpisodeInfo_ShowsEpisodeFields`, `TestNowPlayingPane_RenderEpisodeInfo_ShowsPodcastNotch`
+- [ ] Modify `View()` to switch on `CurrentlyPlayingType`
+      - Modify `internal/ui/panes/nowplaying.go`: `switch ps.CurrentlyPlayingType` with `case "track"`, `case "episode"`, `default`
+      - test: `TestNowPlayingPane_View_EpisodeMode`, `TestNowPlayingPane_View_TrackMode_Unchanged`, `TestNowPlayingPane_View_UnknownType_EmptyState`
+- [ ] Modify `Title()` to reflect episode info when playing
+      - Modify `internal/ui/panes/nowplaying.go`
+      - test: `TestNowPlayingPane_Title_EpisodeMode`
+- [ ] Modify `Actions()` to include `{Key: "i", Label: "details"}` when episode is playing
+      - Modify `internal/ui/panes/nowplaying.go`
+      - test: `TestNowPlayingPane_Actions_TrackMode_NoIDetails`, `TestNowPlayingPane_Actions_EpisodeMode_HasIDetails`
+- [ ] Add `[i:details]` border notch in InfoBox when episode is playing
+      - Modify episode rendering to include notch
+      - test: `TestNowPlayingPane_EpisodeInfoBorderNotch`
+- [ ] Update Stats page compact strip to show episode format
+      - Modify the strip rendering (wherever the compact NowPlaying strip is built) to show `"Episode · Show"` when `CurrentlyPlayingType == "episode"`
+      - test: `TestStatsStrip_EpisodeFormat`, `TestStatsStrip_TrackFormat`
+- [ ] Run `make ci` — all lint, tests, and 80% coverage pass
