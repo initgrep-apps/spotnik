@@ -1,56 +1,50 @@
 # AGENTS.md — Spotnik
 
-> **Primary guidance file for all agents working on this codebase.**
-> Read this completely before writing any code or making any decision.
-> This file wins if any conflict arises with other sources.
+> Primary guidance. Read before any code/decision.
+> Conflict? This wins.
+
+**Caveman mandatory** — respond terse, technical, no fluff. Agent must use caveman skill always. Only drop caveman when user says "explain" or "clarify". Code/commits written normal.
 
 ---
 
-**Important**: Load caveman skill first and use it for everything unless user specifically ask to not use it
+## What
 
-## What We Are Building
-
-**Spotnik** — a terminal Spotify client for developers. Keyboard-driven, single binary,
-beautiful in a terminal. Not a Spotify clone — a developer-first music environment.
-Target user: developer with Spotify Premium who lives in the terminal all day.
+Spotnik — terminal Spotify client for devs. Keyboard-driven, single binary.
+Target: dev with Spotify Premium, lives in terminal.
 
 ---
 
 ## Reading Order
 
-Read **this file** and **your feature spec**. That's it.
+Read **this file** + **feature spec** first.
 
-`docs/system/architecture.md` and `docs/system/design.md` are reference docs — consult them only when
-the feature spec explicitly points you to a pattern or layout you need to look up.
-
-When writing or modifying CLI output, consult `docs/system/cli.md` — the canonical
-reference for message types, glyphs, palette, and interactive prompts.
-
-When writing or modifying TUI primitives, consult `docs/system/tui.md` — the
-canonical reference for primitives, glyph catalogue, and role matrix.
-
-For Spotify Web API endpoints and capability scope, consult `docs/system/api-guide.md`.
+Reference docs — consult only when spec says so:
+- `docs/system/architecture.md` — patterns, code examples
+- `docs/system/design.md` — layout, keybindings, theme
+- `docs/system/cli.md` — message types, glyphs, palette
+- `docs/system/tui.md` — primitives, glyph catalogue, roles
+- `docs/system/api-guide.md` — Spotify API endpoints & scope
 
 ---
 
-## Tech Stack (Non-Negotiable)
+## Tech Stack
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Language | Go 1.26+ | Single binary, no runtime |
-| TUI | Bubble Tea v1.3+ | Elm architecture |
-| Styling | Lip Gloss | Token-based, via Theme interface |
-| Components | Bubbles | Lists, inputs, spinners |
-| Tables | `github.com/evertras/bubble-table` | Dense sortable tables in panes |
-| Overlays | `github.com/rmhubbert/bubbletea-overlay` | Modal overlay compositing |
-| HTTP | Go stdlib `net/http` | No extra HTTP lib |
-| Config | `github.com/BurntSushi/toml` | |
-| Keychain | `github.com/zalando/go-keyring` | Token storage |
-| CLI | `github.com/spf13/cobra` | Commands + subcommands |
-| Testing | `testing` + `testify` | Table-driven |
-| Linting | `golangci-lint` | Required gate |
+| Layer | Choice |
+|---|---|
+| Language | Go 1.26+ |
+| TUI | Bubble Tea v1.3+ |
+| Styling | Lip Gloss |
+| Components | Bubbles |
+| Tables | `github.com/evertras/bubble-table` |
+| Overlays | `github.com/rmhubbert/bubbletea-overlay` |
+| HTTP | Go stdlib `net/http` |
+| Config | `github.com/BurntSushi/toml` |
+| Keychain | `github.com/zalando/go-keyring` |
+| CLI | `github.com/spf13/cobra` |
+| Testing | `testing` + `testify` |
+| Linting | `golangci-lint` |
 
-**No new dependencies without explicit approval.** Ask first: can stdlib do this in ~30 lines?
+**No new deps without approval.** Ask: can stdlib do this in ~30 lines?
 
 ---
 
@@ -65,99 +59,88 @@ go 1.26
 
 ## Project Layout
 
-Full structure with annotations is in `docs/system/architecture.md`. Top-level overview:
+Full structure in `docs/system/architecture.md`. Top-level:
 
 ```
 spotnik/
-├── main.go              ← entry point only, no logic
+├── main.go              ← entry point only
 ├── cmd/root.go          ← CLI flags, auth check, app launch
 ├── internal/
 │   ├── app/             ← root Bubble Tea model
 │   ├── api/             ← Spotify HTTP client, gateway, rate limiting
-│   ├── domain/          ← shared types bridging api/ and ui/ (PlaybackState, Track, etc.)
+│   ├── domain/          ← shared types (PlaybackState, Track, etc.)
 │   ├── ui/
-│   │   ├── panes/       ← nowplaying, queue, playlists, albums, likedsongs, toptracks,
-│   │   │                   topartists, recentlyplayed, search, devices, requestflow,
-│   │   │                   networklog
-│   │   ├── components/  ← gradient, visualizer (viz/), filter, table, controls,
-│   │   │                   notifications, infobox, timeutil
-│   │   ├── layout/      ← LayoutManager, preset system, focus rotation, PaneAt hit-test
+│   │   ├── panes/       ← nowplaying, queue, playlists, search, devices, etc.
+│   │   ├── components/  ← gradient, viz/, filter, table, controls, notifications
+│   │   ├── layout/      ← LayoutManager, presets, focus rotation, PaneAt
 │   │   └── theme/       ← Theme interface + 5 implementations
 │   ├── state/           ← central Store (single source of truth)
 │   ├── config/          ← config loading + defaults
-│   └── keychain/        ← token storage abstraction
+│   └── keychain/        ← token storage
 ├── docs/
-└── testdata/fixtures/   ← JSON fixtures for API mock tests
+└── testdata/fixtures/   ← JSON fixtures for API mocks
 ```
 
 ---
 
 ## Spec Structure
 
-Feature and issue specs live in `docs/spec/`:
+Feature/issue specs in `docs/spec/`:
 
 ```
 docs/spec/
-├── 00-overview.md              ← index of all features with status and story counts
-├── issues.md                   ← quick dump for unresolved issues from PR reviews
-└── features/
-    └── NN-name/                ← one directory per feature
-        ├── feature.md          ← high-level: title, status, description, acceptance criteria
-        └── stories/
-            └── NN-story-name.md  ← individual story with background, design, tasks, tests
+├── 00-overview.md       ← master index (update on add/complete)
+├── issues.md            ← untriaged issues
+└── features/NN-name/
+    ├── feature.md        ← title, status, description, AC
+    └── stories/NN-story-name.md ← background, design, tasks, tests
 ```
 
-- **feature.md** has YAML frontmatter: `title`, `status` (open/in-progress/done/closed)
-- **Story files** have YAML frontmatter: `title`, `feature` (parent directory name), `status`
-- **issues.md** collects untriaged issues — triage into feature stories when ready to fix
-- **00-overview.md** is the master index — update it when adding or completing features
+YAML frontmatter: `title`, `status` (open/in-progress/done/closed), `feature` (stories only)
 
 ---
 
 ## Architecture Rules
 
-Full patterns and code examples are in `docs/system/architecture.md`. These are the non-negotiables:
-
-- **All API data lives in the Store** — never in a pane struct
-- **Side effects only via Commands** — never call API inside `Update()` directly
-- **`View()` must be pure** — no external calls, no heavy computation, just read state → string
-- **Messages are typed structs** — never strings or constants as message types
-- **Panes never talk to each other** — only through messages routed via root model
-- **`ui/` never imports `api/`** — data flows through messages and store only
-- **`api/` never imports `ui/`** — one-way dependency enforced
-- **Commands must not mutate the Store** — return data in Msg payloads; only `Update()` writes to Store. Msg types carry `Data` + `Err error` fields. See `docs/system/architecture.md` "Data-Carrying Messages" section for before/after examples.
-- **All API errors route through toast notifications** — use `a.alerts.NewAlertCmd(type, msg)` from `app.go` Update handlers. Pane `View()` methods must never render inline error boxes or read store error fields for display.
+- All API data in Store — never in pane structs
+- Side effects only via Cmd (`tea.Cmd`) — never call API inside `Update()`
+- `View()` pure: read state → string only. No ext calls, no heavy compute.
+- Messages = typed structs. Never strings/constants as msg type.
+- Panes isolated: communicate only through root-routed Msgs
+- `ui/` never imports `api/` (and vice versa) — one-way dependency
+- Cmds never mutate Store. Msg payloads carry `Data` + `Err`.
+- All API errors → toast notifications via `a.alerts.NewAlertCmd`. Never inline error boxes in `View()`.
 
 ---
 
 ## API Rules
 
-- Playback state: poll every **1000ms** via `tea.Tick` — never `time.Sleep`
-- Search: **300ms debounce** after last keypress — never fire on every keystroke
-- On `429`: back off for `Retry-After` seconds, emit `"ratelimit"` toast via `a.alerts.NewAlertCmd`
-- On `401`: refresh token immediately, retry once
-- On `403`: emit `"warning"` toast "Spotify Premium required"
-- Always wrap errors with context: `fmt.Errorf("getting track: %w", err)`
-- **All requests go through the API Gateway** — `BaseClient.doJSON`/`doNoContent` route through `*Gateway` when attached; never bypass with `http.Client.Do` directly in API methods
-- Use `api.WithPriority(ctx, api.Interactive)` for user-triggered commands; `Background` is the default for polling and prefetch
+- Playback poll: **1000ms** via `tea.Tick` — never `time.Sleep`
+- Search: **300ms debounce** after keypress
+- `429` → `Retry-After` backoff + `"ratelimit"` toast
+- `401` → refresh token, retry once
+- `403` → `"warning"` toast "Spotify Premium required"
+- Wrap errors: `fmt.Errorf("context: %w", err)`
+- All requests via `BaseClient.doJSON`/`doNoContent` → `*Gateway` when attached. Never `http.Client.Do` directly.
+- Priority: `api.WithPriority(ctx, api.Interactive)` for user-triggered, `Background` for polling/prefetch.
 
 ---
 
 ## Testing Rules
 
-- **80% coverage minimum** — `make test-coverage` enforces this, CI fails below threshold
-- Every function in `api/`, `state/`, `config/` needs a test
-- Style: **table-driven** — see `docs/system/architecture.md` for the pattern
-- API mocks: use `httptest.NewServer` — no external mock libraries
-- Fixtures: JSON responses in `testdata/fixtures/` named descriptively
+- **80% coverage min** — `make test-coverage` enforces, CI fails below
+- Every `api/`, `state/`, `config/` function needs a test
+- Style: **table-driven**
+- API mocks: `httptest.NewServer` (no mock libs)
+- Fixtures: JSON in `testdata/fixtures/`, descriptive names
 
 ---
 
 ## Code Style
 
-- `gofmt` always — non-negotiable, enforced by `make lint`
-- `golangci-lint` uses default rules — no custom `.golangci.yml` needed
-- Exported types/funcs/consts: doc comment required
+- `gofmt` always — enforced by `make lint`
+- `golangci-lint` default rules
+- Exports: doc comment required
 - Comments explain *why*, not *what*
 - `// NOTE:` for non-obvious decisions, `// TODO(feature-name):` for planned work
 - No orphaned TODOs
@@ -166,14 +149,13 @@ Full patterns and code examples are in `docs/system/architecture.md`. These are 
 
 ## Design Rules
 
-Full spec is in `docs/system/design.md` — read it before any UI work. Hard rules:
-
-- **Grid layout managed by LayoutManager** — 10 panes across 2 pages, configured via presets; see `docs/system/design.md` for full spec
-- **Never hardcode hex values** — always use `Theme` interface tokens
-- **Default theme is `black`** — config key `theme = "black"`
-- **Keybindings are frozen** — full table in `docs/system/design.md` §17, update there first if changing
-- **Rounded corners only** — `╭╮╰╯`, never `┌┐└┘`
-- **Status bar always visible** — never hide or remove it
+Full spec in `docs/system/design.md`. Hard rules:
+- Grid via **LayoutManager** — 10 panes, 2 pages, presets
+- Never hardcode hex — use `Theme` interface tokens
+- Default theme: `black` (config key `theme = "black"`)
+- Keybindings frozen — table in design.md §17
+- Rounded corners only (`╭╮╰╯`, never `┌┐└┘`)
+- Status bar always visible
 
 ---
 
@@ -181,252 +163,225 @@ Full spec is in `docs/system/design.md` — read it before any UI work. Hard rul
 
 Conventional Commits format:
 ```
-feat(playback): add seek bar with keyboard controls
-fix(auth): handle token refresh race condition
-test(library): add table tests for pagination
-refactor(state): extract polling into ticker command
-chore(deps): upgrade bubbletea to v0.27.1
+type(scope): description
 ```
+Types: feat / fix / test / refactor / chore / docs.
 
-Never commit: non-compiling code · failing tests · lint failures · hardcoded secrets · debug prints
+Never commit: non-compiling code · failing tests · lint failures · secrets · debug prints
 
 ---
 
-## Feature Development Workflow
+## Feature Dev Workflow
 
-### Orchestrate-driven (standard)
-
-The orchestrator manages branch and worktree creation. Feature-implementer receives
-them pre-created and works within the worktree.
-
-```
-Branch per feature:  feat/NN-feature-name      (e.g. feat/10-error-resilience)
-Fix story (post-merge): fix/NNN-story-name     (e.g. fix/150-devices-error-state)
-Worktree per active feature: ../spotnik-feat-NN (sibling of repo root, outside repo)
-Stories = commits on the feature branch (no sub-branches)
-One PR per feature (not per story)
-```
-
-Orchestrator Step 1.5 creates the worktree. Feature-implementer Phase 1 Mode A cds into
-it. Orchestrator Step 4b removes it after merge.
+### Orchestrate (standard)
+- Branch: `feat/NN-name`. Worktree: `../spotnik-feat-NN`. Stories = commits.
+- Orchestrator creates worktree + branch. Feature-implementer works inside.
+- PR per feature (not per story). Post-merge fix: `fix/NNN-story-name`.
 
 ### Standalone / manual
-
-```
-1. git pull origin main
-2. git checkout -b feat/NN-feature-name
-3. Implement — one commit per completed task
-4. make ci   ← must pass fully (lint + tests + 80% coverage)
-5. git push origin feat/NN-feature-name
-6. Open a PR: title = "feat(name): brief description"  body = tasks completed + test summary
-7. STOP — do not merge unless you are the orchestrator agent running `/orchestrate`.
-8. After merge confirmed: git checkout main && git pull origin main
-```
+1. `git pull origin main && git checkout -b feat/NN-name`
+2. Implement — one commit per task
+3. `make ci` (lint + tests + 80% coverage — must pass)
+4. `git push origin feat/NN-name`
+5. Open PR: title = `feat(name): brief`, body = tasks + test summary
+6. STOP — don't merge unless you're orchestrator
+7. After merge: `git checkout main && git pull origin main`
 
 **Hard rules:**
-- Never work directly on `main`
-- Never merge your own PR — unless you are the orchestrator after external review passes
-- A failing `make ci` blocks the PR step — fix before pushing
-- One feature per branch — never mix features in a branch
-- Never create sub-branches within a feature branch — stories are commits, not branches
-- Post-merge fix stories use `fix/NNN-story-name` from main — never reopen a merged feature branch
+- Never work on `main`. Never merge own PR (unless orchestrator).
+- Failing `make ci` blocks PR. One feature per branch.
+- No sub-branches. Post-merge fix stories from main.
 
 ---
 
-## What Agents Must NEVER Do
+## Never Do
 
-1. Store credentials or secrets in tracked files
-2. Bypass the LayoutManager — all pane geometry flows through it
-3. Add a feature not in `docs/spec/features/` without creating a spec first
-4. Call API synchronously from `View()` or `Update()`
-5. Skip writing tests for new `api/`, `state/`, `config/` code
-6. Change keybindings without updating `docs/system/design.md`
-7. Use `panic()` in production code paths
+1. Store credentials/keys in tracked files
+2. Bypass LayoutManager
+3. Add unspecced features (no feature.md = no code)
+4. Sync API calls in `View()` or `Update()`
+5. Skip tests for `api/`/`state/`/`config/` code
+6. Change keybindings without 3-file update (README + design.md §17 + help_overlay.go)
+7. Use `panic()` in production
 8. Use `time.Sleep()` — use `tea.Tick`
-9. Import `ui/` from `api/` or `api/` from `ui/`
-10. Hardcode hex colour values in component code
-11. Add a theme without implementing every method of the `Theme` interface
-12. Work directly on `main` — always use a feature branch
-13. Merge a PR — unless you are the orchestrator agent after external review passes
-14. Render inline error boxes in pane `View()` methods — all API errors go through toast notifications via `a.alerts.NewAlertCmd`
-15. Add, change, or remove a keybinding without updating all three locations in the
-    same commit: the **Keybindings** section in `README.md`, `docs/system/design.md §17`, and
-    the `helpContent` var in `internal/ui/panes/help_overlay.go`.
-16. Add a new message type or glyph to `internal/cliout` without updating
-    `docs/system/cli.md` in the same commit.
-17. Add a new primitive, glyph, or role to `internal/uikit` without updating
-    `docs/system/tui.md` in the same commit.
+9. Cross-import `ui/`↔`api/`
+10. Hardcode hex colors
+11. Add theme without implementing full Theme interface
+12. Work on main
+13. Merge own PR (unless orchestrator)
+14. Inline error boxes in `View()` — use `a.alerts.NewAlertCmd` toasts
+15. Add msgs/glyphs without updating `docs/system/cli.md`
+16. Add primitives/glyphs/roles without updating `docs/system/tui.md`
+17. Modify keybindings without sync'ing all 3 locations
 
 ---
 
 ## Keybinding Maintenance
 
-All keybindings are documented in three places that must stay in sync:
-- `README.md` **Keybindings** section — canonical user-facing reference
-- `docs/system/design.md §17` — spec-level keybinding table
-- `internal/ui/panes/help_overlay.go` `helpContent` var — in-app help overlay display
-
-When adding, changing, or removing any keybinding, update all three in the same commit.
+Three locations, same commit:
+- `README.md` **Keybindings** — user-facing
+- `docs/system/design.md §17` — spec table
+- `internal/ui/panes/help_overlay.go` `helpContent` — in-app overlay
 
 ---
 
 ## Feature Order
 
-See `docs/spec/00-overview.md` for the full map. Short version:
-`01-theme` → `02-auth` → `03-playback` → `04-library` → `05-search`
-→ `06-queue` → `07-devices` → `08-stats` → `09-playlists` → `10-error-resilience`
-→ `11-api-gateway` → `12-layout` → `13-nowplaying` → `14-nerd-status` → `15-cicd`
+```
+01-theme → 02-auth → 03-playback → 04-library → 05-search
+→ 06-queue → 07-devices → 08-stats → 09-playlists
+→ 10-error-resilience → 11-api-gateway → 12-layout
+→ 13-nowplaying → 14-nerd-status → 15-cicd
+```
 
-Do not start a feature until the previous one has passing tests and is committed.
+Don't start next feature until previous has passing tests + committed.
 
 ---
 
 ## Quick Commands
 
-```bash
-make build     # compile → bin/spotnik
-make run       # build + run
-make test      # all tests
-make lint      # golangci-lint
-make test-coverage  # coverage report (min 80%)
-make ci        # full pre-commit check
 ```
+make build         compile → bin/spotnik
+make run           build + run
+make test          all tests
+make lint          golangci-lint
+make test-coverage coverage (min 80%)
+make ci            full pre-commit check
+```
+
+---
+
+## Delegation
+
+Main agent = orchestrator. Stay lean (first 3-5 msgs at top).
+Token-heavy tasks → delegate to subagent. Always synthesize results.
+
+### When to Delegate
+
+- Code exploration, multi-file search, large file reads
+- Architecture design or code review
+- Test debugging (2+ files) or feature implementation
+- Anything requiring 5+ file interactions
+
+### Subagent Decision Table
+
+| Trigger | Subagent | Prompt Recipe | Handle Output |
+|---------|----------|---------------|---------------|
+| Code exploration: "how X works", "find Y", "trace Z" | `explore` | thoroughness (medium/very) + scope + pattern | Compact file:line + brief summary |
+| Multi-file search: "grep X across N files" | `explore` | pattern + dir + file types | Compact file list |
+| Read large file (>100 lines) | `Task(read+summarize)` | path + what to extract | Minimal relevant summary |
+| Architecture: "design X component" | `code-architect` | existing patterns + constraints | Files to create/modify, data flow |
+| Code review: "review diff/branch" | `code-reviewer` or `pr-*` suite | diff + focus areas | ≥80 confidence findings |
+| Test debug: failures in 2+ files | `Task` per file (parallel) | error msg + test name per file | Root cause + fix per file |
+| Feature: "implement story N" | `feature-implementer` | story spec + branch + worktree | CI-passing commits |
+| Bug: "is there a bug in X?" | `code-reviewer` / `cavecrew-reviewer` | file + suspicion | ≥80 confidence findings |
+
+### Delegation Rules
+
+1. **One subagent per independent domain** — never bundle unrelated work in one agent.
+2. **Self-contained prompts** — include all context needed, never rely on session history.
+3. **Parallel dispatch** — for independent work (e.g. 3 failing test files), dispatch simultaneously.
+4. **Review then integrate** — after subagent returns: read summary, check conflicts, merge.
+5. **Always synthesize** — return 2-3 sentence summary to user, never raw subagent dump.
+6. **Verify after edits** — if subagent touched files, run `make ci` before claiming done.
+
+---
 
 <!-- rtk-instructions v2 -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
+# RTK — Token-Optimized Commands
 
-## Golden Rule
+**Always prefix commands with `rtk`.** If RTK has a dedicated filter, it uses it. If not, passes through unchanged. Always safe.
 
-**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
+Even in `&&` chains: `rtk git add . && rtk git commit -m "msg" && rtk git push`
 
-**Important**: Even in command chains with `&&`, use `rtk`:
-```bash
-# ❌ Wrong
-git add . && git commit -m "msg" && git push
+### Commands by Workflow
 
-# ✅ Correct
-rtk git add . && rtk git commit -m "msg" && rtk git push
+#### Build & Compile (80-90% savings)
+```
+rtk cargo build / check / clippy
+rtk tsc
+rtk lint
+rtk prettier --check
+rtk next build
 ```
 
-## RTK Commands by Workflow
-
-### Build & Compile (80-90% savings)
-```bash
-rtk cargo build         # Cargo build output
-rtk cargo check         # Cargo check output
-rtk cargo clippy        # Clippy warnings grouped by file (80%)
-rtk tsc                 # TypeScript errors grouped by file/code (83%)
-rtk lint                # ESLint/Biome violations grouped (84%)
-rtk prettier --check    # Files needing format only (70%)
-rtk next build          # Next.js build with route metrics (87%)
+#### Test (60-99% savings)
+```
+rtk cargo test     rtk go test     rtk jest
+rtk vitest         rtk playwright  rtk pytest
+rtk rspec          rtk test <cmd>
 ```
 
-### Test (60-99% savings)
-```bash
-rtk cargo test          # Cargo test failures only (90%)
-rtk go test             # Go test failures only (90%)
-rtk jest                # Jest failures only (99.5%)
-rtk vitest              # Vitest failures only (99.5%)
-rtk playwright test     # Playwright failures only (94%)
-rtk pytest              # Python test failures only (90%)
-rtk rake test           # Ruby test failures only (90%)
-rtk rspec               # RSpec test failures only (60%)
-rtk test <cmd>          # Generic test wrapper - failures only
+#### Git (59-80% savings)
+```
+rtk git status     rtk git log      rtk git diff
+rtk git show       rtk git add      rtk git commit
+rtk git push       rtk git pull     rtk git branch
+rtk git stash      rtk git worktree
+```
+Git passthrough works for ALL subcommands, even unlisted.
+
+#### GitHub (26-87% savings)
+```
+rtk gh pr view <num>    rtk gh pr checks
+rtk gh run list         rtk gh issue list
+rtk gh api
 ```
 
-### Git (59-80% savings)
-```bash
-rtk git status          # Compact status
-rtk git log             # Compact log (works with all git flags)
-rtk git diff            # Compact diff (80%)
-rtk git show            # Compact show (80%)
-rtk git add             # Ultra-compact confirmations (59%)
-rtk git commit          # Ultra-compact confirmations (59%)
-rtk git push            # Ultra-compact confirmations
-rtk git pull            # Ultra-compact confirmations
-rtk git branch          # Compact branch list
-rtk git fetch           # Compact fetch
-rtk git stash           # Compact stash
-rtk git worktree        # Compact worktree
+#### JS/TS (70-90% savings)
+```
+rtk pnpm list / outdated / install
+rtk npm run <script>
+rtk npx <cmd>
+rtk prisma
 ```
 
-Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+#### Files & Search (60-75% savings)
+```
+rtk ls <path>           rtk read <file>
+rtk grep <pattern>      rtk find <pattern>
+```
+Format flags (-c, -l, -L, -o, -Z) on `grep` run raw.
 
-### GitHub (26-87% savings)
-```bash
-rtk gh pr view <num>    # Compact PR view (87%)
-rtk gh pr checks        # Compact PR checks (79%)
-rtk gh run list         # Compact workflow runs (82%)
-rtk gh issue list       # Compact issue list (80%)
-rtk gh api              # Compact API responses (26%)
+#### Analysis & Debug (70-90% savings)
+```
+rtk err <cmd>           rtk log <file>
+rtk json <file>         rtk deps
+rtk env                 rtk summary <cmd>
+rtk diff
 ```
 
-### JavaScript/TypeScript Tooling (70-90% savings)
-```bash
-rtk pnpm list           # Compact dependency tree (70%)
-rtk pnpm outdated       # Compact outdated packages (80%)
-rtk pnpm install        # Compact install output (90%)
-rtk npm run <script>    # Compact npm script output
-rtk npx <cmd>           # Compact npx command output
-rtk prisma              # Prisma without ASCII art (88%)
+#### Infra (85% savings)
+```
+rtk docker ps / images / logs <c>
+rtk kubectl get / logs
 ```
 
-### Files & Search (60-75% savings)
-```bash
-rtk ls <path>           # Tree format, compact (65%)
-rtk read <file>         # Code reading with filtering (60%)
-rtk grep <pattern>      # Search grouped by file (75%). Format flags (-c, -l, -L, -o, -Z) run raw.
-rtk find <pattern>      # Find grouped by directory (70%)
+#### Network (65-70% savings)
+```
+rtk curl <url>          rtk wget <url>
 ```
 
-### Analysis & Debug (70-90% savings)
-```bash
-rtk err <cmd>           # Filter errors only from any command
-rtk log <file>          # Deduplicated logs with counts
-rtk json <file>         # JSON structure without values
-rtk deps                # Dependency overview
-rtk env                 # Environment variables compact
-rtk summary <cmd>       # Smart summary of command output
-rtk diff                # Ultra-compact diffs
+#### Meta
+```
+rtk gain            rtk gain --history
+rtk discover        rtk proxy <cmd>
+rtk init            rtk init --global
 ```
 
-### Infrastructure (85% savings)
-```bash
-rtk docker ps           # Compact container list
-rtk docker images       # Compact image list
-rtk docker logs <c>     # Deduplicated logs
-rtk kubectl get         # Compact resource list
-rtk kubectl logs        # Deduplicated pod logs
-```
+### Savings Reference
 
-### Network (65-70% savings)
-```bash
-rtk curl <url>          # Compact HTTP responses (70%)
-rtk wget <url>          # Compact download output (65%)
-```
-
-### Meta Commands
-```bash
-rtk gain                # View token savings statistics
-rtk gain --history      # View command history with savings
-rtk discover            # Analyze Claude Code sessions for missed RTK usage
-rtk proxy <cmd>          # Run command without filtering (for debugging)
-rtk init                # Add RTK instructions to CLAUDE.md
-rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
-```
-
-## Token Savings Overview
-
-| Category | Commands | Typical Savings |
-|----------|----------|-----------------|
-| Tests | vitest, playwright, cargo test | 90-99% |
+| Category | Commands | Savings |
+|----------|----------|---------|
+| Test | vitest, playwright, cargo test | 90-99% |
 | Build | next, tsc, lint, prettier | 70-87% |
 | Git | status, log, diff, add, commit | 59-80% |
 | GitHub | gh pr, gh run, gh issue | 26-87% |
-| Package Managers | pnpm, npm, npx | 70-90% |
+| JS/TS | pnpm, npm, npx | 70-90% |
 | Files | ls, read, grep, find | 60-75% |
-| Infrastructure | docker, kubectl | 85% |
+| Debug | err, log, json, deps, env, diff | 70-90% |
+| Infra | docker, kubectl | 85% |
 | Network | curl, wget | 65-70% |
 
-Overall average: **60-90% token reduction** on common development operations.
+Overall: **60-90% token reduction** on common operations.
 <!-- /rtk-instructions -->

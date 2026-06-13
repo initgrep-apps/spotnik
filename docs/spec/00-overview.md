@@ -27,6 +27,7 @@
 | 16 | Mono Themes + Page Rename | `features/16-mono-themes-page-rename/` | done | 207 ✓, 208 ✓ | Rename Page A/B → Music/Stats, add mono-dark/mono-light themes |
 | 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | in-progress | 214 ✓, 215 ✓, 216 ✓, 217 ✓, 218 ✓, 219 ✓, 220 ✓, 221 ✓, 222 ✓, 223 | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight, single-formula layout. Phase 2 (shipped): OverlayBackground token + InfoBox fill (221); remove album art, overlay InfoBox on full-pane visualizer (222). Phase 3 (open): Fix layout — adaptive width, remove solid bg, centering, compact preset MinHeight (223) |
 | 18 | Podcasts Page | `features/18-podcasts/` | done | 227 ✓, 228 ✓, 229 ✓, 230 ✓, 231 ✓, 232 ✓ | Dedicated page for podcast listening: PodcastPlayback pane, ShowEpisodes/FollowedShows/SavedEpisodes table panes, PodcastAPI client, 4 new border tokens, 3-page cycle |
+| 19 | Player Page Unification | `features/19-player-page-unification/` | open | 233, 234, 235, 236, 238, 239, 240, 241, 242, 243 | Unify Music+Podcasts into single Player page, content-aware NowPlaying, FollowedShows drill-down, Queue mixed content, auto-switch presets, visibility-gated polling, Episode Details overlay |
 
 ---
 
@@ -36,4 +37,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-06-12 — feature 18 (podcasts) added with stories 227–232*
+*Last updated: 2026-06-14 — feature 19 (player page unification) added with stories 233–243*
