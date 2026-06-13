@@ -835,6 +835,17 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				playbackCmds = append(playbackCmds, cmd)
 			}
 		}
+		// Auto-load show episodes when an episode is playing.
+		if m.State != nil && m.State.CurrentlyPlayingType == "episode" && m.State.Episode != nil && m.State.Episode.Show != nil {
+			showID := m.State.Episode.Show.ID
+			if a.store.SelectedShowID() != showID {
+				a.store.SetSelectedShowID(showID)
+				a.store.SetSelectedShow(m.State.Episode.Show)
+				if a.layout.ActivePage() == layout.PagePodcasts || !a.store.ShowEpisodesLoaded() {
+					playbackCmds = append(playbackCmds, a.buildFetchShowEpisodesCmd(showID))
+				}
+			}
+		}
 		if len(playbackCmds) > 0 {
 			return a, tea.Batch(playbackCmds...)
 		}
@@ -1631,6 +1642,37 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, a.buildFetchShowEpisodesCmd(m.ShowID)
+
+	case panes.SearchResultSelectedMsg:
+		if m.IsShow || m.IsEpisode {
+			// Close the search overlay first.
+			app, closeCmd := a.closeSearch()
+			if app != nil {
+				a = app
+			}
+			// Navigate to Podcasts page from wherever we are.
+			// TogglePage cycles Music→Podcasts→Stats→Music.
+			switch a.layout.ActivePage() {
+			case layout.PageMusic:
+				a.layout.TogglePage() // → Podcasts
+			case layout.PageStats:
+				a.layout.TogglePage() // → Music
+				a.layout.TogglePage() // → Podcasts
+			}
+			if m.IsEpisode {
+				return a, tea.Batch(
+					closeCmd,
+					a.buildPlayEpisodeCmd(m.URI, ""),
+				)
+			}
+			// For shows, select the show in the podcasts page.
+			a.store.SetSelectedShowID(showIDFromURI(m.URI))
+			return a, tea.Batch(
+				closeCmd,
+				a.buildFetchShowEpisodesCmd(showIDFromURI(m.URI)),
+			)
+		}
+		return a, nil
 
 	case panes.PlayEpisodeMsg:
 		return a, a.buildPlayEpisodeCmd(m.EpisodeURI, m.PlaylistURI)

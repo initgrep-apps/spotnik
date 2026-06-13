@@ -182,11 +182,26 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// '0' toggles between Music and Stats.
+	// '0' cycles between Music, Podcasts, and Stats.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "0" {
 		a.layout.TogglePage()
 		a.propagateSizes()
 		a.syncFocus()
+
+		// Auto-load show episodes when switching to Podcasts page while an episode is playing.
+		if a.layout.ActivePage() == layout.PagePodcasts {
+			if ps := a.store.PlaybackState(); ps != nil && ps.CurrentlyPlayingType == "episode" && ps.Episode != nil && ps.Episode.Show != nil {
+				showID := ps.Episode.Show.ID
+				if a.store.SelectedShowID() != showID {
+					a.store.SetSelectedShowID(showID)
+					a.store.SetSelectedShow(ps.Episode.Show)
+					if a.store.ShowEpisodesStale() || !a.store.ShowEpisodesLoaded() {
+						return a, a.buildFetchShowEpisodesCmd(showID)
+					}
+				}
+			}
+		}
+
 		return a, nil
 	}
 

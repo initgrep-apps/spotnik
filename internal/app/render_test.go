@@ -82,6 +82,12 @@ func TestRenderHeader_ContainsPresetName(t *testing.T) {
 	assert.NotContains(t, result, "preset 0", "header should not show raw preset index")
 }
 
+func TestPageLabel_Podcasts(t *testing.T) {
+	assert.Equal(t, "Music", pageLabel(layout.PageMusic))
+	assert.Equal(t, "Stats", pageLabel(layout.PageStats))
+	assert.Equal(t, "Podcasts", pageLabel(layout.PagePodcasts))
+}
+
 func TestRenderHeader_ContainsActionShortcuts(t *testing.T) {
 	// Story 75: search and devices shortcuts are removed from header (they live in the status bar).
 	// This test now verifies they are NOT in the header.
@@ -509,7 +515,8 @@ func TestRenderStatusBar_MusicPage_IncludesPresetAndToggle(t *testing.T) {
 // bar omits "preset" and "toggle" (Stats page has a single fixed layout).
 func TestRenderStatusBar_StatsPage_OmitsPresetAndToggle(t *testing.T) {
 	a := newRenderTestApp()
-	// Switch to Stats page.
+	// Switch to Stats page (Music → Podcasts → Stats).
+	a.layout.TogglePage()
 	a.layout.TogglePage()
 	result := a.renderStatusBar()
 

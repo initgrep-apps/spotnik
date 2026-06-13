@@ -25,7 +25,7 @@ const (
 
 // SearchPrefixes is the ordered list of valid command prefixes.
 // Exported so tests and the help text can reference them.
-var SearchPrefixes = []string{":songs", ":artists", ":albums", ":playlists"}
+var SearchPrefixes = []string{":songs", ":artists", ":albums", ":playlists", ":shows", ":episodes"}
 
 // searchPlaceholder holds a single cycling placeholder entry with a prefix (e.g. ":songs")
 // and an action text (e.g. "search tracks") that visually separates the filter command
@@ -42,6 +42,8 @@ var searchPlaceholders = []searchPlaceholder{
 	{":artists", "find artists"},
 	{":albums", "browse albums"},
 	{":playlists", "discover playlists"},
+	{":shows", "explore shows"},
+	{":episodes", "find episodes"},
 }
 
 // SearchPlaceholders exposes the placeholder list for tests.
@@ -73,6 +75,8 @@ var prefixToTabMap = map[string]SearchTab{
 	":artists":   TabArtists,
 	":albums":    TabAlbums,
 	":playlists": TabPlaylists,
+	":shows":     TabShows,
+	":episodes":  TabEpisodes,
 }
 
 // tabToPrefixMap maps each non-All SearchTab to its command prefix.
@@ -82,6 +86,8 @@ var tabToPrefixMap = map[SearchTab]string{
 	TabArtists:   ":artists",
 	TabAlbums:    ":albums",
 	TabPlaylists: ":playlists",
+	TabShows:     ":shows",
+	TabEpisodes:  ":episodes",
 }
 
 // PrefixToTab returns the SearchTab for the given command prefix, and whether it is valid.

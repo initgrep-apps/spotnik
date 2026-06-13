@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
@@ -12,9 +13,16 @@ import (
 // vertically-centered content lines inside. Border glyphs are resolved via
 // uikit.PaneChrome so the output honours ui.glyphs = "ascii" / "unicode".
 type InfoBox struct {
-	th     theme.Theme
-	width  int
-	height int
+	th          theme.Theme
+	width       int
+	height      int
+	accentColor lipgloss.Color // when non-empty, overrides ActiveBorder/InactiveBorder
+}
+
+// SetAccentColor overrides the default ActiveBorder/InactiveBorder color with
+// a specific color. Pass an empty string to revert to default behavior.
+func (b *InfoBox) SetAccentColor(c lipgloss.Color) {
+	b.accentColor = c
 }
 
 // NewInfoBox creates an InfoBox using the given theme.
@@ -110,9 +118,12 @@ func (b *InfoBox) Render(title string, lines []string, focused bool) string {
 	// Border colour encodes focus state directly; Focused is always true so
 	// PaneChrome does not additionally Faint the already-chosen colour.
 	// -----------------------------------------------------------------------
-	border := b.th.ActiveBorder()
-	if !focused {
-		border = b.th.InactiveBorder()
+	border := b.accentColor
+	if border == "" {
+		border = b.th.ActiveBorder()
+		if !focused {
+			border = b.th.InactiveBorder()
+		}
 	}
 	chrome := uikit.PaneChrome{
 		Width:       w,

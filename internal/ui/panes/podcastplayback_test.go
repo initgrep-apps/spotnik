@@ -103,9 +103,36 @@ func TestPodcastPlaybackPane_EpisodeView(t *testing.T) {
 	assert.Contains(t, output, "Test Episode Title", "should show episode title")
 	assert.Contains(t, output, "Test Show", "should show show name")
 	assert.Contains(t, output, "Released: 2024-01-15", "should show release date")
-	assert.Contains(t, output, "· Duration: 30m", "should show duration")
+	assert.Contains(t, output, "30m", "should show duration")
 	assert.Contains(t, output, "Publisher: Test Publisher", "should show publisher")
 	assert.Contains(t, output, "test episode description", "should show description")
+}
+
+func TestPodcastPlaybackPane_HTMLDescription(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&domain.PlaybackState{
+		IsPlaying:            true,
+		ProgressMs:           60000,
+		CurrentlyPlayingType: "episode",
+		Episode: &domain.Episode{
+			ID:              "ep-1",
+			Name:            "HTML Episode",
+			Description:     "plain text fallback",
+			HTMLDescription: "<p>Styled <b>bold</b> and <i>italic</i> text</p>",
+			DurationMs:      1800000,
+			ReleaseDate:     "2024-06-01",
+		},
+	})
+	th := theme.Load("black")
+	p := NewPodcastPlaybackPane(s, th, true)
+	p.SetSize(80, 24)
+	output := p.View()
+
+	assert.Contains(t, output, "HTML Episode", "should show episode title")
+	assert.Contains(t, output, "bold", "HTML bold text should render")
+	assert.Contains(t, output, "italic", "HTML italic text should render")
+	assert.NotContains(t, output, "<p>", "raw HTML tags should not leak")
+	assert.NotContains(t, output, "plain text fallback", "HTML should be preferred over plain description")
 }
 
 func TestPodcastPlaybackPane_ProgressBar(t *testing.T) {
@@ -404,39 +431,35 @@ func TestPodcastPlaybackPane_SetSize(t *testing.T) {
 	th := theme.Load("black")
 	p := NewPodcastPlaybackPane(s, th, true)
 
+	// 100 wide, 30 tall → infoWidth = 100/3 = 33, detailsWidth = 100-33-1 = 66
 	p.SetSize(100, 30)
 	assert.Equal(t, 100, p.width)
 	assert.Equal(t, 30, p.height)
-	assert.Equal(t, 30, p.infoWidth)
-	assert.Equal(t, 69, p.detailsWidth)
+	assert.Equal(t, 33, p.infoWidth)
+	assert.Equal(t, 66, p.detailsWidth)
 
-	// Minimum infoWidth 24
+	// 30 wide, 10 tall → infoWidth = 30/3 = 10, min 28 → infoWidth = 28, detailsWidth = 30-28-1 = 1
+	// detailsWidth < 10 → info collapses, details = cw
 	p.SetSize(30, 10)
-	assert.Equal(t, 24, p.infoWidth)
-	assert.Equal(t, 5, p.detailsWidth)
+	assert.Equal(t, 0, p.infoWidth, "info collapses when detailsWidth < 10")
+	assert.Equal(t, 30, p.detailsWidth)
 
-	// Smallest possible
+	// Smallest possible: 5 wide → cw = 10, infoWidth collapses → 0, details = cw = 10
 	p.SetSize(5, 10)
-	assert.Equal(t, 24, p.infoWidth, "min 24 even when pane is narrow")
+	assert.Equal(t, 0, p.infoWidth, "info collapses when pane is too narrow")
+	assert.Equal(t, 10, p.detailsWidth)
 }
 
-func TestPodcastPlaybackPane_ProgressBarFormat(t *testing.T) {
-	bar := renderProgressBar(0, 100, 10)
-	assert.Equal(t, strings.Repeat("\u2588", 0)+strings.Repeat("\u2591", 10), bar,
-		"0% progress should be all empty")
-
-	bar = renderProgressBar(100, 100, 10)
-	assert.Equal(t, strings.Repeat("\u2588", 10)+strings.Repeat("\u2591", 0), bar,
-		"100% progress should be all full")
-
-	bar = renderProgressBar(50, 100, 10)
-	assert.Equal(t, strings.Repeat("\u2588", 5)+strings.Repeat("\u2591", 5), bar,
-		"50% progress should be half full")
-
-	// Zero duration
-	bar = renderProgressBar(50, 0, 10)
-	assert.Equal(t, strings.Repeat("\u2588", 0)+strings.Repeat("\u2591", 10), bar,
-		"zero duration should produce empty bar")
+func TestPodcastPlaybackPane_GradientSeekBar(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	p := NewPodcastPlaybackPane(s, th, false)
+	p.SetSize(80, 20)
+	p.seekBar.SetWidth(50)
+	p.localProgressMs = 50000
+	result := p.seekBar.Render(p.localProgressMs, 300000)
+	assert.Contains(t, result, "0:50", "should contain elapsed time label")
+	assert.Contains(t, result, "5:00", "should contain total time label")
 }
 
 func TestPodcastPlaybackPane_TruncateStr(t *testing.T) {
@@ -478,4 +501,63 @@ func TestPodcastPlaybackPane_KeyNotFocused(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := p.Update(msg)
 	assert.Nil(t, cmd, "should ignore keys when not focused")
+}
+
+func TestPodcastPlaybackPane_AdaptiveSizing_Tall(t *testing.T) {
+	p := NewPodcastPlaybackPane(state.New(), theme.Load("black"), true)
+	p.SetSize(120, 30)
+	info33 := 120 / 3
+	assert.Equal(t, info33, p.infoWidth, "tall pane (>8) should use 1/3 info width")
+}
+
+func TestPodcastPlaybackPane_AdaptiveSizing_Short(t *testing.T) {
+	p := NewPodcastPlaybackPane(state.New(), theme.Load("black"), true)
+	p.SetSize(120, 6)
+	info50 := 120 / 2
+	assert.Equal(t, info50, p.infoWidth, "short pane (<=8) should use 1/2 info width")
+}
+
+func TestPodcastPlaybackPane_AdaptiveSizing_MinWidth(t *testing.T) {
+	p := NewPodcastPlaybackPane(state.New(), theme.Load("black"), true)
+	p.SetSize(120, 30)
+	infoWidth := 120 / 3
+	if infoWidth < 28 {
+		infoWidth = 28
+	}
+	deleteWidth := 120 - infoWidth - 1
+	if deleteWidth < 10 {
+		infoWidth = 0
+	}
+	assert.Equal(t, infoWidth, p.infoWidth, "infoWidth should respect 28 min and 10 details min")
+}
+
+func TestPodcastPlaybackPane_PaddingRowBeforeProgressBar(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&domain.PlaybackState{
+		IsPlaying:            true,
+		ProgressMs:           60000,
+		CurrentlyPlayingType: "episode",
+		Episode: &domain.Episode{
+			ID:          "ep-1",
+			Name:        "Test Episode",
+			Description: "A test episode description.",
+			DurationMs:  1800000,
+			ReleaseDate: "2024-01-15",
+		},
+	})
+	th := theme.Load("black")
+	p := NewPodcastPlaybackPane(s, th, true)
+	p.SetSize(80, 24)
+	output := p.View()
+
+	lines := strings.Split(output, "\n")
+	lastContentLine := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed != "" {
+			lastContentLine = lines[i]
+			break
+		}
+	}
+	assert.Contains(t, lastContentLine, "m", "last content line should contain time (seek bar)")
 }

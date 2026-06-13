@@ -641,19 +641,21 @@ func TestSearchOverlay_View_BtopBorderTitle(t *testing.T) {
 
 // --- Story 82: Three-panel layout tests ---
 
-// TestSearchTab_EnumValues verifies numTabs==5 and tabToAPITypes returns correct types.
+// TestSearchTab_EnumValues verifies numTabs==7 and tabToAPITypes returns correct types.
 func TestSearchTab_EnumValues(t *testing.T) {
-	assert.Equal(t, 5, panes.NumTabs, "numTabs should be 5")
+	assert.Equal(t, 7, panes.NumTabs, "numTabs should be 7")
 
 	tests := []struct {
 		tab       panes.SearchTab
 		wantTypes []string
 	}{
-		{panes.TabAll, []string{"track", "artist", "album", "playlist"}},
+		{panes.TabAll, []string{"track", "artist", "album", "playlist", "show", "episode"}},
 		{panes.TabSongs, []string{"track"}},
 		{panes.TabArtists, []string{"artist"}},
 		{panes.TabAlbums, []string{"album"}},
 		{panes.TabPlaylists, []string{"playlist"}},
+		{panes.TabShows, []string{"show"}},
+		{panes.TabEpisodes, []string{"episode"}},
 	}
 	for _, tt := range tests {
 		types := panes.TabToAPITypes(tt.tab)

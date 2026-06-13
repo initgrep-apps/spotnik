@@ -452,7 +452,7 @@ func PaneBorderColor(id PaneID, t theme.Theme) lipgloss.Color {
 	case PaneNetworkLog:
 		return t.PaneBorderNetworkLog()
 	case PanePodcastPlayback:
-		return t.PaneBorderPodcastPlayback()
+		return t.PaneBorderNowPlaying()
 	case PaneShowEpisodes:
 		return t.PaneBorderShowEpisodes()
 	case PaneFollowedShows:
