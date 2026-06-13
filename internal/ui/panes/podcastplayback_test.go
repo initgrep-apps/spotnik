@@ -102,7 +102,7 @@ func TestPodcastPlaybackPane_EpisodeView(t *testing.T) {
 	assert.Contains(t, output, "Test Episode Title", "should show episode title")
 	assert.Contains(t, output, "Test Show", "should show show name")
 	assert.Contains(t, output, "Released: 2024-01-15", "should show release date")
-	assert.Contains(t, output, "· Duration: 30m", "should show duration")
+	assert.Contains(t, output, "30m", "should show duration")
 	assert.Contains(t, output, "Publisher: Test Publisher", "should show publisher")
 	assert.Contains(t, output, "test episode description", "should show description")
 }

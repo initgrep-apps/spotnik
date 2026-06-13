@@ -266,6 +266,12 @@ func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *dom
 	titleLines := strings.Split(titleStyle.Render(episode.Name), "\n")
 	lines = append(lines, titleLines...)
 
+	durationStr := fmt.Sprintf("%dm", episode.DurationMs/60000)
+	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
+	metaLine := fmt.Sprintf("Released: %s %s %s", episode.ReleaseDate, sep, durationStr)
+	muted := lipgloss.NewStyle().Width(innerW).Foreground(p.theme.TextMuted())
+	lines = append(lines, muted.Render(metaLine))
+
 	lines = append(lines, "")
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 	lines = append(lines, ctrl.Render())
@@ -280,14 +286,8 @@ func (p *PodcastPlaybackPane) renderLeftPanel(episode *domain.Episode, show *dom
 
 func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *domain.Show) string {
 	var lines []string
-	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary())
 	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
 	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
-
-	durationStr := fmt.Sprintf("%dm", episode.DurationMs/60000)
-	sep := uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())
-	metaLine := fmt.Sprintf("Released: %s %s Duration: %s", episode.ReleaseDate, sep, durationStr)
-	lines = append(lines, primaryStyle.Width(p.detailsWidth).Render(metaLine))
 
 	if show != nil && show.Publisher != "" {
 		pubLine := fmt.Sprintf("Publisher: %s", show.Publisher)
