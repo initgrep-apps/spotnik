@@ -1650,17 +1650,14 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if app != nil {
 				a = app
 			}
-			// If on Music page, switch to Podcasts page.
-			if a.layout.ActivePage() != layout.PagePodcasts {
-				a.layout.TogglePage()
-				if a.layout.ActivePage() != layout.PagePodcasts {
-					// TogglePage cycles Music→Podcasts→Stats→Music.
-					// From Music: one toggle lands on Podcasts.
-					// From Stats: two toggles needed.
-					if a.layout.ActivePage() == layout.PageStats {
-						a.layout.TogglePage()
-					}
-				}
+			// Navigate to Podcasts page from wherever we are.
+			// TogglePage cycles Music→Podcasts→Stats→Music.
+			switch a.layout.ActivePage() {
+			case layout.PageMusic:
+				a.layout.TogglePage() // → Podcasts
+			case layout.PageStats:
+				a.layout.TogglePage() // → Music
+				a.layout.TogglePage() // → Podcasts
 			}
 			if m.IsEpisode {
 				return a, tea.Batch(

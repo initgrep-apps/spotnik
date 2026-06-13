@@ -108,6 +108,33 @@ func TestPodcastPlaybackPane_EpisodeView(t *testing.T) {
 	assert.Contains(t, output, "test episode description", "should show description")
 }
 
+func TestPodcastPlaybackPane_HTMLDescription(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&domain.PlaybackState{
+		IsPlaying:            true,
+		ProgressMs:           60000,
+		CurrentlyPlayingType: "episode",
+		Episode: &domain.Episode{
+			ID:              "ep-1",
+			Name:            "HTML Episode",
+			Description:     "plain text fallback",
+			HTMLDescription: "<p>Styled <b>bold</b> and <i>italic</i> text</p>",
+			DurationMs:      1800000,
+			ReleaseDate:     "2024-06-01",
+		},
+	})
+	th := theme.Load("black")
+	p := NewPodcastPlaybackPane(s, th, true)
+	p.SetSize(80, 24)
+	output := p.View()
+
+	assert.Contains(t, output, "HTML Episode", "should show episode title")
+	assert.Contains(t, output, "bold", "HTML bold text should render")
+	assert.Contains(t, output, "italic", "HTML italic text should render")
+	assert.NotContains(t, output, "<p>", "raw HTML tags should not leak")
+	assert.NotContains(t, output, "plain text fallback", "HTML should be preferred over plain description")
+}
+
 func TestPodcastPlaybackPane_ProgressBar(t *testing.T) {
 	s := state.New()
 	s.SetPlaybackState(&domain.PlaybackState{

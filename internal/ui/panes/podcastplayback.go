@@ -225,18 +225,12 @@ func (p *PodcastPlaybackPane) renderEpisode(episode *domain.Episode, ps *domain.
 	leftLines := strings.Split(left, "\n")
 	rightLines := strings.Split(right, "\n")
 
-	for len(leftLines) < len(rightLines) {
-		leftLines = append(leftLines, strings.Repeat(" ", p.infoWidth))
+	maxH := p.height
+	if len(leftLines) > maxH {
+		leftLines = leftLines[:maxH]
 	}
-	for len(rightLines) < len(leftLines) {
-		rightLines = append(rightLines, strings.Repeat(" ", p.detailsWidth))
-	}
-
-	if len(leftLines) > p.height {
-		leftLines = leftLines[:p.height]
-	}
-	if len(rightLines) > p.height {
-		rightLines = rightLines[:p.height]
+	if len(rightLines) > maxH {
+		rightLines = rightLines[:maxH]
 	}
 	for len(leftLines) < len(rightLines) {
 		leftLines = append(leftLines, strings.Repeat(" ", p.infoWidth))
@@ -301,27 +295,18 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 		descMaxLines = 1
 	}
 	desc := episode.Description
-	htmlDesc := episode.HTMLDescription
-	if htmlDesc != "" {
-		rendered, err := renderMarkdown(htmlToMarkdown(htmlDesc), p.detailsWidth)
+	if episode.HTMLDescription != "" {
+		rendered, err := renderMarkdown(htmlToMarkdown(episode.HTMLDescription), p.detailsWidth)
 		if err == nil && rendered != "" {
 			descLines := strings.Split(rendered, "\n")
 			if len(descLines) > descMaxLines {
 				descLines = descLines[:descMaxLines]
 			}
 			lines = append(lines, descLines...)
-		} else if desc != "" {
-			wrapped := mutedStyle.Width(p.detailsWidth).Render(desc)
-			descLines := strings.Split(wrapped, "\n")
-			if len(descLines) > descMaxLines {
-				descLines = descLines[:descMaxLines]
-				ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
-				last := descLines[len(descLines)-1]
-				descLines[len(descLines)-1] = mutedStyle.Width(p.detailsWidth).Render(truncateStr(last, p.detailsWidth-len([]rune(ell))) + ell)
-			}
-			lines = append(lines, descLines...)
+			desc = "" // HTML succeeded — skip plain-text fallback
 		}
-	} else if desc != "" {
+	}
+	if desc != "" {
 		wrapped := mutedStyle.Width(p.detailsWidth).Render(desc)
 		descLines := strings.Split(wrapped, "\n")
 		if len(descLines) > descMaxLines {

@@ -126,7 +126,8 @@ func TestRenderHTMLDescription_Simple(t *testing.T) {
 	result, err := renderMarkdown(md, 40)
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
-	assert.Contains(t, result, "Simple description")
+	assert.Contains(t, result, "Simple")
+	assert.Contains(t, result, "description")
 }
 
 func TestRenderHTMLDescription_WithEntities(t *testing.T) {

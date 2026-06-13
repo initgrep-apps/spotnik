@@ -143,6 +143,9 @@ func htmlToMarkdown(htmlText string) string {
 	}
 
 	result := out.String()
-	result = strings.NewReplacer("\n\n\n\n", "\n\n", "\n\n\n", "\n\n").Replace(result)
+	// Collapse runs of 3+ newlines into double-newline paragraph breaks.
+	for strings.Contains(result, "\n\n\n") {
+		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
+	}
 	return strings.TrimSpace(result)
 }
