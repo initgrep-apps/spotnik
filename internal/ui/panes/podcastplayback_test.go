@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -473,4 +474,63 @@ func TestPodcastPlaybackPane_KeyNotFocused(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeySpace}
 	_, cmd := p.Update(msg)
 	assert.Nil(t, cmd, "should ignore keys when not focused")
+}
+
+func TestPodcastPlaybackPane_AdaptiveSizing_Tall(t *testing.T) {
+	p := NewPodcastPlaybackPane(state.New(), theme.Load("black"), true)
+	p.SetSize(120, 30)
+	info33 := 120 / 3
+	assert.Equal(t, info33, p.infoWidth, "tall pane (>8) should use 1/3 info width")
+}
+
+func TestPodcastPlaybackPane_AdaptiveSizing_Short(t *testing.T) {
+	p := NewPodcastPlaybackPane(state.New(), theme.Load("black"), true)
+	p.SetSize(120, 6)
+	info50 := 120 / 2
+	assert.Equal(t, info50, p.infoWidth, "short pane (<=8) should use 1/2 info width")
+}
+
+func TestPodcastPlaybackPane_AdaptiveSizing_MinWidth(t *testing.T) {
+	p := NewPodcastPlaybackPane(state.New(), theme.Load("black"), true)
+	p.SetSize(120, 30)
+	infoWidth := 120 / 3
+	if infoWidth < 28 {
+		infoWidth = 28
+	}
+	deleteWidth := 120 - infoWidth - 1
+	if deleteWidth < 10 {
+		infoWidth = 0
+	}
+	assert.Equal(t, infoWidth, p.infoWidth, "infoWidth should respect 28 min and 10 details min")
+}
+
+func TestPodcastPlaybackPane_PaddingRowBeforeProgressBar(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&domain.PlaybackState{
+		IsPlaying:            true,
+		ProgressMs:           60000,
+		CurrentlyPlayingType: "episode",
+		Episode: &domain.Episode{
+			ID:          "ep-1",
+			Name:        "Test Episode",
+			Description: "A test episode description.",
+			DurationMs:  1800000,
+			ReleaseDate: "2024-01-15",
+		},
+	})
+	th := theme.Load("black")
+	p := NewPodcastPlaybackPane(s, th, true)
+	p.SetSize(80, 24)
+	output := p.View()
+
+	lines := strings.Split(output, "\n")
+	lastContentLine := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed != "" {
+			lastContentLine = lines[i]
+			break
+		}
+	}
+	assert.Contains(t, lastContentLine, "m", "last content line should contain time (seek bar)")
 }

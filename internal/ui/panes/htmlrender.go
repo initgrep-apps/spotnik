@@ -59,6 +59,11 @@ func htmlToMarkdown(htmlText string) string {
 					case "li":
 						out.WriteString("\n")
 					case "a":
+						out.WriteString("]")
+					case "b", "strong":
+						out.WriteString("**")
+					case "i", "em":
+						out.WriteString("*")
 					}
 					i++
 					continue
