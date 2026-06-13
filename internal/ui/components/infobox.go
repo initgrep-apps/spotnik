@@ -13,10 +13,10 @@ import (
 // vertically-centered content lines inside. Border glyphs are resolved via
 // uikit.PaneChrome so the output honours ui.glyphs = "ascii" / "unicode".
 type InfoBox struct {
-	th           theme.Theme
-	width        int
-	height       int
-	accentColor  lipgloss.Color // when non-empty, overrides ActiveBorder/InactiveBorder
+	th          theme.Theme
+	width       int
+	height      int
+	accentColor lipgloss.Color // when non-empty, overrides ActiveBorder/InactiveBorder
 }
 
 // SetAccentColor overrides the default ActiveBorder/InactiveBorder color with

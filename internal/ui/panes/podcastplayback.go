@@ -296,12 +296,33 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 
 	lines = append(lines, "")
 
-	descMaxLines := p.height - len(lines) - 1
+	descMaxLines := p.height - len(lines) - 2
 	if descMaxLines < 1 {
 		descMaxLines = 1
 	}
-	if episode.Description != "" && descMaxLines > 0 {
-		wrapped := mutedStyle.Width(p.detailsWidth).Render(episode.Description)
+	desc := episode.Description
+	htmlDesc := episode.HTMLDescription
+	if htmlDesc != "" {
+		rendered, err := renderMarkdown(htmlToMarkdown(htmlDesc), p.detailsWidth)
+		if err == nil && rendered != "" {
+			descLines := strings.Split(rendered, "\n")
+			if len(descLines) > descMaxLines {
+				descLines = descLines[:descMaxLines]
+			}
+			lines = append(lines, descLines...)
+		} else if desc != "" {
+			wrapped := mutedStyle.Width(p.detailsWidth).Render(desc)
+			descLines := strings.Split(wrapped, "\n")
+			if len(descLines) > descMaxLines {
+				descLines = descLines[:descMaxLines]
+				ell := uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode())
+				last := descLines[len(descLines)-1]
+				descLines[len(descLines)-1] = mutedStyle.Width(p.detailsWidth).Render(truncateStr(last, p.detailsWidth-len([]rune(ell))) + ell)
+			}
+			lines = append(lines, descLines...)
+		}
+	} else if desc != "" {
+		wrapped := mutedStyle.Width(p.detailsWidth).Render(desc)
 		descLines := strings.Split(wrapped, "\n")
 		if len(descLines) > descMaxLines {
 			descLines = descLines[:descMaxLines]
@@ -311,6 +332,8 @@ func (p *PodcastPlaybackPane) renderRightPanel(episode *domain.Episode, show *do
 		}
 		lines = append(lines, descLines...)
 	}
+
+	lines = append(lines, "")
 
 	for len(lines) < p.height-1 {
 		lines = append(lines, "")
