@@ -1,15 +1,17 @@
 package app
 
-// routing_internal_test.go — White-box tests for isPlaybackKey and isPremiumOnlyPlaybackKey.
-// These tests serve as a living specification: every key listed in isPlaybackKey is
-// checked for whether it also requires Premium. Any future addition to isPlaybackKey
-// that is not mirrored in isPremiumOnlyPlaybackKey will cause a test failure here.
+// routing_internal_test.go — White-box tests for toggle key routing helpers.
+// Covers isPlaybackKey, isPremiumOnlyPlaybackKey, currentToggleKeyMap,
+// and podcastPresetNames.
 
 import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsPlaybackKey_Enumeration(t *testing.T) {
@@ -69,4 +71,82 @@ func TestIsPremiumOnlyPlaybackKey_Enumeration(t *testing.T) {
 				"isPremiumOnlyPlaybackKey(%q)", tc.name)
 		})
 	}
+}
+
+// ── currentToggleKeyMap tests ──────────────────────────────────────────────────
+
+func TestCurrentToggleKeyMap_PodcastPreset(t *testing.T) {
+	a := New(&config.Config{}, AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a.layout.SetPreset(2)
+	require.Equal(t, layout.PresetNamePodcast, a.layout.ActivePresetName())
+
+	km := a.currentToggleKeyMap()
+
+	assert.Equal(t, layout.PaneNowPlaying, km['1'])
+	assert.Equal(t, layout.PaneQueue, km['2'])
+	assert.Equal(t, layout.PaneFollowedShows, km['3'])
+	assert.Equal(t, layout.PaneSavedEpisodes, km['4'])
+
+	for _, k := range []rune{'5', '6', '7', '8'} {
+		_, exists := km[k]
+		assert.False(t, exists, "key '%c' should not exist in podcast key map", k)
+	}
+}
+
+func TestCurrentToggleKeyMap_MusicPreset(t *testing.T) {
+	a := New(&config.Config{}, AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	require.Equal(t, layout.PresetNameDashboard, a.layout.ActivePresetName())
+
+	km := a.currentToggleKeyMap()
+
+	assert.Equal(t, layout.PaneNowPlaying, km['1'])
+	assert.Equal(t, layout.PaneQueue, km['2'])
+	assert.Equal(t, layout.PanePlaylists, km['3'])
+	assert.Equal(t, layout.PaneAlbums, km['4'])
+	assert.Equal(t, layout.PaneLikedSongs, km['5'])
+	assert.Equal(t, layout.PaneRecentlyPlayed, km['6'])
+	assert.Equal(t, layout.PaneTopTracks, km['7'])
+	assert.Equal(t, layout.PaneTopArtists, km['8'])
+}
+
+func TestCurrentToggleKeyMap_StatsPreset(t *testing.T) {
+	a := New(&config.Config{}, AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a.layout.TogglePage()
+	require.Equal(t, layout.PageStats, a.layout.ActivePage())
+
+	km := a.currentToggleKeyMap()
+
+	assert.Equal(t, layout.PaneNowPlaying, km['1'])
+	assert.Equal(t, layout.PaneGatewayHealth, km['2'])
+	assert.Equal(t, layout.PanePollingTraffic, km['3'])
+	assert.Equal(t, layout.PaneGatewayLive, km['4'])
+	assert.Equal(t, layout.PaneNetworkLog, km['5'])
+
+	for _, k := range []rune{'6', '7', '8'} {
+		_, exists := km[k]
+		assert.False(t, exists, "key '%c' should not exist in stats key map", k)
+	}
+}
+
+func TestCurrentToggleKeyMap_PodcastDashboardPreset(t *testing.T) {
+	a := New(&config.Config{}, AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a.layout.SetPreset(5)
+	require.Equal(t, layout.PresetNamePodcastDashboard, a.layout.ActivePresetName())
+
+	km := a.currentToggleKeyMap()
+
+	assert.Equal(t, layout.PaneNowPlaying, km['1'])
+	assert.Equal(t, layout.PaneQueue, km['2'])
+	assert.Equal(t, layout.PaneFollowedShows, km['3'])
+	assert.Equal(t, layout.PaneSavedEpisodes, km['4'])
+}
+
+func TestPodcastPresetNames_UsesConstants(t *testing.T) {
+	assert.True(t, podcastPresetNames[layout.PresetNamePodcast])
+	assert.True(t, podcastPresetNames[layout.PresetNamePodcastDashboard])
+	assert.False(t, podcastPresetNames[layout.PresetNameDashboard])
 }

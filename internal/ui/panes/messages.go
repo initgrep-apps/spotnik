@@ -423,16 +423,16 @@ type SearchPageLoadedMsg struct {
 
 // Podcast messages
 
-// FetchFollowedShowsRequestMsg is emitted by the podcasts pane when it needs to
+// FetchFollowedShowsRequestMsg is emitted by the FollowedShowsPane when it needs to
 // load followed shows from the API.
 type FetchFollowedShowsRequestMsg struct{}
 
-// FetchSavedEpisodesRequestMsg is emitted by the podcasts pane when it needs to
+// FetchSavedEpisodesRequestMsg is emitted by the SavedEpisodesPane when it needs to
 // load saved episodes from the API.
 type FetchSavedEpisodesRequestMsg struct{}
 
-// FetchShowEpisodesRequestMsg is emitted by the podcasts pane when it needs to
-// load episodes for a specific show from the API.
+// FetchShowEpisodesRequestMsg is emitted by the FollowedShowsPane or the app layer
+// when episodes for a specific show need to be loaded from the API.
 type FetchShowEpisodesRequestMsg struct {
 	ShowID string
 }
@@ -466,15 +466,15 @@ type ShowEpisodesLoadedMsg struct {
 	Err     error
 }
 
-// SelectedShowChangedMsg is emitted by the podcasts pane when the user selects
+// SelectedShowChangedMsg is emitted by the FollowedShowsPane when the user selects
 // a different show. The root app model uses ShowID to update the store and
 // trigger an episode fetch if needed.
 type SelectedShowChangedMsg struct {
 	ShowID string
 }
 
-// PlayEpisodeMsg is emitted by the podcasts pane when the user presses Enter
-// on an episode. EpisodeURI is the URI of the episode to play. PlaylistURI
+// PlayEpisodeMsg is emitted by the SavedEpisodesPane or the app layer when the user
+// presses Enter on an episode. EpisodeURI is the URI of the episode to play. PlaylistURI
 // is the show URI for context, empty for saved episodes.
 type PlayEpisodeMsg struct {
 	EpisodeURI  string

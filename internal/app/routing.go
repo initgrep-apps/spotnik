@@ -19,8 +19,9 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
-// toggleKeyMap maps rune keys '1'-'8' to their corresponding Music page PaneID.
-// This is used for btop-style pane visibility toggling on the Music page.
+// toggleKeyMap maps rune keys '1'-'8' to PaneIDs for the Player page presets
+// that include those panes. The actual key map is selected at runtime by
+// currentToggleKeyMap() based on the active preset's Visible map.
 var toggleKeyMap = map[rune]layout.PaneID{
 	'1': layout.PaneNowPlaying,
 	'2': layout.PaneQueue,
@@ -42,13 +43,33 @@ var statsToggleKeyMap = map[rune]layout.PaneID{
 	'5': layout.PaneNetworkLog,
 }
 
-// podcastToggleKeyMap maps rune keys '1'-'4' to Podcasts page PaneIDs.
-// This is used for btop-style pane visibility toggling on the Podcasts page.
+// podcastToggleKeyMap maps rune keys '1'-'4' for podcast-oriented presets.
+// Used by currentToggleKeyMap() when a podcast preset is active.
 var podcastToggleKeyMap = map[rune]layout.PaneID{
-	'1': layout.PanePodcastPlayback,
-	'2': layout.PaneShowEpisodes,
+	'1': layout.PaneNowPlaying,
+	'2': layout.PaneQueue,
 	'3': layout.PaneFollowedShows,
 	'4': layout.PaneSavedEpisodes,
+}
+
+// podcastPresetNames identifies which presets use podcast key bindings.
+var podcastPresetNames = map[string]bool{
+	layout.PresetNamePodcast:          true,
+	layout.PresetNamePodcastDashboard: true,
+}
+
+// currentToggleKeyMap returns the appropriate toggle key map for the active page
+// and preset. Player page uses contextual keys based on the active preset.
+// Stats page always uses statsToggleKeyMap.
+func (a *App) currentToggleKeyMap() map[rune]layout.PaneID {
+	if a.layout.ActivePage() == layout.PageStats {
+		return statsToggleKeyMap
+	}
+	name := a.layout.ActivePresetName()
+	if podcastPresetNames[name] {
+		return podcastToggleKeyMap
+	}
+	return toggleKeyMap
 }
 
 // isPlaybackKey returns true for keys that control playback regardless of focus.
@@ -182,26 +203,11 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// '0' cycles between Music, Podcasts, and Stats.
+	// '0' cycles between Player and Stats (2-page cycle).
 	if m.Type == tea.KeyRunes && string(m.Runes) == "0" {
 		a.layout.TogglePage()
 		a.propagateSizes()
 		a.syncFocus()
-
-		// Auto-load show episodes when switching to Podcasts page while an episode is playing.
-		if a.layout.ActivePage() == layout.PagePodcasts {
-			if ps := a.store.PlaybackState(); ps != nil && ps.CurrentlyPlayingType == "episode" && ps.Episode != nil && ps.Episode.Show != nil {
-				showID := ps.Episode.Show.ID
-				if a.store.SelectedShowID() != showID {
-					a.store.SetSelectedShowID(showID)
-					a.store.SetSelectedShow(ps.Episode.Show)
-					if a.store.ShowEpisodesStale() || !a.store.ShowEpisodesLoaded() {
-						return a, a.buildFetchShowEpisodesCmd(showID)
-					}
-				}
-			}
-		}
-
 		return a, nil
 	}
 
@@ -214,15 +220,10 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.schedulePrefsFlush()
 	}
 
-	// '1'-'8' (Music), '1'-'5' (Stats), or '1'-'4' (Podcasts) toggle pane visibility.
+	// '1'-'8' (Player music presets), '1'-'4' (Player podcast presets),
+	// or '1'-'5' (Stats) toggle pane visibility.
 	if m.Type == tea.KeyRunes && len(m.Runes) == 1 {
-		keyMap := toggleKeyMap
-		switch a.layout.ActivePage() {
-		case layout.PageStats:
-			keyMap = statsToggleKeyMap
-		case layout.PagePodcasts:
-			keyMap = podcastToggleKeyMap
-		}
+		keyMap := a.currentToggleKeyMap()
 		if id, ok := keyMap[m.Runes[0]]; ok {
 			a.layout.TogglePane(id)
 			a.propagateSizes()
@@ -244,8 +245,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Playback keys route to the NowPlaying pane (Music/Stats pages) or the
-	// PodcastPlayback pane (Podcasts page), regardless of focus.
+	// Playback keys route to the NowPlaying pane regardless of focus.
 	// Temporarily enable focus so the pane handles the key even when it isn't focused.
 	if isPlaybackKey(m) {
 		// Gate: free-tier users are blocked from Premium-only API operations.
@@ -255,25 +255,6 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 				Intent: uikit.ToastWarning,
 				Title:  "Spotify Premium required",
 			})
-		}
-		if a.layout.ActivePage() == layout.PagePodcasts {
-			pp := a.podcastPlaybackPane()
-			if pp == nil {
-				return a, nil
-			}
-			wasFocused := pp.IsFocused()
-			if !wasFocused {
-				pp.SetFocused(true)
-			}
-			updatedPane, cmd := pp.Update(m)
-			if ppp, ok := updatedPane.(*panes.PodcastPlaybackPane); ok {
-				a.panes[layout.PanePodcastPlayback] = ppp
-				pp = ppp
-			}
-			if !wasFocused {
-				pp.SetFocused(false)
-			}
-			return a, cmd
 		}
 		np := a.nowPlayingPane()
 		if np == nil {
