@@ -1,7 +1,7 @@
 ---
 title: "Layout: rename PageMusic→PagePlayer, remove PagePodcasts, 6 presets, delete old panes"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
