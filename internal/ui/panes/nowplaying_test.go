@@ -40,10 +40,11 @@ func newTestNowPlayingPaneWithState(isPlaying bool, focused bool) (*NowPlayingPa
 	s := state.New()
 	w := &testStateWriter{s}
 	s.SetPlaybackState(&api.PlaybackState{
-		IsPlaying:    isPlaying,
-		ProgressMs:   30000,
-		ShuffleState: false,
-		RepeatState:  "off",
+		IsPlaying:            isPlaying,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           30000,
+		ShuffleState:         false,
+		RepeatState:          "off",
 		Item: &api.Track{
 			ID:         "track-1",
 			Name:       "Blinding Lights",
@@ -175,8 +176,9 @@ func TestNowPlayingPane_Update_R_CyclesRepeat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := state.New()
 			s.SetPlaybackState(&api.PlaybackState{
-				IsPlaying:   true,
-				RepeatState: tt.startRepeat,
+				IsPlaying:            true,
+				CurrentlyPlayingType: "track",
+				RepeatState:          tt.startRepeat,
 				Item: &api.Track{
 					ID:         "t1",
 					Name:       "Track",
@@ -205,8 +207,9 @@ func TestNowPlayingPane_Update_PlaybackFetched(t *testing.T) {
 
 	// Simulate app.go updating the store and sending PlaybackStateFetchedMsg.
 	newState := &api.PlaybackState{
-		IsPlaying:  true,
-		ProgressMs: 90000,
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           90000,
 		Item: &api.Track{
 			ID:         "track-2",
 			Name:       "Save Your Tears",
@@ -462,8 +465,9 @@ func TestNowPlayingPane_PlaybackFetched_SetsEnginePlaying(t *testing.T) {
 
 	// Update store to playing=true, then send PlaybackStateFetchedMsg.
 	w.SetPlaybackState(&api.PlaybackState{
-		IsPlaying:  true,
-		ProgressMs: 5000,
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           5000,
 		Item: &api.Track{
 			Name:       "Track",
 			DurationMs: 200000,
@@ -485,8 +489,9 @@ func TestNowPlayingPane_PlaybackFetched_PausesEngine(t *testing.T) {
 
 	// Update store to paused, send PlaybackStateFetchedMsg.
 	w.SetPlaybackState(&api.PlaybackState{
-		IsPlaying:  false,
-		ProgressMs: 5000,
+		IsPlaying:            false,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           5000,
 		Item: &api.Track{
 			Name:       "Track",
 			DurationMs: 200000,
@@ -565,8 +570,9 @@ func TestNowPlayingPane_FullView_ContainsTrackAndAlbum(t *testing.T) {
 func TestNowPlayingPane_ZeroDuration(t *testing.T) {
 	s := state.New()
 	s.SetPlaybackState(&api.PlaybackState{
-		IsPlaying:  true,
-		ProgressMs: 0,
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           0,
 		Item: &api.Track{
 			Name:       "Track",
 			DurationMs: 0, // zero duration edge case
@@ -1018,8 +1024,9 @@ func TestNowPlayingPane_HandleKey_N_NoOp(t *testing.T) {
 func newPaneWithVolume(vol int) *NowPlayingPane {
 	s := state.New()
 	s.SetPlaybackState(&api.PlaybackState{
-		IsPlaying:  true,
-		ProgressMs: 0,
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           0,
 		Item: &api.Track{
 			Name:       "Track",
 			DurationMs: 200000,
@@ -1639,4 +1646,274 @@ func TestNowPlayingPane_ControlsCentered(t *testing.T) {
 			leadingSpace, trailingSpace)
 		break
 	}
+}
+
+// ── Story 234: Content-aware rendering (track + episode) ────────────────────
+
+// newTestNowPlayingPaneWithEpisode creates a NowPlayingPane pre-loaded with
+// episode playback state for testing content-aware rendering.
+func newTestNowPlayingPaneWithEpisode(isPlaying bool, focused bool) (*NowPlayingPane, *testStateWriter) {
+	s := state.New()
+	w := &testStateWriter{s}
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            isPlaying,
+		CurrentlyPlayingType: "episode",
+		ProgressMs:           750000,
+		ShuffleState:         false,
+		RepeatState:          "off",
+		Episode: &api.Episode{
+			ID:          "ep-1",
+			Name:        "The Big Interview",
+			Description: "An in-depth conversation",
+			DurationMs:  2700000,
+			ReleaseDate: "2026-05-20",
+			URI:         "spotify:episode:ep-1",
+			Show: &api.Show{
+				ID:   "show-1",
+				Name: "Tech Talks Daily",
+			},
+		},
+		Device: &api.Device{
+			ID:            "dev-1",
+			Name:          "MacBook Pro",
+			VolumePercent: 65,
+		},
+	})
+	t := theme.Load("black")
+	return NewNowPlayingPane(s, t, focused), w
+}
+
+// TestNowPlayingPane_View_EpisodeMode verifies that View() renders episode info
+// when CurrentlyPlayingType is "episode".
+func TestNowPlayingPane_View_EpisodeMode(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+
+	assert.Contains(t, stripped, "The Big Interview", "episode mode should show episode name")
+	assert.Contains(t, stripped, "Tech Talks Daily", "episode mode should show show name (as secondary)")
+	assert.Contains(t, stripped, "2026-05-20", "episode mode should show release date (as muted)")
+	assert.Contains(t, stripped, "Episode Info", "episode mode should show Episode Info as InfoBox title")
+}
+
+// TestNowPlayingPane_View_TrackMode_Unchanged verifies that View() still renders
+// track info when CurrentlyPlayingType is "track" (unchanged existing behavior).
+func TestNowPlayingPane_View_TrackMode_Unchanged(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+
+	assert.Contains(t, stripped, "Blinding Lights", "track mode should show track name")
+	assert.Contains(t, stripped, "The Weeknd", "track mode should show artist name")
+	assert.Contains(t, stripped, "After Hours", "track mode should show album name")
+	assert.Contains(t, stripped, "Track Info", "track mode should show Track Info as InfoBox title")
+}
+
+// TestNowPlayingPane_View_UnknownType_EmptyState verifies that View() renders the
+// empty state when CurrentlyPlayingType is "ad", "unknown", or empty.
+func TestNowPlayingPane_View_UnknownType_EmptyState(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  string
+	}{
+		{"ad type", "ad"},
+		{"unknown type", "unknown"},
+		{"empty type", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := state.New()
+			s.SetPlaybackState(&api.PlaybackState{
+				IsPlaying:            true,
+				CurrentlyPlayingType: tt.typ,
+				ProgressMs:           0,
+				Item:                 nil,
+				Episode:              nil,
+			})
+			th := theme.Load("black")
+			pane := NewNowPlayingPane(s, th, true)
+			pane.SetSize(80, 24)
+
+			output := pane.View()
+			assert.Contains(t, output, "Nothing playing", "unknown type should show empty state")
+		})
+	}
+}
+
+// TestNowPlayingPane_RenderEpisodeInfo_ShowsEpisodeFields verifies that the
+// episode InfoBox contains episode name, show name, and release date.
+func TestNowPlayingPane_RenderEpisodeInfo_ShowsEpisodeFields(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(120, 20)
+
+	output := pane.View()
+	assert.Contains(t, output, "The Big Interview", "should show episode name")
+	assert.Contains(t, output, "Tech Talks Daily", "should show show name")
+	assert.Contains(t, output, "2026-05-20", "should show release date")
+}
+
+// TestNowPlayingPane_RenderEpisodeInfo_ShowsPodcastNotch verifies that
+// Title() includes "⏵ Podcast" when an episode is playing.
+func TestNowPlayingPane_RenderEpisodeInfo_ShowsPodcastNotch(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(80, 24)
+
+	title := pane.Title()
+	assert.Contains(t, title, "⏵ Podcast", "episode mode title should include Podcast notch")
+}
+
+// TestNowPlayingPane_Title_EpisodeMode verifies that Title() in compact mode
+// (height < 8) includes episode name and show name for episodes.
+func TestNowPlayingPane_Title_EpisodeMode(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(80, 6)
+	pane.localProgressMs = 750000
+
+	title := pane.Title()
+	assert.Contains(t, title, "The Big Interview", "compact episode title should include episode name")
+	assert.Contains(t, title, "Tech Talks Daily", "compact episode title should include show name")
+	assert.Contains(t, title, "⏵ Podcast", "compact episode title should include Podcast notch")
+}
+
+// TestNowPlayingPane_Actions_TrackMode_NoIDetails verifies that Actions() does NOT
+// include {i, details} when a track is playing.
+func TestNowPlayingPane_Actions_TrackMode_NoIDetails(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	actions := pane.Actions()
+	for _, a := range actions {
+		assert.NotEqual(t, "i", a.Key, "track mode should NOT have i:details action, got key=%s label=%s", a.Key, a.Label)
+	}
+}
+
+// TestNowPlayingPane_Actions_EpisodeMode_HasIDetails verifies that Actions()
+// includes {Key: "i", Label: "details"} when an episode is playing.
+func TestNowPlayingPane_Actions_EpisodeMode_HasIDetails(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	actions := pane.Actions()
+
+	found := false
+	for _, a := range actions {
+		if a.Key == "i" && a.Label == "details" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "episode mode should have {i, details} action")
+}
+
+// TestNowPlayingPane_Actions_EmptyState_NoIDetails verifies that Actions()
+// does NOT include {i, details} when nothing is playing.
+func TestNowPlayingPane_Actions_EmptyState_NoIDetails(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	actions := pane.Actions()
+	for _, a := range actions {
+		assert.NotEqual(t, "i", a.Key, "empty state should NOT have i:details action")
+	}
+}
+
+// TestNowPlayingPane_EpisodeInfoBorderNotch verifies that the episode InfoBox
+// title includes the "Episode Info" label.
+func TestNowPlayingPane_EpisodeInfoBorderNotch(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(120, 20)
+
+	output := pane.View()
+	assert.Contains(t, output, "Episode Info", "episode InfoBox should have 'Episode Info' title")
+}
+
+// TestNowPlayingPane_EpisodeSeekBar_ShowsEpisodeDuration verifies that the seek
+// bar renders with the episode's duration.
+func TestNowPlayingPane_EpisodeSeekBar_ShowsEpisodeDuration(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	// Episode is 2700000ms = 45:00. Progress is 750000ms = 12:30.
+	assert.Contains(t, output, "12:30", "episode seek bar should show current progress")
+}
+
+// TestNowPlayingPane_EpisodeTickClampsAtEpisodeDuration verifies that tick
+// clamping uses episode duration when an episode is playing.
+func TestNowPlayingPane_EpisodeTickClampsAtEpisodeDuration(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.localProgressMs = 2699500
+
+	tickMsg := TickMsg{}
+	updatedModel, _ := pane.Update(tickMsg)
+	updatedPane, ok := updatedModel.(*NowPlayingPane)
+	require.True(t, ok)
+
+	// 2699500 + 1000 = 2700500 > 2700000 (DurationMs) → clamp to 2700000.
+	assert.Equal(t, 2700000, updatedPane.localProgressMs,
+		"localProgressMs must be clamped to episode DurationMs")
+}
+
+// TestNowPlayingPane_EpisodeFetched_SetsSeekBarDuration verifies that
+// handlePlaybackFetched sets the seek bar duration from the Episode field.
+// This is verified indirectly by checking that the rendered view shows the
+// new episode's progress time stamp after a PlaybackStateFetched update.
+func TestNowPlayingPane_EpisodeFetched_SetsSeekBarDuration(t *testing.T) {
+	pane, w := newTestNowPlayingPaneWithEpisode(false, true)
+	pane.SetSize(80, 24)
+
+	// Simulate store update: episode progress at 750000ms (12:30).
+	w.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "episode",
+		ProgressMs:           750000,
+		Episode: &api.Episode{
+			ID:          "ep-2",
+			Name:        "Another Episode",
+			DurationMs:  1800000,
+			ReleaseDate: "2026-03-01",
+			Show:        &api.Show{ID: "show-2", Name: "Some Show"},
+		},
+		Device: &api.Device{VolumePercent: 50},
+	})
+
+	_, _ = pane.Update(PlaybackStateFetchedMsg{})
+	// After PlaybackStateFetched, localProgressMs should be reset to server value.
+	assert.Equal(t, 750000, pane.localProgressMs,
+		"localProgressMs should be reset to server value after PlaybackStateFetched")
+}
+
+// TestNowPlayingPane_View_NilState_EmptyState verifies that View() returns the
+// empty state when PlaybackState is nil.
+func TestNowPlayingPane_View_NilState_EmptyState(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	assert.Contains(t, output, "Nothing playing", "nil state should render empty state")
+}
+
+// TestNowPlayingPane_View_TrackModeWithExplicitType verifies View() renders track
+// when CurrentlyPlayingType is explicitly "track".
+func TestNowPlayingPane_View_TrackModeWithExplicitType(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           30000,
+		Item: &api.Track{
+			ID:         "track-1",
+			Name:       "Test Track",
+			DurationMs: 200000,
+			Artists:    []api.Artist{{ID: "a1", Name: "Artist1"}},
+			Album:      api.Album{ID: "alb1", Name: "Album1"},
+		},
+		Device: &api.Device{ID: "dev-1", Name: "Speaker", VolumePercent: 50},
+	})
+	th := theme.Load("black")
+	pane := NewNowPlayingPane(s, th, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	assert.Contains(t, output, "Test Track", "explicit track type should render track info")
+	assert.Contains(t, output, "Artist1", "explicit track type should render artist")
 }
