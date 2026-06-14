@@ -54,8 +54,8 @@ var podcastToggleKeyMap = map[rune]layout.PaneID{
 
 // podcastPresetNames identifies which presets use podcast key bindings.
 var podcastPresetNames = map[string]bool{
-	"Podcast":           true,
-	"Podcast Dashboard": true,
+	layout.PresetNamePodcast:          true,
+	layout.PresetNamePodcastDashboard: true,
 }
 
 // currentToggleKeyMap returns the appropriate toggle key map for the active page

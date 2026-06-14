@@ -902,6 +902,65 @@ func TestRecompute_StatsPage_RectsNonOverlapping(t *testing.T) {
 
 // ── Story 233: Player page unification ─────────────────────────────────────────
 
+// ── SwitchToPage tests ──────────────────────────────────────────────────────────
+
+func TestSwitchToPage_SwitchesAndResets(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	require.Equal(t, layout.PagePlayer, m.ActivePage())
+	require.Equal(t, 0, m.ActivePresetIndex())
+
+	m.SwitchToPage(layout.PageStats)
+	assert.Equal(t, layout.PageStats, m.ActivePage())
+	assert.Equal(t, 0, m.ActivePresetIndex(), "preset index should reset to 0")
+}
+
+func TestSwitchToPage_NoOpIfAlreadyOnPage(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	require.Equal(t, layout.PagePlayer, m.ActivePage())
+	presetBefore := m.ActivePresetIndex()
+
+	m.SwitchToPage(layout.PagePlayer)
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
+	assert.Equal(t, presetBefore, m.ActivePresetIndex(), "preset index should not change")
+}
+
+func TestSwitchToPage_ResetsHiddenPanes(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	// Hide a pane on Player page
+	m.TogglePane(layout.PanePlaylists)
+	require.False(t, m.IsPaneVisible(layout.PanePlaylists))
+
+	// Switch to Stats — hidden state must be cleared
+	m.SwitchToPage(layout.PageStats)
+	assert.Equal(t, layout.PageStats, m.ActivePage())
+
+	// Switch back to Player — hidden state must be cleared
+	m.SwitchToPage(layout.PagePlayer)
+	assert.True(t, m.IsPaneVisible(layout.PanePlaylists), "hidden panes should be cleared after SwitchToPage")
+}
+
+func TestSwitchToPage_ResetsFocusIndex(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	// Move focus past the first pane
+	m.RotateFocus(true)
+	m.RotateFocus(true)
+	focusBefore := m.FocusedPane()
+	require.NotEqual(t, layout.PaneNowPlaying, focusBefore)
+
+	// Switching pages resets focus to first visible pane
+	m.SwitchToPage(layout.PageStats)
+	visible := m.VisiblePanes()
+	assert.Equal(t, visible[0], m.FocusedPane(), "focus should reset to first visible pane after SwitchToPage")
+}
+
 func TestPagePlayer_Value(t *testing.T) {
 	assert.Equal(t, layout.PageID(0), layout.PagePlayer)
 }

@@ -20,11 +20,21 @@ type Preset struct {
 	Grid    []Row
 }
 
-// Player page presets
+// Preset name constants — use these instead of string literals to avoid
+// typos and enable compiler-verified refactors.
+const (
+	PresetNameDashboard        = "Dashboard"
+	PresetNameListening        = "Listening"
+	PresetNamePodcast          = "Podcast"
+	PresetNameLibrary          = "Library"
+	PresetNameDiscovery        = "Discovery"
+	PresetNamePodcastDashboard = "Podcast Dashboard"
+	PresetNameStats            = "Stats"
+)
 
 // PresetDashboard shows all 8 Player page panes across 3 rows.
 var PresetDashboard = Preset{
-	Name: "Dashboard",
+	Name: PresetNameDashboard,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PaneQueue: true, PanePlaylists: true,
 		PaneAlbums: true, PaneLikedSongs: true, PaneRecentlyPlayed: true,
@@ -48,7 +58,7 @@ var PresetDashboard = Preset{
 
 // PresetListening shows NowPlaying expanded with Queue and RecentlyPlayed below.
 var PresetListening = Preset{
-	Name: "Listening",
+	Name: PresetNameListening,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PaneQueue: true, PaneRecentlyPlayed: true,
 	},
@@ -63,7 +73,7 @@ var PresetListening = Preset{
 
 // PresetPodcast shows NowPlaying with FollowedShows and Queue.
 var PresetPodcast = Preset{
-	Name: "Podcast",
+	Name: PresetNamePodcast,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PaneFollowedShows: true, PaneQueue: true,
 	},
@@ -78,7 +88,7 @@ var PresetPodcast = Preset{
 
 // PresetLibrary shows a compact NowPlaying strip with the full library below.
 var PresetLibrary = Preset{
-	Name: "Library",
+	Name: PresetNameLibrary,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PanePlaylists: true, PaneAlbums: true, PaneLikedSongs: true,
 	},
@@ -94,7 +104,7 @@ var PresetLibrary = Preset{
 
 // PresetDiscovery shows a compact NowPlaying strip with discovery panes below.
 var PresetDiscovery = Preset{
-	Name: "Discovery",
+	Name: PresetNameDiscovery,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PaneTopTracks: true, PaneTopArtists: true, PaneRecentlyPlayed: true,
 	},
@@ -110,7 +120,7 @@ var PresetDiscovery = Preset{
 
 // PresetPodcastDashboard shows NowPlaying with FollowedShows, SavedEpisodes, and Queue.
 var PresetPodcastDashboard = Preset{
-	Name: "Podcast Dashboard",
+	Name: PresetNamePodcastDashboard,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying: true, PaneFollowedShows: true, PaneSavedEpisodes: true, PaneQueue: true,
 	},
@@ -134,7 +144,7 @@ var PagePlayerPresets = []Preset{PresetDashboard, PresetListening, PresetPodcast
 // (Health, Traffic, Live with weights 1:1:3 → ~20%/20%/60%), and NetworkLog
 // full-width below. All five panes are individually toggleable via keys 1-5.
 var PresetStats = Preset{
-	Name: "Stats",
+	Name: PresetNameStats,
 	Visible: map[PaneID]bool{
 		PaneNowPlaying:     true,
 		PaneGatewayHealth:  true,

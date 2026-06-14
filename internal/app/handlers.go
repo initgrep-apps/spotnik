@@ -1614,9 +1614,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Switch to podcast preset if on a music preset.
 			presetName := a.layout.ActivePresetName()
-			if presetName != "Podcast" && presetName != "Podcast Dashboard" {
+			if presetName != layout.PresetNamePodcast && presetName != layout.PresetNamePodcastDashboard {
 				for i, p := range layout.PagePlayerPresets {
-					if p.Name == "Podcast" {
+					if p.Name == layout.PresetNamePodcast {
 						a.layout.SwitchToPage(layout.PagePlayer)
 						a.layout.SetPreset(i)
 						break
