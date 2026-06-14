@@ -36,10 +36,7 @@ type appKeyMap struct {
 // StatusBar.Render() uses bubbles/help in short-help mode (ShowAll stays false)
 // so this method drives the single-row output seen at the bottom of the app.
 func (k appKeyMap) ShortHelp() []key.Binding {
-	if k.activePage == layout.PageMusic {
-		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
-	}
-	if k.activePage == layout.PagePodcasts {
+	if k.activePage == layout.PagePlayer {
 		return []key.Binding{k.Search, k.Page, k.Preset, k.Toggle, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
 	}
 	return []key.Binding{k.Search, k.Page, k.Pane, k.Devices, k.Profile, k.Theme, k.Help, k.Quit}
@@ -49,16 +46,7 @@ func (k appKeyMap) ShortHelp() []key.Binding {
 // Each inner slice is one column rendered vertically; columns are joined horizontally.
 // Column 3 (Pane/Devices/Profile) has 3 entries — Devices and Profile are overlay shortcuts.
 func (k appKeyMap) FullHelp() [][]key.Binding {
-	if k.activePage == layout.PageMusic {
-		return [][]key.Binding{
-			{k.Search, k.Page},
-			{k.Preset, k.Toggle},
-			{k.Pane, k.Devices, k.Profile},
-			{k.Theme, k.Help},
-			{k.Quit},
-		}
-	}
-	if k.activePage == layout.PagePodcasts {
+	if k.activePage == layout.PagePlayer {
 		return [][]key.Binding{
 			{k.Search, k.Page},
 			{k.Preset, k.Toggle},
@@ -559,12 +547,10 @@ func truncateDeviceName(name string) string {
 // pageLabel converts a layout.PageID to its display label.
 func pageLabel(page layout.PageID) string {
 	switch page {
-	case layout.PageMusic:
-		return "Music"
+	case layout.PagePlayer:
+		return "Player"
 	case layout.PageStats:
 		return "Stats"
-	case layout.PagePodcasts:
-		return "Podcasts"
 	default:
 		return "?"
 	}

@@ -235,3 +235,17 @@ func formatSavedDate(isoStr string) string {
 	}
 	return components.FormatRelativeTime(t)
 }
+
+func formatDurationMsH(ms int) string {
+	if ms <= 0 {
+		return "\u2014"
+	}
+	totalSec := ms / 1000
+	hours := totalSec / 3600
+	minutes := (totalSec % 3600) / 60
+	seconds := totalSec % 60
+	if hours > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
+	}
+	return fmt.Sprintf("%d:%02d", minutes, seconds)
+}
