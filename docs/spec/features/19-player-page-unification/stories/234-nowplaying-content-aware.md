@@ -1,7 +1,7 @@
 ---
 title: "NowPlaying: content-aware rendering (track + episode)"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
