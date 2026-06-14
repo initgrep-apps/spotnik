@@ -1892,6 +1892,172 @@ func TestNowPlayingPane_View_NilState_EmptyState(t *testing.T) {
 	assert.Contains(t, output, "Nothing playing", "nil state should render empty state")
 }
 
+// TestNowPlayingPane_Title_EpisodeCompact_ProgressFormat verifies that the compact
+// episode title formats progress as "current/total" (e.g. "12:30/45:00"), not
+// "glyph/current total" (e.g. "⏸/12:30 45:00").
+func TestNowPlayingPane_Title_EpisodeCompact_ProgressFormat(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(80, 6)           // height < 8 triggers compact title
+	pane.localProgressMs = 750000 // 12:30
+
+	title := pane.Title()
+	assert.Contains(t, title, "12:30/45:00", "compact episode title should format progress as current/total")
+}
+
+// TestNowPlayingPane_View_EpisodeTypeWithNilEpisode_EmptyState verifies that View()
+// returns the empty state when CurrentlyPlayingType is "episode" but Episode is nil.
+func TestNowPlayingPane_View_EpisodeTypeWithNilEpisode_EmptyState(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "episode",
+		ProgressMs:           0,
+		Episode:              nil,
+	})
+	th := theme.Load("black")
+	pane := NewNowPlayingPane(s, th, true)
+	pane.SetSize(80, 24)
+
+	output := pane.View()
+	assert.Contains(t, output, "Nothing playing", "episode type with nil Episode should show empty state")
+}
+
+// TestNowPlayingPane_Title_EpisodeTypeWithNilEpisode_ReturnsDefault verifies that
+// Title() returns "Now Playing" when CurrentlyPlayingType is "episode" but Episode is nil.
+func TestNowPlayingPane_Title_EpisodeTypeWithNilEpisode_ReturnsDefault(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "episode",
+		ProgressMs:           0,
+		Episode:              nil,
+	})
+	th := theme.Load("black")
+	pane := NewNowPlayingPane(s, th, true)
+	pane.SetSize(80, 24)
+
+	title := pane.Title()
+	assert.Equal(t, "Now Playing", title, "episode type with nil Episode should return default title")
+}
+
+// TestNowPlayingPane_Title_TrackTypeWithNilItem_ReturnsDefault verifies that
+// Title() returns "Now Playing" when CurrentlyPlayingType is "track" but Item is nil.
+func TestNowPlayingPane_Title_TrackTypeWithNilItem_ReturnsDefault(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           0,
+		Item:                 nil,
+	})
+	th := theme.Load("black")
+	pane := NewNowPlayingPane(s, th, true)
+	pane.SetSize(80, 24)
+
+	title := pane.Title()
+	assert.Equal(t, "Now Playing", title, "track type with nil Item should return default title")
+}
+
+// TestNowPlayingPane_EpisodeMode_NilShow_NoPanic verifies that View(), Title(),
+// and buildEpisodeInfoLines don't panic when the episode's Show pointer is nil.
+func TestNowPlayingPane_EpisodeMode_NilShow_NoPanic(t *testing.T) {
+	s := state.New()
+	s.SetPlaybackState(&api.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "episode",
+		ProgressMs:           30000,
+		Episode: &api.Episode{
+			ID:          "ep-nil-show",
+			Name:        "Mystery Episode",
+			DurationMs:  1800000,
+			ReleaseDate: "2026-01-15",
+			Show:        nil,
+		},
+		Device: &api.Device{ID: "dev-1", Name: "Speaker", VolumePercent: 50},
+	})
+	th := theme.Load("black")
+
+	t.Run("View", func(t *testing.T) {
+		pane := NewNowPlayingPane(s, th, true)
+		pane.SetSize(80, 24)
+		assert.NotPanics(t, func() {
+			_ = pane.View()
+		}, "View() must not panic when Episode.Show is nil")
+	})
+
+	t.Run("Title compact", func(t *testing.T) {
+		pane := NewNowPlayingPane(s, th, true)
+		pane.SetSize(80, 6)
+		assert.NotPanics(t, func() {
+			title := pane.Title()
+			assert.Contains(t, title, "Mystery Episode", "compact title should include episode name even with nil Show")
+			assert.NotContains(t, title, "Tech Talks Daily", "compact title should not show name when Show is nil")
+		}, "Title() in compact mode must not panic when Episode.Show is nil")
+	})
+
+	t.Run("Title normal", func(t *testing.T) {
+		pane := NewNowPlayingPane(s, th, true)
+		pane.SetSize(80, 24)
+		title := pane.Title()
+		assert.Contains(t, title, "⏵ Podcast", "normal title should include Podcast notch even with nil Show")
+	})
+}
+
+// TestNowPlayingPane_EpisodeMode_NarrowFallback verifies that at narrow width
+// the episode InfoBox is dropped (no "Episode Info" in output).
+func TestNowPlayingPane_EpisodeMode_NarrowFallback(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	// cw=16; infoWidth=max(16/3,28)=28; vizWidth=16-28-1=-13 < 10 → InfoBox dropped
+	pane.SetSize(16, 16)
+
+	output := pane.View()
+	assert.NotContains(t, output, "╭", "episode narrow fallback should not contain InfoBox corners")
+	assert.NotContains(t, output, "Episode Info", "episode narrow fallback should not contain InfoBox title")
+}
+
+// TestNowPlayingPane_EpisodeMode_MinimumSize verifies that episode mode doesn't
+// panic and returns non-empty output at extremely small sizes.
+func TestNowPlayingPane_EpisodeMode_MinimumSize(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+
+	for _, sz := range [][2]int{{1, 1}, {4, 4}, {10, 6}} {
+		sz := sz
+		t.Run("", func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				pane.SetSize(sz[0], sz[1])
+				out := pane.View()
+				assert.NotEmpty(t, out,
+					"episode View() must return non-empty string at SetSize(%d, %d)", sz[0], sz[1])
+			}, "episode View() must not panic at SetSize(%d, %d)", sz[0], sz[1])
+		})
+	}
+}
+
+// TestNowPlayingPane_EpisodeMode_NormalWidthIsOverlay verifies that at a normal
+// width (120×20) the episode InfoBox ("Episode Info") is rendered.
+func TestNowPlayingPane_EpisodeMode_NormalWidthIsOverlay(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+	pane.SetSize(120, 20)
+
+	output := pane.View()
+	stripped := ansi.Strip(output)
+	assert.Contains(t, stripped, "╭",
+		"episode normal width should contain InfoBox top-left corner")
+	assert.Contains(t, stripped, "Episode Info",
+		"episode normal width should contain 'Episode Info' title")
+}
+
+// TestNowPlayingPane_SeekArrowLeft_EpisodePlaying verifies that the left arrow
+// seek key works correctly when an episode is playing (returns non-nil cmd).
+func TestNowPlayingPane_SeekArrowLeft_EpisodePlaying(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
+
+	leftMsg := tea.KeyMsg{Type: tea.KeyLeft}
+	_, cmd := pane.Update(leftMsg)
+
+	require.NotNil(t, cmd, "left arrow seek should return a cmd when episode is playing")
+}
+
 // TestNowPlayingPane_View_TrackModeWithExplicitType verifies View() renders track
 // when CurrentlyPlayingType is explicitly "track".
 func TestNowPlayingPane_View_TrackModeWithExplicitType(t *testing.T) {

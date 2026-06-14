@@ -131,7 +131,7 @@ func (p *NowPlayingPane) Title() string {
 			midDot := uikit.GlyphFor(uikit.GlyphSeparator, m)
 			current := formatDurationMs(p.localProgressMs)
 			total := formatDurationMs(ep.DurationMs)
-			return fmt.Sprintf("Now Playing%s %s %s %s %s %s %s/%s %s",
+			return fmt.Sprintf("Now Playing%s %s %s %s %s %s %s %s/%s",
 				podcastNotch, sep, ep.Name, midDot, showName, sep, stateGlyph, current, total)
 		}
 		return fmt.Sprintf("Now Playing%s", podcastNotch)
