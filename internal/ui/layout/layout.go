@@ -17,19 +17,17 @@ type Manager struct {
 	statusHeight int // 3 lines (bubbles/help bar: border + 1 content row + border)
 }
 
-// NewManager creates a Manager with default presets and Music page active.
+// NewManager creates a Manager with default presets and Player page active.
 func NewManager() *Manager {
 	m := &Manager{
-		activePage: PageMusic,
+		activePage: PagePlayer,
 		presets: map[PageID][]Preset{
-			PageMusic:    PageMusicPresets,
-			PageStats:    PageStatsPresets,
-			PagePodcasts: PagePodcastsPresets,
+			PagePlayer: PagePlayerPresets,
+			PageStats:  PageStatsPresets,
 		},
 		activePreset: map[PageID]int{
-			PageMusic:    0,
-			PageStats:    0,
-			PagePodcasts: 0,
+			PagePlayer: 0,
+			PageStats:  0,
 		},
 		hidden:       make(map[PaneID]bool),
 		rects:        make(map[PaneID]Rect),
@@ -234,17 +232,27 @@ func (m *Manager) ActivePresetName() string {
 	return presets[idx].Name
 }
 
-// TogglePage cycles through PageMusic, PagePodcasts, and PageStats.
+// TogglePage cycles between Player and Stats (2-page cycle).
 // Resets hidden map and recomputes layout.
 func (m *Manager) TogglePage() {
 	switch m.activePage {
-	case PageMusic:
-		m.activePage = PagePodcasts
-	case PagePodcasts:
+	case PagePlayer:
 		m.activePage = PageStats
 	default:
-		m.activePage = PageMusic
+		m.activePage = PagePlayer
 	}
+	m.hidden = make(map[PaneID]bool)
+	m.focusIndex = 0
+	m.recompute()
+}
+
+// SwitchToPage switches directly to a specific page.
+// Resets hidden map and recomputes layout. No-op if already on that page.
+func (m *Manager) SwitchToPage(page PageID) {
+	if m.activePage == page {
+		return
+	}
+	m.activePage = page
 	m.hidden = make(map[PaneID]bool)
 	m.focusIndex = 0
 	m.recompute()

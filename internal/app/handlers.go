@@ -533,16 +533,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
 			{&a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
 			{&a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
-			{&a.showEpisodesPoll, podcastIntervals,
-				func() bool { return a.store.ShowEpisodesFetching() || a.store.SelectedShowID() == "" },
-				func(b bool) { a.store.SetShowEpisodesFetching(b) },
-				func() tea.Cmd {
-					id := a.store.SelectedShowID()
-					if id == "" {
-						return nil
-					}
-					return a.buildFetchShowEpisodesCmd(id)
-				}},
 		} {
 			p := entry.p
 			if p.backoffTicks > 0 {
@@ -826,22 +816,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				playbackCmds = append(playbackCmds, cmd)
 			}
 		}
-		if ppp := a.podcastPlaybackPane(); ppp != nil {
-			updatedPane, cmd := ppp.Update(m)
-			if pp, ok := updatedPane.(*panes.PodcastPlaybackPane); ok {
-				a.panes[layout.PanePodcastPlayback] = pp
-			}
-			if cmd != nil {
-				playbackCmds = append(playbackCmds, cmd)
-			}
-		}
 		// Auto-load show episodes when an episode is playing.
 		if m.State != nil && m.State.CurrentlyPlayingType == "episode" && m.State.Episode != nil && m.State.Episode.Show != nil {
 			showID := m.State.Episode.Show.ID
 			if a.store.SelectedShowID() != showID {
 				a.store.SetSelectedShowID(showID)
 				a.store.SetSelectedShow(m.State.Episode.Show)
-				if a.layout.ActivePage() == layout.PagePodcasts || !a.store.ShowEpisodesLoaded() {
+				if !a.store.ShowEpisodesLoaded() {
 					playbackCmds = append(playbackCmds, a.buildFetchShowEpisodesCmd(showID))
 				}
 			}
@@ -1595,45 +1576,22 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if errors.Is(m.Err, errNilClient) {
 				return a, nil
 			}
-			a.showEpisodesPoll.errorCount++
-			a.showEpisodesPoll.backoffTicks = calcBackoffTicks(a.showEpisodesPoll.errorCount)
 			a.store.SetShowEpisodesFetchError(m.Err)
-			if a.showEpisodesPoll.errorCount == 1 {
-				return a, a.toasts.Cmd(uikit.Toast{
-					Intent: uikit.ToastError,
-					Title:  "Failed to load show episodes",
-					Body:   "Retrying automatically.",
-				})
-			}
-			return a, nil
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to load show episodes",
+				Body:   "Retrying automatically.",
+			})
 		}
-		a.showEpisodesPoll.errorCount = 0
-		a.showEpisodesPoll.backoffTicks = 0
-		a.showEpisodesPoll.hasData = true
 		a.store.ClearShowEpisodesFetchError()
 		if m.Items != nil {
 			a.store.SetShowEpisodes(m.Items)
 		}
 		a.store.SetShowEpisodesTotal(m.Total)
-		var cmds []tea.Cmd
-		if ep := a.showEpisodesPane(); ep != nil {
-			updated, cmd := ep.Update(m)
-			if epu, ok := updated.(*panes.ShowEpisodesPane); ok {
-				a.panes[layout.PaneShowEpisodes] = epu
-			}
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-		if len(cmds) > 0 {
-			return a, tea.Batch(cmds...)
-		}
 		return a, nil
 
 	case panes.SelectedShowChangedMsg:
 		a.store.SetSelectedShowID(m.ShowID)
-		// Resolve the full show from the followed-shows cache so the
-		// ShowEpisodesPane can show metadata immediately while episodes load.
 		for _, ss := range a.store.FollowedShows() {
 			if ss.Show.ID == m.ShowID {
 				showCopy := ss.Show
@@ -1650,14 +1608,20 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if app != nil {
 				a = app
 			}
-			// Navigate to Podcasts page from wherever we are.
-			// TogglePage cycles Music→Podcasts→Stats→Music.
-			switch a.layout.ActivePage() {
-			case layout.PageMusic:
-				a.layout.TogglePage() // → Podcasts
-			case layout.PageStats:
-				a.layout.TogglePage() // → Music
-				a.layout.TogglePage() // → Podcasts
+			// Navigate to Player page from Stats.
+			if a.layout.ActivePage() == layout.PageStats {
+				a.layout.TogglePage()
+			}
+			// Switch to podcast preset if on a music preset.
+			presetName := a.layout.ActivePresetName()
+			if presetName != "Podcast" && presetName != "Podcast Dashboard" {
+				for i, p := range layout.PagePlayerPresets {
+					if p.Name == "Podcast" {
+						a.layout.SwitchToPage(layout.PagePlayer)
+						a.layout.SetPreset(i)
+						break
+					}
+				}
 			}
 			if m.IsEpisode {
 				return a, tea.Batch(
@@ -1720,8 +1684,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, tea.Batch(
 		a.forwardToPane(layout.PanePlaylists, msg),
 		a.forwardToPane(layout.PaneAlbums, msg),
-		a.forwardToPane(layout.PanePodcastPlayback, msg),
-		a.forwardToPane(layout.PaneShowEpisodes, msg),
 		a.forwardToPane(layout.PaneFollowedShows, msg),
 		a.forwardToPane(layout.PaneSavedEpisodes, msg),
 	)

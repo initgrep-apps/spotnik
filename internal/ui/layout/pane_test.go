@@ -53,7 +53,7 @@ func TestPaneIDs_StatsPageConstants_AreDistinct(t *testing.T) {
 }
 
 func TestPageID_Constants(t *testing.T) {
-	assert.Equal(t, layout.PageID(0), layout.PageMusic)
+	assert.Equal(t, layout.PageID(0), layout.PagePlayer)
 	assert.Equal(t, layout.PageID(1), layout.PageStats)
 }
 

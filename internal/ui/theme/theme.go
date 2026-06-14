@@ -87,20 +87,18 @@ type Theme interface {
 	PresetIndicator() lipgloss.Color // Preset label in header
 
 	// Per-pane borders — distinct accent colour per pane, btop-style identity (Feature 42)
-	PaneBorderNowPlaying() lipgloss.Color      // Green accent
-	PaneBorderQueue() lipgloss.Color           // Yellow accent
-	PaneBorderPlaylists() lipgloss.Color       // Blue accent
-	PaneBorderAlbums() lipgloss.Color          // Cyan accent
-	PaneBorderLikedSongs() lipgloss.Color      // Green accent
-	PaneBorderRecentlyPlayed() lipgloss.Color  // Teal accent
-	PaneBorderTopTracks() lipgloss.Color       // Purple accent
-	PaneBorderTopArtists() lipgloss.Color      // Pink/red accent
-	PaneBorderRequestFlow() lipgloss.Color     // Orange/amber accent
-	PaneBorderNetworkLog() lipgloss.Color      // Warm grey accent
-	PaneBorderPodcastPlayback() lipgloss.Color // Pink accent
-	PaneBorderShowEpisodes() lipgloss.Color    // Purple accent
-	PaneBorderFollowedShows() lipgloss.Color   // Orange accent
-	PaneBorderSavedEpisodes() lipgloss.Color   // Red accent
+	PaneBorderNowPlaying() lipgloss.Color     // Green accent
+	PaneBorderQueue() lipgloss.Color          // Yellow accent
+	PaneBorderPlaylists() lipgloss.Color      // Blue accent
+	PaneBorderAlbums() lipgloss.Color         // Cyan accent
+	PaneBorderLikedSongs() lipgloss.Color     // Green accent
+	PaneBorderRecentlyPlayed() lipgloss.Color // Teal accent
+	PaneBorderTopTracks() lipgloss.Color      // Purple accent
+	PaneBorderTopArtists() lipgloss.Color     // Pink/red accent
+	PaneBorderRequestFlow() lipgloss.Color    // Orange/amber accent
+	PaneBorderNetworkLog() lipgloss.Color     // Warm grey accent
+	PaneBorderFollowedShows() lipgloss.Color  // Orange accent
+	PaneBorderSavedEpisodes() lipgloss.Color  // Red accent
 
 	// Column colors — distinct foreground for each table column semantic (Feature 70)
 	ColumnIndex() lipgloss.Color     // # column (muted but colorful)

@@ -20,9 +20,9 @@ type Preset struct {
 	Grid    []Row
 }
 
-// Music page presets (DESIGN.md §4)
+// Player page presets
 
-// PresetDashboard shows all 8 Music page panes across 3 rows.
+// PresetDashboard shows all 8 Player page panes across 3 rows.
 var PresetDashboard = Preset{
 	Name: "Dashboard",
 	Visible: map[PaneID]bool{
@@ -61,6 +61,21 @@ var PresetListening = Preset{
 	},
 }
 
+// PresetPodcast shows NowPlaying with FollowedShows and Queue.
+var PresetPodcast = Preset{
+	Name: "Podcast",
+	Visible: map[PaneID]bool{
+		PaneNowPlaying: true, PaneFollowedShows: true, PaneQueue: true,
+	},
+	Grid: []Row{
+		{HeightWeight: 2, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PaneFollowedShows, WidthWeight: 55},
+			{PaneID: PaneQueue, WidthWeight: 45},
+		}},
+	},
+}
+
 // PresetLibrary shows a compact NowPlaying strip with the full library below.
 var PresetLibrary = Preset{
 	Name: "Library",
@@ -93,6 +108,26 @@ var PresetDiscovery = Preset{
 	},
 }
 
+// PresetPodcastDashboard shows NowPlaying with FollowedShows, SavedEpisodes, and Queue.
+var PresetPodcastDashboard = Preset{
+	Name: "Podcast Dashboard",
+	Visible: map[PaneID]bool{
+		PaneNowPlaying: true, PaneFollowedShows: true, PaneSavedEpisodes: true, PaneQueue: true,
+	},
+	Grid: []Row{
+		{HeightWeight: 2, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
+		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PaneFollowedShows, WidthWeight: 1},
+			{PaneID: PaneSavedEpisodes, WidthWeight: 1},
+			{PaneID: PaneQueue, WidthWeight: 1},
+		}},
+	},
+}
+
+// PagePlayerPresets is the ordered list of presets for the Player page.
+// Index 0 is the default (Dashboard).
+var PagePlayerPresets = []Preset{PresetDashboard, PresetListening, PresetPodcast, PresetLibrary, PresetDiscovery, PresetPodcastDashboard}
+
 // Stats page preset
 
 // PresetStats shows NowPlaying strip, three diagnostic panes side-by-side
@@ -122,51 +157,5 @@ var PresetStats = Preset{
 	},
 }
 
-// PageMusicPresets is the ordered list of presets for the Music page.
-// Index 0 is the default (Dashboard).
-var PageMusicPresets = []Preset{PresetDashboard, PresetListening, PresetLibrary, PresetDiscovery}
-
 // PageStatsPresets is the ordered list of presets for the Stats page.
 var PageStatsPresets = []Preset{PresetStats}
-
-// Podcasts page presets
-
-// PresetPodcastListening shows podcast playback in the upper row and
-// followed shows + show episodes side-by-side below.
-var PresetPodcastListening = Preset{
-	Name: "Listening",
-	Visible: map[PaneID]bool{
-		PanePodcastPlayback: true,
-		PaneShowEpisodes:    true,
-		PaneFollowedShows:   true,
-	},
-	Grid: []Row{
-		{HeightWeight: 2, Cells: []Cell{{PaneID: PanePodcastPlayback, WidthWeight: 1}}},
-		{HeightWeight: 3, Cells: []Cell{
-			{PaneID: PaneFollowedShows, WidthWeight: 55},
-			{PaneID: PaneShowEpisodes, WidthWeight: 45},
-		}},
-	},
-}
-
-// PresetPodcastDashboard shows all 4 podcast panes with equal-width bottom row.
-var PresetPodcastDashboard = Preset{
-	Name: "Dashboard",
-	Visible: map[PaneID]bool{
-		PanePodcastPlayback: true,
-		PaneShowEpisodes:    true,
-		PaneFollowedShows:   true,
-		PaneSavedEpisodes:   true,
-	},
-	Grid: []Row{
-		{HeightWeight: 2, Cells: []Cell{{PaneID: PanePodcastPlayback, WidthWeight: 1}}},
-		{HeightWeight: 3, Cells: []Cell{
-			{PaneID: PaneShowEpisodes, WidthWeight: 1},
-			{PaneID: PaneFollowedShows, WidthWeight: 1},
-			{PaneID: PaneSavedEpisodes, WidthWeight: 1},
-		}},
-	},
-}
-
-// PagePodcastsPresets is the ordered list of presets for the Podcasts page.
-var PagePodcastsPresets = []Preset{PresetPodcastListening, PresetPodcastDashboard}
