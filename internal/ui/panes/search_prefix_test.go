@@ -11,14 +11,16 @@ import (
 
 // --- Task 1: searchPrefixes, prefixToTab, prefixState ---
 
-// TestSearchPrefixes_AllFourDefined verifies all 4 command prefixes are defined.
-func TestSearchPrefixes_AllFourDefined(t *testing.T) {
+// TestSearchPrefixes_AllSixDefined verifies all 6 command prefixes are defined.
+func TestSearchPrefixes_AllSixDefined(t *testing.T) {
 	prefixes := panes.SearchPrefixes
-	require.Len(t, prefixes, 4, "should have exactly 4 prefixes")
+	require.Len(t, prefixes, 6, "should have exactly 6 prefixes")
 	assert.Contains(t, prefixes, ":songs")
 	assert.Contains(t, prefixes, ":artists")
 	assert.Contains(t, prefixes, ":albums")
 	assert.Contains(t, prefixes, ":playlists")
+	assert.Contains(t, prefixes, ":shows")
+	assert.Contains(t, prefixes, ":episodes")
 }
 
 // TestPrefixToTab_MapsAllEntries verifies each prefix maps to the correct tab.
@@ -187,9 +189,9 @@ func TestActiveAPITypes_NoPrefix(t *testing.T) {
 		o, _ = sendKey(t, o, string(ch))
 	}
 
-	// Default activeTab is TabAll — all 4 types.
+	// Default activeTab is TabAll — all 6 types.
 	types := o.ActiveAPITypes()
-	assert.Equal(t, []string{"track", "artist", "album", "playlist"}, types)
+	assert.Equal(t, []string{"track", "artist", "album", "playlist", "show", "episode"}, types)
 }
 
 // --- Task 4: renderPrefixHints() — removed in story 212 (always returns "") ---
@@ -479,9 +481,9 @@ func TestCycleTabForward_UsesCleanQueryWhenPrefixLocked(t *testing.T) {
 
 // --- Part 1: Animated cycling placeholder ---
 
-// TestSearchPlaceholders_FourEntries verifies all 4 placeholder messages are defined.
-func TestSearchPlaceholders_FourEntries(t *testing.T) {
-	require.Len(t, panes.SearchPlaceholders, 4, "should have exactly 4 placeholder messages")
+// TestSearchPlaceholders_SixEntries verifies all 6 placeholder messages are defined.
+func TestSearchPlaceholders_SixEntries(t *testing.T) {
+	require.Len(t, panes.SearchPlaceholders, 6, "should have exactly 6 placeholder messages")
 }
 
 // TestSearchPlaceholders_EachStartsWithPrefix verifies each placeholder entry's
@@ -555,11 +557,11 @@ func TestNewSearchOverlay_ShowSuggestionsEnabled(t *testing.T) {
 	assert.True(t, o.InputShowSuggestions(), "textinput.ShowSuggestions should be enabled")
 }
 
-// TestNewSearchOverlay_SuggestionsContainAllPrefixes verifies all 4 prefixes with trailing space.
+// TestNewSearchOverlay_SuggestionsContainAllPrefixes verifies all 6 prefixes with trailing space.
 func TestNewSearchOverlay_SuggestionsContainAllPrefixes(t *testing.T) {
 	o := newTestSearchOverlay()
 	suggestions := o.InputAvailableSuggestions()
-	require.Len(t, suggestions, 4, "should have exactly 4 suggestions")
+	require.Len(t, suggestions, 6, "should have exactly 6 suggestions")
 	for _, s := range suggestions {
 		assert.True(t, len(s) > 0 && s[len(s)-1] == ' ',
 			"suggestion %q should end with a trailing space", s)
@@ -568,6 +570,8 @@ func TestNewSearchOverlay_SuggestionsContainAllPrefixes(t *testing.T) {
 	assert.Contains(t, suggestions, ":artists ")
 	assert.Contains(t, suggestions, ":albums ")
 	assert.Contains(t, suggestions, ":playlists ")
+	assert.Contains(t, suggestions, ":shows ")
+	assert.Contains(t, suggestions, ":episodes ")
 }
 
 // TestNewSearchOverlay_PlaceholderStyleIsTextMuted verifies PlaceholderStyle uses TextMuted() color.

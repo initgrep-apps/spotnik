@@ -312,6 +312,278 @@ func TestPlayOptions_JSON(t *testing.T) {
 
 // TestPlayOptions_WithOffset_MarshalJSON verifies that PlayOptions with an Offset
 // field marshals to the expected JSON and that zero Offset is omitted.
+// TestShow_Fields verifies that Show fields marshal/unmarshal correctly.
+func TestShow_Fields(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		want    Show
+		wantErr bool
+	}{
+		{
+			name: "full show with all fields",
+			json: `{
+				"id": "show-123",
+				"name": "Test Show",
+				"publisher": "Test Publisher",
+				"description": "A test show",
+				"total_episodes": 42,
+				"images": [{"url": "https://example.com/image.jpg", "width": 300, "height": 300}],
+				"media_type": "audio",
+				"explicit": false
+			}`,
+			want: Show{
+				ID:            "show-123",
+				Name:          "Test Show",
+				Publisher:     "Test Publisher",
+				Description:   "A test show",
+				TotalEpisodes: 42,
+				Images:        []AlbumImage{{URL: "https://example.com/image.jpg", Width: 300, Height: 300}},
+				MediaType:     "audio",
+				Explicit:      false,
+			},
+		},
+		{
+			name: "explicit show",
+			json: `{
+				"id": "show-456",
+				"name": "Explicit Show",
+				"publisher": "Pub",
+				"description": "",
+				"total_episodes": 10,
+				"images": [],
+				"media_type": "mixed",
+				"explicit": true
+			}`,
+			want: Show{
+				ID:            "show-456",
+				Name:          "Explicit Show",
+				Publisher:     "Pub",
+				TotalEpisodes: 10,
+				MediaType:     "mixed",
+				Explicit:      true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s Show
+			err := json.Unmarshal([]byte(tt.json), &s)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.ID, s.ID)
+			assert.Equal(t, tt.want.Name, s.Name)
+			assert.Equal(t, tt.want.Publisher, s.Publisher)
+			assert.Equal(t, tt.want.Description, s.Description)
+			assert.Equal(t, tt.want.TotalEpisodes, s.TotalEpisodes)
+			assert.Equal(t, tt.want.MediaType, s.MediaType)
+			assert.Equal(t, tt.want.Explicit, s.Explicit)
+			assert.Equal(t, len(tt.want.Images), len(s.Images))
+			if len(tt.want.Images) > 0 {
+				assert.Equal(t, tt.want.Images[0].URL, s.Images[0].URL)
+			}
+		})
+	}
+}
+
+// TestEpisode_Fields verifies that Episode fields marshal/unmarshal correctly.
+func TestEpisode_Fields(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		want    Episode
+		wantErr bool
+	}{
+		{
+			name: "full episode with all fields",
+			json: `{
+				"id": "ep-123",
+				"name": "Test Episode",
+				"description": "An episode",
+				"html_description": "<p>An episode</p>",
+				"duration_ms": 1800000,
+				"release_date": "2024-01-15",
+				"explicit": false,
+				"is_playable": true,
+				"is_externally_hosted": false,
+				"audio_preview_url": "https://example.com/preview.mp3",
+				"language": "en",
+				"uri": "spotify:episode:ep-123",
+				"show": {"id": "show-123", "name": "Test Show"},
+				"resume_point": {"fully_played": false, "resume_position_ms": 60000},
+				"restrictions": {"reason": ""}
+			}`,
+			want: Episode{
+				ID:                 "ep-123",
+				Name:               "Test Episode",
+				Description:        "An episode",
+				HTMLDescription:    "<p>An episode</p>",
+				DurationMs:         1800000,
+				ReleaseDate:        "2024-01-15",
+				Explicit:           false,
+				IsPlayable:         true,
+				IsExternallyHosted: false,
+				AudioPreviewURL:    "https://example.com/preview.mp3",
+				Language:           "en",
+				URI:                "spotify:episode:ep-123",
+				Show:               &Show{ID: "show-123", Name: "Test Show"},
+				ResumePoint:        ResumePoint{FullyPlayed: false, ResumePositionMs: 60000},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var ep Episode
+			err := json.Unmarshal([]byte(tt.json), &ep)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.ID, ep.ID)
+			assert.Equal(t, tt.want.Name, ep.Name)
+			assert.Equal(t, tt.want.Description, ep.Description)
+			assert.Equal(t, tt.want.HTMLDescription, ep.HTMLDescription)
+			assert.Equal(t, tt.want.DurationMs, ep.DurationMs)
+			assert.Equal(t, tt.want.ReleaseDate, ep.ReleaseDate)
+			assert.Equal(t, tt.want.Explicit, ep.Explicit)
+			assert.Equal(t, tt.want.IsPlayable, ep.IsPlayable)
+			assert.Equal(t, tt.want.IsExternallyHosted, ep.IsExternallyHosted)
+			assert.Equal(t, tt.want.AudioPreviewURL, ep.AudioPreviewURL)
+			assert.Equal(t, tt.want.Language, ep.Language)
+			assert.Equal(t, tt.want.URI, ep.URI)
+			assert.Equal(t, tt.want.ResumePoint, ep.ResumePoint)
+			if tt.want.Show != nil {
+				require.NotNil(t, ep.Show)
+				assert.Equal(t, tt.want.Show.ID, ep.Show.ID)
+				assert.Equal(t, tt.want.Show.Name, ep.Show.Name)
+			}
+		})
+	}
+}
+
+// TestResumePoint_Fields verifies ResumePoint field access and zero values.
+func TestResumePoint_Fields(t *testing.T) {
+	var rp ResumePoint
+	assert.False(t, rp.FullyPlayed)
+	assert.Equal(t, 0, rp.ResumePositionMs)
+
+	rp = ResumePoint{FullyPlayed: true, ResumePositionMs: 120000}
+	assert.True(t, rp.FullyPlayed)
+	assert.Equal(t, 120000, rp.ResumePositionMs)
+}
+
+// TestRestrictions_Fields verifies Restrictions field access and zero values.
+func TestRestrictions_Fields(t *testing.T) {
+	var r Restrictions
+	assert.Empty(t, r.Reason)
+
+	r = Restrictions{Reason: "market"}
+	assert.Equal(t, "market", r.Reason)
+}
+
+// TestPlaybackState_UnmarshalTrack verifies that PlaybackState unmarshals a track item
+// when currently_playing_type is "track".
+func TestPlaybackState_UnmarshalTrack(t *testing.T) {
+	raw := `{
+		"is_playing": true,
+		"progress_ms": 45000,
+		"shuffle_state": false,
+		"repeat_state": "off",
+		"currently_playing_type": "track",
+		"item": {"id": "t1", "name": "Song", "uri": "spotify:track:t1", "duration_ms": 200000, "artists": [], "album": {"id": "al1", "name": "Album"}},
+		"device": {"id": "d1", "name": "MacBook", "type": "Computer", "volume_percent": 70},
+		"context": {"type": "album", "uri": "spotify:album:al1"}
+	}`
+
+	var ps PlaybackState
+	err := json.Unmarshal([]byte(raw), &ps)
+	require.NoError(t, err)
+	assert.True(t, ps.IsPlaying)
+	assert.Equal(t, 45000, ps.ProgressMs)
+	assert.Equal(t, "track", ps.CurrentlyPlayingType)
+	require.NotNil(t, ps.Item)
+	assert.Equal(t, "t1", ps.Item.ID)
+	assert.Nil(t, ps.Episode, "Episode should be nil when currently_playing_type is track")
+	require.NotNil(t, ps.Device)
+	assert.Equal(t, "MacBook", ps.Device.Name)
+	require.NotNil(t, ps.Context)
+	assert.Equal(t, "album", ps.Context.Type)
+}
+
+// TestPlaybackState_UnmarshalEpisode verifies that PlaybackState unmarshals an episode
+// item when currently_playing_type is "episode".
+func TestPlaybackState_UnmarshalEpisode(t *testing.T) {
+	raw := `{
+		"is_playing": true,
+		"progress_ms": 60000,
+		"shuffle_state": false,
+		"repeat_state": "off",
+		"currently_playing_type": "episode",
+		"item": {
+			"id": "ep-123",
+			"name": "Podcast Episode",
+			"description": "A great episode",
+			"duration_ms": 1800000,
+			"release_date": "2024-01-15",
+			"explicit": false,
+			"is_playable": true,
+			"is_externally_hosted": false,
+			"audio_preview_url": "",
+			"language": "en",
+			"uri": "spotify:episode:ep-123",
+			"show": {"id": "show-1", "name": "My Show"},
+			"resume_point": {"fully_played": false, "resume_position_ms": 60000},
+			"restrictions": {"reason": ""}
+		},
+		"device": {"id": "d1", "name": "iPhone", "type": "Smartphone", "volume_percent": 80},
+		"context": {"type": "show", "uri": "spotify:show:show-1"}
+	}`
+
+	var ps PlaybackState
+	err := json.Unmarshal([]byte(raw), &ps)
+	require.NoError(t, err)
+	assert.True(t, ps.IsPlaying)
+	assert.Equal(t, 60000, ps.ProgressMs)
+	assert.Equal(t, "episode", ps.CurrentlyPlayingType)
+	assert.Nil(t, ps.Item, "Item should be nil when currently_playing_type is episode")
+	require.NotNil(t, ps.Episode)
+	assert.Equal(t, "ep-123", ps.Episode.ID)
+	assert.Equal(t, "Podcast Episode", ps.Episode.Name)
+	assert.Equal(t, "A great episode", ps.Episode.Description)
+	assert.Equal(t, 1800000, ps.Episode.DurationMs)
+	require.NotNil(t, ps.Episode.Show)
+	assert.Equal(t, "show-1", ps.Episode.Show.ID)
+	require.NotNil(t, ps.Context)
+	assert.Equal(t, "show", ps.Context.Type)
+}
+
+// TestPlaybackState_UnmarshalNilItem verifies that PlaybackState handles a null item.
+func TestPlaybackState_UnmarshalNilItem(t *testing.T) {
+	raw := `{
+		"is_playing": false,
+		"progress_ms": 0,
+		"shuffle_state": false,
+		"repeat_state": "off",
+		"currently_playing_type": "unknown",
+		"item": null,
+		"device": null
+	}`
+
+	var ps PlaybackState
+	err := json.Unmarshal([]byte(raw), &ps)
+	require.NoError(t, err)
+	assert.False(t, ps.IsPlaying)
+	assert.Equal(t, "unknown", ps.CurrentlyPlayingType)
+	assert.Nil(t, ps.Item)
+	assert.Nil(t, ps.Episode)
+}
+
 func TestPlayOptions_WithOffset_MarshalJSON(t *testing.T) {
 	tests := []struct {
 		name       string

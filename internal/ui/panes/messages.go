@@ -394,6 +394,15 @@ type SearchLoadingMsg struct {
 	IsFirstPage bool
 }
 
+// SearchResultSelectedMsg is emitted by the search overlay when the user presses
+// Enter on a show or episode result. The root app model uses IsShow/IsEpisode
+// to route to the podcasts page or play the episode directly.
+type SearchResultSelectedMsg struct {
+	URI       string
+	IsShow    bool
+	IsEpisode bool
+}
+
 // SearchPageLoadedMsg is sent by the root app model after a single page of search
 // results has loaded. Query and Page are staleness keys — app.go discards this message
 // if either does not match the current search session. Results carries the pre-converted
@@ -410,6 +419,66 @@ type SearchPageLoadedMsg struct {
 	Total int
 	// Err is non-nil if the fetch failed.
 	Err error
+}
+
+// Podcast messages
+
+// FetchFollowedShowsRequestMsg is emitted by the FollowedShowsPane when it needs to
+// load followed shows from the API.
+type FetchFollowedShowsRequestMsg struct{}
+
+// FetchSavedEpisodesRequestMsg is emitted by the SavedEpisodesPane when it needs to
+// load saved episodes from the API.
+type FetchSavedEpisodesRequestMsg struct{}
+
+// FetchShowEpisodesRequestMsg is emitted by the FollowedShowsPane or the app layer
+// when episodes for a specific show need to be loaded from the API.
+type FetchShowEpisodesRequestMsg struct {
+	ShowID string
+}
+
+// FollowedShowsLoadedMsg is sent by the root app model after followed shows have
+// been fetched. Items carries the fetched shows; Err is non-nil on failure.
+// Update() writes Items to the store.
+type FollowedShowsLoadedMsg struct {
+	Items []domain.SavedShow
+	Err   error
+}
+
+// SavedEpisodesLoadedMsg is sent by the root app model after saved episodes have
+// been fetched. Items carries the fetched episodes; Err is non-nil on failure.
+// Update() writes Items to the store.
+type SavedEpisodesLoadedMsg struct {
+	Items []domain.SavedEpisode
+	Err   error
+}
+
+// ShowEpisodesLoadedMsg is sent by the root app model after episodes for a show
+// have been fetched. ShowID identifies which show's episodes arrived.
+// Items carries the fetched episodes; Total is the total episode count.
+// HasNext is true when more pages are available. Err is non-nil on failure.
+// Update() writes Items to the store.
+type ShowEpisodesLoadedMsg struct {
+	ShowID  string
+	Items   []domain.Episode
+	Total   int
+	HasNext bool
+	Err     error
+}
+
+// SelectedShowChangedMsg is emitted by the FollowedShowsPane when the user selects
+// a different show. The root app model uses ShowID to update the store and
+// trigger an episode fetch if needed.
+type SelectedShowChangedMsg struct {
+	ShowID string
+}
+
+// PlayEpisodeMsg is emitted by the SavedEpisodesPane or the app layer when the user
+// presses Enter on an episode. EpisodeURI is the URI of the episode to play. PlaylistURI
+// is the show URI for context, empty for saved episodes.
+type PlayEpisodeMsg struct {
+	EpisodeURI  string
+	PlaylistURI string
 }
 
 // PollingSnapshotMsg carries app-level polling state to the PollingTrafficPane.

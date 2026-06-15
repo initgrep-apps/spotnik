@@ -146,8 +146,9 @@ func TestApp_NowPlayingPaneRouting(t *testing.T) {
 
 	// Pre-populate the store so key events do something meaningful.
 	a.Store().SetPlaybackState(&api.PlaybackState{
-		IsPlaying:  true,
-		ProgressMs: 30000,
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		ProgressMs:           30000,
 		Item: &api.Track{
 			ID:         "t1",
 			Name:       "Test Track",
@@ -2495,7 +2496,7 @@ func TestApp_NilPlaybackState_CounterResets(t *testing.T) {
 	}
 
 	// Receive a valid state — counter should reset.
-	validState := &domain.PlaybackState{IsPlaying: true, Item: &domain.Track{ID: "t1"}}
+	validState := &domain.PlaybackState{IsPlaying: true, CurrentlyPlayingType: "track", Item: &domain.Track{ID: "t1"}}
 	m, _ := a.Update(panes.PlaybackStateFetchedMsg{State: validState})
 	a = m.(*app.App)
 

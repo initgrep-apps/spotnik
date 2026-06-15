@@ -245,6 +245,98 @@ func TestStore_SetGetPlayingPlaylistID(t *testing.T) {
 	assert.Equal(t, "pl-abc", s.PlayingPlaylistID())
 }
 
+// --- Podcast data accessors ---
+
+func TestStore_SetGetFollowedShows(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.FollowedShows())
+	assert.False(t, s.FollowedShowsLoaded())
+
+	shows := []domain.SavedShow{
+		{AddedAt: "2024-01-01", Show: domain.Show{ID: "show-1", Name: "Podcast One", Publisher: "Pub A"}},
+		{AddedAt: "2024-02-01", Show: domain.Show{ID: "show-2", Name: "Podcast Two", Publisher: "Pub B"}},
+	}
+	s.SetFollowedShows(shows)
+
+	got := s.FollowedShows()
+	assert.Len(t, got, 2)
+	assert.Equal(t, "show-1", got[0].Show.ID)
+	assert.Equal(t, "Podcast One", got[0].Show.Name)
+	assert.True(t, s.FollowedShowsLoaded(), "FollowedShowsLoaded should be true after SetFollowedShows")
+}
+
+func TestStore_SetGetSavedEpisodes(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.SavedEpisodes())
+	assert.False(t, s.SavedEpisodesLoaded())
+
+	episodes := []domain.SavedEpisode{
+		{AddedAt: "2024-03-01", Episode: domain.Episode{ID: "ep-1", Name: "Episode One", DurationMs: 1800000}},
+		{AddedAt: "2024-03-15", Episode: domain.Episode{ID: "ep-2", Name: "Episode Two", DurationMs: 2400000}},
+	}
+	s.SetSavedEpisodes(episodes)
+
+	got := s.SavedEpisodes()
+	assert.Len(t, got, 2)
+	assert.Equal(t, "ep-1", got[0].Episode.ID)
+	assert.Equal(t, "Episode One", got[0].Episode.Name)
+	assert.True(t, s.SavedEpisodesLoaded(), "SavedEpisodesLoaded should be true after SetSavedEpisodes")
+}
+
+func TestStore_SetGetShowEpisodes(t *testing.T) {
+	s := New()
+
+	assert.Empty(t, s.ShowEpisodes())
+	assert.False(t, s.ShowEpisodesLoaded())
+	assert.Equal(t, 0, s.ShowEpisodesTotal())
+
+	episodes := []domain.Episode{
+		{ID: "ep-1", Name: "Episode One", DurationMs: 1800000, URI: "spotify:episode:ep-1"},
+		{ID: "ep-2", Name: "Episode Two", DurationMs: 2400000, URI: "spotify:episode:ep-2"},
+	}
+	s.SetShowEpisodes(episodes)
+	s.SetShowEpisodesTotal(42)
+
+	got := s.ShowEpisodes()
+	assert.Len(t, got, 2)
+	assert.Equal(t, "ep-1", got[0].ID)
+	assert.Equal(t, "Episode One", got[0].Name)
+	assert.Equal(t, 42, s.ShowEpisodesTotal())
+	assert.True(t, s.ShowEpisodesLoaded(), "ShowEpisodesLoaded should be true after SetShowEpisodes")
+}
+
+func TestStore_SetGetSelectedShowID(t *testing.T) {
+	s := New()
+
+	assert.Equal(t, "", s.SelectedShowID(), "initial selected show ID should be empty")
+
+	s.SetSelectedShowID("show-abc")
+	assert.Equal(t, "show-abc", s.SelectedShowID())
+
+	s.SetSelectedShowID("show-xyz")
+	assert.Equal(t, "show-xyz", s.SelectedShowID())
+}
+
+func TestStore_SetGetSelectedShow(t *testing.T) {
+	s := New()
+
+	assert.Nil(t, s.SelectedShow(), "initial selected show should be nil")
+
+	show := &domain.Show{ID: "show-1", Name: "My Podcast", Publisher: "Pub A", TotalEpisodes: 20}
+	s.SetSelectedShow(show)
+
+	got := s.SelectedShow()
+	assert.NotNil(t, got)
+	assert.Equal(t, "show-1", got.ID)
+	assert.Equal(t, "My Podcast", got.Name)
+	assert.Equal(t, 20, got.TotalEpisodes)
+
+	s.SetSelectedShow(nil)
+	assert.Nil(t, s.SelectedShow(), "selected show should be nil after setting nil")
+}
+
 func TestStore_UserID_Default(t *testing.T) {
 	s := New()
 	assert.Equal(t, "", s.UserID(), "initial user ID should be empty")
@@ -312,6 +404,24 @@ func TestStore_ErrorState(t *testing.T) {
 			set:   func(s *Store) { s.SetPlaylistsError(testErr) },
 			get:   func(s *Store) error { return s.PlaylistsError() },
 			clear: func(s *Store) { s.ClearPlaylistsError() },
+		},
+		{
+			name:  "FollowedShowsFetchError",
+			set:   func(s *Store) { s.SetFollowedShowsFetchError(testErr) },
+			get:   func(s *Store) error { return s.FollowedShowsFetchError() },
+			clear: func(s *Store) { s.ClearFollowedShowsFetchError() },
+		},
+		{
+			name:  "SavedEpisodesFetchError",
+			set:   func(s *Store) { s.SetSavedEpisodesFetchError(testErr) },
+			get:   func(s *Store) error { return s.SavedEpisodesFetchError() },
+			clear: func(s *Store) { s.ClearSavedEpisodesFetchError() },
+		},
+		{
+			name:  "ShowEpisodesFetchError",
+			set:   func(s *Store) { s.SetShowEpisodesFetchError(testErr) },
+			get:   func(s *Store) error { return s.ShowEpisodesFetchError() },
+			clear: func(s *Store) { s.ClearShowEpisodesFetchError() },
 		},
 	}
 
@@ -452,6 +562,31 @@ func TestStore_FetchedAt_Accessors(t *testing.T) {
 
 	s.SetRecentlyPlayed([]domain.PlayHistory{{PlayedAt: "2024-01-01", Track: domain.Track{ID: "t1"}}})
 	assert.False(t, s.RecentPlayedFetchedAt().IsZero(), "SetRecentlyPlayed(nonEmpty) must stamp fetchedAt")
+
+	// Podcast domains: initially zero for all.
+	assert.True(t, s.FollowedShowsFetchedAt().IsZero(), "FollowedShowsFetchedAt initially zero")
+	assert.True(t, s.SavedEpisodesFetchedAt().IsZero(), "SavedEpisodesFetchedAt initially zero")
+	assert.True(t, s.ShowEpisodesFetchedAt().IsZero(), "ShowEpisodesFetchedAt initially zero")
+
+	// Nil/empty sets do NOT stamp fetchedAt.
+	s.SetFollowedShows(nil)
+	assert.True(t, s.FollowedShowsFetchedAt().IsZero(), "SetFollowedShows(nil) must not stamp fetchedAt")
+
+	s.SetSavedEpisodes(nil)
+	assert.True(t, s.SavedEpisodesFetchedAt().IsZero(), "SetSavedEpisodes(nil) must not stamp fetchedAt")
+
+	s.SetShowEpisodes(nil)
+	assert.True(t, s.ShowEpisodesFetchedAt().IsZero(), "SetShowEpisodes(nil) must not stamp fetchedAt")
+
+	// Non-empty sets DO stamp fetchedAt.
+	s.SetFollowedShows([]domain.SavedShow{{AddedAt: "2024-01-01", Show: domain.Show{ID: "s1"}}})
+	assert.False(t, s.FollowedShowsFetchedAt().IsZero(), "SetFollowedShows(nonEmpty) must stamp fetchedAt")
+
+	s.SetSavedEpisodes([]domain.SavedEpisode{{AddedAt: "2024-01-01", Episode: domain.Episode{ID: "e1"}}})
+	assert.False(t, s.SavedEpisodesFetchedAt().IsZero(), "SetSavedEpisodes(nonEmpty) must stamp fetchedAt")
+
+	s.SetShowEpisodes([]domain.Episode{{ID: "e1", Name: "Ep One"}})
+	assert.False(t, s.ShowEpisodesFetchedAt().IsZero(), "SetShowEpisodes(nonEmpty) must stamp fetchedAt")
 }
 
 // --- TTL-based staleness convenience methods ---
@@ -540,6 +675,84 @@ func TestStore_DevicesStale_AfterTTL(t *testing.T) {
 	s := New()
 	s.SetDevicesFetchedAt(time.Now().Add(-(DevicesTTL + time.Second)))
 	assert.True(t, s.DevicesStale(), "DevicesStale should be true after TTL")
+}
+
+// --- Podcast staleness ---
+
+func TestStore_FollowedShowsStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.FollowedShowsStale(), "FollowedShowsStale should be true when never fetched")
+}
+
+func TestStore_FollowedShowsStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetFollowedShows([]domain.SavedShow{{AddedAt: "2024-01-01", Show: domain.Show{ID: "s1", Name: "Test Show"}}})
+	assert.False(t, s.FollowedShowsStale(), "FollowedShowsStale should be false within TTL")
+}
+
+func TestStore_FollowedShowsStale_ExpiredTTL(t *testing.T) {
+	s := New()
+	s.mu.Lock()
+	s.followedShowsFetchedAt = time.Now().Add(-(FollowedShowsTTL + time.Second))
+	s.mu.Unlock()
+	assert.True(t, s.FollowedShowsStale(), "FollowedShowsStale should be true after TTL")
+}
+
+func TestStore_SavedEpisodesStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.SavedEpisodesStale(), "SavedEpisodesStale should be true when never fetched")
+}
+
+func TestStore_SavedEpisodesStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetSavedEpisodes([]domain.SavedEpisode{{AddedAt: "2024-01-01", Episode: domain.Episode{ID: "e1", Name: "Test Ep"}}})
+	assert.False(t, s.SavedEpisodesStale(), "SavedEpisodesStale should be false within TTL")
+}
+
+func TestStore_SavedEpisodesStale_ExpiredTTL(t *testing.T) {
+	s := New()
+	s.mu.Lock()
+	s.savedEpisodesFetchedAt = time.Now().Add(-(SavedEpisodesTTL + time.Second))
+	s.mu.Unlock()
+	assert.True(t, s.SavedEpisodesStale(), "SavedEpisodesStale should be true after TTL")
+}
+
+func TestStore_ShowEpisodesStale_NeverFetched(t *testing.T) {
+	s := New()
+	assert.True(t, s.ShowEpisodesStale(), "ShowEpisodesStale should be true when never fetched")
+}
+
+func TestStore_ShowEpisodesStale_WithinTTL(t *testing.T) {
+	s := New()
+	s.SetShowEpisodes([]domain.Episode{{ID: "e1", Name: "Test Ep"}})
+	assert.False(t, s.ShowEpisodesStale(), "ShowEpisodesStale should be false within TTL")
+}
+
+func TestStore_ShowEpisodesStale_ExpiredTTL(t *testing.T) {
+	s := New()
+	s.mu.Lock()
+	s.showEpisodesFetchedAt = time.Now().Add(-(ShowEpisodesTTL + time.Second))
+	s.mu.Unlock()
+	assert.True(t, s.ShowEpisodesStale(), "ShowEpisodesStale should be true after TTL")
+}
+
+// --- Podcast TTL constants ---
+
+func TestStore_PodcastTTL_Constants(t *testing.T) {
+	// All podcast TTLs must be positive.
+	assert.Positive(t, FollowedShowsTTL, "FollowedShowsTTL must be positive")
+	assert.Positive(t, SavedEpisodesTTL, "SavedEpisodesTTL must be positive")
+	assert.Positive(t, ShowEpisodesTTL, "ShowEpisodesTTL must be positive")
+
+	// All podcast TTLs must be distinct from each other and from existing TTLs.
+	ttls := map[string]time.Duration{
+		"FollowedShowsTTL": FollowedShowsTTL,
+		"SavedEpisodesTTL": SavedEpisodesTTL,
+		"ShowEpisodesTTL":  ShowEpisodesTTL,
+	}
+	for name, ttl := range ttls {
+		assert.Equal(t, 5*time.Minute, ttl, "%s should be 5 minutes", name)
+	}
 }
 
 // --- statsFetchedAt initialization ---
@@ -673,6 +886,47 @@ func TestStore_SetDevicesFetching_SetsAndClears(t *testing.T) {
 	assert.True(t, s.DevicesFetching())
 	s.SetDevicesFetching(false)
 	assert.False(t, s.DevicesFetching())
+}
+
+// --- Podcast fetching sentinels ---
+
+func TestStore_FollowedShowsFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.FollowedShowsFetching(), "FollowedShowsFetching should be false initially")
+}
+
+func TestStore_SetFollowedShowsFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetFollowedShowsFetching(true)
+	assert.True(t, s.FollowedShowsFetching(), "FollowedShowsFetching should be true after Set(true)")
+	s.SetFollowedShowsFetching(false)
+	assert.False(t, s.FollowedShowsFetching(), "FollowedShowsFetching should be false after Set(false)")
+}
+
+func TestStore_SavedEpisodesFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.SavedEpisodesFetching(), "SavedEpisodesFetching should be false initially")
+}
+
+func TestStore_SetSavedEpisodesFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetSavedEpisodesFetching(true)
+	assert.True(t, s.SavedEpisodesFetching())
+	s.SetSavedEpisodesFetching(false)
+	assert.False(t, s.SavedEpisodesFetching())
+}
+
+func TestStore_ShowEpisodesFetching_DefaultFalse(t *testing.T) {
+	s := New()
+	assert.False(t, s.ShowEpisodesFetching(), "ShowEpisodesFetching should be false initially")
+}
+
+func TestStore_SetShowEpisodesFetching_SetsAndClears(t *testing.T) {
+	s := New()
+	s.SetShowEpisodesFetching(true)
+	assert.True(t, s.ShowEpisodesFetching())
+	s.SetShowEpisodesFetching(false)
+	assert.False(t, s.ShowEpisodesFetching())
 }
 
 func TestStore_Devices_InitiallyNil(t *testing.T) {

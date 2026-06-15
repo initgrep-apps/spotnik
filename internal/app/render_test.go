@@ -43,7 +43,7 @@ func TestBuildView_OnboardingMode(t *testing.T) {
 	assert.Contains(t, result, "Step 1 of 2",
 		"buildView should render the onboarding register screen when currentView == viewOnboarding")
 	// The grid header (rendered by renderHeader) must NOT appear.
-	assert.NotContains(t, result, "Music page",
+	assert.NotContains(t, result, "Player page",
 		"onboarding view must not render the grid header")
 }
 
@@ -61,13 +61,13 @@ func TestRenderHeader_ContainsPageIndicator(t *testing.T) {
 	a := newRenderTestApp()
 	result := a.renderHeader()
 
-	// Music page is the default page.
-	assert.Contains(t, result, "Music", "header should show current page")
+	// Player page is the default page.
+	assert.Contains(t, result, "Player", "header should show current page")
 }
 
 func TestRenderHeader_StatsPage_ContainsStatsLabel(t *testing.T) {
 	a := newRenderTestApp()
-	a.layout.TogglePage()
+	a.layout.TogglePage() // Player → Stats
 	result := a.renderHeader()
 	assert.Contains(t, result, "Stats", "header should show 'Stats' on Stats page")
 }
@@ -79,6 +79,11 @@ func TestRenderHeader_ContainsPresetName(t *testing.T) {
 	// Default preset name is "Dashboard".
 	assert.Contains(t, result, "Dashboard", "header should show current preset name")
 	assert.NotContains(t, result, "preset 0", "header should not show raw preset index")
+}
+
+func TestPageLabel_Player(t *testing.T) {
+	assert.Equal(t, "Player", pageLabel(layout.PagePlayer))
+	assert.Equal(t, "Stats", pageLabel(layout.PageStats))
 }
 
 func TestRenderHeader_ContainsActionShortcuts(t *testing.T) {
@@ -251,7 +256,7 @@ func TestRenderGrid_StatsPage_FlatLayoutAbsolutePlacement(t *testing.T) {
 	a.width = 200
 	a.height = 80
 	a.layout.Resize(200, 80)
-	a.layout.TogglePage() // switch to Stats page (Stats)
+	a.layout.TogglePage() // Player → Stats
 	a.propagateSizes()
 	a.syncFocus()
 
@@ -469,14 +474,14 @@ func TestRenderHeader_NoShortcutKeys(t *testing.T) {
 	assert.NotContains(t, result, "ᐅp", "header must not show ᐅp preset shortcut")
 }
 
-// TestRenderHeader_MusicPage_ShowsPreset verifies that on Music page, the header shows
+// TestRenderHeader_MusicPage_ShowsPreset verifies that on Player page, the header shows
 // the preset name (e.g. "Dashboard").
 func TestRenderHeader_MusicPage_ShowsPreset(t *testing.T) {
 	a := newRenderTestApp()
-	// Default page is Music page.
+	// Default page is Player page.
 	result := a.renderHeader()
 
-	assert.Contains(t, result, "Dashboard", "header should show 'Dashboard' on Music page")
+	assert.Contains(t, result, "Dashboard", "header should show 'Dashboard' on Player page")
 }
 
 // TestRenderHeader_StatsPage_NoPreset verifies that on Stats page, the header does NOT
@@ -492,27 +497,26 @@ func TestRenderHeader_StatsPage_NoPreset(t *testing.T) {
 
 // --- Story 75 Task 3: Page-aware status bar ---
 
-// TestRenderStatusBar_MusicPage_IncludesPresetAndToggle verifies that on Music page the status
+// TestRenderStatusBar_MusicPage_IncludesPresetAndToggle verifies that on Player page the status
 // bar includes both "preset" and "toggle" hints.
 func TestRenderStatusBar_MusicPage_IncludesPresetAndToggle(t *testing.T) {
 	a := newRenderTestApp()
-	// Default page is Music page.
+	// Default page is Player page.
 	result := a.renderStatusBar()
 
-	assert.Contains(t, result, "preset", "Music page status bar should include 'preset' hint")
-	assert.Contains(t, result, "toggle", "Music page status bar should include 'toggle' hint")
+	assert.Contains(t, result, "preset", "Player page status bar should include 'preset' hint")
+	assert.Contains(t, result, "toggle", "Player page status bar should include 'toggle' hint")
 }
 
 // TestRenderStatusBar_StatsPage_OmitsPresetAndToggle verifies that on Stats page the status
-// bar omits "preset" and "toggle" (Stats page has a single fixed layout).
+// bar omits "preset" and "1-8 toggle" (Stats page has a single fixed layout with 1-5 pane toggle).
 func TestRenderStatusBar_StatsPage_OmitsPresetAndToggle(t *testing.T) {
 	a := newRenderTestApp()
-	// Switch to Stats page.
-	a.layout.TogglePage()
+	a.layout.TogglePage() // Player → Stats
 	result := a.renderStatusBar()
 
 	assert.NotContains(t, result, "preset", "Stats page status bar must NOT include 'preset' hint")
-	assert.NotContains(t, result, "toggle", "Stats page status bar must NOT include 'toggle' hint")
+	assert.NotContains(t, result, "1-8", "Stats page status bar must NOT include '1-8 toggle' hint")
 }
 
 // --- Story 75 Task 2: status bar theme hint ---
@@ -529,14 +533,14 @@ func TestRenderStatusBar_ContainsThemeHint(t *testing.T) {
 
 // --- bubbles/help component tests ---
 
-// TestAppKeyMap_MusicPage_FullHelp_FiveGroups verifies that the Music page appKeyMap produces
+// TestAppKeyMap_PlayerPage_FullHelp_FiveGroups verifies that the Player page appKeyMap produces
 // 5 FullHelp groups (one per column). Column 3 (Pane/Devices/Profile) has 3 bindings;
 // all others have at most 2 (story 117: Profile was added to column 3).
-func TestAppKeyMap_MusicPage_FullHelp_FiveGroups(t *testing.T) {
+func TestAppKeyMap_PlayerPage_FullHelp_FiveGroups(t *testing.T) {
 	km := newAppKeyMap()
-	km.activePage = layout.PageMusic
+	km.activePage = layout.PagePlayer
 	groups := km.FullHelp()
-	assert.Len(t, groups, 5, "Music page FullHelp must have 5 groups (5 columns)")
+	assert.Len(t, groups, 5, "Player page FullHelp must have 5 groups (5 columns)")
 	// Column 3 (index 2) holds Pane, Devices, Profile — 3 entries since story 117.
 	for i, g := range groups {
 		if i == 2 {
@@ -573,26 +577,26 @@ func TestRenderStatusBar_HeightIsThreeLines(t *testing.T) {
 	assert.Len(t, lines, 3, "status bar must be exactly 3 lines tall (1 content row + top/bottom border)")
 }
 
-// TestRenderStatusBar_ShowsAllMusicPageBindings verifies that all 10 Music page key descriptions
+// TestRenderStatusBar_ShowsAllMusicPageBindings verifies that all 10 Player page key descriptions
 // appear in the rendered status bar output (including "profile" added in story 117).
 func TestRenderStatusBar_ShowsAllMusicPageBindings(t *testing.T) {
 	a := newRenderTestApp()
 	a.width = 200 // wide terminal so nothing is truncated
-	// Default page is Music page.
+	// Default page is Player page.
 	result := a.renderStatusBar()
 	for _, want := range []string{"search", "page", "preset", "toggle", "pane", "devices", "profile", "theme", "help", "quit"} {
-		assert.Contains(t, result, want, "Music page status bar must show %q", want)
+		assert.Contains(t, result, want, "Player page status bar must show %q", want)
 	}
 }
 
 // TestRenderStatusBar_ContainsProfileHint verifies that "u" and "profile" appear in the
-// status bar on both Music page and Stats page — fix for story 117.
+// status bar on both Player page and Stats page — fix for story 117.
 func TestRenderStatusBar_ContainsProfileHint(t *testing.T) {
 	tests := []struct {
 		name      string
 		statsPage bool
 	}{
-		{"Music page", false},
+		{"Player page", false},
 		{"Stats page", true},
 	}
 	for _, tt := range tests {
@@ -616,7 +620,7 @@ func TestRenderStatusBar_ProfileAdjacentToDevices(t *testing.T) {
 		name      string
 		statsPage bool
 	}{
-		{"Music page", false},
+		{"Player page", false},
 		{"Stats page", true},
 	}
 	for _, tt := range tests {

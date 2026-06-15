@@ -18,15 +18,17 @@ import (
 // SearchTab identifies the active category tab in the search overlay.
 type SearchTab int
 
-// Tab constants define the five result category tabs shown in Panel 2.
+// Tab constants define the seven result category tabs shown in Panel 2.
 const (
 	TabAll       SearchTab = iota // 0: show all result types
 	TabSongs                      // 1: songs/tracks only
 	TabArtists                    // 2: artists only
 	TabAlbums                     // 3: albums only
 	TabPlaylists                  // 4: playlists only
+	TabShows                      // 5: shows only
+	TabEpisodes                   // 6: episodes only
 	// NumTabs is the total number of category tabs. Exported for tests.
-	NumTabs = 5
+	NumTabs = 7
 
 	// SearchPageSize is the number of results fetched per search page.
 	// Must equal app.SearchPageSize (both reference the same Spotify API limit).
@@ -36,7 +38,7 @@ const (
 )
 
 // TabLabels holds the display label for each tab.
-var TabLabels = [NumTabs]string{"All", "Songs", "Artists", "Albums", "Playlists"}
+var TabLabels = [NumTabs]string{"All", "Songs", "Artists", "Albums", "Playlists", "Shows", "Episodes"}
 
 // TabToAPITypes returns the Spotify API type strings for the given tab.
 // Exported for tests.
@@ -50,8 +52,12 @@ func TabToAPITypes(tab SearchTab) []string {
 		return []string{"album"}
 	case TabPlaylists:
 		return []string{"playlist"}
+	case TabShows:
+		return []string{"show"}
+	case TabEpisodes:
+		return []string{"episode"}
 	default: // TabAll
-		return []string{"track", "artist", "album", "playlist"}
+		return []string{"track", "artist", "album", "playlist", "show", "episode"}
 	}
 }
 
@@ -195,7 +201,7 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	// Each suggestion has a trailing space so that acceptance immediately
 	// triggers parsePrefix() and the lock + Prompt-tag promotion.
 	ti.ShowSuggestions = true
-	ti.SetSuggestions([]string{":songs ", ":artists ", ":albums ", ":playlists "})
+	ti.SetSuggestions([]string{":songs ", ":artists ", ":albums ", ":playlists ", ":shows ", ":episodes "})
 	// Ghost/completion text appears dim so it doesn't compete with the typed input.
 	ti.CompletionStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
 	ti.Focus()
@@ -641,6 +647,15 @@ func (o *SearchOverlay) handleEnter() (tea.Model, tea.Cmd) {
 	si, ok := selected.(SearchListItem)
 	if !ok || si.URI == "" {
 		return o, nil
+	}
+	if si.IsShow || si.IsEpisode {
+		return o, func() tea.Msg {
+			return SearchResultSelectedMsg{
+				URI:       si.URI,
+				IsShow:    si.IsShow,
+				IsEpisode: si.IsEpisode,
+			}
+		}
 	}
 	if si.IsTrack {
 		// Build the URI list from the selected result onward, collecting only tracks.

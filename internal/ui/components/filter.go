@@ -131,6 +131,11 @@ func (f *Filter) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// SetPlaceholder sets the placeholder text shown when the filter input is empty.
+func (f *Filter) SetPlaceholder(text string) {
+	f.input.Placeholder = text
+}
+
 // SetWidth updates the visible width of the filter input bar.
 // Call this from the pane's SetSize so View() remains side-effect-free.
 func (f *Filter) SetWidth(width int) {

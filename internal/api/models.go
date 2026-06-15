@@ -84,3 +84,33 @@ type SearchResult = domain.SearchResult
 // UserProfile re-exports domain.UserProfile so api/ callers can reference the type
 // without importing domain/ directly.
 type UserProfile = domain.UserProfile
+
+// Show re-exports domain.Show for backward compatibility.
+type Show = domain.Show
+
+// Episode re-exports domain.Episode for backward compatibility.
+type Episode = domain.Episode
+
+// SavedShow re-exports domain.SavedShow for backward compatibility.
+type SavedShow = domain.SavedShow
+
+// SavedEpisode re-exports domain.SavedEpisode for backward compatibility.
+type SavedEpisode = domain.SavedEpisode
+
+// ResumePoint re-exports domain.ResumePoint for backward compatibility.
+type ResumePoint = domain.ResumePoint
+
+// PlayContext re-exports domain.PlayContext for backward compatibility.
+type PlayContext = domain.PlayContext
+
+// SearchShow re-exports domain.SearchShow for backward compatibility.
+type SearchShow = domain.SearchShow
+
+// SearchEpisode re-exports domain.SearchEpisode for backward compatibility.
+type SearchEpisode = domain.SearchEpisode
+
+// SearchShowsResult re-exports domain.SearchShowsResult for backward compatibility.
+type SearchShowsResult = domain.SearchShowsResult
+
+// SearchEpisodesResult re-exports domain.SearchEpisodesResult for backward compatibility.
+type SearchEpisodesResult = domain.SearchEpisodesResult

@@ -238,3 +238,37 @@ func TestInfoBox_Render_UnfocusedUsesInactiveBorderColor(t *testing.T) {
 	assert.NotContains(t, outFocused, "38;2;30;30;30",
 		"focused render must not contain InactiveBorder colour code")
 }
+
+// TestInfoBox_SetAccentColor_OverridesBorder verifies that SetAccentColor
+// overrides the default ActiveBorder/InactiveBorder colour in the rendered output.
+func TestInfoBox_SetAccentColor_OverridesBorder(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+
+	th := infoboxTestTheme()
+	ib := NewInfoBox(th)
+	ib.SetSize(28, 10)
+	lines := []string{"Content"}
+
+	// Default render (no accent override) uses ActiveBorder (#00afff).
+	outDefault := ib.Render("Box", lines, true)
+	assert.Contains(t, outDefault, "38;2;0;175;255",
+		"default focus render must contain ActiveBorder (#00afff)")
+
+	// Render with accent colour override.
+	ib.SetAccentColor("#ff0000")
+	outAccent := ib.Render("Box", lines, true)
+	assert.Contains(t, outAccent, "38;2;255;0;0",
+		"accent colour render must contain override (#ff0000)")
+
+	// Unfocused with accent should also use the accent, not InactiveBorder.
+	ib2 := NewInfoBox(th)
+	ib2.SetSize(28, 10)
+	ib2.SetAccentColor("#ff0000")
+	outAccentUnfocused := ib2.Render("Box", lines, false)
+	assert.Contains(t, outAccentUnfocused, "38;2;255;0;0",
+		"unfocused accent render must contain override (#ff0000), not InactiveBorder")
+	assert.NotContains(t, outAccentUnfocused, "38;2;30;30;30",
+		"unfocused accent render must not contain InactiveBorder (#1e1e1e)")
+}

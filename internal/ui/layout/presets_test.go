@@ -166,14 +166,14 @@ func TestPresetStats_FlatThreeRows(t *testing.T) {
 }
 
 func TestPagePresets_Counts(t *testing.T) {
-	assert.Len(t, layout.PageMusicPresets, 4, "PageMusicPresets should have 4 entries")
+	assert.Len(t, layout.PagePlayerPresets, 6, "PagePlayerPresets should have 6 entries")
 	assert.Len(t, layout.PageStatsPresets, 1, "PageStatsPresets should have 1 entry")
 }
 
-// TestPreset_MusicPage_NowPlayingMinHeight verifies that every Music page preset
+// TestPreset_PlayerPage_NowPlayingMinHeight verifies that every Player page preset
 // sets NowPlaying MinHeight to the correct value (story 223 — compact presets
-// raised to 6 so controls+volume remain visible; Listening stays at 0).
-func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
+// raised to 6 so controls+volume remain visible; Listening and Podcast stay at 0).
+func TestPreset_PlayerPage_NowPlayingMinHeight(t *testing.T) {
 	presets := []struct {
 		name     string
 		preset   layout.Preset
@@ -181,8 +181,10 @@ func TestPreset_MusicPage_NowPlayingMinHeight(t *testing.T) {
 	}{
 		{"Dashboard", layout.PresetDashboard, 6},
 		{"Listening", layout.PresetListening, 0},
+		{"Podcast", layout.PresetPodcast, 0},
 		{"Library", layout.PresetLibrary, 6},
 		{"Discovery", layout.PresetDiscovery, 6},
+		{"Podcast Dashboard", layout.PresetPodcastDashboard, 0},
 	}
 
 	for _, tt := range presets {

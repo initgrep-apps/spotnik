@@ -13,26 +13,28 @@ import (
 type PaneID int
 
 const (
-	PaneNowPlaying     PaneID = iota // Music pane 1 (toggle key 1)
-	PaneQueue                        // Music pane 2 (toggle key 2)
-	PanePlaylists                    // Music pane 3 (toggle key 3)
-	PaneAlbums                       // Music pane 4 (toggle key 4)
-	PaneLikedSongs                   // Music pane 5 (toggle key 5)
-	PaneRecentlyPlayed               // Music pane 6 (toggle key 6)
-	PaneTopTracks                    // Music pane 7 (toggle key 7)
-	PaneTopArtists                   // Music pane 8 (toggle key 8)
+	PaneNowPlaying     PaneID = iota // Player pane 1 (toggle key 1)
+	PaneQueue                        // Player pane 2 (toggle key 2)
+	PanePlaylists                    // Player pane 3 (toggle key 3)
+	PaneAlbums                       // Player pane 4 (toggle key 4)
+	PaneLikedSongs                   // Player pane 5 (toggle key 5)
+	PaneRecentlyPlayed               // Player pane 6 (toggle key 6)
+	PaneTopTracks                    // Player pane 7 (toggle key 7)
+	PaneTopArtists                   // Player pane 8 (toggle key 8)
 	PaneNetworkLog                   // Stats pane 5 (toggle key 5)
 	PaneGatewayHealth                // Stats pane 2 (toggle key 2)
 	PanePollingTraffic               // Stats pane 3 (toggle key 3)
 	PaneGatewayLive                  // Stats pane 4 (toggle key 4)
+	PaneFollowedShows                // Player pane (podcast preset, toggle key 3)
+	PaneSavedEpisodes                // Player pane (podcast preset, toggle key 4)
 )
 
 // PageID identifies a page (group of panes).
 type PageID int
 
 const (
-	PageMusic PageID = iota // Music (8 panes)
-	PageStats               // Stats (5 panes)
+	PagePlayer PageID = iota // Player (6 presets)
+	PageStats                // Stats (1 preset)
 )
 
 // Rect describes a pane's position and size in terminal cells.

@@ -463,6 +463,8 @@ func TestPaneBorderColor_ReturnsCorrectColorPerPane(t *testing.T) {
 		{layout.PanePollingTraffic, th.PaneBorderRequestFlow()},
 		{layout.PaneGatewayLive, th.PaneBorderRequestFlow()},
 		{layout.PaneNetworkLog, th.PaneBorderNetworkLog()},
+		{layout.PaneFollowedShows, th.PaneBorderFollowedShows()},
+		{layout.PaneSavedEpisodes, th.PaneBorderSavedEpisodes()},
 	}
 	for _, tt := range tests {
 		got := layout.PaneBorderColor(tt.id, th)

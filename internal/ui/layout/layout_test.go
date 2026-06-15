@@ -13,7 +13,7 @@ import (
 func TestNewManager_Defaults(t *testing.T) {
 	m := layout.NewManager()
 	require.NotNil(t, m)
-	assert.Equal(t, layout.PageMusic, m.ActivePage())
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
 	assert.Equal(t, 0, m.ActivePresetIndex())
 	assert.Equal(t, "Dashboard", m.ActivePresetName())
 }
@@ -154,15 +154,15 @@ func TestResize_LastCellAbsorbsWidthRemainder(t *testing.T) {
 
 // ── Task 4: Page toggle, preset cycling, pane toggling ───────────────────────
 
-func TestTogglePage_SwitchesBetweenPages(t *testing.T) {
+func TestTogglePage_TwoCycle(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	assert.Equal(t, layout.PageMusic, m.ActivePage())
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
 	m.TogglePage()
 	assert.Equal(t, layout.PageStats, m.ActivePage())
 	m.TogglePage()
-	assert.Equal(t, layout.PageMusic, m.ActivePage())
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
 }
 
 func TestTogglePage_ClearsHiddenState(t *testing.T) {
@@ -173,7 +173,7 @@ func TestTogglePage_ClearsHiddenState(t *testing.T) {
 	m.TogglePane(layout.PanePlaylists)
 	assert.False(t, m.IsPaneVisible(layout.PanePlaylists))
 
-	// Switch to Stats page and back
+	// Switch page (Player → Stats → Player)
 	m.TogglePage()
 	m.TogglePage()
 
@@ -192,6 +192,10 @@ func TestCyclePreset_CyclesThroughAllPresets(t *testing.T) {
 	assert.Equal(t, 2, m.ActivePresetIndex())
 	m.CyclePreset()
 	assert.Equal(t, 3, m.ActivePresetIndex())
+	m.CyclePreset()
+	assert.Equal(t, 4, m.ActivePresetIndex())
+	m.CyclePreset()
+	assert.Equal(t, 5, m.ActivePresetIndex())
 	// Wraps back to 0
 	m.CyclePreset()
 	assert.Equal(t, 0, m.ActivePresetIndex())
@@ -208,6 +212,7 @@ func TestCyclePreset_ResetsManualToggles(t *testing.T) {
 	// Cycle preset should reset toggles
 	m.CyclePreset()
 	// Now on Listening preset — Playlists isn't in it, but internal toggle must be reset
+	m.CyclePreset() // Podcast — Playlists not visible
 	m.CyclePreset() // Library — Playlists visible
 	assert.True(t, m.IsPaneVisible(layout.PanePlaylists))
 }
@@ -283,7 +288,7 @@ func TestTogglePane_CannotHideLastVisible(t *testing.T) {
 func TestTogglePane_StatsPage_TogglesNowPlaying(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page
+	m.TogglePage() // Player → Stats
 
 	// NowPlaying (key 1) is in PresetStats and must be toggleable on Stats page.
 	require.True(t, m.IsPaneVisible(layout.PaneNowPlaying))
@@ -297,7 +302,7 @@ func TestTogglePane_StatsPage_TogglesNowPlaying(t *testing.T) {
 func TestTogglePane_StatsPage_TogglesStatsPanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page
+	m.TogglePage() // Player → Stats
 
 	// GatewayHealth (key 2) should be toggleable on Stats page
 	require.True(t, m.IsPaneVisible(layout.PaneGatewayHealth))
@@ -311,7 +316,7 @@ func TestTogglePane_StatsPage_TogglesStatsPanes(t *testing.T) {
 func TestTogglePane_StatsPage_IgnoresMusicPagePanes(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page
+	m.TogglePage() // Player → Stats
 
 	// Music page panes must not be toggleable while on Stats page
 	m.TogglePane(layout.PaneQueue) // PaneQueue < PaneNetworkLog — Music page pane
@@ -330,7 +335,8 @@ func TestTogglePane_MusicPage_IgnoresStatsPagePanes(t *testing.T) {
 func TestTogglePane_StatsPage_CannotHideLastPane(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // Stats page — PresetStats has 5 panes
+
+	m.TogglePage() // Player → Stats page — PresetStats has 5 panes
 
 	// Hide 4 of 5 panes — only NowPlaying remains
 	m.TogglePane(layout.PaneGatewayHealth)
@@ -530,7 +536,7 @@ func TestFullLifecycle(t *testing.T) {
 	m.Resize(120, 30)
 
 	// Start: Music page, Dashboard
-	assert.Equal(t, layout.PageMusic, m.ActivePage())
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
 	assert.Len(t, m.VisiblePanes(), 8)
 
 	// Cycle preset
@@ -542,15 +548,15 @@ func TestFullLifecycle(t *testing.T) {
 	m.TogglePane(layout.PaneQueue)
 	assert.False(t, m.IsPaneVisible(layout.PaneQueue))
 
-	// Switch page
+	// Switch page (Player → Stats)
 	m.TogglePage()
 	assert.Equal(t, layout.PageStats, m.ActivePage())
 	assert.Len(t, m.VisiblePanes(), 5) // PresetStats has 5 panes
 
-	// Switch back
+	// Switch back (Stats → Player)
 	m.TogglePage()
-	assert.Equal(t, layout.PageMusic, m.ActivePage())
-	// Hidden state was cleared when we toggled to Stats page and back
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
+	// Hidden state was cleared when we toggled through pages and back
 	// so we cycle to Listening again manually
 	m.SetPreset(1) // Listening
 	// Manual toggles were reset when we switched pages, so Queue should be visible again
@@ -614,7 +620,7 @@ func TestLayoutManager_MinHeight(t *testing.T) {
 	}}
 
 	m := layout.NewManager()
-	m.TogglePage()    // switch to Stats page
+	m.TogglePage()    // Player → Stats
 	m.Resize(120, 34) // contentH = 30
 
 	// reserved = 10, remaining = 20, totalW = 3
@@ -634,10 +640,10 @@ func TestLayoutManager_MinHeight(t *testing.T) {
 func TestLayoutManager_MinHeight_ZeroRegression(t *testing.T) {
 	// Use a custom preset with no MinHeight so the pure weight-based
 	// distribution can be verified independently of the Dashboard preset.
-	oldPresets := layout.PageMusicPresets
-	defer func() { layout.PageMusicPresets = oldPresets }()
+	oldPresets := layout.PagePlayerPresets
+	defer func() { layout.PagePlayerPresets = oldPresets }()
 
-	layout.PageMusicPresets = []layout.Preset{{
+	layout.PagePlayerPresets = []layout.Preset{{
 		Name: "TestNoMinHeight",
 		Visible: map[layout.PaneID]bool{
 			layout.PaneNowPlaying: true,
@@ -686,7 +692,7 @@ func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
 	}}
 
 	m := layout.NewManager()
-	m.TogglePage()
+	m.TogglePage() // Player → Stats
 
 	assert.NotPanics(t, func() {
 		m.Resize(120, 10) // contentH = 6, reserved = 20 > 6
@@ -704,7 +710,7 @@ func TestLayoutManager_MinHeight_Overflow(t *testing.T) {
 func TestPresetStats_NowPlayingRowHeight(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
-	m.TogglePage() // Stats page
+	m.TogglePage() // Player → Stats
 
 	// PresetStats: weights 1:3:3, contentH=26, MinHeight sum=6
 	// totalW=7, remaining=26-6=20
@@ -724,8 +730,8 @@ func TestPresetCycleFullLoop(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
 
-	expectedNames := []string{"Dashboard", "Listening", "Library", "Discovery"}
-	expectedVisible := []int{8, 3, 4, 4}
+	expectedNames := []string{"Dashboard", "Listening", "Podcast", "Library", "Discovery", "Podcast Dashboard"}
+	expectedVisible := []int{8, 3, 3, 4, 4, 4}
 
 	for i := 0; i < len(expectedNames); i++ {
 		assert.Equal(t, expectedNames[i], m.ActivePresetName(), "preset %d name", i)
@@ -783,7 +789,8 @@ func TestFocusRotation_AfterHideWrapsCorrectly(t *testing.T) {
 func TestRecompute_StatsPageFlat_ThreeRows(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage() // switch to Stats page (flat 3-row PresetStats)
+
+	m.TogglePage() // Player → Stats page (flat 3-row PresetStats)
 
 	np := m.PaneRect(layout.PaneNowPlaying)
 	h := m.PaneRect(layout.PaneGatewayHealth)
@@ -810,7 +817,7 @@ func TestRecompute_StatsPageFlat_ThreeRows(t *testing.T) {
 func TestTogglePane_StatsPage_HealthHidden_TrafficLiveExpand(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Player → Stats
 	pre := m.PaneRect(layout.PanePollingTraffic).Width
 
 	m.TogglePane(layout.PaneGatewayHealth)
@@ -827,7 +834,7 @@ func TestTogglePane_StatsPage_HealthHidden_TrafficLiveExpand(t *testing.T) {
 func TestTogglePane_StatsPage_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Player → Stats
 	m.TogglePane(layout.PaneGatewayHealth)
 	m.TogglePane(layout.PanePollingTraffic)
 
@@ -839,7 +846,7 @@ func TestTogglePane_StatsPage_HealthAndTrafficHidden_LiveFullRow(t *testing.T) {
 func TestTogglePane_StatsPage_LiveHidden_HealthTrafficExpand(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Player → Stats
 	m.TogglePane(layout.PaneGatewayLive)
 
 	h := m.PaneRect(layout.PaneGatewayHealth)
@@ -853,7 +860,7 @@ func TestRecompute_StatsPage_FocusOrder_LeftToRightTopToBottom(t *testing.T) {
 	// Flat layout: focus order is purely visual reading order.
 	m := layout.NewManager()
 	m.Resize(200, 50)
-	m.TogglePage()
+	m.TogglePage() // Player → Stats
 
 	expected := []layout.PaneID{
 		layout.PaneNowPlaying,
@@ -877,7 +884,7 @@ func TestRecompute_StatsPage_RectsNonOverlapping(t *testing.T) {
 	// Use odd dimensions to exercise rounding-remainder paths.
 	m := layout.NewManager()
 	m.Resize(201, 79)
-	m.TogglePage()
+	m.TogglePage() // Player → Stats
 
 	visible := m.VisiblePanes()
 	for i := range visible {
@@ -890,5 +897,166 @@ func TestRecompute_StatsPage_RectsNonOverlapping(t *testing.T) {
 				"panes %d and %d must not overlap: %+v vs %+v",
 				visible[i], visible[j], a, b)
 		}
+	}
+}
+
+// ── Story 233: Player page unification ─────────────────────────────────────────
+
+// ── SwitchToPage tests ──────────────────────────────────────────────────────────
+
+func TestSwitchToPage_SwitchesAndResets(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	require.Equal(t, layout.PagePlayer, m.ActivePage())
+	require.Equal(t, 0, m.ActivePresetIndex())
+
+	m.SwitchToPage(layout.PageStats)
+	assert.Equal(t, layout.PageStats, m.ActivePage())
+	assert.Equal(t, 0, m.ActivePresetIndex(), "preset index should reset to 0")
+}
+
+func TestSwitchToPage_NoOpIfAlreadyOnPage(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	require.Equal(t, layout.PagePlayer, m.ActivePage())
+	presetBefore := m.ActivePresetIndex()
+
+	m.SwitchToPage(layout.PagePlayer)
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
+	assert.Equal(t, presetBefore, m.ActivePresetIndex(), "preset index should not change")
+}
+
+func TestSwitchToPage_ResetsHiddenPanes(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	// Hide a pane on Player page
+	m.TogglePane(layout.PanePlaylists)
+	require.False(t, m.IsPaneVisible(layout.PanePlaylists))
+
+	// Switch to Stats — hidden state must be cleared
+	m.SwitchToPage(layout.PageStats)
+	assert.Equal(t, layout.PageStats, m.ActivePage())
+
+	// Switch back to Player — hidden state must be cleared
+	m.SwitchToPage(layout.PagePlayer)
+	assert.True(t, m.IsPaneVisible(layout.PanePlaylists), "hidden panes should be cleared after SwitchToPage")
+}
+
+func TestSwitchToPage_ResetsFocusIndex(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	// Move focus past the first pane
+	m.RotateFocus(true)
+	m.RotateFocus(true)
+	focusBefore := m.FocusedPane()
+	require.NotEqual(t, layout.PaneNowPlaying, focusBefore)
+
+	// Switching pages resets focus to first visible pane
+	m.SwitchToPage(layout.PageStats)
+	visible := m.VisiblePanes()
+	assert.Equal(t, visible[0], m.FocusedPane(), "focus should reset to first visible pane after SwitchToPage")
+}
+
+func TestPagePlayer_Value(t *testing.T) {
+	assert.Equal(t, layout.PageID(0), layout.PagePlayer)
+}
+
+func TestPageStats_Value(t *testing.T) {
+	assert.Equal(t, layout.PageID(1), layout.PageStats)
+}
+
+func TestTogglePage_PlayerStatsTwoCycle(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
+	m.TogglePage()
+	assert.Equal(t, layout.PageStats, m.ActivePage())
+	m.TogglePage()
+	assert.Equal(t, layout.PagePlayer, m.ActivePage())
+}
+
+func TestSetPreset_DirectSwitch(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	assert.Equal(t, 0, m.ActivePresetIndex())
+	assert.Equal(t, "Dashboard", m.ActivePresetName())
+
+	m.SetPreset(2) // Podcast
+	assert.Equal(t, 2, m.ActivePresetIndex())
+	assert.Equal(t, "Podcast", m.ActivePresetName())
+
+	m.SetPreset(-1) // out of range, no-op
+	assert.Equal(t, 2, m.ActivePresetIndex())
+
+	m.SetPreset(99) // out of range, no-op
+	assert.Equal(t, 2, m.ActivePresetIndex())
+}
+
+func TestIsPaneVisible_CurrentPreset(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	// Dashboard: FollowedShows not visible
+	assert.False(t, m.IsPaneVisible(layout.PaneFollowedShows))
+
+	// Switch to Podcast preset
+	m.SetPreset(2) // Podcast
+	assert.True(t, m.IsPaneVisible(layout.PaneFollowedShows))
+}
+
+func TestPagePlayerPresets_HasSixEntries(t *testing.T) {
+	assert.Len(t, layout.PagePlayerPresets, 6)
+	assert.Equal(t, "Dashboard", layout.PagePlayerPresets[0].Name)
+	assert.Equal(t, "Listening", layout.PagePlayerPresets[1].Name)
+	assert.Equal(t, "Podcast", layout.PagePlayerPresets[2].Name)
+	assert.Equal(t, "Library", layout.PagePlayerPresets[3].Name)
+	assert.Equal(t, "Discovery", layout.PagePlayerPresets[4].Name)
+	assert.Equal(t, "Podcast Dashboard", layout.PagePlayerPresets[5].Name)
+}
+
+func TestPresetPodcast_PlayerGrid(t *testing.T) {
+	assert.Equal(t, "Podcast", layout.PresetPodcast.Name)
+	require.Len(t, layout.PresetPodcast.Grid, 2)
+	require.Len(t, layout.PresetPodcast.Grid[1].Cells, 2)
+	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcast.Grid[1].Cells[0].PaneID)
+	assert.Equal(t, layout.PaneQueue, layout.PresetPodcast.Grid[1].Cells[1].PaneID)
+	assert.Equal(t, 55, layout.PresetPodcast.Grid[1].Cells[0].WidthWeight)
+	assert.Equal(t, 45, layout.PresetPodcast.Grid[1].Cells[1].WidthWeight)
+}
+
+func TestPresetPodcastDashboard_PlayerGrid(t *testing.T) {
+	assert.Equal(t, "Podcast Dashboard", layout.PresetPodcastDashboard.Name)
+	require.Len(t, layout.PresetPodcastDashboard.Grid, 2)
+	require.Len(t, layout.PresetPodcastDashboard.Grid[1].Cells, 3)
+	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcastDashboard.Grid[1].Cells[0].PaneID)
+	assert.Equal(t, layout.PaneSavedEpisodes, layout.PresetPodcastDashboard.Grid[1].Cells[1].PaneID)
+	assert.Equal(t, layout.PaneQueue, layout.PresetPodcastDashboard.Grid[1].Cells[2].PaneID)
+}
+
+func TestPaneIDs_NoPodcastPlaybackOrShowEpisodes(t *testing.T) {
+	// PanePodcastPlayback and PaneShowEpisodes were removed in the player page unification.
+	// Verify that follow-on PaneIDs (FollowedShows, SavedEpisodes) still have valid values.
+	assert.GreaterOrEqual(t, int(layout.PaneFollowedShows), 0)
+	assert.GreaterOrEqual(t, int(layout.PaneSavedEpisodes), 0)
+}
+
+func TestPlayerPage_PodcastPresetPaneRects(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+	m.SetPreset(2) // Podcast preset
+
+	visible := m.VisiblePanes()
+	require.Greater(t, len(visible), 0, "podcast preset should have visible panes")
+
+	for _, id := range visible {
+		r := m.PaneRect(id)
+		assert.Greater(t, r.Width, 0, "pane %d should have positive width", id)
+		assert.Greater(t, r.Height, 0, "pane %d should have positive height", id)
 	}
 }

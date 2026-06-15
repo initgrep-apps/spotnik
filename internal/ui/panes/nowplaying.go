@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/components/viz"
@@ -84,8 +85,9 @@ func NewNowPlayingPane(s state.StateReader, t theme.Theme, focused bool) *NowPla
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
 		}
 		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
-		if ps.Item != nil {
-			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		durationMs := p.playingDurationMs(ps)
+		if durationMs > 0 {
+			p.seekBar.SetTrackDuration(durationMs)
 		}
 	}
 	return p
@@ -97,13 +99,49 @@ func (p *NowPlayingPane) ID() layout.PaneID {
 }
 
 // Title returns the display title for the border.
-// When height < 8 (pane too small for the overlay body), the title embeds track info
-// so the user can still see what's playing without any content area.
+// When height < 8 (pane too small for the overlay body), the title embeds track/episode
+// info so the user can still see what's playing without any content area.
+// When an episode is playing, the title includes a ⏵ Podcast notch.
 func (p *NowPlayingPane) Title() string {
-	if p.height < 8 {
-		ps := p.store.PlaybackState()
-		if ps != nil && ps.Item != nil {
-			t := ps.Item
+	ps := p.store.PlaybackState()
+	if ps == nil {
+		return "Now Playing"
+	}
+
+	switch ps.CurrentlyPlayingType {
+	case "episode":
+		if ps.Episode == nil {
+			return "Now Playing"
+		}
+		ep := ps.Episode
+		podcastNotch := " ⏵ Podcast"
+		if p.height < 8 {
+			showName := ""
+			if ep.Show != nil {
+				showName = ep.Show.Name
+			}
+			m := uikit.ActiveMode()
+			var stateGlyph string
+			if ps.IsPlaying {
+				stateGlyph = uikit.GlyphFor(uikit.GlyphPaused, m)
+			} else {
+				stateGlyph = uikit.GlyphFor(uikit.GlyphPlaying, m)
+			}
+			sep := uikit.GlyphFor(uikit.GlyphHRule, m)
+			midDot := uikit.GlyphFor(uikit.GlyphSeparator, m)
+			current := formatDurationMs(p.localProgressMs)
+			total := formatDurationMs(ep.DurationMs)
+			return fmt.Sprintf("Now Playing%s %s %s %s %s %s %s %s/%s",
+				podcastNotch, sep, ep.Name, midDot, showName, sep, stateGlyph, current, total)
+		}
+		return fmt.Sprintf("Now Playing%s", podcastNotch)
+
+	case "track":
+		if ps.Item == nil {
+			return "Now Playing"
+		}
+		t := ps.Item
+		if p.height < 8 {
 			artistNames := make([]string, len(t.Artists))
 			for i, a := range t.Artists {
 				artistNames[i] = a.Name
@@ -122,8 +160,11 @@ func (p *NowPlayingPane) Title() string {
 			return fmt.Sprintf("Now Playing %s %s %s %s %s %s %s/%s",
 				sep, t.Name, midDot, strings.Join(artistNames, ", "), sep, stateGlyph, current, total)
 		}
+		return "Now Playing"
+
+	default:
+		return "Now Playing"
 	}
-	return "Now Playing"
 }
 
 // ToggleKey returns the number key for btop-style pane toggling (key 1).
@@ -132,18 +173,25 @@ func (p *NowPlayingPane) ToggleKey() int {
 }
 
 // Actions returns the pane-specific shortcuts shown in the border.
+// When an episode is playing, includes an {Key: "i", Label: "details"} action
+// for the Episode Details overlay.
 // NOTE: layout.RenderPaneBorder drops all actions atomically when the pane is too
 // narrow to fit title + actions within cfg.Width (dashCount < 0 after computing
-// fixedWidth). At narrow widths none of these five actions will appear; once the
+// fixedWidth). At narrow widths none of these actions will appear; once the
 // pane is wide enough they all appear. This is expected graceful degradation, not a bug.
 func (p *NowPlayingPane) Actions() []layout.Action {
-	return []layout.Action{
+	actions := []layout.Action{
 		{Key: "s", Label: "shfl"},
 		{Key: "r", Label: "rpt"},
 		{Key: "space", Label: "play"},
 		{Key: "+/-", Label: "vol"},
 		{Key: "v", Label: "viz"},
 	}
+	ps := p.store.PlaybackState()
+	if ps != nil && ps.CurrentlyPlayingType == "episode" {
+		actions = append(actions, layout.Action{Key: "i", Label: "details"})
+	}
+	return actions
 }
 
 // SetSize updates the pane's dimensions and recomputes the side-by-side
@@ -255,13 +303,27 @@ func (p *NowPlayingPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the NowPlaying pane. It reads from the store and never calls the API.
-// Dispatches to renderEmpty when nothing is playing, otherwise renderSideBySide.
+// Dispatches based on CurrentlyPlayingType: track → side-by-side, episode → episode
+// side-by-side, default/empty → empty state.
 func (p *NowPlayingPane) View() string {
 	ps := p.store.PlaybackState()
-	if ps == nil || ps.Item == nil {
+	if ps == nil {
 		return p.renderEmpty()
 	}
-	return p.renderSideBySide()
+	switch ps.CurrentlyPlayingType {
+	case "track":
+		if ps.Item != nil {
+			return p.renderSideBySide()
+		}
+		return p.renderEmpty()
+	case "episode":
+		if ps.Episode != nil {
+			return p.renderEpisodeSideBySide()
+		}
+		return p.renderEmpty()
+	default:
+		return p.renderEmpty()
+	}
 }
 
 // renderSideBySide composes the InfoBox on the left and the visualizer on
@@ -293,8 +355,7 @@ func (p *NowPlayingPane) renderSideBySide() string {
 	// Build right column lines.
 	rightLines := make([]string, 0, len(frame)+1)
 	for _, line := range frame {
-		style := lipgloss.NewStyle().Foreground(line.Color)
-		rightLines = append(rightLines, style.Render(line.Text))
+		rightLines = append(rightLines, renderStyledLine(line))
 	}
 	rightLines = append(rightLines, seekBar)
 
@@ -356,9 +417,141 @@ func (p *NowPlayingPane) renderSideBySide() string {
 	return strings.Join(lines, "\n")
 }
 
-// buildInfoLines builds the InfoBox content (track, artists, album, controls,
-// volume). When the body height is tight, the album line is dropped so controls
-// and volume remain visible.
+// renderEpisodeSideBySide composes the episode InfoBox on the left and the
+// visualizer on the right. Same layout as renderSideBySide but renders episode
+// info (episode name, show name, release date) instead of track info.
+func (p *NowPlayingPane) renderEpisodeSideBySide() string {
+	ps := p.store.PlaybackState()
+	ep := ps.Episode
+	effH := p.effectiveHeight()
+	cw := p.contentWidth()
+
+	infoWidth := cw / npInfoPctTall
+	if effH <= 8 {
+		infoWidth = cw / npInfoPctShort
+	}
+	if infoWidth < npInfoMin {
+		infoWidth = npInfoMin
+	}
+	vizWidth := cw - infoWidth - npGap
+	if vizWidth < npMinViz {
+		infoWidth = 0
+		vizWidth = cw
+	}
+
+	frame := p.engine.CurrentFrame()
+	seekBar := p.seekBar.Render(p.localProgressMs, ep.DurationMs)
+
+	// Build right column lines.
+	rightLines := make([]string, 0, len(frame)+1)
+	for _, line := range frame {
+		rightLines = append(rightLines, renderStyledLine(line))
+	}
+	rightLines = append(rightLines, seekBar)
+
+	// Fit right column into effective height.
+	targetH := effH
+	contentH := len(rightLines)
+	padTotal := targetH - contentH
+	if padTotal < 0 {
+		keepViz := targetH - 1
+		if keepViz < 0 {
+			keepViz = 0
+		}
+		if len(rightLines)-1 > keepViz {
+			rightLines = append(rightLines[:keepViz], seekBar)
+		}
+		padTotal = 0
+	}
+	topPad := padTotal / 2
+	botPad := padTotal - topPad
+	for i := 0; i < topPad; i++ {
+		rightLines = append([]string{""}, rightLines...)
+	}
+	for i := 0; i < botPad; i++ {
+		rightLines = append(rightLines, "")
+	}
+
+	// Compose line-by-line.
+	var lines []string
+	if infoWidth > 0 {
+		infoLines := p.buildEpisodeInfoLines(effH, infoWidth)
+		infoTitle := "Episode Info"
+		infoView := p.infoBox.Render(infoTitle, infoLines, p.focused)
+		infoSplit := strings.Split(infoView, "\n")
+
+		// Equalise line count.
+		for len(infoSplit) < len(rightLines) {
+			infoSplit = append(infoSplit, strings.Repeat(" ", infoWidth))
+		}
+		for len(rightLines) < len(infoSplit) {
+			rightLines = append(rightLines, strings.Repeat(" ", vizWidth))
+		}
+
+		gap := strings.Repeat(" ", npGap)
+		for i := range infoSplit {
+			lines = append(lines, infoSplit[i]+gap+rightLines[i])
+		}
+	} else {
+		lines = rightLines
+	}
+
+	// Centre vertically within oversized pane.
+	if p.height > effH {
+		outerPad := (p.height - effH) / 2
+		for i := 0; i < outerPad; i++ {
+			lines = append([]string{""}, lines...)
+			lines = append(lines, "")
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// buildEpisodeInfoLines builds the InfoBox content for an episode (episode name,
+// show name, release date, controls, volume). When tight, release date is dropped.
+func (p *NowPlayingPane) buildEpisodeInfoLines(bodyHeight int, infoWidth int) []string {
+	ps := p.store.PlaybackState()
+	if ps == nil || ps.Episode == nil {
+		return nil
+	}
+	ep := ps.Episode
+	primaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextPrimary()).Bold(true)
+	secondaryStyle := lipgloss.NewStyle().Foreground(p.theme.TextSecondary())
+	mutedStyle := lipgloss.NewStyle().Foreground(p.theme.TextMuted())
+
+	showName := ""
+	if ep.Show != nil {
+		showName = ep.Show.Name
+	}
+
+	pad := strings.Repeat(" ", npInfoPadLeft)
+	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
+	innerW := infoWidth - 2
+	ctrlLine := lipgloss.NewStyle().Width(innerW).Align(lipgloss.Center).Render(ctrl.Render())
+
+	lines := []string{
+		pad + primaryStyle.Render(ep.Name),
+		pad + secondaryStyle.Render(showName),
+		pad + mutedStyle.Render(ep.ReleaseDate),
+		ctrlLine,
+		p.volumeBar.Render(),
+	}
+
+	innerH := bodyHeight - 2
+	if innerH < 1 {
+		innerH = 1
+	}
+	if len(lines) > innerH {
+		if innerH >= 4 {
+			// Drop release date line so controls + volume remain visible.
+			lines = append(lines[:2], lines[3:]...)
+		} else {
+			lines = lines[:innerH]
+		}
+	}
+	return lines
+}
 func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string {
 	ps := p.store.PlaybackState()
 	if ps == nil || ps.Item == nil {
@@ -402,24 +595,59 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string 
 	return lines
 }
 
-// renderStyledLines joins StyledLines into a single string with per-line coloring.
+// renderStyledLine renders a single StyledLine into a string.
+// When Segments is populated, each segment gets its own color;
+// otherwise the line-level Color field is used (backward compatible).
+func renderStyledLine(line viz.StyledLine) string {
+	if len(line.Segments) > 0 {
+		var sb strings.Builder
+		for _, seg := range line.Segments {
+			sb.WriteString(lipgloss.NewStyle().Foreground(seg.Color).Render(seg.Text))
+		}
+		return sb.String()
+	}
+	return lipgloss.NewStyle().Foreground(line.Color).Render(line.Text)
+}
+
+// renderStyledLines joins StyledLines into a single string.
+// When Segments is populated, each segment gets its own color;
+// otherwise the line-level Color field is used (backward compatible).
 func renderStyledLines(lines viz.Frame) string {
 	if len(lines) == 0 {
 		return ""
 	}
 	rows := make([]string, len(lines))
 	for i, line := range lines {
-		style := lipgloss.NewStyle().Foreground(line.Color)
-		rows[i] = style.Render(line.Text)
+		rows[i] = renderStyledLine(line)
 	}
 	return strings.Join(rows, "\n")
+}
+
+// currentDurationMs returns the duration of the currently playing item (track or episode).
+// Returns 0 if nothing is playing.
+func (p *NowPlayingPane) currentDurationMs() int {
+	ps := p.store.PlaybackState()
+	if ps == nil {
+		return 0
+	}
+	return p.playingDurationMs(ps)
+}
+
+// currentProgressMs returns the confirmed playback progress from the store.
+// Returns 0 if playback state is unavailable.
+func (p *NowPlayingPane) currentProgressMs() int {
+	ps := p.store.PlaybackState()
+	if ps == nil {
+		return 0
+	}
+	return ps.ProgressMs
 }
 
 // renderEmpty shows the "Nothing playing" empty state, centered in the pane.
 func (p *NowPlayingPane) renderEmpty() string {
 	return uikit.EmptyState{
 		Text:   "Nothing playing",
-		Hint:   "Open Spotify on a device and start playing music",
+		Hint:   "Press / to search",
 		Width:  p.width,
 		Height: p.height,
 		Theme:  p.theme,
@@ -436,12 +664,29 @@ func (p *NowPlayingPane) handleTick() (*NowPlayingPane, tea.Cmd) {
 	if ps != nil && ps.IsPlaying {
 		if !p.seekBar.HasPending() {
 			p.localProgressMs += 1000
-			if ps.Item != nil && p.localProgressMs > ps.Item.DurationMs {
-				p.localProgressMs = ps.Item.DurationMs
+			durationMs := p.playingDurationMs(ps)
+			if durationMs > 0 && p.localProgressMs > durationMs {
+				p.localProgressMs = durationMs
 			}
 		}
 	}
 	return p, nil
+}
+
+// playingDurationMs returns the duration in ms of whatever is currently playing.
+// Returns 0 if nothing is playing (duration unknown).
+func (p *NowPlayingPane) playingDurationMs(ps *domain.PlaybackState) int {
+	switch ps.CurrentlyPlayingType {
+	case "track":
+		if ps.Item != nil {
+			return ps.Item.DurationMs
+		}
+	case "episode":
+		if ps.Episode != nil {
+			return ps.Episode.DurationMs
+		}
+	}
+	return 0
 }
 
 // handlePlaybackFetched processes notification that the store has fresh playback state.
@@ -459,8 +704,9 @@ func (p *NowPlayingPane) handlePlaybackFetched(_ PlaybackStateFetchedMsg) (*NowP
 		if ps.Device != nil {
 			p.volumeBar.SetConfirmed(ps.Device.VolumePercent)
 		}
-		if ps.Item != nil {
-			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		durationMs := p.playingDurationMs(ps)
+		if durationMs > 0 {
+			p.seekBar.SetTrackDuration(durationMs)
 		}
 		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
 	} else {
@@ -494,25 +740,25 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 	case msg.Type == tea.KeyShiftRight:
 		return p, emitPlaybackRequest(ActionNext)
 
-	// Plain arrows: seek back/forward 5 seconds (was: previous/next track).
+	// Plain arrows: seek back/forward 5 seconds. Works for both tracks and episodes.
 	case msg.Type == tea.KeyLeft:
-		if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil && ps.Item.DurationMs > 0 {
-			confirmed := ps.ProgressMs
+		if durationMs := p.currentDurationMs(); durationMs > 0 {
+			confirmed := p.currentProgressMs()
 			if p.seekBar.HasPending() {
 				confirmed = p.seekBar.Current()
 			}
-			cmd := p.seekBar.HandleKey(-5000, confirmed, ps.Item.DurationMs)
+			cmd := p.seekBar.HandleKey(-5000, confirmed, durationMs)
 			return p, cmd
 		}
 		return p, nil
 
 	case msg.Type == tea.KeyRight:
-		if ps := p.store.PlaybackState(); ps != nil && ps.Item != nil && ps.Item.DurationMs > 0 {
-			confirmed := ps.ProgressMs
+		if durationMs := p.currentDurationMs(); durationMs > 0 {
+			confirmed := p.currentProgressMs()
 			if p.seekBar.HasPending() {
 				confirmed = p.seekBar.Current()
 			}
-			cmd := p.seekBar.HandleKey(+5000, confirmed, ps.Item.DurationMs)
+			cmd := p.seekBar.HandleKey(+5000, confirmed, durationMs)
 			return p, cmd
 		}
 		return p, nil
@@ -592,8 +838,9 @@ func (p *NowPlayingPane) SetTheme(th theme.Theme) {
 	// Restore seek bar state from the store so the new bar renders the correct position.
 	if ps := p.store.PlaybackState(); ps != nil {
 		p.seekBar.SetPositionConfirmed(ps.ProgressMs)
-		if ps.Item != nil {
-			p.seekBar.SetTrackDuration(ps.Item.DurationMs)
+		durationMs := p.playingDurationMs(ps)
+		if durationMs > 0 {
+			p.seekBar.SetTrackDuration(durationMs)
 		}
 	}
 	// Propagate dimensions to newly created sub-components.
