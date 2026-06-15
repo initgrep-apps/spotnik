@@ -921,21 +921,21 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
 		// Determine content type from context URI prefix.
 		if strings.HasPrefix(m.ContextURI, "spotify:show:") {
-			a.autoSwitchPreset("episode")
+			a.autoSwitchPreset(contentTypeEpisode)
 		} else {
-			a.autoSwitchPreset("track")
+			a.autoSwitchPreset(contentTypeTrack)
 		}
 		return a, a.buildPlayContextCmd(m.ContextURI, m.OffsetURI)
 
 	case panes.PlayTrackListMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
-		a.autoSwitchPreset("track")
+		a.autoSwitchPreset(contentTypeTrack)
 		return a, a.buildPlayTrackListCmd(m.URIs)
 
 	case panes.PlayTrackMsg:
 		// QueuePane skip-to: play a single track URI directly.
 		// Single-URI list is functionally equivalent to the old buildPlayTrackCmd.
-		a.autoSwitchPreset("track")
+		a.autoSwitchPreset(contentTypeTrack)
 		return a, a.buildPlayTrackListCmd([]string{m.TrackURI})
 
 	case panes.AddToQueueMsg:
@@ -1672,7 +1672,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.PlayEpisodeMsg:
-		a.autoSwitchPreset("episode")
+		a.autoSwitchPreset(contentTypeEpisode)
 		return a, a.buildPlayEpisodeCmd(m.EpisodeURI, m.PlaylistURI)
 
 	case panes.FollowedShowsViewClosedMsg:
@@ -1729,17 +1729,24 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 }
 
+const (
+	contentTypeTrack   = "track"
+	contentTypeEpisode = "episode"
+)
+
 // autoSwitchPreset switches the preset when the user initiates playback of content
 // that doesn't match the current preset's orientation. Background playback changes
 // (polling) must NOT call this method.
 func (a *App) autoSwitchPreset(forContentType string) {
+	a.layout.SwitchToPage(layout.PagePlayer)
+
 	isPodcastPreset := a.isCurrentPresetPodcastOriented()
 
-	if forContentType == "track" && isPodcastPreset {
+	if forContentType == contentTypeTrack && isPodcastPreset {
 		a.layout.SetPreset(1) // Listening
 		a.propagateSizes()
 		a.syncFocus()
-	} else if forContentType == "episode" && !isPodcastPreset {
+	} else if forContentType == contentTypeEpisode && !isPodcastPreset {
 		a.layout.SetPreset(2) // Podcast
 		a.propagateSizes()
 		a.syncFocus()

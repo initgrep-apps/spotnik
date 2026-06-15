@@ -14,8 +14,7 @@ import (
 )
 
 // newAutoSwitchTestApp creates an App with a reasonable window size,
-// posts a PlaybackStateFetchedMsg with a nil state to stabilize the model,
-// and returns the app in grid view.
+// sets terminal size and initializes layout, and returns the app in grid view.
 func newAutoSwitchTestApp(t *testing.T) *app.App {
 	t.Helper()
 	a := app.New(&config.Config{}, app.AppOptions{})
@@ -266,6 +265,18 @@ func TestPlayContextMsg_ShowURI_OnPodcastPreset_NoSwitch(t *testing.T) {
 
 	assert.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName(),
 		"PlayContextMsg with show URI on podcast preset should not switch")
+}
+
+func TestPlayContextMsg_AlbumURI_OnMusicPreset_NoSwitch(t *testing.T) {
+	a := newAutoSwitchTestApp(t)
+	// Default is Dashboard (music preset)
+	require.Equal(t, layout.PresetNameDashboard, a.Layout().ActivePresetName())
+
+	msg := panes.PlayContextMsg{ContextURI: "spotify:album:xyz789"}
+	a.Update(msg)
+
+	assert.Equal(t, layout.PresetNameDashboard, a.Layout().ActivePresetName(),
+		"PlayContextMsg with album URI on music preset should not switch")
 }
 
 // =============================================================================

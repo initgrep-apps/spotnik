@@ -998,6 +998,64 @@ func TestSetPreset_DirectSwitch(t *testing.T) {
 	assert.Equal(t, 2, m.ActivePresetIndex())
 }
 
+func TestActivePreset_ReturnsCorrectPreset(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	tests := []struct {
+		presetIdx int
+		wantName  string
+	}{
+		{0, "Dashboard"},
+		{1, "Listening"},
+		{2, "Podcast"},
+		{3, "Library"},
+		{4, "Discovery"},
+		{5, "Podcast Dashboard"},
+	}
+
+	for _, tt := range tests {
+		m.SetPreset(tt.presetIdx)
+		got := m.ActivePreset()
+		assert.Equal(t, tt.wantName, got.Name)
+		assert.NotEmpty(t, got.Visible)
+		assert.NotEmpty(t, got.Grid)
+	}
+}
+
+func TestActivePreset_OutOfBounds(t *testing.T) {
+	// Switch to Stats page (1 preset) and set preset index beyond the single entry.
+	m := layout.NewManager()
+	m.Resize(120, 30)
+	m.TogglePage() // Player → Stats
+	require.Equal(t, 0, m.ActivePresetIndex())
+	m.CyclePreset() // wraps to 0, still valid
+	require.Equal(t, 0, m.ActivePresetIndex())
+
+	// ActivePreset on Stats page with index 0 returns the correct preset.
+	got := m.ActivePreset()
+	assert.Equal(t, "Stats", got.Name)
+	assert.NotEmpty(t, got.Visible)
+}
+
+func TestActivePreset_ReturnsZeroValueForOutOfBounds(t *testing.T) {
+	m := layout.NewManager()
+	m.Resize(120, 30)
+
+	// Valid preset returns non-zero Preset.
+	got := m.ActivePreset()
+	assert.Equal(t, "Dashboard", got.Name)
+	assert.NotEmpty(t, got.Grid)
+
+	// Force out-of-bounds index on Player page (6 presets: 0-5).
+	m.SetActivePresetIndex(99)
+	got = m.ActivePreset()
+	assert.Equal(t, layout.Preset{}, got)
+	assert.Empty(t, got.Name)
+	assert.Empty(t, got.Grid)
+	assert.Empty(t, got.Visible)
+}
+
 func TestIsPaneVisible_CurrentPreset(t *testing.T) {
 	m := layout.NewManager()
 	m.Resize(120, 30)
