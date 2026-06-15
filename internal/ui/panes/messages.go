@@ -202,11 +202,11 @@ type AddToQueueResultMsg struct {
 }
 
 // QueueLoadedMsg is returned by the queue fetch command.
-// Tracks carries the fetched queue on success; Err is non-nil on failure.
-// Update() writes Tracks to the store; QueuePane reads from store directly.
+// Items carries the fetched queue on success; Err is non-nil on failure.
+// Update() writes Items to the store; QueuePane reads from store directly.
 type QueueLoadedMsg struct {
-	Tracks []domain.Track
-	Err    error
+	Items []domain.QueueItem
+	Err   error
 }
 
 // FetchStatsMsg is a request message emitted by stats panes (TopTracksPane, TopArtistsPane)

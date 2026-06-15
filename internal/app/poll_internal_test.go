@@ -617,7 +617,7 @@ func TestApp_QueueLoaded_SuccessResetsPollState(t *testing.T) {
 	assert.Equal(t, 1, a.queuePoll.errorCount)
 
 	// Success resets.
-	msg := panes.QueueLoadedMsg{Tracks: []domain.Track{}}
+	msg := panes.QueueLoadedMsg{Items: []domain.QueueItem{}}
 	model, cmd := a.Update(msg)
 	a = model.(*App)
 	assert.Equal(t, 0, a.queuePoll.errorCount, "success should reset errorCount")

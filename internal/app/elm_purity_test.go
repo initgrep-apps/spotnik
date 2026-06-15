@@ -161,24 +161,24 @@ func TestUpdate_PlaybackStateFetchedMsg_WithErr_NoStoreMutation(t *testing.T) {
 	assert.NotNil(t, a.Store().PlaybackState())
 }
 
-// TestUpdate_QueueLoadedMsg_WritesStore verifies that QueueLoadedMsg with tracks
+// TestUpdate_QueueLoadedMsg_WritesStore verifies that QueueLoadedMsg with items
 // causes Update() to write to the store.
 func TestUpdate_QueueLoadedMsg_WritesStore(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	tracks := []domain.Track{
-		{ID: "q1", Name: "First in Queue"},
-		{ID: "q2", Name: "Second in Queue"},
+	items := []domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q1", Name: "First in Queue"}},
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q2", Name: "Second in Queue"}},
 	}
 
-	msg := panes.QueueLoadedMsg{Tracks: tracks}
+	msg := panes.QueueLoadedMsg{Items: items}
 	_, _ = a.Update(msg)
 
 	got := a.Store().Queue()
 	require.Len(t, got, 2)
-	assert.Equal(t, "q1", got[0].ID)
-	assert.Equal(t, "First in Queue", got[0].Name)
+	assert.Equal(t, "q1", got[0].Track.ID)
+	assert.Equal(t, "First in Queue", got[0].Track.Name)
 }
 
 // TestUpdate_QueueLoadedMsg_WithErr_WritesQueueError verifies that QueueLoadedMsg
@@ -203,15 +203,17 @@ func TestUpdate_QueueLoadedMsg_Success_ClearsQueueError(t *testing.T) {
 	// Set an error first
 	a.Store().SetQueueError(errors.New("previous error"))
 
-	tracks := []domain.Track{{ID: "q1", Name: "Track"}}
-	msg := panes.QueueLoadedMsg{Tracks: tracks}
+	items := []domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q1", Name: "Track"}},
+	}
+	msg := panes.QueueLoadedMsg{Items: items}
 	_, _ = a.Update(msg)
 
 	assert.Nil(t, a.Store().QueueError(), "QueueError should be cleared on successful load")
 }
 
 // TestFetchQueueCmd_ReturnsTracksInMsg verifies that fetchQueueCmd returns
-// queue tracks in the QueueLoadedMsg payload.
+// queue items in the QueueLoadedMsg payload.
 func TestFetchQueueCmd_ReturnsTracksInMsg(t *testing.T) {
 	srv := queueServer()
 	defer srv.Close()
@@ -222,9 +224,9 @@ func TestFetchQueueCmd_ReturnsTracksInMsg(t *testing.T) {
 
 	m, err := runFetchQueueCmd(a)
 	require.NoError(t, err, "should be able to extract QueueLoadedMsg from command chain")
-	assert.Len(t, m.Tracks, 2, "QueueLoadedMsg.Tracks should contain the fetched tracks")
-	assert.Equal(t, "t2", m.Tracks[0].ID)
-	assert.Equal(t, "Next Song", m.Tracks[0].Name)
+	assert.Len(t, m.Items, 2, "QueueLoadedMsg.Items should contain the fetched items")
+	assert.Equal(t, "t2", m.Items[0].Track.ID)
+	assert.Equal(t, "Next Song", m.Items[0].Track.Name)
 }
 
 // --- Task 2: Library messages carry data ---

@@ -420,8 +420,8 @@ func TestGetQueue(t *testing.T) {
 				require.NotNil(t, resp)
 				assert.Equal(t, "Blinding Lights", resp.CurrentlyPlaying.Name, "currently_playing track name should match")
 				require.Len(t, resp.Queue, 2, "queue should have 2 tracks")
-				assert.Equal(t, "Save Your Tears", resp.Queue[0].Name)
-				assert.Equal(t, "Starboy", resp.Queue[1].Name)
+				assert.Equal(t, "Save Your Tears", resp.Queue[0].Track.Name)
+				assert.Equal(t, "Starboy", resp.Queue[1].Track.Name)
 			},
 		},
 		{
@@ -462,7 +462,7 @@ func TestQueueResponse_Parse(t *testing.T) {
 	assert.Equal(t, "Blinding Lights", qr.CurrentlyPlaying.Name)
 	assert.Equal(t, "spotify:track:track-xyz789", qr.CurrentlyPlaying.URI)
 	require.Len(t, qr.Queue, 2)
-	assert.Equal(t, "The Weeknd", qr.Queue[0].Artists[0].Name)
+	assert.Equal(t, "The Weeknd", qr.Queue[0].Track.Artists[0].Name)
 }
 
 // TestPlayerClient_GetPlaybackState_ImagesPopulated verifies that the PlaybackState

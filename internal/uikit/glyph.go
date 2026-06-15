@@ -82,6 +82,7 @@ const (
 	// Domain / music / identity
 	GlyphMusicNote  GlyphRole = "music.note"
 	GlyphDoubleNote GlyphRole = "music.double"
+	GlyphEpisode    GlyphRole = "music.episode"
 	GlyphPremium    GlyphRole = "music.premium"
 	GlyphFreeTier   GlyphRole = "music.free"
 	GlyphCloud      GlyphRole = "music.cloud"
@@ -198,6 +199,7 @@ var glyphTable = map[GlyphRole][2]string{
 	// Domain
 	GlyphMusicNote:  {"♪", "*"},
 	GlyphDoubleNote: {"♫", "**"},
+	GlyphEpisode:    {"◆", "EP"},
 	GlyphPremium:    {"♛", "*P"},
 	GlyphFreeTier:   {"○", "(o)"},
 	GlyphCloud:      {"☁", "(c)"},

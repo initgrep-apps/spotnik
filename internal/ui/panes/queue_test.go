@@ -6,7 +6,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/api"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
@@ -22,22 +21,49 @@ func newTestQueuePane(focused bool) *QueuePane {
 	return NewQueuePane(s, t, focused)
 }
 
+// makes a track QueueItem for tests.
+func qiTrack(id, name, uri, artist string) domain.QueueItem {
+	return domain.QueueItem{
+		Type: domain.QueueItemTypeTrack,
+		Track: &domain.Track{
+			ID:      id,
+			Name:    name,
+			URI:     uri,
+			Artists: []domain.Artist{{Name: artist}},
+		},
+	}
+}
+
+// makes an episode QueueItem for tests.
+func qiEpisode(id, name, uri string, durMs int, showName string) domain.QueueItem {
+	return domain.QueueItem{
+		Type: domain.QueueItemTypeEpisode,
+		Episode: &domain.Episode{
+			ID:         id,
+			Name:       name,
+			URI:        uri,
+			DurationMs: durMs,
+			Show:       &domain.Show{Name: showName},
+		},
+	}
+}
+
 // newTestQueuePaneWithData creates a QueuePane pre-loaded with playback state and queue.
 func newTestQueuePaneWithData(focused bool) *QueuePane {
 	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
+	s.SetPlaybackState(&domain.PlaybackState{
 		IsPlaying: true,
-		Item: &api.Track{
+		Item: &domain.Track{
 			ID:      "now-1",
 			Name:    "Blinding Lights",
 			URI:     "spotify:track:now-1",
-			Artists: []api.Artist{{Name: "The Weeknd"}},
+			Artists: []domain.Artist{{Name: "The Weeknd"}},
 		},
 	})
-	s.SetQueue([]api.Track{
-		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1", Artists: []api.Artist{{Name: "The Weeknd"}}},
-		{ID: "q2", Name: "Starboy", URI: "spotify:track:q2", Artists: []api.Artist{{Name: "The Weeknd"}}},
-		{ID: "q3", Name: "Can't Feel My Face", URI: "spotify:track:q3", Artists: []api.Artist{{Name: "The Weeknd"}}},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Save Your Tears", "spotify:track:q1", "The Weeknd"),
+		qiTrack("q2", "Starboy", "spotify:track:q2", "The Weeknd"),
+		qiTrack("q3", "Can't Feel My Face", "spotify:track:q3", "The Weeknd"),
 	})
 	t := theme.Load("black")
 	return NewQueuePane(s, t, focused)
@@ -144,21 +170,17 @@ func TestQueuePane_IsFocused(t *testing.T) {
 
 func TestQueuePane_ScrollIndicators_LongQueue(t *testing.T) {
 	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
+	s.SetPlaybackState(&domain.PlaybackState{
 		IsPlaying: true,
-		Item:      &api.Track{ID: "t1", Name: "Now", Artists: []api.Artist{{Name: "A"}}},
+		Item:      &domain.Track{ID: "t1", Name: "Now", Artists: []domain.Artist{{Name: "A"}}},
 	})
 
-	// Create 25 tracks in the queue.
-	tracks := make([]api.Track, 25)
-	for i := range tracks {
-		tracks[i] = api.Track{
-			ID:      fmt.Sprintf("q%d", i),
-			Name:    fmt.Sprintf("Track %d", i+1),
-			Artists: []api.Artist{{Name: "Artist"}},
-		}
+	// Create 25 items in the queue.
+	items := make([]domain.QueueItem, 25)
+	for i := range items {
+		items[i] = qiTrack(fmt.Sprintf("q%d", i), fmt.Sprintf("Track %d", i+1), "uri", "Artist")
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -172,20 +194,16 @@ func TestQueuePane_ScrollIndicators_LongQueue(t *testing.T) {
 
 func TestQueuePane_Scroll_CursorMovesWindow(t *testing.T) {
 	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
+	s.SetPlaybackState(&domain.PlaybackState{
 		IsPlaying: true,
-		Item:      &api.Track{ID: "t1", Name: "Now", Artists: []api.Artist{{Name: "A"}}},
+		Item:      &domain.Track{ID: "t1", Name: "Now", Artists: []domain.Artist{{Name: "A"}}},
 	})
 
-	tracks := make([]api.Track, 25)
-	for i := range tracks {
-		tracks[i] = api.Track{
-			ID:      fmt.Sprintf("q%d", i),
-			Name:    fmt.Sprintf("Track %d", i+1),
-			Artists: []api.Artist{{Name: "Artist"}},
-		}
+	items := make([]domain.QueueItem, 25)
+	for i := range items {
+		items[i] = qiTrack(fmt.Sprintf("q%d", i), fmt.Sprintf("Track %d", i+1), "uri", "Artist")
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -204,12 +222,14 @@ func TestQueuePane_Scroll_CursorMovesWindow(t *testing.T) {
 // TestQueuePane_View_WithQueueData verifies that track data is visible in table rows.
 func TestQueuePane_View_WithQueueData(t *testing.T) {
 	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
+	s.SetPlaybackState(&domain.PlaybackState{
 		IsPlaying:   true,
 		RepeatState: "off",
-		Item:        &api.Track{ID: "t1", Name: "Now Playing", Artists: []api.Artist{{Name: "A"}}},
+		Item:        &domain.Track{ID: "t1", Name: "Now Playing", Artists: []domain.Artist{{Name: "A"}}},
 	})
-	s.SetQueue([]api.Track{{ID: "q1", Name: "Next Track", Artists: []api.Artist{{Name: "B"}}}})
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Next Track", "uri", "B"),
+	})
 
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, false)
@@ -244,7 +264,6 @@ func TestQueuePane_ToggleKey(t *testing.T) {
 }
 
 // TestQueuePane_Actions verifies that Actions() returns only filter action by default.
-// 'A' (add) was removed in story 120 — no handler existed for it in queue.go.
 func TestQueuePane_Actions(t *testing.T) {
 	pane := newTestQueuePane(false)
 	actions := pane.Actions()
@@ -258,15 +277,11 @@ func TestQueuePane_Actions(t *testing.T) {
 // TestQueuePane_Table_FiveTracks verifies the table has 5 rows for 5 queued tracks.
 func TestQueuePane_Table_FiveTracks(t *testing.T) {
 	s := state.New()
-	tracks := make([]api.Track, 5)
-	for i := range tracks {
-		tracks[i] = api.Track{
-			ID:      fmt.Sprintf("t%d", i+1),
-			Name:    fmt.Sprintf("Track %d", i+1),
-			Artists: []api.Artist{{Name: "Artist"}},
-		}
+	items := make([]domain.QueueItem, 5)
+	for i := range items {
+		items[i] = qiTrack(fmt.Sprintf("t%d", i+1), fmt.Sprintf("Track %d", i+1), "uri", "Artist")
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -285,7 +300,7 @@ func TestQueuePane_Table_ColumnHeaders(t *testing.T) {
 	output := pane.View()
 
 	assert.Contains(t, output, "#", "should contain # column header")
-	assert.Contains(t, output, "Track", "should contain Track column header")
+	assert.Contains(t, output, "Title", "should contain Title column header")
 	assert.Contains(t, output, "Artist", "should contain Artist column header")
 	assert.Contains(t, output, "Duration", "should contain Duration column header")
 }
@@ -293,21 +308,20 @@ func TestQueuePane_Table_ColumnHeaders(t *testing.T) {
 // TestQueuePane_Table_PlayingIndicator verifies the ▶ symbol appears for the playing track.
 func TestQueuePane_Table_PlayingIndicator(t *testing.T) {
 	s := state.New()
-	s.SetPlaybackState(&api.PlaybackState{
+	s.SetPlaybackState(&domain.PlaybackState{
 		IsPlaying: true,
-		Item: &api.Track{
+		Item: &domain.Track{
 			ID:      "now-1",
 			Name:    "Playing Track",
 			URI:     "spotify:track:now-1",
-			Artists: []api.Artist{{Name: "Artist"}},
-			// Mark this as playing at position 1 in the queue (0-based index 0).
+			Artists: []domain.Artist{{Name: "Artist"}},
 		},
 	})
-	tracks := []api.Track{
-		{ID: "q1", Name: "First Queue", URI: "spotify:track:q1", Artists: []api.Artist{{Name: "Artist"}}},
-		{ID: "q2", Name: "Second Queue", URI: "spotify:track:q2", Artists: []api.Artist{{Name: "Artist"}}},
+	items := []domain.QueueItem{
+		qiTrack("q1", "First Queue", "spotify:track:q1", "Artist"),
+		qiTrack("q2", "Second Queue", "spotify:track:q2", "Artist"),
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -392,10 +406,10 @@ func TestQueuePane_Filter_EscCloses(t *testing.T) {
 // TestQueuePane_Filter_QueryFiltersRows verifies that typing a query reduces visible rows.
 func TestQueuePane_Filter_QueryFiltersRows(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]api.Track{
-		{ID: "q1", Name: "Rocket Man", Artists: []api.Artist{{Name: "Elton John"}}},
-		{ID: "q2", Name: "Rock and Roll", Artists: []api.Artist{{Name: "Led Zeppelin"}}},
-		{ID: "q3", Name: "Save Your Tears", Artists: []api.Artist{{Name: "The Weeknd"}}},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Rocket Man", "uri", "Elton John"),
+		qiTrack("q2", "Rock and Roll", "uri", "Led Zeppelin"),
+		qiTrack("q3", "Save Your Tears", "uri", "The Weeknd"),
 	})
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -420,9 +434,9 @@ func TestQueuePane_Filter_QueryFiltersRows(t *testing.T) {
 // TestQueuePane_Filter_ArtistMatch verifies that filter matches artist names.
 func TestQueuePane_Filter_ArtistMatch(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]api.Track{
-		{ID: "q1", Name: "Blinding Lights", Artists: []api.Artist{{Name: "The Weeknd"}}},
-		{ID: "q2", Name: "Levitating", Artists: []api.Artist{{Name: "Dua Lipa"}}},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Blinding Lights", "uri", "The Weeknd"),
+		qiTrack("q2", "Levitating", "uri", "Dua Lipa"),
 	})
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -479,8 +493,7 @@ func TestQueuePane_Filter_NoMatchesShowsEmptyTable(t *testing.T) {
 }
 
 // TestQueuePane_Filter_ActionsUnchangedWhenActive verifies Actions() always returns
-// the {f, filter} hint — the close-notch is retired (Esc is a global key).
-// The border renderer uses FilterQuery to show the graded f(query) label instead.
+// the {f, filter} hint.
 func TestQueuePane_Filter_ActionsUnchangedWhenActive(t *testing.T) {
 	pane := newTestQueuePaneWithData(true)
 	pane.SetSize(80, 20)
@@ -514,13 +527,12 @@ func TestQueuePane_FullLifecycle(t *testing.T) {
 	pane.SetSize(100, 30)
 
 	// Step 2: load queue.
-	tracks := []api.Track{
-		{ID: "t1", Name: "Blinding Lights", Artists: []api.Artist{{Name: "The Weeknd"}}, DurationMs: 200000},
-		{ID: "t2", Name: "Levitating", Artists: []api.Artist{{Name: "Dua Lipa"}}, DurationMs: 203000},
-		{ID: "t3", Name: "Rocket Man", Artists: []api.Artist{{Name: "Elton John"}}, DurationMs: 269000},
+	items := []domain.QueueItem{
+		qiTrack("t1", "Blinding Lights", "uri", "The Weeknd"),
+		qiTrack("t2", "Levitating", "uri", "Dua Lipa"),
+		qiTrack("t3", "Rocket Man", "uri", "Elton John"),
 	}
-	s.SetQueue(tracks)
-	// Simulate QueueLoadedMsg by refreshing the pane's rows.
+	s.SetQueue(items)
 	pane.refreshRows()
 
 	output := pane.View()
@@ -539,10 +551,9 @@ func TestQueuePane_FullLifecycle(t *testing.T) {
 	assert.Contains(t, filteredOutput, "Rocket Man")
 	assert.NotContains(t, filteredOutput, "Levitating")
 
-	// Step 4: navigate (j key).
+	// Step 4: navigate (k key in filter mode).
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	pane = m.(*QueuePane)
-	// k in filter mode is forwarded to filter (not table nav).
 
 	// Step 5: close filter and verify full list.
 	m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -564,8 +575,8 @@ func TestQueuePane_QueueUpdate_TableRefreshes(t *testing.T) {
 	assert.NotContains(t, output, "New Track")
 
 	// Load queue data.
-	s.SetQueue([]api.Track{
-		{ID: "t1", Name: "New Track", Artists: []api.Artist{{Name: "Artist"}}},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "New Track", "uri", "Artist"),
 	})
 	pane.refreshRows()
 
@@ -576,9 +587,9 @@ func TestQueuePane_QueueUpdate_TableRefreshes(t *testing.T) {
 // TestQueuePane_PlayingIndicatorPersists verifies ▶ persists across refreshes.
 func TestQueuePane_PlayingIndicatorPersists(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]api.Track{
-		{ID: "t1", Name: "Track A", Artists: []api.Artist{{Name: "Artist"}}},
-		{ID: "t2", Name: "Track B", Artists: []api.Artist{{Name: "Artist"}}},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Track A", "uri", "Artist"),
+		qiTrack("t2", "Track B", "uri", "Artist"),
 	})
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
@@ -597,15 +608,11 @@ func TestQueuePane_PlayingIndicatorPersists(t *testing.T) {
 // TestQueuePane_FilterScrollInteraction tests filtering then scrolling then clearing filter.
 func TestQueuePane_FilterScrollInteraction(t *testing.T) {
 	s := state.New()
-	tracks := make([]api.Track, 10)
-	for i := range tracks {
-		tracks[i] = api.Track{
-			ID:      fmt.Sprintf("t%d", i),
-			Name:    fmt.Sprintf("Rock Track %d", i+1),
-			Artists: []api.Artist{{Name: "Band"}},
-		}
+	items := make([]domain.QueueItem, 10)
+	for i := range items {
+		items[i] = qiTrack(fmt.Sprintf("t%d", i), fmt.Sprintf("Rock Track %d", i+1), "uri", "Band")
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
 	pane.SetSize(100, 20)
@@ -631,15 +638,11 @@ func TestQueuePane_FilterScrollInteraction(t *testing.T) {
 // TestQueuePane_LargeQueue verifies 200 items scroll correctly without panic.
 func TestQueuePane_LargeQueue(t *testing.T) {
 	s := state.New()
-	tracks := make([]api.Track, 200)
-	for i := range tracks {
-		tracks[i] = api.Track{
-			ID:      fmt.Sprintf("t%d", i),
-			Name:    fmt.Sprintf("Track %d", i+1),
-			Artists: []api.Artist{{Name: "Artist"}},
-		}
+	items := make([]domain.QueueItem, 200)
+	for i := range items {
+		items[i] = qiTrack(fmt.Sprintf("t%d", i), fmt.Sprintf("Track %d", i+1), "uri", "Artist")
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
 	pane.SetSize(100, 30)
@@ -657,19 +660,13 @@ func TestQueuePane_LargeQueue(t *testing.T) {
 // TestQueuePane_LongTrackName verifies very long track names don't overflow.
 func TestQueuePane_LongTrackName(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]api.Track{
-		{
-			ID:      "t1",
-			Name:    "This Is A Very Long Track Name That Exceeds Any Reasonable Column Width By Far",
-			Artists: []api.Artist{{Name: "This Is Also A Very Long Artist Name That Won't Fit"}},
-		},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "This Is A Very Long Track Name That Exceeds Any Reasonable Column Width By Far", "uri", "This Is Also A Very Long Artist Name That Won't Fit"),
 	})
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
 	pane.SetSize(60, 20) // narrow to force truncation
 
-	// Should not panic and output should not exceed pane width.
-	// Use lipgloss.Width() to measure visible width after stripping ANSI escapes.
 	output := pane.View()
 	assert.NotEmpty(t, output)
 	for _, line := range splitLines(output) {
@@ -677,10 +674,9 @@ func TestQueuePane_LongTrackName(t *testing.T) {
 	}
 }
 
-// ── Story 120: dead pane action removal ──────────────────────────────────────
+// --- Story 120: dead pane action removal ---
 
 // TestQueuePane_Actions_NoAddEntry verifies 'A' is not in queue Actions()
-// after removal of the phantom add-to-queue action (story 120).
 func TestQueuePane_Actions_NoAddEntry(t *testing.T) {
 	pane := newTestQueuePane(false)
 	for _, a := range pane.Actions() {
@@ -688,42 +684,38 @@ func TestQueuePane_Actions_NoAddEntry(t *testing.T) {
 	}
 }
 
-// ── Story 71 Task 2: column color tokens ─────────────────────────────────────
+// --- Story 71 Task 2: column color tokens ---
 
 // TestQueuePane_UsesColumnColors verifies that QueuePane column definitions
-// use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens
-// instead of the deprecated TextMuted/TextPrimary/TextSecondary.
+// use the new ColumnIndex/ColumnPrimary/ColumnSecondary/ColumnTertiary tokens.
 func TestQueuePane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	q := NewQueuePane(state.New(), th, false)
 	cols := q.table.Columns()
-	require.Len(t, cols, 4, "QueuePane should have 4 columns")
+	require.Len(t, cols, 6, "QueuePane should have 6 columns")
 
 	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
-	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "type column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnPrimary(), cols[2].Color, "Title column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[3].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[4].Color, "Duration column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[5].Color, "icon column should use ColumnSecondary()")
 }
 
-// ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
+// --- Story 173: Esc scroll-reset ---
 
 // TableCurrentPage returns the current page of the queue pane's inner table.
-// White-box accessor for testing Esc scroll-reset (story 173).
 func (q *QueuePane) TableCurrentPage() int { return q.table.CurrentPage() }
 
 // TestQueuePane_Esc_ResetsScrollToPage1 verifies that pressing Esc when no filter
 // is active resets the table scroll position back to page 1.
 func TestQueuePane_Esc_ResetsScrollToPage1(t *testing.T) {
 	s := state.New()
-	tracks := make([]api.Track, 20)
-	for i := range tracks {
-		tracks[i] = api.Track{
-			ID:      fmt.Sprintf("q%d", i),
-			Name:    fmt.Sprintf("Track %d", i+1),
-			Artists: []api.Artist{{Name: "Artist"}},
-		}
+	items := make([]domain.QueueItem, 20)
+	for i := range items {
+		items[i] = qiTrack(fmt.Sprintf("q%d", i), fmt.Sprintf("Track %d", i+1), "uri", "Artist")
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
 	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
@@ -746,7 +738,9 @@ func TestQueuePane_Esc_ResetsScrollToPage1(t *testing.T) {
 // ActiveFilterQuery() returns the committed filter query after f → type → Enter.
 func TestQueuePane_ActiveFilterQuery_ReturnsCommittedQuery(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]domain.Track{{Name: "Rock Track", URI: "spotify:track:1"}})
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("uri:1", "Rock Track", "uri:1", "Artist"),
+	})
 	pane := NewQueuePane(s, theme.Load("black"), true)
 	pane.SetSize(80, 20)
 
@@ -765,9 +759,9 @@ func TestQueuePane_ActiveFilterQuery_ReturnsCommittedQuery(t *testing.T) {
 // filter query (restoring all rows) before falling back to scroll-reset.
 func TestQueuePane_Esc_ClearsCommittedFilter(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]domain.Track{
-		{Name: "Rock Track", URI: "uri:1"},
-		{Name: "Jazz Track", URI: "uri:2"},
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("uri:1", "Rock Track", "uri:1", "Artist"),
+		qiTrack("uri:2", "Jazz Track", "uri:2", "Artist"),
 	})
 	pane := NewQueuePane(s, theme.Load("black"), true)
 	pane.SetSize(80, 20)
@@ -783,4 +777,182 @@ func TestQueuePane_Esc_ClearsCommittedFilter(t *testing.T) {
 	// Esc → clears filter
 	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}
+
+// --- Story 238: mixed content tests ---
+
+// TestQueuePane_TypeColumn_TrackSymbol verifies ♪ appears in type column for tracks.
+func TestQueuePane_TypeColumn_TrackSymbol(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Track Song", "uri", "Artist"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+
+	assert.Contains(t, output, "♪", "♪ symbol should appear for tracks")
+}
+
+// TestQueuePane_TypeColumn_EpisodeSymbol verifies ◆ appears in type column for episodes.
+func TestQueuePane_TypeColumn_EpisodeSymbol(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiEpisode("ep-1", "Episode Title", "spotify:episode:ep-1", 1800000, "Show Name"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+
+	assert.Contains(t, output, "◆", "◆ symbol should appear for episodes")
+}
+
+// TestQueuePane_TitleHeader verifies "Title" replaces "Track" as column header.
+func TestQueuePane_TitleHeader(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Song Name", "uri", "Artist"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+
+	assert.Contains(t, output, "Title", "should have Title header")
+	assert.NotContains(t, output, "Track", "should not have Track header")
+}
+
+// TestQueuePane_ArtistColumn_EpisodeShowName verifies episode's show name in Artist column.
+func TestQueuePane_ArtistColumn_EpisodeShowName(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiEpisode("ep-1", "Episode Title", "spotify:episode:ep-1", 1800000, "My Podcast Show"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+
+	assert.Contains(t, output, "Episode Title", "should show episode name in title column")
+	assert.Contains(t, output, "My Podcast Show", "should show show name in artist column")
+}
+
+// TestQueuePane_EnterTrack_PlaysTrack verifies Enter on a track row emits PlayTrackMsg.
+func TestQueuePane_EnterTrack_PlaysTrack(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Track Song", "spotify:track:t1", "Artist"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	playMsg, ok := msg.(PlayTrackMsg)
+	require.True(t, ok)
+	assert.Equal(t, "spotify:track:t1", playMsg.TrackURI)
+}
+
+// TestQueuePane_EnterEpisode_PlaysEpisode verifies Enter on an episode row emits PlayEpisodeMsg.
+func TestQueuePane_EnterEpisode_PlaysEpisode(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiEpisode("ep-1", "Episode", "spotify:episode:ep-1", 1200000, "Show"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	epMsg, ok := msg.(PlayEpisodeMsg)
+	require.True(t, ok)
+	assert.Equal(t, "spotify:episode:ep-1", epMsg.EpisodeURI)
+	assert.Equal(t, "", epMsg.PlaylistURI)
+}
+
+// TestQueuePane_MixedContent_RendersBoth verifies mixed tracks and episodes render correctly.
+func TestQueuePane_MixedContent_RendersBoth(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Track One", "uri", "Artist A"),
+		qiEpisode("e1", "Episode One", "uri", 1800000, "Show A"),
+		qiTrack("t2", "Track Two", "uri", "Artist B"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+
+	assert.Contains(t, output, "♪", "♪ for first track")
+	assert.Contains(t, output, "◆", "◆ for episode")
+	assert.Contains(t, output, "Track One")
+	assert.Contains(t, output, "Episode One")
+	assert.Contains(t, output, "Track Two")
+}
+
+// TestQueuePane_MixedContent_FilterEpisodes verifies filter works on episode content.
+func TestQueuePane_MixedContent_FilterEpisodes(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Rock Song", "uri", "Artist"),
+		qiEpisode("e1", "Tech Podcast", "uri", 1800000, "Tech Show"),
+		qiEpisode("e2", "News Cast", "uri", 1800000, "News Show"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	// Activate filter and type "tech" — matches episode name.
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+	for _, r := range "tech" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+	output := pane.View()
+	assert.NotContains(t, output, "Rock Song", "track should be filtered out")
+	assert.Contains(t, output, "Tech Podcast", "episode matching filter should show")
+	assert.NotContains(t, output, "News Cast", "non-matching episode should be hidden")
+}
+
+// TestQueuePane_MixedContent_FilterByShowName verifies filter works on show name.
+func TestQueuePane_MixedContent_FilterByShowName(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("t1", "Song", "uri", "Artist"),
+		qiEpisode("e1", "Episode", "uri", 1800000, "Specific Show"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	pane = m.(*QueuePane)
+	for _, r := range "Specific" {
+		m, _ = pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pane = m.(*QueuePane)
+	}
+	output := pane.View()
+	assert.NotContains(t, output, "Song", "track should be filtered out")
+	assert.Contains(t, output, "Episode", "episode with matching show should show")
+}
+
+// TestQueuePane_Duration_EpisodeFormat verifies episode durations are formatted correctly.
+func TestQueuePane_Duration_EpisodeFormat(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiEpisode("ep-1", "Episode", "uri", 3661000, "Show"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+
+	assert.Contains(t, output, "1:01:01", "episode duration should be formatted as h:mm:ss")
 }

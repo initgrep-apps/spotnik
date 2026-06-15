@@ -161,9 +161,9 @@ func TestGatewayHealthPane_SetTheme(t *testing.T) {
 // clear the table rows — RebuildTableTheme must copy existing rows to the new table.
 func TestQueuePane_SetTheme_PreservesRows(t *testing.T) {
 	s := state.New()
-	s.SetQueue([]domain.Track{
-		{ID: "t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}},
-		{ID: "t2", Name: "Starboy", Artists: []domain.Artist{{Name: "The Weeknd"}}},
+	s.SetQueue([]domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "t1", Name: "Blinding Lights", Artists: []domain.Artist{{Name: "The Weeknd"}}}},
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "t2", Name: "Starboy", Artists: []domain.Artist{{Name: "The Weeknd"}}}},
 	})
 	pane := NewQueuePane(s, theme.Load("black"), true)
 	pane.SetSize(80, 20)

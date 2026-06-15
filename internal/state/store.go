@@ -99,7 +99,7 @@ type Store struct {
 	devicesFetching   bool
 
 	// Queue data
-	queue []domain.Track
+	queue []domain.QueueItem
 
 	// Stats data: top tracks and top artists keyed by time range.
 	// Ranges: "short_term", "medium_term", "long_term".
@@ -376,18 +376,19 @@ func (s *Store) SetRecentlyPlayed(items []domain.PlayHistory) {
 	}
 }
 
-// Queue returns the upcoming tracks in the user's play queue.
-func (s *Store) Queue() []domain.Track {
+// Queue returns the upcoming items in the user's play queue.
+// Each item is either a track or an episode, determined by its Type field.
+func (s *Store) Queue() []domain.QueueItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.queue
 }
 
-// SetQueue updates the queue tracks in the store.
-func (s *Store) SetQueue(tracks []domain.Track) {
+// SetQueue updates the queue items in the store.
+func (s *Store) SetQueue(items []domain.QueueItem) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.queue = tracks
+	s.queue = items
 }
 
 // TopTracks returns the cached top tracks for the given time range,
