@@ -33,11 +33,12 @@ The redesign draws from **btop** — a system monitor beloved by terminal enthus
 
 | Aspect | Previous (three-column layout) | Current (this document) |
 |--------|---------------------|---------------------|
-| Layout | Fixed 3-column (22/50/28%) | 3-row responsive grid, 14 panes across 3 pages |
-| Panes | 3 fixed + 2 alternative views | 8 music panes + 4 podcast panes + 4 nerd status panes, toggleable |
-| Pages | None | Music page (Music) + Podcasts page + Stats page (Stats), cycled by `0` |
-| Presets | None (view switching via 1/2/3) | `p` cycles preset layouts within current page |
-| Pane toggle | None | Keys `1`-`8` hide/show individual panes (btop-style) |
+| Layout | Fixed 3-column (22/50/28%) | 3-row responsive grid, 14 panes across 2 pages |
+| Panes | 3 fixed + 2 alternative views | 10 player panes + 5 nerd status panes, toggleable |
+| Pages | None | Player page + Stats page, cycled by `0` |
+| Presets | None (view switching via 1/2/3) | `p` cycles 6 Player presets + 1 Stats preset |
+| Pane toggle | None | Keys `1`-`8` hide/show individual panes (btop-style, context-aware) |
+| Podcasts | Separate page (4 panes) | Integrated into Player page: content-aware NowPlaying + FollowedShows drill-down |
 | Shortcuts | All in status bar | Embedded in pane borders (btop-style) |
 | Filtering | None | In-pane `f` key filter on every list |
 | Visuals | Monochrome cyan bars | Gradient bars, braille visualizer, multi-color columns |
@@ -77,45 +78,48 @@ Note: for these features and existing featues a lot of componetns are available 
 
 ## 2. Pane Definitions
 
-### Music page — Music (8 panes)
+### Player page — Player (10 panes across 6 presets)
 
-| # | Pane | ID | API Source | Toggle Key | Border Accent |
-|---|------|----|-----------|------------|---------------|
-| 1 | Now Playing | `PaneNowPlaying` | `GET /me/player` | `1` | `PlayingIndicator()` green |
-| 2 | Queue | `PaneQueue` | `GET /me/player/queue` | `2` | `Warning()` yellow |
-| 3 | Playlists | `PanePlaylists` | `GET /me/playlists` | `3` | `SectionHeader()` blue |
-| 4 | Albums | `PaneAlbums` | `GET /me/albums` | `4` | `SeekBar()` cyan |
-| 5 | Liked Songs | `PaneLikedSongs` | `GET /me/tracks` | `5` | `Success()` green |
-| 6 | Recently Played | `PaneRecentlyPlayed` | `GET /me/player/recently-played` | `6` | `DeviceActive()` teal |
-| 7 | Top Tracks | `PaneTopTracks` | `GET /me/top/tracks` | `7` | `KeyHint()` purple |
-| 8 | Top Artists | `PaneTopArtists` | `GET /me/top/artists` | `8` | `Error()` pink/red |
+| Preset # | Pane | ID | API Source | Toggle Key | Border Accent |
+|---|---|---|---|---|---|
+| all | Now Playing | `PaneNowPlaying` | `GET /me/player` + episode/show state | `1` | `PlayingIndicator()` green |
+| 0,1,4,5 | Queue | `PaneQueue` | `GET /me/player/queue` | `2` | `Warning()` yellow |
+| 4 | Followed Shows | `PaneFollowedShows` | `GET /me/shows` | `2/3` * | `PaneBorderFollowedShows()` |
+| 4 | Saved Episodes | `PaneSavedEpisodes` | `GET /me/episodes` | `3` * | `PaneBorderSavedEpisodes()` |
+| 0,2 | Playlists | `PanePlaylists` | `GET /me/playlists` | `3` | `SectionHeader()` blue |
+| 0,2 | Albums | `PaneAlbums` | `GET /me/albums` | `4` | `SeekBar()` cyan |
+| 0,2 | Liked Songs | `PaneLikedSongs` | `GET /me/tracks` | `5` | `Success()` green |
+| 0,1,3 | Recently Played | `PaneRecentlyPlayed` | `GET /me/player/recently-played` | `6` | `DeviceActive()` teal |
+| 0,3 | Top Tracks | `PaneTopTracks` | `GET /me/top/tracks` | `7` | `KeyHint()` purple |
+| 0,3 | Top Artists | `PaneTopArtists` | `GET /me/top/artists` | `8` | `Error()` pink/red |
 
-### Stats page — Stats (4 panes)
+\* Toggle keys are **context-aware** — they adapt based on active preset. On Podcasts preset, keys `2` and `3`
+map to FollowedShows and SavedEpisodes (which are not visible in other presets). On other presets, keys
+`2` and `3` map to Queue and Playlists respectively.
+
+NowPlaying is **content-aware**: renders track UI when playing a track, switches to episode UI (with
+show name, episode description, `i` for Episode Details overlay) when playing a podcast episode.
+
+FollowedShows has **drill-down**: pressing `Enter` on a show opens the show's episodes as a scrollable
+sub-view within the same pane. `Esc` returns to the show list.
+
+### Stats page — Stats (5 panes)
 
 | # | Pane | ID | Data Source | Toggle Key | Border Accent |
-|---|------|----|-------------|------------|---------------|
+|---|---|---|---|---|---|
+| — | Now Playing | `PaneNowPlaying` | `GET /me/player` | `1` | `PlayingIndicator()` green |
 | — | Gateway Health | `PaneGatewayHealth` | `store.ReadEventsFrom(cursor)` — token bucket, slots, backoff, dedup | `2` | `PaneBorderRequestFlow()` orange/amber |
 | — | Polling Traffic | `PanePollingTraffic` | `PollingSnapshotMsg` + store TTL sentinels | `3` | `PaneBorderRequestFlow()` orange/amber |
 | — | Gateway Live | `PaneGatewayLive` | `store.ReadEventsFrom(cursor)` — 500-entry event stream | `4` | `PaneBorderRequestFlow()` orange/amber |
 | — | Network Log | `PaneNetworkLog` | `store.ReadEventsFrom(cursor)` — GatewayEventLog (200-entry buffer) | `5` | `PaneBorderNetworkLog()` warm grey |
 
-### Podcasts page — Podcasts (4 panes)
-
-| # | Pane | ID | API Source | Toggle Key | Border Accent |
-|---|------|----|-----------|------------|---------------|
-| 1 | Now Playing | `PanePodcastPlayback` | `GET /me/player` + episode/show state | `1` | `PaneBorderPodcastPlayback()` |
-| 2 | Show Episodes | `PaneShowEpisodes` | `GET /shows/{id}/episodes` | `2` | `PaneBorderShowEpisodes()` |
-| 3 | Followed Shows | `PaneFollowedShows` | `GET /me/shows` | `3` | `PaneBorderFollowedShows()` |
-| 4 | Saved Episodes | `PaneSavedEpisodes` | `GET /me/episodes` | `4` | `PaneBorderSavedEpisodes()` |
-
-Toggle keys are contextual per page. Player page keys (`1`–`8`) do not toggle Stats page panes,
-and Stats page keys (`1`–`5`) do not toggle Player page panes.
-
 ### Key Notes
 
-- Keys `1`-`8` **toggle** pane visibility on Player page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
-- `0` cycles Player → Stats → Player
+- Toggle keys are **context-aware**: same key maps to different panes depending on active preset
+- Keys `2`–`5` toggle pane visibility on Stats page
+- `0` cycles Player → Stats → Player (2-page cycle)
 - Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`, `Shift+←`, `Shift+→`) route to NowPlaying regardless of focus
+- `i` opens Episode Details overlay when a podcast episode is playing
 - `A` for "add to queue" in search overlay and list panes
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
@@ -186,9 +190,29 @@ Each pane's content area is `Rect.Width - 2` x `Rect.Height - 2` (borders consum
 - Each page has its own preset cycle
 - Switching pages preserves pane state on both sides
 
-### Pane Toggling (btop-style)
+### Pane Toggling (btop-style, context-aware)
 
-Keys `1`-`8` toggle the corresponding pane's visibility on Player page; keys `1`-`5` toggle panes on Stats page:
+Toggle keys adapt based on the active page and preset:
+
+**Player page:**
+- Keys `1`–`8` toggle the corresponding pane's visibility
+- Toggle key mapping changes per preset — e.g., key `2` toggles Queue in most presets,
+  but FollowedShows in the Podcasts preset
+- Key `3` toggles Playlists in most presets, SavedEpisodes in Podcasts preset
+
+**Auto-switch rules:**
+
+| Trigger | Action |
+|---|---|
+| Podcast episode starts playing | Auto-switch to Podcasts preset (if not already) |
+| Music track starts playing | Auto-switch to Listening preset (if on Podcasts preset) |
+| User manually changes preset | Override auto-switch until next content-type change |
+
+**Stats page:**
+- Keys `2`–`5` toggle Stats-page diagnostic panes
+- Key `1` is unused on Stats page
+
+**General behavior:**
 - When a pane hides, siblings in the same row expand to fill its space
 - When all panes in a row hide, the row collapses and other rows expand
 - When a hidden pane is toggled back, it reappears in its original grid position
@@ -201,7 +225,7 @@ Keys `1`-`8` toggle the corresponding pane's visibility on Player page; keys `1`
 - After the last preset, wraps to the first (full layout)
 - Switching preset resets all manual toggles
 
-### Music page Presets
+### Player page Presets
 
 #### Preset 0 — Full Dashboard (default)
 
@@ -320,18 +344,64 @@ NowPlaying small strip (height < 8 triggers title-bar-embedded track info). TopT
 
 **Visible panes:** NowPlaying (small strip, height < 8), TopTracks, TopArtists, RecentlyPlayed
 
-### Music page Preset Summary
+#### Preset 4 — Podcasts
+
+NowPlaying with episode UI, FollowedShows, SavedEpisodes, and Queue.
+
+```
+╭─ ¹Now Playing ── Show Name · Episode Title ── ◆ 1:41/45:30 ─────────────╮  Row 1 (weight 2)
+│  (content-aware: episode UI with show info, description, progress)       │
+╰──────────────────────────────────────────────────────────────────────────╯
+╭─ ²Followed Shows ──────────╮╭─ ³Saved Episodes ──────────────╮  Row 2 (weight 3)
+│  1  Show Name              ││  1  Episode Title             │
+│  2  Another Show           ││  2  Another Episode          │
+│  ▼ more below              ││  ▼ more below                │
+╰────────────────────────────╯╰──────────────────────────────╯
+╭─ ⁴Queue ──────────────────────────────────────────────────────────────────╮  Row 3 (weight 3)
+│  #   ◆/♪  Title                    Artist/Show          Duration         │
+│  1   ◆    Episode Title            Show Name            34:12             │
+│  2   ♪    Track Name               Artist Name          3:45              │
+│  ▼ more below                                                             │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
+
+**Visible panes:** NowPlaying, FollowedShows, SavedEpisodes, Queue
+
+FollowedShows supports **drill-down**: `Enter` on a show opens its episodes list within the same pane.
+`Esc` returns to the show list.
+
+#### Preset 5 — Compact
+
+Minimal NowPlaying + Queue for focused listening.
+
+```
+╭─ ¹Now Playing ──────────────────╮ s shfl ╭─╮ r rpt ╭─╮ space play ╭─╮ +/- vol ╮  Row 1 (weight 3)
+│  (content-aware: track or episode UI)                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ ²Queue ────────────────────────────────────────────────────────────────────╮  Row 2 (weight 3)
+│  #   ◆/♪  Title                    Artist/Show          Duration           │
+│  1   ♪    Track Name               Artist Name          3:45               │
+│  2   ◆    Episode Title            Show Name            34:12              │
+│  ▼ more below                                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+**Visible panes:** NowPlaying, Queue
+
+### Player page Preset Summary
 
 | Preset | Name | Visible Panes |
-|--------|------|---------------|
-| 0 | Full Dashboard | All 8 (3 rows) |
+|---|---|---|
+| 0 | Full Dashboard | All 10 (3 rows) |
 | 1 | Listening | NowPlaying, Queue, RecentlyPlayed |
 | 2 | Library | NowPlaying (small strip, height < 8), Playlists, Albums, LikedSongs |
 | 3 | Discovery | NowPlaying (small strip, height < 8), TopTracks, TopArtists, RecentlyPlayed |
+| 4 | Podcasts | NowPlaying, FollowedShows, SavedEpisodes, Queue |
+| 5 | Compact | NowPlaying, Queue |
 
 ### Stats page Layout
 
-Four-pane, three-row layout: NowPlaying compact strip (row 1) + three diagnostic panes
+Five-pane, three-row layout: NowPlaying compact strip (row 1) + three diagnostic panes
 side-by-side (row 2) + Network Log full-width (row 3).
 
 ```
@@ -365,7 +435,7 @@ When switching presets:
 - All pane states (scroll position, selected item, filter text) are preserved
 - Focus moves to the first visible pane if the currently focused pane becomes hidden
 - The `renderGrid()` function re-assembles the layout immediately
-- Manual pane toggles (keys `1`-`8` on Music page, `1`-`5` on Stats page) are reset when switching presets
+- Manual pane toggles (keys `1`-`8` on Player page, `2`-`5` on Stats page) are reset when switching presets
 
 ---
 
@@ -488,10 +558,10 @@ List panes (Queue, Playlists, Albums, LikedSongs, RecentlyPlayed, TopTracks, Top
 ### Column Layout Example (Queue)
 
 ```
- #   Track                    Artist              Duration
- 1   Lil Boo Thang            Paul Russell        3:12
- 2   Street Fighter           Kamasi Washington   5:44
- 3   BIRDS OF A FEATHER       Billie Eilish       3:30
+  #   ◆/♪  Title                    Artist/Show          Duration
+  1   ♪    Lil Boo Thang            Paul Russell         3:12
+  2   ◆    Episode Title            Show Name            34:12
+  3   ♪    BIRDS OF A FEATHER       Billie Eilish        3:30
 ```
 
 ### Column Colors
@@ -501,8 +571,9 @@ Each column uses a different theme color for visual separation without explicit 
 | Column | Color Token | Purpose |
 |--------|-------------|---------|
 | Index (`#`) | `TextMuted()` | De-emphasized numbering |
-| Track name | `TextPrimary()` | Primary data — highest contrast |
-| Artist | `TextSecondary()` | Supporting context |
+| Type (`◆`/`♪`) | `TextMuted()` | Episode (◆) / Track (♪) indicator |
+| Title | `TextPrimary()` | Primary data — highest contrast |
+| Artist/Show | `TextSecondary()` | Artist name or show name for episodes |
 | Duration/metadata | `TextMuted()` | Tertiary information |
 
 **Selected row:** All columns override to `SelectedBg()` + `SelectedFg()`
@@ -511,9 +582,9 @@ Each column uses a different theme color for visual separation without explicit 
 
 ### Column Width Proportions
 
-| Pane | Col 1 | Col 2 | Col 3 | Col 4 |
-|------|-------|-------|-------|-------|
-| Queue | `#` 5% | Track 45% | Artist 35% | Duration 15% |
+| Pane | Col 1 | Col 2 | Col 3 | Col 4 | Col 5 |
+|------|-------|-------|-------|-------|-------|
+| Queue | `#` 5% | Type 5% | Title 40% | Artist/Show 35% | Duration 15% |
 | Playlists | `#` 5% | Name 70% | Tracks 25% | — |
 | Albums | `#` 5% | Name 50% | Artist 30% | Year 15% |
 | Liked Songs | `#` 5% | Track 45% | Artist 35% | Duration 15% |
@@ -560,6 +631,8 @@ Like btop, each pane has a distinct border color that provides visual identity w
 | Recently Played | `PaneBorderRecentlyPlayed()` (teal accent) | Dimmed teal |
 | Top Tracks | `PaneBorderTopTracks()` (purple accent) | Dimmed purple |
 | Top Artists | `PaneBorderTopArtists()` (pink/red accent) | Dimmed pink |
+| Followed Shows | `PaneBorderFollowedShows()` (teal accent) | Dimmed teal |
+| Saved Episodes | `PaneBorderSavedEpisodes()` (green accent) | Dimmed green |
 | Gateway Health | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
 | Polling Traffic | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
 | Gateway Live | `PaneBorderRequestFlow()` (orange/amber accent) | Dimmed orange |
@@ -713,7 +786,9 @@ descriptions in Muted role.
 
 ### Pane Toggle (replaces Direct Pane Jump)
 
-Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`4` toggle pane visibility on Podcasts page; keys `1`-`5` toggle pane visibility on Stats page. Use `Tab`/`Shift+Tab` for focus navigation. This follows btop's approach where number keys control what's visible.
+Toggle keys are context-aware — they adapt based on the active page and preset. See §4 for the
+complete auto-switch rules and per-preset toggle key mappings. Use `Tab`/`Shift+Tab` for focus
+navigation.
 
 ### Playback Keys (Always Route to NowPlaying)
 
@@ -726,8 +801,10 @@ Keys `1`-`8` toggle pane visibility on Music page; keys `1`-`4` toggle pane visi
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat |
 | `v` | Cycle visualizer animation pattern |
+| `i` | Show Episode Details overlay (when podcast episode playing) |
 
-These keys route to `PaneNowPlaying` (Music/Stats pages) or `PanePodcastPlayback` (Podcasts page) regardless of which pane is focused.
+These keys route to `PaneNowPlaying` regardless of which pane is focused. NowPlaying is
+content-aware — it handles both track and episode playback in a single pane.
 
 ### Overlay Keys
 
@@ -746,12 +823,12 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | Key | Action | Scope |
 |-----|--------|-------|
 | **Pages** | | |
-| `0` | Cycle Player / Stats | Global |
-| **Pane Toggle** | | |
-| `1`-`8` | Toggle pane 1-8 visibility | Player page |
-| `1`-`5` | Toggle pane 1-5 visibility | Stats page |
+| `0` | Cycle Player → Stats → Player | Global |
+| **Pane Toggle (context-aware)** | | |
+| `1`–`8` | Toggle pane visibility (mapping varies by preset) | Player page |
+| `2`–`5` | Toggle pane visibility | Stats page |
 | **Presets** | | |
-| `p` | Cycle to next preset | Player page |
+| `p` | Cycle to next preset (6 on Player page, 1 on Stats) | Per page |
 | **Playback (always route to NowPlaying)** | | |
 | `Space` | Play/pause | Always |
 | `←` / `→` | Seek back/forward 5 s | Always |
@@ -766,8 +843,8 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `Shift+Tab` | Previous pane focus | Visible panes |
 | `↑` / `k` | Scroll up | Focused pane |
 | `↓` / `j` | Scroll down | Focused pane |
-| `Enter` | Select/play item | Focused pane |
-| `Esc` | Close overlay · clear filter · scroll top | Context |
+| `Enter` | Select/play item · drill-down (FollowedShows) | Focused pane |
+| `Esc` | Close overlay · clear filter · back from drill-down · scroll top | Context |
 | **Pane Actions** | | |
 | `f` | Toggle filter in focused pane | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
@@ -814,6 +891,8 @@ PaneBorderLikedSongs() lipgloss.Color
 PaneBorderRecentlyPlayed() lipgloss.Color  // teal accent
 PaneBorderTopTracks() lipgloss.Color       // purple accent
 PaneBorderTopArtists() lipgloss.Color      // pink/red accent
+PaneBorderFollowedShows() lipgloss.Color   // teal accent (podcast shows)
+PaneBorderSavedEpisodes() lipgloss.Color   // green accent (saved episodes)
 PaneBorderRequestFlow() lipgloss.Color     // orange/amber accent (flow visualization)
 PaneBorderNetworkLog() lipgloss.Color      // warm grey accent (API log)
 
@@ -1064,7 +1143,7 @@ solarized, synthwave, tokyonight) implement these tokens.
 
 Stats page provides live visibility into Spotnik's internal request pipeline. No Spotify API calls needed — all data is read from existing internal structures (`*Gateway`, `*Store`).
 
-Stats page has **four panes** below the NowPlaying compact strip: three diagnostic panes in a side-by-side row (GatewayHealth, PollingTraffic, GatewayLive) and a full-width NetworkLog row.
+Stats page has **five panes** including the NowPlaying compact strip at top: three diagnostic panes in a side-by-side row (GatewayHealth, PollingTraffic, GatewayLive) and a full-width NetworkLog row.
 
 ### Toggle Key Table (Stats page)
 
@@ -1280,10 +1359,14 @@ type App struct {
 
 | Current | New |
 |---------|-----|
-| `PlayerPane` | `NowPlayingPane` (renamed, visualizer added) |
+| `PlayerPane` | `NowPlayingPane` (renamed, content-aware: track + episode, visualizer added) |
 | `LibraryPane` | Split into `PlaylistsPane`, `AlbumsPane`, `LikedSongsPane` |
-| `QueuePane` | `QueuePane` (add Pane interface, dense table) |
+| `QueuePane` | `QueuePane` (add Pane interface, dense table with type column ♪/◆) |
 | `StatsView` | Split into `TopTracksPane` + `TopArtistsPane` (separate panes). RecentlyPlayed section → `RecentlyPlayedPane` |
+| `PodcastPlaybackPane` | Merged into `NowPlayingPane` — NowPlaying is content-aware for tracks and episodes |
+| `ShowEpisodesPane` | Deleted — merged into `FollowedShowsPane` with drill-down (`Enter` on show opens episodes) |
+| `FollowedShowsPane` | `FollowedShowsPane` (add drill-down to episode list) |
+| `SavedEpisodesPane` | `SavedEpisodesPane` (moved to Player page from Podcasts page) |
 | `PlaylistManager` | Merged into `PlaylistsPane` (Enter=track sub-view, n=new, r=rename, x=delete, Shift+arrow=reorder as border actions) |
 | — (new) | `GatewayHealthPane` (Stats page, token/slot/backoff/dedup grid from `store.ReadEventsFrom`) |
 | — (new) | `PollingTrafficPane` (Stats page, poll cadence + library cache freshness from store sentinels) |
@@ -1325,6 +1408,10 @@ Each existing pane must gain these new methods to satisfy `layout.Pane`:
 - `focusedPane` enum — replaced by `layout.Manager.FocusedPane()`
 - `renderPaneWithBorder()` — replaced by `layout.RenderPaneBorder()`
 - `libraryPane` tree model — split across 3 independent panes
+- `PodcastPlaybackPane` — merged into content-aware `NowPlayingPane`
+- `ShowEpisodesPane` — merged into `FollowedShowsPane` with drill-down
+- Podcasts page (separate page) — deleted; podcast content integrated into Player page
+- `PaneBorderPodcastPlayback()` and `PaneBorderShowEpisodes()` theme tokens — deleted
 - Context-sensitive status bar hints — hints move to pane borders
 - Key `3` for playlist manager — now pane toggle for Playlists
 - Key `2` for stats view — now pane toggle for Queue

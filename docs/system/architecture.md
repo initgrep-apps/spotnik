@@ -39,9 +39,11 @@ Spotnik follows the **Elm Architecture** as enforced by Bubble Tea. The entire a
        │       │          │        │
 ┌──────▼───────▼──┐  ┌───▼────────▼──────┐
 │  internal/ui/   │  │  internal/api/    │
-│  (10 panes,     │  │  (HTTP clients,   │
-│   components,   │  │   gateway,        │
-│   layout,       │  │   logging)        │
+│  (10 panes      │  │  (HTTP clients,   │
+│   across 2      │  │   gateway,        │
+│   pages,        │  │   logging)        │
+│   components,   │  │                   │
+│   layout,       │  │                   │
 │   theme)        │  │                   │
 └────────┬────────┘  └─────────┬─────────┘
          │                     │
@@ -60,13 +62,15 @@ Spotnik follows the **Elm Architecture** as enforced by Bubble Tea. The entire a
 └────────┘    └───────────┘   └─────────┘
 
 PANES (10 total):
-  Music page (Music, 8 panes):
-    NowPlayingPane, QueuePane, PlaylistsPane, AlbumsPane,
+  Player page (Player, 8 panes):
+    NowPlayingPane (content-aware: track vs episode), QueuePane, FollowedShowsPane
+    (with drill-down), SavedEpisodesPane, PlaylistsPane, AlbumsPane,
     LikedSongsPane, RecentlyPlayedPane, TopTracksPane, TopArtistsPane
   Stats page (Stats, 5 panes):
     NowPlayingPane, GatewayHealthPane, PollingTrafficPane, GatewayLivePane, NetworkLogPane
   Floating overlays (not in grid):
     SearchOverlay, DeviceOverlay
+  Deleted panes: PodcastPlaybackPane, ShowEpisodesPane (unified into content-aware NowPlaying + drill-down FollowedShows)
 ```
 
 ### The Domain Package
@@ -157,37 +161,53 @@ View()
 
 ## Page / Preset / Toggle System
 
-The grid layout has two pages and a preset system for switching between curated layouts.
+The grid layout has a unified 2-page model and preset system for switching between curated layouts.
+Podcast content (episodes, shows) is integrated directly into Player page panes — no separate Podcasts page.
 
 ### Pages
 
-- **Music page (Music)** — 8 panes: NowPlaying, Queue, Playlists, Albums, LikedSongs,
-  RecentlyPlayed, TopTracks, TopArtists
+- **Player page (Player)** — 10 panes across 6 presets: NowPlaying (content-aware: track vs episode),
+  Queue, FollowedShows (with drill-down to episodes), SavedEpisodes, Playlists, Albums,
+  LikedSongs, RecentlyPlayed, TopTracks, TopArtists
 - **Stats page (Stats)** — 5 panes: NowPlaying, GatewayHealth, PollingTraffic, GatewayLive, NetworkLog
 
 `TogglePage()` switches between pages. The current page is stored as `currentPage` in `App`.
-Key: `0`.
+Key: `0` cycles Player → Stats → Player.
 
 ### Preset Cycling
 
 `CyclePreset()` advances to the next preset within the current page and wraps around.
 Key: `p`.
 
-- **Music page** has 4 presets (Full Dashboard, Listening, Library, Stats)
+- **Player page** has 6 presets (Full Dashboard, Listening, Library, Discovery, Podcasts, Compact)
 - **Stats page** has 1 preset
+
+| Player Preset | Name | Visible Panes |
+||---|---|---|
+| 0 | Full Dashboard | All (3 rows) |
+| 1 | Listening | NowPlaying, Queue, RecentlyPlayed |
+| 2 | Library | NowPlaying (compact strip), Playlists, Albums, LikedSongs |
+| 3 | Discovery | NowPlaying (compact strip), TopTracks, TopArtists, RecentlyPlayed |
+| 4 | Podcasts | NowPlaying, FollowedShows, SavedEpisodes, Queue |
+| 5 | Compact | NowPlaying, Queue |
 
 Each preset is a `[]Row` grid definition. Switching a preset resets all manual pane toggles.
 Preset index is persisted via `PreferenceStore` so it survives restarts.
 
-### Pane Toggling
+### Pane Toggling (Context-Aware)
 
-`TogglePane(id layout.PaneID)` hides or shows an individual pane on Music page.
-Keys: `1`–`8` (one per Music page pane).
+`TogglePane(id layout.PaneID)` hides or shows an individual pane. Toggle keys are **context-aware**
+— they adapt based on the active preset page:
+
+- **Player page**: keys `1`–`8` toggle the 8 Player-page panes
+- **Stats page**: keys `2`–`5` toggle Stats-page diagnostic panes (key `1` is unused on Stats page)
+
+When a pane is hidden in one preset, its toggle key may map to a different pane in another preset.
+The `layout.Manager` resolves toggle keys based on the currently visible pane set.
 
 - When a pane hides, its siblings in the same row expand to fill the space
 - When all panes in a row hide, the row collapses and other rows expand
 - Toggle state is independent of presets — switching preset resets manual toggles
-- Stats page panes are not individually toggleable
 
 ---
 
@@ -205,9 +225,9 @@ routing.go: handleKeyMsg / handleMouseMsg
      ├── Guard 4: Search overlay open → all keys to SearchOverlay
      ├── Guard 5: Auth view → only quit keys
      ├── Guard 6: Pane has active filter → all keys to pane
-     ├── Global keys (q, /, d, 0, p, 1-8, Tab, Shift+Tab)
-     ├── Playback keys (Space, n, +, -, s, r, v, ←, →) → always NowPlayingPane
-     └── All other keys → focused pane
+      ├── Global keys (q, /, d, 0, p, 1-8, Tab, Shift+Tab)
+      ├── Playback keys (Space, n, +, -, s, r, v, i, ←, →, Shift+←, Shift+→) → always NowPlayingPane
+      └── All other keys → focused pane
               │
               ▼
          pane.Update(msg)
@@ -242,7 +262,7 @@ all input and prevent lower-priority handlers from running:
 | 5 | Auth view active | Only quit keys (`q`, `ctrl+c`) pass; all others dropped |
 | 6 | Pane has active filter | All keys → focused pane (filter captures input) |
 | 7 | Global shortcuts | `q`, `/`, `d`, `t`, `0`, `p`, `1`–`8`, `Tab`, `Shift+Tab` |
-| 8 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `←`, `→` → always NowPlayingPane |
+| 8 | Playback keys | `Space`, `n`, `+`, `-`, `s`, `r`, `v`, `i`, `←`, `→`, `Shift+←`, `Shift+→` → always NowPlayingPane |
 | 8 | Default | All other keys → focused pane |
 
 This means: if the device overlay is open, `q` goes to the overlay (not quit). Theme
@@ -492,6 +512,72 @@ The actual polling intervals adapt based on user activity and playback state. Th
 - The tick handler calls `a.pollIntervals()` on every tick to get current intervals
 - When a `KeyMsg` arrives after idle (`wasIdle && now active`), `tickCount` is reset to 0 to
   force an immediate fetch on the next tick — gives instant feedback on return from idle
+
+### Visibility-Gated Polling
+
+Library panes (Playlists, Albums, LikedSongs, RecentlyPlayed, TopTracks, TopArtists,
+FollowedShows, SavedEpisodes) use a visibility-gated polling strategy. The polling tick
+loop iterates over all data domains but **skips fetches for panes not visible** in the
+current preset or page.
+
+**Rules:**
+
+1. Each polling entry checks `layout.IsPaneVisible(paneID)` at the top — if the pane is
+   not visible, the fetch is skipped entirely for that tick cycle
+2. On preset switch (`CyclePreset` or `SetPreset`), the app immediately checks staleness
+   for all newly visible panes and dispatches a fetch if stale
+3. **Always poll regardless of preset**: Playback state (`GET /me/player`) and Queue
+   (`GET /me/player/queue`) — these are consumed by NowPlaying and Queue panes which are
+   present on every preset
+4. Stats page panes (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) poll on every
+   tick regardless of Stats page pane visibility — they read from internal store event logs,
+   not Spotify API
+
+**Implementation pattern (in tick handler):**
+
+```go
+for domain, paneID := range libraryDomains {
+    if layout.IsPaneVisible(paneID) {
+        if store.IsStale(domain) && !store.IsFetching(domain) {
+            cmds = append(cmds, buildFetchCmd(domain))
+        }
+    }
+}
+```
+
+**What Polls When:**
+
+| Pane | Polls when... | Interval | API Endpoint |
+|---|---|---|---|
+| NowPlaying | Always | Adaptive (3-30s) | `GET /me/player` |
+| Queue | Always | Adaptive (9-60s) | `GET /me/player/queue` |
+| Playlists | Player page, visible in preset | Staleness-gated (5m TTL) | `GET /me/playlists` |
+| Albums | Player page, visible in preset | Staleness-gated (5m TTL) | `GET /me/albums` |
+| LikedSongs | Player page, visible in preset | Staleness-gated (5m TTL) | `GET /me/tracks` |
+| RecentlyPlayed | Player page, visible in preset | Staleness-gated (2m TTL) | `GET /me/player/recently-played` |
+| TopTracks | Player page, visible in preset | Staleness-gated (10m TTL) | `GET /me/top/tracks` |
+| TopArtists | Player page, visible in preset | Staleness-gated (10m TTL) | `GET /me/top/artists` |
+| FollowedShows | Player page, visible in preset | Staleness-gated (5m TTL) | `GET /me/shows` |
+| SavedEpisodes | Player page, visible in preset | Staleness-gated (5m TTL) | `GET /me/episodes` |
+| GatewayHealth | Stats page (any) | Every app tick | Internal (event log) |
+| PollingTraffic | Stats page (any) | Every app tick | Internal (store) |
+| GatewayLive | Stats page (any) | Every app tick | Internal (event log) |
+| NetworkLog | Stats page (any) | Every app tick | Internal (event log) |
+
+**Preset switch staleness check:**
+
+```go
+case presetCycledMsg:
+    a.layout.CyclePreset()
+    // Check all newly-visible panes for staleness
+    for _, paneID := range a.layout.VisiblePanes() {
+        if domain, ok := paneDomainMap[paneID]; ok {
+            if a.store.IsStale(domain) && !a.store.IsFetching(domain) {
+                cmds = append(cmds, a.buildFetchCmdForDomain(domain))
+            }
+        }
+    }
+```
 
 ### Search Debounce
 
