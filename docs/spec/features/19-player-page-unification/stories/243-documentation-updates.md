@@ -1,7 +1,7 @@
 ---
 title: "Documentation: architecture.md + design.md updates"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
