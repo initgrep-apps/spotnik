@@ -1582,6 +1582,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.ShowEpisodesLoadedMsg:
+		if m.ShowID != a.showEpisodesID {
+			return a, nil // discard stale response
+		}
 		a.store.SetShowEpisodesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {

@@ -711,6 +711,18 @@ func (a *App) SetAlbumTracksID(id string) {
 	a.albumTracksID = id
 }
 
+// ShowEpisodesID returns the current show episodes staleness key (show ID).
+// Exported for tests.
+func (a *App) ShowEpisodesID() string {
+	return a.showEpisodesID
+}
+
+// SetShowEpisodesID sets the show episodes staleness key for testing.
+// Exported for tests only.
+func (a *App) SetShowEpisodesID(id string) {
+	a.showEpisodesID = id
+}
+
 // SetSearchSession sets the search staleness keys and loading flag for testing.
 // This bypasses the normal SearchRequestMsg pathway so tests can set up state directly.
 // Exported for tests only.

@@ -173,10 +173,7 @@ func (p *FollowedShowsPane) handleListViewKey(key tea.KeyMsg) (tea.Model, tea.Cm
 		idx := p.Table().SelectedIndex()
 		if idx >= 0 && idx < len(shows) {
 			show := shows[idx].Show
-			if show.ID == p.selectedShowID && p.inEpisodeView {
-				return p, nil
-			}
-			// If same show and already in episode view, no-op.
+			// Prevent re-entering same show.
 			if show.ID == p.selectedShowID {
 				return p, nil
 			}

@@ -816,6 +816,9 @@ func (a *App) buildFetchShowEpisodesCmd(ctx context.Context, showID string, offs
 			}
 			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Offset: offset, Err: err}
 		}
+		if ctx.Err() != nil {
+			return nil
+		}
 		return panes.ShowEpisodesLoadedMsg{
 			ShowID:  showID,
 			Items:   items,
