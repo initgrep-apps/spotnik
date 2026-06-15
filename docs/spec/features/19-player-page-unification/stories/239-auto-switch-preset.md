@@ -1,7 +1,7 @@
 ---
 title: "Auto-switch preset on user-initiated playback"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background

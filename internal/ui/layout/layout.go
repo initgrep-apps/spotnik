@@ -232,6 +232,16 @@ func (m *Manager) ActivePresetName() string {
 	return presets[idx].Name
 }
 
+// ActivePreset returns the current Preset struct (Visible map + Grid + Name).
+func (m *Manager) ActivePreset() Preset {
+	idx := m.activePreset[m.activePage]
+	presets := m.presets[m.activePage]
+	if idx >= len(presets) {
+		return Preset{}
+	}
+	return presets[idx]
+}
+
 // TogglePage cycles between Player and Stats (2-page cycle).
 // Resets hidden map and recomputes layout.
 func (m *Manager) TogglePage() {
