@@ -116,6 +116,12 @@ type App struct {
 	albumTracksCancel context.CancelFunc
 	albumTracksID     string
 
+	// Show episodes sub-view: interactive fetch state (mirrors playlistTracksCancel pattern).
+	// showEpisodesCancel cancels the active show episodes fetch; always safe to call.
+	// showEpisodesID is the staleness key: ID of the show currently being fetched.
+	showEpisodesCancel context.CancelFunc
+	showEpisodesID     string
+
 	// currentView tracks which top-level view is displayed.
 	currentView viewMode
 
@@ -423,6 +429,8 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		playlistTracksCancel: func() {},
 		// albumTracksCancel must never be nil; initialize to a no-op.
 		albumTracksCancel: func() {},
+		// showEpisodesCancel must never be nil; initialize to a no-op.
+		showEpisodesCancel: func() {},
 	}
 
 	// Wire the typed Toast API. ToastManager holds &a.alerts so theme-switch
