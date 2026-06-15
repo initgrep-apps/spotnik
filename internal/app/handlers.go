@@ -304,6 +304,9 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.helpOverlay != nil {
 			a.helpOverlay.SetSize(m.Width, m.Height)
 		}
+		if a.episodeDetails != nil {
+			a.episodeDetails.SetSize(m.Width, m.Height)
+		}
 		if a.onboardingPermissionsOverlay != nil {
 			a.onboardingPermissionsOverlay.SetSize(m.Width, m.Height)
 		}
@@ -1336,6 +1339,10 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.HelpOverlayClosedMsg:
 		// Help overlay closed via Esc — close overlay without any state change.
 		return a.closeHelp()
+
+	case panes.EpisodeDetailsClosedMsg:
+		// Episode details overlay closed via Esc or 'q' — close overlay.
+		return a.closeEpisodeDetails()
 
 	case panes.OnboardingPermissionsOverlayClosedMsg:
 		// Onboarding permissions overlay closed via Esc.

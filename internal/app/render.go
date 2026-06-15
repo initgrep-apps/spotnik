@@ -401,6 +401,10 @@ func (a *App) buildView() string {
 		return a.renderWithOverlayChrome(body, a.helpOverlay.View(), btoverlay.Center, btoverlay.Center)
 	}
 
+	if a.episodeDetailsOpen && a.episodeDetails != nil {
+		return a.renderWithOverlayChrome(body, a.episodeDetails.View(), btoverlay.Center, btoverlay.Center)
+	}
+
 	return body
 }
 

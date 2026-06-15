@@ -31,3 +31,11 @@ func (a *App) InjectUserProfileLoadedErr(err error) {
 		a.profilePane = p
 	}
 }
+
+// EpisodeDetailsOpen returns true if the episode details overlay is currently open.
+func (a *App) EpisodeDetailsOpen() bool {
+	return a.episodeDetailsOpen
+}
+
+// SplashDismissMsgForTest is exported for use in app_test package tests.
+type SplashDismissMsgForTest = splashDismissMsg

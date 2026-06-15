@@ -153,6 +153,29 @@ func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
 	}
 }
 
+// TestHelpOverlay_ContainsIDetails asserts that the help overlay includes the
+// 'i' keybinding for episode details in the Playback section.
+func TestHelpOverlay_ContainsIDetails(t *testing.T) {
+	o := newTestHelpOverlay()
+	o.SetSize(120, 40)
+	view := o.View()
+	found := false
+	for _, col := range buildHelpContent() {
+		for _, sec := range col {
+			if sec.title == "Playback" {
+				for _, b := range sec.bindings {
+					if b.key == "i" {
+						found = true
+					}
+				}
+			}
+		}
+	}
+	assert.True(t, found, "Playback section must contain 'i' keybinding for episode details")
+	// Also check the rendered view contains the text.
+	assert.Contains(t, view, "Episode details")
+}
+
 // TestHelpOverlay_AsciiBorder verifies that the help overlay border renders
 // ASCII-safe characters when the uikit glyph mode is ASCII. Corner characters
 // (╭╮╰╯), horizontal rules (─), and the inner column divider (│) must not

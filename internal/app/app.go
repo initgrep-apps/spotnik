@@ -159,6 +159,11 @@ type App struct {
 	// helpOverlay is the floating help overlay. Populated when open.
 	helpOverlay *panes.HelpOverlay
 
+	// episodeDetailsOpen is true while the episode details overlay is visible.
+	episodeDetailsOpen bool
+	// episodeDetails is the floating episode details overlay. Populated when open.
+	episodeDetails *panes.EpisodeDetailsOverlay
+
 	// onboardingPermissionsOverlay is the floating permissions notice shown on
 	// Step 2 of onboarding when the user presses 'v'. Nil when closed.
 	onboardingPermissionsOverlay *panes.OnboardingPermissionsOverlay
@@ -1090,6 +1095,26 @@ func (a *App) openHelp() (*App, tea.Cmd) {
 func (a *App) closeHelp() (*App, tea.Cmd) {
 	a.helpOpen = false
 	a.helpOverlay = nil
+	return a, nil
+}
+
+// openEpisodeDetails opens the episode details overlay. Only opens when
+// currently_playing_type is "episode"; silent no-op for tracks or nothing playing.
+func (a *App) openEpisodeDetails() (*App, tea.Cmd) {
+	ps := a.store.PlaybackState()
+	if ps == nil || ps.CurrentlyPlayingType != "episode" || ps.Episode == nil {
+		return a, nil
+	}
+	a.episodeDetailsOpen = true
+	a.episodeDetails = panes.NewEpisodeDetailsOverlay(a.store, a.theme)
+	a.episodeDetails.SetSize(a.width, a.height)
+	return a, nil
+}
+
+// closeEpisodeDetails closes the episode details overlay.
+func (a *App) closeEpisodeDetails() (*App, tea.Cmd) {
+	a.episodeDetailsOpen = false
+	a.episodeDetails = nil
 	return a, nil
 }
 
