@@ -1,7 +1,7 @@
 ---
 title: "Polling optimization: skip invisible panes"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
