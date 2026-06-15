@@ -108,15 +108,14 @@ Note: for these features and existing featues a lot of componetns are available 
 | 3 | Followed Shows | `PaneFollowedShows` | `GET /me/shows` | `3` | `PaneBorderFollowedShows()` |
 | 4 | Saved Episodes | `PaneSavedEpisodes` | `GET /me/episodes` | `4` | `PaneBorderSavedEpisodes()` |
 
-Toggle keys `1`–`4` are only active on Podcasts page. Music page number keys (`1`–`8`) do not toggle
-Podcasts page panes, Podcast page number keys (`1`–`4`) do not toggle Music or Stats page panes, and
-Stats page number keys (`1`–`5`) do not toggle Music or Podcasts page panes.
+Toggle keys are contextual per page. Player page keys (`1`–`8`) do not toggle Stats page panes,
+and Stats page keys (`1`–`5`) do not toggle Player page panes.
 
 ### Key Notes
 
-- Keys `1`-`8` **toggle** pane visibility on Music page; keys `1`-`4` toggle pane visibility on Podcasts page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
-- `0` cycles Music → Podcasts → Stats → Music
-- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`, `Shift+←`, `Shift+→`) route to NowPlaying (Music/Stats pages) or PodcastPlayback (Podcasts page) regardless of focus
+- Keys `1`-`8` **toggle** pane visibility on Player page; keys `1`-`5` toggle pane visibility on Stats page (btop-style hide/show), not pane-jump
+- `0` cycles Player → Stats → Player
+- Playback keys (`Space`, `+`, `-`, `s`, `r`, `v`, `←`, `→`, `Shift+←`, `Shift+→`) route to NowPlaying regardless of focus
 - `A` for "add to queue" in search overlay and list panes
 - NowPlaying pane uses a btop-inspired horizontal split layout: InfoBox sub-pane (~1/3 width, left) + viz.Engine (right, ~2/3 width); seek bar is inside the right panel between top and bottom viz rows
 
@@ -183,13 +182,13 @@ Each pane's content area is `Rect.Width - 2` x `Rect.Height - 2` (borders consum
 
 ### Page Switching
 
-- `0` cycles **Music page** → **Podcasts page** → **Stats page** → **Music page** (3-cycle)
+- `0` cycles **Player page** → **Stats page** → **Player page** (2-cycle)
 - Each page has its own preset cycle
 - Switching pages preserves pane state on both sides
 
 ### Pane Toggling (btop-style)
 
-Keys `1`-`8` toggle the corresponding pane's visibility on Music page; keys `1`-`4` toggle panes on Podcasts page; keys `1`-`5` toggle panes on Stats page:
+Keys `1`-`8` toggle the corresponding pane's visibility on Player page; keys `1`-`5` toggle panes on Stats page:
 - When a pane hides, siblings in the same row expand to fill its space
 - When all panes in a row hide, the row collapses and other rows expand
 - When a hidden pane is toggled back, it reappears in its original grid position
@@ -747,13 +746,12 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | Key | Action | Scope |
 |-----|--------|-------|
 | **Pages** | | |
-| `0` | Cycle Music / Podcasts / Stats | Global |
+| `0` | Cycle Player / Stats | Global |
 | **Pane Toggle** | | |
-| `1`-`8` | Toggle pane 1-8 visibility | Music page |
-| `1`-`4` | Toggle pane 1-4 visibility | Podcasts page |
+| `1`-`8` | Toggle pane 1-8 visibility | Player page |
 | `1`-`5` | Toggle pane 1-5 visibility | Stats page |
 | **Presets** | | |
-| `p` | Cycle to next preset | Current page |
+| `p` | Cycle to next preset | Player page |
 | **Playback (always route to NowPlaying)** | | |
 | `Space` | Play/pause | Always |
 | `←` / `→` | Seek back/forward 5 s | Always |

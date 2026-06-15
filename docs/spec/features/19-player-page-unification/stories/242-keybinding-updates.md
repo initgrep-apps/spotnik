@@ -1,7 +1,7 @@
 ---
 title: "Keybinding updates (3 locations)"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background

@@ -45,9 +45,11 @@ func TestHelpOverlay_View_ContainsGlobalKeys(t *testing.T) {
 	o := newTestHelpOverlay()
 	o.SetSize(120, 40)
 	view := o.View()
-	for _, k := range []string{"/", "d", "t", "?", "q", "0", "1-8", "p"} {
+	for _, k := range []string{"/", "d", "t", "?", "q", "0", "1-8", "1-5", "p"} {
 		assert.Contains(t, view, k, "global key %q should appear", k)
 	}
+	// Podcasts page removed — "1-4" no longer listed separately.
+	assert.NotContains(t, view, "1-4", "global section must not contain 1-4 (Podcasts page removed)")
 }
 
 func TestHelpOverlay_View_ContainsPlaybackKeys(t *testing.T) {
@@ -121,7 +123,7 @@ func TestHelpOverlay_View_NarrowTerminal(t *testing.T) {
 // TestHelpOverlay_Labels_TitleCase asserts that every binding label in the help
 // content starts with an uppercase letter. A label like "search" fails; "Search" passes.
 func TestHelpOverlay_Labels_TitleCase(t *testing.T) {
-	for _, col := range buildHelpContent() {
+	for _, col := range buildHelpContent("") {
 		for _, sec := range col {
 			for _, b := range sec.bindings {
 				if len(b.label) == 0 {
@@ -138,7 +140,7 @@ func TestHelpOverlay_Labels_TitleCase(t *testing.T) {
 // TestHelpOverlay_Navigation_NoJK asserts that the Navigation section contains
 // no binding whose key is "j / k" or "j/k".
 func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
-	for _, col := range buildHelpContent() {
+	for _, col := range buildHelpContent("") {
 		for _, sec := range col {
 			if sec.title != "Navigation" {
 				continue
@@ -154,13 +156,15 @@ func TestHelpOverlay_Navigation_NoJK(t *testing.T) {
 }
 
 // TestHelpOverlay_ContainsIDetails asserts that the help overlay includes the
-// 'i' keybinding for episode details in the Playback section.
+// 'i' keybinding for episode details in the Playback section when
+// currentlyPlayingType is "episode".
 func TestHelpOverlay_ContainsIDetails(t *testing.T) {
 	o := newTestHelpOverlay()
+	o.SetCurrentlyPlayingType("episode")
 	o.SetSize(120, 40)
 	view := o.View()
 	found := false
-	for _, col := range buildHelpContent() {
+	for _, col := range buildHelpContent("episode") {
 		for _, sec := range col {
 			if sec.title == "Playback" {
 				for _, b := range sec.bindings {
@@ -174,6 +178,44 @@ func TestHelpOverlay_ContainsIDetails(t *testing.T) {
 	assert.True(t, found, "Playback section must contain 'i' keybinding for episode details")
 	// Also check the rendered view contains the text.
 	assert.Contains(t, view, "Episode details")
+}
+
+// TestHelpOverlay_NoIDetailsWhenTrack asserts that the 'i' keybinding is
+// omitted when currentlyPlayingType is not "episode".
+func TestHelpOverlay_NoIDetailsWhenTrack(t *testing.T) {
+	o := newTestHelpOverlay()
+	o.SetCurrentlyPlayingType("track")
+	o.SetSize(120, 40)
+	view := o.View()
+	for _, col := range buildHelpContent("track") {
+		for _, sec := range col {
+			if sec.title == "Playback" {
+				for _, b := range sec.bindings {
+					assert.NotEqual(t, "i", b.key, "Playback section must not contain 'i' when playing track")
+				}
+			}
+		}
+	}
+	assert.NotContains(t, view, "Episode details", "rendered view must not contain 'Episode details' when playing track")
+}
+
+// TestHelpOverlay_ZeroKey_PlayerStats asserts the '0' key label is
+// "Cycle Player / Stats" reflecting the 2-page model.
+func TestHelpOverlay_ZeroKey_PlayerStats(t *testing.T) {
+	o := newTestHelpOverlay()
+	o.SetSize(120, 40)
+	view := o.View()
+	assert.Contains(t, view, "Cycle Player / Stats", "0 key must show 'Cycle Player / Stats'")
+}
+
+// TestHelpOverlay_NoPodcastPageKeys asserts that the help overlay no longer
+// references Podcasts page toggle keys.
+func TestHelpOverlay_NoPodcastPageKeys(t *testing.T) {
+	o := newTestHelpOverlay()
+	o.SetSize(120, 40)
+	view := o.View()
+	assert.NotContains(t, view, "1-4", "help overlay must not contain 1-4 (Podcasts page removed)")
+	assert.NotContains(t, view, "Podcasts", "help overlay must not reference Podcasts page")
 }
 
 // TestHelpOverlay_AsciiBorder verifies that the help overlay border renders

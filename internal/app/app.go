@@ -1108,6 +1108,9 @@ func (a *App) openHelp() (*App, tea.Cmd) {
 	a.helpOpen = true
 	a.helpOverlay = panes.NewHelpOverlay(a.theme)
 	a.helpOverlay.SetSize(a.width, a.height)
+	if ps := a.store.PlaybackState(); ps != nil {
+		a.helpOverlay.SetCurrentlyPlayingType(ps.CurrentlyPlayingType)
+	}
 	return a, nil
 }
 
