@@ -124,13 +124,13 @@ for the full list and revocation steps.
 
 ## Features
 
-Spotnik organises the TUI into three pages with a btop-style, pane-based layout.
-Music page holds the everyday Spotify panes; Podcasts page is for podcast browsing
-and playback; Stats page is a live developer view of the API gateway.
+Spotnik organises the TUI into two pages with a btop-style, pane-based layout.
+Player page holds music and podcast panes; Stats page is a live developer view
+of the API gateway.
 
 ### How to use
 
-* Press `0` to cycle through Music, Podcasts, and Stats pages.
+* Press `0` to cycle through Player and Stats pages.
 * Press `1` through `8` to toggle individual panes. Each pane title shows a
   small superscript number indicating its toggle key.
 * Press `Tab` (or `Shift+Tab`) to move focus between visible panes.
@@ -199,11 +199,10 @@ automatic retry-after.
 | `t` | Theme switcher |
 | `?` | Help overlay |
 | `q` | Quit |
-| `0` | Cycle Music / Podcasts / Stats |
-| `1`–`8` | Toggle pane visibility (Music page) |
-| `1`–`4` | Toggle pane visibility (Podcasts page) |
+| `0` | Cycle Player / Stats |
+| `1`–`8` | Toggle pane visibility (Player page) |
 | `1`–`5` | Toggle pane visibility (Stats page) |
-| `p` | Cycle preset layout |
+| `p` | Cycle preset on Player page |
 
 ### Playback (always active)
 
