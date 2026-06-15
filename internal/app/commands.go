@@ -789,28 +789,42 @@ func (a *App) buildFetchSavedEpisodesCmd() tea.Cmd {
 }
 
 // buildFetchShowEpisodesCmd creates a command that fetches episodes for a specific
-// show and returns them in ShowEpisodesLoadedMsg.
-func (a *App) buildFetchShowEpisodesCmd(showID string) tea.Cmd {
+// show and returns them in ShowEpisodesLoadedMsg. The context is passed in from the
+// caller to support cancellation when the user switches shows or presses Esc.
+func (a *App) buildFetchShowEpisodesCmd(ctx context.Context, showID string, offset int) tea.Cmd {
 	client := a.podcastClient
 	return func() tea.Msg {
-		if client == nil {
-			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Err: errNilClient}
+		if ctx.Err() != nil {
+			return nil
 		}
-		items, total, hasNext, err := client.ShowEpisodes(context.Background(), showID, 50, 0)
+		if client == nil {
+			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Offset: offset, Err: errNilClient}
+		}
+		items, total, hasNext, err := client.ShowEpisodes(
+			api.WithPriority(ctx, api.Interactive),
+			showID, 50, offset,
+		)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
 			}
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Err: err}
+			return panes.ShowEpisodesLoadedMsg{ShowID: showID, Offset: offset, Err: err}
+		}
+		if ctx.Err() != nil {
+			return nil
 		}
 		return panes.ShowEpisodesLoadedMsg{
 			ShowID:  showID,
 			Items:   items,
 			Total:   total,
 			HasNext: hasNext,
+			Offset:  offset,
 		}
 	}
 }
