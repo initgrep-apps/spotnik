@@ -1,7 +1,7 @@
 ---
 title: "Queue: mixed content support (type column, QueueItem)"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background

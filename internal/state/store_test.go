@@ -149,20 +149,55 @@ func TestStore_SetGetQueue(t *testing.T) {
 	// Initially empty.
 	assert.Empty(t, s.Queue())
 
-	tracks := []api.Track{
-		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
-		{ID: "q2", Name: "Starboy", URI: "spotify:track:q2"},
+	items := []domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"}},
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q2", Name: "Starboy", URI: "spotify:track:q2"}},
 	}
-	s.SetQueue(tracks)
+	s.SetQueue(items)
 
 	got := s.Queue()
 	require.Len(t, got, 2)
-	assert.Equal(t, "Save Your Tears", got[0].Name)
-	assert.Equal(t, "Starboy", got[1].Name)
+	assert.Equal(t, domain.QueueItemTypeTrack, got[0].Type)
+	assert.Equal(t, "Save Your Tears", got[0].Track.Name)
+	assert.Equal(t, "Starboy", got[1].Track.Name)
 
 	// Clear queue.
 	s.SetQueue(nil)
 	assert.Empty(t, s.Queue())
+}
+
+// TestStore_SetGetQueue_QueueItemType verifies Queue() returns QueueItem for tracks.
+func TestStore_SetGetQueue_QueueItemType(t *testing.T) {
+	s := New()
+
+	items := []domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "t1", Name: "Track One", URI: "spotify:track:t1"}},
+	}
+	s.SetQueue(items)
+
+	got := s.Queue()
+	require.Len(t, got, 1)
+	assert.Equal(t, domain.QueueItemTypeTrack, got[0].Type)
+	assert.NotNil(t, got[0].Track)
+	assert.Nil(t, got[0].Episode)
+}
+
+// TestStore_Queue_TrackAndEpisode verifies Queue() returns both tracks and episodes.
+func TestStore_Queue_TrackAndEpisode(t *testing.T) {
+	s := New()
+
+	items := []domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "t1", Name: "Track", URI: "spotify:track:t1"}},
+		{Type: domain.QueueItemTypeEpisode, Episode: &domain.Episode{ID: "e1", Name: "Episode", URI: "spotify:episode:e1", Show: &domain.Show{Name: "Show"}}},
+	}
+	s.SetQueue(items)
+
+	got := s.Queue()
+	require.Len(t, got, 2)
+	assert.Equal(t, domain.QueueItemTypeTrack, got[0].Type)
+	assert.Equal(t, "Track", got[0].Track.Name)
+	assert.Equal(t, domain.QueueItemTypeEpisode, got[1].Type)
+	assert.Equal(t, "Episode", got[1].Episode.Name)
 }
 
 func TestStore_TopTracks_InitiallyNil(t *testing.T) {

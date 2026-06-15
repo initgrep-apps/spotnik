@@ -1,6 +1,7 @@
 // Package panes — QueuePane displays the current play queue in the right pane.
-// It renders a dense table with columns #, Track, Artist, Duration and supports
-// in-pane filtering via the 'f' key.
+// It renders a dense table with columns #, type, Title, Artist, Duration, icon
+// and supports in-pane filtering via the 'f' key. The queue may contain both
+// tracks and episodes from Spotify's mixed-content queue response.
 package panes
 
 import (
@@ -33,9 +34,11 @@ type QueuePane struct {
 func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueuePane {
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
+		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -103,14 +106,21 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return q, cmd
 	}
 
-	// Enter: play the selected track.
+	// Enter: play the selected queue item (track or episode).
 	if keyMsg.Type == tea.KeyEnter {
 		queue := q.filteredQueue()
 		idx := q.Table().SelectedIndex()
 		if idx >= 0 && idx < len(queue) {
-			uri := queue[idx].URI
-			return q, func() tea.Msg {
-				return PlayTrackMsg{TrackURI: uri}
+			item := queue[idx]
+			switch item.Type {
+			case domain.QueueItemTypeTrack:
+				return q, func() tea.Msg {
+					return PlayTrackMsg{TrackURI: item.Track.URI}
+				}
+			case domain.QueueItemTypeEpisode:
+				return q, func() tea.Msg {
+					return PlayEpisodeMsg{EpisodeURI: item.Episode.URI, PlaylistURI: ""}
+				}
 			}
 		}
 		return q, nil
@@ -155,35 +165,62 @@ func (q *QueuePane) RefreshRows() { q.refreshRows() }
 func (q *QueuePane) refreshRows() {
 	queue := q.filteredQueue()
 	rows := make([]map[string]string, len(queue))
-	for i, track := range queue {
-		artistName := ""
-		if len(track.Artists) > 0 {
-			artistName = track.Artists[0].Name
+	for i, item := range queue {
+		row := map[string]string{
+			"index": fmt.Sprintf("%d", i+1),
 		}
-		rows[i] = map[string]string{
-			"index":    fmt.Sprintf("%d", i+1),
-			"track":    track.Name,
-			"artist":   artistName,
-			"duration": formatDurationMs(track.DurationMs),
+
+		switch item.Type {
+		case domain.QueueItemTypeEpisode:
+			row["type"] = uikit.GlyphFor(uikit.GlyphEpisode, uikit.GlyphUnicode)
+			row["title"] = item.Episode.Name
+			showName := ""
+			if item.Episode.Show != nil {
+				showName = item.Episode.Show.Name
+			}
+			row["artist"] = showName
+			row["duration"] = formatDurationMsH(item.Episode.DurationMs)
+			row["icon"] = ""
+		default:
+			row["type"] = uikit.GlyphFor(uikit.GlyphMusicNote, uikit.GlyphUnicode)
+			row["title"] = item.Track.Name
+			artistName := ""
+			if len(item.Track.Artists) > 0 {
+				artistName = item.Track.Artists[0].Name
+			}
+			row["artist"] = artistName
+			row["duration"] = formatDurationMsH(item.Track.DurationMs)
+			row["icon"] = ""
 		}
+
+		rows[i] = row
 	}
 	q.Table().SetRows(rows)
 }
 
-// filteredQueue returns the queue tracks filtered by the current filter query.
-func (q *QueuePane) filteredQueue() []domain.Track {
+// filteredQueue returns the queue items filtered by the current filter query.
+func (q *QueuePane) filteredQueue() []domain.QueueItem {
 	all := q.store.Queue()
 	if q.Filter().Query() == "" {
 		return all
 	}
-	result := make([]domain.Track, 0, len(all))
-	for _, track := range all {
-		artistName := ""
-		if len(track.Artists) > 0 {
-			artistName = track.Artists[0].Name
+	result := make([]domain.QueueItem, 0, len(all))
+	for _, item := range all {
+		var name, secondary string
+		switch item.Type {
+		case domain.QueueItemTypeEpisode:
+			name = item.Episode.Name
+			if item.Episode.Show != nil {
+				secondary = item.Episode.Show.Name
+			}
+		default:
+			name = item.Track.Name
+			if len(item.Track.Artists) > 0 {
+				secondary = item.Track.Artists[0].Name
+			}
 		}
-		if q.Filter().MatchesAny(track.Name, artistName) {
-			result = append(result, track)
+		if q.Filter().MatchesAny(name, secondary) {
+			result = append(result, item)
 		}
 	}
 	return result
@@ -209,9 +246,11 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 	q.theme = th
 	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
+		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary()},
+		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary()},
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, q.Table().Rows(), q.focused)
 	q.SwapTableAndFilter(newTable, newFilter)
