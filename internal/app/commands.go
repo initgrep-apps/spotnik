@@ -524,7 +524,7 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 }
 
 // fetchQueueCmd creates a command that fetches the current play queue and returns
-// the tracks in the QueueLoadedMsg payload. No Store writes occur — Update() writes.
+// the items in the QueueLoadedMsg payload. No Store writes occur — Update() writes.
 func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 	return func() tea.Msg {
 		if player == nil {
@@ -541,7 +541,7 @@ func fetchQueueCmd(player api.PlayerAPI) tea.Cmd {
 			return panes.QueueLoadedMsg{Err: err}
 		}
 		if qr != nil {
-			return panes.QueueLoadedMsg{Tracks: qr.Queue}
+			return panes.QueueLoadedMsg{Items: qr.Queue}
 		}
 		return panes.QueueLoadedMsg{}
 	}

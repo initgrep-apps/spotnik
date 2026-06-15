@@ -302,13 +302,14 @@ type PlayHistory struct {
 }
 
 // QueueResponse represents the response from GET /me/player/queue.
-// It contains the currently playing track and the list of queued tracks.
+// It contains the currently playing track and the list of queued items (tracks and episodes).
 type QueueResponse struct {
 	// CurrentlyPlaying is the track currently playing (may be zero-value if nothing is playing).
 	CurrentlyPlaying Track `json:"currently_playing"`
 
-	// Queue contains the upcoming tracks in the user's play queue.
-	Queue []Track `json:"queue"`
+	// Queue contains the upcoming items in the user's play queue.
+	// Each item is either a track or an episode, determined by its "type" field.
+	Queue []QueueItem `json:"queue"`
 }
 
 // Device represents a Spotify Connect playback device.
@@ -468,6 +469,57 @@ type SavedEpisode struct {
 
 	// Episode contains the full episode details.
 	Episode Episode `json:"episode"`
+}
+
+// QueueItemType identifies the content type of a queue item.
+type QueueItemType int
+
+const (
+	// QueueItemTypeTrack indicates a track item in the queue.
+	QueueItemTypeTrack QueueItemType = iota
+	// QueueItemTypeEpisode indicates an episode item in the queue.
+	QueueItemTypeEpisode
+)
+
+// QueueItem wraps either a Track or an Episode from the play queue.
+// When Type == QueueItemTypeTrack, Track is non-nil and Episode is nil.
+// When Type == QueueItemTypeEpisode, Episode is non-nil and Track is nil.
+type QueueItem struct {
+	Type    QueueItemType
+	Track   *Track
+	Episode *Episode
+}
+
+// UnmarshalJSON implements custom unmarshaling to handle both track and episode
+// items in the queue based on the "type" field from the Spotify API response.
+func (q *QueueItem) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	raw := struct {
+		Type string `json:"type"`
+	}{}
+	if err := unmarshalJSON(data, &raw); err != nil {
+		return fmt.Errorf("unmarshaling queue item type: %w", err)
+	}
+
+	if raw.Type == "episode" {
+		var ep Episode
+		if err := unmarshalJSON(data, &ep); err != nil {
+			return fmt.Errorf("unmarshaling queue episode: %w", err)
+		}
+		q.Type = QueueItemTypeEpisode
+		q.Episode = &ep
+	} else {
+		var t Track
+		if err := unmarshalJSON(data, &t); err != nil {
+			return fmt.Errorf("unmarshaling queue track: %w", err)
+		}
+		q.Type = QueueItemTypeTrack
+		q.Track = &t
+	}
+
+	return nil
 }
 
 // PlayContext describes the context in which playback is occurring.

@@ -37,8 +37,8 @@ type StateReader interface {
 
 	// --- Queue ---
 
-	// Queue returns the upcoming tracks in the user's play queue.
-	Queue() []domain.Track
+	// Queue returns the upcoming items in the user's play queue.
+	Queue() []domain.QueueItem
 
 	// --- Library: Playlists ---
 

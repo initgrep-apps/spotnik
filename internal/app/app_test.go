@@ -804,26 +804,27 @@ func TestApp_QueueLoadedMsg_UpdatesStore(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
-	tracks := []api.Track{
-		{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+	items := []domain.QueueItem{
+		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"}},
 	}
-	a.Store().SetQueue(tracks)
+	a.Store().SetQueue(items)
 
 	got := a.Store().Queue()
 	require.Len(t, got, 1)
-	assert.Equal(t, "Save Your Tears", got[0].Name)
+	assert.Equal(t, domain.QueueItemTypeTrack, got[0].Type)
+	assert.Equal(t, "Save Your Tears", got[0].Track.Name)
 }
 
 // TestApp_QueueUpdate_StoreReflectsQueueData verifies that after a QueueLoadedMsg,
-// the store contains the updated queue data (set by the fetchQueueCmd before the msg).
+// the store contains the updated queue data.
 func TestApp_QueueUpdate_StoreReflectsQueueData(t *testing.T) {
 	cfg := &config.Config{}
 	a := app.New(cfg, app.AppOptions{})
 
 	// Send QueueLoadedMsg carrying data — app.Update() writes to store.
 	m, cmd := a.Update(panes.QueueLoadedMsg{
-		Tracks: []api.Track{
-			{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"},
+		Items: []domain.QueueItem{
+			{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1"}},
 		},
 	})
 	require.NotNil(t, m)
@@ -832,7 +833,7 @@ func TestApp_QueueUpdate_StoreReflectsQueueData(t *testing.T) {
 	// Store should reflect the queue data written by Update().
 	got := a.Store().Queue()
 	require.Len(t, got, 1)
-	assert.Equal(t, "Save Your Tears", got[0].Name)
+	assert.Equal(t, "Save Your Tears", got[0].Track.Name)
 }
 
 // TestAddToQueue_Success_EmitsToast verifies that a successful add-to-queue
@@ -976,8 +977,8 @@ func TestApp_QueuePane_ShowsQueueData(t *testing.T) {
 
 	// Route through Update so RefreshRows is called on the queue pane.
 	a.Update(panes.QueueLoadedMsg{
-		Tracks: []api.Track{
-			{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1", Artists: []api.Artist{{Name: "The Weeknd"}}},
+		Items: []domain.QueueItem{
+			{Type: domain.QueueItemTypeTrack, Track: &domain.Track{ID: "q1", Name: "Save Your Tears", URI: "spotify:track:q1", Artists: []domain.Artist{{Name: "The Weeknd"}}}},
 		},
 	})
 
