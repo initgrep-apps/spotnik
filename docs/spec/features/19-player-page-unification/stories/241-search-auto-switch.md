@@ -1,7 +1,7 @@
 ---
 title: "Search integration: auto-switch on show/episode selection"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
