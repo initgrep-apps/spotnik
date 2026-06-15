@@ -216,6 +216,7 @@ automatic retry-after.
 | `s` | Toggle shuffle |
 | `r` | Cycle repeat |
 | `v` | Cycle visualizer pattern |
+| `i` | Episode details (when episode playing) |
 
 ### Navigation
 

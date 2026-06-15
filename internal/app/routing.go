@@ -120,6 +120,15 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// When episode details overlay is open, route all keys to it.
+	if a.episodeDetailsOpen && a.episodeDetails != nil {
+		updated, cmd := a.episodeDetails.Update(m)
+		if eo, ok := updated.(*panes.EpisodeDetailsOverlay); ok {
+			a.episodeDetails = eo
+		}
+		return a, cmd
+	}
+
 	// When device overlay is open, route all keys to the device pane.
 	if a.deviceOverlayOpen {
 		updated, cmd := a.devicePane.Update(m)
@@ -197,8 +206,16 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// '?' opens the help overlay — but only if no other overlay is already open.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "?" {
-		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen && !a.profileOverlayOpen {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen && !a.profileOverlayOpen && !a.episodeDetailsOpen {
 			return a.openHelp()
+		}
+		return a, nil
+	}
+
+	// 'i' opens the episode details overlay — only when an episode is playing.
+	if m.Type == tea.KeyRunes && string(m.Runes) == "i" {
+		if !a.searchOpen && !a.deviceOverlayOpen && !a.showThemeSwitcher && !a.helpOpen && !a.profileOverlayOpen && !a.episodeDetailsOpen {
+			return a.openEpisodeDetails()
 		}
 		return a, nil
 	}
@@ -296,7 +313,7 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a *App) handleMouseMsg(m tea.MouseMsg) tea.Cmd {
 	// Ignore mouse events when any overlay is open.
 	// Overlays handle their own input; scroll behind them is unintuitive.
-	if a.deviceOverlayOpen || a.searchOpen || a.helpOpen || a.profileOverlayOpen {
+	if a.deviceOverlayOpen || a.searchOpen || a.helpOpen || a.profileOverlayOpen || a.episodeDetailsOpen {
 		return nil
 	}
 

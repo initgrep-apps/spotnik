@@ -481,6 +481,14 @@ type PlayEpisodeMsg struct {
 	PlaylistURI string
 }
 
+// EpisodeDetailsOpenMsg is emitted when the user presses 'i' while an episode
+// is playing. The root app handles this by opening the EpisodeDetailsOverlay.
+type EpisodeDetailsOpenMsg struct{}
+
+// EpisodeDetailsClosedMsg is emitted when the user presses Esc or 'q' in the
+// EpisodeDetailsOverlay. The root app handles this by closing the overlay.
+type EpisodeDetailsClosedMsg struct{}
+
 // PollingSnapshotMsg carries app-level polling state to the PollingTrafficPane.
 // The app sends this on each TickMsg so the pane can display polling diagnostics.
 type PollingSnapshotMsg struct {

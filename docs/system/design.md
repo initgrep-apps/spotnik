@@ -762,6 +762,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `s` | Toggle shuffle | Always |
 | `r` | Cycle repeat | Always |
 | `v` | Cycle visualizer animation pattern | Always |
+| `i` | Show episode details overlay | When episode playing |
 | **Navigation** | | |
 | `Tab` | Next pane focus | Visible panes |
 | `Shift+Tab` | Previous pane focus | Visible panes |

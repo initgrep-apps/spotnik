@@ -1,7 +1,7 @@
 ---
 title: "Episode Details overlay (i key)"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
