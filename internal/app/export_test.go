@@ -39,3 +39,13 @@ func (a *App) EpisodeDetailsOpen() bool {
 
 // SplashDismissMsgForTest is exported for use in app_test package tests.
 type SplashDismissMsgForTest = splashDismissMsg
+
+// AutoSwitchPreset wraps autoSwitchPreset for test access.
+func (a *App) AutoSwitchPreset(forContentType string) {
+	a.autoSwitchPreset(forContentType)
+}
+
+// IsCurrentPresetPodcastOriented wraps isCurrentPresetPodcastOriented for test access.
+func (a *App) IsCurrentPresetPodcastOriented() bool {
+	return a.isCurrentPresetPodcastOriented()
+}
