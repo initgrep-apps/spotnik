@@ -107,7 +107,7 @@ sub-view within the same pane. `Esc` returns to the show list.
 
 | # | Pane | ID | Data Source | Toggle Key | Border Accent |
 |---|---|---|---|---|---|
-| — | Now Playing | `PaneNowPlaying` | `GET /me/player` | `1` | `PlayingIndicator()` green |
+| — | Now Playing | `PaneNowPlaying` | `GET /me/player` | `—` | `PlayingIndicator()` green |
 | — | Gateway Health | `PaneGatewayHealth` | `store.ReadEventsFrom(cursor)` — token bucket, slots, backoff, dedup | `2` | `PaneBorderRequestFlow()` orange/amber |
 | — | Polling Traffic | `PanePollingTraffic` | `PollingSnapshotMsg` + store TTL sentinels | `3` | `PaneBorderRequestFlow()` orange/amber |
 | — | Gateway Live | `PaneGatewayLive` | `store.ReadEventsFrom(cursor)` — 500-entry event stream | `4` | `PaneBorderRequestFlow()` orange/amber |
@@ -837,7 +837,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | `s` | Toggle shuffle | Always |
 | `r` | Cycle repeat | Always |
 | `v` | Cycle visualizer animation pattern | Always |
-| `i` | Show episode details overlay | When episode playing |
+| `i` | Show Episode Details overlay | Always (when podcast episode playing) |
 | **Navigation** | | |
 | `Tab` | Next pane focus | Visible panes |
 | `Shift+Tab` | Previous pane focus | Visible panes |
