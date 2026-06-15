@@ -1,7 +1,7 @@
 ---
 title: "FollowedShows drill-down (absorb ShowEpisodes)"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
