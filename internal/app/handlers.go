@@ -539,7 +539,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			{layout.PaneFollowedShows, &a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
 			{layout.PaneSavedEpisodes, &a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
 		} {
-			if !a.layout.IsPaneVisible(entry.paneID) {
+			// TopTracks and TopArtists share the same stats data. Continue polling
+			// if either pane is visible.
+			if entry.paneID == layout.PaneTopTracks {
+				if !a.layout.IsPaneVisible(layout.PaneTopTracks) && !a.layout.IsPaneVisible(layout.PaneTopArtists) {
+					continue
+				}
+			} else if !a.layout.IsPaneVisible(entry.paneID) {
 				continue
 			}
 			p := entry.p

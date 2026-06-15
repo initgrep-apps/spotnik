@@ -154,10 +154,11 @@ func TestPlayTrackMsg_AutoSwitches_WhenOnPodcastPreset(t *testing.T) {
 	require.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName())
 
 	msg := panes.PlayTrackMsg{TrackURI: "spotify:track:abc123"}
-	a.Update(msg)
+	_, cmd := a.Update(msg)
 
 	assert.Equal(t, layout.PresetNameListening, a.Layout().ActivePresetName(),
 		"PlayTrackMsg on podcast preset should switch to Listening")
+	assert.NotNil(t, cmd, "PlayTrackMsg must batch preset stale-check with play command")
 }
 
 func TestPlayTrackMsg_NoSwitch_WhenOnMusicPreset(t *testing.T) {
@@ -178,10 +179,11 @@ func TestPlayTrackListMsg_AutoSwitches_WhenOnPodcastPreset(t *testing.T) {
 	require.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName())
 
 	msg := panes.PlayTrackListMsg{URIs: []string{"spotify:track:abc123"}}
-	a.Update(msg)
+	_, cmd := a.Update(msg)
 
 	assert.Equal(t, layout.PresetNameListening, a.Layout().ActivePresetName(),
 		"PlayTrackListMsg on podcast preset should switch to Listening")
+	assert.NotNil(t, cmd, "PlayTrackListMsg must batch preset stale-check with play command")
 }
 
 func TestPlayTrackListMsg_NoSwitch_WhenOnMusicPreset(t *testing.T) {
@@ -201,10 +203,11 @@ func TestPlayEpisodeMsg_AutoSwitches_WhenOnMusicPreset(t *testing.T) {
 	require.Equal(t, layout.PresetNameDashboard, a.Layout().ActivePresetName())
 
 	msg := panes.PlayEpisodeMsg{EpisodeURI: "spotify:episode:abc123"}
-	a.Update(msg)
+	_, cmd := a.Update(msg)
 
 	assert.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName(),
 		"PlayEpisodeMsg on music preset should switch to Podcast")
+	assert.NotNil(t, cmd, "PlayEpisodeMsg must batch preset stale-check with play command")
 }
 
 func TestPlayEpisodeMsg_NoSwitch_WhenOnPodcastPreset(t *testing.T) {
@@ -225,10 +228,11 @@ func TestPlayContextMsg_ShowURI_AutoSwitchesToPodcast(t *testing.T) {
 	require.Equal(t, layout.PresetNameDashboard, a.Layout().ActivePresetName())
 
 	msg := panes.PlayContextMsg{ContextURI: "spotify:show:xyz789"}
-	a.Update(msg)
+	_, cmd := a.Update(msg)
 
 	assert.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName(),
 		"PlayContextMsg with show URI on music preset should switch to Podcast")
+	assert.NotNil(t, cmd, "PlayContextMsg must batch preset stale-check with play command")
 }
 
 func TestPlayContextMsg_AlbumURI_AutoSwitchesToListening(t *testing.T) {
@@ -279,6 +283,21 @@ func TestPlayContextMsg_AlbumURI_OnMusicPreset_NoSwitch(t *testing.T) {
 		"PlayContextMsg with album URI on music preset should not switch")
 }
 
+func TestCyclePreset_DispatchesCheckNewlyVisiblePanes(t *testing.T) {
+	a := newAutoSwitchTestApp(t)
+
+	// Set to Listening preset (index 1) — only NowPlaying, Queue, RecentlyPlayed.
+	a.Layout().SetPreset(1)
+	require.Equal(t, layout.PresetNameListening, a.Layout().ActivePresetName())
+
+	// Press 'p' to cycle to Podcast preset (index 2) — FollowedShows becomes newly visible.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+
+	assert.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName(),
+		"'p' should cycle from Listening to Podcast")
+	assert.NotNil(t, cmd, "'p' CyclePreset must dispatch checkNewlyVisiblePanes batch")
+}
+
 // =============================================================================
 // PlaybackStateFetchedMsg must NOT trigger auto-switch
 // =============================================================================
@@ -305,6 +324,22 @@ func TestPlaybackStateFetchedMsg_NoAutoSwitch(t *testing.T) {
 	// Must stay on Podcast preset — background changes don't trigger auto-switch
 	assert.Equal(t, layout.PresetNamePodcast, a.Layout().ActivePresetName(),
 		"PlaybackStateFetchedMsg must NOT trigger auto-switch")
+}
+
+func TestTogglePage_DispatchesCheckNewlyVisiblePanes(t *testing.T) {
+	a := newAutoSwitchTestApp(t)
+
+	// Toggle to Stats page first so that toggling back to Player makes library
+	// panes newly visible and stale.
+	a.Layout().TogglePage()
+	require.Equal(t, layout.PageStats, a.Layout().ActivePage())
+
+	// Press '0' to toggle back to Player page.
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
+
+	assert.Equal(t, layout.PagePlayer, a.Layout().ActivePage(),
+		"'0' should toggle from Stats back to Player page")
+	assert.NotNil(t, cmd, "'0' TogglePage must dispatch checkNewlyVisiblePanes batch")
 }
 
 func TestPlaybackStateFetchedMsg_EpisodeOnMusicPreset_NoSwitch(t *testing.T) {

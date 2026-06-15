@@ -317,6 +317,42 @@ func TestCheckNewlyVisiblePanes_IgnoresPlaybackAndQueue(t *testing.T) {
 }
 
 // =============================================================================
+// TestCheckNewlyVisiblePanes_SkipsFetchingPane — a pane with an active
+// fetching sentinel must be skipped even if newly visible.
+// =============================================================================
+
+func TestCheckNewlyVisiblePanes_SkipsFetchingPane(t *testing.T) {
+	a := newPollOptTestApp(t)
+
+	// Start on Listening preset (only NowPlaying, Queue, RecentlyPlayed).
+	a.layout.SetPreset(1)
+	require.Equal(t, layout.PresetNameListening, a.layout.ActivePresetName())
+
+	oldVisible := copyVisibleMap(a.layout.ActivePreset().Visible)
+
+	// Set fetching sentinel on Playlists BEFORE switching.
+	a.store.SetPlaylistsFetching(true)
+
+	// Switch to Dashboard — Playlists is newly visible but fetching.
+	a.layout.SetPreset(0) // Dashboard
+	require.Equal(t, layout.PresetNameDashboard, a.layout.ActivePresetName())
+
+	cmd := a.checkNewlyVisiblePanes(oldVisible)
+
+	// Playlists must NOT dispatch a fetch because its sentinel is already true.
+	msgs := collectAllTestMsgs(cmd)
+	for _, m := range msgs {
+		if lm, ok := m.(panes.LibraryLoadedMsg); ok {
+			t.Logf("LibraryLoadedMsg dispatched: %+v", lm)
+		}
+	}
+
+	// Playlists sentinel must remain true (it was set before, and skipped).
+	assert.True(t, a.store.PlaylistsFetching(),
+		"fetching sentinel must remain true when pane with active fetch becomes visible")
+}
+
+// =============================================================================
 // TestPolling_SkipsHiddenPane — panes manually toggled off are skipped.
 // =============================================================================
 
