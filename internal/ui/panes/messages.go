@@ -435,7 +435,13 @@ type FetchSavedEpisodesRequestMsg struct{}
 // when episodes for a specific show need to be loaded from the API.
 type FetchShowEpisodesRequestMsg struct {
 	ShowID string
+	Offset int // 0 for first page, len(loadedEpisodes) for subsequent pages
 }
+
+// FollowedShowsViewClosedMsg is emitted by FollowedShowsPane when the user presses
+// Esc in the episode sub-view. App.go uses it to cancel any in-flight show-episodes
+// fetch and clear the staleness key.
+type FollowedShowsViewClosedMsg struct{}
 
 // FollowedShowsLoadedMsg is sent by the root app model after followed shows have
 // been fetched. Items carries the fetched shows; Err is non-nil on failure.
@@ -456,13 +462,15 @@ type SavedEpisodesLoadedMsg struct {
 // ShowEpisodesLoadedMsg is sent by the root app model after episodes for a show
 // have been fetched. ShowID identifies which show's episodes arrived.
 // Items carries the fetched episodes; Total is the total episode count.
-// HasNext is true when more pages are available. Err is non-nil on failure.
+// HasNext is true when more pages are available. Offset mirrors the request offset
+// for stale-response detection. Err is non-nil on failure.
 // Update() writes Items to the store.
 type ShowEpisodesLoadedMsg struct {
 	ShowID  string
 	Items   []domain.Episode
 	Total   int
 	HasNext bool
+	Offset  int // mirrors request offset for stale-response detection
 	Err     error
 }
 

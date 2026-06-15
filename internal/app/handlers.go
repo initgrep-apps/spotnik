@@ -826,7 +826,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.store.SetSelectedShowID(showID)
 				a.store.SetSelectedShow(m.State.Episode.Show)
 				if !a.store.ShowEpisodesLoaded() {
-					playbackCmds = append(playbackCmds, a.buildFetchShowEpisodesCmd(showID))
+					playbackCmds = append(playbackCmds, a.buildFetchShowEpisodesCmd(context.Background(), showID, 0))
 				}
 			}
 		}
@@ -1483,12 +1483,16 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.FetchShowEpisodesRequestMsg:
-		if a.store.SelectedShowID() != m.ShowID || a.store.ShowEpisodesStale() {
+		// Cancel any prior in-flight fetch (user switched shows or closed sub-view).
+		a.showEpisodesCancel()
+		ctx, cancel := context.WithCancel(context.Background())
+		a.showEpisodesCancel = cancel
+		a.showEpisodesID = m.ShowID
+		a.store.SetSelectedShowID(m.ShowID)
+		if !a.store.ShowEpisodesStale() && m.Offset == 0 {
 			a.store.SetShowEpisodesFetching(true)
-			a.store.SetSelectedShowID(m.ShowID)
-			return a, a.buildFetchShowEpisodesCmd(m.ShowID)
 		}
-		return a, nil
+		return a, a.buildFetchShowEpisodesCmd(ctx, m.ShowID, m.Offset)
 
 	case panes.FollowedShowsLoadedMsg:
 		a.store.SetFollowedShowsFetching(false)
@@ -1578,24 +1582,37 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.ShowEpisodesLoadedMsg:
+		if m.ShowID != a.showEpisodesID {
+			return a, nil // discard stale response
+		}
 		a.store.SetShowEpisodesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
-				return a, nil
+				// Forward to pane so it clears episodesFetching.
+				return a, a.forwardToPane(layout.PaneFollowedShows, m)
 			}
 			a.store.SetShowEpisodesFetchError(m.Err)
-			return a, a.toasts.Cmd(uikit.Toast{
-				Intent: uikit.ToastError,
-				Title:  "Failed to load show episodes",
-				Body:   "Retrying automatically.",
-			})
+			fp := a.followedShowsPane()
+			var paneCmd tea.Cmd
+			if fp != nil {
+				_, paneCmd = fp.Update(m)
+			}
+			return a, tea.Batch(
+				paneCmd,
+				a.toasts.Cmd(uikit.Toast{
+					Intent: uikit.ToastError,
+					Title:  "Failed to load show episodes",
+					Body:   "Retrying automatically.",
+				}),
+			)
 		}
 		a.store.ClearShowEpisodesFetchError()
 		if m.Items != nil {
 			a.store.SetShowEpisodes(m.Items)
 		}
 		a.store.SetShowEpisodesTotal(m.Total)
-		return a, nil
+		// Forward to FollowedShowsPane so it can update episode sub-view.
+		return a, a.forwardToPane(layout.PaneFollowedShows, m)
 
 	case panes.SelectedShowChangedMsg:
 		a.store.SetSelectedShowID(m.ShowID)
@@ -1606,7 +1623,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
-		return a, a.buildFetchShowEpisodesCmd(m.ShowID)
+		return a, a.buildFetchShowEpisodesCmd(context.Background(), m.ShowID, 0)
 
 	case panes.SearchResultSelectedMsg:
 		if m.IsShow || m.IsEpisode {
@@ -1640,13 +1657,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.store.SetSelectedShowID(showIDFromURI(m.URI))
 			return a, tea.Batch(
 				closeCmd,
-				a.buildFetchShowEpisodesCmd(showIDFromURI(m.URI)),
+				a.buildFetchShowEpisodesCmd(context.Background(), showIDFromURI(m.URI), 0),
 			)
 		}
 		return a, nil
 
 	case panes.PlayEpisodeMsg:
 		return a, a.buildPlayEpisodeCmd(m.EpisodeURI, m.PlaylistURI)
+
+	case panes.FollowedShowsViewClosedMsg:
+		a.showEpisodesCancel()
+		a.showEpisodesCancel = func() {}
+		a.showEpisodesID = ""
+		return a, nil
 
 	case throttleExpiredMsg:
 		// Clear throttle state in the store once the backoff period expires.

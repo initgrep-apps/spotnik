@@ -2602,6 +2602,93 @@ func TestApp_AlbumTrackViewClosedMsg_ClearsID(t *testing.T) {
 	assert.Equal(t, "", a.AlbumTracksID(), "AlbumTrackViewClosedMsg must clear the staleness ID")
 }
 
+// TestApp_FetchShowEpisodesRequestMsg_SetsID verifies that FetchShowEpisodesRequestMsg
+// sets the showEpisodesID staleness key and returns a fetch cmd.
+func TestApp_FetchShowEpisodesRequestMsg_SetsID(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	msg := panes.FetchShowEpisodesRequestMsg{ShowID: "show-1", Offset: 0}
+	model, cmd := a.Update(msg)
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "FetchShowEpisodesRequestMsg should return a fetch cmd")
+	assert.Equal(t, "show-1", a.ShowEpisodesID(), "staleness ID must be set to show ID")
+}
+
+// TestApp_FollowedShowsViewClosedMsg_ClearsID verifies that FollowedShowsViewClosedMsg
+// clears the staleness key and cancels any in-flight fetch.
+func TestApp_FollowedShowsViewClosedMsg_ClearsID(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetShowEpisodesID("show-1")
+
+	model, cmd := a.Update(panes.FollowedShowsViewClosedMsg{})
+	a = model.(*app.App)
+	assert.Nil(t, cmd, "FollowedShowsViewClosedMsg must not emit a cmd")
+	assert.Equal(t, "", a.ShowEpisodesID(), "FollowedShowsViewClosedMsg must clear the staleness ID")
+}
+
+// TestApp_ShowEpisodesLoadedMsg_StaleMsgDiscarded verifies stale ShowEpisodesLoadedMsg is discarded.
+func TestApp_ShowEpisodesLoadedMsg_StaleMsgDiscarded(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	// showEpisodesID is "" by default, so any non-empty ShowID is stale.
+
+	msg := panes.ShowEpisodesLoadedMsg{ShowID: "old-show", Items: []domain.Episode{{ID: "e1", Name: "Ep 1"}}, Total: 1, Offset: 0}
+	_, cmd := a.Update(msg)
+	assert.Nil(t, cmd, "stale ShowEpisodesLoadedMsg must be discarded")
+}
+
+// TestApp_ShowEpisodesLoadedMsg_MatchingID_ClearsSentinel verifies that a matching
+// ShowEpisodesLoadedMsg clears the showEpisodesFetching sentinel and writes store.
+func TestApp_ShowEpisodesLoadedMsg_MatchingID_ClearsSentinel(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetShowEpisodesID("show-1")
+	a.Store().SetShowEpisodesFetching(true)
+
+	msg := panes.ShowEpisodesLoadedMsg{ShowID: "show-1", Items: []domain.Episode{{ID: "e1", Name: "Ep 1", URI: "spotify:episode:e1"}}, Total: 1, Offset: 0}
+	_, _ = a.Update(msg)
+	assert.False(t, a.Store().ShowEpisodesFetching(), "sentinel must be cleared on matching response")
+	episodes := a.Store().ShowEpisodes()
+	assert.Len(t, episodes, 1, "episodes must be written to store")
+	assert.Equal(t, 1, a.Store().ShowEpisodesTotal(), "total must be written to store")
+}
+
+// TestApp_ShowEpisodesLoadedMsg_WithErr_EmitsToast verifies that an error in
+// ShowEpisodesLoadedMsg triggers a toast notification.
+func TestApp_ShowEpisodesLoadedMsg_WithErr_EmitsToast(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+	a.SetShowEpisodesID("show-1")
+
+	showErr := fmt.Errorf("connection refused")
+	msg := panes.ShowEpisodesLoadedMsg{ShowID: "show-1", Err: showErr}
+	_, cmd := a.Update(msg)
+	assert.NotNil(t, cmd, "error in ShowEpisodesLoadedMsg must emit a toast cmd")
+}
+
+// TestApp_BuildFetchShowEpisodesCmd_Cancellation verifies that context cancellation
+// results in nil messages from the fetch command.
+func TestApp_BuildFetchShowEpisodesCmd_Cancellation(t *testing.T) {
+	cfg := &config.Config{}
+	a := app.New(cfg, app.AppOptions{})
+
+	// Trigger a show episode fetch.
+	model, cmd := a.Update(panes.FetchShowEpisodesRequestMsg{ShowID: "show-1", Offset: 0})
+	a = model.(*app.App)
+	require.NotNil(t, cmd, "FetchShowEpisodesRequestMsg should return a fetch cmd")
+
+	// Cancel the in-flight context by closing the sub-view.
+	model, _ = a.Update(panes.FollowedShowsViewClosedMsg{})
+	a = model.(*app.App)
+	assert.Equal(t, "", a.ShowEpisodesID(), "staleness key must be cleared")
+
+	// The cmd returned before cancellation is now stale — executing it returns nil.
+	result := cmd()
+	assert.Nil(t, result, "cancelled fetch cmd must return nil")
+}
+
 // ctxCapturingPlayer is a test-local PlayerAPI that records the context passed to PlaybackState.
 // It implements the full api.PlayerAPI interface so it can be injected via SetPlayer.
 type ctxCapturingPlayer struct {
