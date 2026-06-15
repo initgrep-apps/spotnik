@@ -521,23 +521,27 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Library pane polling — per-pane exponential backoff, isolated from global 429.
 		for _, entry := range []struct {
+			paneID   layout.PaneID
 			p        *pollState
 			iv       libraryIntervals
 			fetching func() bool
 			setFetch func(bool)
 			cmd      func() tea.Cmd
 		}{
-			{&a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
-			{&a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
-			{&a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
-			{&a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
-			{&a.statsPoll, statsIntervals,
+			{layout.PanePlaylists, &a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
+			{layout.PaneAlbums, &a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
+			{layout.PaneLikedSongs, &a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
+			{layout.PaneRecentlyPlayed, &a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
+			{layout.PaneTopTracks, &a.statsPoll, statsIntervals,
 				func() bool { return a.store.StatsFetching("short_term") },
 				func(b bool) { a.store.SetStatsFetching("short_term", b) },
 				func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
-			{&a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
-			{&a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
+			{layout.PaneFollowedShows, &a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
+			{layout.PaneSavedEpisodes, &a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
 		} {
+			if !a.layout.IsPaneVisible(entry.paneID) {
+				continue
+			}
 			p := entry.p
 			if p.backoffTicks > 0 {
 				p.backoffTicks--
@@ -920,23 +924,24 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case panes.PlayContextMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
 		// Determine content type from context URI prefix.
+		var presetCmd tea.Cmd
 		if strings.HasPrefix(m.ContextURI, "spotify:show:") {
-			a.autoSwitchPreset(contentTypeEpisode)
+			presetCmd = a.autoSwitchPreset(contentTypeEpisode)
 		} else {
-			a.autoSwitchPreset(contentTypeTrack)
+			presetCmd = a.autoSwitchPreset(contentTypeTrack)
 		}
-		return a, a.buildPlayContextCmd(m.ContextURI, m.OffsetURI)
+		return a, tea.Batch(presetCmd, a.buildPlayContextCmd(m.ContextURI, m.OffsetURI))
 
 	case panes.PlayTrackListMsg:
 		// Overlay stays open — only Esc (SearchClosedMsg) closes it.
-		a.autoSwitchPreset(contentTypeTrack)
-		return a, a.buildPlayTrackListCmd(m.URIs)
+		presetCmd := a.autoSwitchPreset(contentTypeTrack)
+		return a, tea.Batch(presetCmd, a.buildPlayTrackListCmd(m.URIs))
 
 	case panes.PlayTrackMsg:
 		// QueuePane skip-to: play a single track URI directly.
 		// Single-URI list is functionally equivalent to the old buildPlayTrackCmd.
-		a.autoSwitchPreset(contentTypeTrack)
-		return a, a.buildPlayTrackListCmd([]string{m.TrackURI})
+		presetCmd := a.autoSwitchPreset(contentTypeTrack)
+		return a, tea.Batch(presetCmd, a.buildPlayTrackListCmd([]string{m.TrackURI}))
 
 	case panes.AddToQueueMsg:
 		// Gate: free-tier users cannot add to queue — block before any API call.
@@ -1672,8 +1677,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case panes.PlayEpisodeMsg:
-		a.autoSwitchPreset(contentTypeEpisode)
-		return a, a.buildPlayEpisodeCmd(m.EpisodeURI, m.PlaylistURI)
+		presetCmd := a.autoSwitchPreset(contentTypeEpisode)
+		return a, tea.Batch(presetCmd, a.buildPlayEpisodeCmd(m.EpisodeURI, m.PlaylistURI))
 
 	case panes.FollowedShowsViewClosedMsg:
 		a.showEpisodesCancel()
@@ -1737,7 +1742,10 @@ const (
 // autoSwitchPreset switches the preset when the user initiates playback of content
 // that doesn't match the current preset's orientation. Background playback changes
 // (polling) must NOT call this method.
-func (a *App) autoSwitchPreset(forContentType string) {
+// Returns a stale-check command for newly visible panes after the preset switch.
+func (a *App) autoSwitchPreset(forContentType string) tea.Cmd {
+	oldVisible := copyVisibleMap(a.layout.ActivePreset().Visible)
+
 	a.layout.SwitchToPage(layout.PagePlayer)
 
 	isPodcastPreset := a.isCurrentPresetPodcastOriented()
@@ -1751,6 +1759,17 @@ func (a *App) autoSwitchPreset(forContentType string) {
 		a.propagateSizes()
 		a.syncFocus()
 	}
+
+	return a.checkNewlyVisiblePanes(oldVisible)
+}
+
+// copyVisibleMap returns a shallow copy of a Visible map.
+func copyVisibleMap(src map[layout.PaneID]bool) map[layout.PaneID]bool {
+	dst := make(map[layout.PaneID]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // isCurrentPresetPodcastOriented returns true if the active preset contains

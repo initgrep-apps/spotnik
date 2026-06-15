@@ -222,19 +222,21 @@ func (a *App) handleKeyMsg(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// '0' cycles between Player and Stats (2-page cycle).
 	if m.Type == tea.KeyRunes && string(m.Runes) == "0" {
+		oldVisible := copyVisibleMap(a.layout.ActivePreset().Visible)
 		a.layout.TogglePage()
 		a.propagateSizes()
 		a.syncFocus()
-		return a, nil
+		return a, tea.Batch(a.checkNewlyVisiblePanes(oldVisible))
 	}
 
 	// 'p' cycles presets within the current page.
 	if m.Type == tea.KeyRunes && string(m.Runes) == "p" {
+		oldVisible := copyVisibleMap(a.layout.ActivePreset().Visible)
 		a.layout.CyclePreset()
 		a.propagateSizes()
 		a.syncFocus()
 		a.prefs.Set("preset", a.layout.ActivePresetIndex())
-		return a, a.schedulePrefsFlush()
+		return a, tea.Batch(a.checkNewlyVisiblePanes(oldVisible), a.schedulePrefsFlush())
 	}
 
 	// '1'-'8' (Player music presets), '1'-'4' (Player podcast presets),
