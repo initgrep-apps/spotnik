@@ -1151,6 +1151,87 @@ func (a *App) closeOnboardingPermissions() (*App, tea.Cmd) {
 	return a, nil
 }
 
+// checkNewlyVisiblePanes finds panes that are visible in the current preset
+// but were not visible in oldVisible. For each newly visible pane, if its
+// data is stale and no fetch is in-flight, a fetch command is dispatched.
+// Returns nil if no panes need fetching.
+func (a *App) checkNewlyVisiblePanes(oldVisible map[layout.PaneID]bool) tea.Cmd {
+	type paneStaleGate struct {
+		stale    func() bool
+		fetching func() bool
+		setFetch func(bool)
+		cmd      func() tea.Cmd
+	}
+	gates := map[layout.PaneID]paneStaleGate{
+		layout.PanePlaylists: {
+			stale:    a.store.PlaylistsStale,
+			fetching: a.store.PlaylistsFetching,
+			setFetch: a.store.SetPlaylistsFetching,
+			cmd:      func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) },
+		},
+		layout.PaneAlbums: {
+			stale:    a.store.AlbumsStale,
+			fetching: a.store.AlbumsFetching,
+			setFetch: a.store.SetAlbumsFetching,
+			cmd:      func() tea.Cmd { return a.buildFetchAlbumsCmd(0) },
+		},
+		layout.PaneLikedSongs: {
+			stale:    a.store.LikedTracksStale,
+			fetching: a.store.LikedFetching,
+			setFetch: a.store.SetLikedFetching,
+			cmd:      func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) },
+		},
+		layout.PaneRecentlyPlayed: {
+			stale:    a.store.RecentlyPlayedStale,
+			fetching: a.store.RecentFetching,
+			setFetch: a.store.SetRecentFetching,
+			cmd:      func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() },
+		},
+		layout.PaneTopTracks: {
+			stale:    func() bool { return a.store.StatsStale("short_term") },
+			fetching: func() bool { return a.store.StatsFetching("short_term") },
+			setFetch: func(b bool) { a.store.SetStatsFetching("short_term", b) },
+			cmd:      func() tea.Cmd { return a.buildFetchStatsCmd("short_term") },
+		},
+		layout.PaneFollowedShows: {
+			stale:    a.store.FollowedShowsStale,
+			fetching: a.store.FollowedShowsFetching,
+			setFetch: a.store.SetFollowedShowsFetching,
+			cmd:      func() tea.Cmd { return a.buildFetchFollowedShowsCmd() },
+		},
+		layout.PaneSavedEpisodes: {
+			stale:    a.store.SavedEpisodesStale,
+			fetching: a.store.SavedEpisodesFetching,
+			setFetch: a.store.SetSavedEpisodesFetching,
+			cmd:      func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() },
+		},
+	}
+
+	cur := a.layout.ActivePreset()
+	var cmds []tea.Cmd
+	for id := range cur.Visible {
+		if oldVisible[id] {
+			continue
+		}
+		gate, ok := gates[id]
+		if !ok {
+			continue
+		}
+		if gate.fetching() {
+			continue
+		}
+		if !gate.stale() {
+			continue
+		}
+		gate.setFetch(true)
+		cmds = append(cmds, gate.cmd())
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
+
 // Update handles all messages routed through the root model.
 // It delegates to handleMsg for application logic, then forwards the message to
 // the BubbleUp alerts model so alert lifecycle timers (auto-dismiss) keep running.

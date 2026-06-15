@@ -74,6 +74,9 @@ func assertAllLibraryMsgs(t *testing.T, msgs []tea.Msg) {
 // 0 % 5 == 0 triggers the first fetch immediately).
 func TestApp_TickMsg_LibraryPollDispatchesAtTick0(t *testing.T) {
 	a := app.New(&config.Config{}, app.AppOptions{})
+	// Layout must be computed before polling checks pane visibility.
+	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = model.(*app.App)
 
 	// Tick 0: all library panes are in retry mode (hasData=false) so interval=5.
 	// 0 % 5 == 0 → all five library panes should dispatch fetch commands.

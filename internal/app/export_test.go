@@ -41,8 +41,8 @@ func (a *App) EpisodeDetailsOpen() bool {
 type SplashDismissMsgForTest = splashDismissMsg
 
 // AutoSwitchPreset wraps autoSwitchPreset for test access.
-func (a *App) AutoSwitchPreset(forContentType string) {
-	a.autoSwitchPreset(forContentType)
+func (a *App) AutoSwitchPreset(forContentType string) tea.Cmd {
+	return a.autoSwitchPreset(forContentType)
 }
 
 // IsCurrentPresetPodcastOriented wraps isCurrentPresetPodcastOriented for test access.
