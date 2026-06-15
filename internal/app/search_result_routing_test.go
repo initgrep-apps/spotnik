@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/stretchr/testify/assert"
@@ -253,4 +254,39 @@ func TestSearchResult_EpisodeOnStatsPage_SwitchesToPlayerAndPodcast(t *testing.T
 		"should be on Podcast preset")
 	assert.False(t, a.SearchOpen(), "search should be closed after episode selection")
 	assert.NotNil(t, cmd, "episode selection must return a batched command")
+}
+
+// TestSearchResultSelectedMsg_Show_SetsShowEpisodesID verifies that selecting a show
+// from search results sets the showEpisodesID staleness key so that the subsequent
+// ShowEpisodesLoadedMsg response is not discarded.
+func TestSearchResultSelectedMsg_Show_SetsShowEpisodesID(t *testing.T) {
+	a := newSearchTestApp(t)
+
+	msg := panes.SearchResultSelectedMsg{
+		URI:    "spotify:show:abc123",
+		IsShow: true,
+	}
+	_, cmd := a.Update(msg)
+
+	assert.Equal(t, "abc123", a.ShowEpisodesID(),
+		"showEpisodesID must be set when a show is selected from search")
+	assert.NotNil(t, cmd, "show selection must return a batched cmd with fetch")
+
+	// Verify that a ShowEpisodesLoadedMsg with the matching ShowID is NOT
+	// discarded (it would be discarded if showEpisodesID were still "").
+	loadedMsg := panes.ShowEpisodesLoadedMsg{
+		ShowID: "abc123",
+		Items:  []domain.Episode{{ID: "e1", Name: "Ep 1", URI: "spotify:episode:e1"}},
+		Total:  1,
+		Offset: 0,
+	}
+	model, _ := a.Update(loadedMsg)
+	a = model.(*app.App)
+
+	assert.False(t, a.Store().ShowEpisodesFetching(),
+		"ShowEpisodesFetching sentinel must be cleared on matching response")
+	assert.Len(t, a.Store().ShowEpisodes(), 1,
+		"episodes must be written to store (response not discarded)")
+	assert.Equal(t, 1, a.Store().ShowEpisodesTotal(),
+		"total must be written to store")
 }

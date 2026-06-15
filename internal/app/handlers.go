@@ -1659,11 +1659,13 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.buildPlayEpisodeCmd(m.URI, ""),
 				)
 			}
-			a.store.SetSelectedShowID(showIDFromURI(m.URI))
+			showID := showIDFromURI(m.URI)
+			a.store.SetSelectedShowID(showID)
+			a.showEpisodesID = showID
 			return a, tea.Batch(
 				closeCmd,
 				presetCmd,
-				a.buildFetchShowEpisodesCmd(context.Background(), showIDFromURI(m.URI), 0),
+				a.buildFetchShowEpisodesCmd(context.Background(), showID, 0),
 			)
 		}
 		presetCmd := a.autoSwitchPreset(contentTypeTrack)
