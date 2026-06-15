@@ -60,6 +60,7 @@ func buildHelpContent() [2][]helpSection {
 				{"Space", "Play / Pause"}, {al + " / " + ar, "Seek back / forward"},
 				{"Shift+" + al + " / Shift+" + ar, "Prev / Next track"},
 				{"+  / -", "Volume"}, {"s", "Shuffle"}, {"r", "Repeat"}, {"v", "Visualizer"},
+				{"i", "Episode details"},
 			}},
 			{title: "Pane Actions", bindings: []helpBinding{
 				{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
