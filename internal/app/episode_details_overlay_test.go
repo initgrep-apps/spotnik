@@ -28,7 +28,7 @@ func newEpisodeDetailsTestApp(t *testing.T) *app.App {
 		DurationMs:      3600000,
 		ReleaseDate:     "2026-01-15",
 		Description:     "A test episode description",
-		HTMLDescription:  "<p>A test episode description</p>",
+		HTMLDescription: "<p>A test episode description</p>",
 		Show: &domain.Show{
 			Name:      "Test Show",
 			Publisher: "Test Publisher",
@@ -55,9 +55,9 @@ func TestApp_IKey_OpensOverlay_WhenEpisode(t *testing.T) {
 	assert.True(t, a.EpisodeDetailsOpen(), "pressing 'i' while episode playing should open overlay")
 }
 
-// TestApp_IKey_NoOp_WhenTrackPlaying verifies that pressing 'i' is a silent no-op
-// when a track (not episode) is playing.
-func TestApp_IKey_NoOp_WhenTrackPlaying(t *testing.T) {
+// TestApp_IKey_NoOp_WhenNothingPlaying verifies that pressing 'i' is a silent no-op
+// when nothing is playing (nil PlaybackState).
+func TestApp_IKey_NoOp_WhenNothingPlaying(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Preferences.Theme = "black"
 	a := app.New(cfg, app.AppOptions{})
@@ -67,6 +67,44 @@ func TestApp_IKey_NoOp_WhenTrackPlaying(t *testing.T) {
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 
 	assert.False(t, a.EpisodeDetailsOpen(), "pressing 'i' with nothing playing should not open overlay")
+}
+
+// TestApp_IKey_NoOp_WhenTrackPlaying verifies that pressing 'i' is a silent no-op
+// when a track (not episode) is playing.
+func TestApp_IKey_NoOp_WhenTrackPlaying(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := app.New(cfg, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+
+	s := state.New()
+	ps := &domain.PlaybackState{
+		IsPlaying:            true,
+		CurrentlyPlayingType: "track",
+		Item: &domain.Track{
+			ID:   "track-1",
+			Name: "A Song",
+		},
+	}
+	s.SetPlaybackState(ps)
+	a.Update(panes.PlaybackStateFetchedMsg{State: ps})
+
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+
+	assert.False(t, a.EpisodeDetailsOpen(), "pressing 'i' while a track is playing should not open overlay")
+}
+
+// TestApp_EpisodeDetails_IKey_NoOpWhenOpen verifies that pressing 'i' while the
+// episode details overlay is already open does not toggle it closed and does not
+// panic.
+func TestApp_EpisodeDetails_IKey_NoOpWhenOpen(t *testing.T) {
+	a := newEpisodeDetailsTestApp(t)
+
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	require.True(t, a.EpisodeDetailsOpen(), "overlay should be open after first 'i'")
+
+	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	assert.True(t, a.EpisodeDetailsOpen(), "overlay should still be open after second 'i'")
 }
 
 // TestApp_EpisodeDetailsClosedMsg_ClosesOverlay verifies that

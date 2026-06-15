@@ -199,7 +199,7 @@ func (o *EpisodeDetailsOverlay) View() string {
 	if o.maxScroll > 0 {
 		scrollHint = "  " + dimStyle.Render(keyHintStyle.Render("j/k")+" scroll")
 	}
-	keybarLine := dimStyle.Render(keyHintStyle.Render("Esc")+" close"+scrollHint)
+	keybarLine := dimStyle.Render(keyHintStyle.Render("Esc") + " close" + scrollHint)
 
 	// Compose
 	allLines := append(headerLines, descRendered...)

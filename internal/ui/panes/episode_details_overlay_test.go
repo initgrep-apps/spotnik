@@ -240,6 +240,48 @@ func TestEpisodeDetailsOverlay_View_HasBorder(t *testing.T) {
 	assert.Contains(t, view, "╰")
 }
 
+func TestEpisodeDetailsOverlay_ScrollClampAfterResize(t *testing.T) {
+	longDesc := strings.Repeat("Line of text.\n", 200)
+	ps := episodeWithDescription("Ep 1", "Show", "", "", longDesc)
+	o := newTestEpisodeOverlay(ps)
+	o.SetSize(120, 40)
+	_ = o.View() // populate maxScroll
+
+	// Scroll down several times to accumulate scrollY.
+	for i := 0; i < 15; i++ {
+		_, _ = o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	}
+
+	beforeResize := o.scrollY
+	require.Greater(t, beforeResize, 0, "scrollY should have advanced after multiple scroll-downs")
+
+	// Resize terminal much smaller — maxScroll must shrink, scrollY must clamp.
+	assert.NotPanics(t, func() {
+		o.SetSize(120, 10)
+	}, "resizing to a tiny terminal should not panic")
+
+	o.SetSize(120, 10)
+	_ = o.View() // forces maxScroll recomputation + clamp
+
+	assert.LessOrEqual(t, o.scrollY, o.maxScroll, "scrollY must not exceed maxScroll after resize")
+}
+
+func TestEpisodeDetailsOverlay_View_NarrowTerminal(t *testing.T) {
+	ps := episodeWithDescription("Ep 1", "Show", "Publisher Co", "", "A plain description")
+	o := newTestEpisodeOverlay(ps)
+
+	var view string
+	assert.NotPanics(t, func() {
+		o.SetSize(50, 40)
+		view = o.View()
+	}, "View() on narrow terminal should not panic")
+
+	assert.NotEmpty(t, view, "narrow terminal view should not be empty")
+	assert.Contains(t, view, "Episode Details", "narrow terminal view should contain title")
+	assert.Contains(t, view, "╭", "narrow terminal view should have top border")
+	assert.Contains(t, view, "╰", "narrow terminal view should have bottom border")
+}
+
 func TestEpisodeDetailsOverlay_View_HasTitle(t *testing.T) {
 	ps := episodeWithDescription("Ep 1", "Show", "", "", "Desc")
 	o := newTestEpisodeOverlay(ps)
