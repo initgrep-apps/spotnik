@@ -1,6 +1,6 @@
 ---
 title: "Player Page Unification"
-status: open
+status: done
 ---
 
 ## Description
@@ -36,16 +36,16 @@ column to disambiguate tracks from episodes.
 
 | Story | Title | Status |
 |-------|-------|--------|
-| 233 | Layout: rename PageMusic→PagePlayer, remove PagePodcasts, 6 presets, delete panes | open |
-| 234 | NowPlaying: content-aware rendering (track + episode) | open |
-| 235 | Episode Details overlay (`i` key) | open |
-| 236 | FollowedShows drill-down (absorb ShowEpisodes) | open |
-| 238 | Queue: mixed content support (type column, QueueItem) | open |
-| 239 | Auto-switch preset on user-initiated playback | open |
-| 240 | Polling optimization: skip invisible panes | open |
-| 241 | Search integration: auto-switch on show/episode selection | open |
-| 242 | Keybinding updates (3 locations: README, design.md, help overlay) | open |
-| 243 | Documentation: architecture.md + design.md updates | open |
+| 233 | Layout: rename PageMusic→PagePlayer, remove PagePodcasts, 6 presets, delete panes | done |
+| 234 | NowPlaying: content-aware rendering (track + episode) | done |
+| 235 | Episode Details overlay (`i` key) | done |
+| 236 | FollowedShows drill-down (absorb ShowEpisodes) | done |
+| 238 | Queue: mixed content support (type column, QueueItem) | done |
+| 239 | Auto-switch preset on user-initiated playback | done |
+| 240 | Polling optimization: skip invisible panes | done |
+| 241 | Search integration: auto-switch on show/episode selection | done |
+| 242 | Keybinding updates (3 locations: README, design.md, help overlay) | done |
+| 243 | Documentation: architecture.md + design.md updates | done |
 
 ## Acceptance Criteria
 
