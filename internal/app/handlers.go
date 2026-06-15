@@ -1647,40 +1647,27 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.SearchResultSelectedMsg:
 		if m.IsShow || m.IsEpisode {
-			// Close the search overlay first.
 			app, closeCmd := a.closeSearch()
 			if app != nil {
 				a = app
 			}
-			// Navigate to Player page from Stats.
-			if a.layout.ActivePage() == layout.PageStats {
-				a.layout.TogglePage()
-			}
-			// Switch to podcast preset if on a music preset.
-			presetName := a.layout.ActivePresetName()
-			if presetName != layout.PresetNamePodcast && presetName != layout.PresetNamePodcastDashboard {
-				for i, p := range layout.PagePlayerPresets {
-					if p.Name == layout.PresetNamePodcast {
-						a.layout.SwitchToPage(layout.PagePlayer)
-						a.layout.SetPreset(i)
-						break
-					}
-				}
-			}
+			presetCmd := a.autoSwitchPreset(contentTypeEpisode)
 			if m.IsEpisode {
 				return a, tea.Batch(
 					closeCmd,
+					presetCmd,
 					a.buildPlayEpisodeCmd(m.URI, ""),
 				)
 			}
-			// For shows, select the show in the podcasts page.
 			a.store.SetSelectedShowID(showIDFromURI(m.URI))
 			return a, tea.Batch(
 				closeCmd,
+				presetCmd,
 				a.buildFetchShowEpisodesCmd(context.Background(), showIDFromURI(m.URI), 0),
 			)
 		}
-		return a, nil
+		presetCmd := a.autoSwitchPreset(contentTypeTrack)
+		return a, presetCmd
 
 	case panes.PlayEpisodeMsg:
 		presetCmd := a.autoSwitchPreset(contentTypeEpisode)
