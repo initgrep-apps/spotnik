@@ -493,6 +493,9 @@ type QueueItem struct {
 // UnmarshalJSON implements custom unmarshaling to handle both track and episode
 // items in the queue based on the "type" field from the Spotify API response.
 func (q *QueueItem) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
 	raw := struct {
 		Type string `json:"type"`
 	}{}

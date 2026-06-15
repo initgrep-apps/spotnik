@@ -581,6 +581,46 @@ func TestRestrictions_Fields(t *testing.T) {
 	assert.Equal(t, "market", r.Reason)
 }
 
+// TestQueueItem_NullItem verifies that a null JSON value in the queue array
+// results in a zero-value QueueItem (Type=0, Track=nil, Episode=nil).
+func TestQueueItem_NullItem(t *testing.T) {
+	var qi QueueItem
+	err := json.Unmarshal([]byte("null"), &qi)
+	require.NoError(t, err)
+	assert.Equal(t, QueueItemType(0), qi.Type)
+	assert.Nil(t, qi.Track)
+	assert.Nil(t, qi.Episode)
+}
+
+// TestQueueResponse_MixedAndNull verifies queue response with mixed content
+// that includes a null item in the queue array.
+func TestQueueResponse_MixedAndNull(t *testing.T) {
+	raw := `{
+		"currently_playing": {"id": "t1", "name": "Now Playing", "uri": "spotify:track:t1"},
+		"queue": [
+			{"id": "t2", "name": "Track", "uri": "spotify:track:t2", "type": "track"},
+			null,
+			{"id": "ep-1", "name": "Episode", "uri": "spotify:episode:ep-1", "duration_ms": 1200000, "type": "episode", "show": {"id": "show-1", "name": "Show", "publisher": "Pub"}}
+		]
+	}`
+
+	var qr QueueResponse
+	require.NoError(t, json.Unmarshal([]byte(raw), &qr))
+	require.Len(t, qr.Queue, 3)
+
+	assert.Equal(t, QueueItemTypeTrack, qr.Queue[0].Type)
+	assert.NotNil(t, qr.Queue[0].Track)
+	assert.Equal(t, "Track", qr.Queue[0].Track.Name)
+
+	assert.Equal(t, QueueItemType(0), qr.Queue[1].Type)
+	assert.Nil(t, qr.Queue[1].Track)
+	assert.Nil(t, qr.Queue[1].Episode)
+
+	assert.Equal(t, QueueItemTypeEpisode, qr.Queue[2].Type)
+	assert.NotNil(t, qr.Queue[2].Episode)
+	assert.Equal(t, "Episode", qr.Queue[2].Episode.Name)
+}
+
 // TestPlaybackState_UnmarshalTrack verifies that PlaybackState unmarshals a track item
 // when currently_playing_type is "track".
 func TestPlaybackState_UnmarshalTrack(t *testing.T) {

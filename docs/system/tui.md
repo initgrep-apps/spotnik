@@ -1232,6 +1232,7 @@ also use notch format; `filtering: "query"` renders as muted preamble before the
 | Role | Unicode | ASCII |
 |---|---|---|
 | music note | `♪` | `*` |
+| music episode | `◆` | `EP` |
 | double note | `♫` | `**` |
 | premium badge | `♛` | `*P` |
 | free-tier badge | `○` | `(o)` |

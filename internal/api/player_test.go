@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -398,6 +399,7 @@ func TestAddToQueue(t *testing.T) {
 // TestGetQueue verifies GetQueue parses the queue JSON correctly and handles errors.
 func TestGetQueue(t *testing.T) {
 	fixture := testhelpers.LoadFixture(t, "queue_response.json")
+	fixtureMixed := testhelpers.LoadFixture(t, "queue_response_mixed.json")
 
 	tests := []struct {
 		name      string
@@ -422,6 +424,60 @@ func TestGetQueue(t *testing.T) {
 				require.Len(t, resp.Queue, 2, "queue should have 2 tracks")
 				assert.Equal(t, "Save Your Tears", resp.Queue[0].Track.Name)
 				assert.Equal(t, "Starboy", resp.Queue[1].Track.Name)
+			},
+		},
+		{
+			name: "mixed content parses tracks and episodes",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
+				assert.Equal(t, http.MethodGet, r.Method)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(fixtureMixed)
+			},
+			checkResp: func(t *testing.T, resp *QueueResponse, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, "Blinding Lights", resp.CurrentlyPlaying.Name)
+				require.Len(t, resp.Queue, 3, "queue should have 3 items (track, episode, track)")
+				assert.Equal(t, domain.QueueItemTypeTrack, resp.Queue[0].Type)
+				assert.NotNil(t, resp.Queue[0].Track)
+				assert.Equal(t, "Save Your Tears", resp.Queue[0].Track.Name)
+				assert.Equal(t, domain.QueueItemTypeEpisode, resp.Queue[1].Type)
+				assert.NotNil(t, resp.Queue[1].Episode)
+				assert.Equal(t, "Daily Tech News #42", resp.Queue[1].Episode.Name)
+				assert.Equal(t, "Tech Daily", resp.Queue[1].Episode.Show.Name)
+				assert.Equal(t, domain.QueueItemTypeTrack, resp.Queue[2].Type)
+				assert.NotNil(t, resp.Queue[2].Track)
+				assert.Equal(t, "Starboy", resp.Queue[2].Track.Name)
+			},
+		},
+		{
+			name: "204 returns nil response no error",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/me/player/queue", r.URL.Path)
+				w.WriteHeader(http.StatusNoContent)
+			},
+			checkResp: func(t *testing.T, resp *QueueResponse, err error) {
+				t.Helper()
+				require.NoError(t, err, "204 should return nil response, not error")
+				assert.Nil(t, resp, "nil response expected for 204 status")
+			},
+		},
+		{
+			name: "429 returns RateLimitError",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Retry-After", "5")
+				w.WriteHeader(http.StatusTooManyRequests)
+			},
+			checkResp: func(t *testing.T, resp *QueueResponse, err error) {
+				t.Helper()
+				require.Error(t, err)
+				assert.Nil(t, resp)
+				var rateLimitErr *RateLimitError
+				require.ErrorAs(t, err, &rateLimitErr)
+				assert.Equal(t, 5, rateLimitErr.RetryAfter)
 			},
 		},
 		{
