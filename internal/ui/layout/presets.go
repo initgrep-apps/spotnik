@@ -80,8 +80,8 @@ var PresetPodcast = Preset{
 	Grid: []Row{
 		{HeightWeight: 2, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
-			{PaneID: PaneFollowedShows, WidthWeight: 55},
 			{PaneID: PaneQueue, WidthWeight: 45},
+			{PaneID: PaneFollowedShows, WidthWeight: 55},
 		}},
 	},
 }
@@ -127,9 +127,9 @@ var PresetPodcastDashboard = Preset{
 	Grid: []Row{
 		{HeightWeight: 2, MinHeight: 0, Cells: []Cell{{PaneID: PaneNowPlaying, WidthWeight: 1}}},
 		{HeightWeight: 3, Cells: []Cell{
+			{PaneID: PaneQueue, WidthWeight: 1},
 			{PaneID: PaneFollowedShows, WidthWeight: 1},
 			{PaneID: PaneSavedEpisodes, WidthWeight: 1},
-			{PaneID: PaneQueue, WidthWeight: 1},
 		}},
 	},
 }
