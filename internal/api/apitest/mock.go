@@ -25,6 +25,7 @@ type MockPlayer struct {
 	QueueErr            error
 
 	PlayCalled         bool
+	LastPlayOpts       api.PlayOptions
 	PauseCalled        bool
 	NextCalled         bool
 	PreviousCalled     bool
@@ -47,9 +48,10 @@ func (m *MockPlayer) PlaybackState(_ context.Context) (*api.PlaybackState, error
 	return m.PlaybackStateResult, m.PlaybackStateErr
 }
 
-// Play records the call and returns the configured error.
-func (m *MockPlayer) Play(_ context.Context, _ api.PlayOptions) error {
+// Play records the call, stores the options, and returns the configured error.
+func (m *MockPlayer) Play(_ context.Context, opts api.PlayOptions) error {
 	m.PlayCalled = true
+	m.LastPlayOpts = opts
 	return m.PlayErr
 }
 

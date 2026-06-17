@@ -1082,19 +1082,19 @@ func TestPresetPodcast_PlayerGrid(t *testing.T) {
 	assert.Equal(t, "Podcast", layout.PresetPodcast.Name)
 	require.Len(t, layout.PresetPodcast.Grid, 2)
 	require.Len(t, layout.PresetPodcast.Grid[1].Cells, 2)
-	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcast.Grid[1].Cells[0].PaneID)
-	assert.Equal(t, layout.PaneQueue, layout.PresetPodcast.Grid[1].Cells[1].PaneID)
-	assert.Equal(t, 55, layout.PresetPodcast.Grid[1].Cells[0].WidthWeight)
-	assert.Equal(t, 45, layout.PresetPodcast.Grid[1].Cells[1].WidthWeight)
+	assert.Equal(t, layout.PaneQueue, layout.PresetPodcast.Grid[1].Cells[0].PaneID)
+	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcast.Grid[1].Cells[1].PaneID)
+	assert.Equal(t, 45, layout.PresetPodcast.Grid[1].Cells[0].WidthWeight)
+	assert.Equal(t, 55, layout.PresetPodcast.Grid[1].Cells[1].WidthWeight)
 }
 
 func TestPresetPodcastDashboard_PlayerGrid(t *testing.T) {
 	assert.Equal(t, "Podcast Dashboard", layout.PresetPodcastDashboard.Name)
 	require.Len(t, layout.PresetPodcastDashboard.Grid, 2)
 	require.Len(t, layout.PresetPodcastDashboard.Grid[1].Cells, 3)
-	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcastDashboard.Grid[1].Cells[0].PaneID)
-	assert.Equal(t, layout.PaneSavedEpisodes, layout.PresetPodcastDashboard.Grid[1].Cells[1].PaneID)
-	assert.Equal(t, layout.PaneQueue, layout.PresetPodcastDashboard.Grid[1].Cells[2].PaneID)
+	assert.Equal(t, layout.PaneQueue, layout.PresetPodcastDashboard.Grid[1].Cells[0].PaneID)
+	assert.Equal(t, layout.PaneFollowedShows, layout.PresetPodcastDashboard.Grid[1].Cells[1].PaneID)
+	assert.Equal(t, layout.PaneSavedEpisodes, layout.PresetPodcastDashboard.Grid[1].Cells[2].PaneID)
 }
 
 func TestPaneIDs_NoPodcastPlaybackOrShowEpisodes(t *testing.T) {
