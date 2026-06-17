@@ -840,7 +840,7 @@ func (a *App) buildPlayEpisodeCmd(episodeURI, playlistURI string) tea.Cmd {
 		opts := domain.PlayOptions{URIs: []string{episodeURI}}
 		if playlistURI != "" {
 			opts.ContextURI = playlistURI
-			opts.URIs = nil
+			opts.Offset = &domain.PlayOffset{URI: episodeURI}
 		}
 		err := player.Play(api.WithPriority(context.Background(), api.Interactive), opts)
 		if err != nil {

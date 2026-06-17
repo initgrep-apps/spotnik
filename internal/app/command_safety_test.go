@@ -13,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/api/apitest"
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -636,4 +637,86 @@ func collectBatchMsgs(cmd tea.Cmd) []tea.Msg {
 		return msgs
 	}
 	return []tea.Msg{msg}
+}
+
+// TestBuildPlayEpisodeCmd_WithPlaylistURI_KeepsURIsAndSetsOffset verifies that
+// when buildPlayEpisodeCmd is called with a non-empty playlistURI, the PlayOptions
+// sent to the API include both URIs (the episode) and Offset so Spotify starts
+// at the correct episode within the show context.
+func TestBuildPlayEpisodeCmd_WithPlaylistURI_KeepsURIsAndSetsOffset(t *testing.T) {
+	mock := &apitest.MockPlayer{}
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := app.New(cfg, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+	a.SetPlayer(mock)
+
+	episodeURI := "spotify:episode:abc123"
+	showURI := "spotify:show:xyz789"
+
+	_, cmd := a.Update(panes.PlayEpisodeMsg{
+		EpisodeURI:  episodeURI,
+		PlaylistURI: showURI,
+	})
+	require.NotNil(t, cmd)
+
+	msgs := collectBatchMsgs(cmd)
+	require.NotEmpty(t, msgs)
+
+	var found bool
+	for _, m := range msgs {
+		if _, ok := m.(panes.PlaybackCmdSentMsg); ok {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "batch must contain PlaybackCmdSentMsg")
+
+	require.True(t, mock.PlayCalled, "Play must have been called")
+	require.NotNil(t, mock.LastPlayOpts.URIs, "URIs must not be nil")
+	require.Len(t, mock.LastPlayOpts.URIs, 1)
+	assert.Equal(t, episodeURI, mock.LastPlayOpts.URIs[0])
+	assert.Equal(t, showURI, mock.LastPlayOpts.ContextURI)
+	require.NotNil(t, mock.LastPlayOpts.Offset, "Offset must not be nil")
+	assert.Equal(t, episodeURI, mock.LastPlayOpts.Offset.URI)
+}
+
+// TestBuildPlayEpisodeCmd_NoPlaylistURI_OnlyURIs verifies that when playlistURI
+// is empty, only URIs is set and no ContextURI/Offset are sent.
+func TestBuildPlayEpisodeCmd_NoPlaylistURI_OnlyURIs(t *testing.T) {
+	mock := &apitest.MockPlayer{}
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := app.New(cfg, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+	a.SetPlayer(mock)
+
+	episodeURI := "spotify:episode:abc123"
+
+	_, cmd := a.Update(panes.PlayEpisodeMsg{
+		EpisodeURI:  episodeURI,
+		PlaylistURI: "",
+	})
+	require.NotNil(t, cmd)
+
+	msgs := collectBatchMsgs(cmd)
+	require.NotEmpty(t, msgs)
+
+	var found bool
+	for _, m := range msgs {
+		if _, ok := m.(panes.PlaybackCmdSentMsg); ok {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "batch must contain PlaybackCmdSentMsg")
+
+	require.True(t, mock.PlayCalled, "Play must have been called")
+	require.NotNil(t, mock.LastPlayOpts.URIs)
+	require.Len(t, mock.LastPlayOpts.URIs, 1)
+	assert.Equal(t, episodeURI, mock.LastPlayOpts.URIs[0])
+	assert.Empty(t, mock.LastPlayOpts.ContextURI)
+	assert.Nil(t, mock.LastPlayOpts.Offset)
 }
