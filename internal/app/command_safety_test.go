@@ -643,7 +643,7 @@ func collectBatchMsgs(cmd tea.Cmd) []tea.Msg {
 // when buildPlayEpisodeCmd is called with a non-empty playlistURI, the PlayOptions
 // sent to the API include both URIs (the episode) and Offset so Spotify starts
 // at the correct episode within the show context.
-func TestBuildPlayEpisodeCmd_WithPlaylistURI_KeepsURIsAndSetsOffset(t *testing.T) {
+func TestBuildPlayEpisodeCmd_WithPlaylistURI_SetsContextAndOffset(t *testing.T) {
 	mock := &apitest.MockPlayer{}
 	cfg := &config.Config{}
 	cfg.Preferences.Theme = "black"
@@ -674,9 +674,7 @@ func TestBuildPlayEpisodeCmd_WithPlaylistURI_KeepsURIsAndSetsOffset(t *testing.T
 	require.True(t, found, "batch must contain PlaybackCmdSentMsg")
 
 	require.True(t, mock.PlayCalled, "Play must have been called")
-	require.NotNil(t, mock.LastPlayOpts.URIs, "URIs must not be nil")
-	require.Len(t, mock.LastPlayOpts.URIs, 1)
-	assert.Equal(t, episodeURI, mock.LastPlayOpts.URIs[0])
+	require.Nil(t, mock.LastPlayOpts.URIs, "URIs must be nil when context_uri is set (mutually exclusive)")
 	assert.Equal(t, showURI, mock.LastPlayOpts.ContextURI)
 	require.NotNil(t, mock.LastPlayOpts.Offset, "Offset must not be nil")
 	assert.Equal(t, episodeURI, mock.LastPlayOpts.Offset.URI)
