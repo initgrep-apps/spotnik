@@ -211,7 +211,7 @@ func (o *EpisodeDetailsOverlay) renderEmptyChrome(text, hint string) string {
 func (o *EpisodeDetailsOverlay) renderDescription(ep *domain.Episode) string {
 	if ep.HTMLDescription != "" {
 		md := htmlToMarkdown(ep.HTMLDescription)
-		rendered, err := renderMarkdown(md, o.overlayWidth()-6)
+		rendered, err := renderMarkdown(md, o.viewport.Width)
 		if err == nil && rendered != "" {
 			return rendered
 		}
