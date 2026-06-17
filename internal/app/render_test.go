@@ -985,8 +985,8 @@ func TestRenderOnboardingRegister_panelTitle(t *testing.T) {
 	a.width = 120
 	a.height = 40
 	view := a.renderOnboardingRegister()
-	// The Panel title is embedded in the top border row: "╭─ Step 1 of 2 — ..."
-	assert.Contains(t, view, "╭─ Step 1 of 2")
+	// The Panel title is embedded in the top border row: "╭─Step 1 of 2 — ..."
+	assert.Contains(t, view, "╭─Step 1 of 2")
 }
 
 // TestRenderOnboardingOAuth_panelTitle verifies the step header is embedded in
@@ -997,8 +997,8 @@ func TestRenderOnboardingOAuth_panelTitle(t *testing.T) {
 	a.height = 40
 	a.onboardingAuthURL = "https://accounts.spotify.com/authorize?client_id=test"
 	view := a.renderOnboardingOAuth()
-	// Panel title embedded in border: "╭─ Step 2 of 2 — ..."
-	assert.Contains(t, view, "╭─ Step 2 of 2")
+	// Panel title embedded in border: "╭─Step 2 of 2 — ..."
+	assert.Contains(t, view, "╭─Step 2 of 2")
 }
 
 // TestRenderOnboardingError_panelTitle verifies PanelIntentError is used: the
@@ -1009,8 +1009,8 @@ func TestRenderOnboardingError_panelTitle(t *testing.T) {
 	a.height = 40
 	a.onboardingError = "token exchange failed"
 	view := a.renderOnboardingError()
-	// Panel title embedded in border: "╭─ Step 2 of 2 — Authorization Failed..."
-	assert.Contains(t, view, "╭─ Step 2 of 2")
+	// Panel title embedded in border: "╭─Step 2 of 2 — Authorization Failed..."
+	assert.Contains(t, view, "╭─Step 2 of 2")
 	assert.Contains(t, view, "Authorization Failed")
 }
 

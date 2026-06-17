@@ -22,9 +22,9 @@ func TestOverlayChrome_Unicode_DefaultBorderAccent(t *testing.T) {
 	}
 	lines := uikit.Capture(oc.Render("  body"))
 	require.Equal(t, 10, len(lines), "height must match")
-	assert.True(t, strings.HasPrefix(lines[0], "╭─ Search"),
+	assert.True(t, strings.HasPrefix(lines[0], "╭─Search"),
 		"top-left corner + hrule + title, got: %q", lines[0])
-	assert.Contains(t, lines[0], "╮ Enter play ╭",
+	assert.Contains(t, lines[0], "╮Enter play╭",
 		"first action notch")
 }
 

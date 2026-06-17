@@ -20,10 +20,9 @@ import (
 
 // themeFile is the top-level structure matching the TOML schema.
 type themeFile struct {
-	ID          string           `toml:"id"`
-	Name        string           `toml:"name"`
-	Colors      themeColors      `toml:"colors"`
-	PaneBorders paneBorderColors `toml:"pane_borders"`
+	ID     string      `toml:"id"`
+	Name   string      `toml:"name"`
+	Colors themeColors `toml:"colors"`
 }
 
 // themeColors holds all color token values parsed from the [colors] section.
@@ -71,29 +70,12 @@ type themeColors struct {
 	Accent string `toml:"accent"`
 }
 
-// paneBorderColors holds per-pane border accent values from [pane_borders].
-type paneBorderColors struct {
-	NowPlaying     string `toml:"now_playing"`
-	Queue          string `toml:"queue"`
-	Playlists      string `toml:"playlists"`
-	Albums         string `toml:"albums"`
-	LikedSongs     string `toml:"liked_songs"`
-	RecentlyPlayed string `toml:"recently_played"`
-	TopTracks      string `toml:"top_tracks"`
-	TopArtists     string `toml:"top_artists"`
-	RequestFlow    string `toml:"request_flow"`
-	NetworkLog     string `toml:"network_log"`
-	FollowedShows  string `toml:"followed_shows"`
-	SavedEpisodes  string `toml:"saved_episodes"`
-}
-
 // ConfigTheme implements Theme by loading color values from a parsed TOML file.
 // This is the sole concrete implementation used for all themes (built-in and user-provided).
 type ConfigTheme struct {
 	id   string
 	name string
 	c    themeColors
-	pb   paneBorderColors
 }
 
 // ParseTheme decodes TOML bytes into a ConfigTheme.
@@ -109,10 +91,10 @@ func ParseTheme(data []byte) (*ConfigTheme, error) {
 		return nil, fmt.Errorf("theme missing id field")
 	}
 	// Validate that all color fields are non-empty.
-	if err := validateColorFields(f.ID, f.Colors, f.PaneBorders); err != nil {
+	if err := validateColorFields(f.ID, f.Colors); err != nil {
 		return nil, err
 	}
-	return &ConfigTheme{id: f.ID, name: f.Name, c: f.Colors, pb: f.PaneBorders}, nil
+	return &ConfigTheme{id: f.ID, name: f.Name, c: f.Colors}, nil
 }
 
 // optionalColorFields lists themeColors TOML keys that are not required.
@@ -121,23 +103,16 @@ var optionalColorFields = map[string]bool{
 	"accent": true, // CLI accent; falls back to seek_bar when absent (Story 146)
 }
 
-// validateColorFields checks that every string field in themeColors and
-// paneBorderColors is non-empty, skipping fields listed in optionalColorFields.
+// validateColorFields checks that every string field in themeColors is
+// non-empty, skipping fields listed in optionalColorFields.
 // Returns an error identifying the first missing required field found.
-func validateColorFields(themeID string, c themeColors, pb paneBorderColors) error {
+func validateColorFields(themeID string, c themeColors) error {
 	cv := reflect.ValueOf(c)
 	ct := cv.Type()
 	for i := 0; i < cv.NumField(); i++ {
 		name := ct.Field(i).Tag.Get("toml")
 		if cv.Field(i).String() == "" && !optionalColorFields[name] {
 			return fmt.Errorf("theme %q: missing or empty color field %q", themeID, name)
-		}
-	}
-	pv := reflect.ValueOf(pb)
-	pt := pv.Type()
-	for i := 0; i < pv.NumField(); i++ {
-		if pv.Field(i).String() == "" {
-			return fmt.Errorf("theme %q: missing or empty color field %q", themeID, pt.Field(i).Tag.Get("toml"))
 		}
 	}
 	return nil
@@ -282,54 +257,6 @@ func (t *ConfigTheme) TableHeader() lipgloss.Color { return lipgloss.Color(t.c.T
 
 // PresetIndicator returns the preset label color.
 func (t *ConfigTheme) PresetIndicator() lipgloss.Color { return lipgloss.Color(t.c.PresetIndicator) }
-
-// Per-pane borders
-
-// PaneBorderNowPlaying returns the now-playing pane border accent color.
-func (t *ConfigTheme) PaneBorderNowPlaying() lipgloss.Color {
-	return lipgloss.Color(t.pb.NowPlaying)
-}
-
-// PaneBorderQueue returns the queue pane border accent color.
-func (t *ConfigTheme) PaneBorderQueue() lipgloss.Color { return lipgloss.Color(t.pb.Queue) }
-
-// PaneBorderPlaylists returns the playlists pane border accent color.
-func (t *ConfigTheme) PaneBorderPlaylists() lipgloss.Color { return lipgloss.Color(t.pb.Playlists) }
-
-// PaneBorderAlbums returns the albums pane border accent color.
-func (t *ConfigTheme) PaneBorderAlbums() lipgloss.Color { return lipgloss.Color(t.pb.Albums) }
-
-// PaneBorderLikedSongs returns the liked songs pane border accent color.
-func (t *ConfigTheme) PaneBorderLikedSongs() lipgloss.Color { return lipgloss.Color(t.pb.LikedSongs) }
-
-// PaneBorderRecentlyPlayed returns the recently played pane border accent color.
-func (t *ConfigTheme) PaneBorderRecentlyPlayed() lipgloss.Color {
-	return lipgloss.Color(t.pb.RecentlyPlayed)
-}
-
-// PaneBorderTopTracks returns the top tracks pane border accent color.
-func (t *ConfigTheme) PaneBorderTopTracks() lipgloss.Color { return lipgloss.Color(t.pb.TopTracks) }
-
-// PaneBorderTopArtists returns the top artists pane border accent color.
-func (t *ConfigTheme) PaneBorderTopArtists() lipgloss.Color { return lipgloss.Color(t.pb.TopArtists) }
-
-// PaneBorderRequestFlow returns the request flow pane border accent color.
-func (t *ConfigTheme) PaneBorderRequestFlow() lipgloss.Color {
-	return lipgloss.Color(t.pb.RequestFlow)
-}
-
-// PaneBorderNetworkLog returns the network log pane border accent color.
-func (t *ConfigTheme) PaneBorderNetworkLog() lipgloss.Color { return lipgloss.Color(t.pb.NetworkLog) }
-
-// PaneBorderFollowedShows returns the followed shows pane border accent color.
-func (t *ConfigTheme) PaneBorderFollowedShows() lipgloss.Color {
-	return lipgloss.Color(t.pb.FollowedShows)
-}
-
-// PaneBorderSavedEpisodes returns the saved episodes pane border accent color.
-func (t *ConfigTheme) PaneBorderSavedEpisodes() lipgloss.Color {
-	return lipgloss.Color(t.pb.SavedEpisodes)
-}
 
 // Column colors
 

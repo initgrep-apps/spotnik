@@ -246,7 +246,7 @@ func renderSwatches(t *theme.ConfigTheme) string {
 		t.ColumnPrimary(),
 		t.ColumnSecondary(),
 		t.ColumnTertiary(),
-		t.PaneBorderNowPlaying(),
+		t.Success(),
 		t.ActiveBorder(),
 	}
 	swatch := uikit.GlyphFor(uikit.GlyphBarFull, uikit.ActiveMode())

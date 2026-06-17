@@ -50,7 +50,7 @@ func (s StatusBar) Render() string {
 		Height:      statusH,
 		Title:       "",
 		Actions:     []layout.Action{},
-		AccentColor: s.Theme.TextMuted(),
+		AccentColor: s.Theme.InactiveBorder(),
 		Focused:     false,
 		Theme:       s.Theme,
 		// Resolve glyph mode here so layout/border.go does not need to import

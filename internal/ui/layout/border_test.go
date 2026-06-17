@@ -51,7 +51,7 @@ func TestRenderPaneBorder_BasicCornerCharacters(t *testing.T) {
 		Height:      5,
 		Title:       "Test",
 		ToggleKey:   0,
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -76,7 +76,7 @@ func TestRenderPaneBorder_WithToggleKey(t *testing.T) {
 		Height:      5,
 		Title:       "Playlists",
 		ToggleKey:   3,
-		AccentColor: th.PaneBorderPlaylists(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -101,7 +101,7 @@ func TestRenderPaneBorder_WithActions(t *testing.T) {
 		Title:       "Playlists",
 		ToggleKey:   3,
 		Actions:     actions,
-		AccentColor: th.PaneBorderPlaylists(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -124,7 +124,7 @@ func TestRenderPaneBorder_WidthMatchesRequested(t *testing.T) {
 		Height:      5,
 		Title:       "Queue",
 		ToggleKey:   2,
-		AccentColor: th.PaneBorderQueue(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     false,
 		Theme:       th,
 	}
@@ -143,7 +143,7 @@ func TestRenderPaneBorder_HeightMatchesRequested(t *testing.T) {
 		Width:       30,
 		Height:      wantHeight,
 		Title:       "Albums",
-		AccentColor: th.PaneBorderAlbums(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -160,7 +160,7 @@ func TestRenderPaneBorder_ContentLinesPaddedToFit(t *testing.T) {
 		Width:       w,
 		Height:      3,
 		Title:       "Test",
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -185,7 +185,7 @@ func TestRenderPaneBorder_FilterMode(t *testing.T) {
 		ToggleKey:   2,
 		Actions:     actions,
 		FilterQuery: "rock",
-		AccentColor: th.PaneBorderQueue(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -302,7 +302,7 @@ func TestRenderPaneBorder_NoToggleKey(t *testing.T) {
 		Height:      5,
 		Title:       "Request Flow",
 		ToggleKey:   0, // no toggle key
-		AccentColor: th.PaneBorderRequestFlow(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -326,7 +326,7 @@ func TestRenderPaneBorder_EmptyActionsOnlyTitleAndDashes(t *testing.T) {
 		Title:       "Albums",
 		ToggleKey:   4,
 		Actions:     nil, // empty actions
-		AccentColor: th.PaneBorderAlbums(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -343,21 +343,26 @@ func TestRenderPaneBorder_EmptyActionsOnlyTitleAndDashes(t *testing.T) {
 
 func TestRenderPaneBorder_FocusedStyleApplied(t *testing.T) {
 	th := theme.Load("black")
-	cfg := layout.BorderConfig{
+	cfgFocused := layout.BorderConfig{
 		Width:       30,
 		Height:      5,
 		Title:       "Test",
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: layout.PaneBorderColor(true, th),
 		Focused:     true,
 		Theme:       th,
 	}
-	focusedResult := layout.RenderPaneBorder("", cfg)
+	cfgUnfocused := layout.BorderConfig{
+		Width:       30,
+		Height:      5,
+		Title:       "Test",
+		AccentColor: layout.PaneBorderColor(false, th),
+		Focused:     false,
+		Theme:       th,
+	}
+	focusedResult := layout.RenderPaneBorder("", cfgFocused)
+	unfocusedResult := layout.RenderPaneBorder("", cfgUnfocused)
 
-	cfg.Focused = false
-	unfocusedResult := layout.RenderPaneBorder("", cfg)
-
-	// The outputs should differ — focused: full AccentColor + bold title;
-	// unfocused: AccentColor + Faint (dimmed but still colored).
+	// Focus is distinguished by different colour tokens (ActiveBorder vs InactiveBorder).
 	assert.NotEqual(t, focusedResult, unfocusedResult, "focused and unfocused renders should differ")
 }
 
@@ -367,116 +372,90 @@ func TestRenderPaneBorder_UnfocusedFaintStyle(t *testing.T) {
 		Width:       30,
 		Height:      5,
 		Title:       "Test",
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.InactiveBorder(),
 		Focused:     false,
 		Theme:       th,
 	}
 	result := layout.RenderPaneBorder("", cfg)
-	// Unfocused border: AccentColor + Faint (dim). Both color escape and dim code are present.
 	assert.Contains(t, result, "\x1b[", "unfocused border should contain ANSI escape codes")
 }
 
-// ── Story 71 Task 1: Unfocused accent color ───────────────────────────────────
-
-// TestRenderPaneBorder_Unfocused_UsesAccentColor verifies that an unfocused border
-// still emits the accent color escape (Foreground) along with the faint modifier,
-// rather than only the faint grey produced by lipgloss.Faint(true) alone.
-//
-// The black theme NowPlaying accent is #00ff88 → TrueColor RGB(0, 255, 136) →
-// escape sequence "38;2;0;255;136". This escape must appear in the unfocused render
-// (the border chars), not only in the key-hint or title segments.
-func TestRenderPaneBorder_Unfocused_UsesAccentColor(t *testing.T) {
+// TestRenderPaneBorder_Unfocused_UsesInactiveColor verifies that an unfocused
+// border uses the InactiveBorder theme token, not the ActiveBorder token.
+// The caller (PaneBorderColor) is responsible for selecting the correct color
+// based on focus state.
+func TestRenderPaneBorder_Unfocused_UsesInactiveColor(t *testing.T) {
 	th := theme.Load("black")
-	// Use a config with ToggleKey=0 and no actions so the only styled elements
-	// are the border characters themselves and the title.
-	accentColor := th.PaneBorderNowPlaying() // #00ff88 → 38;2;0;255;136
 	cfg := layout.BorderConfig{
 		Width:       40,
 		Height:      5,
 		Title:       "Test",
-		ToggleKey:   0, // no superscript — eliminates KeyHint color from output
+		ToggleKey:   0,
 		Actions:     nil,
-		AccentColor: accentColor,
+		AccentColor: th.InactiveBorder(),
 		Focused:     false,
 		Theme:       th,
 	}
 	result := layout.RenderPaneBorder("", cfg)
 
-	// With ToggleKey=0 and no Actions, the only colored elements are borders and title.
-	// The accent color #00ff88 encodes as "38;2;0;255;136" in TrueColor mode.
-	// If the border uses Faint(true) alone, this sequence will NOT appear.
-	// If it uses Foreground(AccentColor)+Faint(true), this sequence WILL appear.
-	const accentEscape = "38;2;0;255;136"
-	assert.Contains(t, result, accentEscape,
-		"unfocused border must emit the accent foreground color (not just faint grey)")
-	// Faint modifier must also be present.
-	assert.Contains(t, result, "\x1b[2", "unfocused border must include the faint (dim) modifier")
+	// InactiveBorder is #1e1e1e → 38;2;30;30;30 in TrueColor
+	const inactiveEscape = "38;2;30;30;30"
+	assert.Contains(t, result, inactiveEscape,
+		"unfocused border must use the InactiveBorder colour")
+	// No faint modifier — colour is controlled by the token, not Faint().
+	assert.NotContains(t, result, "\x1b[2", "unfocused border must not include the faint modifier")
 }
 
-// TestRenderPaneBorder_Focused_NoBoldRegression verifies that a focused border
-// emits both the accent color and bold, and that both focused vs unfocused renders
-// differ (focus is distinguished by brightness/bold, not just presence of color).
+// TestRenderPaneBorder_Focused_NoBoldRegression verifies that focused vs unfocused
+// renders differ via colour tokens (ActiveBorder vs InactiveBorder). Title is never
+// bold — focus is conveyed by border colour alone.
 func TestRenderPaneBorder_Focused_NoBoldRegression(t *testing.T) {
 	th := theme.Load("black")
-	accentColor := th.PaneBorderNowPlaying()
 	cfgFocused := layout.BorderConfig{
 		Width:       40,
 		Height:      5,
 		Title:       "Now Playing",
 		ToggleKey:   1,
-		AccentColor: accentColor,
+		AccentColor: layout.PaneBorderColor(true, th),
 		Focused:     true,
 		Theme:       th,
 	}
-	cfgUnfocused := cfgFocused
-	cfgUnfocused.Focused = false
+	cfgUnfocused := layout.BorderConfig{
+		Width:       40,
+		Height:      5,
+		Title:       "Now Playing",
+		ToggleKey:   1,
+		AccentColor: layout.PaneBorderColor(false, th),
+		Focused:     false,
+		Theme:       th,
+	}
 
 	focused := layout.RenderPaneBorder("", cfgFocused)
 	unfocused := layout.RenderPaneBorder("", cfgUnfocused)
 
-	// Both must contain the accent color sequence.
+	// Both must contain foreground color escapes.
 	assert.Contains(t, focused, "38;2;", "focused border must contain foreground color escape")
 	assert.Contains(t, unfocused, "38;2;", "unfocused border must contain foreground color escape")
-	// The two renders must differ — focus is visually distinguishable.
+	// The two renders must differ — focus is visually distinguishable via colour.
 	assert.NotEqual(t, focused, unfocused, "focused and unfocused renders must differ")
-	// Focused title must use bold (ANSI code 1). Lipgloss emits bold as "[1;" prefix.
-	assert.Contains(t, focused, "\x1b[1;", "focused title must be bold")
+	// Title must NOT use bold — focus is conveyed by border colour alone.
+	assert.NotContains(t, focused, "\x1b[1;", "focused title must not be bold")
 }
 
 // ── Task 1: PaneBorderColor helper ───────────────────────────────────────────
 
-func TestPaneBorderColor_ReturnsCorrectColorPerPane(t *testing.T) {
+func TestPaneBorderColor_FocusedReturnsActiveBorder(t *testing.T) {
 	th := theme.Load("black")
-	tests := []struct {
-		id   layout.PaneID
-		want lipgloss.Color
-	}{
-		{layout.PaneNowPlaying, th.PaneBorderNowPlaying()},
-		{layout.PaneQueue, th.PaneBorderQueue()},
-		{layout.PanePlaylists, th.PaneBorderPlaylists()},
-		{layout.PaneAlbums, th.PaneBorderAlbums()},
-		{layout.PaneLikedSongs, th.PaneBorderLikedSongs()},
-		{layout.PaneRecentlyPlayed, th.PaneBorderRecentlyPlayed()},
-		{layout.PaneTopTracks, th.PaneBorderTopTracks()},
-		{layout.PaneTopArtists, th.PaneBorderTopArtists()},
-		{layout.PaneGatewayHealth, th.PaneBorderRequestFlow()},
-		{layout.PanePollingTraffic, th.PaneBorderRequestFlow()},
-		{layout.PaneGatewayLive, th.PaneBorderRequestFlow()},
-		{layout.PaneNetworkLog, th.PaneBorderNetworkLog()},
-		{layout.PaneFollowedShows, th.PaneBorderFollowedShows()},
-		{layout.PaneSavedEpisodes, th.PaneBorderSavedEpisodes()},
-	}
-	for _, tt := range tests {
-		got := layout.PaneBorderColor(tt.id, th)
-		assert.Equal(t, tt.want, got, "pane %d color mismatch", tt.id)
-	}
+	got := layout.PaneBorderColor(true, th)
+	assert.Equal(t, th.ActiveBorder(), got)
+	assert.NotEmpty(t, string(got))
 }
 
-func TestPaneBorderColor_UnknownIDFallback(t *testing.T) {
+func TestPaneBorderColor_UnfocusedReturnsInactiveBorder(t *testing.T) {
 	th := theme.Load("black")
-	// Unknown pane ID should not panic — returns some color
-	got := layout.PaneBorderColor(layout.PaneID(99), th)
-	assert.NotEmpty(t, string(got), "unknown ID should return non-empty fallback color")
+	got := layout.PaneBorderColor(false, th)
+	assert.Equal(t, th.InactiveBorder(), got)
+	assert.NotEqual(t, th.ActiveBorder(), got, "unfocused must not equal active border")
 }
 
 // ── Task 2 Tests: Edge cases and content truncation ───────────────────────────
@@ -534,7 +513,7 @@ func TestRenderPaneBorder_ContentShorterThanHeightPadded(t *testing.T) {
 		Width:       30,
 		Height:      5,
 		Title:       "Test",
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -552,7 +531,7 @@ func TestRenderPaneBorder_ContentWiderThanWidthTruncated(t *testing.T) {
 		Width:       w,
 		Height:      3,
 		Title:       "T",
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -578,7 +557,7 @@ func TestRenderPaneBorder_UnicodeContentMeasuredCorrectly(t *testing.T) {
 		Width:       w,
 		Height:      3,
 		Title:       "T",
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -620,7 +599,7 @@ func TestRenderPaneBorder_NowPlayingBorder(t *testing.T) {
 		Title:       "Now Playing",
 		ToggleKey:   1,
 		Actions:     actions,
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -653,7 +632,7 @@ func TestRenderPaneBorder_PlaylistsBorder(t *testing.T) {
 		Title:       "Playlists",
 		ToggleKey:   3,
 		Actions:     actions,
-		AccentColor: th.PaneBorderPlaylists(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     false,
 		Theme:       th,
 	}
@@ -683,7 +662,7 @@ func TestRenderPaneBorder_QueueWithActiveFilter(t *testing.T) {
 		ToggleKey:   2,
 		Actions:     actions,
 		FilterQuery: "rock",
-		AccentColor: th.PaneBorderQueue(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -711,7 +690,7 @@ func TestRenderPaneBorder_StatsPageRequestFlowNoToggleKey(t *testing.T) {
 		Height:      12,
 		Title:       "Request Flow",
 		ToggleKey:   0, // Stats page — no toggle key
-		AccentColor: th.PaneBorderRequestFlow(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -746,7 +725,7 @@ func TestRenderPaneBorder_ExactDimensions(t *testing.T) {
 				Width:       tt.w,
 				Height:      tt.h,
 				Title:       "Test",
-				AccentColor: th.PaneBorderNowPlaying(),
+				AccentColor: th.ActiveBorder(),
 				Focused:     true,
 				Theme:       th,
 			}
@@ -767,7 +746,7 @@ func TestRenderPaneBorder_SideBySideNoOverlap(t *testing.T) {
 			Width:       w,
 			Height:      h,
 			Title:       title,
-			AccentColor: th.PaneBorderNowPlaying(),
+			AccentColor: th.ActiveBorder(),
 			Focused:     false,
 			Theme:       th,
 		}
@@ -801,7 +780,7 @@ func TestBuildRightSegment_CornerNotchFormat(t *testing.T) {
 		Title:       "Now Playing",
 		ToggleKey:   1,
 		Actions:     actions,
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -832,7 +811,7 @@ func TestRenderPaneBorder_FilterMode_UsesLabelNotNotch(t *testing.T) {
 		Title:       "Queue",
 		ToggleKey:   2,
 		FilterQuery: "rock",
-		AccentColor: th.PaneBorderQueue(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -898,7 +877,7 @@ func TestRenderPaneBorder_NotchActions_FitsWidth(t *testing.T) {
 			Title:       "Now Playing",
 			ToggleKey:   1,
 			Actions:     actions,
-			AccentColor: th.PaneBorderNowPlaying(),
+			AccentColor: th.ActiveBorder(),
 			Focused:     true,
 			Theme:       th,
 		}
@@ -921,7 +900,7 @@ func TestRenderPaneBorder_AllThemesAccentColorsChange(t *testing.T) {
 			Width:       30,
 			Height:      5,
 			Title:       "Test",
-			AccentColor: th.PaneBorderNowPlaying(),
+			AccentColor: th.ActiveBorder(),
 			Focused:     true,
 			Theme:       th,
 		}
@@ -950,7 +929,7 @@ func TestRenderPaneBorder_NoActions_FlushCorner(t *testing.T) {
 		Title:       "Test",
 		ToggleKey:   0,
 		Actions:     nil, // no actions
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}
@@ -975,7 +954,7 @@ func TestRenderPaneBorder_WithActions_FlushCorner(t *testing.T) {
 		Title:       "Test",
 		ToggleKey:   0,
 		Actions:     []layout.Action{{Key: "f", Label: "filter"}},
-		AccentColor: th.PaneBorderNowPlaying(),
+		AccentColor: th.ActiveBorder(),
 		Focused:     true,
 		Theme:       th,
 	}

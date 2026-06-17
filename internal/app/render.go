@@ -436,7 +436,7 @@ func (a *App) renderGrid() string {
 			Title:       pane.Title(),
 			ToggleKey:   pane.ToggleKey(),
 			Actions:     pane.Actions(),
-			AccentColor: layout.PaneBorderColor(paneID, a.theme),
+			AccentColor: layout.PaneBorderColor(pane.IsFocused(), a.theme),
 			Focused:     pane.IsFocused(),
 			Theme:       a.theme,
 		}
