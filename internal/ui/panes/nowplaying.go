@@ -477,7 +477,8 @@ func (p *NowPlayingPane) renderEpisodeSideBySide() string {
 	if infoWidth > 0 {
 		infoLines := p.buildEpisodeInfoLines(effH, infoWidth)
 		infoTitle := "Episode Info"
-		infoView := p.infoBox.Render(infoTitle, infoLines, p.focused)
+		epiActions := []layout.Action{{Key: "i", Label: "details"}}
+		infoView := p.infoBox.Render(infoTitle, infoLines, p.focused, epiActions...)
 		infoSplit := strings.Split(infoView, "\n")
 
 		// Equalise line count.

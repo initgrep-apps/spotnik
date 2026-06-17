@@ -53,7 +53,7 @@ func (b *InfoBox) SetSize(w, h int) {
 //     always shown first.
 //   - Remaining vertical space is distributed as topPad above and bottom
 //     padding below to centre the block.
-func (b *InfoBox) Render(title string, lines []string, focused bool) string {
+func (b *InfoBox) Render(title string, lines []string, focused bool, actions ...layout.Action) string {
 	w := b.width
 	h := b.height
 
@@ -129,6 +129,7 @@ func (b *InfoBox) Render(title string, lines []string, focused bool) string {
 		Width:       w,
 		Height:      h,
 		Title:       title,
+		Actions:     actions,
 		AccentColor: border,
 		Focused:     true, // colour encodes focus; don't ALSO faint over it
 		Theme:       b.th,
