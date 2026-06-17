@@ -1,7 +1,7 @@
 ---
 title: "Improve: Viewport-based Episode Details scrolling"
 feature: 19-player-page-unification
-status: open
+status: done
 ---
 
 ## Background
