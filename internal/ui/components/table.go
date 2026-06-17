@@ -20,19 +20,19 @@ func playingSymbol() string {
 // effectively hiding the table's built-in border. The outer pane border
 // (rendered by internal/ui/layout.RenderPaneBorder) handles the visible border.
 var emptyBorder = btable.Border{
-	Top:            " ",
+	Top:            "",
 	Left:           "",
 	Right:          "",
-	Bottom:         " ",
-	TopRight:       " ",
-	TopLeft:        " ",
-	BottomRight:    " ",
-	BottomLeft:     " ",
-	TopJunction:    " ",
+	Bottom:         "",
+	TopRight:       "",
+	TopLeft:        "",
+	BottomRight:    "",
+	BottomLeft:     "",
+	TopJunction:    "",
 	LeftJunction:   "",
 	RightJunction:  "",
-	BottomJunction: " ",
-	InnerJunction:  " ",
+	BottomJunction: "",
+	InnerJunction:  "",
 	InnerDivider:   " ",
 }
 
@@ -117,13 +117,11 @@ func (t *Table) rebuild() {
 		return lipgloss.NewStyle()
 	})
 
-	// NOTE: The emptyBorder adds top(1) + bottom(1) = 2 lines, the pagination
-	// indicator adds 1 more, and when header is visible a separator line adds 1.
-	// Total overhead: ShowHeader=true → 6 lines; ShowHeader=false → 4 lines.
-	// pageSize = height - overhead gives exactly height lines rendered.
-	pageSize := t.height - 6 // header visible: top+separator+header+pagination+bottom+spare = 6
+	// Overhead: separator(1) + header(1) + pagination(1) + spare(1) = 4 with header,
+	// pagination(1) + spare(1) = 2 without. Top/Bottom removed — border provides framing.
+	pageSize := t.height - 4 // header visible
 	if !t.config.ShowHeader {
-		pageSize = t.height - 4 // no header: top+pagination+bottom+spare = 4
+		pageSize = t.height - 2 // no header
 	}
 	if pageSize < 1 {
 		pageSize = 1

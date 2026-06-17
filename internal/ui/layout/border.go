@@ -113,15 +113,10 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 		cfg.Height = 2
 	}
 
-	// Build styled helper: always applies the accent Foreground color; unfocused
-	// adds Faint(true) on top so the color is dimmed but still visible as the
-	// pane's identity color (not flat grey).
+	// borderStyle: focused uses ActiveBorder color, unfocused uses InactiveBorder.
+	// No Faint() — the theme's inactive_border token controls the muted appearance.
 	borderStyle := func(s string) string {
-		style := lipgloss.NewStyle().Foreground(cfg.AccentColor)
-		if !cfg.Focused {
-			style = style.Faint(true)
-		}
-		return style.Render(s)
+		return lipgloss.NewStyle().Foreground(cfg.AccentColor).Render(s)
 	}
 
 	keyHintStyle := func(s string) string {
@@ -138,16 +133,11 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 		return s
 	}
 
-	// titleStyle: focused renders with AccentColor + Bold; unfocused renders with
-	// AccentColor + Faint so each pane title retains its identity color when not focused.
+	// titleStyle: AccentColor only — no Bold even when focused.
+	// Focus is distinguished by the border colour (ActiveBorder vs InactiveBorder),
+	// so the title does not need additional weight.
 	titleStyle := func(s string) string {
-		style := lipgloss.NewStyle().Foreground(cfg.AccentColor)
-		if cfg.Focused {
-			style = style.Bold(true)
-		} else {
-			style = style.Faint(true)
-		}
-		return style.Render(s)
+		return lipgloss.NewStyle().Foreground(cfg.AccentColor).Render(s)
 	}
 
 	// ── Build top border ─────────────────────────────────────────────────────
@@ -167,13 +157,13 @@ func RenderPaneBorder(content string, cfg BorderConfig) string {
 	// the last notch's ╭ provides visual separation from ╮.
 	//
 	// We use lipgloss.Width() for accurate terminal-column counting.
-	// Use "─ " prefix (dash + space) only when there is a visible title/toggle key.
-	// When leftInner is empty the space would create a visible gap in the border line.
+	// Title sits flush against the leading dash: ╭─Title──╮ (no space).
+	// When leftInner is empty, no dash prefix needed: ╭────────╮.
 	var leftPrefix string
 	if lipgloss.Width(leftInner) == 0 {
 		leftPrefix = hBar // no gap: ╭──────╮
 	} else {
-		leftPrefix = hBar + " " // space before title: ╭─ Title ──╮
+		leftPrefix = hBar // no space: ╭─Title──╮
 	}
 
 	outerWidth := cfg.Width // includes ╭ and ╮
@@ -321,14 +311,10 @@ func FormatFilterLabel(query string, budget int) string {
 // The ╮ and ╭ characters use the pane's accent color (faint when unfocused)
 // so they visually blend into the border dashes as notch cutouts.
 func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) string, budget int) string {
-	// borderChar renders a single character in the pane accent color (faint if unfocused).
-	// Used for the ╮ and ╭ notch characters so they blend into the border line.
+	// borderChar renders a single border character in the AccentColor.
+	// The color itself already encodes focused/inactive state.
 	borderChar := func(s string) string {
-		style := lipgloss.NewStyle().Foreground(cfg.AccentColor)
-		if !cfg.Focused {
-			style = style.Faint(true)
-		}
-		return style.Render(s)
+		return lipgloss.NewStyle().Foreground(cfg.AccentColor).Render(s)
 	}
 
 	// Resolve glyphs for notch characters from the config overrides. These are
@@ -353,11 +339,12 @@ func buildRightSegment(cfg BorderConfig, keyHintStyle, mutedStyle func(string) s
 		return ""
 	}
 
-	// Corner-notch format: ╮ key label ╭ with ─ between consecutive notches.
+	// Corner-notch format: ╮key label╭ with ─ between consecutive notches.
+	// No extra padding — key sits flush against border glyphs.
 	parts := make([]string, len(cfg.Actions))
 	for i, a := range cfg.Actions {
-		parts[i] = borderChar(trCorner) + " " +
-			keyHintStyle(a.Key) + " " + mutedStyle(a.Label) + " " +
+		parts[i] = borderChar(trCorner) +
+			keyHintStyle(a.Key) + " " + mutedStyle(a.Label) +
 			borderChar(tlCorner)
 	}
 	return strings.Join(parts, borderChar(hRule))
@@ -426,36 +413,12 @@ func truncateToColumns(s string, maxCols int) string {
 	return ""
 }
 
-// PaneBorderColor returns the accent color for a given PaneID from the Theme.
-// This maps PaneID constants to the corresponding PaneBorder*() Theme method.
-// Falls back to Theme.ActiveBorder() for unknown PaneIDs.
-func PaneBorderColor(id PaneID, t theme.Theme) lipgloss.Color {
-	switch id {
-	case PaneNowPlaying:
-		return t.PaneBorderNowPlaying()
-	case PaneQueue:
-		return t.PaneBorderQueue()
-	case PanePlaylists:
-		return t.PaneBorderPlaylists()
-	case PaneAlbums:
-		return t.PaneBorderAlbums()
-	case PaneLikedSongs:
-		return t.PaneBorderLikedSongs()
-	case PaneRecentlyPlayed:
-		return t.PaneBorderRecentlyPlayed()
-	case PaneTopTracks:
-		return t.PaneBorderTopTracks()
-	case PaneTopArtists:
-		return t.PaneBorderTopArtists()
-	case PaneGatewayHealth, PanePollingTraffic, PaneGatewayLive:
-		return t.PaneBorderRequestFlow()
-	case PaneNetworkLog:
-		return t.PaneBorderNetworkLog()
-	case PaneFollowedShows:
-		return t.PaneBorderFollowedShows()
-	case PaneSavedEpisodes:
-		return t.PaneBorderSavedEpisodes()
-	default:
+// PaneBorderColor returns the border color for a pane based on focus state.
+// Focused panes receive ActiveBorder(); all others receive InactiveBorder().
+// This replaces the per-pane identity color model with a state-driven semantic model.
+func PaneBorderColor(focused bool, t theme.Theme) lipgloss.Color {
+	if focused {
 		return t.ActiveBorder()
 	}
+	return t.InactiveBorder()
 }
