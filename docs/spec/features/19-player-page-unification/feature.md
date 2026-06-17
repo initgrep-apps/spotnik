@@ -1,6 +1,6 @@
 ---
 title: "Player Page Unification"
-status: open
+status: done
 ---
 
 ## Description
