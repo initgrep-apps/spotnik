@@ -23,11 +23,12 @@ import (
 // delegated to a bubbles viewport.Model (j/k/↑/↓/pgup/pgdn/home/end/mouse wheel).
 // All other keys are consumed (modal).
 type EpisodeDetailsOverlay struct {
-	store    state.StateReader
-	theme    theme.Theme
-	width    int
-	height   int
-	viewport viewport.Model
+	store     state.StateReader
+	theme     theme.Theme
+	width     int
+	height    int
+	viewport  viewport.Model
+	vpContent string // last content set on viewport; guards against redundant SetContent calls
 }
 
 // NewEpisodeDetailsOverlay creates an overlay using the given store and theme.
@@ -52,7 +53,7 @@ func (o *EpisodeDetailsOverlay) resizeViewport() {
 	if vpW < 2 {
 		vpW = 2
 	}
-	vpH := min(o.height-8, 40) // -5 header, -2 border, -1 keybar
+	vpH := min(o.height-12, 40) // -5 header, -2 border, -1 keybar, -4 padding
 	if vpH < 3 {
 		vpH = 3
 	}
@@ -60,6 +61,7 @@ func (o *EpisodeDetailsOverlay) resizeViewport() {
 		o.viewport.Width = vpW
 		o.viewport.Height = vpH
 	}
+	o.viewport.MouseWheelEnabled = true
 }
 
 // SetTheme updates the overlay's theme reference for runtime theme switching.
@@ -152,16 +154,10 @@ func (o *EpisodeDetailsOverlay) View() string {
 
 	desc := o.renderDescription(ep)
 
-	vpW := innerW
-	vpH := min(o.height-len(headerLines)-2-1, 40)
-	if vpH < 3 {
-		vpH = 3
+	if desc != o.vpContent {
+		o.viewport.SetContent(desc)
+		o.vpContent = desc
 	}
-
-	o.viewport.Width = vpW
-	o.viewport.Height = vpH
-	o.viewport.MouseWheelEnabled = true
-	o.viewport.SetContent(desc)
 
 	keyHintStyle := lipgloss.NewStyle().Foreground(o.theme.KeyHint()).Bold(true)
 	dimStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())

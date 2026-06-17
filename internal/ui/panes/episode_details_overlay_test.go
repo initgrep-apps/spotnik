@@ -220,6 +220,16 @@ func TestEpisodeDetailsOverlay_View_HasTitle(t *testing.T) {
 	assert.Contains(t, o.View(), "Episode Details")
 }
 
+func TestEpisodeDetailsOverlay_ViewportTinyTerminal(t *testing.T) {
+	ps := episodeWithDescription("Ep 1", "Show", "Pub", "", "Desc")
+	o := newTestEpisodeOverlay(ps)
+
+	assert.NotPanics(t, func() {
+		o.SetSize(3, 10)
+		o.View()
+	}, "tiny terminal (3x10) should not panic")
+}
+
 // --- Viewport-specific tests ---
 
 func TestEpisodeDetailsOverlay_ViewportInitialized(t *testing.T) {
@@ -335,6 +345,24 @@ func TestEpisodeDetailsOverlay_MouseWheelScrolls(t *testing.T) {
 	assert.Less(t, o.viewport.YOffset, afterDown, "mouse wheel up should scroll up")
 }
 
+func TestEpisodeDetailsOverlay_ViewportScrollSurvivesView(t *testing.T) {
+	longDesc := strings.Repeat("Line of text.\n", 200)
+	ps := episodeWithDescription("Ep 1", "Show", "", "", longDesc)
+	o := newTestEpisodeOverlay(ps)
+	o.SetSize(120, 40)
+	o.View()
+
+	// Scroll down 2 lines
+	_, _ = o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	_, _ = o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	afterScroll := o.viewport.YOffset
+	require.Greater(t, afterScroll, 0)
+
+	// View() must not reset scroll position
+	o.View()
+	assert.Equal(t, afterScroll, o.viewport.YOffset, "scroll position should survive View() calls")
+}
+
 func TestEpisodeDetailsOverlay_View_ShowsScrollPercent(t *testing.T) {
 	longDesc := strings.Repeat("Line of text.\n", 200)
 	ps := episodeWithDescription("Ep 1", "Show", "", "", longDesc)
@@ -342,8 +370,14 @@ func TestEpisodeDetailsOverlay_View_ShowsScrollPercent(t *testing.T) {
 	o.SetSize(120, 40)
 	o.View()
 
+	// At top, should show 0%
 	view := o.View()
-	assert.Contains(t, view, "%", "view should show scroll percentage")
+	assert.Contains(t, view, "0%", "should show 0% at top")
+
+	// Jump to bottom, should show 100%
+	_, _ = o.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	view = o.View()
+	assert.Contains(t, view, "100%", "should show 100% at bottom")
 }
 
 func TestEpisodeDetailsOverlay_KeybarShowsEscClose(t *testing.T) {
