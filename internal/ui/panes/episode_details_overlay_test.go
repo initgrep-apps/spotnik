@@ -380,13 +380,13 @@ func TestEpisodeDetailsOverlay_View_ShowsScrollPercent(t *testing.T) {
 	assert.Contains(t, view, "100%", "should show 100% at bottom")
 }
 
-func TestEpisodeDetailsOverlay_KeybarShowsEscClose(t *testing.T) {
+func TestEpisodeDetailsOverlay_KeybarShowsScrollPercent(t *testing.T) {
 	ps := episodeWithDescription("Ep 1", "Show", "", "", "Desc")
 	o := newTestEpisodeOverlay(ps)
 	o.SetSize(120, 40)
 	view := o.View()
-	assert.Contains(t, view, "Esc", "keybar should show Esc hint")
-	assert.Contains(t, view, "close", "keybar should show close hint")
+	assert.Contains(t, view, "0%", "keybar should show scroll percentage at top")
+	assert.Contains(t, view, "%", "keybar should show percent sign")
 }
 
 func TestEpisodeDetailsOverlay_SetSize_InitializesViewport(t *testing.T) {

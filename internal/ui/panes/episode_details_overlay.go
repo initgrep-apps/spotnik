@@ -48,8 +48,9 @@ func (o *EpisodeDetailsOverlay) SetSize(width, height int) {
 }
 
 // resizeViewport computes the viewport dimensions from current overlay size.
+// Width: overlayWidth - 6 (-2 border, -4 external padding added in View()).
 func (o *EpisodeDetailsOverlay) resizeViewport() {
-	vpW := o.overlayWidth() - 2
+	vpW := o.overlayWidth() - 6
 	if vpW < 2 {
 		vpW = 2
 	}
@@ -117,6 +118,10 @@ func (o *EpisodeDetailsOverlay) View() string {
 	if innerW < 2 {
 		innerW = 2
 	}
+	contentW := innerW - 4
+	if contentW < 2 {
+		contentW = 2
+	}
 
 	titleStyle := lipgloss.NewStyle().
 		Foreground(o.theme.TextPrimary()).
@@ -128,7 +133,7 @@ func (o *EpisodeDetailsOverlay) View() string {
 
 	var headerLines []string
 
-	headerLines = append(headerLines, titleStyle.Width(innerW).Render(ep.Name))
+	headerLines = append(headerLines, titleStyle.Width(contentW).Render(ep.Name))
 
 	var metaParts []string
 	if ep.Show != nil && ep.Show.Name != "" {
@@ -142,12 +147,12 @@ func (o *EpisodeDetailsOverlay) View() string {
 	}
 	if len(metaParts) > 0 {
 		headerLines = append(headerLines,
-			metaStyle.Width(innerW).Render(strings.Join(metaParts, " "+uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())+" ")))
+			metaStyle.Width(contentW).Render(strings.Join(metaParts, " "+uikit.GlyphFor(uikit.GlyphSeparator, uikit.ActiveMode())+" ")))
 	}
 
 	if ep.Show != nil && ep.Show.Publisher != "" {
 		headerLines = append(headerLines,
-			publisherStyle.Width(innerW).Render("Published by: "+ep.Show.Publisher))
+			publisherStyle.Width(contentW).Render("Published by: "+ep.Show.Publisher))
 	}
 
 	headerLines = append(headerLines, "")
@@ -159,16 +164,19 @@ func (o *EpisodeDetailsOverlay) View() string {
 		o.vpContent = desc
 	}
 
-	keyHintStyle := lipgloss.NewStyle().Foreground(o.theme.KeyHint()).Bold(true)
 	dimStyle := lipgloss.NewStyle().Foreground(o.theme.TextMuted())
 	scrollPct := fmt.Sprintf("%.0f%%", o.viewport.ScrollPercent()*100)
-	keybarLine := dimStyle.Render(keyHintStyle.Render("Esc") + " close  " + scrollPct)
+	kbWidth := innerW - 4
+	if kbWidth < 4 {
+		kbWidth = 4
+	}
+	keybarLine := dimStyle.Width(kbWidth).Align(lipgloss.Right).Render(scrollPct)
 
 	vpStr := o.viewport.View()
 	vpLines := strings.Split(vpStr, "\n")
 	allLines := append(headerLines, vpLines...)
 	paddedContent := lipgloss.NewStyle().Padding(1, 2).Render(strings.Join(allLines, "\n"))
-	paddedKeybar := lipgloss.NewStyle().Padding(0, 2, 1, 2).Width(innerW).MaxWidth(innerW).Render(keybarLine)
+	paddedKeybar := lipgloss.NewStyle().Padding(0, 2, 1, 2).Render(keybarLine)
 
 	composite := lipgloss.JoinVertical(lipgloss.Left, paddedContent, paddedKeybar)
 	height := strings.Count(composite, "\n") + 1 + 2
@@ -208,21 +216,61 @@ func (o *EpisodeDetailsOverlay) renderEmptyChrome(text, hint string) string {
 
 // renderDescription returns the description text for the episode, using
 // html_description (preferred), description (fallback), or a muted placeholder.
+// All paths word-wrap content to match the viewport width, preventing the
+// viewport's MaxWidth truncation from injecting "…" on every line.
 func (o *EpisodeDetailsOverlay) renderDescription(ep *domain.Episode) string {
+	renderWidth := o.viewport.Width
+	if renderWidth < 20 {
+		renderWidth = 20
+	}
 	if ep.HTMLDescription != "" {
 		md := htmlToMarkdown(ep.HTMLDescription)
-		rendered, err := renderMarkdown(md, o.overlayWidth()-6)
+		rendered, err := renderMarkdown(md, renderWidth)
 		if err == nil && rendered != "" {
 			return rendered
 		}
 		if md != "" {
-			return md
+			return wrapText(md, renderWidth)
 		}
 	}
 	if ep.Description != "" {
-		return ep.Description
+		return wrapText(ep.Description, renderWidth)
 	}
 	return "No description available."
+}
+
+// wrapText word-wraps text to the given width. Lines longer than width are
+// broken at word boundaries; words longer than width are left intact.
+func wrapText(text string, width int) string {
+	if width <= 0 || text == "" {
+		return text
+	}
+	var result strings.Builder
+	for _, line := range strings.Split(text, "\n") {
+		if result.Len() > 0 {
+			result.WriteByte('\n')
+		}
+		words := strings.Fields(line)
+		if len(words) == 0 {
+			continue
+		}
+		lineWidth := 0
+		for i, word := range words {
+			wordLen := len(word)
+			if i > 0 {
+				if lineWidth+1+wordLen > width {
+					result.WriteByte('\n')
+					lineWidth = 0
+				} else {
+					result.WriteByte(' ')
+					lineWidth++
+				}
+			}
+			result.WriteString(word)
+			lineWidth += wordLen
+		}
+	}
+	return result.String()
 }
 
 // formatDuration converts milliseconds to a human-readable duration string.
