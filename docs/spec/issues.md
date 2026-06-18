@@ -179,3 +179,15 @@ Items to log:
 Two minor test gaps that don't block functionality:
 1. TestNowPlayingPane_InfoBoxLeftPadding only verifies padding on the first content line (track name), not all three padded lines (artist, album).
 2. TestNowPlayingPane_ControlsCentered uses byte-length for space counting instead of utf8.RuneCountInString — fragile if multi-byte characters appear alongside spaces.
+
+---
+
+## Missing column color tests for FollowedShows and SavedEpisodes panes
+**Found:** 2026-06-18 | **Source:** PR #355 Review
+**Feature:** 20-pane-content-design
+
+Every other table pane (albums, likedsongs, playlists, queue, recentlyplayed, topartists, toptracks) has `Test*Pane_UsesColumnColors` verifying 3-5 column colors. FollowedShowsPane has two tables and SavedEpisodesPane has one table with zero color assertions. A theme change could silently break column coloring in these panes.
+
+Items to log:
+1. Add TestFollowedShowsPane_UsesColumnColors covering show list (3 cols) and episode track table (3 cols)
+2. Add TestSavedEpisodesPane_UsesColumnColors covering 3 cols (Episode, Show, Duration)
