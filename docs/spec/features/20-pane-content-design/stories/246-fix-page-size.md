@@ -1,7 +1,7 @@
 ---
 title: "Fix table page size calculation and add width threshold crossing"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background

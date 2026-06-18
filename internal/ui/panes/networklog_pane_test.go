@@ -636,7 +636,7 @@ func TestNetworkLogPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	th := theme.Load("black")
 	pane := panes.NewNetworkLogPane(s, th)
 	pane.SetFocused(true)
-	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 4).
 	pane.SetSize(80, 11)
 
 	// Trigger a tick to load events into the pane.

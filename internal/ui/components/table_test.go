@@ -197,7 +197,7 @@ func TestTable_GotoTop_ResetsToFirstPage(t *testing.T) {
 		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
-	// pageSize = height - 6 (header + borders + padding) with ShowHeader=true.
+	// pageSize = height - 4 (header + borders + padding) with ShowHeader=true.
 	// height=11 → pageSize=5; 20 rows across 5-row pages = 4 pages.
 	tbl.SetSize(80, 11)
 	tbl.SetFocused(true)

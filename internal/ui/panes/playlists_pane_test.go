@@ -947,7 +947,7 @@ func TestPlaylistsPane_Esc_ResetsScrollInMainListView(t *testing.T) {
 	s.SetPlaylists(playlists)
 	th := theme.Load("black")
 	pane := NewPlaylistsPane(s, th, true)
-	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 4).
 	pane.SetSize(80, 11)
 
 	// Scroll 8 rows down to advance past page 1.
