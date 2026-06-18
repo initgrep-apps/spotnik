@@ -3,7 +3,6 @@ package panes
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -24,11 +23,10 @@ type SavedEpisodesPane struct {
 
 func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *SavedEpisodesPane {
 	columns := []components.ColumnDef{
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "saved", Header: "Saved", FlexFactor: 3, Color: th.ColumnTertiary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:    columns,
@@ -156,11 +154,10 @@ func (p *SavedEpisodesPane) buildRows() {
 		}
 
 		rows[i] = map[string]string{
+			"icon":     iconGlyph,
 			"episode":  ep.Name,
 			"show":     showName,
-			"saved":    formatSavedDate(se.AddedAt),
 			"duration": formatDurationMsH(ep.DurationMs),
-			"icon":     iconGlyph,
 		}
 	}
 
@@ -199,27 +196,15 @@ func (p *SavedEpisodesPane) resizeTable() {
 func (p *SavedEpisodesPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "saved", Header: "Saved", FlexFactor: 3, Color: th.ColumnTertiary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
 	p.SwapTableAndFilter(newTable, newFilter)
 	p.resizeTable()
 	p.buildRows()
-}
-
-func formatSavedDate(isoStr string) string {
-	if isoStr == "" {
-		return ""
-	}
-	t, err := time.Parse(time.RFC3339, isoStr)
-	if err != nil {
-		return isoStr
-	}
-	return components.FormatRelativeTime(t)
 }
 
 func formatDurationMsH(ms int) string {

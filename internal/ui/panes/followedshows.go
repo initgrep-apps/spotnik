@@ -42,10 +42,10 @@ type FollowedShowsPane struct {
 
 func NewFollowedShowsPane(store state.StateReader, th theme.Theme, focused bool) *FollowedShowsPane {
 	showColumns := []components.ColumnDef{
+		{Key: "media", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "show", Header: "Show", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "publisher", Header: "Publisher", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "episodes", Header: "Eps", FlexFactor: 3, Color: th.ColumnTertiary()},
-		{Key: "media", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:    showColumns,
@@ -54,10 +54,10 @@ func NewFollowedShowsPane(store state.StateReader, th theme.Theme, focused bool)
 	})
 
 	episodeColumns := []components.ColumnDef{
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "title", Header: "Title", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "released", Header: "Released", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	et := components.NewTable(components.TableConfig{
 		Columns:    episodeColumns,
@@ -361,19 +361,19 @@ func (p *FollowedShowsPane) resizeTable() {
 func (p *FollowedShowsPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	showCols := []components.ColumnDef{
+		{Key: "media", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "show", Header: "Show", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "publisher", Header: "Publisher", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "episodes", Header: "Eps", FlexFactor: 3, Color: th.ColumnTertiary()},
-		{Key: "media", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, showCols, p.Table().Rows(), p.focused && !p.inEpisodeView)
 	p.SwapTableAndFilter(newTable, newFilter)
 
 	episodeCols := []components.ColumnDef{
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "title", Header: "Title", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "released", Header: "Released", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	p.episodeTable = components.NewTable(components.TableConfig{
 		Columns:    episodeCols,
