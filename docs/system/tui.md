@@ -242,8 +242,7 @@ type Panel struct {
 
 ### 3.4 TableChrome
 
-**Purpose:** Standardises column construction — column tokens, header colour, playing-indicator
-colour — so panes no longer build `TableConfig` literals inline.
+**Purpose:** Standardises column construction — column tokens and header colour — so panes no longer build `TableConfig` literals inline.
 
 **Note:** Implemented in `internal/ui/components/table_chrome.go` (alongside the `Table`
 primitive it wraps), not in `internal/uikit/`. Call sites continue to call `NewTable`
@@ -252,23 +251,31 @@ directly; `TableChrome` is the canonical wrapping pattern for future migrations.
 **Fields:**
 
 ```go
+type ColumnDef struct {
+    Header    string
+    WeightPct int
+    Priority  int            // 1=Always, 2=Default(≥40cols), 3=Wide-only(≥60cols)
+    Color     lipgloss.Color
+}
+
 type TableChrome struct {
-    Columns []ColumnDef    // column layout and per-column colour tokens
+    Columns []ColumnDef      // column layout and per-column colour tokens
     Theme   theme.Theme
     // inner *Table — constructed on first Inner() call
 }
 ```
 
 **Key method:** `Inner() *Table` — returns the wrapped `*Table`, constructing it on first
-call. The inner table owns all interactive state (scroll position, selection, etc.);
-`TableChrome` is stateless from the caller's perspective.
+call. The inner table owns all interactive state (scroll position, selection, responsive
+column filtering, etc.); `TableChrome` is stateless from the caller's perspective.
 
 **Rendering (unicode, header + rows):**
 
 ```
- #   Track                    Artist              Duration
- 1   Lil Boo Thang            Paul Russell        3:12
-▶2   Street Fighter           Kamasi Washington   5:44   ← playing row
+  Track                    Artist              Dur
+  Lil Boo Thang            Paul Russell        3:12
+  Street Fighter           Kamasi Washington   5:44
+  BIRDS OF A FEATHER       Billie Eilish       3:30
 ```
 
 **Rendering (ascii):** same layout; no braille or Unicode column-separator glyphs.
@@ -283,14 +290,57 @@ call. The inner table owns all interactive state (scroll position, selection, et
 | Cell (secondary column) | Column-Secondary |
 | Cell (tertiary column) | Column-Tertiary |
 | Cell (selected row) | Selection |
-| Playing indicator (`▶`) | `theme.PlayingIndicator()` |
 
-**Glyphs:** `▶` / `>` playing indicator.
+**Glyphs:** none.
 
 **Lifecycle:** owns-state via inner `*Table`.
 
-**Tests:** header renders in TableHeader colour; selected row uses Selection role; playing
-row shows `▶`; ascii mode.
+**Tests:** header renders in TableHeader colour; selected row uses Selection role; ascii mode.
+
+---
+
+### 3.4a Responsive Columns
+
+**Purpose:** Column visibility adapts to pane width via `Priority` field on each
+`ColumnDef`. This prevents horizontal overflow in narrow panes while showing
+richer data when space permits.
+
+**Thresholds:**
+
+| Priority | Label | Width threshold | Behavior |
+|----------|-------|-----------------|----------|
+| 1 | Always | Any width | Never hidden |
+| 2 | Default | < 40 cols | Hidden when pane is narrow |
+| 3 | Wide-only | < 60 cols | Hidden unless pane is spacious |
+
+**Mechanism:**
+
+The `Table.rebuild()` method filters columns by current pane width before
+constructing the inner table row data. Only columns whose priority threshold
+is met are included.
+
+```
+activeColumns = filter(cols, col.Priority <= thresholdFor(width))
+
+thresholdFor(width):
+    if width >= 60 → all columns (1,2,3)
+    if width >= 40 → columns 1 and 2
+    else           → columns 1 only
+```
+
+**Threshold crossing:** `SetWidth()` compares the new width against the previous
+width. If the width crosses a threshold boundary (e.g., 59→60), `rebuild()` is
+triggered to add or remove columns. Width changes within the same band do not
+trigger a rebuild.
+
+```
+crossesThreshold(oldW, newW int) bool:
+    return bandFor(oldW) != bandFor(newW)
+    // bandFor: 0 (<40), 1 (40-59), 2 (60+)
+```
+
+**Ordering:** Active columns maintain their declared order. Icon/glyph columns
+(Priority 1) are always first.
 
 ---
 

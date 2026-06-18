@@ -1,7 +1,7 @@
 ---
 title: "Update design.md and tui.md for pane content design language"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background
