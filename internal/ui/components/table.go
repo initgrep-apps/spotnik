@@ -7,14 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	btable "github.com/evertras/bubble-table/table"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
-	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
-
-// playingSymbol returns the playing indicator glyph, resolved via the active
-// GlyphMode so ASCII mode emits ">" instead of the unicode "▶".
-func playingSymbol() string {
-	return uikit.GlyphFor(uikit.GlyphPlaying, uikit.ActiveMode())
-}
 
 // emptyBorder is a bubble-table Border with space characters for all positions,
 // effectively hiding the table's built-in border. The outer pane border
@@ -53,32 +46,28 @@ type ColumnDef struct {
 type TableConfig struct {
 	// Columns defines the column layout and per-column colors.
 	Columns []ColumnDef
-	// Theme provides color tokens for header, selection, and playing indicator.
+	// Theme provides color tokens for header and selection.
 	Theme theme.Theme
-	// PlayingIndex is the row index that shows the ▶ indicator (-1 = none).
-	PlayingIndex int
 	// ShowHeader controls whether the column header row is rendered.
 	ShowHeader bool
 }
 
 // Table wraps bubble-table with Spotnik styling conventions: borderless mode,
-// per-column colors, selected row highlighting, and a playing indicator.
+// per-column colors and selected row highlighting.
 type Table struct {
-	inner        btable.Model
-	config       TableConfig
-	rows         []map[string]string
-	richRows     []map[string]any // set via SetRichRows; nil when SetRows was used last
-	playingIndex int
-	width        int
-	height       int
+	inner    btable.Model
+	config   TableConfig
+	rows     []map[string]string
+	richRows []map[string]any // set via SetRichRows; nil when SetRows was used last
+	width    int
+	height   int
 }
 
 // NewTable creates a Table with the given configuration.
 // Call SetSize before calling View to set dimensions.
 func NewTable(cfg TableConfig) *Table {
 	t := &Table{
-		config:       cfg,
-		playingIndex: cfg.PlayingIndex,
+		config: cfg,
 	}
 	t.rebuild()
 	return t
@@ -136,8 +125,6 @@ func (t *Table) rebuild() {
 // them to the inner model. When richRows is set (via SetRichRows), each cell value
 // may be a plain string or a btable.StyledCell — both are passed directly to
 // bubble-table. When richRows is nil, the plain []map[string]string path is used.
-// The playing indicator replaces the first-column value for the playing row in
-// both paths.
 func (t *Table) applyRows() {
 	// Rich-rows path: accept string or btable.StyledCell per cell.
 	if t.richRows != nil {
@@ -145,20 +132,10 @@ func (t *Table) applyRows() {
 			t.inner = t.inner.WithRows(nil)
 			return
 		}
-		th := t.config.Theme
 		btRows := make([]btable.Row, len(t.richRows))
 		for i, rowData := range t.richRows {
 			data := make(btable.RowData, len(rowData))
 			maps.Copy(data, rowData)
-			if i == t.playingIndex {
-				if len(t.config.Columns) > 0 {
-					firstKey := t.config.Columns[0].Key
-					data[firstKey] = btable.NewStyledCell(
-						playingSymbol(),
-						lipgloss.NewStyle().Foreground(th.PlayingIndicator()),
-					)
-				}
-			}
 			btRows[i] = btable.NewRow(data)
 		}
 		t.inner = t.inner.WithRows(btRows)
@@ -171,24 +148,12 @@ func (t *Table) applyRows() {
 		return
 	}
 
-	th := t.config.Theme
 	btRows := make([]btable.Row, len(t.rows))
 
 	for i, rowData := range t.rows {
 		data := btable.RowData{}
 		for k, v := range rowData {
 			data[k] = v
-		}
-
-		if i == t.playingIndex {
-			// Replace the first column value with a styled playing indicator.
-			if len(t.config.Columns) > 0 {
-				firstKey := t.config.Columns[0].Key
-				data[firstKey] = btable.NewStyledCell(
-					playingSymbol(),
-					lipgloss.NewStyle().Foreground(th.PlayingIndicator()),
-				)
-			}
 		}
 
 		btRows[i] = btable.NewRow(data)
@@ -245,13 +210,6 @@ func (t *Table) SetRichRows(rows []map[string]any) {
 // RebuildTableTheme to copy existing data into a freshly themed table.
 func (t *Table) Rows() []map[string]string {
 	return t.rows
-}
-
-// SetPlayingIndex marks which row index shows the ▶ indicator.
-// Pass -1 to clear the indicator. The rows are re-applied immediately.
-func (t *Table) SetPlayingIndex(index int) {
-	t.playingIndex = index
-	t.applyRows()
 }
 
 // SetFocused enables or disables keyboard navigation. When unfocused the

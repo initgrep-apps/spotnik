@@ -32,10 +32,9 @@ func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool)
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	t := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 	f := components.NewFilter(th)
 	f.SetPlaceholder("filter episodes...")
@@ -167,16 +166,6 @@ func (p *SavedEpisodesPane) buildRows() {
 		}
 	}
 
-	playingIdx := -1
-	if ps := p.store.PlaybackState(); ps != nil && ps.Episode != nil {
-		for i, se := range saved {
-			if se.Episode.ID == ps.Episode.ID {
-				playingIdx = i
-				break
-			}
-		}
-	}
-	p.Table().SetPlayingIndex(playingIdx)
 	p.Table().SetRows(rows)
 }
 

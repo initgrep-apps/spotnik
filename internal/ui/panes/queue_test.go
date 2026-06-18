@@ -305,34 +305,6 @@ func TestQueuePane_Table_ColumnHeaders(t *testing.T) {
 	assert.Contains(t, output, "Duration", "should contain Duration column header")
 }
 
-// TestQueuePane_Table_PlayingIndicator verifies the ▶ symbol appears for the playing track.
-func TestQueuePane_Table_PlayingIndicator(t *testing.T) {
-	s := state.New()
-	s.SetPlaybackState(&domain.PlaybackState{
-		IsPlaying: true,
-		Item: &domain.Track{
-			ID:      "now-1",
-			Name:    "Playing Track",
-			URI:     "spotify:track:now-1",
-			Artists: []domain.Artist{{Name: "Artist"}},
-		},
-	})
-	items := []domain.QueueItem{
-		qiTrack("q1", "First Queue", "spotify:track:q1", "Artist"),
-		qiTrack("q2", "Second Queue", "spotify:track:q2", "Artist"),
-	}
-	s.SetQueue(items)
-
-	th := theme.Load("black")
-	pane := NewQueuePane(s, th, true)
-	pane.SetSize(80, 20)
-	// Set playing index to 0 (first queued track is "playing").
-	pane.SetPlayingIndex(0)
-	output := pane.View()
-
-	assert.Contains(t, output, "▶", "should show playing indicator")
-}
-
 // TestQueuePane_Table_EmptyQueue verifies no panic and shows empty state.
 func TestQueuePane_Table_EmptyQueue(t *testing.T) {
 	pane := newTestQueuePane(true)
@@ -582,27 +554,6 @@ func TestQueuePane_QueueUpdate_TableRefreshes(t *testing.T) {
 
 	output = pane.View()
 	assert.Contains(t, output, "New Track", "table should reflect new queue data")
-}
-
-// TestQueuePane_PlayingIndicatorPersists verifies ▶ persists across refreshes.
-func TestQueuePane_PlayingIndicatorPersists(t *testing.T) {
-	s := state.New()
-	s.SetQueue([]domain.QueueItem{
-		qiTrack("t1", "Track A", "uri", "Artist"),
-		qiTrack("t2", "Track B", "uri", "Artist"),
-	})
-	th := theme.Load("black")
-	pane := NewQueuePane(s, th, true)
-	pane.SetSize(100, 30)
-	pane.SetPlayingIndex(0)
-
-	output := pane.View()
-	assert.Contains(t, output, "▶", "playing indicator should appear")
-
-	// Refresh rows (simulating data update).
-	pane.refreshRows()
-	output2 := pane.View()
-	assert.Contains(t, output2, "▶", "playing indicator should persist after refresh")
 }
 
 // TestQueuePane_FilterScrollInteraction tests filtering then scrolling then clearing filter.

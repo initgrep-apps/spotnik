@@ -2,7 +2,6 @@ package components_test
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -10,7 +9,6 @@ import (
 	btable "github.com/evertras/bubble-table/table"
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
-	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,10 +32,9 @@ func makeColumns() []components.ColumnDef {
 
 func TestNewTable_CreatesWithColumns(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	require.NotNil(t, tbl)
@@ -45,10 +42,9 @@ func TestNewTable_CreatesWithColumns(t *testing.T) {
 
 func TestTable_SetSizeScalesColumns(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	// Should not panic on resize
@@ -58,10 +54,9 @@ func TestTable_SetSizeScalesColumns(t *testing.T) {
 
 func TestTable_SetRows(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -84,10 +79,9 @@ func TestTable_SetRows(t *testing.T) {
 
 func TestTable_SelectedIndexInitiallyZero(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -103,10 +97,9 @@ func TestTable_SelectedIndexInitiallyZero(t *testing.T) {
 
 func TestTable_KeyboardNavigationChangesSelection(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -132,35 +125,11 @@ func TestTable_KeyboardNavigationChangesSelection(t *testing.T) {
 	assert.Equal(t, 1, tbl.SelectedIndex())
 }
 
-func TestTable_SetPlayingIndex(t *testing.T) {
-	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
-	}
-	tbl := components.NewTable(cfg)
-	tbl.SetSize(80, 20)
-
-	rows := []map[string]string{
-		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"index": "2", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
-		{"index": "3", "track": "Track C", "artist": "Artist C", "duration": "2:30"},
-	}
-	tbl.SetRows(rows)
-	tbl.SetPlayingIndex(2)
-
-	// View should render without panic and the playing indicator config is set
-	view := tbl.View()
-	assert.NotEmpty(t, view)
-}
-
 func TestTable_EmptyRowsRendersCleanly(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -173,10 +142,9 @@ func TestTable_EmptyRowsRendersCleanly(t *testing.T) {
 
 func TestTable_WidthRecalculatedAfterSetSize(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 
@@ -210,10 +178,9 @@ func TestTable_ColumnDefsHaveCorrectColors(t *testing.T) {
 
 func TestTable_SetFocused(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -225,10 +192,9 @@ func TestTable_SetFocused(t *testing.T) {
 
 func TestTable_GotoTop_ResetsToFirstPage(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    makeColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
 	}
 	tbl := components.NewTable(cfg)
 	// pageSize = height - 6 (header + borders + padding) with ShowHeader=true.
@@ -287,10 +253,9 @@ func makeRichColumns() []components.ColumnDef {
 // plain string values for both columns renders the expected text in View().
 func TestTable_SetRichRows_PlainStringCellsRender(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeRichColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   false,
+		Columns:    makeRichColumns(),
+		Theme:      testTheme(),
+		ShowHeader: false,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -316,10 +281,9 @@ func TestTable_SetRichRows_StyledCellAppliesForeground(t *testing.T) {
 	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 
 	cfg := components.TableConfig{
-		Columns:      makeRichColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   false,
+		Columns:    makeRichColumns(),
+		Theme:      testTheme(),
+		ShowHeader: false,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -342,10 +306,9 @@ func TestTable_SetRichRows_StyledCellAppliesForeground(t *testing.T) {
 // after SetRows replaces the data and no leftover string rows appear.
 func TestTable_SetRichRows_DoesNotAffectExistingSetRows(t *testing.T) {
 	cfg := components.TableConfig{
-		Columns:      makeRichColumns(),
-		Theme:        testTheme(),
-		PlayingIndex: -1,
-		ShowHeader:   false,
+		Columns:    makeRichColumns(),
+		Theme:      testTheme(),
+		ShowHeader: false,
 	}
 	tbl := components.NewTable(cfg)
 	tbl.SetSize(80, 20)
@@ -364,61 +327,4 @@ func TestTable_SetRichRows_DoesNotAffectExistingSetRows(t *testing.T) {
 	viewAfter := tbl.View()
 	assert.Contains(t, viewAfter, "new rich row", "SetRichRows data must appear after call")
 	assert.NotContains(t, viewAfter, "old plain row", "SetRows data must not appear after SetRichRows replaces it")
-}
-
-// TestTable_PlayingSymbol_AsciiMode verifies that when the uikit glyph mode is
-// ASCII the playing indicator renders as ">" (GlyphPlaying ASCII form) and NOT
-// as the unicode "▶". Both the plain-rows and rich-rows paths in applyRows call
-// playingSymbol(), so we exercise them here.
-func TestTable_PlayingSymbol_AsciiMode(t *testing.T) {
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
-
-	uikit.SetModeForTest(uikit.GlyphASCII)
-	defer uikit.SetModeForTest(uikit.GlyphUnicode)
-
-	cols := makeColumns() // uses "index", "track", "artist", "duration"
-
-	t.Run("plain rows", func(t *testing.T) {
-		cfg := components.TableConfig{
-			Columns:      cols,
-			Theme:        testTheme(),
-			PlayingIndex: 0, // first row is playing
-			ShowHeader:   false,
-		}
-		tbl := components.NewTable(cfg)
-		tbl.SetSize(120, 20)
-		tbl.SetRows([]map[string]string{
-			{"index": "1", "track": "Song A", "artist": "Artist A", "duration": "3:30"},
-			{"index": "2", "track": "Song B", "artist": "Artist B", "duration": "4:00"},
-		})
-
-		out := tbl.View()
-		assert.NotContains(t, out, "▶", "unicode playing glyph ▶ must not appear in ASCII mode")
-		assert.True(t, strings.Contains(out, ">"), "ASCII playing glyph '>' must appear in ASCII mode")
-	})
-
-	t.Run("rich rows", func(t *testing.T) {
-		richCols := []components.ColumnDef{
-			{Key: "index", Header: "#", FlexFactor: 1},
-			{Key: "track", Header: "Track", FlexFactor: 4},
-		}
-		cfg := components.TableConfig{
-			Columns:      richCols,
-			Theme:        testTheme(),
-			PlayingIndex: 0,
-			ShowHeader:   false,
-		}
-		tbl := components.NewTable(cfg)
-		tbl.SetSize(120, 20)
-		tbl.SetRichRows([]map[string]any{
-			{"index": "1", "track": "Rich Song A"},
-			{"index": "2", "track": "Rich Song B"},
-		})
-
-		out := tbl.View()
-		assert.NotContains(t, out, "▶", "unicode playing glyph ▶ must not appear in ASCII mode (rich rows)")
-		assert.True(t, strings.Contains(out, ">"), "ASCII playing glyph '>' must appear in ASCII mode (rich rows)")
-	})
 }

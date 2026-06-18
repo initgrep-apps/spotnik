@@ -1,7 +1,7 @@
 ---
 title: "Remove PlayingIndex dead code from Table and all panes"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background

@@ -49,10 +49,9 @@ func NewFollowedShowsPane(store state.StateReader, th theme.Theme, focused bool)
 		{Key: "media", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	t := components.NewTable(components.TableConfig{
-		Columns:      showColumns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    showColumns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	episodeColumns := []components.ColumnDef{
@@ -63,10 +62,9 @@ func NewFollowedShowsPane(store state.StateReader, th theme.Theme, focused bool)
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	et := components.NewTable(components.TableConfig{
-		Columns:      episodeColumns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    episodeColumns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	f := components.NewFilter(th)
@@ -384,10 +382,9 @@ func (p *FollowedShowsPane) SetTheme(th theme.Theme) {
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	p.episodeTable = components.NewTable(components.TableConfig{
-		Columns:      episodeCols,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    episodeCols,
+		Theme:      th,
+		ShowHeader: true,
 	})
 	p.episodeTable.SetSize(p.width, p.height)
 	if p.inEpisodeView {
