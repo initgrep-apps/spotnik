@@ -42,7 +42,6 @@ type FollowedShowsPane struct {
 
 func NewFollowedShowsPane(store state.StateReader, th theme.Theme, focused bool) *FollowedShowsPane {
 	showColumns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "show", Header: "Show", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "publisher", Header: "Publisher", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "episodes", Header: "Eps", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -55,7 +54,6 @@ func NewFollowedShowsPane(store state.StateReader, th theme.Theme, focused bool)
 	})
 
 	episodeColumns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "title", Header: "Title", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "released", Header: "Released", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -304,7 +302,6 @@ func (p *FollowedShowsPane) buildShowRows() {
 		}
 
 		rows[i] = map[string]string{
-			"index":     fmt.Sprintf("%d", i+1),
 			"show":      show.Name,
 			"publisher": show.Publisher,
 			"episodes":  fmt.Sprintf("%d", show.TotalEpisodes),
@@ -323,7 +320,6 @@ func (p *FollowedShowsPane) buildEpisodeRows() {
 			iconGlyph = uikit.GlyphFor(uikit.GlyphLocked, mode)
 		}
 		rows[i] = map[string]string{
-			"index":    fmt.Sprintf("%d", i+1),
 			"title":    ep.Name,
 			"released": formatReleaseDate(ep.ReleaseDate),
 			"duration": formatDurationMsH(ep.DurationMs),
@@ -365,7 +361,6 @@ func (p *FollowedShowsPane) resizeTable() {
 func (p *FollowedShowsPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	showCols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "show", Header: "Show", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "publisher", Header: "Publisher", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "episodes", Header: "Eps", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -375,7 +370,6 @@ func (p *FollowedShowsPane) SetTheme(th theme.Theme) {
 	p.SwapTableAndFilter(newTable, newFilter)
 
 	episodeCols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "title", Header: "Title", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "released", Header: "Released", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},

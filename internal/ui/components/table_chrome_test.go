@@ -14,8 +14,8 @@ import (
 func TestTableChrome_WrapsComponentsTable(t *testing.T) {
 	th := theme.Load("black")
 	cols := []components.ColumnDef{
-		{Key: "n", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
-		{Key: "name", Header: "Name", FlexFactor: 4, Color: th.ColumnPrimary()},
+		{Key: "name", Header: "Name", FlexFactor: 5, Color: th.ColumnPrimary()},
+		{Key: "artist", Header: "Artist", FlexFactor: 3, Color: th.ColumnSecondary()},
 	}
 	tbl := components.TableChrome{Columns: cols, Theme: th}
 

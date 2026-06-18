@@ -1,7 +1,6 @@
 package components_test
 
 import (
-	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,11 +18,10 @@ func testTheme() theme.Theme {
 	return theme.Load("black")
 }
 
-// makeColumns returns a typical 4-column track list definition.
+// makeColumns returns a typical 3-column track list definition (no index column).
 func makeColumns() []components.ColumnDef {
 	t := testTheme()
 	return []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: t.TextMuted()},
 		{Key: "track", Header: "Track", FlexFactor: 4, Color: t.TextPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 3, Color: t.TextSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: t.TextMuted()},
@@ -62,11 +60,11 @@ func TestTable_SetRows(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"index": "2", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
-		{"index": "3", "track": "Track C", "artist": "Artist C", "duration": "2:30"},
-		{"index": "4", "track": "Track D", "artist": "Artist D", "duration": "5:10"},
-		{"index": "5", "track": "Track E", "artist": "Artist E", "duration": "3:45"},
+		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"track": "Track B", "artist": "Artist B", "duration": "4:00"},
+		{"track": "Track C", "artist": "Artist C", "duration": "2:30"},
+		{"track": "Track D", "artist": "Artist D", "duration": "5:10"},
+		{"track": "Track E", "artist": "Artist E", "duration": "3:45"},
 	}
 
 	// SetRows should not panic
@@ -87,8 +85,8 @@ func TestTable_SelectedIndexInitiallyZero(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"index": "2", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
+		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"track": "Track B", "artist": "Artist B", "duration": "4:00"},
 	}
 	tbl.SetRows(rows)
 
@@ -105,9 +103,9 @@ func TestTable_KeyboardNavigationChangesSelection(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"index": "2", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
-		{"index": "3", "track": "Track C", "artist": "Artist C", "duration": "2:30"},
+		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"track": "Track B", "artist": "Artist B", "duration": "4:00"},
+		{"track": "Track C", "artist": "Artist C", "duration": "2:30"},
 	}
 	tbl.SetRows(rows)
 	tbl.SetFocused(true)
@@ -149,7 +147,7 @@ func TestTable_WidthRecalculatedAfterSetSize(t *testing.T) {
 	tbl := components.NewTable(cfg)
 
 	rows := []map[string]string{
-		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
 	}
 	tbl.SetRows(rows)
 
@@ -170,10 +168,9 @@ func TestTable_ColumnDefsHaveCorrectColors(t *testing.T) {
 	cols := makeColumns()
 
 	// Verify column colors are set from theme
-	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[0].Color)
-	assert.Equal(t, lipgloss.Color(th.TextPrimary()), cols[1].Color)
-	assert.Equal(t, lipgloss.Color(th.TextSecondary()), cols[2].Color)
-	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[3].Color)
+	assert.Equal(t, lipgloss.Color(th.TextPrimary()), cols[0].Color)
+	assert.Equal(t, lipgloss.Color(th.TextSecondary()), cols[1].Color)
+	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[2].Color)
 }
 
 func TestTable_SetFocused(t *testing.T) {
@@ -205,7 +202,7 @@ func TestTable_GotoTop_ResetsToFirstPage(t *testing.T) {
 	rows := make([]map[string]string, 20)
 	for i := range rows {
 		rows[i] = map[string]string{
-			"index": fmt.Sprintf("%d", i+1), "track": "T", "artist": "A", "duration": "1:00",
+			"track": "T", "artist": "A", "duration": "1:00",
 		}
 	}
 	tbl.SetRows(rows)
@@ -230,7 +227,7 @@ func TestTable_ViewRendersHeader(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"index": "1", "track": "Song", "artist": "Artist", "duration": "3:00"},
+		{"track": "Song", "artist": "Artist", "duration": "3:00"},
 	}
 	tbl.SetRows(rows)
 

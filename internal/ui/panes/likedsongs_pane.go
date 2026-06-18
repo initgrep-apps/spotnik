@@ -4,7 +4,6 @@
 package panes
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,10 +30,9 @@ type LikedSongsPane struct {
 
 // NewLikedSongsPane creates a LikedSongsPane with the given store, theme, and focus state.
 func NewLikedSongsPane(store state.StateReader, th theme.Theme, focused bool) *LikedSongsPane {
-	// Liked songs columns: # 5% | Track 45% | Artist 35% | Duration 15%
-	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
+	// Liked songs columns: Track 45% | Artist 35% | Duration 15%
+	// Flex factors: 9 : 7 : 3 ≈ 45% / 35% / 15%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -148,7 +146,6 @@ func (l *LikedSongsPane) refreshRows() {
 			artistName = st.Track.Artists[0].Name
 		}
 		rows[i] = map[string]string{
-			"index":    fmt.Sprintf("%d", i+1),
 			"track":    st.Track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(st.Track.DurationMs),
@@ -183,7 +180,6 @@ func (l *LikedSongsPane) filteredTracks() []domain.SavedTrack {
 func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 	l.theme = th
 	cols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},

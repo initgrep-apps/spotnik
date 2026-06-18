@@ -284,12 +284,11 @@ func TestAlbumsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	a := NewAlbumsPane(state.New(), th, false)
 	cols := a.table.Columns()
-	require.Len(t, cols, 4, "AlbumsPane should have 4 columns")
+	require.Len(t, cols, 3, "AlbumsPane should have 3 columns")
 
-	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
-	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Name column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Year column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnPrimary(), cols[0].Color, "Name column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[2].Color, "Year column should use ColumnTertiary()")
 }
 
 // ── Story 107: Album drill-down + track play ─────────────────────────────────

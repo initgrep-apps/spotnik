@@ -1,7 +1,7 @@
 ---
 title: "Remove # column from all table panes"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background

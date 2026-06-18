@@ -24,7 +24,6 @@ type SavedEpisodesPane struct {
 
 func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *SavedEpisodesPane {
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "saved", Header: "Saved", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -157,7 +156,6 @@ func (p *SavedEpisodesPane) buildRows() {
 		}
 
 		rows[i] = map[string]string{
-			"index":    fmt.Sprintf("%d", i+1),
 			"episode":  ep.Name,
 			"show":     showName,
 			"saved":    formatSavedDate(se.AddedAt),
@@ -201,7 +199,6 @@ func (p *SavedEpisodesPane) resizeTable() {
 func (p *SavedEpisodesPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "saved", Header: "Saved", FlexFactor: 3, Color: th.ColumnTertiary()},

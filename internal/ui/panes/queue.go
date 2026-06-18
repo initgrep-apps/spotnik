@@ -1,11 +1,10 @@
 // Package panes — QueuePane displays the current play queue in the right pane.
-// It renders a dense table with columns #, type, Title, Artist, Duration, icon
+// It renders a dense table with columns Type, Title, Artist, Duration
 // and supports in-pane filtering via the 'f' key. The queue may contain both
 // tracks and episodes from Spotify's mixed-content queue response.
 package panes
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -33,7 +32,6 @@ type QueuePane struct {
 // NewQueuePane creates a new QueuePane with the given store, theme, and focus state.
 func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueuePane {
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary()},
@@ -160,9 +158,7 @@ func (q *QueuePane) refreshRows() {
 	queue := q.filteredQueue()
 	rows := make([]map[string]string, len(queue))
 	for i, item := range queue {
-		row := map[string]string{
-			"index": fmt.Sprintf("%d", i+1),
-		}
+		row := map[string]string{}
 
 		switch item.Type {
 		case domain.QueueItemTypeEpisode:
@@ -239,7 +235,6 @@ func (q *QueuePane) resizeTable() {
 func (q *QueuePane) SetTheme(th theme.Theme) {
 	q.theme = th
 	cols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary()},
