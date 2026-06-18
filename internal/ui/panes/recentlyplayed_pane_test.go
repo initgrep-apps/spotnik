@@ -217,6 +217,7 @@ func TestRecentlyPlayedPane_Init(t *testing.T) {
 func TestRecentlyPlayedPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewRecentlyPlayedPane(state.New(), th, false)
+	p.SetSize(80, 20)
 	cols := p.table.Columns()
 	require.Len(t, cols, 3, "RecentlyPlayedPane should have 3 columns")
 

@@ -37,9 +37,9 @@ func NewRecentlyPlayedPane(store state.StateReader, th theme.Theme, focused bool
 	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Played 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
-		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -191,9 +191,9 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 	r.theme = th
 	cols := []components.ColumnDef{
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
-		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, r.Table().Rows(), r.focused)
 	r.SwapTableAndFilter(newTable, newFilter)

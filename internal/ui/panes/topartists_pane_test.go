@@ -270,6 +270,7 @@ func TestTopArtistsPane_RefreshRows(t *testing.T) {
 func TestTopArtistsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewTopArtistsPane(state.New(), th, false)
+	p.SetSize(80, 20)
 	cols := p.table.Columns()
 	require.Len(t, cols, 3, "TopArtistsPane should have 3 columns")
 

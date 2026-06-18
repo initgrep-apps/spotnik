@@ -74,9 +74,9 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	// Album columns: Name 50% | Artist 30% | Year 15%
 	// Flex factors: 10 : 6 : 3 ≈ 50% / 30% / 15%
 	columns := []components.ColumnDef{
-		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -88,9 +88,9 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	// Track sub-view columns: Track 50% | Artist 30% | Duration 15%
 	// Flex factors: 10 : 6 : 3 (same proportions as playlist track sub-view)
 	trackCols := []components.ColumnDef{
-		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	tt := components.NewTable(components.TableConfig{
 		Columns:    trackCols,
@@ -400,9 +400,9 @@ func (a *AlbumsPane) resizeTable() {
 func (a *AlbumsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
-		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, a.Table().Rows(), a.focused && !a.inTrackView)
 	a.SwapTableAndFilter(newTable, newFilter)
@@ -411,9 +411,9 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{
-		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary()},
-		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	a.trackTable = components.NewTable(components.TableConfig{
 		Columns:    trackCols,

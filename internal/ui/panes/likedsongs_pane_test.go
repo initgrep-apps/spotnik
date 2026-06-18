@@ -316,6 +316,7 @@ func TestLikedSongsPane_Actions_NoLikeEntry(t *testing.T) {
 func TestLikedSongsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	l := NewLikedSongsPane(state.New(), th, false)
+	l.SetSize(80, 20)
 	cols := l.table.Columns()
 	require.Len(t, cols, 3, "LikedSongsPane should have 3 columns")
 

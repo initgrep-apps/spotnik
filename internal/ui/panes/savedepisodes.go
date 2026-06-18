@@ -23,10 +23,10 @@ type SavedEpisodesPane struct {
 
 func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *SavedEpisodesPane {
 	columns := []components.ColumnDef{
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
-		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
+		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:    columns,
@@ -196,10 +196,10 @@ func (p *SavedEpisodesPane) resizeTable() {
 func (p *SavedEpisodesPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
-		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary()},
-		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary()},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
+		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
+		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
 	p.SwapTableAndFilter(newTable, newFilter)

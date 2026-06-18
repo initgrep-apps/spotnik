@@ -269,6 +269,7 @@ func TestTopTracksPane_RefreshRows(t *testing.T) {
 func TestTopTracksPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewTopTracksPane(state.New(), th, false)
+	p.SetSize(80, 20)
 	cols := p.table.Columns()
 	require.Len(t, cols, 3, "TopTracksPane should have 3 columns")
 

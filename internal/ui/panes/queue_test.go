@@ -641,6 +641,7 @@ func TestQueuePane_Actions_NoAddEntry(t *testing.T) {
 func TestQueuePane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	q := NewQueuePane(state.New(), th, false)
+	q.SetSize(80, 20)
 	cols := q.table.Columns()
 	require.Len(t, cols, 4, "QueuePane should have 4 columns")
 

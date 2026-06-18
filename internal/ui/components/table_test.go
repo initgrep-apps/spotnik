@@ -237,6 +237,101 @@ func TestTable_ViewRendersHeader(t *testing.T) {
 	assert.Contains(t, view, "Artist")
 }
 
+// makePriorityColumns returns a 3-column layout with mixed priorities:
+//
+//	trk: Priority 1 (always), art: Priority 2 (≥40 cols), dur: Priority 3 (≥60 cols).
+func makePriorityColumns() []components.ColumnDef {
+	th := testTheme()
+	return []components.ColumnDef{
+		{Key: "trk", Header: "Track", FlexFactor: 4, Color: th.TextPrimary(), Priority: 1},
+		{Key: "art", Header: "Artist", FlexFactor: 3, Color: th.TextSecondary(), Priority: 2},
+		{Key: "dur", Header: "Dur", FlexFactor: 2, Color: th.TextMuted(), Priority: 3},
+	}
+}
+
+func TestTable_PriorityFiltering_HidesColumnsAtNarrowWidth(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:    makePriorityColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(30, 20) // below 40 — only priority-1 cols
+
+	cols := tbl.Columns()
+	assert.Len(t, cols, 1, "only Priority-1 columns should be visible at width 30")
+	assert.Equal(t, "trk", cols[0].Key)
+}
+
+func TestTable_PriorityFiltering_MediumWidthShowsPriority2(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:    makePriorityColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(50, 20) // >=40, <60 — priority 1+2
+
+	cols := tbl.Columns()
+	assert.Len(t, cols, 2, "Priority-1 and Priority-2 columns should be visible at width 50")
+	keys := make([]string, len(cols))
+	for i, c := range cols {
+		keys[i] = c.Key
+	}
+	assert.Contains(t, keys, "trk")
+	assert.Contains(t, keys, "art")
+	assert.NotContains(t, keys, "dur")
+}
+
+func TestTable_PriorityFiltering_WideWidthShowsAll(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:    makePriorityColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
+	}
+	tbl := components.NewTable(cfg)
+	tbl.SetSize(80, 20) // >=60 — all columns
+
+	cols := tbl.Columns()
+	assert.Len(t, cols, 3, "all columns should be visible at width 80 (>=60)")
+	keys := make([]string, len(cols))
+	for i, c := range cols {
+		keys[i] = c.Key
+	}
+	assert.Contains(t, keys, "trk")
+	assert.Contains(t, keys, "art")
+	assert.Contains(t, keys, "dur")
+}
+
+func TestTable_PriorityFiltering_WidthThresholdCrossing(t *testing.T) {
+	cfg := components.TableConfig{
+		Columns:    makePriorityColumns(),
+		Theme:      testTheme(),
+		ShowHeader: true,
+	}
+	tbl := components.NewTable(cfg)
+
+	// Start narrow: only trk.
+	tbl.SetSize(30, 20)
+	assert.Len(t, tbl.Columns(), 1)
+
+	// Cross 40: trk + art appear.
+	tbl.SetSize(45, 20)
+	assert.Len(t, tbl.Columns(), 2)
+
+	// Cross 60: all three appear.
+	tbl.SetSize(70, 20)
+	assert.Len(t, tbl.Columns(), 3)
+
+	// Drop back below 60: dur hides.
+	tbl.SetSize(55, 20)
+	assert.Len(t, tbl.Columns(), 2)
+
+	// Drop below 40: art hides too.
+	tbl.SetSize(35, 20)
+	assert.Len(t, tbl.Columns(), 1)
+}
+
 // makeRichColumns returns a two-column layout matching GatewayLivePane's design.
 func makeRichColumns() []components.ColumnDef {
 	th := testTheme()

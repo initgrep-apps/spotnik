@@ -38,6 +38,10 @@ type ColumnDef struct {
 	// FlexFactor controls the column's relative share of available width.
 	// A column with FlexFactor 2 gets twice the space of one with FlexFactor 1.
 	FlexFactor int
+	// Priority determines column visibility at different pane widths.
+	// 0/1 = always visible, 2 = visible at >=40 cols, 3 = visible at >=60 cols.
+	// Zero-value (0) is treated as Priority 1 for backward compatibility.
+	Priority int
 	// Color is the lipgloss foreground color applied to data cells in this column.
 	Color lipgloss.Color
 }
@@ -74,14 +78,41 @@ func NewTable(cfg TableConfig) *Table {
 	return t
 }
 
+// filterColumnsByPriority returns the column subset that should be visible at the
+// given pane width. Priority 0/1 are always visible; Priority 2 requires >=40 cols;
+// Priority 3 requires >=60 cols. At least one column is always returned.
+func filterColumnsByPriority(cols []ColumnDef, width int) []ColumnDef {
+	filtered := make([]ColumnDef, 0, len(cols))
+	for _, c := range cols {
+		switch c.Priority {
+		case 0, 1:
+			filtered = append(filtered, c)
+		case 2:
+			if width >= 40 {
+				filtered = append(filtered, c)
+			}
+		case 3:
+			if width >= 60 {
+				filtered = append(filtered, c)
+			}
+		}
+	}
+	if len(filtered) == 0 && len(cols) > 0 {
+		filtered = append(filtered, cols[0])
+	}
+	return filtered
+}
+
 // rebuild reconstructs the inner bubble-table Model with current config and size.
 // Called after config changes or size changes.
 func (t *Table) rebuild() {
 	th := t.config.Theme
 
-	// Build bubble-table flex columns from ColumnDef slice.
-	btCols := make([]btable.Column, len(t.config.Columns))
-	for i, col := range t.config.Columns {
+	activeCols := filterColumnsByPriority(t.config.Columns, t.width)
+
+	// Build bubble-table flex columns from the active (priority-filtered) columns.
+	btCols := make([]btable.Column, len(activeCols))
+	for i, col := range activeCols {
 		btCols[i] = btable.NewFlexColumn(col.Key, col.Header, col.FlexFactor).
 			WithStyle(lipgloss.NewStyle().Foreground(col.Color).Align(lipgloss.Left))
 	}
@@ -253,10 +284,11 @@ func (t *Table) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// Columns returns the column definitions used to construct this table.
-// Primarily used in tests to verify that the correct color tokens were applied.
+// Columns returns the currently visible column definitions after applying
+// priority-based filtering at the current pane width. Tests use this to verify
+// that the correct columns (and only those columns) are active after SetSize.
 func (t *Table) Columns() []ColumnDef {
-	return t.config.Columns
+	return filterColumnsByPriority(t.config.Columns, t.width)
 }
 
 // View renders the table to a string. Call SetSize before first render.
