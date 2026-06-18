@@ -341,7 +341,7 @@ func TestTopArtistsPane_Esc_ResetsScrollToPage1(t *testing.T) {
 	st.StampStatsFetchedAt("short_term")
 	th := theme.Load("black")
 	pane := NewTopArtistsPane(st, th, true)
-	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 6).
+	// height=11 → pageSize=5 with ShowHeader=true (pageSize = height - 4).
 	pane.SetSize(80, 11)
 
 	// Scroll 8 rows down to advance past page 1.

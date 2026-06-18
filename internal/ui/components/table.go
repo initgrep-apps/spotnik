@@ -61,6 +61,7 @@ type Table struct {
 	richRows []map[string]any // set via SetRichRows; nil when SetRows was used last
 	width    int
 	height   int
+	focused  bool
 }
 
 // NewTable creates a Table with the given configuration.
@@ -118,6 +119,7 @@ func (t *Table) rebuild() {
 	inner = inner.WithPageSize(pageSize)
 
 	t.inner = inner
+	t.inner = t.inner.Focused(t.focused)
 	t.applyRows()
 }
 
@@ -163,21 +165,40 @@ func (t *Table) applyRows() {
 }
 
 // SetSize updates the table dimensions. Recalculates column widths and page size.
-// The emptyBorder adds top+bottom lines; with ShowHeader the separator adds another.
-// Total overhead is 6 lines (header visible) or 4 lines (no header).
+// If the width crosses a column-priority threshold (40 or 60 cols), the table is
+// rebuilt so the visible column set adapts.
 func (t *Table) SetSize(width, height int) {
+	oldWidth := t.width
 	t.width = width
 	t.height = height
+
+	if crossesThreshold(oldWidth, width) {
+		t.rebuild()
+		return
+	}
+
 	t.inner = t.inner.WithTargetWidth(width)
 
-	pageSize := height - 6
+	pageSize := height - 4
 	if !t.config.ShowHeader {
-		pageSize = height - 4
+		pageSize = height - 2
 	}
 	if pageSize < 1 {
 		pageSize = 1
 	}
 	t.inner = t.inner.WithPageSize(pageSize)
+}
+
+// crossesThreshold reports whether oldW and newW fall on opposite sides of a
+// column-priority width threshold (40 or 60 terminal columns).
+func crossesThreshold(oldW, newW int) bool {
+	if (oldW < 40 && newW >= 40) || (oldW >= 40 && newW < 40) {
+		return true
+	}
+	if (oldW < 60 && newW >= 60) || (oldW >= 60 && newW < 60) {
+		return true
+	}
+	return false
 }
 
 // SetRows updates the table data. Each row is a map[string]string keyed by
@@ -215,6 +236,7 @@ func (t *Table) Rows() []map[string]string {
 // SetFocused enables or disables keyboard navigation. When unfocused the
 // highlight cursor is hidden and key events are not processed.
 func (t *Table) SetFocused(focused bool) {
+	t.focused = focused
 	t.inner = t.inner.Focused(focused)
 }
 
