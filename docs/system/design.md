@@ -468,9 +468,15 @@ ascii fallback.
 
 ### Column Truncation (Dense Tables)
 
-- Table columns get fixed proportions of pane width (e.g., `#` 5%, Track 45%, Artist 35%, Duration 15%)
+- Table columns get fixed proportions of pane width (e.g., Track 45%, Artist 35%, Dur 15%)
 - Each cell value is individually truncated to its column width
 - Column widths recalculated on `SetSize()` — never hardcoded
+
+### Empty Data Sets
+
+No blank rows between pane border and table content. Table must fill available height.
+Empty data sets render `EmptyState`, not an empty table. EmptyState provides a hint
+guiding the user to the next action (e.g., "Nothing in queue · Press / to search").
 
 ### Truncation Utility
 
@@ -558,10 +564,10 @@ List panes (Queue, Playlists, Albums, LikedSongs, RecentlyPlayed, TopTracks, Top
 ### Column Layout Example (Queue)
 
 ```
-  #   ◆/♪  Title                    Artist/Show          Duration
-  1   ♪    Lil Boo Thang            Paul Russell         3:12
-  2   ◆    Episode Title            Show Name            34:12
-  3   ♪    BIRDS OF A FEATHER       Billie Eilish        3:30
+  ◆/♪  Title                    Artist/Show          Dur
+  ♪    Lil Boo Thang            Paul Russell         3:12
+  ◆    Episode Title            Show Name            34:12
+  ♪    BIRDS OF A FEATHER       Billie Eilish        3:30
 ```
 
 ### Column Colors
@@ -570,7 +576,6 @@ Each column uses a different theme color for visual separation without explicit 
 
 | Column | Color Token | Purpose |
 |--------|-------------|---------|
-| Index (`#`) | `TextMuted()` | De-emphasized numbering |
 | Type (`◆`/`♪`) | `TextMuted()` | Episode (◆) / Track (♪) indicator |
 | Title | `TextPrimary()` | Primary data — highest contrast |
 | Artist/Show | `TextSecondary()` | Artist name or show name for episodes |
@@ -578,19 +583,45 @@ Each column uses a different theme color for visual separation without explicit 
 
 **Selected row:** All columns override to `SelectedBg()` + `SelectedFg()`
 
-**Currently playing row:** Index column shows `▶` in `PlayingIndicator()` color
+### Column Ordering
+
+Icon/glyph columns MUST be the first data column in every pane table. Ordering:
+
+[Icon/Glyph] → [Primary Identifier] → [Secondary Info] → [Tertiary/Metadata]
+
+### Column Priority Thresholds
+
+Columns have a `Priority` field (1-3). At render time, columns are filtered by
+pane width:
+
+| Priority | Label | Threshold | Behavior |
+|----------|-------|-----------|----------|
+| 1 | Always | Any width | Always rendered |
+| 2 | Default | ≥ 40 cols | Hidden when narrow |
+| 3 | Wide-only | ≥ 60 cols | Hidden unless spacious |
+
+The table wrapper (`components.Table`) applies this filter in `rebuild()`. Width
+changes across threshold boundaries trigger a table rebuild.
+
+### Column Header Guidelines
+
+Headers must not be wider than typical cell content. Use short names:
+- `Dur` instead of `Duration`
+- `Pop` instead of `Popularity`
+- `Pub` instead of `Publisher`
+- `Eps` instead of `Episodes`
 
 ### Column Width Proportions
 
-| Pane | Col 1 | Col 2 | Col 3 | Col 4 | Col 5 |
-|------|-------|-------|-------|-------|-------|
-| Queue | `#` 5% | Type 5% | Title 40% | Artist/Show 35% | Duration 15% |
-| Playlists | `#` 5% | Name 70% | Tracks 25% | — |
-| Albums | `#` 5% | Name 50% | Artist 30% | Year 15% |
-| Liked Songs | `#` 5% | Track 45% | Artist 35% | Duration 15% |
-| Top Tracks | `#` 5% | Track 45% | Artist 35% | Duration 15% |
-| Top Artists | `#` 5% | Name 55% | Popularity 20% | Flw 20% |
-| Recently Played | `#` 5% | Track 45% | Artist 35% | Played 15% |
+| Pane | Col 1 | Col 2 | Col 3 | Col 4 |
+|------|-------|-------|-------|-------|
+| Queue | ◆/♪ 5% | Title 45% | Artist/Show 35% | Dur 15% |
+| Playlists | Name 75% | Tracks 25% | — | — |
+| Albums | Name 55% | Artist 30% | Year 15% | — |
+| Liked Songs | Track 45% | Artist 40% | Dur 15% | — |
+| Top Tracks | Track 45% | Artist 40% | Dur 15% | — |
+| Top Artists | Name 55% | Pop 25% | Flw 20% | — |
+| Recently Played | Track 45% | Artist 35% | Played 20% | — |
 
 Column header row: `TableHeader()` color, not bold.
 
