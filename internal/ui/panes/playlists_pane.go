@@ -92,7 +92,7 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 	trackColumns := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	tt := components.NewTable(components.TableConfig{
 		Columns:    trackColumns,
@@ -484,7 +484,7 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	trackCols := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	p.trackTable = components.NewTable(components.TableConfig{
 		Columns:    trackCols,

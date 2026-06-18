@@ -35,7 +35,7 @@ func NewLikedSongsPane(store state.StateReader, th theme.Theme, focused bool) *L
 	columns := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -182,7 +182,7 @@ func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 	cols := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, l.Table().Rows(), l.focused)
 	l.SwapTableAndFilter(newTable, newFilter)

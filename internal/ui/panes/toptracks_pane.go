@@ -52,7 +52,7 @@ func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *To
 	columns := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "dur", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -242,7 +242,7 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 	cols := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "dur", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
 	p.SwapTableAndFilter(newTable, newFilter)

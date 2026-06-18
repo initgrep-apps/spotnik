@@ -90,7 +90,7 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	trackCols := []components.ColumnDef{
 		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	tt := components.NewTable(components.TableConfig{
 		Columns:    trackCols,
@@ -413,7 +413,7 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 	trackCols := []components.ColumnDef{
 		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	a.trackTable = components.NewTable(components.TableConfig{
 		Columns:    trackCols,
