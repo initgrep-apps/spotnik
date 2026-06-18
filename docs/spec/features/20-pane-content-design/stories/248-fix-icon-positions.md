@@ -1,7 +1,7 @@
 ---
 title: "Fix icon column positions in SavedEpisodes, FollowedShows, Queue"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background
