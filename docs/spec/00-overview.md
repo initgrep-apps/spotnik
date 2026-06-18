@@ -28,7 +28,7 @@
 | 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | in-progress | 214 ✓, 215 ✓, 216 ✓, 217 ✓, 218 ✓, 219 ✓, 220 ✓, 221 ✓, 222 ✓, 223 | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight, single-formula layout. Phase 2 (shipped): OverlayBackground token + InfoBox fill (221); remove album art, overlay InfoBox on full-pane visualizer (222). Phase 3 (open): Fix layout — adaptive width, remove solid bg, centering, compact preset MinHeight (223) |
 | 18 | Podcasts Page | `features/18-podcasts/` | done | 227 ✓, 228 ✓, 229 ✓, 230 ✓, 231 ✓, 232 ✓ | Dedicated page for podcast listening: PodcastPlayback pane, ShowEpisodes/FollowedShows/SavedEpisodes table panes, PodcastAPI client, 4 new border tokens, 3-page cycle |
 | 19 | Player Page Unification | `features/19-player-page-unification/` | done | 233 ✓, 234 ✓, 235 ✓, 236 ✓, 238 ✓, 239 ✓, 240 ✓, 241 ✓, 242 ✓, 243 ✓, 244 ✓ | Unify Music+Podcasts into single Player page, content-aware NowPlaying, FollowedShows drill-down, Queue mixed content, auto-switch presets, visibility-gated polling, Episode Details overlay |
-| 20 | Pane Content Design Language | `features/20-pane-content-design/` | open | 245 ✓, 246 ✓, 247 ✓, 248 ✓, 249 ✓, 250, 251, 252 | Unified design system: remove PlayingIndex dead code, remove # column, fix icon positions, responsive column priority, optimized headers, consistent EmptyStates |
+| 20 | Pane Content Design Language | `features/20-pane-content-design/` | open | 245 ✓, 246 ✓, 247 ✓, 248 ✓, 249 ✓, 250 ✓, 251, 252 | Unified design system: remove PlayingIndex dead code, remove # column, fix icon positions, responsive column priority, optimized headers, consistent EmptyStates |
 
 ---
 
