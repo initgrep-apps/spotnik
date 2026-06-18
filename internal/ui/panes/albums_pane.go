@@ -331,6 +331,16 @@ func (a *AlbumsPane) View() string {
 	if a.inTrackView {
 		return a.trackTable.View()
 	}
+	if len(a.store.SavedAlbums()) == 0 && !a.Filter().IsActive() {
+		return uikit.EmptyState{
+			Text:   "No saved albums",
+			Hint:   "Save albums in Spotify or search with /",
+			Width:  a.width,
+			Height: a.height,
+			Theme:  a.theme,
+		}.Render()
+	}
+
 	var parts []string
 	if a.Filter().IsActive() {
 		parts = append(parts, a.Filter().View(a.width))

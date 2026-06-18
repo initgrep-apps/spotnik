@@ -180,6 +180,16 @@ func (a *TopArtistsPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 
 // View renders the top artists pane content. Pure — reads state, returns string.
 func (a *TopArtistsPane) View() string {
+	if len(a.store.TopArtists(a.timeRange)) == 0 && !a.Filter().IsActive() {
+		return uikit.EmptyState{
+			Text:   "No top artists",
+			Hint:   "Listen to more music to populate this list",
+			Width:  a.width,
+			Height: a.height,
+			Theme:  a.theme,
+		}.Render()
+	}
+
 	var parts []string
 	if a.Filter().IsActive() {
 		parts = append(parts, a.Filter().View(a.width))

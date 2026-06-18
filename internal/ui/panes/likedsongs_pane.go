@@ -12,6 +12,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: LikedSongsPane implements layout.Pane.
@@ -122,6 +123,16 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the liked songs pane content. Pure — reads state, returns string.
 func (l *LikedSongsPane) View() string {
+	if len(l.store.LikedTracks()) == 0 && !l.Filter().IsActive() {
+		return uikit.EmptyState{
+			Text:   "No liked songs",
+			Hint:   "Press / to search for tracks",
+			Width:  l.width,
+			Height: l.height,
+			Theme:  l.theme,
+		}.Render()
+	}
+
 	var parts []string
 
 	if l.Filter().IsActive() {
