@@ -50,7 +50,6 @@ func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *To
 	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Dur 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -207,7 +206,6 @@ func (p *TopTracksPane) refreshRows() {
 			artistName = track.Artists[0].Name
 		}
 		rows[i] = map[string]string{
-			"index":  fmt.Sprintf("%d", i+1),
 			"track":  track.Name,
 			"artist": artistName,
 			"dur":    trackDuration(track.DurationMs),
@@ -242,7 +240,6 @@ func (p *TopTracksPane) filteredTracks() []domain.Track {
 func (p *TopTracksPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "dur", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},

@@ -51,7 +51,6 @@ func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *T
 	// Column widths per DESIGN.md §9: # 5% | Name 55% | Pop 20% | Flw 20%
 	// Flex factors: 1 : 11 : 4 : 4 ≈ 5% / 55% / 20% / 20%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary()},
 		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},
@@ -199,10 +198,9 @@ func (a *TopArtistsPane) refreshRows() {
 	rows := make([]map[string]string, len(artists))
 	for i, artist := range artists {
 		rows[i] = map[string]string{
-			"index": fmt.Sprintf("%d", i+1),
-			"name":  artist.Name,
-			"pop":   artistPopStars(artist.Popularity),
-			"flw":   formatArtistFollowers(artist.Followers.Total),
+			"name": artist.Name,
+			"pop":  artistPopStars(artist.Popularity),
+			"flw":  formatArtistFollowers(artist.Followers.Total),
 		}
 	}
 	a.Table().SetRows(rows)
@@ -229,7 +227,6 @@ func (a *TopArtistsPane) filteredArtists() []domain.FullArtist {
 func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary()},
 		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary()},

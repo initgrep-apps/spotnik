@@ -11,7 +11,6 @@ import "github.com/initgrep-apps/spotnik/internal/ui/theme"
 //	func (p *MyPane) SetTheme(th theme.Theme) {
 //	    p.theme = th
 //	    cols := []ColumnDef{
-//	        {Key: "index", Header: "#",     FlexFactor: 1, Color: th.ColumnIndex()},
 //	        {Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 //	    }
 //	    p.table, p.filter = components.RebuildTableTheme(th, cols, p.table.Rows(), p.focused && !p.filter.IsActive())

@@ -299,7 +299,6 @@ func TestQueuePane_Table_ColumnHeaders(t *testing.T) {
 	pane.SetSize(80, 20)
 	output := pane.View()
 
-	assert.Contains(t, output, "#", "should contain # column header")
 	assert.Contains(t, output, "Title", "should contain Title column header")
 	assert.Contains(t, output, "Artist", "should contain Artist column header")
 	assert.Contains(t, output, "Duration", "should contain Duration column header")
@@ -643,14 +642,13 @@ func TestQueuePane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	q := NewQueuePane(state.New(), th, false)
 	cols := q.table.Columns()
-	require.Len(t, cols, 6, "QueuePane should have 6 columns")
+	require.Len(t, cols, 5, "QueuePane should have 5 columns")
 
-	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
-	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "type column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnPrimary(), cols[2].Color, "Title column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[3].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[4].Color, "Duration column should use ColumnTertiary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[5].Color, "icon column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[0].Color, "type column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Title column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[4].Color, "icon column should use ColumnSecondary()")
 }
 
 // --- Story 173: Esc scroll-reset ---

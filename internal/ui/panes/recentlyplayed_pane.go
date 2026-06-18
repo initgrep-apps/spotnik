@@ -6,7 +6,6 @@
 package panes
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -38,7 +37,6 @@ func NewRecentlyPlayedPane(store state.StateReader, th theme.Theme, focused bool
 	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Played 15%
 	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
 	columns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -159,7 +157,6 @@ func (r *RecentlyPlayedPane) refreshRows() {
 		}
 		playedAt := formatPlayedAtFromHistory(item.PlayedAt)
 		rows[i] = map[string]string{
-			"index":  fmt.Sprintf("%d", i+1),
 			"track":  item.Track.Name,
 			"artist": artistName,
 			"played": playedAt,
@@ -194,7 +191,6 @@ func (r *RecentlyPlayedPane) filteredItems() []domain.PlayHistory {
 func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 	r.theme = th
 	cols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary()},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary()},

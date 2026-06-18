@@ -77,7 +77,6 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 	// Playlist list columns: # 5% | access (blank header) 5% | Name 65% | Tracks 25%
 	// Using flex factors: 1 : 1 : 13 : 5 ≈ 5% / 5% / 65% / 25%
 	listColumns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
@@ -91,7 +90,6 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 	// Track sub-view columns: # 5% | Track 50% | Artist 30% | Duration 15%
 	// Flex factors: 1 : 10 : 6 : 3 ≈ 5% / 50% / 30% / 15%
 	trackColumns := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
@@ -420,7 +418,6 @@ func (p *PlaylistsPane) refreshPlaylistRows() {
 		}
 		rows[i] = map[string]string{
 			"access": accessGlyph,
-			"index":  fmt.Sprintf("%d", i+1),
 			"name":   pl.Name,
 			"tracks": fmt.Sprintf("%d", pl.TrackCount),
 		}
@@ -448,7 +445,6 @@ func (p *PlaylistsPane) refreshTrackRows() {
 			artistName = track.Artists[0].Name
 		}
 		rows[i] = map[string]string{
-			"index":    fmt.Sprintf("%d", i+1),
 			"track":    track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(track.DurationMs),
@@ -477,7 +473,6 @@ func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	listCols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
@@ -487,7 +482,6 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{
-		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex()},
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},

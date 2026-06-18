@@ -270,12 +270,11 @@ func TestTopTracksPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewTopTracksPane(state.New(), th, false)
 	cols := p.table.Columns()
-	require.Len(t, cols, 4, "TopTracksPane should have 4 columns")
+	require.Len(t, cols, 3, "TopTracksPane should have 3 columns")
 
-	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
-	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnPrimary(), cols[0].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[2].Color, "Duration column should use ColumnTertiary()")
 }
 
 // ── Story 119: t→g rebind ────────────────────────────────────────────────────

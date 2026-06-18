@@ -218,12 +218,11 @@ func TestRecentlyPlayedPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewRecentlyPlayedPane(state.New(), th, false)
 	cols := p.table.Columns()
-	require.Len(t, cols, 4, "RecentlyPlayedPane should have 4 columns")
+	require.Len(t, cols, 3, "RecentlyPlayedPane should have 3 columns")
 
-	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "# column should use ColumnIndex()")
-	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Played column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnPrimary(), cols[0].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[2].Color, "Played column should use ColumnTertiary()")
 }
 
 // ── Story 173: Esc scroll-reset ───────────────────────────────────────────────
