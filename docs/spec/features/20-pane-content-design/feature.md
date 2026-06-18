@@ -1,6 +1,6 @@
 ---
 title: "Pane Content Design Language"
-status: open
+status: done
 ---
 
 ## Description
