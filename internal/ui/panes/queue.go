@@ -35,7 +35,7 @@ func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueueP
 		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -235,7 +235,7 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, q.Table().Rows(), q.focused)
 	q.SwapTableAndFilter(newTable, newFilter)

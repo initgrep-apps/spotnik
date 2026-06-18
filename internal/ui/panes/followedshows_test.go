@@ -169,7 +169,7 @@ func TestFollowedShows_EpisodeView_ColumnHeaders(t *testing.T) {
 	output := p.View()
 	assert.Contains(t, output, "Title")
 	assert.Contains(t, output, "Released")
-	assert.Contains(t, output, "Duration")
+	assert.Contains(t, output, "Dur")
 }
 
 func TestFollowedShows_EpisodeView_ShowsEpisodeData(t *testing.T) {

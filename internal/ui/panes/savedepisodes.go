@@ -26,7 +26,7 @@ func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool)
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:    columns,
@@ -199,7 +199,7 @@ func (p *SavedEpisodesPane) SetTheme(th theme.Theme) {
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
-		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
+		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
 	p.SwapTableAndFilter(newTable, newFilter)

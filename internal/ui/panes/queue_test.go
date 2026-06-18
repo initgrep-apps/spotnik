@@ -301,7 +301,7 @@ func TestQueuePane_Table_ColumnHeaders(t *testing.T) {
 
 	assert.Contains(t, output, "Title", "should contain Title column header")
 	assert.Contains(t, output, "Artist", "should contain Artist column header")
-	assert.Contains(t, output, "Duration", "should contain Duration column header")
+	assert.Contains(t, output, "Dur", "should contain Dur column header")
 }
 
 // TestQueuePane_Table_EmptyQueue verifies no panic and shows empty state.

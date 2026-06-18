@@ -52,7 +52,7 @@ func NewTopArtistsPane(store state.StateReader, th theme.Theme, focused bool) *T
 	// Flex factors: 1 : 11 : 4 : 4 ≈ 5% / 55% / 20% / 20%
 	columns := []components.ColumnDef{
 		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 3},
+		{Key: "pop", Header: "Pop", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 3},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
@@ -228,7 +228,7 @@ func (a *TopArtistsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
 		{Key: "name", Header: "Artist", FlexFactor: 11, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "pop", Header: "Popularity", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 3},
+		{Key: "pop", Header: "Pop", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 3},
 		{Key: "flw", Header: "Flw", FlexFactor: 4, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, a.Table().Rows(), a.focused)

@@ -1,7 +1,7 @@
 ---
 title: "Optimize column headers for space efficiency"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background
