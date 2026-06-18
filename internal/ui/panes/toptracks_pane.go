@@ -15,6 +15,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/ui/components"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
 
 // Compile-time check: TopTracksPane implements layout.Pane.
@@ -184,6 +185,16 @@ func (p *TopTracksPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 
 // View renders the top tracks pane content. Pure — reads state, returns string.
 func (p *TopTracksPane) View() string {
+	if len(p.store.TopTracks(p.timeRange)) == 0 && !p.Filter().IsActive() {
+		return uikit.EmptyState{
+			Text:   "No top tracks",
+			Hint:   "Listen to more music to populate this list",
+			Width:  p.width,
+			Height: p.height,
+			Theme:  p.theme,
+		}.Render()
+	}
+
 	var parts []string
 	if p.Filter().IsActive() {
 		parts = append(parts, p.Filter().View(p.width))
