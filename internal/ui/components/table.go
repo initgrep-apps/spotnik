@@ -95,6 +95,8 @@ func filterColumnsByPriority(cols []ColumnDef, width int) []ColumnDef {
 			if width >= 60 {
 				filtered = append(filtered, c)
 			}
+		default:
+			filtered = append(filtered, c)
 		}
 	}
 	if len(filtered) == 0 && len(cols) > 0 {
