@@ -283,6 +283,7 @@ func TestAlbumsPane_Navigation_JK(t *testing.T) {
 func TestAlbumsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	a := NewAlbumsPane(state.New(), th, false)
+	a.SetSize(80, 20)
 	cols := a.table.Columns()
 	require.Len(t, cols, 3, "AlbumsPane should have 3 columns")
 

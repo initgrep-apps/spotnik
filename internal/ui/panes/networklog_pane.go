@@ -58,13 +58,13 @@ var _ layout.FilterQueryPane = &NetworkLogPane{}
 // NewNetworkLogPane creates a NetworkLogPane with the given store and theme.
 func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	columns := []components.ColumnDef{
-		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary()},
-		{Key: "endpoint", Header: "Endpoint", FlexFactor: 7, Color: th.ColumnPrimary()},
-		{Key: "status", Header: "Status", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "latency", Header: "Latency", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary()},
+		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex(), Priority: 2},
+		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "endpoint", Header: "Endpoint", FlexFactor: 7, Color: th.ColumnPrimary(), Priority: 2},
+		{Key: "status", Header: "Status", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 2},
+		{Key: "latency", Header: "Latency", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 2},
+		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex(), Priority: 2},
+		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary(), Priority: 2},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -314,13 +314,13 @@ func (p *NetworkLogPane) buildTableRows() {
 func (p *NetworkLogPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	columns := []components.ColumnDef{
-		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary()},
-		{Key: "endpoint", Header: "Endpoint", FlexFactor: 7, Color: th.ColumnPrimary()},
-		{Key: "status", Header: "Status", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "latency", Header: "Latency", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex()},
-		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary()},
+		{Key: "time", Header: "Time", FlexFactor: 3, Color: th.ColumnIndex(), Priority: 2},
+		{Key: "method", Header: "Method", FlexFactor: 2, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "endpoint", Header: "Endpoint", FlexFactor: 7, Color: th.ColumnPrimary(), Priority: 2},
+		{Key: "status", Header: "Status", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 2},
+		{Key: "latency", Header: "Latency", FlexFactor: 2, Color: th.ColumnTertiary(), Priority: 2},
+		{Key: "priority", Header: "Priority", FlexFactor: 3, Color: th.ColumnIndex(), Priority: 2},
+		{Key: "decision", Header: "Decision", FlexFactor: 3, Color: th.ColumnSecondary(), Priority: 2},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, columns, p.Table().Rows(), p.focused)
 	p.SwapTableAndFilter(newTable, newFilter)

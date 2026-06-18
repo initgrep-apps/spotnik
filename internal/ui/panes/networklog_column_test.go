@@ -16,6 +16,7 @@ import (
 func TestNetworkLogPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewNetworkLogPane(state.New(), th)
+	p.SetSize(80, 20)
 	cols := p.table.Columns()
 	require.Len(t, cols, 7, "NetworkLogPane should have 7 columns")
 

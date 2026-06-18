@@ -1,7 +1,7 @@
 ---
 title: "Add Priority field to ColumnDef and implement responsive column hiding"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background

@@ -748,6 +748,7 @@ func TestPlaylistsPane_SetFocused_TrackView_PaneFocused(t *testing.T) {
 func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewPlaylistsPane(state.New(), th, false)
+	p.SetSize(80, 20)
 
 	// List view: access (blank header) → ColumnSecondary, Name → ColumnPrimary, Tracks → ColumnTertiary
 	listCols := p.table.Columns()

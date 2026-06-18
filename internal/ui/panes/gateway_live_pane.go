@@ -51,8 +51,8 @@ func NewGatewayLivePane(s state.StateReader, th theme.Theme) *GatewayLivePane {
 		// FlexFactor 1:30 reserves a narrow glyph column (one Unicode rune plus
 		// bubble-table column padding) and gives the remainder to the event text.
 		// Color on the glyph column is a fallback; per-row StyledCell overrides it.
-		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary()},
-		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
+		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary(), Priority: 1},
+		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary(), Priority: 1},
 	}
 	t := components.NewTable(components.TableConfig{
 		Columns:    columns,
@@ -104,8 +104,8 @@ func (p *GatewayLivePane) SetTheme(th theme.Theme) {
 	p.theme = th
 	newFilter := components.NewFilter(th)
 	columns := []components.ColumnDef{
-		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary()},
-		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
+		{Key: "glyph", Header: "", FlexFactor: 1, Color: th.TextPrimary(), Priority: 1},
+		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary(), Priority: 1},
 	}
 	newTable := components.NewTable(components.TableConfig{
 		Columns:    columns,
