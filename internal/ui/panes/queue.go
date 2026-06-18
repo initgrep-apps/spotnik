@@ -36,7 +36,6 @@ func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueueP
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 
 	t := components.NewTable(components.TableConfig{
@@ -170,7 +169,6 @@ func (q *QueuePane) refreshRows() {
 			}
 			row["artist"] = showName
 			row["duration"] = formatDurationMsH(item.Episode.DurationMs)
-			row["icon"] = ""
 		default:
 			row["type"] = uikit.GlyphFor(uikit.GlyphMusicNote, uikit.GlyphUnicode)
 			row["title"] = item.Track.Name
@@ -180,7 +178,6 @@ func (q *QueuePane) refreshRows() {
 			}
 			row["artist"] = artistName
 			row["duration"] = formatDurationMsH(item.Track.DurationMs)
-			row["icon"] = ""
 		}
 
 		rows[i] = row
@@ -239,7 +236,6 @@ func (q *QueuePane) SetTheme(th theme.Theme) {
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: th.ColumnTertiary()},
-		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, q.Table().Rows(), q.focused)
 	q.SwapTableAndFilter(newTable, newFilter)
