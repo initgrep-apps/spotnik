@@ -74,8 +74,8 @@ type PlaylistsPane struct {
 
 // NewPlaylistsPane creates a PlaylistsPane with the given store, theme, and focus state.
 func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *PlaylistsPane {
-	// Playlist list columns: # 5% | access (blank header) 5% | Name 65% | Tracks 25%
-	// Using flex factors: 1 : 1 : 13 : 5 ≈ 5% / 5% / 65% / 25%
+	// Playlist list columns: access (blank header) 5% | Name 65% | Tracks 25%
+	// Using flex factors: 1 : 13 : 5 ≈ 5% / 65% / 25%
 	listColumns := []components.ColumnDef{
 		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary()},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary()},
@@ -87,8 +87,8 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 		ShowHeader: true,
 	})
 
-	// Track sub-view columns: # 5% | Track 50% | Artist 30% | Duration 15%
-	// Flex factors: 1 : 10 : 6 : 3 ≈ 5% / 50% / 30% / 15%
+	// Track sub-view columns: Track 50% | Artist 30% | Duration 15%
+	// Flex factors: 10 : 6 : 3 ≈ 50% / 30% / 15%
 	trackColumns := []components.ColumnDef{
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},

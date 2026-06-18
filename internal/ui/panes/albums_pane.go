@@ -71,8 +71,8 @@ type AlbumsPane struct {
 
 // NewAlbumsPane creates an AlbumsPane with the given store, theme, and focus state.
 func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *AlbumsPane {
-	// Album columns: # 5% | Name 50% | Artist 30% | Year 15%
-	// Flex factors: 1 : 10 : 6 : 3 ≈ 5% / 50% / 30% / 15%
+	// Album columns: Name 50% | Artist 30% | Year 15%
+	// Flex factors: 10 : 6 : 3 ≈ 50% / 30% / 15%
 	columns := []components.ColumnDef{
 		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary()},

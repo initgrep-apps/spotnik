@@ -749,7 +749,7 @@ func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 	th := theme.Load("black")
 	p := NewPlaylistsPane(state.New(), th, false)
 
-	// List view: # → ColumnIndex, access (blank header) → ColumnSecondary, Name → ColumnPrimary, Tracks → ColumnTertiary
+	// List view: access (blank header) → ColumnSecondary, Name → ColumnPrimary, Tracks → ColumnTertiary
 	listCols := p.table.Columns()
 	require.Len(t, listCols, 3, "PlaylistsPane list table should have 3 columns")
 	assert.Equal(t, th.ColumnSecondary(), listCols[0].Color, "access column should use ColumnSecondary()")

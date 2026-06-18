@@ -1,5 +1,5 @@
 // Package panes — QueuePane displays the current play queue in the right pane.
-// It renders a dense table with columns #, type, Title, Artist, Duration, icon
+// It renders a dense table with columns Type, Title, Artist, Duration
 // and supports in-pane filtering via the 'f' key. The queue may contain both
 // tracks and episodes from Spotify's mixed-content queue response.
 package panes
