@@ -57,10 +57,9 @@ func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *To
 	}
 
 	t := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	p := &TopTracksPane{

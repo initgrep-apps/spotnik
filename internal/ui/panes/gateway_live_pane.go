@@ -55,10 +55,9 @@ func NewGatewayLivePane(s state.StateReader, th theme.Theme) *GatewayLivePane {
 		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
 	}
 	t := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   false,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: false,
 	})
 	t.SetFocused(false)
 
@@ -109,10 +108,9 @@ func (p *GatewayLivePane) SetTheme(th theme.Theme) {
 		{Key: "event", Header: "", FlexFactor: 30, Color: th.ColumnPrimary()},
 	}
 	newTable := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   false,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: false,
 	})
 	newTable.SetFocused(p.focused && !p.Filter().IsActive())
 	p.SwapTableAndFilter(newTable, newFilter)

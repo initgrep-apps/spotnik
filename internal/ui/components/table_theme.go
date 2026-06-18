@@ -22,7 +22,7 @@ func RebuildTableTheme(
 	rows []map[string]string,
 	focused bool,
 ) (*Table, *Filter) {
-	t := NewTable(TableConfig{Columns: cols, Theme: th, PlayingIndex: -1, ShowHeader: true})
+	t := NewTable(TableConfig{Columns: cols, Theme: th, ShowHeader: true})
 	t.SetRows(rows)
 	t.SetFocused(focused)
 	return t, NewFilter(th)

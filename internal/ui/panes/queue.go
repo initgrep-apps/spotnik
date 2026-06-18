@@ -42,10 +42,9 @@ func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueueP
 	}
 
 	t := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	q := &QueuePane{
@@ -83,11 +82,6 @@ func (q *QueuePane) SetSize(width, height int) {
 	q.TableBasedPane.SetSize(width, height)
 	q.Filter().SetWidth(width)
 	q.resizeTable()
-}
-
-// SetPlayingIndex marks which row shows the ▶ indicator. Pass -1 to clear.
-func (q *QueuePane) SetPlayingIndex(index int) {
-	q.Table().SetPlayingIndex(index)
 }
 
 // Update handles key events when the pane is focused.

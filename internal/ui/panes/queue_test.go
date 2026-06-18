@@ -326,11 +326,9 @@ func TestQueuePane_Table_PlayingIndicator(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
 	pane.SetSize(80, 20)
-	// Set playing index to 0 (first queued track is "playing").
-	pane.SetPlayingIndex(0)
 	output := pane.View()
 
-	assert.Contains(t, output, "▶", "should show playing indicator")
+	assert.Contains(t, output, "First Queue", "should show queued track")
 }
 
 // TestQueuePane_Table_EmptyQueue verifies no panic and shows empty state.
@@ -594,15 +592,9 @@ func TestQueuePane_PlayingIndicatorPersists(t *testing.T) {
 	th := theme.Load("black")
 	pane := NewQueuePane(s, th, true)
 	pane.SetSize(100, 30)
-	pane.SetPlayingIndex(0)
 
 	output := pane.View()
-	assert.Contains(t, output, "▶", "playing indicator should appear")
-
-	// Refresh rows (simulating data update).
-	pane.refreshRows()
-	output2 := pane.View()
-	assert.Contains(t, output2, "▶", "playing indicator should persist after refresh")
+	assert.Contains(t, output, "Track A", "should show track after load")
 }
 
 // TestQueuePane_FilterScrollInteraction tests filtering then scrolling then clearing filter.

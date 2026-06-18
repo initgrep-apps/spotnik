@@ -81,10 +81,9 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	}
 
 	t := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	// Track sub-view columns: # 5% | Track 50% | Artist 30% | Duration 15%
@@ -96,10 +95,9 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	tt := components.NewTable(components.TableConfig{
-		Columns:      trackCols,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    trackCols,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	a := &AlbumsPane{
@@ -424,10 +422,9 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	a.trackTable = components.NewTable(components.TableConfig{
-		Columns:      trackCols,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    trackCols,
+		Theme:      th,
+		ShowHeader: true,
 	})
 	a.trackTable.SetSize(a.width, a.height)
 	if a.inTrackView {

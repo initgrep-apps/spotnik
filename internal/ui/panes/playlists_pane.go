@@ -83,10 +83,9 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary()},
 	}
 	t := components.NewTable(components.TableConfig{
-		Columns:      listColumns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    listColumns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	// Track sub-view columns: # 5% | Track 50% | Artist 30% | Duration 15%
@@ -98,10 +97,9 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	tt := components.NewTable(components.TableConfig{
-		Columns:      trackColumns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    trackColumns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	f := components.NewFilter(th)
@@ -495,10 +493,9 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 		{Key: "duration", Header: "Duration", FlexFactor: 3, Color: th.ColumnTertiary()},
 	}
 	p.trackTable = components.NewTable(components.TableConfig{
-		Columns:      trackCols,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    trackCols,
+		Theme:      th,
+		ShowHeader: true,
 	})
 	p.trackTable.SetSize(p.width, p.height)
 	if p.inTrackView {

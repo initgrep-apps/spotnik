@@ -68,10 +68,9 @@ func NewNetworkLogPane(s state.StateReader, th theme.Theme) *NetworkLogPane {
 	}
 
 	t := components.NewTable(components.TableConfig{
-		Columns:      columns,
-		Theme:        th,
-		PlayingIndex: -1,
-		ShowHeader:   true,
+		Columns:    columns,
+		Theme:      th,
+		ShowHeader: true,
 	})
 
 	p := &NetworkLogPane{

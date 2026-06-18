@@ -24,10 +24,9 @@ type TableChrome struct {
 func (t *TableChrome) Inner() *Table {
 	if t.inner == nil {
 		t.inner = NewTable(TableConfig{
-			Columns:      t.Columns,
-			Theme:        t.Theme,
-			PlayingIndex: -1,
-			ShowHeader:   true,
+			Columns:    t.Columns,
+			Theme:      t.Theme,
+			ShowHeader: true,
 		})
 	}
 	return t.inner
