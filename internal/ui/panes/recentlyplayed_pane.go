@@ -35,12 +35,12 @@ type RecentlyPlayedPane struct {
 
 // NewRecentlyPlayedPane creates a RecentlyPlayedPane with the given store, theme, and focus state.
 func NewRecentlyPlayedPane(store state.StateReader, th theme.Theme, focused bool) *RecentlyPlayedPane {
-	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Played 15%
-	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
+	// Column widths per DESIGN.md §9: # 5% | Track 55% | Artist 27% | Played 14%
+	// Flex factors: 1 : 12 : 6 : 3 ≈ 5% / 55% / 27% / 14%
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "track", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
@@ -195,8 +195,8 @@ func (r *RecentlyPlayedPane) SetTheme(th theme.Theme) {
 	r.theme = th
 	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "track", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "played", Header: "Played", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, r.Table().Rows(), r.focused)

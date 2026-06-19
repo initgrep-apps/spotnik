@@ -86,11 +86,11 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 		ShowHeader: true,
 	})
 
-	// Track sub-view columns: Track 50% | Artist 30% | Duration 15%
-	// Flex factors: 10 : 6 : 3 (same proportions as playlist track sub-view)
+	// Track sub-view columns: Track 57% | Artist 29% | Duration 14%
+	// Flex factors: 12 : 6 : 3 ≈ 57% / 29% / 14%
 	trackCols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "name", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
@@ -427,7 +427,7 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "name", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
