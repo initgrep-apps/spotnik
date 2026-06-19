@@ -32,12 +32,12 @@ type LikedSongsPane struct {
 
 // NewLikedSongsPane creates a LikedSongsPane with the given store, theme, and focus state.
 func NewLikedSongsPane(store state.StateReader, th theme.Theme, focused bool) *LikedSongsPane {
-	// Liked songs columns: Track 45% | Artist 35% | Duration 15%
-	// Flex factors: 9 : 7 : 3 ≈ 45% / 35% / 15%
+	// Liked songs columns: Track 55% | Artist 27% | Duration 14%
+	// Flex factors: 12 : 6 : 3 ≈ 55% / 27% / 14%
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "track", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
@@ -195,8 +195,8 @@ func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 	l.theme = th
 	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "track", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, l.Table().Rows(), l.focused)

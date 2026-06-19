@@ -48,12 +48,12 @@ type TopTracksPane struct {
 // NewTopTracksPane creates a TopTracksPane with the given store, theme, and focus state.
 // Default time range is short_term (4 weeks).
 func NewTopTracksPane(store state.StateReader, th theme.Theme, focused bool) *TopTracksPane {
-	// Column widths per DESIGN.md §9: # 5% | Track 45% | Artist 35% | Dur 15%
-	// Flex factors: 1 : 9 : 7 : 3 ≈ 5% / 45% / 35% / 15%
+	// Column widths per DESIGN.md §9: # 5% | Track 55% | Artist 27% | Dur 14%
+	// Flex factors: 1 : 12 : 6 : 3 ≈ 5% / 55% / 27% / 14%
 	columns := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "track", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "dur", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 
@@ -254,8 +254,8 @@ func (p *TopTracksPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
 		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
-		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
-		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
+		{Key: "track", Header: "Track", FlexFactor: 12, Color: th.ColumnPrimary(), Priority: 1},
+		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "dur", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
 	}
 	newTable, newFilter := components.RebuildTableTheme(th, cols, p.Table().Rows(), p.focused)
