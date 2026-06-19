@@ -1,7 +1,7 @@
 ---
 title: "Tune responsive column visibility — ensure at least 2 cols at dashboard widths"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background
