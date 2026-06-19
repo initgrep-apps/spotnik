@@ -5,6 +5,7 @@
 package panes
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,6 +33,7 @@ type QueuePane struct {
 // NewQueuePane creates a new QueuePane with the given store, theme, and focus state.
 func NewQueuePane(store state.StateReader, th theme.Theme, focused bool) *QueuePane {
 	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 2},
@@ -161,6 +163,7 @@ func (q *QueuePane) refreshRows() {
 
 		switch item.Type {
 		case domain.QueueItemTypeEpisode:
+			row["index"] = fmt.Sprintf("%d", i+1)
 			row["type"] = uikit.GlyphFor(uikit.GlyphEpisode, uikit.GlyphUnicode)
 			row["title"] = item.Episode.Name
 			showName := ""
@@ -170,6 +173,7 @@ func (q *QueuePane) refreshRows() {
 			row["artist"] = showName
 			row["duration"] = formatDurationMsH(item.Episode.DurationMs)
 		default:
+			row["index"] = fmt.Sprintf("%d", i+1)
 			row["type"] = uikit.GlyphFor(uikit.GlyphMusicNote, uikit.GlyphUnicode)
 			row["title"] = item.Track.Name
 			artistName := ""
@@ -232,6 +236,7 @@ func (q *QueuePane) resizeTable() {
 func (q *QueuePane) SetTheme(th theme.Theme) {
 	q.theme = th
 	cols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "type", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "title", Header: "Title", FlexFactor: 7, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 4, Color: th.ColumnSecondary(), Priority: 2},

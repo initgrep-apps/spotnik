@@ -23,6 +23,7 @@ type SavedEpisodesPane struct {
 
 func NewSavedEpisodesPane(store state.StateReader, th theme.Theme, focused bool) *SavedEpisodesPane {
 	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
@@ -154,6 +155,7 @@ func (p *SavedEpisodesPane) buildRows() {
 		}
 
 		rows[i] = map[string]string{
+			"index":    fmt.Sprintf("%d", i+1),
 			"icon":     iconGlyph,
 			"episode":  ep.Name,
 			"show":     showName,
@@ -196,6 +198,7 @@ func (p *SavedEpisodesPane) resizeTable() {
 func (p *SavedEpisodesPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	cols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "icon", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "episode", Header: "Episode", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "show", Header: "Show", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},

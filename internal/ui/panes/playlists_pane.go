@@ -77,6 +77,7 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 	// Playlist list columns: access (blank header) 5% | Name 65% | Tracks 25%
 	// Using flex factors: 1 : 13 : 5 ≈ 5% / 65% / 25%
 	listColumns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary(), Priority: 3},
@@ -90,6 +91,7 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 	// Track sub-view columns: Track 50% | Artist 30% | Duration 15%
 	// Flex factors: 10 : 6 : 3 ≈ 50% / 30% / 15%
 	trackColumns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
@@ -427,6 +429,7 @@ func (p *PlaylistsPane) refreshPlaylistRows() {
 			accessGlyph = uikit.GlyphFor(uikit.GlyphActive, mode)
 		}
 		rows[i] = map[string]string{
+			"index":  fmt.Sprintf("%d", i+1),
 			"access": accessGlyph,
 			"name":   pl.Name,
 			"tracks": fmt.Sprintf("%d", pl.TrackCount),
@@ -455,6 +458,7 @@ func (p *PlaylistsPane) refreshTrackRows() {
 			artistName = track.Artists[0].Name
 		}
 		rows[i] = map[string]string{
+			"index":    fmt.Sprintf("%d", i+1),
 			"track":    track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(track.DurationMs),
@@ -483,6 +487,7 @@ func (p *PlaylistsPane) filteredPlaylist() []domain.SimplePlaylist {
 func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 	p.theme = th
 	listCols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "access", Header: "", FlexFactor: 1, Color: th.ColumnSecondary(), Priority: 1},
 		{Key: "name", Header: "Name", FlexFactor: 13, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "tracks", Header: "Tracks", FlexFactor: 5, Color: th.ColumnTertiary(), Priority: 3},
@@ -492,6 +497,7 @@ func (p *PlaylistsPane) SetTheme(th theme.Theme) {
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "track", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},

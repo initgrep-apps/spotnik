@@ -643,12 +643,13 @@ func TestQueuePane_UsesColumnColors(t *testing.T) {
 	q := NewQueuePane(state.New(), th, false)
 	q.SetSize(80, 20)
 	cols := q.table.Columns()
-	require.Len(t, cols, 4, "QueuePane should have 4 columns")
+	require.Len(t, cols, 5, "QueuePane should have 5 columns")
 
-	assert.Equal(t, th.ColumnSecondary(), cols[0].Color, "type column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Title column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "Index column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "type column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnPrimary(), cols[2].Color, "Title column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[3].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[4].Color, "Duration column should use ColumnTertiary()")
 }
 
 // --- Story 173: Esc scroll-reset ---

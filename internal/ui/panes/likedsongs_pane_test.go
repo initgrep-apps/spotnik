@@ -318,11 +318,12 @@ func TestLikedSongsPane_UsesColumnColors(t *testing.T) {
 	l := NewLikedSongsPane(state.New(), th, false)
 	l.SetSize(80, 20)
 	cols := l.table.Columns()
-	require.Len(t, cols, 3, "LikedSongsPane should have 3 columns")
+	require.Len(t, cols, 4, "LikedSongsPane should have 4 columns")
 
-	assert.Equal(t, th.ColumnPrimary(), cols[0].Color, "Track column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[2].Color, "Duration column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "Index column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Duration column should use ColumnTertiary()")
 }
 
 // ── Story 173: Esc scroll-reset ───────────────────────────────────────────────

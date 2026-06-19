@@ -750,19 +750,21 @@ func TestPlaylistsPane_UsesColumnColors(t *testing.T) {
 	p := NewPlaylistsPane(state.New(), th, false)
 	p.SetSize(80, 20)
 
-	// List view: access (blank header) → ColumnSecondary, Name → ColumnPrimary, Tracks → ColumnTertiary
+	// List view: index → ColumnIndex, access (blank header) → ColumnSecondary, Name → ColumnPrimary, Tracks → ColumnTertiary
 	listCols := p.table.Columns()
-	require.Len(t, listCols, 3, "PlaylistsPane list table should have 3 columns")
-	assert.Equal(t, th.ColumnSecondary(), listCols[0].Color, "access column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnPrimary(), listCols[1].Color, "Name column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnTertiary(), listCols[2].Color, "Tracks column should use ColumnTertiary()")
+	require.Len(t, listCols, 4, "PlaylistsPane list table should have 4 columns")
+	assert.Equal(t, th.ColumnIndex(), listCols[0].Color, "Index column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnSecondary(), listCols[1].Color, "access column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnPrimary(), listCols[2].Color, "Name column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnTertiary(), listCols[3].Color, "Tracks column should use ColumnTertiary()")
 
-	// Track sub-view: Track → ColumnPrimary, Artist → ColumnSecondary, Duration → ColumnTertiary
+	// Track sub-view: index → ColumnIndex, Track → ColumnPrimary, Artist → ColumnSecondary, Duration → ColumnTertiary
 	trackCols := p.trackTable.Columns()
-	require.Len(t, trackCols, 3, "PlaylistsPane track table should have 3 columns")
-	assert.Equal(t, th.ColumnPrimary(), trackCols[0].Color, "Track column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), trackCols[1].Color, "Artist column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), trackCols[2].Color, "Duration column should use ColumnTertiary()")
+	require.Len(t, trackCols, 4, "PlaylistsPane track table should have 4 columns")
+	assert.Equal(t, th.ColumnIndex(), trackCols[0].Color, "Index column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), trackCols[1].Color, "Track column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), trackCols[2].Color, "Artist column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), trackCols[3].Color, "Duration column should use ColumnTertiary()")
 }
 
 // ── Story 120: dead pane action removal ──────────────────────────────────────
