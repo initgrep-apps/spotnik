@@ -4,6 +4,7 @@
 package panes
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -34,6 +35,7 @@ func NewLikedSongsPane(store state.StateReader, th theme.Theme, focused bool) *L
 	// Liked songs columns: Track 45% | Artist 35% | Duration 15%
 	// Flex factors: 9 : 7 : 3 ≈ 45% / 35% / 15%
 	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
@@ -157,6 +159,7 @@ func (l *LikedSongsPane) refreshRows() {
 			artistName = st.Track.Artists[0].Name
 		}
 		rows[i] = map[string]string{
+			"index":    fmt.Sprintf("%d", i+1),
 			"track":    st.Track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(st.Track.DurationMs),
@@ -191,6 +194,7 @@ func (l *LikedSongsPane) filteredTracks() []domain.SavedTrack {
 func (l *LikedSongsPane) SetTheme(th theme.Theme) {
 	l.theme = th
 	cols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "track", Header: "Track", FlexFactor: 9, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 7, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},

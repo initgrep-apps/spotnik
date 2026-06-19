@@ -18,10 +18,11 @@ func testTheme() theme.Theme {
 	return theme.Load("black")
 }
 
-// makeColumns returns a typical 3-column track list definition (no index column).
+// makeColumns returns a typical 4-column track list definition with an index column.
 func makeColumns() []components.ColumnDef {
 	t := testTheme()
 	return []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: t.TextMuted()},
 		{Key: "track", Header: "Track", FlexFactor: 4, Color: t.TextPrimary()},
 		{Key: "artist", Header: "Artist", FlexFactor: 3, Color: t.TextSecondary()},
 		{Key: "duration", Header: "Duration", FlexFactor: 2, Color: t.TextMuted()},
@@ -60,11 +61,11 @@ func TestTable_SetRows(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"track": "Track B", "artist": "Artist B", "duration": "4:00"},
-		{"track": "Track C", "artist": "Artist C", "duration": "2:30"},
-		{"track": "Track D", "artist": "Artist D", "duration": "5:10"},
-		{"track": "Track E", "artist": "Artist E", "duration": "3:45"},
+		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"index": "1", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
+		{"index": "1", "track": "Track C", "artist": "Artist C", "duration": "2:30"},
+		{"index": "1", "track": "Track D", "artist": "Artist D", "duration": "5:10"},
+		{"index": "1", "track": "Track E", "artist": "Artist E", "duration": "3:45"},
 	}
 
 	// SetRows should not panic
@@ -85,8 +86,8 @@ func TestTable_SelectedIndexInitiallyZero(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"track": "Track B", "artist": "Artist B", "duration": "4:00"},
+		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"index": "1", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
 	}
 	tbl.SetRows(rows)
 
@@ -103,9 +104,9 @@ func TestTable_KeyboardNavigationChangesSelection(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
-		{"track": "Track B", "artist": "Artist B", "duration": "4:00"},
-		{"track": "Track C", "artist": "Artist C", "duration": "2:30"},
+		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"index": "1", "track": "Track B", "artist": "Artist B", "duration": "4:00"},
+		{"index": "1", "track": "Track C", "artist": "Artist C", "duration": "2:30"},
 	}
 	tbl.SetRows(rows)
 	tbl.SetFocused(true)
@@ -147,7 +148,7 @@ func TestTable_WidthRecalculatedAfterSetSize(t *testing.T) {
 	tbl := components.NewTable(cfg)
 
 	rows := []map[string]string{
-		{"track": "Track A", "artist": "Artist A", "duration": "3:00"},
+		{"index": "1", "track": "Track A", "artist": "Artist A", "duration": "3:00"},
 	}
 	tbl.SetRows(rows)
 
@@ -168,9 +169,10 @@ func TestTable_ColumnDefsHaveCorrectColors(t *testing.T) {
 	cols := makeColumns()
 
 	// Verify column colors are set from theme
-	assert.Equal(t, lipgloss.Color(th.TextPrimary()), cols[0].Color)
-	assert.Equal(t, lipgloss.Color(th.TextSecondary()), cols[1].Color)
-	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[2].Color)
+	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[0].Color)     // index
+	assert.Equal(t, lipgloss.Color(th.TextPrimary()), cols[1].Color)   // track
+	assert.Equal(t, lipgloss.Color(th.TextSecondary()), cols[2].Color) // artist
+	assert.Equal(t, lipgloss.Color(th.TextMuted()), cols[3].Color)     // duration
 }
 
 func TestTable_SetFocused(t *testing.T) {
@@ -202,7 +204,7 @@ func TestTable_GotoTop_ResetsToFirstPage(t *testing.T) {
 	rows := make([]map[string]string, 20)
 	for i := range rows {
 		rows[i] = map[string]string{
-			"track": "T", "artist": "A", "duration": "1:00",
+			"index": "1", "track": "T", "artist": "A", "duration": "1:00",
 		}
 	}
 	tbl.SetRows(rows)
@@ -227,7 +229,7 @@ func TestTable_ViewRendersHeader(t *testing.T) {
 	tbl.SetSize(80, 20)
 
 	rows := []map[string]string{
-		{"track": "Song", "artist": "Artist", "duration": "3:00"},
+		{"index": "1", "track": "Song", "artist": "Artist", "duration": "3:00"},
 	}
 	tbl.SetRows(rows)
 
@@ -524,7 +526,7 @@ func TestTable_PriorityFiltering_ViewExcludesHiddenHeaders(t *testing.T) {
 	tbl.SetSize(30, 20) // only Priority-1 (trk) visible; art (P2) and dur (P3) hidden
 
 	rows := []map[string]string{
-		{"trk": "Song One", "art": "Artist One", "dur": "3:00"},
+		{"index": "1", "trk": "Song One", "art": "Artist One", "dur": "3:00"},
 	}
 	tbl.SetRows(rows)
 

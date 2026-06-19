@@ -74,6 +74,7 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	// Album columns: Name 50% | Artist 30% | Year 15%
 	// Flex factors: 10 : 6 : 3 ≈ 50% / 30% / 15%
 	columns := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
@@ -88,6 +89,7 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 	// Track sub-view columns: Track 50% | Artist 30% | Duration 15%
 	// Flex factors: 10 : 6 : 3 (same proportions as playlist track sub-view)
 	trackCols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
@@ -318,6 +320,7 @@ func (a *AlbumsPane) refreshTrackRows() {
 			artistName = tr.Artists[0].Name
 		}
 		rows[i] = map[string]string{
+			"index":    fmt.Sprintf("%d", i+1),
 			"name":     tr.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(tr.DurationMs),
@@ -364,6 +367,7 @@ func (a *AlbumsPane) refreshRows() {
 		}
 		year := extractYear(sa.Album.ReleaseDate)
 		rows[i] = map[string]string{
+			"index":  fmt.Sprintf("%d", i+1),
 			"name":   sa.Album.Name,
 			"artist": artistName,
 			"year":   year,
@@ -410,6 +414,7 @@ func (a *AlbumsPane) resizeTable() {
 func (a *AlbumsPane) SetTheme(th theme.Theme) {
 	a.theme = th
 	cols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "name", Header: "Name", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "year", Header: "Year", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},
@@ -421,6 +426,7 @@ func (a *AlbumsPane) SetTheme(th theme.Theme) {
 
 	// Rebuild track table with new column colors.
 	trackCols := []components.ColumnDef{
+		{Key: "index", Header: "#", FlexFactor: 1, Color: th.ColumnIndex(), Priority: 1},
 		{Key: "name", Header: "Track", FlexFactor: 10, Color: th.ColumnPrimary(), Priority: 1},
 		{Key: "artist", Header: "Artist", FlexFactor: 6, Color: th.ColumnSecondary(), Priority: 2},
 		{Key: "duration", Header: "Dur", FlexFactor: 3, Color: th.ColumnTertiary(), Priority: 3},

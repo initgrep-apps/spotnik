@@ -1,7 +1,7 @@
 ---
 title: "Revert # column removal — restore index column to all panes"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background

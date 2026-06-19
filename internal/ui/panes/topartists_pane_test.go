@@ -272,11 +272,12 @@ func TestTopArtistsPane_UsesColumnColors(t *testing.T) {
 	p := NewTopArtistsPane(state.New(), th, false)
 	p.SetSize(80, 20)
 	cols := p.table.Columns()
-	require.Len(t, cols, 3, "TopArtistsPane should have 3 columns")
+	require.Len(t, cols, 4, "TopArtistsPane should have 4 columns")
 
-	assert.Equal(t, th.ColumnPrimary(), cols[0].Color, "Artist column should use ColumnPrimary()")
-	assert.Equal(t, th.ColumnSecondary(), cols[1].Color, "Pop column should use ColumnSecondary()")
-	assert.Equal(t, th.ColumnTertiary(), cols[2].Color, "Flw column should use ColumnTertiary()")
+	assert.Equal(t, th.ColumnIndex(), cols[0].Color, "Index column should use ColumnIndex()")
+	assert.Equal(t, th.ColumnPrimary(), cols[1].Color, "Artist column should use ColumnPrimary()")
+	assert.Equal(t, th.ColumnSecondary(), cols[2].Color, "Pop column should use ColumnSecondary()")
+	assert.Equal(t, th.ColumnTertiary(), cols[3].Color, "Flw column should use ColumnTertiary()")
 }
 
 // ── Story 119: t→g rebind and Enter to play artist ──────────────────────────

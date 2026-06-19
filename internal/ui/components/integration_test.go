@@ -17,11 +17,11 @@ func newKeyRune(r rune) tea.KeyMsg {
 // allRows is a sample track list used across integration tests.
 func allRows() []map[string]string {
 	return []map[string]string{
-		{"track": "Rocket Man", "artist": "Elton John", "duration": "4:52"},
-		{"track": "Bohemian Rhapsody", "artist": "Queen", "duration": "5:55"},
-		{"track": "Rock and Roll", "artist": "Led Zeppelin", "duration": "3:40"},
-		{"track": "Space Oddity", "artist": "David Bowie", "duration": "5:17"},
-		{"track": "Sweet Home Alabama", "artist": "Lynyrd Skynyrd", "duration": "4:44"},
+		{"index": "1", "track": "Rocket Man", "artist": "Elton John", "duration": "4:52"},
+		{"index": "1", "track": "Bohemian Rhapsody", "artist": "Queen", "duration": "5:55"},
+		{"index": "1", "track": "Rock and Roll", "artist": "Led Zeppelin", "duration": "3:40"},
+		{"index": "1", "track": "Space Oddity", "artist": "David Bowie", "duration": "5:17"},
+		{"index": "1", "track": "Sweet Home Alabama", "artist": "Lynyrd Skynyrd", "duration": "4:44"},
 	}
 }
 
@@ -121,6 +121,7 @@ func TestIntegration_TruncateOnTableCellValues(t *testing.T) {
 	// Very long track and artist names
 	rows := []map[string]string{
 		{
+			"index":    "1",
 			"track":    layout.TruncateOrPad("A Very Long Track Name That Would Overflow Any Column", 20),
 			"artist":   layout.TruncateOrPad("An Extremely Long Artist Name", 15),
 			"duration": "3:00",
