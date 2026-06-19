@@ -1,11 +1,13 @@
 ---
 title: "Pane Content Design Language"
-status: done
+status: in-progress
 ---
 
 ## Description
 
-Define and implement a consistent design language for all pane content. Fixes observed layout issues: wasted `#` column space, mispositioned icon columns, inconsistent empty states, blank rows, column wrapping, and unresponsive column layouts. Result: sharp, space-efficient, production-quality terminal UI.
+Define and implement a consistent design language for all pane content. Fixes observed layout issues: mispositioned icon columns, inconsistent empty states, blank rows, column wrapping, and unresponsive column layouts. Result: sharp, space-efficient, production-quality terminal UI.
+
+**Note:** Story 247 (remove `#` column) was reverted by story 253 — the `#` column is restored in all panes with `Priority: 1` for always-on visibility.
 
 **Design record:** `docs/superpowers/specs/2026-06-18-pane-content-design-language.md`
 
@@ -15,7 +17,6 @@ Define and implement a consistent design language for all pane content. Fixes ob
 
 - Remove PlayingIndex dead code from Table wrapper and all panes
 - Fix page size miscalculation (`height - 6` → `height - 4`)
-- Remove `#` (row-number) column from all 10 table panes
 - Move icon/glyph columns to position 1 in all panes
 - Add `Priority` field to `ColumnDef` for responsive column hiding at width thresholds
 - Shorten verbose column headers (`Duration` → `Dur`, `Popularity` → `Pop`, `Publisher` → `Pub`)
@@ -35,7 +36,9 @@ Define and implement a consistent design language for all pane content. Fixes ob
 - [ ] No `PlayingIndex` field in `TableConfig`, `Table` struct, or any pane code
 - [ ] No `playingSymbol()` function or uikit import in `table.go`
 - [ ] Page size unified to `height - 4` (header) / `height - 2` (no header) in both `SetSize` and `rebuild`
-- [ ] No `#` column rendered in any table pane
+- [ ] `#` column present in all table panes with `Priority: 1` and `Color: ColumnIndex()`
+- [ ] All panes show at least 2 columns at dashboard preset (~30 cols width)
+- [ ] Primary identifier columns get dominant flex factors (≥50% width share)
 - [ ] Icon columns at position 1 in SavedEpisodes, FollowedShows (shows + episodes); trailing empty icon column removed from Queue
 - [ ] `Saved` column removed from SavedEpisodes
 - [ ] `ColumnDef` has `Priority int` field; `filterColumnsByPriority()` filters at render time
@@ -44,6 +47,8 @@ Define and implement a consistent design language for all pane content. Fixes ob
 - [ ] EmptyState renders in LikedSongs, TopTracks, TopArtists, Playlists (list view), Albums (list view) when data is empty and filter inactive
 - [ ] `make ci` passes after every story
 - [ ] `docs/system/design.md` and `docs/system/tui.md` updated with new rules
+- [ ] `#` column restored in all 9 table panes (constructors + SetTheme + row data)
+- [ ] Primary columns given dominant flex factors in LikedSongs, RecentlyPlayed, TopTracks, Albums tracks
 
 ## Stories
 
@@ -57,3 +62,5 @@ Define and implement a consistent design language for all pane content. Fixes ob
 | 250 | Optimize column headers | `stories/250-optimize-headers.md` | 247 |
 | 251 | Add consistent EmptyState to all panes | `stories/251-consistent-empty-states.md` | 247 |
 | 252 | Update design documentation | `stories/252-update-design-docs.md` | 245–251 |
+| 253 | Revert # column removal — restore index | `stories/253-revert-hash-column.md` | 247, 249 |
+| 254 | Tune responsive flex factors | `stories/254-responsive-width-tuning.md` | 253 |
