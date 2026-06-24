@@ -65,7 +65,6 @@ type Table struct {
 	richRows []map[string]any // set via SetRichRows; nil when SetRows was used last
 	width    int
 	height   int
-	focused  bool
 }
 
 // NewTable creates a Table with the given configuration.
@@ -150,9 +149,9 @@ func (t *Table) rebuild() {
 		pageSize = 1
 	}
 	inner = inner.WithPageSize(pageSize)
+	inner = inner.WithMinimumHeight(t.height)
 
 	t.inner = inner
-	t.inner = t.inner.Focused(t.focused)
 	t.applyRows()
 }
 
@@ -206,7 +205,9 @@ func (t *Table) SetSize(width, height int) {
 	t.height = height
 
 	if crossesThreshold(oldWidth, width) {
+		wasFocused := (&t.inner).GetFocused()
 		t.rebuild()
+		t.inner = t.inner.Focused(wasFocused)
 		return
 	}
 
@@ -220,6 +221,7 @@ func (t *Table) SetSize(width, height int) {
 		pageSize = 1
 	}
 	t.inner = t.inner.WithPageSize(pageSize)
+	t.inner = t.inner.WithMinimumHeight(height)
 }
 
 // crossesThreshold reports whether oldW and newW fall on opposite sides of a
@@ -269,7 +271,6 @@ func (t *Table) Rows() []map[string]string {
 // SetFocused enables or disables keyboard navigation. When unfocused the
 // highlight cursor is hidden and key events are not processed.
 func (t *Table) SetFocused(focused bool) {
-	t.focused = focused
 	t.inner = t.inner.Focused(focused)
 }
 
