@@ -1,6 +1,6 @@
 ---
 title: "Pane Content Design Language"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -64,3 +64,4 @@ Define and implement a consistent design language for all pane content. Fixes ob
 | 252 | Update design documentation | `stories/252-update-design-docs.md` | 245–251 |
 | 253 | Revert # column removal — restore index | `stories/253-revert-hash-column.md` | 247, 249 |
 | 254 | Tune responsive flex factors | `stories/254-responsive-width-tuning.md` | 253 |
+| 255 | Fix pagination footer positioning | `stories/255-fix-pagination-footer.md` | 246 |
