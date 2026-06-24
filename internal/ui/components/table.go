@@ -150,7 +150,6 @@ func (t *Table) rebuild() {
 		pageSize = 1
 	}
 	inner = inner.WithPageSize(pageSize)
-	inner = inner.WithMinimumHeight(t.height)
 
 	t.inner = inner
 	t.applyRows()
@@ -222,7 +221,6 @@ func (t *Table) SetSize(width, height int) {
 		pageSize = 1
 	}
 	t.inner = t.inner.WithPageSize(pageSize)
-	t.inner = t.inner.WithMinimumHeight(height)
 }
 
 // crossesThreshold reports whether oldW and newW fall on opposite sides of a
