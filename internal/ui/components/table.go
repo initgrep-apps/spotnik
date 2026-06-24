@@ -139,11 +139,12 @@ func (t *Table) rebuild() {
 		return lipgloss.NewStyle()
 	})
 
-	// Overhead: separator(1) + header(1) + pagination(1) + spare(1) = 4 with header,
-	// pagination(1) + spare(1) = 2 without. Top/Bottom removed — border provides framing.
-	pageSize := t.height - 4 // header visible
+	// Overhead with emptyBorder: header/divider area consumes ~2 extra lines above
+	// pageSize data rows. Total rendered = ~2 + pageSize + pagination footer(1).
+	// pageSize = height - 6 ensures footer always fits (verified: h=10→PS=4→10 lines).
+	pageSize := t.height - 6 // header visible
 	if !t.config.ShowHeader {
-		pageSize = t.height - 2 // no header
+		pageSize = t.height - 4 // no header
 	}
 	if pageSize < 1 {
 		pageSize = 1
@@ -213,9 +214,9 @@ func (t *Table) SetSize(width, height int) {
 
 	t.inner = t.inner.WithTargetWidth(width)
 
-	pageSize := height - 4
+	pageSize := height - 6
 	if !t.config.ShowHeader {
-		pageSize = height - 2
+		pageSize = height - 4
 	}
 	if pageSize < 1 {
 		pageSize = 1
