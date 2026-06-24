@@ -1,7 +1,7 @@
 ---
 title: "Fix pagination footer positioning — use WithMinimumHeight"
 feature: 20-pane-content-design
-status: open
+status: done
 ---
 
 ## Background
