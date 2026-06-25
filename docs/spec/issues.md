@@ -33,7 +33,7 @@ and whether the app had just polled. Triage into a fix story with that context.
 ### PollingTrafficPane Stats row: icon collision + time-range scope
 
 **Found:** 2026-05-20 | **Source:** PR #292 Review
-**Feature:** 14-page-b-redesign
+**Feature:** 10-developer-tools
 
 Minor items from story 211 PR review:
 
@@ -157,7 +157,7 @@ Items to log:
 ### Device overlay stale error on reopen
 
 **Found:** 2026-06-11 | **Source:** PR #320 Review
-**Feature:** 15-error-resilience (story 225)
+**Feature:** 02-api-infrastructure (story 225)
 
 `closeDeviceOverlay()` does not create a fresh `DeviceOverlay` (unlike `closeProfileOverlay()` which recreates on close). The `d.err` field persists across close/reopen, briefly showing a stale error state before the new fetch completes. Pre-existing issue made more visible by story 225's error-delivery fix.
 
@@ -166,7 +166,7 @@ Items to log:
 ### Profile overlay error persists after backoff expires
 
 **Found:** 2026-06-11 | **Source:** PR #320 Review
-**Feature:** 15-error-resilience (story 225)
+**Feature:** 02-api-infrastructure (story 225)
 
 `throttleExpiredMsg` does not re-trigger a profile fetch, so the "Profile unavailable" error state persists until the user closes and reopens the overlay. There is no periodic profile polling mechanism. Pre-existing gap — not introduced by story 225.
 
