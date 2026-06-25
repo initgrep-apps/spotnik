@@ -24,6 +24,7 @@ Reference docs — consult only when spec says so:
 - `docs/system/cli.md` — message types, glyphs, palette
 - `docs/system/tui.md` — primitives, glyph catalogue, roles
 - `docs/system/api-guide.md` — Spotify API endpoints & scope
+- `docs/system/sanity-tests.md` — Given/When/Then behavioral test cases, manual + automation-ready
 
 ---
 
@@ -213,6 +214,7 @@ Never commit: non-compiling code · failing tests · lint failures · secrets ·
 15. Add msgs/glyphs without updating `docs/system/cli.md`
 16. Add primitives/glyphs/roles without updating `docs/system/tui.md`
 17. Modify keybindings without sync'ing all 3 locations
+18. Add/remove tests without updating `docs/system/sanity-tests.md` when critical coverage changes
 
 ---
 
