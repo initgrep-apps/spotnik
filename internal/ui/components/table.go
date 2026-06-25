@@ -12,20 +12,28 @@ import (
 // emptyBorder is a bubble-table Border with space characters for all positions,
 // effectively hiding the table's built-in border. The outer pane border
 // (rendered by internal/ui/layout.RenderPaneBorder) handles the visible border.
+//
+// Using " " (space) instead of "" (empty) for all border fields ensures consistent
+// cell heights across all header and row styles. With empty chars, bubble-table's
+// generateMultiStyles creates first-column styles without top/bottom borders
+// (height=1) while other columns get .BorderTop(true)/.BorderBottom(true)
+// (height=3). This height mismatch causes JoinHorizontal to stagger columns
+// onto separate lines at the full table width. Space chars auto-enable all
+// borders via BorderStyle, giving every cell identical height.
 var emptyBorder = btable.Border{
-	Top:            "",
-	Left:           "",
-	Right:          "",
-	Bottom:         "",
-	TopRight:       "",
-	TopLeft:        "",
-	BottomRight:    "",
-	BottomLeft:     "",
-	TopJunction:    "",
-	LeftJunction:   "",
-	RightJunction:  "",
-	BottomJunction: "",
-	InnerJunction:  "",
+	Top:            " ",
+	Left:           " ",
+	Right:          " ",
+	Bottom:         " ",
+	TopRight:       " ",
+	TopLeft:        " ",
+	BottomRight:    " ",
+	BottomLeft:     " ",
+	TopJunction:    " ",
+	LeftJunction:   " ",
+	RightJunction:  " ",
+	BottomJunction: " ",
+	InnerJunction:  " ",
 	InnerDivider:   " ",
 }
 
@@ -139,8 +147,8 @@ func (t *Table) rebuild() {
 		return lipgloss.NewStyle()
 	})
 
-	// Overhead with emptyBorder: header/divider area consumes ~2 extra lines above
-	// pageSize data rows. Total rendered = ~2 + pageSize + pagination footer(1).
+	// Overhead: top border(1) + header(1) + header-data divider(1) +
+	//   data-bottom divider(1) + pagination footer(1) + bottom border(1) = 6.
 	// pageSize = height - 6 ensures footer always fits (verified: h=10→PS=4→10 lines).
 	pageSize := t.height - 6 // header visible
 	if !t.config.ShowHeader {
