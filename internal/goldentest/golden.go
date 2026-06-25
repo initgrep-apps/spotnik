@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
@@ -77,12 +78,23 @@ func AssertGolden(t *testing.T, got string) {
 	}
 }
 
-// ReadOutput reads all rendered output from a teatest.TestModel.
-// The TestModel's program runs in a background goroutine; this reads whatever
-// has been rendered to the output buffer so far.
+// ReadOutput reads all rendered output from a teatest.TestModel after the
+// underlying program has finished. The caller must call tm.Quit() and then
+// tm.WaitFinished() before calling ReadOutput to stop the program and flush
+// all output.
 func ReadOutput(tm *teatest.TestModel) string {
 	out, _ := io.ReadAll(tm.Output())
 	return string(out)
+}
+
+// WaitAndReadOutput quits the TestModel's program, waits for it to finish,
+// and returns the complete rendered output. Use this for golden snapshots
+// that need to capture the initial render.
+func WaitAndReadOutput(t *testing.T, tm *teatest.TestModel) string {
+	t.Helper()
+	tm.Quit()
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+	return ReadOutput(tm)
 }
 
 // diffString returns a simple unified diff between two strings.
