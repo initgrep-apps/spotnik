@@ -1,7 +1,7 @@
 ---
 title: "End-to-End Test Infrastructure"
 status: open
-stories: 256–265
+stories: 256–266
 ---
 
 ## Description
@@ -37,6 +37,7 @@ include regenerated golden files with diff review.
 | 263 | DevTools panes component (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) | open |
 | 264 | Cross-cutting integration flows (navigation, overlay lifecycle, error resilience) | open |
 | 265 | CI enforcement + docs | open |
+| 266 | Onboarding + Splash golden tests | open |
 
 ## Acceptance Criteria
 

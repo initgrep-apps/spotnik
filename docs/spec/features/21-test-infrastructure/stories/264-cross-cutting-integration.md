@@ -82,6 +82,45 @@ func TestPageToggle_CyclesPlayerToStats(t *testing.T) {
     // 2. Assert View() contains Stats preset panes (GatewayHealth, etc.)
     // 3. Send '0' again → Player page active
 }
+
+func TestPresetCycle_PKeyAdvancesThroughPlayerPresets(t *testing.T) {
+    // 1. Dashboard preset active
+    // 2. Send 'p' 6 times → asserts cycling through all 6 Player presets
+    // 3. Assert View() shows correct preset name after each cycle
+}
+
+func TestPaneToggle_ToggleKeyHidesShowsPane(t *testing.T) {
+    // 1. Dashboard preset, Queue pane visible (key 2)
+    // 2. Send '2' → Queue pane hidden, grid reflows
+    // 3. Send '2' → Queue pane visible again
+}
+```
+
+### Devices transfer: `internal/app/device_flow_test.go`
+
+```go
+func TestDevicesFlow_EnterTransfersPlayback(t *testing.T) {
+    // 1. Open device overlay ('d')
+    // 2. Cursor on device 1, send Enter
+    // 3. Assert TransferPlaybackMsg cmd produced with correct DeviceID
+    // 4. Send DeviceTransferredMsg{Err: nil} → assert confirmation
+}
+
+func TestDevicesFlow_EscClosesOverlay(t *testing.T) {
+    // 1. Open device overlay
+    // 2. Send Esc → overlay closed
+    // 3. Assert focus restored to previous pane
+}
+```
+
+### Esc scroll-to-top: `internal/app/scroll_flow_test.go`
+
+```go
+func TestEscScrollToTop_ResetsScrollOnTablePanes(t *testing.T) {
+    // 1. Focus a table pane (e.g. Queue), scroll down with 'j'
+    // 2. Send Esc (no filter active, no overlay open)
+    // 3. Assert scroll position resets to top (page 1)
+}
 ```
 
 ## Files
@@ -92,6 +131,8 @@ func TestPageToggle_CyclesPlayerToStats(t *testing.T) {
 - `internal/app/overlay_flow_test.go`
 - `internal/app/error_flow_test.go`
 - `internal/app/page_flow_test.go`
+- `internal/app/device_flow_test.go`
+- `internal/app/scroll_flow_test.go`
 
 ## Acceptance Criteria
 
@@ -104,6 +145,10 @@ func TestPageToggle_CyclesPlayerToStats(t *testing.T) {
 - [ ] Error→toast: 403 shows Premium required toast
 - [ ] Error→toast: polling failures throttled (toast on 3rd consecutive)
 - [ ] Page toggle: '0' cycles Player→Stats→Player
+- [ ] Preset cycling: 'p' advances through all 6 Player presets
+- [ ] Pane toggle: toggle keys hide/show panes, grid reflows
+- [ ] Devices: Enter on device produces TransferPlaybackMsg, Esc closes overlay
+- [ ] Esc scroll-to-top: on table pane with filter inactive, Esc resets to page 1
 - [ ] `make ci` passes
 
 ## Tasks
@@ -116,4 +161,10 @@ func TestPageToggle_CyclesPlayerToStats(t *testing.T) {
       - test: `TestErrorToToast_401_TriggersRefresh`, `TestErrorToToast_429_ShowsRateLimitToast`, `TestErrorToToast_403_ShowsPremiumRequired`, `TestErrorToToast_PollingFailure_Throttled`
 - [ ] Create page toggle integration test
       - test: `TestPageToggle_CyclesPlayerToStats`
+- [ ] Create preset cycling + pane toggle integration tests
+      - test: `TestPresetCycle_PKeyAdvancesThroughPlayerPresets`, `TestPaneToggle_ToggleKeyHidesShowsPane`
+- [ ] Create devices transfer integration tests
+      - test: `TestDevicesFlow_EnterTransfersPlayback`, `TestDevicesFlow_EscClosesOverlay`
+- [ ] Create Esc scroll-to-top integration test
+      - test: `TestEscScrollToTop_ResetsScrollOnTablePanes`
 - [ ] Verify all tests pass with mock API backends

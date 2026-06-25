@@ -21,6 +21,8 @@ Snapshots:
 - `TestTopTracksPane_View_EmptyState` — no data, empty state shown
 - `TestTopTracksPane_View_MediumTerm` — time range label "past 6 months"
 - `TestTopTracksPane_View_Narrow` — 40×24, column hiding
+- `TestTopTracksPane_View_FilterActive` — 'f' pressed, tracks filtered by name or artist
+- `TestTopTracksPane_View_FilterActive_NoMatches` — 'f' pressed, query matches nothing, "no results" shown
 
 ### Golden tests: `internal/ui/panes/topartists_golden_test.go`
 
@@ -29,6 +31,8 @@ Snapshots:
 - `TestTopArtistsPane_View_EmptyState` — no data
 - `TestTopArtistsPane_View_LongTerm` — "all time" label
 - `TestTopArtistsPane_View_Narrow` — 40×24
+- `TestTopArtistsPane_View_FilterActive` — 'f' pressed, artists filtered by name
+- `TestTopArtistsPane_View_FilterActive_NoMatches` — 'f' pressed, query matches nothing
 
 ### Golden tests: `internal/ui/panes/recentlyplayed_golden_test.go`
 
@@ -36,6 +40,8 @@ Snapshots:
 - `TestRecentlyPlayedPane_View_Tracks` — 5 recently played with timestamps, 80×24
 - `TestRecentlyPlayedPane_View_EmptyState` — no data
 - `TestRecentlyPlayedPane_View_Narrow` — 40×24
+- `TestRecentlyPlayedPane_View_FilterActive` — 'f' pressed, filtered by track or artist name
+- `TestRecentlyPlayedPane_View_FilterActive_NoMatches` — 'f' pressed, query matches nothing
 
 ### Integration test: `internal/ui/panes/stats_flow_test.go`
 
@@ -67,21 +73,21 @@ func TestStatsEnterPlaysContextOrTrackList(t *testing.T) {
 
 ## Acceptance Criteria
 
-- [ ] TopTracksPane: 4 golden snapshots (tracks, empty, medium_term, narrow)
-- [ ] TopArtistsPane: 4 golden snapshots (artists, empty, long_term, narrow)
-- [ ] RecentlyPlayedPane: 3 golden snapshots (tracks with timestamps, empty, narrow)
+- [ ] TopTracksPane: 6 golden snapshots (tracks, empty, medium_term, narrow, filter active, filter no matches)
+- [ ] TopArtistsPane: 6 golden snapshots (artists, empty, long_term, narrow, filter active, filter no matches)
+- [ ] RecentlyPlayedPane: 5 golden snapshots (tracks with timestamps, empty, narrow, filter active, filter no matches)
 - [ ] Integration: time-range cycle updates View() label correctly
 - [ ] Integration: Enter produces correct PlayTrackListMsg / PlayContextMsg
 - [ ] `make ci` passes
 
 ## Tasks
 
-- [ ] Create TopTracksPane golden tests (4 snapshots)
-      - test: `TestTopTracksPane_View_Tracks`, `TestTopTracksPane_View_EmptyState`, `TestTopTracksPane_View_MediumTerm`, `TestTopTracksPane_View_Narrow`
-- [ ] Create TopArtistsPane golden tests (4 snapshots)
-      - test: `TestTopArtistsPane_View_Artists`, `TestTopArtistsPane_View_EmptyState`, `TestTopArtistsPane_View_LongTerm`, `TestTopArtistsPane_View_Narrow`
-- [ ] Create RecentlyPlayedPane golden tests (3 snapshots)
-      - test: `TestRecentlyPlayedPane_View_Tracks`, `TestRecentlyPlayedPane_View_EmptyState`, `TestRecentlyPlayedPane_View_Narrow`
+- [ ] Create TopTracksPane golden tests (6 snapshots)
+      - test: `TestTopTracksPane_View_Tracks`, `TestTopTracksPane_View_EmptyState`, `TestTopTracksPane_View_MediumTerm`, `TestTopTracksPane_View_Narrow`, `TestTopTracksPane_View_FilterActive`, `TestTopTracksPane_View_FilterActive_NoMatches`
+- [ ] Create TopArtistsPane golden tests (6 snapshots)
+      - test: `TestTopArtistsPane_View_Artists`, `TestTopArtistsPane_View_EmptyState`, `TestTopArtistsPane_View_LongTerm`, `TestTopArtistsPane_View_Narrow`, `TestTopArtistsPane_View_FilterActive`, `TestTopArtistsPane_View_FilterActive_NoMatches`
+- [ ] Create RecentlyPlayedPane golden tests (5 snapshots)
+      - test: `TestRecentlyPlayedPane_View_Tracks`, `TestRecentlyPlayedPane_View_EmptyState`, `TestRecentlyPlayedPane_View_Narrow`, `TestRecentlyPlayedPane_View_FilterActive`, `TestRecentlyPlayedPane_View_FilterActive_NoMatches`
 - [ ] Create stats integration flow tests
       - test: `TestTopTracksTimeRangeCycle_UpdatesView`, `TestStatsEnterPlaysContextOrTrackList`
 - [ ] Generate golden files and verify all tests pass

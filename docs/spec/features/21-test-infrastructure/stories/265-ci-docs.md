@@ -34,6 +34,34 @@ When you intentionally change rendering output:
 3. Commit regenerated golden files alongside code changes
 ```
 
+### ASCII mode golden files
+
+All golden tests use the default unicode glyph mode. A separate CI check ensures ASCII
+mode output is also covered:
+
+```
+# Generate ASCII golden files:
+GOLDEN_MODE=ascii go test ./... -update
+```
+
+Or via environment:
+```go
+func init() {
+    if os.Getenv("GOLDEN_MODE") == "ascii" {
+        uikit.SetModeForTest(uikit.GlyphASCII)
+    }
+}
+```
+
+Add to `Makefile`:
+```makefile
+.PHONY: test-golden-ascii
+test-golden-ascii:
+	GOLDEN_MODE=ascii go test ./internal/ui/panes/ -run "Golden|golden" -update
+```
+
+CI matrix runs golden tests under both unicode and ASCII modes.
+
 ### AGENTS.md updates
 
 Add to Reading Order:
@@ -62,13 +90,14 @@ require (
 
 ### Modify
 
-- `Makefile` — ensure golden tests included in `ci` target
+- `Makefile` — ensure golden tests included in `ci` target, add `test-golden-ascii` target
 - `AGENTS.md` — add golden test protocol, Reading Order entry, Never Do entry, Quick Commands
 - `docs/system/sanity-tests.md` — add golden test cross-references
 - `go.mod` / `go.sum` — teatest pinned (already added in story 256)
 
 ## Acceptance Criteria
 
+- [ ] ASCII mode golden generation protocol documented and wired into Makefile
 - [ ] `make ci` runs golden tests and fails on mismatch
 - [ ] `go test ./... -update` regenerates all golden files
 - [ ] AGENTS.md has: Reading Order entry, Never Do entry, Quick Command for `-update`
@@ -80,6 +109,8 @@ require (
 
 - [ ] Wire golden tests into `make ci`
       - test: `make ci` includes golden tests in test run
+- [ ] Add `test-golden-ascii` target to Makefile
+      - test: `make test-golden-ascii` generates ASCII golden files
 - [ ] Document golden test protocol in AGENTS.md
       - test: manual review of AGENTS.md
 - [ ] Add golden test cross-references to sanity-tests.md

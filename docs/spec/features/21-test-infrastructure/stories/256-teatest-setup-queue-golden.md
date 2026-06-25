@@ -158,6 +158,70 @@ func TestQueuePane_View_WithEpisodes_Narrow(t *testing.T) {
     tm := goldentest.NewPaneTest(t, pane, 40, 24)
     goldentest.AssertGolden(t, goldentest.ReadOutput(tm))
 }
+
+func TestQueuePane_View_MixedContent(t *testing.T) {
+    s := state.New()
+    th := theme.Load("black")
+    s.SetQueue([]domain.QueueItem{
+        {Type: domain.QueueItemTypeTrack, Track: &domain.Track{
+            Name: "Blinding Lights", URI: "spotify:track:1",
+            Artists: []domain.Artist{{Name: "The Weeknd"}},
+            DurationMs: 200000,
+        }},
+        {Type: domain.QueueItemTypeEpisode, Episode: &domain.Episode{
+            Name: "The Future of AI", URI: "spotify:episode:1",
+            DurationMs: 3600000,
+            Show: &domain.Show{Name: "Tech Weekly"},
+        }},
+        {Type: domain.QueueItemTypeTrack, Track: &domain.Track{
+            Name: "Shape of You", URI: "spotify:track:2",
+            Artists: []domain.Artist{{Name: "Ed Sheeran"}},
+            DurationMs: 240000,
+        }},
+    })
+
+    pane := panes.NewQueuePane(s, th)
+    pane.SetSize(78, 10)
+    pane.SetFocused(true)
+
+    tm := goldentest.NewPaneTest(t, pane, 80, 24)
+    goldentest.AssertGolden(t, goldentest.ReadOutput(tm))
+}
+
+func TestQueuePane_View_FilterActive(t *testing.T) {
+    s := state.New()
+    th := theme.Load("black")
+    s.SetQueue([]domain.QueueItem{
+        {Type: domain.QueueItemTypeTrack, Track: &domain.Track{
+            Name: "Blinding Lights", URI: "spotify:track:1",
+            Artists: []domain.Artist{{Name: "The Weeknd"}},
+            DurationMs: 200000,
+        }},
+        {Type: domain.QueueItemTypeTrack, Track: &domain.Track{
+            Name: "Shape of You", URI: "spotify:track:2",
+            Artists: []domain.Artist{{Name: "Ed Sheeran"}},
+            DurationMs: 240000,
+        }},
+        {Type: domain.QueueItemTypeTrack, Track: &domain.Track{
+            Name: "Starboy", URI: "spotify:track:3",
+            Artists: []domain.Artist{{Name: "The Weeknd"}},
+            DurationMs: 230000,
+        }},
+    })
+
+    pane := panes.NewQueuePane(s, th)
+    pane.SetSize(78, 10)
+    pane.SetFocused(true)
+    // Activate filter with query matching "The Weeknd"
+    pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+    // Feed filter keystrokes via pane Update
+    for _, r := range "The Weeknd" {
+        pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+    }
+
+    tm := goldentest.NewPaneTest(t, pane, 80, 24)
+    goldentest.AssertGolden(t, goldentest.ReadOutput(tm))
+}
 ```
 
 ## Files
@@ -181,7 +245,9 @@ func TestQueuePane_View_WithEpisodes_Narrow(t *testing.T) {
 - [ ] `internal/goldentest/` package provides `AssertGolden`, `ReadOutput`, `NewPaneTest`
 - [ ] `go test -update` regenerates golden files correctly
 - [ ] `go test ./internal/ui/panes/ -run TestQueuePane_View` passes with committed golden files
-- [ ] QueuePane snapshots include: tracks (normal width), empty state, episodes (narrow width)
+- [ ] QueuePane snapshots include: tracks (normal width), empty state, episodes (narrow width), mixed content (tracks+episodes), filter active with matches, filter active with no matches
+- [ ] Mixed content snapshot shows ♪ for tracks and ◆ for episodes in type column
+- [ ] Filter-active snapshot shows filter input bar and filtered rows
 - [ ] Golden files contain recognizable pane borders, column headers, and track names
 - [ ] `make ci` passes
 
@@ -191,8 +257,8 @@ func TestQueuePane_View_WithEpisodes_Narrow(t *testing.T) {
       - test: none (infrastructure)
 - [ ] Create `internal/goldentest/golden.go` with AssertGolden, ReadOutput, NewPaneTest
       - test: `TestAssertGolden_Match`, `TestAssertGolden_Mismatch`, `TestReadOutput_ReturnsString`
-- [ ] Create `internal/ui/panes/queue_golden_test.go` with 3 golden tests
-      - test: `TestQueuePane_View_WithTracks_Normal`, `TestQueuePane_View_Empty`, `TestQueuePane_View_WithEpisodes_Narrow`
+- [ ] Create `internal/ui/panes/queue_golden_test.go` with 6 golden tests
+      - test: `TestQueuePane_View_WithTracks_Normal`, `TestQueuePane_View_Empty`, `TestQueuePane_View_WithEpisodes_Narrow`, `TestQueuePane_View_MixedContent`, `TestQueuePane_View_FilterActive`, `TestQueuePane_View_FilterActive_NoMatches`
 - [ ] Generate golden files: `go test ./internal/ui/panes/ -run TestQueuePane_View -update`
       - test: golden files committed, tests pass without `-update`
 - [ ] Verify `make ci` passes with new dependency

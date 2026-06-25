@@ -45,9 +45,16 @@ func TestSearchFlow_CtrlA_AddToQueue(t *testing.T) {
     // Cursor on track, Ctrl+A → AddToQueueMsg produced
 }
 
-func TestSearchFlow_TabCycling(t *testing.T) {
-    // Tab → All→Songs→Artists→Albums→Playlists→All
-    // Shift+Tab → reverse
+func TestSearchFlow_StaleRequestCancelled(t *testing.T) {
+    // 1. Type "test" → debounce fires, SearchRequestMsg sent
+    // 2. Type "testing" before "test" response arrives
+    // 3. First in-flight request cancelled (context.Canceled)
+    // 4. Only "testing" results displayed in View()
+}
+
+func TestSearchFlow_CtrlU_ClearInput(t *testing.T) {
+    // Type "hello world" → Ctrl+U → input cleared to empty
+    // Assert results reset, placeholder cycling resumes
 }
 ```
 
@@ -67,6 +74,8 @@ func TestSearchFlow_TabCycling(t *testing.T) {
 - [ ] Integration: Ctrl+A produces AddToQueueMsg
 - [ ] Integration: Tab/Shift+Tab cycles tabs
 - [ ] Integration: Esc fully resets state (second open is fresh)
+- [ ] Integration: stale in-flight request cancelled when new search supersedes it
+- [ ] Integration: Ctrl+U clears input and resets results
 - [ ] `make ci` passes
 
 ## Tasks
@@ -77,4 +86,6 @@ func TestSearchFlow_TabCycling(t *testing.T) {
       - test: `TestSearchFlow_OpenTypeResultsPaginatePlayClose`
 - [ ] Create search flow integration test — prefix + shortcuts
       - test: `TestSearchFlow_PrefixAutocomplete`, `TestSearchFlow_CtrlA_AddToQueue`, `TestSearchFlow_TabCycling`
+- [ ] Create search flow integration test — stale cancellation + Ctrl+U
+      - test: `TestSearchFlow_StaleRequestCancelled`, `TestSearchFlow_CtrlU_ClearInput`
 - [ ] Generate golden files and verify all tests pass

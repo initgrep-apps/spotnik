@@ -19,12 +19,14 @@ rendered output or multi-step flows like show→Enter→episodes→Esc→shows.
 - `TestFollowedShowsPane_View_EmptyState` — no followed shows
 - `TestFollowedShowsPane_View_EpisodeSubView` — Enter on show, episodes shown, title updated
 - `TestFollowedShowsPane_View_Narrow` — 40×24
+- `TestFollowedShowsPane_View_FilterActive` — 'f' pressed, shows filtered by name
 
 ### Golden tests: `internal/ui/panes/savedepisodes_golden_test.go`
 
 - `TestSavedEpisodesPane_View_Episodes` — 5 episodes loaded, 80×24
 - `TestSavedEpisodesPane_View_EmptyState` — no episodes
 - `TestSavedEpisodesPane_View_Narrow` — 40×24
+- `TestSavedEpisodesPane_View_FilterActive` — 'f' pressed, episodes filtered by name or show
 
 ### Golden tests: `internal/ui/panes/episode_details_golden_test.go`
 
@@ -68,8 +70,8 @@ func TestPodcastFlow_EnterPlaysEpisode(t *testing.T) {
 
 ## Acceptance Criteria
 
-- [ ] FollowedShowsPane: 4 golden snapshots (shows, empty, episode sub-view, narrow)
-- [ ] SavedEpisodesPane: 3 golden snapshots (episodes, empty, narrow)
+- [ ] FollowedShowsPane: 5 golden snapshots (shows, empty, episode sub-view, narrow, filter active)
+- [ ] SavedEpisodesPane: 4 golden snapshots (episodes, empty, narrow, filter active)
 - [ ] EpisodeDetailsOverlay: 2 golden snapshots (normal, narrow)
 - [ ] Integration: drill-down Enter→episodes→Esc→shows flow
 - [ ] Integration: 'i' opens Episode Details when episode playing, no-op for tracks
@@ -78,10 +80,10 @@ func TestPodcastFlow_EnterPlaysEpisode(t *testing.T) {
 
 ## Tasks
 
-- [ ] Create FollowedShowsPane golden tests (4 snapshots)
-      - test: `TestFollowedShowsPane_View_Shows`, `TestFollowedShowsPane_View_EmptyState`, `TestFollowedShowsPane_View_EpisodeSubView`, `TestFollowedShowsPane_View_Narrow`
-- [ ] Create SavedEpisodesPane golden tests (3 snapshots)
-      - test: `TestSavedEpisodesPane_View_Episodes`, `TestSavedEpisodesPane_View_EmptyState`, `TestSavedEpisodesPane_View_Narrow`
+- [ ] Create FollowedShowsPane golden tests (5 snapshots)
+      - test: `TestFollowedShowsPane_View_Shows`, `TestFollowedShowsPane_View_EmptyState`, `TestFollowedShowsPane_View_EpisodeSubView`, `TestFollowedShowsPane_View_Narrow`, `TestFollowedShowsPane_View_FilterActive`
+- [ ] Create SavedEpisodesPane golden tests (4 snapshots)
+      - test: `TestSavedEpisodesPane_View_Episodes`, `TestSavedEpisodesPane_View_EmptyState`, `TestSavedEpisodesPane_View_Narrow`, `TestSavedEpisodesPane_View_FilterActive`
 - [ ] Create EpisodeDetailsOverlay golden tests (2 snapshots)
       - test: `TestEpisodeDetailsOverlay_View_EpisodeInfo`, `TestEpisodeDetailsOverlay_View_Narrow`
 - [ ] Create podcast integration flow tests

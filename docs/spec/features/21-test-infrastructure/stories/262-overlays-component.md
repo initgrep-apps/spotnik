@@ -28,7 +28,9 @@ overlay output at known dimensions.
 - `TestProfileOverlay_View_Premium` — premium user, display name, country, 80×24
 - `TestProfileOverlay_View_Free` — free tier user with Free badge
 - `TestProfileOverlay_View_Loading` — profile not yet fetched, loading state
+- `TestProfileOverlay_View_Error` — profile fetch returned error, error display
 - `TestProfileOverlay_View_LogoutConfirmation` — 'l' pressed once, confirmation view
+- `TestProfileOverlay_View_ForgetConfirmation` — 'f' pressed once, "press f again" view
 
 ### Golden tests: `internal/ui/panes/devices_golden_test.go`
 
@@ -53,7 +55,7 @@ overlay output at known dimensions.
 
 - [ ] ThemeOverlay: 2 golden snapshots (list, narrow)
 - [ ] HelpOverlay: 2 golden snapshots (keybindings, narrow)
-- [ ] ProfileOverlay: 4 golden snapshots (premium, free, loading, logout confirmation)
+- [ ] ProfileOverlay: 6 golden snapshots (premium, free, loading, error, logout confirmation, forget confirmation)
 - [ ] DevicesPane: 3 golden snapshots (devices, empty, narrow)
 - [ ] `make ci` passes
 
@@ -63,8 +65,8 @@ overlay output at known dimensions.
       - test: `TestThemeOverlay_View_ThemeList`, `TestThemeOverlay_View_Narrow`
 - [ ] Create HelpOverlay golden tests (2 snapshots)
       - test: `TestHelpOverlay_View_Keybindings`, `TestHelpOverlay_View_Narrow`
-- [ ] Create ProfileOverlay golden tests (4 snapshots)
-      - test: `TestProfileOverlay_View_Premium`, `TestProfileOverlay_View_Free`, `TestProfileOverlay_View_Loading`, `TestProfileOverlay_View_LogoutConfirmation`
+- [ ] Create ProfileOverlay golden tests (6 snapshots)
+      - test: `TestProfileOverlay_View_Premium`, `TestProfileOverlay_View_Free`, `TestProfileOverlay_View_Loading`, `TestProfileOverlay_View_Error`, `TestProfileOverlay_View_LogoutConfirmation`, `TestProfileOverlay_View_ForgetConfirmation`
 - [ ] Create DevicesPane golden tests (3 snapshots)
       - test: `TestDevicesPane_View_Devices`, `TestDevicesPane_View_Empty`, `TestDevicesPane_View_Narrow`
 - [ ] Generate golden files and verify all tests pass

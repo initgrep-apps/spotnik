@@ -35,6 +35,10 @@ rendered output.
 - `TestNowPlayingPane_View_SeekBar_AtPosition` — seek bar at 30% progress
 - `TestNowPlayingPane_View_VolumeBar` — volume bar at 65%
 
+**Edge case types:**
+- `TestNowPlayingPane_View_AdType_EmptyState` — `currently_playing_type == "ad"`, renders empty state
+- `TestNowPlayingPane_View_UnknownType_EmptyState` — `currently_playing_type == "unknown"`, renders empty state
+
 ### Integration test: `internal/app/playback_flow_test.go`
 
 ```go
@@ -64,13 +68,13 @@ func TestPlaybackFlow_CycleRepeat(t *testing.T) {
 
 ### Create
 
-- `internal/ui/panes/nowplaying_golden_test.go` — 10 snapshots
+- `internal/ui/panes/nowplaying_golden_test.go` — 12 snapshots
 - `internal/app/playback_flow_test.go` — playback integration flows
-- `internal/ui/panes/testdata/TestNowPlayingPane_View_*.golden` (10 files)
+- `internal/ui/panes/testdata/TestNowPlayingPane_View_*.golden` (12 files)
 
 ## Acceptance Criteria
 
-- [ ] NowPlaying golden snapshots: track playing, track paused, empty, episode playing, episode paused, compact strip, narrow fallback, wide, seek bar, volume bar
+- [ ] NowPlaying golden snapshots: track playing, track paused, empty, episode playing, episode paused, compact strip, narrow fallback, wide, seek bar, volume bar, ad_type empty, unknown_type empty
 - [ ] Integration: Space → pause → resume cycle with correct cmd types
 - [ ] Integration: ←/→ seek with debounce (only final seek sent)
 - [ ] Integration: Shift+←/Shift+→ → ActionPrev/ActionNext
@@ -89,6 +93,8 @@ func TestPlaybackFlow_CycleRepeat(t *testing.T) {
       - test: `TestNowPlayingPane_View_CompactStrip`, `TestNowPlayingPane_View_NarrowFallback`, `TestNowPlayingPane_View_Wide`
 - [ ] Create NowPlaying golden tests — seek + volume (2 snapshots)
       - test: `TestNowPlayingPane_View_SeekBar_AtPosition`, `TestNowPlayingPane_View_VolumeBar`
+- [ ] Create NowPlaying golden tests — edge case types (2 snapshots)
+      - test: `TestNowPlayingPane_View_AdType_EmptyState`, `TestNowPlayingPane_View_UnknownType_EmptyState`
 - [ ] Create playback flow integration tests
       - test: `TestPlaybackFlow_PauseThenResume`, `TestPlaybackFlow_SeekRight`, `TestPlaybackFlow_ShiftRight_NextTrack`, `TestPlaybackFlow_CycleRepeat`
 - [ ] Generate golden files and verify all tests pass
