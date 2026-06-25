@@ -70,7 +70,10 @@ func AssertGolden(t *testing.T, got string) {
 
 	want, err := os.ReadFile(name)
 	if err != nil {
-		t.Fatalf("golden file missing: %s (run `go test -update` to generate)", name)
+		if os.IsNotExist(err) {
+			t.Fatalf("golden file missing: %s (run `go test -update` to generate)", name)
+		}
+		t.Fatalf("goldentest: reading golden file %s: %v", name, err)
 	}
 
 	if got != string(want) {
@@ -81,10 +84,10 @@ func AssertGolden(t *testing.T, got string) {
 // ReadOutput reads all rendered output from a teatest.TestModel after the
 // underlying program has finished. The caller must call tm.Quit() and then
 // tm.WaitFinished() before calling ReadOutput to stop the program and flush
-// all output.
-func ReadOutput(tm *teatest.TestModel) string {
-	out, _ := io.ReadAll(tm.Output())
-	return string(out)
+// all output. Returns error if reading output fails.
+func ReadOutput(tm *teatest.TestModel) (string, error) {
+	out, err := io.ReadAll(tm.Output())
+	return string(out), err
 }
 
 // WaitAndReadOutput quits the TestModel's program, waits for it to finish,
@@ -96,7 +99,11 @@ func WaitAndReadOutput(t *testing.T, tm *teatest.TestModel) string {
 		t.Fatalf("goldentest: quitting test model: %v", err)
 	}
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
-	return ReadOutput(tm)
+	out, err := ReadOutput(tm)
+	if err != nil {
+		t.Fatalf("goldentest: reading output: %v", err)
+	}
+	return out
 }
 
 // diffString returns a simple unified diff between two strings.
