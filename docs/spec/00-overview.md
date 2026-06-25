@@ -26,6 +26,7 @@
 | 17 | Album Art & Responsive NowPlaying | `features/17-album-art/` | in-progress | 214–222 ✓, 223 | Phase 1 (shipped): pixterm album art, responsive layout, LayoutManager MinHeight. Phase 2 (shipped): OverlayBackground token, remove album art, overlay InfoBox on full-pane visualizer. Phase 3 (open): Fix layout — adaptive width, centering, compact preset MinHeight |
 | 18 | Podcasts & Player Unification | `features/18-podcasts/` | done | 227–236, 238–244 | Phase 1: Podcasts page with 4 panes + PodcastAPI client. Phase 2: Unified Player page, content-aware NowPlaying, FollowedShows drill-down, mixed-content Queue, auto-switch presets, visibility-gated polling, Episode Details overlay |
 | 20 | Pane Content Design Language | `features/20-pane-content-design/` | done | 245–255 | Consistent design language: responsive column hiding, optimized headers, empty states, # column restoration, pagination footer fix |
+| 21 | End-to-End Test Infrastructure | `features/21-test-infrastructure/` | open | 256–266 | Component golden-file snapshots + integration flow tests using `teatest`; testing pyramid gains View() regression and multi-step flow layers |
 
 ---
 
@@ -46,4 +47,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-06-25 — feature consolidation: 20 → 16 features*
+*Last updated: 2026-06-26 — added feature 21 (End-to-End Test Infrastructure)*
