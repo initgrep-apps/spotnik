@@ -191,3 +191,16 @@ Every other table pane (albums, likedsongs, playlists, queue, recentlyplayed, to
 Items to log:
 1. Add TestFollowedShowsPane_UsesColumnColors covering show list (3 cols) and episode track table (3 cols)
 2. Add TestSavedEpisodesPane_UsesColumnColors covering 3 cols (Episode, Show, Duration)
+
+---
+
+## Golden test infrastructure improvements
+**Found:** 2026-06-26 | **Source:** PR #372 Review
+**Feature:** 21-test-infrastructure
+
+Minor findings from PR review, not blocking:
+
+1. AssertGolden should have test coverage for error paths (file-not-found, I/O error)
+2. ReadOutput signature exposes unsafe path; consider type-level guard between safe (WaitAndReadOutput) and unsafe (manual Quit+ReadOutput) usage
+3. isUpdateMode reads process-global mutable flag — document parallelism hazard for -update flag
+4. diffString maxDiffs=20 should be extracted to named constant

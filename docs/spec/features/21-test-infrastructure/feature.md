@@ -27,7 +27,7 @@ include regenerated golden files with diff review.
 
 | Story | Title | Status |
 |-------|-------|--------|
-| 256 | teatest setup + QueuePane golden POC | open |
+| 256 | teatest setup + QueuePane golden POC | done |
 | 257 | Library component + integration (Playlists, Albums, LikedSongs) | open |
 | 258 | Stats component + integration (TopTracks, TopArtists, RecentlyPlayed) | open |
 | 259 | NowPlaying component + playback integration | open |

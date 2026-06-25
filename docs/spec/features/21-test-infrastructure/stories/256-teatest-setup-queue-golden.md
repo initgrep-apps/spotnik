@@ -1,7 +1,7 @@
 ---
 title: "teatest setup + QueuePane golden POC"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background
