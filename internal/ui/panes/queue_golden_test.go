@@ -19,12 +19,12 @@ func TestQueuePane_View_WithTracks_Normal(t *testing.T) {
 	s.SetQueue([]domain.QueueItem{
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Blinding Lights", URI: "spotify:track:1",
-			Artists:   []domain.Artist{{Name: "The Weeknd"}},
+			Artists:    []domain.Artist{{Name: "The Weeknd"}},
 			DurationMs: 200000,
 		}},
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Shape of You", URI: "spotify:track:2",
-			Artists:   []domain.Artist{{Name: "Ed Sheeran"}},
+			Artists:    []domain.Artist{{Name: "Ed Sheeran"}},
 			DurationMs: 240000,
 		}},
 	})
@@ -77,7 +77,7 @@ func TestQueuePane_View_MixedContent(t *testing.T) {
 	s.SetQueue([]domain.QueueItem{
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Blinding Lights", URI: "spotify:track:1",
-			Artists:   []domain.Artist{{Name: "The Weeknd"}},
+			Artists:    []domain.Artist{{Name: "The Weeknd"}},
 			DurationMs: 200000,
 		}},
 		{Type: domain.QueueItemTypeEpisode, Episode: &domain.Episode{
@@ -88,7 +88,7 @@ func TestQueuePane_View_MixedContent(t *testing.T) {
 		}},
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Shape of You", URI: "spotify:track:2",
-			Artists:   []domain.Artist{{Name: "Ed Sheeran"}},
+			Artists:    []domain.Artist{{Name: "Ed Sheeran"}},
 			DurationMs: 240000,
 		}},
 	})
@@ -108,17 +108,17 @@ func TestQueuePane_View_FilterActive(t *testing.T) {
 	s.SetQueue([]domain.QueueItem{
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Blinding Lights", URI: "spotify:track:1",
-			Artists:   []domain.Artist{{Name: "The Weeknd"}},
+			Artists:    []domain.Artist{{Name: "The Weeknd"}},
 			DurationMs: 200000,
 		}},
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Shape of You", URI: "spotify:track:2",
-			Artists:   []domain.Artist{{Name: "Ed Sheeran"}},
+			Artists:    []domain.Artist{{Name: "Ed Sheeran"}},
 			DurationMs: 240000,
 		}},
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Starboy", URI: "spotify:track:3",
-			Artists:   []domain.Artist{{Name: "The Weeknd"}},
+			Artists:    []domain.Artist{{Name: "The Weeknd"}},
 			DurationMs: 230000,
 		}},
 	})
@@ -144,12 +144,12 @@ func TestQueuePane_View_FilterActive_NoMatches(t *testing.T) {
 	s.SetQueue([]domain.QueueItem{
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Blinding Lights", URI: "spotify:track:1",
-			Artists:   []domain.Artist{{Name: "The Weeknd"}},
+			Artists:    []domain.Artist{{Name: "The Weeknd"}},
 			DurationMs: 200000,
 		}},
 		{Type: domain.QueueItemTypeTrack, Track: &domain.Track{
 			Name: "Shape of You", URI: "spotify:track:2",
-			Artists:   []domain.Artist{{Name: "Ed Sheeran"}},
+			Artists:    []domain.Artist{{Name: "Ed Sheeran"}},
 			DurationMs: 240000,
 		}},
 	})
