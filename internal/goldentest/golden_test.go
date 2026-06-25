@@ -31,7 +31,9 @@ func TestIsUpdateMode_AfterSet(t *testing.T) {
 		t.Error("isUpdateMode should return true after setting -update")
 	}
 	// Clean up: reset to false
-	f.Value.Set("false")
+	if err := f.Value.Set("false"); err != nil {
+		t.Logf("failed to reset update flag: %v", err)
+	}
 }
 
 // TestAssertGolden_Match verifies that AssertGolden passes when output matches
@@ -50,17 +52,23 @@ func TestAssertGolden_Match(t *testing.T) {
 	}
 
 	// Change to temp dir so AssertGolden finds testdata/ relative to cwd
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(dir)
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(origDir); err != nil {
+			t.Logf("failed to restore working directory: %v", err)
+		}
+	})
 
 	// Register our own -update flag since we're in an isolated test
 	oldFlag := flag.Lookup("update")
 	if oldFlag == nil {
 		flag.Bool("update", false, "")
-		defer func() {
-			// Can't unregister — just leave it
-		}()
 	}
 
 	// This should NOT fail — output matches golden file
@@ -72,17 +80,32 @@ func TestAssertGolden_Match(t *testing.T) {
 func TestAssertGolden_UpdateWritesGoldenFile(t *testing.T) {
 	dir := t.TempDir()
 
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(dir)
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(origDir); err != nil {
+			t.Logf("failed to restore working directory: %v", err)
+		}
+	})
 
 	// Ensure our -update flag is registered and set to true
 	oldFlag := flag.Lookup("update")
 	if oldFlag == nil {
 		flag.Bool("update", true, "")
 	} else {
-		oldFlag.Value.Set("true")
-		defer oldFlag.Value.Set("false")
+		if err := oldFlag.Value.Set("true"); err != nil {
+			t.Fatalf("failed to set update flag: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := oldFlag.Value.Set("false"); err != nil {
+				t.Logf("failed to reset update flag: %v", err)
+			}
+		})
 	}
 
 	AssertGolden(t, "updated content\n")

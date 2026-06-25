@@ -92,7 +92,9 @@ func ReadOutput(tm *teatest.TestModel) string {
 // that need to capture the initial render.
 func WaitAndReadOutput(t *testing.T, tm *teatest.TestModel) string {
 	t.Helper()
-	tm.Quit()
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("goldentest: quitting test model: %v", err)
+	}
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 	return ReadOutput(tm)
 }
@@ -113,8 +115,8 @@ func diffString(want, got string) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("--- want (%d lines)\n", len(wantLines)))
-	b.WriteString(fmt.Sprintf("+++ got  (%d lines)\n", len(gotLines)))
+	fmt.Fprintf(&b, "--- want (%d lines)\n", len(wantLines))
+	fmt.Fprintf(&b, "+++ got  (%d lines)\n", len(gotLines))
 
 	diffCount := 0
 	maxDiffs := 20
