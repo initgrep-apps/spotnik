@@ -33,7 +33,7 @@ include regenerated golden files with diff review.
 | 259 | NowPlaying component + playback integration | done |
 | 260 | Search component + integration | done |
 | 261 | Podcast component + integration (FollowedShows, SavedEpisodes, EpisodeDetails) | done |
-| 262 | Overlays component (Theme, Help, Profile, Devices) | open |
+| 262 | Overlays component (Theme, Help, Profile, Devices) | done |
 | 263 | DevTools panes component (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) | open |
 | 264 | Cross-cutting integration flows (navigation, overlay lifecycle, error resilience) | open |
 | 265 | CI enforcement + docs | open |

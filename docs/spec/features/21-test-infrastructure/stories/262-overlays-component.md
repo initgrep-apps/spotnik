@@ -1,7 +1,7 @@
 ---
 title: "Overlays component tests (Theme, Help, Profile, Devices)"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background
