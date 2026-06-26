@@ -218,3 +218,17 @@ Non-blocking review findings:
 3. Golden snapshots skip debounce loading state — test final state only
 4. No `make test-update-golden` workflow target documented
 5. AlbumsPane 'x' key in track sub-view forwarded to table but no test verifies it's a no-op (not blocking — correct behavior)
+
+---
+
+## Stats golden test gaps
+**Found:** 2026-06-26 | **Source:** PR #374 Review
+**Feature:** 21-test-infrastructure
+
+Non-blocking review findings (existing white-box tests cover these behaviors):
+
+1. RecentlyPlayed Enter not tested in new flow test (only in existing white-box test)
+2. Enter-on-filtered-data flow — no test verifies filtered-track URIs in PlayTrackListMsg
+3. No golden snapshot for Esc-after-filter (clear filter → restore full table)
+4. No TopTracks LongTerm golden snapshot (TopArtists has one, asymmetric)
+5. No unfocused-with-data golden snapshots (all normal data tests pass focused=true)
