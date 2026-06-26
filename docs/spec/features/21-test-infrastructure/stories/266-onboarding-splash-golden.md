@@ -1,7 +1,7 @@
 ---
 title: "Onboarding + Splash golden tests"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background
