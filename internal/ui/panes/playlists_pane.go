@@ -70,6 +70,9 @@ type PlaylistsPane struct {
 
 	// Debounce (protects rapid playlist switching)
 	playlistIntent playlistDebounceIntent // current desired playlist
+
+	// removing guards against duplicate 'x' presses during an in-flight removal.
+	removing bool
 }
 
 // NewPlaylistsPane creates a PlaylistsPane with the given store, theme, and focus state.
@@ -202,6 +205,32 @@ func (p *PlaylistsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.hasMoreTracks = m.HasNext
 		p.refreshTrackRows()
 		return p, nil
+
+	case PlaylistRemoveResultMsg:
+		// Guard: ignore stale results from a playlist the user already navigated away from.
+		if m.PlaylistID != p.selectedID {
+			return p, nil
+		}
+		p.removing = false
+		if m.Err != nil {
+			// Error case: toast is emitted by app.go. Pane just clears the sentinel.
+			return p, nil
+		}
+		// Success: filter the removed track from loadedTracks.
+		newTracks := make([]domain.Track, 0, len(p.loadedTracks))
+		for _, t := range p.loadedTracks {
+			if t.URI != m.TrackURI {
+				newTracks = append(newTracks, t)
+			}
+		}
+		p.loadedTracks = newTracks
+		p.trackTotal--
+		if p.trackTotal < 0 {
+			p.trackTotal = 0
+		}
+		p.trackOffset = len(p.loadedTracks)
+		p.refreshTrackRows()
+		return p, nil
 	}
 
 	if !p.focused {
@@ -283,6 +312,7 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 		// Return to playlist list and emit closed message for app.go to cancel
 		// any in-flight fetch.
 		p.inTrackView = false
+		p.removing = false
 		p.trackTable.SetFocused(false)
 		p.Table().SetFocused(true)
 		p.resizeTable()
@@ -303,7 +333,21 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return p, nil
 
 	case key.Type == tea.KeyRunes && string(key.Runes) == "x":
-		// NOTE: 'x' (remove track) is out of scope for story 106 — remains non-functional.
+		// Guard against duplicate presses during in-flight removal.
+		if p.removing {
+			return p, nil
+		}
+		// Remove selected track from the playlist.
+		if idx := p.trackTable.SelectedIndex(); idx >= 0 && idx < len(p.loadedTracks) {
+			p.removing = true
+			track := p.loadedTracks[idx]
+			return p, func() tea.Msg {
+				return PlaylistRemoveRequestMsg{
+					PlaylistID: p.selectedID,
+					TrackURI:   track.URI,
+				}
+			}
+		}
 		return p, nil
 	}
 

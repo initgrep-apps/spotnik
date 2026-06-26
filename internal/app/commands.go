@@ -865,14 +865,6 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 			return panes.PlaylistRemoveResultMsg{Err: errNilClient, PlaylistID: playlistID, TrackURI: trackURI}
 		}
 		err := playlistsAPI.RemoveTracksFromPlaylist(api.WithPriority(context.Background(), api.Interactive), playlistID, []string{trackURI})
-		if err != nil {
-			if retryAfter := parse429RetryAfter(err); retryAfter > 0 {
-				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
-			}
-			if isUnauthorizedError(err) {
-				return unauthorizedMsg{}
-			}
-		}
 		return panes.PlaylistRemoveResultMsg{PlaylistID: playlistID, TrackURI: trackURI, Err: err}
 	}
 }
