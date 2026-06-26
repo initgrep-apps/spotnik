@@ -232,3 +232,12 @@ Non-blocking review findings (existing white-box tests cover these behaviors):
 3. No golden snapshot for Esc-after-filter (clear filter → restore full table)
 4. No TopTracks LongTerm golden snapshot (TopArtists has one, asymmetric)
 5. No unfocused-with-data golden snapshots (all normal data tests pass focused=true)
+
+---
+
+## NowPlaying + playback flow test gaps
+**Found:** 2026-06-26 | **Source:** PR #375 Review
+**Feature:** 21-test-infrastructure
+
+1. No coverage of non-nil API client error path through toast in playback flow tests
+2. No golden snapshot for NowPlaying visualizer animation mid-transition

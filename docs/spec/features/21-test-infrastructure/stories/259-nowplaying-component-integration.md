@@ -1,7 +1,7 @@
 ---
 title: "NowPlaying component + playback integration tests"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background
