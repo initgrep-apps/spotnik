@@ -598,11 +598,11 @@ func TestBuildTransferPlaybackCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	assert.True(t, foundRateLimit, "429 from TransferPlayback should produce RateLimitedMsg, got: %v", msgs)
 }
 
-// TestBuildRemovePlaylistTrackCmd_429_EmitsRateLimitedMsg verifies that a 429 from
+// TestBuildRemovePlaylistTrackCmd_429_ReturnsErr verifies that a 429 from
 // the remove-playlist-track endpoint causes buildRemovePlaylistTrackCmd to return
-// RateLimitedMsg (not PlaylistRemoveResultMsg) so the gateway-level rate limit is
-// surfaced and fetching sentinels are cleared.
-func TestBuildRemovePlaylistTrackCmd_429_EmitsRateLimitedMsg(t *testing.T) {
+// PlaylistRemoveResultMsg with an api.RateLimitError so the pane's removing sentinel
+// is always cleared. The routing layer's errorMapper handles the toast notification.
+func TestBuildRemovePlaylistTrackCmd_429_ReturnsErr(t *testing.T) {
 	srv := rateLimitServer("12")
 	defer srv.Close()
 
@@ -614,9 +614,15 @@ func TestBuildRemovePlaylistTrackCmd_429_EmitsRateLimitedMsg(t *testing.T) {
 	require.NotNil(t, cmd)
 
 	msg := cmd()
-	rl, ok := msg.(panes.RateLimitedMsg)
-	assert.True(t, ok, "429 from RemoveTracksFromPlaylist should produce RateLimitedMsg, got %T", msg)
-	assert.Equal(t, 12, rl.RetryAfterSecs, "RetryAfterSecs should match Retry-After header")
+	result, ok := msg.(panes.PlaylistRemoveResultMsg)
+	require.True(t, ok, "429 from RemoveTracksFromPlaylist should produce PlaylistRemoveResultMsg, got %T", msg)
+	require.Error(t, result.Err, "expected error in PlaylistRemoveResultMsg for 429")
+
+	var rateLimitErr *api.RateLimitError
+	require.True(t, errors.As(result.Err, &rateLimitErr), "expected api.RateLimitError, got %T", result.Err)
+	assert.Equal(t, 12, rateLimitErr.RetryAfter, "RetryAfter should match Retry-After header")
+	assert.Equal(t, "pl1", result.PlaylistID)
+	assert.Equal(t, "spotify:track:t1", result.TrackURI)
 }
 
 // collectBatchMsgs executes a tea.Cmd and, if it returns a tea.BatchMsg, executes
