@@ -1,7 +1,7 @@
 ---
 title: "Cross-cutting integration flows"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background

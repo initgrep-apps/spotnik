@@ -51,6 +51,16 @@ func (d *DeviceOverlay) Err() error {
 	return d.err
 }
 
+// Cursor returns the current highlighted device index (exported for testing).
+func (d *DeviceOverlay) Cursor() int {
+	return d.cursor
+}
+
+// Devices returns the current device list shown in the overlay (exported for testing).
+func (d *DeviceOverlay) Devices() []DeviceInfo {
+	return d.devices
+}
+
 // Init returns a command that fetches the current device list from the store.
 // NOTE: The actual API call is dispatched by a command returned from here; panes
 // never call the API directly. The root app provides a FetchDevicesRequestMsg handler.
