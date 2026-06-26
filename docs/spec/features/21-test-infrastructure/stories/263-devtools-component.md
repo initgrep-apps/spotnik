@@ -1,7 +1,7 @@
 ---
 title: "DevTools panes component tests"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background
@@ -48,20 +48,20 @@ Current tests verify data rendering logic but never snapshot the full pane outpu
 
 ## Acceptance Criteria
 
-- [ ] GatewayHealth: 2 golden snapshots (healthy, mixed)
-- [ ] PollingTraffic: 2 golden snapshots (fresh, stale)
-- [ ] GatewayLive: 2 golden snapshots (entries, empty)
-- [ ] NetworkLog: 2 golden snapshots (entries, empty)
-- [ ] `make ci` passes
+- [x] GatewayHealth: 2 golden snapshots (healthy, mixed)
+- [x] PollingTraffic: 2 golden snapshots (fresh, stale)
+- [x] GatewayLive: 2 golden snapshots (entries, empty)
+- [x] NetworkLog: 2 golden snapshots (entries, empty)
+- [x] `make ci` passes
 
 ## Tasks
 
-- [ ] Create GatewayHealthPane golden tests (2 snapshots)
+- [x] Create GatewayHealthPane golden tests (2 snapshots)
       - test: `TestGatewayHealthPane_View_AllHealthy`, `TestGatewayHealthPane_View_MixedHealth`
-- [ ] Create PollingTrafficPane golden tests (2 snapshots)
+- [x] Create PollingTrafficPane golden tests (2 snapshots)
       - test: `TestPollingTrafficPane_View_Fresh`, `TestPollingTrafficPane_View_Stale`
-- [ ] Create GatewayLivePane golden tests (2 snapshots)
+- [x] Create GatewayLivePane golden tests (2 snapshots)
       - test: `TestGatewayLivePane_View_WithEntries`, `TestGatewayLivePane_View_Empty`
-- [ ] Create NetworkLogPane golden tests (2 snapshots)
+- [x] Create NetworkLogPane golden tests (2 snapshots)
       - test: `TestNetworkLogPane_View_WithEntries`, `TestNetworkLogPane_View_Empty`
-- [ ] Generate golden files and verify all tests pass
+- [x] Generate golden files and verify all tests pass

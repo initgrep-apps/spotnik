@@ -34,7 +34,7 @@ include regenerated golden files with diff review.
 | 260 | Search component + integration | done |
 | 261 | Podcast component + integration (FollowedShows, SavedEpisodes, EpisodeDetails) | done |
 | 262 | Overlays component (Theme, Help, Profile, Devices) | done |
-| 263 | DevTools panes component (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) | open |
+| 263 | DevTools panes component (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) | done |
 | 264 | Cross-cutting integration flows (navigation, overlay lifecycle, error resilience) | open |
 | 265 | CI enforcement + docs | open |
 | 266 | Onboarding + Splash golden tests | open |
