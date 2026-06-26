@@ -1,0 +1,26 @@
+╭─Step 2 of 2 — Authorize Spotnik with Spotify─────────────────────────────────────╮
+│                                                                                  │
+│                                   ♪  spotnik                                     │
+│                           A terminal Spotify client                              │
+│                                                                                  │
+│  A browser window has been opened. Log in and click Agree.                       │
+│                                                                                  │
+│  ╭──────────────────────────────────────────────────────────────────────╮        │
+│  │ About these permissions                                              │        │
+│  │ All Spotify access stays on this device — tokens live in your OS     │        │
+│  │ keychain.                                                            │        │
+│  ╰──────────────────────────────────────────────────────────────────────╯        │
+│                                                                                  │
+│  On a headless server or browser didn't open? Visit this URL:                    │
+│  ╭──────────────────────────────────────────────────────────────────────╮        │
+│  │ https://accounts.spotify.com/authorize?client_id=abc123&             │        │
+│  │ scope=user-read-playback-state                                       │        │
+│  ╰──────────────────────────────────────────────────────────────────────╯        │
+│                                                                                  │
+│  ⠋ Waiting for authorization...  (times out in 5 minutes)                        │
+│                                                                                  │
+│  v view permissions · c copy URL · q quit                                        │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────╯

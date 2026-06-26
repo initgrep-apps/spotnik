@@ -1,0 +1,26 @@
+╭─Step 1 of 2 — Set up your Spotify Developer App──────────────────────────────────╮
+│                                                                                  │
+│                                   ♪  spotnik                                     │
+│                           A terminal Spotify client                              │
+│                                                                                  │
+│  1. Go to https://developer.spotify.com/dashboard and create an app.             │
+│  2. In the app settings, set the Redirect URI exactly as shown below:            │
+│                                                                                  │
+│  ╭──────────────────────────────────────────────────────────────────────╮        │
+│  │ http://127.0.0.1:8888/callback                                       │        │
+│  ╰──────────────────────────────────────────────────────────────────────╯        │
+│                                                                                  │
+│  ◬  Spotify Premium is required for playback controls                            │
+│  ✓  Your Client ID will be saved to ~/.config/spotnik/config.toml                │
+│                                                                                  │
+│  Client ID:                                                                      │
+│  ╭──────────────────────────────────────────────────────────────╮                │
+│  │ > your-client-id-here                                        │                │
+│  ╰──────────────────────────────────────────────────────────────╯                │
+│                                                                                  │
+│  c copy URI · Enter confirm · q quit                                             │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────╯

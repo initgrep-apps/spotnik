@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                  ╭─Step 2 of 2 — Authorization Failed───────────────────────────────────────────────╮                  
+                  │                                                                                  │                  
+                  │                                   ♪  spotnik                                     │                  
+                  │                           A terminal Spotify client                              │                  
+                  │                                                                                  │                  
+                  │  ✗╭─Permissions Spotnik requests─────────────────────────────────────────────╮   │                  
+                  │  ✗│                                                                          │   │                  
+                  │   │  Read access                                                             │   │                  
+                  │  C│   • Playback state, queue, and devices.                                  │   │                  
+                  │   │   • Saved tracks, albums, and playlists.                                 │   │                  
+                  │   │   • Profile, listening history, and followed artists.                    │   │                  
+                  │   │                                                                          │   │                  
+                  │   │  Write access                                                            │   │                  
+                  │  r│   • Playback control — play, pause, skip, seek, volume, transfer.        │   │                  
+                  │   │   • Library and playlist edits — reserved for upcoming features.         │   │                  
+                  │   │                                                                          │   │                  
+                  │   │  For full scope details and revoke: spotify.com/account/apps             │   │                  
+                  │   │                                                                          │   │                  
+                  │   │  Esc close                                                               │   │                  
+                  │   │                                                                          │   │                  
+                  │   ╰──────────────────────────────────────────────────────────────────────────╯   │                  
+                  │                                                                                  │                  
+                  │                                                                                  │                  
+                  │                                                                                  │                  
+                  │                                                                                  │                  
+                  ╰──────────────────────────────────────────────────────────────────────────────────╯                  
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

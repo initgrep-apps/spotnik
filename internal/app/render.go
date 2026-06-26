@@ -151,8 +151,8 @@ func (a *App) renderOnboarding() string {
 		body = lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, body)
 	}
 
-	// Composite the permissions overlay on top of Step 2 when open.
-	if a.onboardingPermissionsOverlay != nil && a.onboardingStep == stepOAuth {
+	// Composite the permissions overlay on top of Step 2 (OAuth or Error) when open.
+	if a.onboardingPermissionsOverlay != nil && (a.onboardingStep == stepOAuth || a.onboardingStep == stepError) {
 		return a.renderWithOverlayChrome(body, a.onboardingPermissionsOverlay.View(), btoverlay.Center, btoverlay.Center)
 	}
 
