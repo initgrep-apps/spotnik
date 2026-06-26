@@ -31,7 +31,7 @@ include regenerated golden files with diff review.
 | 257 | Library component + integration (Playlists, Albums, LikedSongs) | done |
 | 258 | Stats component + integration (TopTracks, TopArtists, RecentlyPlayed) | done |
 | 259 | NowPlaying component + playback integration | done |
-| 260 | Search component + integration | open |
+| 260 | Search component + integration | done |
 | 261 | Podcast component + integration (FollowedShows, SavedEpisodes, EpisodeDetails) | open |
 | 262 | Overlays component (Theme, Help, Profile, Devices) | open |
 | 263 | DevTools panes component (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) | open |

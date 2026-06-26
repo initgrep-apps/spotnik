@@ -241,3 +241,12 @@ Non-blocking review findings (existing white-box tests cover these behaviors):
 
 1. No coverage of non-nil API client error path through toast in playback flow tests
 2. No golden snapshot for NowPlaying visualizer animation mid-transition
+
+---
+
+## Search overlay test gaps
+**Found:** 2026-06-26 | **Source:** PR #376 Review
+**Feature:** 21-test-infrastructure
+
+1. TestSearchFlow_CtrlU_ClearInput name misleading — test verifies no-op, not clear (Ctrl+U intentionally ignored per overlay-keybinding-cleanup spec)
+2. PrefixAutocomplete test missing backspace-unlock path (backspace to empty → prefix removed → tab returns to TabAll)
