@@ -738,6 +738,44 @@ func (a *App) SearchPane() *panes.SearchOverlay {
 	return a.searchPane
 }
 
+// DevicePane returns the device switcher overlay (exported for testing).
+func (a *App) DevicePane() *panes.DeviceOverlay {
+	return a.devicePane
+}
+
+// ThemeOverlay returns the theme switcher overlay (exported for testing).
+// Returns nil when the overlay is closed.
+func (a *App) ThemeOverlay() *panes.ThemeOverlay {
+	return a.themeOverlay
+}
+
+// HelpOverlayPane returns the help overlay (exported for testing).
+// Returns nil when the overlay is closed.
+func (a *App) HelpOverlayPane() *panes.HelpOverlay {
+	return a.helpOverlay
+}
+
+// ProfilePane returns the profile overlay (exported for testing).
+// Returns nil when the overlay is closed.
+func (a *App) ProfilePane() *panes.ProfileOverlay {
+	return a.profilePane
+}
+
+// QueuePane returns the queue pane (exported for testing).
+func (a *App) QueuePane() *panes.QueuePane {
+	return a.queuePane()
+}
+
+// ActivePresetName returns the name of the current preset (exported for testing).
+func (a *App) ActivePresetName() string {
+	return a.layout.ActivePresetName()
+}
+
+// ActivePage returns the active page ID (exported for testing).
+func (a *App) ActivePage() layout.PageID {
+	return a.layout.ActivePage()
+}
+
 // DeviceOverlayOpen returns true while the device switcher overlay is visible.
 func (a *App) DeviceOverlayOpen() bool {
 	return a.deviceOverlayOpen

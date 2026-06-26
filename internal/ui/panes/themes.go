@@ -65,6 +65,11 @@ func (o *ThemeOverlay) SetSize(width, height int) {
 	o.height = height
 }
 
+// Cursor returns the current highlighted row index (exported for testing).
+func (o *ThemeOverlay) Cursor() int {
+	return o.cursor
+}
+
 // SetTheme updates the overlay's own theme reference for runtime theme switching.
 func (o *ThemeOverlay) SetTheme(th theme.Theme) {
 	o.theme = th
