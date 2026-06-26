@@ -1,7 +1,7 @@
 ---
 title: "CI enforcement + docs"
 feature: 21-test-infrastructure
-status: open
+status: done
 ---
 
 ## Background
