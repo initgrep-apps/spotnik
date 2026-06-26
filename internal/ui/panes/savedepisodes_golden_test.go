@@ -30,17 +30,17 @@ func TestSavedEpisodesPane_View_Episodes(t *testing.T) {
 		{Episode: domain.Episode{
 			ID: "e3", Name: "The History of Jazz", URI: "spotify:episode:e3", DurationMs: 2400000,
 			IsPlayable: false,
-			Show: &domain.Show{ID: "s3", Name: "Music Hour"},
+			Show:       &domain.Show{ID: "s3", Name: "Music Hour"},
 		}},
 		{Episode: domain.Episode{
 			ID: "e4", Name: "Space Exploration", URI: "spotify:episode:e4", DurationMs: 1500000,
 			IsPlayable: true,
-			Show: &domain.Show{ID: "s4", Name: "Science Weekly"},
+			Show:       &domain.Show{ID: "s4", Name: "Science Weekly"},
 		}},
 		{Episode: domain.Episode{
 			ID: "e5", Name: "Economic Forecast 2026", URI: "spotify:episode:e5", DurationMs: 2700000,
 			IsPlayable: true,
-			Show: &domain.Show{ID: "s5", Name: "Market Watch"},
+			Show:       &domain.Show{ID: "s5", Name: "Market Watch"},
 		}},
 	})
 

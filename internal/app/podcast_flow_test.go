@@ -152,12 +152,12 @@ func TestPodcastFlow_EnterPlaysEpisode(t *testing.T) {
 			{Episode: domain.Episode{
 				ID: "e1", Name: "AI Revolution", URI: "spotify:episode:e1", DurationMs: 1800000,
 				IsPlayable: true,
-				Show: &domain.Show{ID: "s1", Name: "Tech Weekly"},
+				Show:       &domain.Show{ID: "s1", Name: "Tech Weekly"},
 			}},
 			{Episode: domain.Episode{
 				ID: "e2", Name: "Deep Sea Mysteries", URI: "spotify:episode:e2", DurationMs: 3600000,
 				IsPlayable: true,
-				Show: &domain.Show{ID: "s2", Name: "Nature Podcast"},
+				Show:       &domain.Show{ID: "s2", Name: "Nature Podcast"},
 			}},
 		})
 
@@ -221,7 +221,7 @@ func TestPodcastFlow_EnterOnUnplayableEpisode_NoOp(t *testing.T) {
 		{Episode: domain.Episode{
 			ID: "e1", Name: "Locked Episode", URI: "spotify:episode:e1", DurationMs: 1800000,
 			IsPlayable: false,
-			Show: &domain.Show{ID: "s1", Name: "Tech Weekly"},
+			Show:       &domain.Show{ID: "s1", Name: "Tech Weekly"},
 		}},
 	})
 
