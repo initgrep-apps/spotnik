@@ -250,3 +250,11 @@ Non-blocking review findings (existing white-box tests cover these behaviors):
 
 1. TestSearchFlow_CtrlU_ClearInput name misleading — test verifies no-op, not clear (Ctrl+U intentionally ignored per overlay-keybinding-cleanup spec)
 2. PrefixAutocomplete test missing backspace-unlock path (backspace to empty → prefix removed → tab returns to TabAll)
+
+---
+
+## Podcast golden test duplication
+**Found:** 2026-06-26 | **Source:** PR #377 Review
+**Feature:** 21-test-infrastructure
+
+1. TestPodcastFlow_EpisodeDetailsOverlay_NoOpForTrack duplicates existing TestApp_IKey_NoOp_WhenTrackPlaying in episode_details_overlay_test.go
