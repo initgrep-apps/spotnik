@@ -1,0 +1,26 @@
+╭─Step 2 of 2 — Authorization Failed───────────────────────────────────────────────╮
+│                                                                                  │
+│                                   ♪  spotnik                                     │
+│                           A terminal Spotify client                              │
+│                                                                                  │
+│  ✗  Authorization failed                                                         │
+│  ✗  Error: authorization code not received                                       │
+│                                                                                  │
+│  Common causes:                                                                  │
+│    •  Client ID mistyped or truncated                                            │
+│    •  Redirect URI does not match: http://127.0.0.1:8888/callback                │
+│    •  Spotify app deleted or suspended                                           │
+│                                                                                  │
+│  r re-enter Client ID · l try again · q quit                                     │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+│                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────╯

@@ -598,6 +598,14 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case stepError:
+		// While the permissions overlay is open, route all keys to it.
+		if a.onboardingPermissionsOverlay != nil {
+			updated, cmd := a.onboardingPermissionsOverlay.Update(m)
+			if po, ok := updated.(*panes.OnboardingPermissionsOverlay); ok {
+				a.onboardingPermissionsOverlay = po
+			}
+			return a, cmd
+		}
 		if m.Type == tea.KeyRunes {
 			switch string(m.Runes) {
 			case "r":
@@ -610,6 +618,8 @@ func (a *App) handleOnboardingKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 					prepareOAuthCmd(a.clientID, a.onboardingPort, a.onboardingCodeCh),
 					a.onboardingSpinner.Init(),
 				)
+			case "v":
+				return a.openOnboardingPermissions()
 			}
 		}
 		return a, nil
