@@ -36,7 +36,7 @@ include regenerated golden files with diff review.
 | 262 | Overlays component (Theme, Help, Profile, Devices) | done |
 | 263 | DevTools panes component (GatewayHealth, PollingTraffic, GatewayLive, NetworkLog) | done |
 | 264 | Cross-cutting integration flows (navigation, overlay lifecycle, error resilience) | done |
-| 265 | CI enforcement + docs | open |
+| 265 | CI enforcement + docs | done |
 | 266 | Onboarding + Splash golden tests | open |
 
 ## Acceptance Criteria
