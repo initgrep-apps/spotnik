@@ -185,9 +185,9 @@ func TestPlaylistsPane_R_IsNoOp(t *testing.T) {
 	assert.Nil(t, cmd, "'r' handler was removed; should return nil cmd")
 }
 
-// TestPlaylistsPane_X_IsNoOpInStory106 verifies 'x' in track view is a no-op
-// in story 106 (management operations are out of scope and remain non-functional).
-func TestPlaylistsPane_X_IsNoOpInStory106(t *testing.T) {
+// TestPlaylistsPane_X_EmitsPlaylistRemoveRequestMsg verifies 'x' in track view
+// emits PlaylistRemoveRequestMsg with correct PlaylistID and TrackURI (story 257).
+func TestPlaylistsPane_X_EmitsPlaylistRemoveRequestMsg(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
 
@@ -201,7 +201,12 @@ func TestPlaylistsPane_X_IsNoOpInStory106(t *testing.T) {
 	pane.refreshTrackRows()
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
-	assert.Nil(t, cmd, "'x' is a no-op in story 106 (management operations out of scope)")
+	require.NotNil(t, cmd, "'x' in track view should emit command")
+	msg := cmd()
+	removeMsg, ok := msg.(PlaylistRemoveRequestMsg)
+	require.True(t, ok, "expected PlaylistRemoveRequestMsg, got %T", msg)
+	assert.Equal(t, "pl1", removeMsg.PlaylistID)
+	assert.Equal(t, "spotify:track:t1", removeMsg.TrackURI)
 }
 
 // TestPlaylistsPane_ShiftUp_IsNoOp verifies Shift+Up in track view is a no-op

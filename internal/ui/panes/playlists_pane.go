@@ -303,7 +303,16 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return p, nil
 
 	case key.Type == tea.KeyRunes && string(key.Runes) == "x":
-		// NOTE: 'x' (remove track) is out of scope for story 106 — remains non-functional.
+		// Remove selected track from the playlist.
+		if idx := p.trackTable.SelectedIndex(); idx >= 0 && idx < len(p.loadedTracks) {
+			track := p.loadedTracks[idx]
+			return p, func() tea.Msg {
+				return PlaylistRemoveRequestMsg{
+					PlaylistID: p.selectedID,
+					TrackURI:   track.URI,
+				}
+			}
+		}
 		return p, nil
 	}
 
