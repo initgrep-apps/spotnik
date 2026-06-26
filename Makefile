@@ -19,7 +19,7 @@ PLATFORMS = \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: all build run test test-integration test-coverage lint fmt clean install release check-glyphs help
+.PHONY: all build run test test-integration test-coverage test-golden-ascii lint fmt clean install release check-glyphs help
 
 ## Default target
 all: lint test build
@@ -67,6 +67,12 @@ test-coverage:
 		else \
 			echo "✓ Coverage $$COVERAGE% meets threshold"; \
 		fi
+
+## Regenerate golden test files in ASCII glyph mode
+test-golden-ascii:
+	@echo "→ Generating ASCII golden files..."
+	GOLDEN_MODE=ascii GOFLAGS="" $(GO) test ./internal/ui/panes/ -run "Golden|golden" -update
+	@echo "✓ ASCII golden files generated"
 
 ## Open coverage report in browser
 coverage-html: test-coverage

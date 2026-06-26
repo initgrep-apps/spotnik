@@ -1192,5 +1192,77 @@ THEN the overlay closes (highest priority)
 
 ---
 
-*Last updated: 2026-06-25*
+## 18. Golden Test Coverage
+
+> Each behavioral test case below has a corresponding golden file snapshot in
+> `internal/ui/panes/testdata/`. Golden tests capture the exact `View()` output
+> at fixed terminal dimensions (80×24 and 40×24). Run `go test ./... -update` to
+> regenerate all golden files after intentional rendering changes.
+
+### 01. Auth & Onboarding
+- Profile overlay: `TestProfileOverlay_View_Premium`, `TestProfileOverlay_View_Free`, `TestProfileOverlay_View_Loading`, `TestProfileOverlay_View_Error`, `TestProfileOverlay_View_LogoutConfirmation`, `TestProfileOverlay_View_ForgetConfirmation`
+
+### 02. Playback Controls
+- NowPlaying track: `TestNowPlayingPane_View_TrackPlaying`, `TestNowPlayingPane_View_TrackPaused`, `TestNowPlayingPane_View_TrackNoData`
+- NowPlaying episode: `TestNowPlayingPane_View_EpisodePlaying`, `TestNowPlayingPane_View_EpisodePaused`
+- Seek bar: `TestNowPlayingPane_View_SeekBar_AtPosition`
+- Volume: `TestNowPlayingPane_View_VolumeBar`
+- Compact strip: `TestNowPlayingPane_View_CompactStrip`
+- Edge cases: `TestNowPlayingPane_View_AdType_EmptyState`, `TestNowPlayingPane_View_UnknownType_EmptyState`
+
+### 03. NowPlaying Display
+- Wide layout: `TestNowPlayingPane_View_Wide`
+- Narrow fallback: `TestNowPlayingPane_View_NarrowFallback`
+
+### 04. Queue
+- Normal: `TestQueuePane_View_WithTracks_Normal`
+- Mixed content: `TestQueuePane_View_MixedContent`
+- Episodes narrow: `TestQueuePane_View_WithEpisodes_Narrow`
+- Empty: `TestQueuePane_View_Empty`
+- Filter: `TestQueuePane_View_FilterActive`, `TestQueuePane_View_FilterActive_NoMatches`
+
+### 05. Devices
+- Device list: `TestDevicesPane_View_Devices`
+- Empty: `TestDevicesPane_View_Empty`
+- Narrow: `TestDevicesPane_View_Narrow`
+
+### 06. Search
+- Idle: `TestSearchOverlay_Golden_Idle`
+- With query: `TestSearchOverlay_Golden_WithQuery`
+- With results: `TestSearchOverlay_Golden_WithResults`
+- No results: `TestSearchOverlay_Golden_NoResults`
+- Page 2: `TestSearchOverlay_Golden_Page2`
+- Prefix locked: `TestSearchOverlay_Golden_PrefixLocked`
+- Narrow: `TestSearchOverlay_Golden_Narrow`
+
+### 07. Library Browser
+- Playlists: `TestPlaylistsPane_View_ListView`, `TestPlaylistsPane_View_EmptyState`, `TestPlaylistsPane_View_Narrow`, `TestPlaylistsPane_View_FilterActive`, `TestPlaylistsPane_View_SpotifyOwnedLocked`, `TestPlaylistsPane_View_TrackSubView`, `TestPlaylistsPane_View_TrackSubView_FilterActive`
+- Albums: `TestAlbumsPane_View_AlbumList`, `TestAlbumsPane_View_EmptyState`, `TestAlbumsPane_View_Narrow`, `TestAlbumsPane_View_FilterActive`, `TestAlbumsPane_View_TrackSubView`, `TestAlbumsPane_View_TrackSubView_FilterActive`
+- LikedSongs: `TestLikedSongsPane_View_Tracks`, `TestLikedSongsPane_View_EmptyState`, `TestLikedSongsPane_View_Narrow`, `TestLikedSongsPane_View_FilterActive`
+
+### 08. Stats & Listening History
+- TopTracks: `TestTopTracksPane_View_Tracks`, `TestTopTracksPane_View_EmptyState`, `TestTopTracksPane_View_Narrow`, `TestTopTracksPane_View_FilterActive`, `TestTopTracksPane_View_FilterActive_NoMatches`, `TestTopTracksPane_View_MediumTerm`
+- TopArtists: `TestTopArtistsPane_View_Artists`, `TestTopArtistsPane_View_EmptyState`, `TestTopArtistsPane_View_Narrow`, `TestTopArtistsPane_View_FilterActive`, `TestTopArtistsPane_View_FilterActive_NoMatches`, `TestTopArtistsPane_View_LongTerm`
+- RecentlyPlayed: `TestRecentlyPlayedPane_View_Tracks`, `TestRecentlyPlayedPane_View_EmptyState`, `TestRecentlyPlayedPane_View_Narrow`, `TestRecentlyPlayedPane_View_FilterActive`, `TestRecentlyPlayedPane_View_FilterActive_NoMatches`
+
+### 09. Theming
+- Theme overlay: `TestThemeOverlay_View_ThemeList`, `TestThemeOverlay_View_Narrow`
+
+### 11. Help Overlay
+- Keybindings: `TestHelpOverlay_View_Keybindings`, `TestHelpOverlay_View_Narrow`
+
+### 14. Podcast Features
+- Episode details: `TestEpisodeDetailsOverlay_View_EpisodeInfo`, `TestEpisodeDetailsOverlay_View_Narrow`
+- FollowedShows: `TestFollowedShowsPane_View_Shows`, `TestFollowedShowsPane_View_EmptyState`, `TestFollowedShowsPane_View_Narrow`, `TestFollowedShowsPane_View_FilterActive`, `TestFollowedShowsPane_View_EpisodeSubView`
+- SavedEpisodes: `TestSavedEpisodesPane_View_Episodes`, `TestSavedEpisodesPane_View_EmptyState`, `TestSavedEpisodesPane_View_Narrow`, `TestSavedEpisodesPane_View_FilterActive`
+
+### 15. Developer Tools (Stats Page)
+- GatewayHealth: `TestGatewayHealthPane_View_AllHealthy`, `TestGatewayHealthPane_View_MixedHealth`
+- GatewayLive: `TestGatewayLivePane_View_WithEntries`, `TestGatewayLivePane_View_Empty`
+- PollingTraffic: `TestPollingTrafficPane_View_Fresh`, `TestPollingTrafficPane_View_Stale`
+- NetworkLog: `TestNetworkLogPane_View_WithEntries`, `TestNetworkLogPane_View_Empty`
+
+---
+
+*Last updated: 2026-06-26*
 *Total: 17 categories, 100+ test cases*

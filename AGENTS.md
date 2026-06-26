@@ -25,6 +25,7 @@ Reference docs — consult only when spec says so:
 - `docs/system/tui.md` — primitives, glyph catalogue, roles
 - `docs/system/api-guide.md` — Spotify API endpoints & scope
 - `docs/system/sanity-tests.md` — Given/When/Then behavioral test cases, manual + automation-ready
+- `internal/goldentest/golden.go` — golden file snapshot protocol (AssertGolden, NewPaneTest, WaitAndReadOutput)
 
 ---
 
@@ -135,6 +136,24 @@ YAML frontmatter: `title`, `status` (open/in-progress/done/closed), `feature` (s
 - API mocks: `httptest.NewServer` (no mock libs)
 - Fixtures: JSON in `testdata/fixtures/`, descriptive names
 
+### Golden File Protocol
+
+Golden tests capture pane `View()` output as committed snapshot files in `testdata/`.
+They catch visual regressions: layout shifts, border breakage, padding changes, glyph misalignment.
+
+```
+When you intentionally change rendering output:
+1. Run: go test ./... -update
+2. Review golden file diffs in git
+3. Commit regenerated golden files alongside code changes
+```
+
+- Golden files stored in `testdata/<TestName>.golden` relative to test file
+- `go test -update` regenerates all golden files
+- `make test-golden-ascii` regenerates golden files in ASCII glyph mode
+- CI runs golden tests as part of `make ci` — mismatch fails the build
+- Never change rendering output without regenerating golden files
+
 ---
 
 ## Code Style
@@ -215,6 +234,7 @@ Never commit: non-compiling code · failing tests · lint failures · secrets ·
 16. Add primitives/glyphs/roles without updating `docs/system/tui.md`
 17. Modify keybindings without sync'ing all 3 locations
 18. Add/remove tests without updating `docs/system/sanity-tests.md` when critical coverage changes
+19. Change rendering output without regenerating golden files (`go test ./... -update`)
 
 ---
 
@@ -248,7 +268,9 @@ make run           build + run
 make test          all tests
 make lint          golangci-lint
 make test-coverage coverage (min 80%)
+make test-golden-ascii  regenerate golden files in ASCII glyph mode
 make ci            full pre-commit check
+go test ./... -update    regenerate all golden files
 ```
 
 ---
