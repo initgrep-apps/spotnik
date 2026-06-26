@@ -204,3 +204,17 @@ Minor findings from PR review, not blocking:
 2. ReadOutput signature exposes unsafe path; consider type-level guard between safe (WaitAndReadOutput) and unsafe (manual Quit+ReadOutput) usage
 3. isUpdateMode reads process-global mutable flag — document parallelism hazard for -update flag
 4. diffString maxDiffs=20 should be extracted to named constant
+
+---
+
+## Library golden test gaps
+**Found:** 2026-06-26 | **Source:** PR #373 Review
+**Feature:** 21-test-infrastructure
+
+Non-blocking review findings:
+
+1. No integration test for Enter-on-track in sub-view (PlayContextMsg emission) for Playlists/Albums
+2. LikedSongsPane has no integration flow tests
+3. Golden snapshots skip debounce loading state — test final state only
+4. No `make test-update-golden` workflow target documented
+5. AlbumsPane 'x' key in track sub-view forwarded to table but no test verifies it's a no-op (not blocking — correct behavior)
