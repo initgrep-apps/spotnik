@@ -186,7 +186,8 @@ func TestPlaylistsPane_R_IsNoOp(t *testing.T) {
 }
 
 // TestPlaylistsPane_X_EmitsPlaylistRemoveRequestMsg verifies 'x' in track view
-// emits PlaylistRemoveRequestMsg with correct PlaylistID and TrackURI (story 257).
+// emits PlaylistRemoveRequestMsg with correct PlaylistID and TrackURI, and sets
+// the removing sentinel to block duplicate presses (story 257).
 func TestPlaylistsPane_X_EmitsPlaylistRemoveRequestMsg(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
@@ -202,11 +203,90 @@ func TestPlaylistsPane_X_EmitsPlaylistRemoveRequestMsg(t *testing.T) {
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	require.NotNil(t, cmd, "'x' in track view should emit command")
+	assert.True(t, pane.removing, "removing sentinel must be set after 'x' press")
 	msg := cmd()
 	removeMsg, ok := msg.(PlaylistRemoveRequestMsg)
 	require.True(t, ok, "expected PlaylistRemoveRequestMsg, got %T", msg)
 	assert.Equal(t, "pl1", removeMsg.PlaylistID)
 	assert.Equal(t, "spotify:track:t1", removeMsg.TrackURI)
+}
+
+// TestPlaylistsPane_PlaylistRemoveResultMsg_Success_RemovesTrack verifies that
+// a successful PlaylistRemoveResultMsg removes the track from loadedTracks and
+// clears the removing sentinel (story 257 — fix review).
+func TestPlaylistsPane_PlaylistRemoveResultMsg_Success_RemovesTrack(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2", Artists: []domain.Artist{{Name: "B"}}},
+	}
+	pane.trackTotal = 2
+	pane.trackOffset = 2
+	pane.removing = true // simulate in-flight removal
+	pane.refreshTrackRows()
+
+	// Deliver successful removal result for t1
+	pane.Update(PlaylistRemoveResultMsg{PlaylistID: "pl1", TrackURI: "spotify:track:t1"}) //nolint:errcheck
+
+	assert.False(t, pane.removing, "removing sentinel must be cleared on result")
+	assert.Len(t, pane.loadedTracks, 1, "track must be removed from loadedTracks")
+	assert.Equal(t, "spotify:track:t2", pane.loadedTracks[0].URI, "remaining track must be t2")
+	assert.Equal(t, 1, pane.trackTotal, "trackTotal must be decremented")
+	assert.Equal(t, 1, pane.trackOffset, "trackOffset must reflect new length")
+}
+
+// TestPlaylistsPane_PlaylistRemoveResultMsg_Error_ClearsRemoving verifies that
+// a failed PlaylistRemoveResultMsg clears the removing sentinel so the user can
+// retry (toast is handled by app.go) (story 257 — fix review).
+func TestPlaylistsPane_PlaylistRemoveResultMsg_Error_ClearsRemoving(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	pane.removing = true
+
+	pane.Update(PlaylistRemoveResultMsg{PlaylistID: "pl1", TrackURI: "spotify:track:t1", Err: fmt.Errorf("network error")}) //nolint:errcheck
+
+	assert.False(t, pane.removing, "removing sentinel must be cleared on error so user can retry")
+	assert.Len(t, pane.loadedTracks, 1, "loadedTracks must not change on error")
+}
+
+// TestPlaylistsPane_X_WhileRemoving_IsNoOp verifies that pressing 'x' while a
+// removal is in-flight returns a no-op (story 257 — fix review).
+func TestPlaylistsPane_X_WhileRemoving_IsNoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	pane.removing = true // simulate in-flight removal
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	assert.Nil(t, cmd, "'x' while removing=true must be no-op")
+}
+
+// TestPlaylistsPane_X_EmptyTracks_NoOp verifies that pressing 'x' when loadedTracks
+// is empty/nil does not panic and returns nil command (story 257 — fix review).
+func TestPlaylistsPane_X_EmptyTracks_NoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	// loadedTracks is nil/empty — no tracks loaded yet
+	pane.refreshTrackRows()
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	assert.Nil(t, cmd, "'x' with empty loadedTracks must be no-op")
 }
 
 // TestPlaylistsPane_ShiftUp_IsNoOp verifies Shift+Up in track view is a no-op
