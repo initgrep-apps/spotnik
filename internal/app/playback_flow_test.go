@@ -60,6 +60,7 @@ func assertPlaybackRequestMsg(t *testing.T, cmd tea.Cmd, wantAction panes.Playba
 	t.Helper()
 	require.NotNil(t, cmd, "expected non-nil cmd")
 	msg := cmd()
+	require.NotNil(t, msg, "cmd() returned nil")
 	req, ok := msg.(panes.PlaybackRequestMsg)
 	require.True(t, ok, "expected PlaybackRequestMsg, got %T", msg)
 	assert.Equal(t, wantAction, req.Action)
@@ -76,8 +77,7 @@ func TestPlaybackFlow_PauseThenResume(t *testing.T) {
 
 	// Step 1: Space when playing → should request pause.
 	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeySpace})
-	req := assertPlaybackRequestMsg(t, cmd, panes.ActionPause)
-	require.NotNil(t, cmd)
+	assertPlaybackRequestMsg(t, cmd, panes.ActionPause)
 
 	// Step 2: Set playback state to paused.
 	a.Store().SetPlaybackState(&domain.PlaybackState{
@@ -101,8 +101,6 @@ func TestPlaybackFlow_PauseThenResume(t *testing.T) {
 	// Step 3: Space when paused → should request play.
 	_, cmd = a.Update(tea.KeyMsg{Type: tea.KeySpace})
 	assertPlaybackRequestMsg(t, cmd, panes.ActionPlay)
-
-	_ = req // used in assert
 }
 
 // TestPlaybackFlow_SeekRight verifies that pressing → produces a SeekIntentMsg
@@ -114,24 +112,16 @@ func TestPlaybackFlow_SeekRight(t *testing.T) {
 	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRight})
 	require.NotNil(t, cmd, "→ key should produce a cmd")
 
-	// Execute the cmd — it should be a components.SeekDebounceTickMsg that fires the debounce.
+	// Execute the cmd — it returns the debounce tick msg.
+	// Feed the tick msg back to the App; the pane matches seq and returns a SeekIntentMsg cmd.
 	msg := cmd()
-	_, ok := msg.(panes.SeekIntentMsg)
-	// NOTE: The debounce fires after a delay. The → key sends a HandleKey call which
-	// sets pending and returns a debounce tick cmd. Executing it fires the intent.
-	if !ok {
-		// Could be a SeekDebounceTickMsg that needs another Update round.
-		// For the first press, the cmd should eventually produce a SeekIntentMsg.
-		// Try sending the tick msg back to the App.
-		_, cmd2 := a.Update(msg)
-		if cmd2 != nil {
-			msg2 := cmd2()
-			if intent, ok2 := msg2.(panes.SeekIntentMsg); ok2 {
-				assert.Equal(t, 35000, intent.TargetMs, "seek target should be +5s from 30000")
-				_ = intent
-			}
-		}
-	}
+	_, cmd2 := a.Update(msg)
+	require.NotNil(t, cmd2, "debounce tick must produce a SeekIntentMsg cmd")
+
+	msg2 := cmd2()
+	intent, ok := msg2.(panes.SeekIntentMsg)
+	require.True(t, ok, "expected SeekIntentMsg, got %T", msg2)
+	assert.Equal(t, 35000, intent.TargetMs, "seek target should be +5s from 30000")
 }
 
 // TestPlaybackFlow_ShiftRight_NextTrack verifies that Shift+→ produces
@@ -179,18 +169,16 @@ func TestPlaybackFlow_VolumeUp(t *testing.T) {
 	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
 	require.NotNil(t, cmd, "+ key should produce a cmd")
 
-	// The cmd should produce a VolumeDebounceTickMsg that fires a VolumeIntentMsg.
-	// Execute the initial cmd and then route back.
+	// Execute the initial cmd and then route back to get the intent.
 	msg := cmd()
-	// It could be the debounce tick — send it through Update to get the intent.
 	_, cmd2 := a.Update(msg)
-	if cmd2 != nil {
-		msg2 := cmd2()
-		if intent, ok := msg2.(panes.VolumeIntentMsg); ok {
-			assert.Equal(t, 66, intent.TargetVol, "volume should increment from 65 to 66")
-			assert.Greater(t, intent.Seq, 0, "volume intent should have sequence number")
-		}
-	}
+	require.NotNil(t, cmd2, "volume debounce tick must produce a VolumeIntentMsg cmd")
+
+	msg2 := cmd2()
+	intent, ok := msg2.(panes.VolumeIntentMsg)
+	require.True(t, ok, "expected VolumeIntentMsg, got %T", msg2)
+	assert.Equal(t, 66, intent.TargetVol, "volume should increment from 65 to 66")
+	assert.Greater(t, intent.Seq, 0, "volume intent should have sequence number")
 }
 
 // TestPlaybackFlow_VolumeDown verifies that pressing '-' produces a VolumeIntentMsg
@@ -203,13 +191,13 @@ func TestPlaybackFlow_VolumeDown(t *testing.T) {
 
 	msg := cmd()
 	_, cmd2 := a.Update(msg)
-	if cmd2 != nil {
-		msg2 := cmd2()
-		if intent, ok := msg2.(panes.VolumeIntentMsg); ok {
-			assert.Equal(t, 64, intent.TargetVol, "volume should decrement from 65 to 64")
-			assert.Greater(t, intent.Seq, 0, "volume intent should have sequence number")
-		}
-	}
+	require.NotNil(t, cmd2, "volume debounce tick must produce a VolumeIntentMsg cmd")
+
+	msg2 := cmd2()
+	intent, ok := msg2.(panes.VolumeIntentMsg)
+	require.True(t, ok, "expected VolumeIntentMsg, got %T", msg2)
+	assert.Equal(t, 64, intent.TargetVol, "volume should decrement from 65 to 64")
+	assert.Greater(t, intent.Seq, 0, "volume intent should have sequence number")
 }
 
 // TestPlaybackFlow_PlaybackRequestMsg_ProducesAPICmd verifies that sending
@@ -252,10 +240,10 @@ func TestPlaybackFlow_SeekLeft(t *testing.T) {
 
 	msg := cmd()
 	_, cmd2 := a.Update(msg)
-	if cmd2 != nil {
-		msg2 := cmd2()
-		if intent, ok := msg2.(panes.SeekIntentMsg); ok {
-			assert.Equal(t, 30000, intent.TargetMs, "seek target should be -5s from 35000")
-		}
-	}
+	require.NotNil(t, cmd2, "debounce tick must produce a SeekIntentMsg cmd")
+
+	msg2 := cmd2()
+	intent, ok := msg2.(panes.SeekIntentMsg)
+	require.True(t, ok, "expected SeekIntentMsg, got %T", msg2)
+	assert.Equal(t, 30000, intent.TargetMs, "seek target should be -5s from 35000")
 }
