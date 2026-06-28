@@ -14,7 +14,7 @@
 | 02 | API Infrastructure & Resilience | `features/02-api-infrastructure/` | done | 18–35, 37–39, 65, 126–127, 199–203, 206, 225 | Centralized gateway, rate limiting, dedup, error types; universal tick-driven polling, per-pane exponential backoff, silent failure fixes, overlay self-sufficiency |
 | 03 | Playback & NowPlaying | `features/03-playback/` | done | 03, 11, 36, 45, 58–60, 105–107, 118–125, 197–198, 205, 224, 226 | Transport controls, NowPlaying display, visualizer, interactive seek bar, InfoBox padding & controls centering |
 | 04 | Queue & Device Switching | `features/04-queue-and-devices/` | done | 06, 07, 12, 13, 46 | Queue viewer pane, Spotify Connect device selection |
-| 05 | Library Browser & Playlists | `features/05-library/` | done | 04, 09, 10, 47 | Browse playlists/albums/liked songs, full playlist management |
+| 05 | Library Browser & Playlists | `features/05-library/` | in-progress | 04, 09, 10, 47, 267, 268 | Browse playlists/albums/liked songs, full playlist management, like/unlike tracks |
 | 06 | Search | `features/06-search/` | done | 05, 16, 81–104, 212–213 | Full-screen overlay, multi-tab results, prefix autocomplete, pagination |
 | 07 | Stats & Listening History | `features/07-stats/` | done | 08, 14, 48, 55 | Top tracks, top artists, recently played with time-range cycling |
 | 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79, 207, 208 | Token-based themes, TOML config, runtime switcher, 13 built-in themes including mono-dark/mono-light; Page A/B → Music/Stats rename |
