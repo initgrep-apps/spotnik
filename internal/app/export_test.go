@@ -49,3 +49,8 @@ func (a *App) AutoSwitchPreset(forContentType string) tea.Cmd {
 func (a *App) IsCurrentPresetPodcastOriented() bool {
 	return a.isCurrentPresetPodcastOriented()
 }
+
+// ErrNilClientForTest exposes the unexported errNilClient sentinel so external
+// test packages (app_test) can construct ToggleLikeResultMsg values that
+// exercise the errNilClient rollback branch of the routing handler.
+var ErrNilClientForTest = errNilClient

@@ -389,7 +389,10 @@ func (s *Store) AddLikedTrack(track domain.Track) {
 		AddedAt: time.Now().Format(time.RFC3339),
 		Track:   track,
 	}}, s.likedTracks...)
-	s.likedTotal++
+	// Derive likedTotal from the slice length so the count can never drift
+	// from likedTracks (SetLikedTracks does not touch likedTotal; deriving
+	// here keeps the two in sync after every optimistic mutation).
+	s.likedTotal = len(s.likedTracks)
 }
 
 // RemoveLikedTrack optimistically removes a track from likedTracks and likedSet.
@@ -416,9 +419,9 @@ func (s *Store) RemoveLikedTrack(trackID string) {
 			break
 		}
 	}
-	if s.likedTotal > 0 {
-		s.likedTotal--
-	}
+	// Derive likedTotal from the slice length so the count can never drift
+	// from likedTracks after an optimistic removal.
+	s.likedTotal = len(s.likedTracks)
 }
 
 // LikedTotal returns the total number of liked tracks (for pagination).

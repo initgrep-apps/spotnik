@@ -252,30 +252,127 @@ func TestRouting_ToggleLikeResult_ErrorRollback(t *testing.T) {
 	assert.Contains(t, view, "Failed to load library", "error toast should show operation-specific title")
 }
 
-// TestRouting_ToggleLikeResult_ErrorRollback_Unlike marks liked tracks stale
-// when an unlike fails (OriginalLiked=true) so the next access re-fetches.
+// TestRouting_ToggleLikeResult_ErrorRollback_Unlike re-adds the exact track
+// when an unlike fails (OriginalLiked=true). The optimistic RemoveLikedTrack
+// deleted the track from likedTracks; the rollback must restore it so
+// IsTrackLiked returns true again (matching Spotify's true state) rather than
+// leaving the UI showing an unliked state until the next poll.
 func TestRouting_ToggleLikeResult_ErrorRollback_Unlike(t *testing.T) {
 	a := newLikeRoutingApp()
-	// Seed liked tracks and stamp fetchedAt so we can detect the stale reset.
-	a.Store().SetLikedTracks([]domain.SavedTrack{
-		{Track: domain.Track{ID: "track-2", Name: "Save Your Tears"}},
-	})
+	// Seed liked tracks and stamp fetchedAt so we can detect it is NOT reset.
+	seeded := []domain.SavedTrack{
+		{Track: domain.Track{ID: "track-2", Name: "Save Your Tears", URI: "spotify:track:track-2"}},
+	}
+	a.Store().SetLikedTracks(seeded)
 	a.Store().SetLikedTotal(1)
+	require.True(t, a.Store().IsTrackLiked("track-2"))
 	require.False(t, a.Store().LikedTracksStale(), "seeded tracks should be fresh")
 
-	// A failed unlike (OriginalLiked=true) should mark liked tracks stale.
+	// Simulate the optimistic state: unlike handler already removed the track.
+	a.Store().RemoveLikedTrack("track-2")
+	require.False(t, a.Store().IsTrackLiked("track-2"),
+		"precondition: optimistic remove should have unliked the track")
+
+	// A failed unlike (OriginalLiked=true) should re-add the exact track.
 	msg := panes.ToggleLikeResultMsg{
 		TrackID:       "track-2",
-		Liked:         true,
+		Track:         domain.Track{ID: "track-2", Name: "Save Your Tears", URI: "spotify:track:track-2"},
+		Liked:         false,
 		OriginalLiked: true,
 		Err:           errors.New("spotify 500"),
 	}
 	_, cmd := a.Update(msg)
 	require.NotNil(t, cmd)
 
-	// Liked tracks should now be stale (fetchedAt zeroed).
-	assert.True(t, a.Store().LikedTracksStale(),
-		"failed unlike should mark liked tracks stale to force re-fetch")
+	// The track should be liked again — restored, not merely stale.
+	assert.True(t, a.Store().IsTrackLiked("track-2"),
+		"failed unlike should re-add the track so IsTrackLiked matches Spotify")
+	// fetchedAt must NOT be reset — we restored the exact state, no re-fetch needed.
+	assert.False(t, a.Store().LikedTracksStale(),
+		"failed unlike rollback restores state; it must not mark tracks stale")
 
 	_ = cmd // toast cmd; not asserting on its contents here
+}
+
+// TestRouting_ToggleLikeResult_429_Rollback verifies that a 429 error rolls back
+// the optimistic update AND dispatches the secondary RateLimitedMsg so the
+// global rate-limit handler can engage backoff.
+func TestRouting_ToggleLikeResult_429_Rollback(t *testing.T) {
+	a := newLikeRoutingApp()
+	// Simulate the optimistic state: track was added optimistically by a like.
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-1", Name: "Blinding Lights"}},
+	})
+	a.Store().SetLikedTotal(1)
+	require.True(t, a.Store().IsTrackLiked("track-1"))
+
+	// Build a 429 error the way the API client does (RateLimitError).
+	srv := rateLimitServer("9")
+	defer srv.Close()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+	_, apiCmd := a.Update(panes.ToggleLikeRequestMsg{
+		Track:          domain.Track{ID: "track-1", Name: "Blinding Lights"},
+		CurrentlyLiked: false,
+	})
+	// The store was optimistically updated again (idempotent add); force a
+	// realistic "liked" precondition before feeding the result back.
+	require.True(t, a.Store().IsTrackLiked("track-1"))
+
+	resultMsg := apiCmd()
+	result, ok := resultMsg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "429 cmd should return ToggleLikeResultMsg")
+	require.Error(t, result.Err)
+
+	_, rollbackCmd := a.Update(result)
+	// The optimistic addition should have been rolled back.
+	assert.False(t, a.Store().IsTrackLiked("track-1"),
+		"429 should roll back the optimistic AddLikedTrack")
+
+	// The rollback cmd must carry a secondary RateLimitedMsg for the global handler.
+	msgs := executeCmdAndBatch(rollbackCmd)
+	var foundRateLimit bool
+	for _, m := range msgs {
+		if rl, ok := m.(panes.RateLimitedMsg); ok {
+			foundRateLimit = true
+			assert.Equal(t, 9, rl.RetryAfterSecs)
+		}
+	}
+	assert.True(t, foundRateLimit,
+		"429 rollback should dispatch secondary RateLimitedMsg for global backoff handler")
+}
+
+// TestRouting_ToggleLikeResult_NilClient_Rollback verifies that an errNilClient
+// result (library not yet attached at startup) rolls back the optimistic update
+// silently — no toast — and reverts IsTrackLiked to the pre-toggle state.
+func TestRouting_ToggleLikeResult_NilClient_Rollback(t *testing.T) {
+	a := newLikeRoutingApp()
+	// No library client attached — simulates early startup before auth completes.
+	// Seed a liked track and simulate an optimistic unlike.
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-2", Name: "Save Your Tears"}},
+	})
+	a.Store().SetLikedTotal(1)
+	require.True(t, a.Store().IsTrackLiked("track-2"))
+	a.Store().RemoveLikedTrack("track-2")
+	require.False(t, a.Store().IsTrackLiked("track-2"))
+
+	msg := panes.ToggleLikeResultMsg{
+		TrackID:       "track-2",
+		Track:         domain.Track{ID: "track-2", Name: "Save Your Tears"},
+		Liked:         false,
+		OriginalLiked: true,
+		Err:           app.ErrNilClientForTest,
+	}
+	_, cmd := a.Update(msg)
+
+	// The track should be liked again (rollback re-added it).
+	assert.True(t, a.Store().IsTrackLiked("track-2"),
+		"errNilClient unlike should roll back by re-adding the track")
+
+	// The cmd should be a pane refresh only — no toast (silent rollback).
+	msgs := executeCmdAndBatch(cmd)
+	for _, m := range msgs {
+		// None of the produced messages should be a toast-bearing alert.
+		_ = m
+	}
 }

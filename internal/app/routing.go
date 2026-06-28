@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -504,32 +503,64 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// so its rows reflect the optimistic update.
 		var apiCmd tea.Cmd
 		if m.CurrentlyLiked {
-			apiCmd = a.buildUnlikeTrackCmd(m.Track.ID, m.Track.Name)
+			apiCmd = a.buildUnlikeTrackCmd(m.Track)
 		} else {
-			apiCmd = a.buildLikeTrackCmd(m.Track.ID, m.Track.Name)
+			apiCmd = a.buildLikeTrackCmd(m.Track)
 		}
+		// NOTE: forwarding an empty LikedTracksLoadedMsg here is a re-render hint
+		// for the LikedSongs pane only — it must NOT reach the global handler
+		// (which would wipe the liked-tracks store). This is safe because
+		// routeLibraryMsg returns handled=true, so the global switch never runs
+		// for this message. If LikedTracksLoadedMsg ever gains a global handler,
+		// introduce a dedicated refresh-only message here instead.
 		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
 		return a, tea.Batch(apiCmd, refreshCmd), true
 
 	case panes.ToggleLikeResultMsg:
 		if m.Err != nil {
+			// errNilClient is an expected startup condition (library not yet
+			// attached). Roll back the optimistic update silently — no toast,
+			// no log — but still refresh the pane so the UI reverts.
 			if errors.Is(m.Err, errNilClient) {
-				return a, nil, true
+				if m.OriginalLiked {
+					a.store.AddLikedTrack(m.Track)
+				} else {
+					a.store.RemoveLikedTrack(m.TrackID)
+				}
+				refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+				return a, refreshCmd, true
 			}
-			// Rollback the optimistic update.
+			// Roll back the optimistic update so the store reflects Spotify's
+			// true state. For an unlike-failure (OriginalLiked=true) re-add the
+			// exact track; for a like-failure (OriginalLiked=false) remove it.
 			if m.OriginalLiked {
-				// Was liked before toggle (unlike failed) → mark liked tracks
-				// stale so the next access re-fetches the true state from Spotify.
-				a.store.SetLikedTracksFetchedAt(time.Time{})
+				a.store.AddLikedTrack(m.Track)
 			} else {
-				// Was not liked before toggle (like failed) → remove the
-				// optimistically-added track from the store.
 				a.store.RemoveLikedTrack(m.TrackID)
 			}
 			refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+			// 429 and 401 still need the global handlers (backoff / token
+			// refresh) to run, so dispatch the secondary message after the
+			// store has been reverted. This keeps rollback as the single source
+			// of truth while preserving the rate-limit/auth side effects.
+			var secondary tea.Cmd
+			if secs := parse429RetryAfter(m.Err); secs > 0 {
+				secondary = func() tea.Msg { return panes.RateLimitedMsg{RetryAfterSecs: secs} }
+			} else if isUnauthorizedError(m.Err) {
+				secondary = func() tea.Msg { return unauthorizedMsg{} }
+			}
 			toast := a.errorMapper.Map(uikit.OpLibrary, m.Err)
 			if toast.Intent == uikit.ToastNone {
+				// Error suppressed by mapper: log to stderr so the silent
+				// rollback is at least observable for debugging.
+				fmt.Fprintf(os.Stderr, "spotnik: toggleLike error suppressed by mapper: %v\n", m.Err)
+				if secondary != nil {
+					return a, tea.Batch(refreshCmd, secondary), true
+				}
 				return a, refreshCmd, true
+			}
+			if secondary != nil {
+				return a, tea.Batch(refreshCmd, a.toasts.Cmd(toast), secondary), true
 			}
 			return a, tea.Batch(refreshCmd, a.toasts.Cmd(toast)), true
 		}
@@ -540,6 +571,8 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		} else {
 			title = "Unliked"
 		}
+		// NOTE: see the comment on the request handler above — the empty
+		// LikedTracksLoadedMsg is a re-render hint scoped to routeLibraryMsg.
 		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
 		return a, tea.Batch(refreshCmd, a.toasts.Cmd(uikit.Toast{
 			Intent: uikit.ToastSuccess,
