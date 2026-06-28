@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/api"
@@ -483,6 +484,67 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return a, cmd, true
 		}
 		return a, nil, true
+
+	case panes.ToggleLikeRequestMsg:
+		// Premium gate: like/unlike requires Spotify Premium (PUT/DELETE /me/tracks).
+		if !a.store.IsPremium() {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			}), true
+		}
+		// Optimistic store update before the API call so the UI reflects the
+		// toggle immediately. Rollback happens in the ToggleLikeResultMsg handler.
+		if m.CurrentlyLiked {
+			a.store.RemoveLikedTrack(m.Track.ID)
+		} else {
+			a.store.AddLikedTrack(m.Track)
+		}
+		// Dispatch the appropriate API command and refresh the LikedSongs pane
+		// so its rows reflect the optimistic update.
+		var apiCmd tea.Cmd
+		if m.CurrentlyLiked {
+			apiCmd = a.buildUnlikeTrackCmd(m.Track.ID, m.Track.Name)
+		} else {
+			apiCmd = a.buildLikeTrackCmd(m.Track.ID, m.Track.Name)
+		}
+		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+		return a, tea.Batch(apiCmd, refreshCmd), true
+
+	case panes.ToggleLikeResultMsg:
+		if m.Err != nil {
+			if errors.Is(m.Err, errNilClient) {
+				return a, nil, true
+			}
+			// Rollback the optimistic update.
+			if m.OriginalLiked {
+				// Was liked before toggle (unlike failed) → mark liked tracks
+				// stale so the next access re-fetches the true state from Spotify.
+				a.store.SetLikedTracksFetchedAt(time.Time{})
+			} else {
+				// Was not liked before toggle (like failed) → remove the
+				// optimistically-added track from the store.
+				a.store.RemoveLikedTrack(m.TrackID)
+			}
+			refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+			toast := a.errorMapper.Map(uikit.OpLibrary, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				return a, refreshCmd, true
+			}
+			return a, tea.Batch(refreshCmd, a.toasts.Cmd(toast)), true
+		}
+		// Success toast.
+		var title string
+		if m.Liked {
+			title = "♥ Liked"
+		} else {
+			title = "Unliked"
+		}
+		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+		return a, tea.Batch(refreshCmd, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastSuccess,
+			Title:  title,
+		})), true
 
 	}
 

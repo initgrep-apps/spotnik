@@ -1,0 +1,281 @@
+package app_test
+
+// like_routing_test.go — Tests for Story 267 Task 6:
+// ToggleLikeRequestMsg and ToggleLikeResultMsg routing handlers.
+//
+// Verifies:
+// - ToggleLikeRequestMsg like path: optimistic AddLikedTrack + dispatch like cmd
+// - ToggleLikeRequestMsg unlike path: optimistic RemoveLikedTrack + dispatch unlike cmd
+// - Premium gate: free-tier user gets warning toast, no API dispatch
+// - ToggleLikeResultMsg success: toast ("♥ Liked" or "Unliked")
+// - ToggleLikeResultMsg error: rollback optimistic update + error toast
+
+import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/app"
+	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/ui/panes"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// newLikeRoutingApp creates an App with premium tier set and a window size so
+// panes and alerts render. Callers may override the tier or inject a library.
+func newLikeRoutingApp() *app.App {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := app.New(cfg, app.AppOptions{})
+	a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+	return a
+}
+
+// executeCmdAndBatch runs a cmd, unwrapping tea.BatchMsg into individual messages.
+// Returns the list of messages produced (nil cmds dropped).
+func executeCmdAndBatch(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			if c != nil {
+				if sub := c(); sub != nil {
+					msgs = append(msgs, sub)
+				}
+			}
+		}
+		return msgs
+	}
+	if msg == nil {
+		return nil
+	}
+	return []tea.Msg{msg}
+}
+
+// --- ToggleLikeRequestMsg ---
+
+// TestRouting_ToggleLikeRequest_Likes verifies that a ToggleLikeRequestMsg with
+// CurrentlyLiked=false optimistically adds the track to the store and dispatches
+// a like API command.
+func TestRouting_ToggleLikeRequest_Likes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	a := newLikeRoutingApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-1", Name: "Blinding Lights", URI: "spotify:track:track-1"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: false})
+	require.NotNil(t, cmd)
+
+	// Optimistic store update should have happened before the API call.
+	assert.True(t, a.Store().IsTrackLiked("track-1"),
+		"optimistic AddLikedTrack should mark track as liked immediately")
+
+	// The batch should include a ToggleLikeResultMsg from the API call.
+	msgs := executeCmdAndBatch(cmd)
+	require.NotEmpty(t, msgs)
+	var foundResult bool
+	for _, m := range msgs {
+		if r, ok := m.(panes.ToggleLikeResultMsg); ok {
+			foundResult = true
+			assert.Equal(t, "track-1", r.TrackID)
+			assert.True(t, r.Liked, "Liked should be true after successful like")
+			assert.NoError(t, r.Err)
+		}
+	}
+	assert.True(t, foundResult, "batch should contain ToggleLikeResultMsg")
+}
+
+// TestRouting_ToggleLikeRequest_Unlikes verifies that a ToggleLikeRequestMsg with
+// CurrentlyLiked=true optimistically removes the track from the store and
+// dispatches an unlike API command.
+func TestRouting_ToggleLikeRequest_Unlikes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	a := newLikeRoutingApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+	// Seed the store with a liked track so we can verify its removal.
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-2", Name: "Save Your Tears"}},
+	})
+	a.Store().SetLikedTotal(1)
+	require.True(t, a.Store().IsTrackLiked("track-2"))
+
+	track := domain.Track{ID: "track-2", Name: "Save Your Tears", URI: "spotify:track:track-2"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: true})
+	require.NotNil(t, cmd)
+
+	// Optimistic store update should have happened before the API call.
+	assert.False(t, a.Store().IsTrackLiked("track-2"),
+		"optimistic RemoveLikedTrack should mark track as unliked immediately")
+
+	msgs := executeCmdAndBatch(cmd)
+	require.NotEmpty(t, msgs)
+	var foundResult bool
+	for _, m := range msgs {
+		if r, ok := m.(panes.ToggleLikeResultMsg); ok {
+			foundResult = true
+			assert.Equal(t, "track-2", r.TrackID)
+			assert.False(t, r.Liked, "Liked should be false after successful unlike")
+			assert.NoError(t, r.Err)
+		}
+	}
+	assert.True(t, foundResult, "batch should contain ToggleLikeResultMsg")
+}
+
+// TestRouting_ToggleLikeRequest_PremiumGate verifies that a free-tier user
+// pressing 'l' gets a warning toast and NO API command is dispatched.
+func TestRouting_ToggleLikeRequest_PremiumGate(t *testing.T) {
+	a := newLikeRoutingApp()
+	// Downgrade to free tier.
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "free"})
+
+	track := domain.Track{ID: "track-1", Name: "Blinding Lights"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: false})
+	require.NotNil(t, cmd, "free user should get a warning toast cmd")
+
+	// The store should NOT have been optimistically updated.
+	assert.False(t, a.Store().IsTrackLiked("track-1"),
+		"free-tier toggle must not optimistically update the store")
+
+	// Executing the cmd should not produce a ToggleLikeResultMsg (it's a toast).
+	msgs := executeCmdAndBatch(cmd)
+	for _, m := range msgs {
+		_, isResult := m.(panes.ToggleLikeResultMsg)
+		assert.False(t, isResult,
+			"free-tier toggle must NOT produce ToggleLikeResultMsg (gate blocks API call)")
+	}
+}
+
+// --- ToggleLikeResultMsg ---
+
+// TestRouting_ToggleLikeResult_Success verifies a successful like result shows
+// a success toast ("♥ Liked").
+func TestRouting_ToggleLikeResult_Success(t *testing.T) {
+	a := newLikeRoutingApp()
+
+	msg := panes.ToggleLikeResultMsg{TrackID: "track-1", Liked: true, OriginalLiked: false}
+	_, cmd := a.Update(msg)
+	require.NotNil(t, cmd, "success result should produce a toast cmd")
+
+	// Execute the alert cmd and feed it back so the toast renders.
+	alertMsg := cmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "♥ Liked", "success toast should show ♥ Liked")
+}
+
+// TestRouting_ToggleLikeResult_UnlikeSuccess verifies a successful unlike result
+// shows a success toast ("Unliked").
+func TestRouting_ToggleLikeResult_UnlikeSuccess(t *testing.T) {
+	a := newLikeRoutingApp()
+
+	msg := panes.ToggleLikeResultMsg{TrackID: "track-2", Liked: false, OriginalLiked: true}
+	_, cmd := a.Update(msg)
+	require.NotNil(t, cmd)
+
+	alertMsg := cmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "Unliked", "success toast should show Unliked")
+}
+
+// TestRouting_ToggleLikeResult_ErrorRollback verifies that on error the
+// optimistic update is rolled back. When the toggle was a like that failed
+// (OriginalLiked=false), the optimistically-added track should be removed.
+func TestRouting_ToggleLikeResult_ErrorRollback(t *testing.T) {
+	a := newLikeRoutingApp()
+	// Simulate the optimistic state: track was added optimistically.
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-1", Name: "Blinding Lights"}},
+	})
+	a.Store().SetLikedTotal(1)
+	require.True(t, a.Store().IsTrackLiked("track-1"))
+
+	// A failed like (OriginalLiked=false) should roll back by removing the track.
+	msg := panes.ToggleLikeResultMsg{
+		TrackID:       "track-1",
+		Liked:         false,
+		OriginalLiked: false,
+		Err:           errors.New("spotify 500"),
+	}
+	_, cmd := a.Update(msg)
+	require.NotNil(t, cmd, "error result should produce a toast cmd")
+
+	// The optimistic addition should have been rolled back.
+	assert.False(t, a.Store().IsTrackLiked("track-1"),
+		"failed like should roll back the optimistic AddLikedTrack")
+
+	// Execute alert and feed back so the toast renders.
+	alertMsg := cmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "Failed to load library", "error toast should show operation-specific title")
+}
+
+// TestRouting_ToggleLikeResult_ErrorRollback_Unlike marks liked tracks stale
+// when an unlike fails (OriginalLiked=true) so the next access re-fetches.
+func TestRouting_ToggleLikeResult_ErrorRollback_Unlike(t *testing.T) {
+	a := newLikeRoutingApp()
+	// Seed liked tracks and stamp fetchedAt so we can detect the stale reset.
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-2", Name: "Save Your Tears"}},
+	})
+	a.Store().SetLikedTotal(1)
+	require.False(t, a.Store().LikedTracksStale(), "seeded tracks should be fresh")
+
+	// A failed unlike (OriginalLiked=true) should mark liked tracks stale.
+	msg := panes.ToggleLikeResultMsg{
+		TrackID:       "track-2",
+		Liked:         true,
+		OriginalLiked: true,
+		Err:           errors.New("spotify 500"),
+	}
+	_, cmd := a.Update(msg)
+	require.NotNil(t, cmd)
+
+	// Liked tracks should now be stale (fetchedAt zeroed).
+	assert.True(t, a.Store().LikedTracksStale(),
+		"failed unlike should mark liked tracks stale to force re-fetch")
+
+	_ = cmd // toast cmd; not asserting on its contents here
+}

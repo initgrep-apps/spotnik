@@ -869,6 +869,54 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 	}
 }
 
+// buildLikeTrackCmd creates a command that calls LibraryClient.LikeTrack with
+// Interactive priority and returns a ToggleLikeResultMsg. trackID identifies the
+// track to like; trackName is not used in the API call but threaded for clarity.
+// On 429 the command returns RateLimitedMsg; on 401 it returns unauthorizedMsg.
+func (a *App) buildLikeTrackCmd(trackID, trackName string) tea.Cmd {
+	library := a.library
+	return func() tea.Msg {
+		if library == nil {
+			return panes.ToggleLikeResultMsg{TrackID: trackID, Liked: false, OriginalLiked: false, Err: errNilClient}
+		}
+		err := library.LikeTrack(api.WithPriority(context.Background(), api.Interactive), trackID)
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.ToggleLikeResultMsg{TrackID: trackID, Liked: false, OriginalLiked: false, Err: err}
+		}
+		return panes.ToggleLikeResultMsg{TrackID: trackID, Liked: true, OriginalLiked: false}
+	}
+}
+
+// buildUnlikeTrackCmd creates a command that calls LibraryClient.UnlikeTrack with
+// Interactive priority and returns a ToggleLikeResultMsg. trackID identifies the
+// track to unlike; trackName is not used in the API call but threaded for clarity.
+// On 429 the command returns RateLimitedMsg; on 401 it returns unauthorizedMsg.
+func (a *App) buildUnlikeTrackCmd(trackID, trackName string) tea.Cmd {
+	library := a.library
+	return func() tea.Msg {
+		if library == nil {
+			return panes.ToggleLikeResultMsg{TrackID: trackID, Liked: true, OriginalLiked: true, Err: errNilClient}
+		}
+		err := library.UnlikeTrack(api.WithPriority(context.Background(), api.Interactive), trackID)
+		if err != nil {
+			if secs := parse429RetryAfter(err); secs > 0 {
+				return panes.RateLimitedMsg{RetryAfterSecs: secs}
+			}
+			if isUnauthorizedError(err) {
+				return unauthorizedMsg{}
+			}
+			return panes.ToggleLikeResultMsg{TrackID: trackID, Liked: true, OriginalLiked: true, Err: err}
+		}
+		return panes.ToggleLikeResultMsg{TrackID: trackID, Liked: false, OriginalLiked: true}
+	}
+}
+
 // showIDFromURI extracts the Spotify show ID from a show URI.
 // A show URI has the format "spotify:show:<id>".
 func showIDFromURI(uri string) string {
