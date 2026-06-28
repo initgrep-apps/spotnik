@@ -9,6 +9,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -687,4 +688,130 @@ func TestAlbumsPane_Esc_ClearsCommittedFilter(t *testing.T) {
 
 	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}
+
+// ── Story 268 Task 5: Like toggle keybinding + heart indicator (track sub-view) ─
+
+// TestAlbumsPane_TrackView_L_EmitsToggleLikeRequest verifies that pressing 'l'
+// in the album track sub-view emits a ToggleLikeRequestMsg carrying the selected
+// track with CurrentlyLiked=false when the track is not yet liked.
+func TestAlbumsPane_TrackView_L_EmitsToggleLikeRequest(t *testing.T) {
+	a := newTestAlbumsPaneWithData(true)
+	a.SetSize(100, 20)
+
+	// Open track view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+
+	// Simulate tracks loaded.
+	tracks := []domain.Track{
+		{ID: "t1", URI: "spotify:track:t1", Name: "So What"},
+		{ID: "t2", URI: "spotify:track:t2", Name: "Freddie"},
+	}
+	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks})
+	a = model2.(*AlbumsPane)
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd, "pressing 'l' in track sub-view should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "t1", req.Track.ID, "should carry the selected track ID")
+	assert.Equal(t, "So What", req.Track.Name)
+	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
+}
+
+// TestAlbumsPane_TrackView_L_WhenLiked_EmitsCurrentlyLikedTrue verifies pressing
+// 'l' when the selected track is already liked sets CurrentlyLiked=true (unlike).
+func TestAlbumsPane_TrackView_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
+	s := state.New()
+	s.SetSavedAlbums([]domain.SavedAlbum{
+		{Album: domain.FullAlbum{ID: "al1", Name: "After Hours", URI: "spotify:album:al1", ReleaseDate: "2020-03-20", Artists: []domain.Artist{{Name: "The Weeknd"}}}},
+	})
+	s.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "t1", Name: "So What"}},
+	})
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(100, 20)
+	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	pane = m.(*AlbumsPane)
+	tracks := []domain.Track{
+		{ID: "t1", URI: "spotify:track:t1", Name: "So What"},
+	}
+	m2, _ := pane.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks})
+	pane = m2.(*AlbumsPane)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
+}
+
+// TestAlbumsPane_TrackView_L_EmptyTracks_NoOp verifies 'l' is a no-op when
+// loadedTracks is empty.
+func TestAlbumsPane_TrackView_L_EmptyTracks_NoOp(t *testing.T) {
+	a := newTestAlbumsPaneWithData(true)
+	a.SetSize(100, 20)
+
+	// Open track view but do not load tracks.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+	a.loadedTracks = []domain.Track{} // empty but not nil
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' with empty loadedTracks should be a no-op")
+}
+
+// TestAlbumsPane_TrackView_ShowsHeartWhenLiked verifies the ♥ prefix is rendered
+// on the track name in the album track sub-view when the track is liked.
+func TestAlbumsPane_TrackView_ShowsHeartWhenLiked(t *testing.T) {
+	s := state.New()
+	s.SetSavedAlbums([]domain.SavedAlbum{
+		{Album: domain.FullAlbum{ID: "al1", Name: "After Hours", URI: "spotify:album:al1", ReleaseDate: "2020-03-20", Artists: []domain.Artist{{Name: "The Weeknd"}}}},
+	})
+	s.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "t1", Name: "So What"}},
+	})
+	th := theme.Load("black")
+	a := NewAlbumsPane(s, th, true)
+	a.SetSize(100, 20)
+
+	// Open track view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+	tracks := []domain.Track{
+		{ID: "t1", URI: "spotify:track:t1", Name: "So What"},
+	}
+	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks})
+	a = model2.(*AlbumsPane)
+
+	output := a.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.Contains(t, output, heart+" So What",
+		"track sub-view should prepend the liked heart glyph to the track name when liked")
+}
+
+// TestAlbumsPane_TrackView_NoHeartWhenUnliked verifies the ♥ prefix is absent
+// in the track sub-view when the track is not liked.
+func TestAlbumsPane_TrackView_NoHeartWhenUnliked(t *testing.T) {
+	a := newTestAlbumsPaneWithData(true)
+	a.SetSize(100, 20)
+
+	// Open track view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+	tracks := []domain.Track{
+		{ID: "t1", URI: "spotify:track:t1", Name: "So What"},
+	}
+	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks})
+	a = model2.(*AlbumsPane)
+
+	output := a.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.NotContains(t, output, heart+" So What",
+		"track sub-view should not show the heart prefix when the track is not liked")
 }
