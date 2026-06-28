@@ -1,7 +1,7 @@
 ---
 title: "Like/Unlike Tracks — Core Infrastructure"
 feature: 05-library
-status: open
+status: done
 ---
 
 ## Background
