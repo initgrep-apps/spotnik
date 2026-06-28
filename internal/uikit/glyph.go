@@ -48,7 +48,10 @@ const (
 	GlyphLocked       GlyphRole = "state.locked"
 	GlyphPinned       GlyphRole = "state.pinned"
 	GlyphUnpinned     GlyphRole = "state.unpinned"
-	GlyphBullet       GlyphRole = "state.bullet"
+	// GlyphLiked marks a track as liked (heart). Used by NowPlaying and
+	// LikedSongs panes to prepend a ♥ prefix on liked track names.
+	GlyphLiked  GlyphRole = "state.liked"
+	GlyphBullet GlyphRole = "state.bullet"
 
 	// Navigation / scroll
 	GlyphScrollDown  GlyphRole = "nav.down"
@@ -165,6 +168,7 @@ var glyphTable = map[GlyphRole][2]string{
 	GlyphLocked:       {"◌", "(r)"},
 	GlyphPinned:       {"★", "*"},
 	GlyphUnpinned:     {"☆", "-"},
+	GlyphLiked:        {"♥", "Y"},
 	GlyphBullet:       {"•", "*"},
 
 	// Navigation

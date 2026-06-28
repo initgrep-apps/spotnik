@@ -869,6 +869,56 @@ func (a *App) buildRemovePlaylistTrackCmd(playlistID, trackURI string) tea.Cmd {
 	}
 }
 
+// buildLikeTrackCmd creates a command that calls LibraryClient.LikeTrack with
+// Interactive priority and returns a ToggleLikeResultMsg. track is the full
+// domain.Track (carried through so the result handler can rollback the
+// optimistic AddLikedTrack on any error). OriginalLiked is always false for a
+// like: the pre-toggle state was "not liked".
+//
+// On every error path (nil client, 429, 401, generic) the command returns a
+// ToggleLikeResultMsg carrying the error and OriginalLiked. The routing handler
+// owns the single rollback path; for 429/401 it additionally dispatches the
+// secondary RateLimitedMsg/unauthorizedMsg so the global handlers can run
+// (backoff / token refresh) after the store has been reverted.
+func (a *App) buildLikeTrackCmd(track domain.Track) tea.Cmd {
+	library := a.library
+	return func() tea.Msg {
+		if library == nil {
+			return panes.ToggleLikeResultMsg{TrackID: track.ID, Track: track, Liked: false, OriginalLiked: false, Err: errNilClient}
+		}
+		err := library.LikeTrack(api.WithPriority(context.Background(), api.Interactive), track.ID)
+		if err != nil {
+			return panes.ToggleLikeResultMsg{TrackID: track.ID, Track: track, Liked: false, OriginalLiked: false, Err: err}
+		}
+		return panes.ToggleLikeResultMsg{TrackID: track.ID, Track: track, Liked: true, OriginalLiked: false}
+	}
+}
+
+// buildUnlikeTrackCmd creates a command that calls LibraryClient.UnlikeTrack with
+// Interactive priority and returns a ToggleLikeResultMsg. track is the full
+// domain.Track; it is threaded through so an unlike-failure can re-add the
+// exact track that the optimistic RemoveLikedTrack deleted. OriginalLiked is
+// always true for an unlike: the pre-toggle state was "liked".
+//
+// On every error path (nil client, 429, 401, generic) the command returns a
+// ToggleLikeResultMsg carrying the error and OriginalLiked. The routing handler
+// owns the single rollback path; for 429/401 it additionally dispatches the
+// secondary RateLimitedMsg/unauthorizedMsg so the global handlers can run
+// (backoff / token refresh) after the store has been reverted.
+func (a *App) buildUnlikeTrackCmd(track domain.Track) tea.Cmd {
+	library := a.library
+	return func() tea.Msg {
+		if library == nil {
+			return panes.ToggleLikeResultMsg{TrackID: track.ID, Track: track, Liked: false, OriginalLiked: true, Err: errNilClient}
+		}
+		err := library.UnlikeTrack(api.WithPriority(context.Background(), api.Interactive), track.ID)
+		if err != nil {
+			return panes.ToggleLikeResultMsg{TrackID: track.ID, Track: track, Liked: false, OriginalLiked: true, Err: err}
+		}
+		return panes.ToggleLikeResultMsg{TrackID: track.ID, Track: track, Liked: false, OriginalLiked: true}
+	}
+}
+
 // showIDFromURI extracts the Spotify show ID from a show URI.
 // A show URI has the format "spotify:show:<id>".
 func showIDFromURI(uri string) string {

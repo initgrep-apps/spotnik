@@ -70,7 +70,7 @@ func buildHelpContent(currentlyPlayingType string) [2][]helpSection {
 			{title: "Playback", bindings: playbackBindings},
 			{title: "Pane Actions", bindings: []helpBinding{
 				{"Enter", "Select / Play"}, {"f", "Filter"}, {"g", "Cycle time range"},
-				{au + " / k", "Scroll up"}, {ad + " / j", "Scroll down"},
+				{"l", "Like / unlike"}, {au + " / k", "Scroll up"}, {ad + " / j", "Scroll down"},
 			}},
 			{title: "Profile Overlay", bindings: []helpBinding{
 				{"l", "Logout"},

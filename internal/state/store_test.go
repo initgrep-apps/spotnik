@@ -1124,3 +1124,128 @@ func TestStore_UserProfile_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	// No assertion needed — the race detector catches data races if locking is broken.
 }
+
+// --- Story 267: Like/Unlike core infrastructure ---
+
+// TestStore_IsTrackLiked verifies IsTrackLiked returns true for tracks in
+// likedTracks and false otherwise (including for an empty store).
+func TestStore_IsTrackLiked(t *testing.T) {
+	t.Parallel()
+	s := New()
+
+	// Empty store: nothing liked.
+	assert.False(t, s.IsTrackLiked("track-1"), "IsTrackLiked on empty store should be false")
+	assert.False(t, s.IsTrackLiked(""), "IsTrackLiked on empty ID should be false")
+
+	// Populate liked tracks.
+	s.SetLikedTracks([]api.SavedTrack{
+		{AddedAt: "2024-02-20T14:00:00Z", Track: api.Track{ID: "track-1", Name: "Blinding Lights"}},
+		{AddedAt: "2024-02-21T14:00:00Z", Track: api.Track{ID: "track-2", Name: "Save Your Tears"}},
+	})
+
+	assert.True(t, s.IsTrackLiked("track-1"), "IsTrackLiked should be true for a liked track")
+	assert.True(t, s.IsTrackLiked("track-2"), "IsTrackLiked should be true for another liked track")
+	assert.False(t, s.IsTrackLiked("track-999"), "IsTrackLiked should be false for a non-liked track")
+}
+
+// TestStore_SetLikedTracksRebuildsLikedSet verifies that SetLikedTracks rebuilds
+// the O(1) likedSet from the incoming tracks. This prevents stale liked status
+// when the store is re-populated after a re-fetch.
+func TestStore_SetLikedTracksRebuildsLikedSet(t *testing.T) {
+	t.Parallel()
+	s := New()
+
+	// Initial population.
+	s.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "track-1"}},
+		{Track: api.Track{ID: "track-2"}},
+	})
+	assert.True(t, s.IsTrackLiked("track-1"))
+	assert.True(t, s.IsTrackLiked("track-2"))
+
+	// Re-set with a different set — track-2 should no longer be liked.
+	s.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "track-3"}},
+	})
+	assert.True(t, s.IsTrackLiked("track-3"), "newly-set track should be liked")
+	assert.False(t, s.IsTrackLiked("track-1"), "track-1 should no longer be liked after rebuild")
+	assert.False(t, s.IsTrackLiked("track-2"), "track-2 should no longer be liked after rebuild")
+}
+
+// TestStore_AddLikedTrack verifies AddLikedTrack prepends to likedTracks and
+// updates likedSet so IsTrackLiked returns true immediately.
+func TestStore_AddLikedTrack(t *testing.T) {
+	t.Parallel()
+	s := New()
+
+	// Start with one liked track.
+	s.SetLikedTracks([]api.SavedTrack{
+		{AddedAt: "2024-01-01T00:00:00Z", Track: api.Track{ID: "track-1", Name: "First"}},
+	})
+	// likedTotal is set by the Loaded handler (API total), not by SetLikedTracks.
+	s.SetLikedTotal(1)
+
+	// Add a new track.
+	newTrack := api.Track{ID: "track-2", Name: "Second", URI: "spotify:track:track-2"}
+	s.AddLikedTrack(newTrack)
+
+	// IsTrackLiked should reflect the new state immediately (O(1) lookup).
+	assert.True(t, s.IsTrackLiked("track-2"), "newly-added track should be liked")
+
+	// The new track should be prepended to likedTracks.
+	tracks := s.LikedTracks()
+	require.Len(t, tracks, 2, "AddLikedTrack should prepend to likedTracks")
+	assert.Equal(t, "track-2", tracks[0].Track.ID, "newly-added track should be at index 0 (prepend)")
+	assert.Equal(t, "track-1", tracks[1].Track.ID, "existing track should shift down")
+
+	// likedTotal should be updated.
+	assert.Equal(t, 2, s.LikedTotal(), "AddLikedTrack should update likedTotal")
+
+	// AddedAt should be set in RFC3339 format.
+	assert.NotEmpty(t, tracks[0].AddedAt, "AddLikedTrack should set AddedAt")
+
+	// Adding a track that is already liked should be idempotent (set membership).
+	s.AddLikedTrack(newTrack)
+	tracks = s.LikedTracks()
+	assert.Len(t, tracks, 2, "AddLikedTrack of already-liked track should not duplicate the entry")
+}
+
+// TestStore_RemoveLikedTrack verifies RemoveLikedTrack removes from both
+// likedTracks slice and likedSet so IsTrackLiked returns false.
+func TestStore_RemoveLikedTrack(t *testing.T) {
+	t.Parallel()
+	s := New()
+
+	s.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "track-1", Name: "First"}},
+		{Track: api.Track{ID: "track-2", Name: "Second"}},
+		{Track: api.Track{ID: "track-3", Name: "Third"}},
+	})
+	s.SetLikedTotal(3)
+	require.True(t, s.IsTrackLiked("track-2"))
+
+	// Remove the middle track.
+	s.RemoveLikedTrack("track-2")
+
+	// likedSet should reflect removal immediately.
+	assert.False(t, s.IsTrackLiked("track-2"), "removed track should not be liked")
+
+	// likedTracks should no longer contain the removed track.
+	tracks := s.LikedTracks()
+	require.Len(t, tracks, 2, "RemoveLikedTrack should remove from likedTracks")
+	assert.Equal(t, "track-1", tracks[0].Track.ID)
+	assert.Equal(t, "track-3", tracks[1].Track.ID)
+
+	// likedTotal should be updated.
+	assert.Equal(t, 2, s.LikedTotal(), "RemoveLikedTrack should update likedTotal")
+
+	// Removing a track that is not liked should be a no-op (no panic).
+	s.RemoveLikedTrack("track-999")
+	tracks = s.LikedTracks()
+	assert.Len(t, tracks, 2, "removing a non-liked track should be a no-op")
+
+	// Removing from empty store should not panic.
+	s2 := New()
+	s2.RemoveLikedTrack("track-1")
+	assert.False(t, s2.IsTrackLiked("track-1"))
+}

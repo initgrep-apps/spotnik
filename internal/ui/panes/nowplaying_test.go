@@ -2083,3 +2083,94 @@ func TestNowPlayingPane_View_TrackModeWithExplicitType(t *testing.T) {
 	assert.Contains(t, output, "Test Track", "explicit track type should render track info")
 	assert.Contains(t, output, "Artist1", "explicit track type should render artist")
 }
+
+// --- Story 267 Task 7: Like toggle keybinding + heart indicator ---
+
+// TestNowPlayingPane_L_EmitsToggleLikeRequest verifies that pressing 'l' in the
+// NowPlayingPane when a track is playing emits a ToggleLikeRequestMsg with the
+// currently playing track and CurrentlyLiked=false (track not yet liked).
+func TestNowPlayingPane_L_EmitsToggleLikeRequest(t *testing.T) {
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+
+	// Track is not liked yet.
+	require.False(t, w.IsTrackLiked("track-1"))
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd, "pressing 'l' should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "track-1", req.Track.ID, "should carry the currently playing track")
+	assert.Equal(t, "Blinding Lights", req.Track.Name)
+	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
+}
+
+// TestNowPlayingPane_L_WhenLiked_EmitsCurrentlyLikedTrue verifies that pressing
+// 'l' when the track is already liked sets CurrentlyLiked=true (unlike direction).
+func TestNowPlayingPane_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+	// Mark the currently playing track as liked.
+	w.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "track-1", Name: "Blinding Lights"}},
+	})
+	require.True(t, w.IsTrackLiked("track-1"))
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
+}
+
+// TestNowPlayingPane_L_NotFocused_NoOp verifies that 'l' is ignored when the
+// pane is not focused (consistent with other keybindings in handleKey).
+func TestNowPlayingPane_L_NotFocused_NoOp(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, false) // not focused
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' when not focused should be a no-op")
+}
+
+// TestNowPlayingPane_L_NoTrack_NoOp verifies 'l' is a no-op when nothing is
+// playing (no item to like).
+func TestNowPlayingPane_L_NoTrack_NoOp(t *testing.T) {
+	pane := newTestNowPlayingPane(true) // no playback state
+	pane.SetSize(80, 24)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' with no track playing should be a no-op")
+}
+
+// TestNowPlayingPane_View_ShowsHeartWhenLiked verifies the ♥ prefix is rendered
+// on the track name in the InfoBox when the track is liked.
+func TestNowPlayingPane_View_ShowsHeartWhenLiked(t *testing.T) {
+	pane, w := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+	w.SetLikedTracks([]api.SavedTrack{
+		{Track: api.Track{ID: "track-1", Name: "Blinding Lights"}},
+	})
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.Contains(t, output, heart,
+		"View should prepend the liked heart glyph to the track name when liked")
+}
+
+// TestNowPlayingPane_View_NoHeartWhenUnliked verifies the ♥ prefix is absent
+// when the track is not liked.
+func TestNowPlayingPane_View_NoHeartWhenUnliked(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	pane.SetSize(80, 24)
+	// Track is not liked (no SetLikedTracks call).
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// The heart glyph should not appear before the track name.
+	// Note: we check it does not prefix the track name; the glyph could
+	// theoretically appear elsewhere, but in this layout it only shows on liked
+	// track names. Use NotContains on the "♥ Blinding Lights" combination.
+	assert.NotContains(t, output, heart+" Blinding Lights",
+		"View should not show the heart prefix when the track is not liked")
+}

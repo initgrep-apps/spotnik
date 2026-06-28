@@ -9,6 +9,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -448,4 +449,61 @@ func TestLikedSongsPane_Esc_ClearsCommittedFilter(t *testing.T) {
 
 	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}
+
+// ── Story 267 Task 8: Like/unlike keybinding + heart indicator ──────────────
+
+// TestLikedSongsPane_L_EmitsToggleLikeRequest verifies that pressing 'l' in the
+// LikedSongsPane emits a ToggleLikeRequestMsg for the selected track with
+// CurrentlyLiked=true (all tracks in LikedSongs are liked, so 'l' always unlikes).
+func TestLikedSongsPane_L_EmitsToggleLikeRequest(t *testing.T) {
+	pane := newTestLikedSongsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd, "pressing 'l' should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "t1", req.Track.ID, "should carry the selected track")
+	assert.Equal(t, "Blinding Lights", req.Track.Name)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true (all LikedSongs rows are liked)")
+}
+
+// TestLikedSongsPane_L_EmptyList_NoOp verifies 'l' is a no-op when the list is
+// empty (no selected track to unlike).
+func TestLikedSongsPane_L_EmptyList_NoOp(t *testing.T) {
+	pane := newTestLikedSongsPane(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' on an empty list should be a no-op")
+}
+
+// TestLikedSongsPane_L_NotFocused_NoOp verifies 'l' is ignored when the pane is
+// not focused (consistent with other keybindings).
+func TestLikedSongsPane_L_NotFocused_NoOp(t *testing.T) {
+	pane := newTestLikedSongsPaneWithData(false)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' when not focused should be a no-op")
+}
+
+// TestLikedSongsPane_View_ShowsHeartOnAllRows verifies every row in the
+// LikedSongsPane table renders the ♥ prefix on the track name (all liked).
+func TestLikedSongsPane_View_ShowsHeartOnAllRows(t *testing.T) {
+	pane := newTestLikedSongsPaneWithData(true)
+	pane.SetSize(80, 20)
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// All three tracks should show the heart prefix.
+	assert.Contains(t, output, heart+" Blinding Lights",
+		"first row should show heart prefix on track name")
+	assert.Contains(t, output, heart+" Save Your Tears",
+		"second row should show heart prefix on track name")
+	assert.Contains(t, output, heart+" Levitating",
+		"third row should show heart prefix on track name")
 }

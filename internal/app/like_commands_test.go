@@ -1,0 +1,219 @@
+package app_test
+
+// like_commands_test.go — Tests for Story 267 Task 5:
+// buildLikeTrackCmd and buildUnlikeTrackCmd command factories.
+//
+// Verifies:
+// - Success path returns ToggleLikeResultMsg with correct Liked state
+// - Nil library client returns errNilClient (no panic)
+// - 429 response is mapped to ToggleLikeResultMsg (rollback-owned), not RateLimitedMsg
+// - 401 response is mapped to ToggleLikeResultMsg (rollback-owned), not unauthorizedMsg
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/initgrep-apps/spotnik/internal/api"
+	"github.com/initgrep-apps/spotnik/internal/app"
+	"github.com/initgrep-apps/spotnik/internal/config"
+	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/ui/panes"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// newLikeTestApp creates a minimal App with premium tier set so the premium
+// gate passes and the routing handler dispatches the API command.
+func newLikeTestApp() *app.App {
+	cfg := &config.Config{}
+	cfg.Preferences.Theme = "black"
+	a := app.New(cfg, app.AppOptions{})
+	a.Store().SetUserProfile(domain.UserProfile{ID: "u1", Product: "premium"})
+	return a
+}
+
+// TestBuildLikeTrackCmd_Success verifies that a 204 response from PUT /me/tracks
+// produces a ToggleLikeResultMsg with Liked=true and nil Err.
+func TestBuildLikeTrackCmd_Success(t *testing.T) {
+	var capturedMethod, capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedMethod = r.Method
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	a := newLikeTestApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-1", Name: "Blinding Lights"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: false})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "expected ToggleLikeResultMsg, got %T", msg)
+	assert.NoError(t, result.Err)
+	assert.Equal(t, "track-1", result.TrackID)
+	assert.True(t, result.Liked, "Liked should be true after successful like")
+	assert.False(t, result.OriginalLiked, "OriginalLiked should be false (was not liked before)")
+	assert.Equal(t, http.MethodPut, capturedMethod, "like should use PUT")
+	assert.Equal(t, "/v1/me/tracks", capturedPath)
+}
+
+// TestBuildLikeTrackCmd_NilClient verifies that a nil library client produces
+// ToggleLikeResultMsg with errNilClient (no panic, no HTTP call).
+func TestBuildLikeTrackCmd_NilClient(t *testing.T) {
+	a := newLikeTestApp()
+	// Library client is nil (never SetLibrary called).
+
+	track := domain.Track{ID: "track-1", Name: "Blinding Lights"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: false})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "expected ToggleLikeResultMsg, got %T", msg)
+	require.Error(t, result.Err, "nil library must set Err")
+	assert.Equal(t, "track-1", result.TrackID)
+}
+
+// TestBuildUnlikeTrackCmd_Success verifies that a 204 response from DELETE /me/tracks
+// produces a ToggleLikeResultMsg with Liked=false and nil Err.
+func TestBuildUnlikeTrackCmd_Success(t *testing.T) {
+	var capturedMethod, capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedMethod = r.Method
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	a := newLikeTestApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-2", Name: "Save Your Tears"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: true})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "expected ToggleLikeResultMsg, got %T", msg)
+	assert.NoError(t, result.Err)
+	assert.Equal(t, "track-2", result.TrackID)
+	assert.False(t, result.Liked, "Liked should be false after successful unlike")
+	assert.True(t, result.OriginalLiked, "OriginalLiked should be true (was liked before)")
+	assert.Equal(t, http.MethodDelete, capturedMethod, "unlike should use DELETE")
+	assert.Equal(t, "/v1/me/tracks", capturedPath)
+}
+
+// TestBuildUnlikeTrackCmd_NilClient verifies that a nil library client produces
+// ToggleLikeResultMsg with errNilClient (no panic, no HTTP call).
+func TestBuildUnlikeTrackCmd_NilClient(t *testing.T) {
+	a := newLikeTestApp()
+	// Library client is nil.
+
+	track := domain.Track{ID: "track-2", Name: "Save Your Tears"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: true})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "expected ToggleLikeResultMsg, got %T", msg)
+	require.Error(t, result.Err, "nil library must set Err")
+	assert.Equal(t, "track-2", result.TrackID)
+}
+
+// TestBuildLikeTrackCmd_429_ReturnsToggleLikeResult verifies a 429 from the like
+// endpoint produces a ToggleLikeResultMsg carrying the error (NOT a
+// RateLimitedMsg). The routing handler owns rollback and dispatches the
+// secondary RateLimitedMsg after the store is reverted, so the command factory
+// must return the result message on every error path.
+func TestBuildLikeTrackCmd_429_ReturnsToggleLikeResult(t *testing.T) {
+	srv := rateLimitServer("9")
+	defer srv.Close()
+
+	a := newLikeTestApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-1", Name: "Blinding Lights"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: false})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "429 should produce ToggleLikeResultMsg for rollback, got %T", msg)
+	require.Error(t, result.Err, "429 must set Err so rollback runs")
+	assert.False(t, result.Liked, "Liked is meaningless on error; set to false")
+	assert.False(t, result.OriginalLiked, "like path OriginalLiked is false")
+	assert.Equal(t, "track-1", result.TrackID)
+}
+
+// TestBuildUnlikeTrackCmd_429_ReturnsToggleLikeResult verifies a 429 from the
+// unlike endpoint produces a ToggleLikeResultMsg carrying the error (NOT a
+// RateLimitedMsg). See TestBuildLikeTrackCmd_429_ReturnsToggleLikeResult.
+func TestBuildUnlikeTrackCmd_429_ReturnsToggleLikeResult(t *testing.T) {
+	srv := rateLimitServer("4")
+	defer srv.Close()
+
+	a := newLikeTestApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-2", Name: "Save Your Tears"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: true})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "429 should produce ToggleLikeResultMsg for rollback, got %T", msg)
+	require.Error(t, result.Err, "429 must set Err so rollback runs")
+	assert.True(t, result.OriginalLiked, "unlike path OriginalLiked is true")
+	assert.Equal(t, "track-2", result.TrackID)
+}
+
+// TestBuildLikeTrackCmd_401_ReturnsToggleLikeResult verifies a 401 from the like
+// endpoint produces a ToggleLikeResultMsg carrying the error (NOT an
+// unauthorizedMsg). The routing handler owns rollback and dispatches the
+// secondary unauthorizedMsg after the store is reverted.
+func TestBuildLikeTrackCmd_401_ReturnsToggleLikeResult(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	a := newLikeTestApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-1", Name: "Blinding Lights"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: false})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "401 should produce ToggleLikeResultMsg for rollback, got %T", msg)
+	require.Error(t, result.Err, "401 must set Err so rollback runs")
+	assert.False(t, result.OriginalLiked)
+}
+
+// TestBuildUnlikeTrackCmd_401_ReturnsToggleLikeResult verifies a 401 from the
+// unlike endpoint produces a ToggleLikeResultMsg carrying the error.
+func TestBuildUnlikeTrackCmd_401_ReturnsToggleLikeResult(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	a := newLikeTestApp()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+
+	track := domain.Track{ID: "track-2", Name: "Save Your Tears"}
+	_, cmd := a.Update(panes.ToggleLikeRequestMsg{Track: track, CurrentlyLiked: true})
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "401 should produce ToggleLikeResultMsg for rollback, got %T", msg)
+	require.Error(t, result.Err, "401 must set Err so rollback runs")
+	assert.True(t, result.OriginalLiked)
+}

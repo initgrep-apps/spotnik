@@ -15,5 +15,5 @@ Three dedicated panes for browsing the user's music library: Playlists, Albums, 
 - [ ] Track reordering with Shift+↑/↓ persists to Spotify API
 - [ ] Filter (f key) narrows rows without additional API calls
 - [ ] Open: story 10 (library display fixes)
-- [ ] Open: story 267 (like/unlike core infrastructure)
+- [x] Done: story 267 (like/unlike core infrastructure)
 - [ ] Open: story 268 (like/unlike cross-pane wiring)

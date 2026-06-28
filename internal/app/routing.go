@@ -484,6 +484,115 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return a, nil, true
 
+	case panes.ToggleLikeRequestMsg:
+		// Premium gate: like/unlike requires Spotify Premium (PUT/DELETE /me/tracks).
+		if !a.store.IsPremium() {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastWarning,
+				Title:  "Spotify Premium required",
+			}), true
+		}
+		// Optimistic store update before the API call so the UI reflects the
+		// toggle immediately. Rollback happens in the ToggleLikeResultMsg handler.
+		if m.CurrentlyLiked {
+			a.store.RemoveLikedTrack(m.Track.ID)
+		} else {
+			a.store.AddLikedTrack(m.Track)
+		}
+		// Dispatch the appropriate API command and refresh the LikedSongs pane
+		// so its rows reflect the optimistic update.
+		var apiCmd tea.Cmd
+		if m.CurrentlyLiked {
+			apiCmd = a.buildUnlikeTrackCmd(m.Track)
+		} else {
+			apiCmd = a.buildLikeTrackCmd(m.Track)
+		}
+		// NOTE: forwarding an empty LikedTracksLoadedMsg here is a re-render hint
+		// for the LikedSongs pane only — it must NOT reach the global handler
+		// (which would wipe the liked-tracks store). This is safe because
+		// forwardToPane dispatches directly to the pane's Update without
+		// re-entering App.Update, so the empty LikedTracksLoadedMsg never reaches
+		// the global handler at handlers.go:1170 which would wipe the store.
+		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+		return a, tea.Batch(apiCmd, refreshCmd), true
+
+	case panes.ToggleLikeResultMsg:
+		if m.Err != nil {
+			// errNilClient is an expected startup condition (library not yet
+			// attached). Roll back the optimistic update silently — no toast —
+			// but log to stderr so the silent rollback is at least observable
+			// for debugging, matching the handlers.go:426 pattern.
+			if errors.Is(m.Err, errNilClient) {
+				if m.OriginalLiked {
+					a.store.AddLikedTrack(m.Track)
+				} else {
+					a.store.RemoveLikedTrack(m.TrackID)
+				}
+				// errNilClient is an expected startup condition (library not yet
+				// attached). Roll back the optimistic update silently — no toast —
+				// but log to stderr so the silent rollback is at least observable
+				// for debugging, matching the handlers.go:426 pattern.
+				fmt.Fprintf(os.Stderr, "spotnik: toggleLike errNilClient rolled back optimistic update for track %s\n", m.TrackID)
+				refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+				return a, refreshCmd, true
+			}
+			// Roll back the optimistic update so the store reflects Spotify's
+			// true state. For an unlike-failure (OriginalLiked=true) re-add the
+			// exact track; for a like-failure (OriginalLiked=false) remove it.
+			if m.OriginalLiked {
+				a.store.AddLikedTrack(m.Track)
+			} else {
+				a.store.RemoveLikedTrack(m.TrackID)
+			}
+			refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+			// 429 and 401 still need the global handlers (backoff / token
+			// refresh) to run, so dispatch the secondary message after the
+			// store has been reverted. This keeps rollback as the single source
+			// of truth while preserving the rate-limit/auth side effects.
+			var secondary tea.Cmd
+			retryAfter := parse429RetryAfter(m.Err)
+			if retryAfter > 0 {
+				secondary = func() tea.Msg { return panes.RateLimitedMsg{RetryAfterSecs: retryAfter} }
+			} else if isUnauthorizedError(m.Err) {
+				secondary = func() tea.Msg { return unauthorizedMsg{} }
+			}
+			// 429: skip the routing-level toast — the global RateLimitedMsg
+			// handler at handlers.go:714-719 owns the single "Rate-limited"
+			// toast and backoff tick. Emitting a second toast here would
+			// duplicate it.
+			if secondary != nil && retryAfter > 0 {
+				return a, tea.Batch(refreshCmd, secondary), true
+			}
+			toast := a.errorMapper.Map(uikit.OpLibrary, m.Err)
+			if toast.Intent == uikit.ToastNone {
+				// Error suppressed by mapper: log to stderr so the silent
+				// rollback is at least observable for debugging.
+				fmt.Fprintf(os.Stderr, "spotnik: toggleLike error suppressed by mapper: %v\n", m.Err)
+				if secondary != nil {
+					return a, tea.Batch(refreshCmd, secondary), true
+				}
+				return a, refreshCmd, true
+			}
+			if secondary != nil {
+				return a, tea.Batch(refreshCmd, a.toasts.Cmd(toast), secondary), true
+			}
+			return a, tea.Batch(refreshCmd, a.toasts.Cmd(toast)), true
+		}
+		// Success toast.
+		var title string
+		if m.Liked {
+			title = "♥ Liked"
+		} else {
+			title = "Unliked"
+		}
+		// NOTE: see the comment on the request handler above — the empty
+		// LikedTracksLoadedMsg is a re-render hint scoped to routeLibraryMsg.
+		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
+		return a, tea.Batch(refreshCmd, a.toasts.Cmd(uikit.Toast{
+			Intent: uikit.ToastSuccess,
+			Title:  title,
+		})), true
+
 	}
 
 	return nil, nil, false

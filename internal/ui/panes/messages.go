@@ -201,6 +201,31 @@ type AddToQueueResultMsg struct {
 	TrackName string
 }
 
+// ToggleLikeRequestMsg is emitted by NowPlayingPane and LikedSongsPane when the
+// user presses 'l' to like or unlike the selected track. The root app handles
+// the premium gate, optimistic store update, and API dispatch.
+// CurrentlyLiked carries the pre-toggle state so the app knows which direction
+// to toggle (true → unlike, false → like).
+type ToggleLikeRequestMsg struct {
+	Track          domain.Track
+	CurrentlyLiked bool // true = currently liked → unlike; false → like
+}
+
+// ToggleLikeResultMsg is returned by buildLikeTrackCmd/buildUnlikeTrackCmd after
+// the Spotify API call completes. On success Liked is the new state (true after
+// like, false after unlike). On error Err is non-nil, Liked is meaningless (set
+// to false), and the routing handler rolls back the optimistic store update
+// using OriginalLiked and Track. Track is the full domain.Track so an
+// unlike-failure can re-add the exact track that the optimistic RemoveLikedTrack
+// deleted. For a like-failure Track is present but unused (rollback uses TrackID).
+type ToggleLikeResultMsg struct {
+	TrackID       string
+	Track         domain.Track
+	Liked         bool // true after successful like, false after unlike
+	OriginalLiked bool // state before toggle, for rollback
+	Err           error
+}
+
 // QueueLoadedMsg is returned by the queue fetch command.
 // Items carries the fetched queue on success; Err is non-nil on failure.
 // Update() writes Items to the store; QueuePane reads from store directly.
