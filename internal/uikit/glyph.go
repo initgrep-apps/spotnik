@@ -50,8 +50,8 @@ const (
 	GlyphUnpinned     GlyphRole = "state.unpinned"
 	// GlyphLiked marks a track as liked (heart). Used by NowPlaying and
 	// LikedSongs panes to prepend a ♥ prefix on liked track names.
-	GlyphLiked        GlyphRole = "state.liked"
-	GlyphBullet       GlyphRole = "state.bullet"
+	GlyphLiked  GlyphRole = "state.liked"
+	GlyphBullet GlyphRole = "state.bullet"
 
 	// Navigation / scroll
 	GlyphScrollDown  GlyphRole = "nav.down"

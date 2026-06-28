@@ -218,7 +218,7 @@ type ToggleLikeRequestMsg struct {
 type ToggleLikeResultMsg struct {
 	TrackID       string
 	Liked         bool // true after successful like, false after unlike
-	OriginalLiked bool   // state before toggle, for rollback
+	OriginalLiked bool // state before toggle, for rollback
 	Err           error
 }
 
