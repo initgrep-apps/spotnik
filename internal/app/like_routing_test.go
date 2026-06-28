@@ -14,6 +14,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -59,6 +61,35 @@ func executeCmdAndBatch(cmd tea.Cmd) []tea.Msg {
 		return nil
 	}
 	return []tea.Msg{msg}
+}
+
+// isBubbleupAlertMsg reports whether m is the unexported bubbleup alertMsg
+// produced by ToastManager.Cmd -> AlertModel.NewAlertCmd. We can't type-assert
+// across packages, so inspect via reflect on the type name + package path.
+func isBubbleupAlertMsg(m tea.Msg) bool {
+	t := reflect.TypeOf(m)
+	if t == nil {
+		return false
+	}
+	return t.Name() == "alertMsg" && strings.Contains(t.PkgPath(), "bubbleup")
+}
+
+// alertMsgString returns the human-readable toast text carried by a bubbleup
+// alertMsg, or "" if m is not one. The msg field is unexported; we read it via
+// reflect because the type lives in an external package.
+func alertMsgString(m tea.Msg) string {
+	v := reflect.ValueOf(m)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+	f := v.FieldByName("msg")
+	if !f.IsValid() {
+		return ""
+	}
+	return f.String()
 }
 
 // --- ToggleLikeRequestMsg ---
@@ -339,6 +370,63 @@ func TestRouting_ToggleLikeResult_429_Rollback(t *testing.T) {
 	}
 	assert.True(t, foundRateLimit,
 		"429 rollback should dispatch secondary RateLimitedMsg for global backoff handler")
+
+	// Exactly ONE "Rate-limited" toast should be emitted — the routing-level
+	// toast must be suppressed so the global RateLimitedMsg handler owns the
+	// single ratelimit toast (otherwise the user sees a duplicate).
+	var ratelimitToasts int
+	for _, m := range msgs {
+		if isBubbleupAlertMsg(m) && strings.Contains(alertMsgString(m), "Rate-limited") {
+			ratelimitToasts++
+		}
+	}
+	assert.Equal(t, 0, ratelimitToasts,
+		"429 routing must NOT emit its own ratelimit toast — global handler owns it")
+}
+
+// TestRouting_ToggleLikeResult_401_Rollback verifies that a 401 error rolls back
+// the optimistic update AND dispatches the secondary unauthorizedMsg so the
+// global 401 handler can trigger a token refresh. The routing handler should
+// NOT emit its own toast (the errorMapper suppresses 401 to ToastNone).
+func TestRouting_ToggleLikeResult_401_Rollback(t *testing.T) {
+	a := newLikeRoutingApp()
+	// Simulate the optimistic state: track was added optimistically by a like.
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-1", Name: "Blinding Lights"}},
+	})
+	a.Store().SetLikedTotal(1)
+	require.True(t, a.Store().IsTrackLiked("track-1"))
+
+	srv := unauthorizedServer()
+	defer srv.Close()
+	a.SetLibrary(api.NewLibraryClient(srv.URL, "test-token"))
+	_, apiCmd := a.Update(panes.ToggleLikeRequestMsg{
+		Track:          domain.Track{ID: "track-1", Name: "Blinding Lights"},
+		CurrentlyLiked: false,
+	})
+	require.True(t, a.Store().IsTrackLiked("track-1"))
+
+	resultMsg := apiCmd()
+	result, ok := resultMsg.(panes.ToggleLikeResultMsg)
+	require.True(t, ok, "401 cmd should return ToggleLikeResultMsg")
+	require.Error(t, result.Err)
+
+	_, rollbackCmd := a.Update(result)
+	// The optimistic addition should have been rolled back.
+	assert.False(t, a.Store().IsTrackLiked("track-1"),
+		"401 should roll back the optimistic AddLikedTrack")
+
+	// The rollback cmd must carry a secondary unauthorizedMsg for the global
+	// token-refresh handler.
+	msgs := executeCmdAndBatch(rollbackCmd)
+	var foundUnauthorized bool
+	for _, m := range msgs {
+		if _, ok := m.(app.UnauthorizedMsgForTest); ok {
+			foundUnauthorized = true
+		}
+	}
+	assert.True(t, foundUnauthorized,
+		"401 rollback should dispatch secondary unauthorizedMsg for global refresh handler")
 }
 
 // TestRouting_ToggleLikeResult_NilClient_Rollback verifies that an errNilClient

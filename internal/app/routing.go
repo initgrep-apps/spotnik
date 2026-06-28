@@ -510,23 +510,29 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// NOTE: forwarding an empty LikedTracksLoadedMsg here is a re-render hint
 		// for the LikedSongs pane only — it must NOT reach the global handler
 		// (which would wipe the liked-tracks store). This is safe because
-		// routeLibraryMsg returns handled=true, so the global switch never runs
-		// for this message. If LikedTracksLoadedMsg ever gains a global handler,
-		// introduce a dedicated refresh-only message here instead.
+		// forwardToPane dispatches directly to the pane's Update without
+		// re-entering App.Update, so the empty LikedTracksLoadedMsg never reaches
+		// the global handler at handlers.go:1170 which would wipe the store.
 		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
 		return a, tea.Batch(apiCmd, refreshCmd), true
 
 	case panes.ToggleLikeResultMsg:
 		if m.Err != nil {
 			// errNilClient is an expected startup condition (library not yet
-			// attached). Roll back the optimistic update silently — no toast,
-			// no log — but still refresh the pane so the UI reverts.
+			// attached). Roll back the optimistic update silently — no toast —
+			// but log to stderr so the silent rollback is at least observable
+			// for debugging, matching the handlers.go:426 pattern.
 			if errors.Is(m.Err, errNilClient) {
 				if m.OriginalLiked {
 					a.store.AddLikedTrack(m.Track)
 				} else {
 					a.store.RemoveLikedTrack(m.TrackID)
 				}
+				// errNilClient is an expected startup condition (library not yet
+				// attached). Roll back the optimistic update silently — no toast —
+				// but log to stderr so the silent rollback is at least observable
+				// for debugging, matching the handlers.go:426 pattern.
+				fmt.Fprintf(os.Stderr, "spotnik: toggleLike errNilClient rolled back optimistic update for track %s\n", m.TrackID)
 				refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
 				return a, refreshCmd, true
 			}
@@ -544,10 +550,18 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// store has been reverted. This keeps rollback as the single source
 			// of truth while preserving the rate-limit/auth side effects.
 			var secondary tea.Cmd
-			if secs := parse429RetryAfter(m.Err); secs > 0 {
-				secondary = func() tea.Msg { return panes.RateLimitedMsg{RetryAfterSecs: secs} }
+			retryAfter := parse429RetryAfter(m.Err)
+			if retryAfter > 0 {
+				secondary = func() tea.Msg { return panes.RateLimitedMsg{RetryAfterSecs: retryAfter} }
 			} else if isUnauthorizedError(m.Err) {
 				secondary = func() tea.Msg { return unauthorizedMsg{} }
+			}
+			// 429: skip the routing-level toast — the global RateLimitedMsg
+			// handler at handlers.go:714-719 owns the single "Rate-limited"
+			// toast and backoff tick. Emitting a second toast here would
+			// duplicate it.
+			if secondary != nil && retryAfter > 0 {
+				return a, tea.Batch(refreshCmd, secondary), true
 			}
 			toast := a.errorMapper.Map(uikit.OpLibrary, m.Err)
 			if toast.Intent == uikit.ToastNone {

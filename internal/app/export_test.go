@@ -54,3 +54,8 @@ func (a *App) IsCurrentPresetPodcastOriented() bool {
 // test packages (app_test) can construct ToggleLikeResultMsg values that
 // exercise the errNilClient rollback branch of the routing handler.
 var ErrNilClientForTest = errNilClient
+
+// UnauthorizedMsgForTest exposes the unexported unauthorizedMsg type so
+// external test packages (app_test) can type-assert on the secondary message
+// dispatched by the 401 rollback branch of the routing handler.
+type UnauthorizedMsgForTest = unauthorizedMsg
