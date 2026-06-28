@@ -1096,3 +1096,123 @@ func TestPlaylistsPane_Esc_ClearsCommittedFilter(t *testing.T) {
 	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
 }
+
+// ── Story 268 Task 4: Like toggle keybinding + heart indicator (track sub-view) ─
+
+// TestPlaylistsPane_TrackView_L_EmitsToggleLikeRequest verifies that pressing
+// 'l' in the playlist track sub-view emits a ToggleLikeRequestMsg carrying the
+// selected track with CurrentlyLiked=false when the track is not yet liked.
+func TestPlaylistsPane_TrackView_L_EmitsToggleLikeRequest(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedURI = "spotify:playlist:pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+		{ID: "t2", Name: "Track Two", URI: "spotify:track:t2", Artists: []domain.Artist{{Name: "B"}}},
+	}
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd, "pressing 'l' in track sub-view should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "t1", req.Track.ID, "should carry the selected track ID")
+	assert.Equal(t, "Track One", req.Track.Name)
+	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
+}
+
+// TestPlaylistsPane_TrackView_L_WhenLiked_EmitsCurrentlyLikedTrue verifies
+// pressing 'l' when the selected track is already liked sets CurrentlyLiked=true.
+func TestPlaylistsPane_TrackView_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
+	s := state.New()
+	s.SetPlaylists([]domain.SimplePlaylist{
+		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 1},
+	})
+	s.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "t1", Name: "Track One"}},
+	})
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedURI = "spotify:playlist:pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
+}
+
+// TestPlaylistsPane_TrackView_L_EmptyTracks_NoOp verifies 'l' is a no-op when
+// loadedTracks is empty.
+func TestPlaylistsPane_TrackView_L_EmptyTracks_NoOp(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = nil
+	pane.trackTable.SetFocused(true)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' with empty loadedTracks should be a no-op")
+}
+
+// TestPlaylistsPane_TrackView_ShowsHeartWhenLiked verifies the ♥ prefix is
+// rendered on the track name in the track sub-view when the track is liked.
+func TestPlaylistsPane_TrackView_ShowsHeartWhenLiked(t *testing.T) {
+	s := state.New()
+	s.SetPlaylists([]domain.SimplePlaylist{
+		{ID: "pl1", Name: "LoFi", URI: "spotify:playlist:pl1", TrackCount: 1},
+	})
+	s.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "t1", Name: "Track One"}},
+	})
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.selectedURI = "spotify:playlist:pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.Contains(t, output, heart+" Track One",
+		"track sub-view should prepend the liked heart glyph to the track name when liked")
+}
+
+// TestPlaylistsPane_TrackView_NoHeartWhenUnliked verifies the ♥ prefix is
+// absent in the track sub-view when the track is not liked.
+func TestPlaylistsPane_TrackView_NoHeartWhenUnliked(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	pane.trackTable.SetFocused(true)
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.NotContains(t, output, heart+" Track One",
+		"track sub-view should not show the heart prefix when the track is not liked")
+}
