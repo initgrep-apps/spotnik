@@ -75,6 +75,10 @@ type Store struct {
 	savedAlbums    []domain.SavedAlbum
 	likedTracks    []domain.SavedTrack
 	likedTotal     int
+	// likedSet is an O(1) lookup map of trackID → liked. It is rebuilt in
+	// SetLikedTracks and kept in sync by AddLikedTrack/RemoveLikedTrack so
+	// panes can render the ♥ indicator without scanning the slice.
+	likedSet       map[string]bool
 	recentlyPlayed []domain.PlayHistory
 
 	// Staleness tracking — set to time.Now() on successful data write.
@@ -172,6 +176,7 @@ func New() *Store {
 		eventLog:       NewGatewayEventLog(defaultEventLogCapacity),
 		statsFetchedAt: make(map[string]time.Time),
 		statsFetching:  make(map[string]bool),
+		likedSet:       make(map[string]bool),
 	}
 }
 
@@ -326,12 +331,93 @@ func (s *Store) LikedTracks() []domain.SavedTrack {
 // SetLikedTracks updates the liked tracks in the store.
 // fetchedAt is only stamped when the slice is non-empty to avoid resetting
 // the TTL on empty/error responses and blocking retries prematurely.
+// It also rebuilds likedSet from the incoming tracks so IsTrackLiked reflects
+// the new state immediately (including removals when the slice shrinks).
 func (s *Store) SetLikedTracks(tracks []domain.SavedTrack) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.likedTracks = tracks
+	if s.likedSet == nil {
+		s.likedSet = make(map[string]bool, len(tracks))
+	} else {
+		// Clear and re-use the underlying map to avoid allocation churn.
+		for k := range s.likedSet {
+			delete(s.likedSet, k)
+		}
+	}
+	for _, st := range tracks {
+		if st.Track.ID != "" {
+			s.likedSet[st.Track.ID] = true
+		}
+	}
 	if len(tracks) > 0 {
 		s.likedTracksFetchedAt = time.Now()
+	}
+}
+
+// IsTrackLiked returns true if the given track ID is present in the user's
+// liked tracks. This is an O(1) lookup against likedSet. Returns false for
+// an empty trackID or when no liked tracks have been loaded.
+func (s *Store) IsTrackLiked(trackID string) bool {
+	if trackID == "" {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.likedSet[trackID]
+}
+
+// AddLikedTrack optimistically prepends a track to likedTracks and marks it as
+// liked in likedSet. Used by the like/unlike toggle flow to update the UI
+// before the API call confirms. The track is wrapped in a SavedTrack with
+// AddedAt set to the current time in RFC3339 format.
+func (s *Store) AddLikedTrack(track domain.Track) {
+	if track.ID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.likedSet == nil {
+		s.likedSet = make(map[string]bool)
+	}
+	// Idempotent: if already liked, do not duplicate the slice entry.
+	if s.likedSet[track.ID] {
+		return
+	}
+	s.likedSet[track.ID] = true
+	s.likedTracks = append([]domain.SavedTrack{{
+		AddedAt: time.Now().Format(time.RFC3339),
+		Track:   track,
+	}}, s.likedTracks...)
+	s.likedTotal++
+}
+
+// RemoveLikedTrack optimistically removes a track from likedTracks and likedSet.
+// Used by the like/unlike toggle flow to update the UI before the API call
+// confirms. If the track is not present this is a no-op (safe to call on a
+// non-liked trackID, e.g. during rollback of an optimistic update).
+func (s *Store) RemoveLikedTrack(trackID string) {
+	if trackID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.likedSet == nil {
+		return
+	}
+	if _, ok := s.likedSet[trackID]; !ok {
+		return
+	}
+	delete(s.likedSet, trackID)
+	// Remove from the likedTracks slice.
+	for i, st := range s.likedTracks {
+		if st.Track.ID == trackID {
+			s.likedTracks = append(s.likedTracks[:i], s.likedTracks[i+1:]...)
+			break
+		}
+	}
+	if s.likedTotal > 0 {
+		s.likedTotal--
 	}
 }
 

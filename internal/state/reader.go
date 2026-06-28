@@ -66,6 +66,10 @@ type StateReader interface {
 	LikedTotal() int
 	// LikedLoaded returns true if liked tracks have been fetched at least once.
 	LikedLoaded() bool
+	// IsTrackLiked returns true if the given track ID is in the user's liked
+	// tracks. O(1) lookup against the store's likedSet. Returns false for an
+	// empty trackID or when no liked tracks have been loaded.
+	IsTrackLiked(trackID string) bool
 
 	// --- Library: Recently Played ---
 
