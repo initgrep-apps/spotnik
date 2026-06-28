@@ -118,6 +118,21 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return l, nil
 	}
 
+	// 'l' unlikes the selected track. All tracks in LikedSongs are liked, so
+	// CurrentlyLiked is always true. Emits ToggleLikeRequestMsg for the root
+	// app to handle the premium gate, optimistic update, and API dispatch.
+	if keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "l" {
+		tracks := l.filteredTracks()
+		idx := l.Table().SelectedIndex()
+		if idx >= 0 && idx < len(tracks) {
+			track := tracks[idx].Track
+			return l, func() tea.Msg {
+				return ToggleLikeRequestMsg{Track: track, CurrentlyLiked: true}
+			}
+		}
+		return l, nil
+	}
+
 	// Forward navigation to the table.
 	cmd := l.Table().Update(keyMsg)
 	return l, cmd
@@ -152,6 +167,9 @@ func (l *LikedSongsPane) RefreshRows() { l.refreshRows() }
 // refreshRows re-reads the store and applies filtered track rows.
 func (l *LikedSongsPane) refreshRows() {
 	tracks := l.filteredTracks()
+	// All tracks in LikedSongs are liked — prepend the heart glyph to every
+	// track name so the user sees the liked state at a glance.
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	rows := make([]map[string]string, len(tracks))
 	for i, st := range tracks {
 		artistName := ""
@@ -160,7 +178,7 @@ func (l *LikedSongsPane) refreshRows() {
 		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"track":    st.Track.Name,
+			"track":    heart + " " + st.Track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(st.Track.DurationMs),
 		}

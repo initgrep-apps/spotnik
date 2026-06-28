@@ -879,6 +879,7 @@ Overlays intercept all keys while open. Focus is saved and restored on close.
 | **Pane Actions** | | |
 | `f` | Toggle filter in focused pane | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
+| `l` | Like / unlike the selected track | NowPlaying / LikedSongs |
 | **Playlist Management (Playlists pane)** | | |
 | `Enter` | Open playlist tracks (sub-view) | Playlists pane |
 | **Global** | | |
