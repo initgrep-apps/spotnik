@@ -568,13 +568,19 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string 
 		artistNames[i] = a.Name
 	}
 
+	// Track name with optional ♥ prefix when the track is liked.
+	trackName := t.Name
+	if p.store.IsTrackLiked(t.ID) {
+		trackName = uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode()) + " " + trackName
+	}
+
 	pad := strings.Repeat(" ", npInfoPadLeft)
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
 	innerW := infoWidth - 2
 	ctrlLine := lipgloss.NewStyle().Width(innerW).Align(lipgloss.Center).Render(ctrl.Render())
 
 	lines := []string{
-		pad + primaryStyle.Render(t.Name),
+		pad + primaryStyle.Render(trackName),
 		pad + secondaryStyle.Render(strings.Join(artistNames, ", ")),
 		pad + mutedStyle.Render(t.Album.Name),
 		ctrlLine,
@@ -782,6 +788,22 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 		p.engine.CyclePattern()
 		return p, func() tea.Msg {
 			return VisualizerPatternChangedMsg{PatternIndex: p.engine.Pattern()}
+		}
+
+	case msg.Type == tea.KeyRunes && string(msg.Runes) == "l":
+		// Like/unlike the currently playing track. Reads liked status from the
+		// store (O(1) lookup) and emits a ToggleLikeRequestMsg for the root app
+		// to handle the premium gate, optimistic update, and API dispatch.
+		ps := p.store.PlaybackState()
+		if ps == nil || ps.Item == nil {
+			return p, nil
+		}
+		track := *ps.Item
+		return p, func() tea.Msg {
+			return ToggleLikeRequestMsg{
+				Track:          track,
+				CurrentlyLiked: p.store.IsTrackLiked(track.ID),
+			}
 		}
 	}
 
