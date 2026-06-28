@@ -11,6 +11,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -343,4 +344,78 @@ func TestRecentlyPlayedPane_Esc_ClearsCommittedFilter(t *testing.T) {
 
 	pane.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Equal(t, "", pane.ActiveFilterQuery(), "Esc must clear committed filter")
+}
+
+// ── Story 268 Task 3: Like toggle keybinding + heart indicator ──────────────
+
+// TestRecentlyPlayedPane_L_EmitsToggleLikeRequest verifies that pressing 'l'
+// emits a ToggleLikeRequestMsg carrying the selected track with
+// CurrentlyLiked=false when the track is not yet liked.
+func TestRecentlyPlayedPane_L_EmitsToggleLikeRequest(t *testing.T) {
+	pane, st := newTestRecentlyPlayedPane()
+	pane.SetFocused(true)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd, "pressing 'l' should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "t1", req.Track.ID, "should carry the selected track ID")
+	assert.Equal(t, "Track One", req.Track.Name)
+	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
+	_ = st
+}
+
+// TestRecentlyPlayedPane_L_WhenLiked_EmitsCurrentlyLikedTrue verifies pressing
+// 'l' when the selected track is already liked sets CurrentlyLiked=true (unlike).
+func TestRecentlyPlayedPane_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
+	pane, st := newTestRecentlyPlayedPane()
+	pane.SetFocused(true)
+	st.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "t1", Name: "Track One"}},
+	})
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
+}
+
+// TestRecentlyPlayedPane_L_NotFocused_NoOp verifies 'l' is ignored when not focused.
+func TestRecentlyPlayedPane_L_NotFocused_NoOp(t *testing.T) {
+	pane, _ := newTestRecentlyPlayedPane()
+	// pane was constructed with focused=false in newTestRecentlyPlayedPane.
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' when not focused should be a no-op")
+}
+
+// TestRecentlyPlayedPane_View_ShowsHeartWhenLiked verifies the ♥ prefix is
+// rendered on the track name when the track is liked.
+func TestRecentlyPlayedPane_View_ShowsHeartWhenLiked(t *testing.T) {
+	pane, st := newTestRecentlyPlayedPane()
+	st.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "t1", Name: "Track One"}},
+	})
+	// Re-read the store so the heart prefix is applied to the liked track.
+	pane.RefreshRows()
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.Contains(t, output, heart+" Track One",
+		"View should prepend the liked heart glyph to the track name when liked")
+}
+
+// TestRecentlyPlayedPane_View_NoHeartWhenUnliked verifies the ♥ prefix is
+// absent when the track is not liked.
+func TestRecentlyPlayedPane_View_NoHeartWhenUnliked(t *testing.T) {
+	pane, _ := newTestRecentlyPlayedPane()
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.NotContains(t, output, heart+" Track One",
+		"View should not show the heart prefix when the track is not liked")
 }
