@@ -3115,6 +3115,43 @@ func TestSearchOverlay_L_OnTrack_EmitsToggleLikeRequest(t *testing.T) {
 	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
 }
 
+// TestSearchOverlay_L_OnTrack_BuildsCompleteTrack verifies that pressing 'l'
+// on a track result emits a ToggleLikeRequestMsg whose Track carries the
+// Artists parsed from SearchListItem.ArtistNames and the Album from
+// AlbumName, so the routing handler's AddLikedTrack stores complete data and
+// the LikedSongs pane renders the artist line until the next manual fetch.
+func TestSearchOverlay_L_OnTrack_BuildsCompleteTrack(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{
+			Category:    "track",
+			Name:        "Track One",
+			URI:         "spotify:track:t1",
+			IsTrack:     true,
+			ArtistNames: "Artist A, Artist B",
+			AlbumName:   "Album One",
+		},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	_, cmd := sendKey(t, o, "l")
+	require.NotNil(t, cmd, "pressing 'l' on a track should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(panes.ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+
+	// Artists must be populated from the joined ArtistNames string so the
+	// LikedSongs pane can render the artist line without waiting for a refetch.
+	require.NotEmpty(t, req.Track.Artists, "Track.Artists must be populated from ArtistNames")
+	assert.Equal(t, "Artist A", req.Track.Artists[0].Name)
+	assert.Equal(t, "Artist B", req.Track.Artists[1].Name)
+
+	// Album name must be carried so AddLikedTrack stores it.
+	assert.Equal(t, "Album One", req.Track.Album.Name)
+}
+
 // TestSearchOverlay_L_WhenLiked_EmitsCurrentlyLikedTrue verifies pressing 'l'
 // when the selected track is already liked sets CurrentlyLiked=true (unlike).
 func TestSearchOverlay_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {

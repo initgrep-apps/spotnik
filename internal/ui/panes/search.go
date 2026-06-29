@@ -712,8 +712,10 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 
 // handleToggleLike likes/unlikes the currently selected track result.
 // Search results don't carry a full domain.Track — the track ID is extracted
-// from the URI ("spotify:track:<id>") and a minimal domain.Track is built from
-// the SearchListItem fields (Name, URI, Artists parsed from ArtistNames).
+// from the URI ("spotify:track:<id>") and a domain.Track is built from the
+// SearchListItem fields: Name, URI, Artists (split from ArtistNames), and Album
+// (from AlbumName). DurationMs can't be recovered from the formatted "3:42"
+// string, so it is left as 0 and corrected on the next LikedSongs re-fetch.
 // Emits ToggleLikeRequestMsg for the root app to handle the premium gate,
 // optimistic update, and API dispatch. No-op when no store is wired, the list
 // is empty, or the selected item is not a track.
@@ -730,9 +732,11 @@ func (o *SearchOverlay) handleToggleLike() (tea.Model, tea.Cmd) {
 		return o, nil
 	}
 	track := domain.Track{
-		ID:   trackIDFromURI(si.URI),
-		Name: si.Name,
-		URI:  si.URI,
+		ID:      trackIDFromURI(si.URI),
+		Name:    si.Name,
+		URI:     si.URI,
+		Artists: artistsFromNames(si.ArtistNames),
+		Album:   domain.Album{Name: si.AlbumName},
 	}
 	return o, func() tea.Msg {
 		return ToggleLikeRequestMsg{
@@ -740,6 +744,28 @@ func (o *SearchOverlay) handleToggleLike() (tea.Model, tea.Cmd) {
 			CurrentlyLiked: o.store.IsTrackLiked(track.ID),
 		}
 	}
+}
+
+// artistsFromNames splits a comma-joined artist names string (e.g.
+// "Artist1, Artist2") into a slice of domain.Artist. Each name is trimmed of
+// surrounding whitespace. Returns nil when names is empty.
+func artistsFromNames(names string) []domain.Artist {
+	if names == "" {
+		return nil
+	}
+	parts := strings.Split(names, ",")
+	artists := make([]domain.Artist, 0, len(parts))
+	for _, p := range parts {
+		name := strings.TrimSpace(p)
+		if name == "" {
+			continue
+		}
+		artists = append(artists, domain.Artist{Name: name})
+	}
+	if len(artists) == 0 {
+		return nil
+	}
+	return artists
 }
 
 // trackIDFromURI extracts the Spotify track ID from a URI of the form
