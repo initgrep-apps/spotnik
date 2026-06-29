@@ -1,7 +1,7 @@
 ---
 title: "Like/Unlike Tracks — Cross-Pane Wiring"
 feature: 05-library
-status: open
+status: done
 ---
 
 ## Background
