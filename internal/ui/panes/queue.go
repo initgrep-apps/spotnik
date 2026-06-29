@@ -119,6 +119,28 @@ func (q *QueuePane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return q, nil
 	}
 
+	// 'l' likes/unlikes the selected track. Only applies to track items —
+	// episodes are not likable via the /me/tracks endpoint. Emits
+	// ToggleLikeRequestMsg for the root app to handle the premium gate,
+	// optimistic update, and API dispatch.
+	if keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "l" {
+		queue := q.filteredQueue()
+		idx := q.Table().SelectedIndex()
+		if idx >= 0 && idx < len(queue) {
+			item := queue[idx]
+			if item.Type == domain.QueueItemTypeTrack {
+				track := *item.Track
+				return q, func() tea.Msg {
+					return ToggleLikeRequestMsg{
+						Track:          track,
+						CurrentlyLiked: q.store.IsTrackLiked(track.ID),
+					}
+				}
+			}
+		}
+		return q, nil
+	}
+
 	// Forward j/k and other navigation to the table.
 	cmd := q.Table().Update(msg)
 	return q, cmd
@@ -157,6 +179,7 @@ func (q *QueuePane) RefreshRows() { q.refreshRows() }
 // refreshRows re-reads the store and applies filtered rows to the table.
 func (q *QueuePane) refreshRows() {
 	queue := q.filteredQueue()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	rows := make([]map[string]string, len(queue))
 	for i, item := range queue {
 		row := map[string]string{}
@@ -175,7 +198,13 @@ func (q *QueuePane) refreshRows() {
 		default:
 			row["index"] = fmt.Sprintf("%d", i+1)
 			row["type"] = uikit.GlyphFor(uikit.GlyphMusicNote, uikit.GlyphUnicode)
-			row["title"] = item.Track.Name
+			// Prepend the heart glyph when the track is liked so the user sees
+			// the liked state at a glance, matching NowPlaying/LikedSongs.
+			title := item.Track.Name
+			if q.store.IsTrackLiked(item.Track.ID) {
+				title = heart + " " + title
+			}
+			row["title"] = title
 			artistName := ""
 			if len(item.Track.Artists) > 0 {
 				artistName = item.Track.Artists[0].Name

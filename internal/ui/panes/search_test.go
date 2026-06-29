@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
@@ -386,18 +387,20 @@ func TestSearchOverlay_Update_TypingJKA(t *testing.T) {
 // the input keeps its value (the textinput swallows Ctrl+U without effect).
 // Per the 2026-04-28 overlay-keybinding-cleanup spec, clearing only happens
 // when the user mutates the input directly.
+//
+// NOTE: as of story 268, 'l' is intercepted as the like/unlike keybinding and
+// no longer types into the input. This test uses a word without 'l' to verify
+// Ctrl+U does not clear the input.
 func TestSearchOverlay_Update_CtrlU(t *testing.T) {
 	o := newTestSearchOverlay()
 
 	o, _ = sendKey(t, o, "h")
 	o, _ = sendKey(t, o, "e")
-	o, _ = sendKey(t, o, "l")
-	o, _ = sendKey(t, o, "l")
-	o, _ = sendKey(t, o, "o")
-	require.Contains(t, o.Query(), "hello", "query should be 'hello' after typing those chars")
+	o, _ = sendKey(t, o, "y")
+	require.Contains(t, o.Query(), "hey", "query should be 'hey' after typing those chars")
 
 	o, _ = sendKey(t, o, "ctrl+u")
-	assert.Equal(t, "hello", o.Query(), "Ctrl+U must not clear the input — clearing only via direct edits")
+	assert.Equal(t, "hey", o.Query(), "Ctrl+U must not clear the input — clearing only via direct edits")
 }
 
 // --- Task 4.4: Result rendering tests ---
@@ -3067,4 +3070,168 @@ func TestSearchOverlay_AsciiBorder_Results(t *testing.T) {
 	o.SetSize(80, 30)
 	out := stripANSI(o.View())
 	assert.False(t, strings.ContainsAny(out, "╭╮╰╯─"), "ASCII mode should not contain unicode box-drawing corners or horizontal rules")
+}
+
+// ── Story 268 Task 6: Like toggle keybinding + heart indicator (search overlay) ─
+
+// newTestSearchOverlayWithStore creates a SearchOverlay wired to a fresh store
+// pre-populated with liked tracks. Returns the overlay and the store so tests
+// can inspect liked status.
+func newTestSearchOverlayWithStore(likedTrackIDs ...string) (*panes.SearchOverlay, *state.Store) {
+	s := state.New()
+	if len(likedTrackIDs) > 0 {
+		liked := make([]domain.SavedTrack, 0, len(likedTrackIDs))
+		for _, id := range likedTrackIDs {
+			liked = append(liked, domain.SavedTrack{Track: domain.Track{ID: id, Name: "Liked " + id}})
+		}
+		s.SetLikedTracks(liked)
+	}
+	t := theme.Load("black")
+	o := panes.NewSearchOverlay(t)
+	o.SetStore(s)
+	return o, s
+}
+
+// TestSearchOverlay_L_OnTrack_EmitsToggleLikeRequest verifies that pressing 'l'
+// on a track result emits a ToggleLikeRequestMsg with the track ID extracted
+// from the URI and CurrentlyLiked=false when the track is not yet liked.
+func TestSearchOverlay_L_OnTrack_EmitsToggleLikeRequest(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	_, cmd := sendKey(t, o, "l")
+	require.NotNil(t, cmd, "pressing 'l' on a track should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(panes.ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "t1", req.Track.ID, "should carry the track ID extracted from the URI")
+	assert.Equal(t, "Track One", req.Track.Name)
+	assert.Equal(t, "spotify:track:t1", req.Track.URI)
+	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
+}
+
+// TestSearchOverlay_L_OnTrack_BuildsCompleteTrack verifies that pressing 'l'
+// on a track result emits a ToggleLikeRequestMsg whose Track carries the
+// Artists parsed from SearchListItem.ArtistNames and the Album from
+// AlbumName, so the routing handler's AddLikedTrack stores complete data and
+// the LikedSongs pane renders the artist line until the next manual fetch.
+func TestSearchOverlay_L_OnTrack_BuildsCompleteTrack(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{
+			Category:    "track",
+			Name:        "Track One",
+			URI:         "spotify:track:t1",
+			IsTrack:     true,
+			ArtistNames: "Artist A, Artist B",
+			AlbumName:   "Album One",
+		},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	_, cmd := sendKey(t, o, "l")
+	require.NotNil(t, cmd, "pressing 'l' on a track should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(panes.ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+
+	// Artists must be populated from the joined ArtistNames string so the
+	// LikedSongs pane can render the artist line without waiting for a refetch.
+	require.NotEmpty(t, req.Track.Artists, "Track.Artists must be populated from ArtistNames")
+	assert.Equal(t, "Artist A", req.Track.Artists[0].Name)
+	assert.Equal(t, "Artist B", req.Track.Artists[1].Name)
+
+	// Album name must be carried so AddLikedTrack stores it.
+	assert.Equal(t, "Album One", req.Track.Album.Name)
+}
+
+// TestSearchOverlay_L_WhenLiked_EmitsCurrentlyLikedTrue verifies pressing 'l'
+// when the selected track is already liked sets CurrentlyLiked=true (unlike).
+func TestSearchOverlay_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore("t1")
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	_, cmd := sendKey(t, o, "l")
+	require.NotNil(t, cmd)
+	msg := cmd()
+	req, ok := msg.(panes.ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
+}
+
+// TestSearchOverlay_L_OnNonTrack_NoOp verifies 'l' is a no-op when the selected
+// item is not a track (e.g. an album or artist result).
+func TestSearchOverlay_L_OnNonTrack_NoOp(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "album", Name: "Album One", URI: "spotify:album:al1", IsTrack: false},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	_, cmd := sendKey(t, o, "l")
+	assert.Nil(t, cmd, "pressing 'l' on a non-track should be a no-op")
+}
+
+// TestSearchOverlay_L_NoStore_NoOp verifies 'l' is a no-op when no store is
+// wired (e.g. in unit tests that skip SetStore).
+func TestSearchOverlay_L_NoStore_NoOp(t *testing.T) {
+	o := newTestSearchOverlayWithResults()
+	o.SetSize(80, 40)
+
+	_, cmd := sendKey(t, o, "l")
+	assert.Nil(t, cmd, "pressing 'l' with no store wired should be a no-op")
+}
+
+// TestSearchOverlay_L_EmptyResults_NoOp verifies 'l' is a no-op when the result
+// list is empty.
+func TestSearchOverlay_L_EmptyResults_NoOp(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+
+	_, cmd := sendKey(t, o, "l")
+	assert.Nil(t, cmd, "pressing 'l' with no results should be a no-op")
+}
+
+// TestSearchOverlay_View_ShowsHeartWhenLiked verifies the ♥ prefix is rendered
+// on the track name in the search results list when the track is liked.
+func TestSearchOverlay_View_ShowsHeartWhenLiked(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore("t1")
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	output := o.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.Contains(t, output, heart+" Track One",
+		"search results should prepend the liked heart glyph to the track name when liked")
+}
+
+// TestSearchOverlay_View_NoHeartWhenUnliked verifies the ♥ prefix is absent
+// when the track is not liked.
+func TestSearchOverlay_View_NoHeartWhenUnliked(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+	}})
+	o = model.(*panes.SearchOverlay)
+
+	output := o.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.NotContains(t, output, heart+" Track One",
+		"search results should not show the heart prefix when the track is not liked")
 }

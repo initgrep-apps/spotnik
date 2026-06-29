@@ -212,6 +212,7 @@ colour directly.
 | `◌` | Pending | `Header{Pending}`, `Step{Pending}`, Spinner non-TTY |
 | `→` | Action | `Hint.Arrow` |
 | `⣾⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` | Spinning | `Spinner` TTY animation frames |
+| `♥` | Liked track | Liked track heart prefix (NowPlaying, LikedSongs, Queue, TopTracks, RecentlyPlayed, Playlists track view, Albums track view, Search) |
 
 ---
 

@@ -349,6 +349,21 @@ func (p *PlaylistsPane) handleTrackViewKey(key tea.KeyMsg) (tea.Model, tea.Cmd) 
 			}
 		}
 		return p, nil
+
+	case key.Type == tea.KeyRunes && string(key.Runes) == "l":
+		// Like/unlike the selected track. Reads liked status from the store
+		// (O(1) lookup) and emits ToggleLikeRequestMsg for the root app to
+		// handle the premium gate, optimistic update, and API dispatch.
+		if idx := p.trackTable.SelectedIndex(); idx >= 0 && idx < len(p.loadedTracks) {
+			track := p.loadedTracks[idx]
+			return p, func() tea.Msg {
+				return ToggleLikeRequestMsg{
+					Track:          track,
+					CurrentlyLiked: p.store.IsTrackLiked(track.ID),
+				}
+			}
+		}
+		return p, nil
 	}
 
 	// Forward j/k and other navigation to the track table.
@@ -495,15 +510,21 @@ func (p *PlaylistsPane) isOwnedByCurrentUser(pl domain.SimplePlaylist) bool {
 // refreshTrackRows rebuilds track rows from p.loadedTracks (pane-owned data).
 // It no longer reads from the global store.
 func (p *PlaylistsPane) refreshTrackRows() {
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	rows := make([]map[string]string, len(p.loadedTracks))
 	for i, track := range p.loadedTracks {
 		artistName := ""
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
 		}
+		// Prepend the heart glyph when the track is liked.
+		name := track.Name
+		if p.store.IsTrackLiked(track.ID) {
+			name = heart + " " + name
+		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"track":    track.Name,
+			"track":    name,
 			"artist":   artistName,
 			"duration": formatDurationMs(track.DurationMs),
 		}

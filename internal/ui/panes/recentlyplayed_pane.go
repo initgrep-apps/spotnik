@@ -119,6 +119,24 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, nil
 	}
 
+	// 'l' likes/unlikes the selected track. Reads liked status from the store
+	// (O(1) lookup) and emits ToggleLikeRequestMsg for the root app to handle
+	// the premium gate, optimistic update, and API dispatch.
+	if keyMsg.Type == tea.KeyRunes && string(keyMsg.Runes) == "l" {
+		items := r.filteredItems()
+		idx := r.Table().SelectedIndex()
+		if idx >= 0 && idx < len(items) {
+			track := items[idx].Track
+			return r, func() tea.Msg {
+				return ToggleLikeRequestMsg{
+					Track:          track,
+					CurrentlyLiked: r.store.IsTrackLiked(track.ID),
+				}
+			}
+		}
+		return r, nil
+	}
+
 	// Forward navigation to the table.
 	cmd := r.Table().Update(keyMsg)
 	return r, cmd
@@ -151,6 +169,7 @@ func (r *RecentlyPlayedPane) RefreshRows() { r.refreshRows() }
 // refreshRows re-reads the store and applies filtered rows.
 func (r *RecentlyPlayedPane) refreshRows() {
 	items := r.filteredItems()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	rows := make([]map[string]string, len(items))
 	for i, item := range items {
 		artistName := ""
@@ -158,9 +177,14 @@ func (r *RecentlyPlayedPane) refreshRows() {
 			artistName = item.Track.Artists[0].Name
 		}
 		playedAt := formatPlayedAtFromHistory(item.PlayedAt)
+		// Prepend the heart glyph when the track is liked.
+		name := item.Track.Name
+		if r.store.IsTrackLiked(item.Track.ID) {
+			name = heart + " " + name
+		}
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
-			"track":  item.Track.Name,
+			"track":  name,
 			"artist": artistName,
 			"played": playedAt,
 		}

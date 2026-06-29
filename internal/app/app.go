@@ -366,6 +366,7 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	}
 
 	searchPane := panes.NewSearchOverlay(t)
+	searchPane.SetStore(s)
 	devicePane := panes.NewDeviceOverlay(s, t)
 	profilePane := panes.NewProfileOverlay(s, t)
 

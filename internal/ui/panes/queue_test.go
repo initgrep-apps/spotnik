@@ -10,6 +10,7 @@ import (
 	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
+	"github.com/initgrep-apps/spotnik/internal/uikit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -905,4 +906,102 @@ func TestQueuePane_Duration_EpisodeFormat(t *testing.T) {
 	output := pane.View()
 
 	assert.Contains(t, output, "1:01:01", "episode duration should be formatted as h:mm:ss")
+}
+
+// ── Story 268 Task 1: Like toggle keybinding + heart indicator ──────────────
+
+// TestQueuePane_L_EmitsToggleLikeRequest verifies that pressing 'l' on a track
+// item emits a ToggleLikeRequestMsg carrying the selected track and the correct
+// CurrentlyLiked value (false when the track is not yet liked).
+func TestQueuePane_L_EmitsToggleLikeRequest(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd, "pressing 'l' on a track should emit a command")
+
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.Equal(t, "q1", req.Track.ID, "should carry the selected track ID")
+	assert.Equal(t, "Save Your Tears", req.Track.Name)
+	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
+}
+
+// TestQueuePane_L_WhenLiked_EmitsCurrentlyLikedTrue verifies that pressing 'l'
+// when the selected track is already liked sets CurrentlyLiked=true (unlike).
+func TestQueuePane_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Save Your Tears", "spotify:track:q1", "The Weeknd"),
+	})
+	s.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "q1", Name: "Save Your Tears"}},
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	req, ok := msg.(ToggleLikeRequestMsg)
+	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
+	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
+}
+
+// TestQueuePane_L_OnEpisode_NoOp verifies 'l' is a no-op on episode items —
+// episodes are not likable via the /me/tracks endpoint.
+func TestQueuePane_L_OnEpisode_NoOp(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiEpisode("ep-1", "Episode", "uri", 3661000, "Show"),
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' on an episode should be a no-op")
+}
+
+// TestQueuePane_L_NotFocused_NoOp verifies 'l' is ignored when the pane is not focused.
+func TestQueuePane_L_NotFocused_NoOp(t *testing.T) {
+	pane := newTestQueuePaneWithData(false)
+	pane.SetSize(80, 20)
+
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' when not focused should be a no-op")
+}
+
+// TestQueuePane_View_ShowsHeartWhenLiked verifies the ♥ prefix is rendered on
+// the track name in the queue table when the track is liked.
+func TestQueuePane_View_ShowsHeartWhenLiked(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Save Your Tears", "spotify:track:q1", "The Weeknd"),
+	})
+	s.SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "q1", Name: "Save Your Tears"}},
+	})
+	th := theme.Load("black")
+	pane := NewQueuePane(s, th, true)
+	pane.SetSize(80, 20)
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.Contains(t, output, heart+" Save Your Tears",
+		"View should prepend the liked heart glyph to the track name when liked")
+}
+
+// TestQueuePane_View_NoHeartWhenUnliked verifies the ♥ prefix is absent when
+// the track is not liked.
+func TestQueuePane_View_NoHeartWhenUnliked(t *testing.T) {
+	pane := newTestQueuePaneWithData(true)
+	pane.SetSize(80, 20)
+
+	output := pane.View()
+	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	assert.NotContains(t, output, heart+" Save Your Tears",
+		"View should not show the heart prefix when the track is not liked")
 }

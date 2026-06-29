@@ -233,7 +233,7 @@ automatic retry-after.
 | `Enter` | Select or play | Focused pane |
 | `f` | Toggle filter | List panes |
 | `g` | Cycle time range | TopTracks, TopArtists |
-| `l` | Like / unlike track | NowPlaying, LikedSongs |
+| `l` | Like / unlike track | NowPlaying, LikedSongs, Queue, TopTracks, RecentlyPlayed, Playlists (track view), Albums (track view), Search |
 | `A` | Add to queue | Search, list panes |
 
 ### Profile overlay
