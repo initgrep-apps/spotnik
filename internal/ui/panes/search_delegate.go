@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
+	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
 )
@@ -100,12 +101,21 @@ func categorySymbol(category string) string {
 // result with a type badge, name line, and optional subtitle line.
 type SearchItemDelegate struct {
 	theme theme.Theme
+	// store is the read-only Store used to render the ♥ heart prefix on liked
+	// tracks. nil when not wired (e.g. in unit tests) — no heart is rendered.
+	store state.StateReader
 }
 
 // NewSearchItemDelegate creates a SearchItemDelegate wired to the given theme.
 // Exported so tests can construct it directly.
 func NewSearchItemDelegate(t theme.Theme) SearchItemDelegate {
 	return SearchItemDelegate{theme: t}
+}
+
+// SetStore wires the read-only Store reference used to render the ♥ heart prefix
+// on liked tracks. Called by SearchOverlay.SetStore; safe to call with nil.
+func (d *SearchItemDelegate) SetStore(s state.StateReader) {
+	d.store = s
 }
 
 // Height returns the number of lines each item occupies (3: title + subtitle + description).
@@ -174,6 +184,17 @@ func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected
 		innerW = 1
 	}
 
+	// Prepend the heart glyph when the track is liked. The delegate extracts
+	// the track ID from the URI (SearchListItem doesn't carry a separate ID).
+	displayName := si.Name
+	if d.store != nil {
+		trackID := trackIDFromURI(si.URI)
+		if trackID != "" && d.store.IsTrackLiked(trackID) {
+			heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+			displayName = heart + " " + displayName
+		}
+	}
+
 	explicitStr := ""
 	if si.Explicit {
 		explicitStr = lipgloss.NewStyle().Foreground(d.theme.Warning()).Bold(true).Render("[E]") + " "
@@ -186,7 +207,7 @@ func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected
 	if nameMaxW < 1 {
 		nameMaxW = 1
 	}
-	name := d.styledName(truncateString(si.Name, nameMaxW), selected, nameMaxW)
+	name := d.styledName(truncateString(displayName, nameMaxW), selected, nameMaxW)
 	line1Content := d.rightAlign(badge+" "+name, rightMeta, innerW)
 
 	line2Content := d.line2Style(selected, d.theme.ColumnSecondary()).Render(si.ArtistNames)

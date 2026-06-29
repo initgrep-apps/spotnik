@@ -212,12 +212,14 @@ func TestSearchFlow_PrefixAutocomplete(t *testing.T) {
 	assert.Equal(t, panes.TabSongs, sp.ActiveTab(), "tab should be set to Songs after :songs prefix")
 	assert.Contains(t, sp.Input().Prompt, "songs", "prompt should contain the locked prefix tag")
 
-	// Verify that typing "hello" after prefix lock searches under songs tab.
-	typeInSearch(t, a, "hello")
+	// Verify that typing "hey" after prefix lock searches under songs tab.
+	// NOTE: 'l' is intercepted as the like/unlike keybinding (story 268), so we
+	// use a word without 'l'.
+	typeInSearch(t, a, "hey")
 	searchReq := fireDebounceAndDispatch(t, a)
 
 	// The SearchRequestMsg should have Types=["track"] from the Songs tab.
-	assert.Equal(t, "hello", a.SearchQuery(), "searchQuery should be 'hello' after prefix + typing")
+	assert.Equal(t, "hey", a.SearchQuery(), "searchQuery should be 'hey' after prefix + typing")
 	assert.Equal(t, 1, a.SearchPage())
 	assert.Equal(t, []string{"track"}, searchReq.Types, "SearchRequestMsg should carry track type from :songs prefix")
 }
@@ -320,21 +322,25 @@ func TestSearchFlow_StaleRequestCancelled(t *testing.T) {
 // (the overlay resets fully on Esc). Per the 2026-04-28 overlay-keybinding-cleanup
 // spec, Ctrl+U is no longer supported. This test verifies Ctrl+U does not clear
 // the input — only direct edits (backspace) or Esc+reopen should reset.
+//
+// NOTE: as of story 268, 'l' is intercepted as the like/unlike keybinding in
+// the search overlay and no longer types into the input. This test uses a word
+// without 'l' to verify Ctrl+U does not clear the input.
 func TestSearchFlow_CtrlU_ClearInput(t *testing.T) {
 	a := newSearchFlowTestApp(t)
 	assertSearchOpen(t, a)
 
-	// Type "hello world".
-	typeInSearch(t, a, "hello world")
+	// Type "hey word".
+	typeInSearch(t, a, "hey word")
 
 	// Verify input has value.
 	sp := a.SearchPane()
 	require.NotNil(t, sp)
-	assert.Equal(t, "hello world", sp.Query(), "input should have typed value")
+	assert.Equal(t, "hey word", sp.Query(), "input should have typed value")
 
 	// Press Ctrl+U — should be a no-op (intercepted by overlay).
 	_, _ = a.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
 
 	// Input should still have the typed value.
-	assert.Equal(t, "hello world", sp.Query(), "Ctrl+U should not clear input (no-op)")
+	assert.Equal(t, "hey word", sp.Query(), "Ctrl+U should not clear input (no-op)")
 }

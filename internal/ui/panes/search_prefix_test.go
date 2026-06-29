@@ -52,6 +52,9 @@ func TestPrefixToTab_InvalidPrefix(t *testing.T) {
 // --- Task 2: parsePrefix() ---
 
 // TestParsePrefix_NoColon sets prefixState to prefixNone.
+//
+// NOTE: as of story 268, 'l' is intercepted as the like/unlike keybinding and
+// no longer types into the input. This test uses a word without 'l'.
 func TestParsePrefix_NoColon(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 30)
@@ -59,7 +62,7 @@ func TestParsePrefix_NoColon(t *testing.T) {
 	// Type a regular query without colon.
 	o, _ = sendKey(t, o, "h")
 	o, _ = sendKey(t, o, "e")
-	o, _ = sendKey(t, o, "l")
+	o, _ = sendKey(t, o, "y")
 
 	assert.Equal(t, panes.PrefixNone, o.PrefixState(), "no colon should give prefixNone")
 	assert.Equal(t, "", o.LockedPrefix(), "no colon should have empty lockedPrefix")
