@@ -145,10 +145,10 @@ type SearchOverlay struct {
 	// keybinding to look up liked status (IsTrackLiked) when emitting
 	// ToggleLikeRequestMsg. nil when not wired (e.g. in unit tests that
 	// don't exercise the like flow) — 'l' is a no-op in that case.
-	store   state.StateReader
+	store    state.StateReader
 	delegate SearchItemDelegate
-	input   textinput.Model
-	sp      *uikit.Spinner
+	input    textinput.Model
+	sp       *uikit.Spinner
 
 	// resultList is the bubbles/list model used in the results panel.
 	// Story 84 will wire actual items into it; here it is initialized and sized.

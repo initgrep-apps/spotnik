@@ -1237,7 +1237,7 @@ same commit. Removed glyphs are flagged "banned".
 | locked / readonly | `◌` | `(r)` | Inaccessible playlist row (Spotify-owned), read-only items |
 | pinned / starred | `★` | `*` | Starred item, pinned playlist (future) |
 | unpinned | `☆` | `-` | Optional counterpart |
-| liked | `♥` | `Y` | Liked track heart prefix (NowPlaying, LikedSongs) |
+| liked | `♥` | `Y` | Liked track heart prefix (NowPlaying, LikedSongs, Queue, TopTracks, RecentlyPlayed, Playlists track view, Albums track view, Search) |
 | bullet | `•` | `*` | Prose lists |
 
 ### 4.4 Navigation / scroll

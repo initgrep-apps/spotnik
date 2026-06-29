@@ -688,6 +688,48 @@ WHEN the pane renders
 THEN an empty state message is displayed
 ```
 
+### Like / Unlike Tracks (cross-pane)
+**P1**
+
+```
+GIVEN any track-displaying pane is focused (NowPlaying, LikedSongs, Queue,
+     TopTracks, RecentlyPlayed, Playlists track sub-view, Albums track sub-view,
+     Search results)
+  AND a track is selected
+WHEN the user presses 'l'
+THEN a ToggleLikeRequestMsg is emitted
+  AND the root app applies the premium gate
+  AND the store is optimistically updated (AddLikedTrack or RemoveLikedTrack)
+  AND a toast is shown on success ("♥ Liked" or "Unliked")
+  AND a toast is shown on failure with rollback
+```
+
+```
+GIVEN a track is liked in the store
+WHEN any pane renders that track
+THEN the track name is prefixed with the ♥ heart glyph
+```
+
+```
+GIVEN a track is NOT liked in the store
+WHEN any pane renders that track
+THEN the track name has NO heart prefix
+```
+
+```
+GIVEN the Queue pane is focused
+  AND an episode is selected
+WHEN the user presses 'l'
+THEN nothing happens (episodes are not likable via /me/tracks)
+```
+
+```
+GIVEN the Search overlay is open
+  AND a non-track result (album/artist/playlist/show/episode) is selected
+WHEN the user presses 'l'
+THEN nothing happens (only track results are likable)
+```
+
 ### Playlist Management (CRUD)
 **P2**
 
