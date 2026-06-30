@@ -1,0 +1,4 @@
+graphify-out/graph.json merge=graphify-merge
+graphify-out/manifest.json merge=graphify-merge
+graphify-out/GRAPH_REPORT.md merge=graphify-merge
+graphify-out/graph.html merge=graphify-merge

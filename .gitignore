@@ -49,3 +49,7 @@ docs/superpowers/
 *.tmp
 
 .agents/
+
+# graphify knowledge graph — commit graph.json + manifest for team map
+graphify-out/cost.json
+# graphify-out/cache/  # uncomment to keep repo small; comment to speed up --update
