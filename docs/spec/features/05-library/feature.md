@@ -1,6 +1,6 @@
 ---
 title: "Library Browser & Playlists"
-status: done
+status: in-progress
 ---
 
 ## Description
@@ -17,3 +17,4 @@ Three dedicated panes for browsing the user's music library: Playlists, Albums, 
 - [ ] Open: story 10 (library display fixes)
 - [x] Done: story 267 (like/unlike core infrastructure)
 - [x] Done: story 268 (like/unlike cross-pane wiring)
+- [ ] Open: story 269 (fix like/unlike UX — revert heart, border action, 403 error)
