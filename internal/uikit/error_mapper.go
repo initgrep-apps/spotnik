@@ -61,6 +61,8 @@ const (
 	OpAddToQueue Operation = "add-to-queue"
 	// OpPlaylistTracks covers playlist track list fetches.
 	OpPlaylistTracks Operation = "playlist-tracks"
+	// OpLikeTracks covers like/unlike track save operations.
+	OpLikeTracks Operation = "like-tracks"
 )
 
 // opTitle maps an Operation to its sentence-case user-facing title for error toasts.
@@ -80,6 +82,7 @@ var opTitle = map[Operation]string{
 	OpRecent:         "Failed to load recently played",
 	OpAddToQueue:     "Add to queue failed",
 	OpPlaylistTracks: "Failed to load playlist tracks",
+	OpLikeTracks:     "Like track failed",
 }
 
 // opForbiddenBody maps an Operation to its 403-specific recovery hint.
@@ -95,6 +98,7 @@ var opForbiddenBody = map[Operation]string{
 	OpTransfer:       "Premium required for device control.",
 	OpAlbums:         "Premium required to view album tracks.",
 	OpPlaylistTracks: "No permission to view this playlist.",
+	OpLikeTracks:     "Premium required to like tracks.",
 }
 
 // ErrorMapper turns any API-layer error into a user-friendly Toast.

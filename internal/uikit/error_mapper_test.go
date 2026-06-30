@@ -336,3 +336,26 @@ func TestErrorMapper_Forbidden_WithMessage_StillOverridesBody(t *testing.T) {
 	// over the operation-specific default.
 	assert.Equal(t, "Premium required to use this endpoint.", toast.Body)
 }
+
+// TestErrorMapper_OpLikeTracks_Forbidden verifies that a 403 from the like-track
+// endpoint produces the operation-specific title and body (story 269).
+func TestErrorMapper_OpLikeTracks_Forbidden(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := &api.ForbiddenError{Message: ""}
+	toast := em.Map(uikit.OpLikeTracks, err)
+	require.Equal(t, uikit.ToastWarning, toast.Intent)
+	assert.Equal(t, "Like track failed", toast.Title)
+	assert.Equal(t, "Premium required to like tracks.", toast.Body)
+}
+
+// TestErrorMapper_OpLikeTracks_Generic verifies that a generic (non-403) error
+// for the like-tracks operation uses the operation-specific title with the
+// generic Spotify service body.
+func TestErrorMapper_OpLikeTracks_Generic(t *testing.T) {
+	em := &uikit.ErrorMapper{}
+	err := errors.New("spotify 500")
+	toast := em.Map(uikit.OpLikeTracks, err)
+	require.Equal(t, uikit.ToastError, toast.Intent)
+	assert.Equal(t, "Like track failed", toast.Title)
+	assert.Equal(t, string(uikit.RecoveryRetryInMoment), toast.Body)
+}

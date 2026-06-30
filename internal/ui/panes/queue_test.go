@@ -464,24 +464,29 @@ func TestQueuePane_Filter_NoMatchesShowsEmptyTable(t *testing.T) {
 	assert.NotContains(t, output, "Save Your Tears", "no tracks should match")
 }
 
-// TestQueuePane_Filter_ActionsUnchangedWhenActive verifies Actions() always returns
-// the {f, filter} hint.
+// TestQueuePane_Filter_ActionsUnchangedWhenActive verifies Actions() returns
+// the filter hint plus a conditional 'l like' hint when a track row is selected
+// (story 269).
 func TestQueuePane_Filter_ActionsUnchangedWhenActive(t *testing.T) {
 	pane := newTestQueuePaneWithData(true)
 	pane.SetSize(80, 20)
 
-	// Default actions: only filter.
+	// Default actions: filter + 'l like' (first queue item is a track, selected).
 	actions := pane.Actions()
-	require.Len(t, actions, 1)
+	require.Len(t, actions, 2)
 	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "l", actions[1].Key)
+	assert.Equal(t, "like", actions[1].Label)
 
-	// Activate filter — Actions() must still return {f, filter}, not {Esc, close}.
+	// Activate filter — Actions() must still return filter + 'l like', not {Esc, close}.
 	m, _ := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	pp := m.(*QueuePane)
 	filterActions := pp.Actions()
-	require.Len(t, filterActions, 1, "filter active must still return {f, filter}")
+	require.Len(t, filterActions, 2, "filter active must still return filter + 'l like'")
 	assert.Equal(t, "f", filterActions[0].Key)
 	assert.Equal(t, "filter", filterActions[0].Label)
+	assert.Equal(t, "l", filterActions[1].Key)
+	assert.Equal(t, "like", filterActions[1].Label)
 }
 
 // --- Task 4: Comprehensive tests ---
@@ -990,8 +995,10 @@ func TestQueuePane_View_ShowsHeartWhenLiked(t *testing.T) {
 
 	output := pane.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart+" Save Your Tears",
-		"View should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" Save Your Tears",
+		"View should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "Save Your Tears",
+		"View should render the track name as-is")
 }
 
 // TestQueuePane_View_NoHeartWhenUnliked verifies the ♥ prefix is absent when
@@ -1004,4 +1011,35 @@ func TestQueuePane_View_NoHeartWhenUnliked(t *testing.T) {
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	assert.NotContains(t, output, heart+" Save Your Tears",
 		"View should not show the heart prefix when the track is not liked")
+}
+
+// TestQueuePane_Actions_ShowsLikeWhenTrackSelected verifies the 'l like' hint
+// appears when the selected queue item is a track (story 269).
+func TestQueuePane_Actions_ShowsLikeWhenTrackSelected(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Save Your Tears", "spotify:track:q1", "The Weeknd"),
+	})
+	pane := NewQueuePane(s, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+	pane.RefreshRows()
+	// Default selection is index 0 — a track.
+	actions := pane.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should include 'l like' when a track is selected")
+}
+
+// TestQueuePane_Actions_NoLikeWhenEpisodeSelected verifies the 'l like' hint
+// is absent when the selected queue item is an episode (not likable) (story 269).
+func TestQueuePane_Actions_NoLikeWhenEpisodeSelected(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiEpisode("e1", "Ep One", "spotify:episode:e1", 1000, "Show"),
+	})
+	pane := NewQueuePane(s, theme.Load("black"), true)
+	pane.SetSize(80, 20)
+	pane.RefreshRows()
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when an episode is selected")
 }

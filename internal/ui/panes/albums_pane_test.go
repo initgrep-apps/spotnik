@@ -85,7 +85,8 @@ func TestAlbumsPane_ToggleKey(t *testing.T) {
 	assert.Equal(t, 4, pane.ToggleKey())
 }
 
-// TestAlbumsPane_Actions_Default returns filter action by default.
+// TestAlbumsPane_Actions_Default returns filter action by default. The 'l like'
+// hint must NOT appear in list view (story 269).
 func TestAlbumsPane_Actions_Default(t *testing.T) {
 	pane := newTestAlbumsPane(true)
 	actions := pane.Actions()
@@ -94,6 +95,7 @@ func TestAlbumsPane_Actions_Default(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "should have filter action")
+	assert.NotContains(t, keys, "l", "list view should NOT show 'l like' (story 269)")
 }
 
 // TestAlbumsPane_Actions_FilterActive verifies Actions() returns only {f, filter}
@@ -791,8 +793,10 @@ func TestAlbumsPane_TrackView_ShowsHeartWhenLiked(t *testing.T) {
 
 	output := a.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart+" So What",
-		"track sub-view should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" So What",
+		"track sub-view should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "So What",
+		"track sub-view should render the track name as-is")
 }
 
 // TestAlbumsPane_TrackView_NoHeartWhenUnliked verifies the ♥ prefix is absent
@@ -814,4 +818,33 @@ func TestAlbumsPane_TrackView_NoHeartWhenUnliked(t *testing.T) {
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	assert.NotContains(t, output, heart+" So What",
 		"track sub-view should not show the heart prefix when the track is not liked")
+}
+
+// TestAlbumsPane_Actions_TrackView_ShowsLike verifies the 'l like' hint appears
+// in track view when tracks are loaded (story 269).
+func TestAlbumsPane_Actions_TrackView_ShowsLike(t *testing.T) {
+	a := newTestAlbumsPaneWithData(true)
+	a.SetSize(100, 20)
+	// Open track view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+	tracks := []domain.Track{
+		{ID: "t1", URI: "spotify:track:t1", Name: "So What"},
+	}
+	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks})
+	a = model2.(*AlbumsPane)
+	actions := a.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"track view with tracks loaded should include 'l like' (story 269)")
+}
+
+// TestAlbumsPane_Actions_ListView_NoLike verifies the 'l like' hint is absent
+// in the albums list view (story 269).
+func TestAlbumsPane_Actions_ListView_NoLike(t *testing.T) {
+	pane := newTestAlbumsPaneWithData(true)
+	pane.SetSize(80, 20)
+	// List view (inTrackView == false).
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"list view should NOT include 'l like' (story 269)")
 }

@@ -184,16 +184,8 @@ func (d SearchItemDelegate) renderTrack(w io.Writer, si SearchListItem, selected
 		innerW = 1
 	}
 
-	// Prepend the heart glyph when the track is liked. The delegate extracts
-	// the track ID from the URI (SearchListItem doesn't carry a separate ID).
+	// Track name renders as-is — no heart prefix (reverted in story 269).
 	displayName := si.Name
-	if d.store != nil {
-		trackID := trackIDFromURI(si.URI)
-		if trackID != "" && d.store.IsTrackLiked(trackID) {
-			heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-			displayName = heart + " " + displayName
-		}
-	}
 
 	explicitStr := ""
 	if si.Explicit {

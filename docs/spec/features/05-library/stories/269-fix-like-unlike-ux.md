@@ -1,7 +1,7 @@
 ---
 title: "Fix: Like/Unlike UX — Revert Heart Prefix, Add Border Action, Fix 403 Error"
 feature: 05-library
-status: open
+status: done
 ---
 
 ## Background

@@ -191,6 +191,10 @@ func (p *NowPlayingPane) Actions() []layout.Action {
 	if ps != nil && ps.CurrentlyPlayingType == "episode" {
 		actions = append(actions, layout.Action{Key: "i", Label: "details"})
 	}
+	// Show the 'l' like hint when a track is loaded (story 269).
+	if ps != nil && ps.Item != nil {
+		actions = append(actions, layout.Action{Key: "l", Label: "like"})
+	}
 	return actions
 }
 
@@ -568,11 +572,8 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string 
 		artistNames[i] = a.Name
 	}
 
-	// Track name with optional ♥ prefix when the track is liked.
+	// Track name renders as-is — no heart prefix (reverted in story 269).
 	trackName := t.Name
-	if p.store.IsTrackLiked(t.ID) {
-		trackName = uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode()) + " " + trackName
-	}
 
 	pad := strings.Repeat(" ", npInfoPadLeft)
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)

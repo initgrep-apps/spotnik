@@ -134,7 +134,12 @@ func (p *PlaylistsPane) ToggleKey() int { return 3 }
 // Actions returns the pane-specific shortcut hints displayed in the border.
 func (p *PlaylistsPane) Actions() []layout.Action {
 	if p.inTrackView {
-		return []layout.Action{{Key: "Esc", Label: "back"}}
+		actions := []layout.Action{{Key: "Esc", Label: "back"}}
+		// Show the 'l' like hint when tracks are loaded in track view (story 269).
+		if len(p.loadedTracks) > 0 {
+			actions = append(actions, layout.Action{Key: "l", Label: "like"})
+		}
+		return actions
 	}
 	return []layout.Action{p.BaseFilterAction()}
 }
@@ -510,21 +515,16 @@ func (p *PlaylistsPane) isOwnedByCurrentUser(pl domain.SimplePlaylist) bool {
 // refreshTrackRows rebuilds track rows from p.loadedTracks (pane-owned data).
 // It no longer reads from the global store.
 func (p *PlaylistsPane) refreshTrackRows() {
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(p.loadedTracks))
 	for i, track := range p.loadedTracks {
 		artistName := ""
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
 		}
-		// Prepend the heart glyph when the track is liked.
-		name := track.Name
-		if p.store.IsTrackLiked(track.ID) {
-			name = heart + " " + name
-		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"track":    name,
+			"track":    track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(track.DurationMs),
 		}

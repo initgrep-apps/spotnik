@@ -280,7 +280,7 @@ func TestRouting_ToggleLikeResult_ErrorRollback(t *testing.T) {
 		a.Update(alertMsg)
 	}
 	view := a.View()
-	assert.Contains(t, view, "Failed to load library", "error toast should show operation-specific title")
+	assert.Contains(t, view, "Like track failed", "error toast should show operation-specific title")
 }
 
 // TestRouting_ToggleLikeResult_ErrorRollback_Unlike re-adds the exact track
@@ -463,4 +463,42 @@ func TestRouting_ToggleLikeResult_NilClient_Rollback(t *testing.T) {
 		// None of the produced messages should be a toast-bearing alert.
 		_ = m
 	}
+}
+
+// TestRouting_ToggleLikeResult_ErrorMapsToOpLikeTracks verifies that the error
+// toast produced by a failed like/unlike uses the OpLikeTracks operation title
+// "Like track failed" (story 269), not the legacy "Failed to load library"
+// title that came from OpLibrary.
+func TestRouting_ToggleLikeResult_ErrorMapsToOpLikeTracks(t *testing.T) {
+	a := newLikeRoutingApp()
+	a.Store().SetLikedTracks([]domain.SavedTrack{
+		{Track: domain.Track{ID: "track-1", Name: "Blinding Lights"}},
+	})
+	a.Store().SetLikedTotal(1)
+
+	msg := panes.ToggleLikeResultMsg{
+		TrackID:       "track-1",
+		Liked:         false,
+		OriginalLiked: false,
+		Err:           errors.New("spotify 500"),
+	}
+	_, cmd := a.Update(msg)
+	require.NotNil(t, cmd, "error result should produce a toast cmd")
+
+	// Execute alert and feed back so the toast renders.
+	alertMsg := cmd()
+	if bm, ok := alertMsg.(tea.BatchMsg); ok {
+		for _, c := range bm {
+			if sub := c(); sub != nil {
+				a.Update(sub)
+			}
+		}
+	} else if alertMsg != nil {
+		a.Update(alertMsg)
+	}
+	view := a.View()
+	assert.Contains(t, view, "Like track failed",
+		"toggleLike error toast must use OpLikeTracks title (story 269)")
+	assert.NotContains(t, view, "Failed to load library",
+		"toggleLike error toast must NOT use the legacy OpLibrary title")
 }

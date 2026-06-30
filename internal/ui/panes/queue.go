@@ -64,6 +64,19 @@ func (q *QueuePane) Title() string { return "Queue" }
 // ToggleKey returns 2 — the number key for btop-style pane toggling.
 func (q *QueuePane) ToggleKey() int { return 2 }
 
+// Actions returns the pane-specific shortcut hints displayed in the border.
+// Shows the filter hint always, plus a 'l like' hint when the selected row is
+// a track (episodes are not likable via /me/tracks) (story 269).
+func (q *QueuePane) Actions() []layout.Action {
+	actions := []layout.Action{q.BaseFilterAction()}
+	queue := q.filteredQueue()
+	idx := q.Table().SelectedIndex()
+	if idx >= 0 && idx < len(queue) && queue[idx].Type == domain.QueueItemTypeTrack {
+		actions = append(actions, layout.Action{Key: "l", Label: "like"})
+	}
+	return actions
+}
+
 // Init satisfies tea.Model. The queue pane has no startup command of its own —
 // the root app's tick loop drives queue refreshes.
 func (q *QueuePane) Init() tea.Cmd {
@@ -179,7 +192,7 @@ func (q *QueuePane) RefreshRows() { q.refreshRows() }
 // refreshRows re-reads the store and applies filtered rows to the table.
 func (q *QueuePane) refreshRows() {
 	queue := q.filteredQueue()
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(queue))
 	for i, item := range queue {
 		row := map[string]string{}
@@ -198,13 +211,7 @@ func (q *QueuePane) refreshRows() {
 		default:
 			row["index"] = fmt.Sprintf("%d", i+1)
 			row["type"] = uikit.GlyphFor(uikit.GlyphMusicNote, uikit.GlyphUnicode)
-			// Prepend the heart glyph when the track is liked so the user sees
-			// the liked state at a glance, matching NowPlaying/LikedSongs.
-			title := item.Track.Name
-			if q.store.IsTrackLiked(item.Track.ID) {
-				title = heart + " " + title
-			}
-			row["title"] = title
+			row["title"] = item.Track.Name
 			artistName := ""
 			if len(item.Track.Artists) > 0 {
 				artistName = item.Track.Artists[0].Name

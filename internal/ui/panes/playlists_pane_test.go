@@ -64,6 +64,7 @@ func TestPlaylistsPane_ToggleKey(t *testing.T) {
 
 // TestPlaylistsPane_Actions_ListView returns standard actions when not in track view.
 // n and r actions were removed in story 120 (dead pane action removal).
+// The 'l like' hint must NOT appear in list view (story 269).
 func TestPlaylistsPane_Actions_ListView(t *testing.T) {
 	pane := newTestPlaylistsPane(true)
 	actions := pane.Actions()
@@ -74,6 +75,7 @@ func TestPlaylistsPane_Actions_ListView(t *testing.T) {
 	assert.Contains(t, keys, "f", "should have filter action")
 	assert.NotContains(t, keys, "n", "n (new playlist stub) must be absent")
 	assert.NotContains(t, keys, "r", "r (rename stub) must be absent")
+	assert.NotContains(t, keys, "l", "list view should NOT show 'l like' (story 269)")
 }
 
 // TestPlaylistsPane_Actions_FilterActive returns filter action unchanged when filter is active.
@@ -88,16 +90,33 @@ func TestPlaylistsPane_Actions_FilterActive(t *testing.T) {
 	assert.Equal(t, "filter", actions[0].Label)
 }
 
-// TestPlaylistsPane_Actions_TrackView returns only Esc back action in track view (story 106).
+// TestPlaylistsPane_Actions_TrackView returns only Esc back action in track view
+// when no tracks are loaded (story 106).
 func TestPlaylistsPane_Actions_TrackView(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
-	// Manually set inTrackView=true to test actions
+	// Manually set inTrackView=true to test actions; no tracks loaded.
 	pane.inTrackView = true
 	actions := pane.Actions()
-	require.Len(t, actions, 1, "track view should have exactly one action")
+	require.Len(t, actions, 1, "track view with no tracks should have exactly one action")
 	assert.Equal(t, "Esc", actions[0].Key, "track view should show Esc action")
 	assert.Equal(t, "back", actions[0].Label, "track view Esc action should be labeled 'back'")
+}
+
+// TestPlaylistsPane_Actions_TrackView_ShowsLike verifies the 'l like' hint
+// appears in track view when tracks are loaded (story 269).
+func TestPlaylistsPane_Actions_TrackView_ShowsLike(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(true)
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	actions := pane.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"track view with tracks loaded should include 'l like' (story 269)")
 }
 
 // TestPlaylistsPane_View_EmptyPlaylists verifies clean render on empty data.
@@ -1194,8 +1213,10 @@ func TestPlaylistsPane_TrackView_ShowsHeartWhenLiked(t *testing.T) {
 
 	output := pane.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart+" Track One",
-		"track sub-view should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" Track One",
+		"track sub-view should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "Track One",
+		"track sub-view should render the track name as-is")
 }
 
 // TestPlaylistsPane_TrackView_NoHeartWhenUnliked verifies the ♥ prefix is
