@@ -1875,9 +1875,9 @@
     "semantic_hash": "085aa1e515161529c024dd9018e944e3"
   },
   "AGENTS.md": {
-    "mtime": 1782469149.7813318,
-    "ast_hash": "fdefdac38b1e9b5c1b0a85b1b08847fb",
-    "semantic_hash": "fdefdac38b1e9b5c1b0a85b1b08847fb"
+    "mtime": 1782851171.1449356,
+    "ast_hash": "71606cb3fad1e8b8e8e6dfca44db92e7",
+    "semantic_hash": ""
   },
   "CHANGELOG.md": {
     "mtime": 1781801322.686182,
@@ -3458,5 +3458,60 @@
     "mtime": 1777644268.0663476,
     "ast_hash": "75139839a5da024489d501358e442133",
     "semantic_hash": "75139839a5da024489d501358e442133"
+  },
+  ".opencode/opencode.json": {
+    "mtime": 1782851119.2567503,
+    "ast_hash": "abcc8b9dcd80bca5f9dde6d9f0c3ae79",
+    "semantic_hash": ""
+  },
+  ".opencode/plugins/graphify.js": {
+    "mtime": 1782851119.2566493,
+    "ast_hash": "d12d57c380c6f01a0a3c3d480824d09f",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/SKILL.md": {
+    "mtime": 1782851119.2556179,
+    "ast_hash": "afa304485e818c4e5776d7706879573f",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/add-watch.md": {
+    "mtime": 1782681017.349043,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/exports.md": {
+    "mtime": 1782681017.3491902,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1782681017.34936,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1782681017.3495574,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/hooks.md": {
+    "mtime": 1782681017.3496928,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/query.md": {
+    "mtime": 1782681017.3499558,
+    "ast_hash": "9e5aadc2c57ab561bc56600fcfa70735",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/transcribe.md": {
+    "mtime": 1782681017.3500936,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/update.md": {
+    "mtime": 1782681017.3503442,
+    "ast_hash": "c698309979460d0f02ba616417844399",
+    "semantic_hash": ""
   }
 }
