@@ -2143,8 +2143,9 @@ func TestNowPlayingPane_L_NoTrack_NoOp(t *testing.T) {
 	assert.Nil(t, cmd, "pressing 'l' with no track playing should be a no-op")
 }
 
-// TestNowPlayingPane_View_ShowsHeartWhenLiked verifies the ♥ prefix is rendered
-// on the track name in the InfoBox when the track is liked.
+// TestNowPlayingPane_View_ShowsHeartWhenLiked verifies the track name renders
+// without a ♥ prefix even when the track is liked (heart prefix reverted in
+// story 269).
 func TestNowPlayingPane_View_ShowsHeartWhenLiked(t *testing.T) {
 	pane, w := newTestNowPlayingPaneWithState(true, true)
 	pane.SetSize(80, 24)
@@ -2154,8 +2155,10 @@ func TestNowPlayingPane_View_ShowsHeartWhenLiked(t *testing.T) {
 
 	output := pane.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart,
-		"View should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" Blinding Lights",
+		"View should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "Blinding Lights",
+		"View should render the track name as-is")
 }
 
 // TestNowPlayingPane_View_NoHeartWhenUnliked verifies the ♥ prefix is absent
@@ -2173,4 +2176,22 @@ func TestNowPlayingPane_View_NoHeartWhenUnliked(t *testing.T) {
 	// track names. Use NotContains on the "♥ Blinding Lights" combination.
 	assert.NotContains(t, output, heart+" Blinding Lights",
 		"View should not show the heart prefix when the track is not liked")
+}
+
+// TestNowPlayingPane_Actions_ShowsLikeWhenTrackLoaded verifies the 'l like' hint
+// appears in Actions() when a track is loaded (story 269).
+func TestNowPlayingPane_Actions_ShowsLikeWhenTrackLoaded(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	actions := pane.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should include 'l like' when a track is loaded")
+}
+
+// TestNowPlayingPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint is
+// absent when no track is loaded (story 269).
+func TestNowPlayingPane_Actions_NoLikeWhenEmpty(t *testing.T) {
+	pane := newTestNowPlayingPane(true)
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when no track is loaded")
 }

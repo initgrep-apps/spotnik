@@ -118,16 +118,24 @@ type SearchRequestMsg struct {
 	Page  int // 1-based page number; reflects intent.page at debounce fire time
 }
 
-// resultActions returns the 4 shortcut actions displayed as corner-notches
+// resultActions returns the shortcut actions displayed as corner-notches
 // in the top border of the Results panel. Key bindings are handled by
 // handleKey() in the overlay Update() — these are display-only hints.
+// The 'l like' hint is shown only when the selected result is a track
+// (story 269).
 func (o *SearchOverlay) resultActions() []layout.Action {
-	return []layout.Action{
+	actions := []layout.Action{
 		{Key: "ctrl+a", Label: "queue"},
 		{Key: "tab", Label: "filter"},
 		{Key: "pgdn", Label: "next"},
 		{Key: "pgup", Label: "prev"},
 	}
+	if selected := o.resultList.SelectedItem(); selected != nil {
+		if si, ok := selected.(SearchListItem); ok && si.IsTrack {
+			actions = append(actions, layout.Action{Key: "l", Label: "like"})
+		}
+	}
+	return actions
 }
 
 // NOTE: SearchPageLoadedMsg and SearchLoadingMsg are defined in messages.go alongside

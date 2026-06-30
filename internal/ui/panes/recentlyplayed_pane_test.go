@@ -59,20 +59,25 @@ func TestRecentlyPlayedPane_Metadata(t *testing.T) {
 func TestRecentlyPlayedPane_Actions_Default(t *testing.T) {
 	pane, _ := newTestRecentlyPlayedPane()
 	actions := pane.Actions()
-	require.Len(t, actions, 1)
+	// Tracks present → filter + 'l like' hint (story 269).
+	require.Len(t, actions, 2)
 	assert.Equal(t, "f", actions[0].Key)
+	assert.Equal(t, "l", actions[1].Key)
+	assert.Equal(t, "like", actions[1].Label)
 }
 
 func TestRecentlyPlayedPane_Actions_FilterActive(t *testing.T) {
 	pane, _ := newTestRecentlyPlayedPane()
 	pane.SetFocused(true)
 	pane.SetSize(120, 20)
-	// Toggle filter on — Actions() must still return {f, filter}, not {Esc, close}.
+	// Toggle filter on — Actions() must still return filter + 'l like', not {Esc, close}.
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
 	actions := pane.Actions()
-	require.Len(t, actions, 1)
+	require.Len(t, actions, 2)
 	assert.Equal(t, "f", actions[0].Key)
 	assert.Equal(t, "filter", actions[0].Label)
+	assert.Equal(t, "l", actions[1].Key)
+	assert.Equal(t, "like", actions[1].Label)
 }
 
 func TestRecentlyPlayedPane_RendersTrackNames(t *testing.T) {
@@ -393,20 +398,23 @@ func TestRecentlyPlayedPane_L_NotFocused_NoOp(t *testing.T) {
 	assert.Nil(t, cmd, "pressing 'l' when not focused should be a no-op")
 }
 
-// TestRecentlyPlayedPane_View_ShowsHeartWhenLiked verifies the ♥ prefix is
-// rendered on the track name when the track is liked.
+// TestRecentlyPlayedPane_View_ShowsHeartWhenLiked verifies the track name renders
+// without a ♥ prefix even when the track is liked (heart prefix reverted in
+// story 269).
 func TestRecentlyPlayedPane_View_ShowsHeartWhenLiked(t *testing.T) {
 	pane, st := newTestRecentlyPlayedPane()
 	st.SetLikedTracks([]domain.SavedTrack{
 		{Track: domain.Track{ID: "t1", Name: "Track One"}},
 	})
-	// Re-read the store so the heart prefix is applied to the liked track.
+	// Re-read the store so rows reflect the liked track.
 	pane.RefreshRows()
 
 	output := pane.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart+" Track One",
-		"View should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" Track One",
+		"View should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "Track One",
+		"View should render the track name as-is")
 }
 
 // TestRecentlyPlayedPane_View_NoHeartWhenUnliked verifies the ♥ prefix is
@@ -418,4 +426,24 @@ func TestRecentlyPlayedPane_View_NoHeartWhenUnliked(t *testing.T) {
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	assert.NotContains(t, output, heart+" Track One",
 		"View should not show the heart prefix when the track is not liked")
+}
+
+// TestRecentlyPlayedPane_Actions_ShowsLikeWhenTracks verifies the 'l like' hint
+// appears when tracks are present (story 269).
+func TestRecentlyPlayedPane_Actions_ShowsLikeWhenTracks(t *testing.T) {
+	pane, _ := newTestRecentlyPlayedPane()
+	actions := pane.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should include 'l like' when tracks are present")
+}
+
+// TestRecentlyPlayedPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint
+// is absent when no tracks are loaded (story 269).
+func TestRecentlyPlayedPane_Actions_NoLikeWhenEmpty(t *testing.T) {
+	st := state.New()
+	pane := NewRecentlyPlayedPane(st, theme.Load("black"), true)
+	pane.SetSize(120, 20)
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when no tracks are loaded")
 }

@@ -132,7 +132,12 @@ func (a *AlbumsPane) ToggleKey() int { return 4 }
 // visually consistent.
 func (a *AlbumsPane) Actions() []layout.Action {
 	if a.inTrackView {
-		return []layout.Action{{Key: "Esc", Label: "back"}}
+		actions := []layout.Action{{Key: "Esc", Label: "back"}}
+		// Show the 'l' like hint when tracks are loaded in track view (story 269).
+		if len(a.loadedTracks) > 0 {
+			actions = append(actions, layout.Action{Key: "l", Label: "like"})
+		}
+		return actions
 	}
 	return []layout.Action{a.BaseFilterAction()}
 }
@@ -330,21 +335,16 @@ func (a *AlbumsPane) checkPrefetch() tea.Cmd {
 
 // refreshTrackRows rebuilds the track table rows from loadedTracks.
 func (a *AlbumsPane) refreshTrackRows() {
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(a.loadedTracks))
 	for i, tr := range a.loadedTracks {
 		artistName := ""
 		if len(tr.Artists) > 0 {
 			artistName = tr.Artists[0].Name
 		}
-		// Prepend the heart glyph when the track is liked.
-		name := tr.Name
-		if a.store.IsTrackLiked(tr.ID) {
-			name = heart + " " + name
-		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"name":     name,
+			"name":     tr.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(tr.DurationMs),
 		}

@@ -563,7 +563,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if secondary != nil && retryAfter > 0 {
 				return a, tea.Batch(refreshCmd, secondary), true
 			}
-			toast := a.errorMapper.Map(uikit.OpLibrary, m.Err)
+			toast := a.errorMapper.Map(uikit.OpLikeTracks, m.Err)
 			if toast.Intent == uikit.ToastNone {
 				// Error suppressed by mapper: log to stderr so the silent
 				// rollback is at least observable for debugging.

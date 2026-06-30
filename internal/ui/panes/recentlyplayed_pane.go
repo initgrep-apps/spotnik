@@ -67,6 +67,17 @@ func (r *RecentlyPlayedPane) Title() string { return "Recently Played" }
 // ToggleKey returns 6 — the number key for btop-style pane toggling.
 func (r *RecentlyPlayedPane) ToggleKey() int { return 6 }
 
+// Actions returns the pane-specific shortcut hints displayed in the border.
+// Shows the filter hint always, plus a 'l like' hint when tracks are present
+// (story 269).
+func (r *RecentlyPlayedPane) Actions() []layout.Action {
+	actions := []layout.Action{r.BaseFilterAction()}
+	if len(r.filteredItems()) > 0 {
+		actions = append(actions, layout.Action{Key: "l", Label: "like"})
+	}
+	return actions
+}
+
 // Init satisfies tea.Model. RecentlyPlayedPane has no startup command.
 func (r *RecentlyPlayedPane) Init() tea.Cmd { return nil }
 
@@ -169,7 +180,7 @@ func (r *RecentlyPlayedPane) RefreshRows() { r.refreshRows() }
 // refreshRows re-reads the store and applies filtered rows.
 func (r *RecentlyPlayedPane) refreshRows() {
 	items := r.filteredItems()
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(items))
 	for i, item := range items {
 		artistName := ""
@@ -177,14 +188,9 @@ func (r *RecentlyPlayedPane) refreshRows() {
 			artistName = item.Track.Artists[0].Name
 		}
 		playedAt := formatPlayedAtFromHistory(item.PlayedAt)
-		// Prepend the heart glyph when the track is liked.
-		name := item.Track.Name
-		if r.store.IsTrackLiked(item.Track.ID) {
-			name = heart + " " + name
-		}
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
-			"track":  name,
+			"track":  item.Track.Name,
 			"artist": artistName,
 			"played": playedAt,
 		}

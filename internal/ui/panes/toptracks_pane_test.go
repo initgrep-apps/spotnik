@@ -17,6 +17,18 @@ import (
 // Compile-time check: TopTracksPane implements layout.Pane.
 var _ layout.Pane = &TopTracksPane{}
 
+// findActionByKey returns a pointer to the first action with the given key,
+// or nil when not present. Used by tests that need to locate a specific action
+// regardless of its position in the slice (e.g. when 'l like' is appended).
+func findActionByKey(actions []layout.Action, key string) *layout.Action {
+	for i := range actions {
+		if actions[i].Key == key {
+			return &actions[i]
+		}
+	}
+	return nil
+}
+
 // populateStoreTopTracks loads test top-tracks data into the store for the given time range.
 func populateStoreTopTracks(st *state.Store, timeRange string) {
 	tracks := []domain.Track{
@@ -54,22 +66,26 @@ func TestTopTracksPane_Metadata(t *testing.T) {
 func TestTopTracksPane_Actions_Default_ShowsFilterAndRange(t *testing.T) {
 	pane, _ := newTestTopTracksPane()
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
+	// Tracks present → filter + range + 'l like' (story 269).
+	require.Len(t, actions, 3)
 	assert.Equal(t, "f", actions[0].Key)
 	assert.Equal(t, "g", actions[1].Key)
 	// Default is short_term → label "4wk"
 	assert.Equal(t, "4wk", actions[1].Label)
+	assert.Equal(t, "l", actions[2].Key)
+	assert.Equal(t, "like", actions[2].Label)
 }
 
 func TestTopTracksPane_Actions_FilterActive(t *testing.T) {
 	pane, _ := newTestTopTracksPane()
 	pane.SetFocused(true)
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) //nolint:errcheck
-	// Actions() always returns {f, filter} + {g, rangeLabel} — close-notch retired.
+	// Actions() returns {f, filter} + {g, rangeLabel} + {l, like} — close-notch retired.
 	actions := pane.Actions()
-	require.Len(t, actions, 2)
+	require.Len(t, actions, 3)
 	assert.Equal(t, "f", actions[0].Key)
 	assert.Equal(t, "g", actions[1].Key)
+	assert.Equal(t, "l", actions[2].Key)
 }
 
 func TestTopTracksPane_RendersTrackNames(t *testing.T) {
@@ -138,14 +154,15 @@ func TestTopTracksPane_ActionsLabelReflectsRange(t *testing.T) {
 	// Cycle to medium_term
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	actions := pane.Actions()
-	gAction := actions[len(actions)-1]
-	assert.Equal(t, "g", gAction.Key)
+	gAction := findActionByKey(actions, "g")
+	require.NotNil(t, gAction)
 	assert.Equal(t, "6mo", gAction.Label)
 
 	// Cycle to long_term
 	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}) //nolint:errcheck
 	actions = pane.Actions()
-	gAction = actions[len(actions)-1]
+	gAction = findActionByKey(actions, "g")
+	require.NotNil(t, gAction)
 	assert.Equal(t, "all", gAction.Label)
 }
 
@@ -480,8 +497,10 @@ func TestTopTracksPane_View_ShowsHeartWhenLiked(t *testing.T) {
 
 	output := pane.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart+" Blinding Lights",
-		"View should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" Blinding Lights",
+		"View should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "Blinding Lights",
+		"View should render the track name as-is")
 }
 
 // TestTopTracksPane_View_NoHeartWhenUnliked verifies the ♥ prefix is absent
@@ -494,4 +513,24 @@ func TestTopTracksPane_View_NoHeartWhenUnliked(t *testing.T) {
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	assert.NotContains(t, output, heart+" Blinding Lights",
 		"View should not show the heart prefix when the track is not liked")
+}
+
+// TestTopTracksPane_Actions_ShowsLikeWhenTracks verifies the 'l like' hint
+// appears when tracks are present (story 269).
+func TestTopTracksPane_Actions_ShowsLikeWhenTracks(t *testing.T) {
+	pane, _ := newTestTopTracksPane()
+	actions := pane.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should include 'l like' when tracks are present")
+}
+
+// TestTopTracksPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint is
+// absent when no tracks are loaded (story 269).
+func TestTopTracksPane_Actions_NoLikeWhenEmpty(t *testing.T) {
+	st := state.New()
+	pane := NewTopTracksPane(st, theme.Load("black"), true)
+	pane.SetSize(120, 20)
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when no tracks are loaded")
 }

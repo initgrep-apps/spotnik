@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/domain"
 	"github.com/initgrep-apps/spotnik/internal/state"
+	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/panes"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
@@ -3216,8 +3217,10 @@ func TestSearchOverlay_View_ShowsHeartWhenLiked(t *testing.T) {
 
 	output := o.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	assert.Contains(t, output, heart+" Track One",
-		"search results should prepend the liked heart glyph to the track name when liked")
+	assert.NotContains(t, output, heart+" Track One",
+		"search results should not prepend the heart glyph to the track name (reverted in story 269)")
+	assert.Contains(t, output, "Track One",
+		"search results should render the track name as-is")
 }
 
 // TestSearchOverlay_View_NoHeartWhenUnliked verifies the ♥ prefix is absent
@@ -3234,4 +3237,32 @@ func TestSearchOverlay_View_NoHeartWhenUnliked(t *testing.T) {
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
 	assert.NotContains(t, output, heart+" Track One",
 		"search results should not show the heart prefix when the track is not liked")
+}
+
+// TestSearchOverlay_Actions_ShowsLikeWhenTrackSelected verifies the 'l like'
+// hint appears in resultActions when the selected result is a track (story 269).
+func TestSearchOverlay_Actions_ShowsLikeWhenTrackSelected(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore("t1")
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "track", Name: "Track One", URI: "spotify:track:t1", IsTrack: true},
+	}})
+	o = model.(*panes.SearchOverlay)
+	actions := o.ResultActions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"resultActions should include 'l like' when a track is selected")
+}
+
+// TestSearchOverlay_Actions_NoLikeWhenArtistSelected verifies the 'l like' hint
+// is absent when the selected result is not a track (story 269).
+func TestSearchOverlay_Actions_NoLikeWhenArtistSelected(t *testing.T) {
+	o, _ := newTestSearchOverlayWithStore()
+	o.SetSize(80, 40)
+	model, _ := o.Update(panes.SearchPageLoadedMsg{Results: []panes.SearchListItem{
+		{Category: "artist", Name: "Artist One", URI: "spotify:artist:a1", IsTrack: false},
+	}})
+	o = model.(*panes.SearchOverlay)
+	actions := o.ResultActions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"resultActions should NOT include 'l like' when an artist is selected")
 }

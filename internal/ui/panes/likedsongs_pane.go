@@ -64,6 +64,17 @@ func (l *LikedSongsPane) Title() string { return "Liked Songs" }
 // ToggleKey returns 5 — the number key for btop-style pane toggling.
 func (l *LikedSongsPane) ToggleKey() int { return 5 }
 
+// Actions returns the pane-specific shortcut hints displayed in the border.
+// Shows the filter hint always, plus a 'l like' hint when tracks are present
+// (story 269).
+func (l *LikedSongsPane) Actions() []layout.Action {
+	actions := []layout.Action{l.BaseFilterAction()}
+	if len(l.filteredTracks()) > 0 {
+		actions = append(actions, layout.Action{Key: "l", Label: "like"})
+	}
+	return actions
+}
+
 // Init satisfies tea.Model. LikedSongsPane has no startup command.
 func (l *LikedSongsPane) Init() tea.Cmd { return nil }
 
@@ -167,9 +178,7 @@ func (l *LikedSongsPane) RefreshRows() { l.refreshRows() }
 // refreshRows re-reads the store and applies filtered track rows.
 func (l *LikedSongsPane) refreshRows() {
 	tracks := l.filteredTracks()
-	// All tracks in LikedSongs are liked — prepend the heart glyph to every
-	// track name so the user sees the liked state at a glance.
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(tracks))
 	for i, st := range tracks {
 		artistName := ""
@@ -178,7 +187,7 @@ func (l *LikedSongsPane) refreshRows() {
 		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"track":    heart + " " + st.Track.Name,
+			"track":    st.Track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(st.Track.DurationMs),
 		}

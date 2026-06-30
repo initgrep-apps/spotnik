@@ -492,18 +492,38 @@ func TestLikedSongsPane_L_NotFocused_NoOp(t *testing.T) {
 }
 
 // TestLikedSongsPane_View_ShowsHeartOnAllRows verifies every row in the
-// LikedSongsPane table renders the ♥ prefix on the track name (all liked).
+// LikedSongsPane table renders the track name without a ♥ prefix (heart prefix
+// reverted in story 269).
 func TestLikedSongsPane_View_ShowsHeartOnAllRows(t *testing.T) {
 	pane := newTestLikedSongsPaneWithData(true)
 	pane.SetSize(80, 20)
 
 	output := pane.View()
 	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
-	// All three tracks should show the heart prefix.
-	assert.Contains(t, output, heart+" Blinding Lights",
-		"first row should show heart prefix on track name")
-	assert.Contains(t, output, heart+" Save Your Tears",
-		"second row should show heart prefix on track name")
-	assert.Contains(t, output, heart+" Levitating",
-		"third row should show heart prefix on track name")
+	// No row should show the heart prefix; names render as-is.
+	assert.NotContains(t, output, heart+" Blinding Lights",
+		"first row should not show heart prefix on track name (reverted in story 269)")
+	assert.NotContains(t, output, heart+" Save Your Tears",
+		"second row should not show heart prefix on track name (reverted in story 269)")
+	assert.NotContains(t, output, heart+" Levitating",
+		"third row should not show heart prefix on track name (reverted in story 269)")
+	assert.Contains(t, output, "Blinding Lights", "track name should render as-is")
+}
+
+// TestLikedSongsPane_Actions_ShowsLikeWhenTracks verifies the 'l like' hint
+// appears when tracks are present (story 269).
+func TestLikedSongsPane_Actions_ShowsLikeWhenTracks(t *testing.T) {
+	pane := newTestLikedSongsPaneWithData(true)
+	actions := pane.Actions()
+	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should include 'l like' when tracks are present")
+}
+
+// TestLikedSongsPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint is
+// absent when no tracks are loaded (story 269).
+func TestLikedSongsPane_Actions_NoLikeWhenEmpty(t *testing.T) {
+	pane := newTestLikedSongsPane(true)
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when no tracks are loaded")
 }
