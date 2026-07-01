@@ -1,7 +1,7 @@
 ---
 title: "Fix: Remove l from NowPlaying, Show l Border Action Only on Focused Pane"
 feature: 05-library
-status: open
+status: done
 ---
 
 ## Background

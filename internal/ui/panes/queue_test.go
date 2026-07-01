@@ -1043,3 +1043,18 @@ func TestQueuePane_Actions_NoLikeWhenEpisodeSelected(t *testing.T) {
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
 		"Actions should NOT include 'l like' when an episode is selected")
 }
+
+// TestQueuePane_Actions_NoLikeWhenUnfocused verifies the 'l like' hint is
+// absent when the pane is unfocused, even when a track is selected (story 270).
+func TestQueuePane_Actions_NoLikeWhenUnfocused(t *testing.T) {
+	s := state.New()
+	s.SetQueue([]domain.QueueItem{
+		qiTrack("q1", "Save Your Tears", "spotify:track:q1", "The Weeknd"),
+	})
+	pane := NewQueuePane(s, theme.Load("black"), false) // unfocused
+	pane.SetSize(80, 20)
+	pane.RefreshRows()
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when unfocused, even with a track selected")
+}

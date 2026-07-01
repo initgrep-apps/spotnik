@@ -527,3 +527,12 @@ func TestLikedSongsPane_Actions_NoLikeWhenEmpty(t *testing.T) {
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
 		"Actions should NOT include 'l like' when no tracks are loaded")
 }
+
+// TestLikedSongsPane_Actions_NoLikeWhenUnfocused verifies the 'l like' hint
+// is absent when the pane is unfocused, even when tracks are present (story 270).
+func TestLikedSongsPane_Actions_NoLikeWhenUnfocused(t *testing.T) {
+	pane := newTestLikedSongsPaneWithData(false) // unfocused
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when unfocused, even with tracks")
+}

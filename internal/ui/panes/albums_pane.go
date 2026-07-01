@@ -126,15 +126,13 @@ func (a *AlbumsPane) Title() string {
 func (a *AlbumsPane) ToggleKey() int { return 4 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// In track sub-view shows {Esc, back}. In list view shows {f, filter} only —
-// Enter-to-open is the implicit pane-wide convention (matches Playlists), so the
-// hint is omitted to avoid border clutter and to keep the two drill-down panes
-// visually consistent.
+// In track sub-view shows Esc back always, plus 'l like' when focused and
+// tracks are loaded. When unfocused in track view, only Esc back is shown —
+// 'l like' is a focus-only action (story 270).
 func (a *AlbumsPane) Actions() []layout.Action {
 	if a.inTrackView {
 		actions := []layout.Action{{Key: "Esc", Label: "back"}}
-		// Show the 'l' like hint when tracks are loaded in track view (story 269).
-		if len(a.loadedTracks) > 0 {
+		if a.IsFocused() && len(a.loadedTracks) > 0 {
 			actions = append(actions, layout.Action{Key: "l", Label: "like"})
 		}
 		return actions

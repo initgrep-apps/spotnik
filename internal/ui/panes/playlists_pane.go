@@ -132,11 +132,13 @@ func (p *PlaylistsPane) Title() string {
 func (p *PlaylistsPane) ToggleKey() int { return 3 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
+// In track view, shows Esc back always, plus 'l like' when focused and tracks
+// are loaded. When unfocused in track view, only Esc back is shown — 'l like'
+// is a focus-only action (story 270).
 func (p *PlaylistsPane) Actions() []layout.Action {
 	if p.inTrackView {
 		actions := []layout.Action{{Key: "Esc", Label: "back"}}
-		// Show the 'l' like hint when tracks are loaded in track view (story 269).
-		if len(p.loadedTracks) > 0 {
+		if p.IsFocused() && len(p.loadedTracks) > 0 {
 			actions = append(actions, layout.Action{Key: "l", Label: "like"})
 		}
 		return actions

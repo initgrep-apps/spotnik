@@ -86,12 +86,17 @@ func (p *TopTracksPane) TimeRange() string { return p.timeRange }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
 // Shows filter (f) and time range cycle (g) with the current range as label.
-// The close-notch is retired — the border renderer uses FilterQuery instead.
+// The 'l like' hint is shown only when focused and tracks are present.
+// When unfocused, only filter and range are shown — 'l like' is a focus-only
+// action (story 270).
 func (p *TopTracksPane) Actions() []layout.Action {
 	rangeLabel := topTracksRangeLabels[p.timeRange]
 	actions := []layout.Action{
 		p.BaseFilterAction(),
 		{Key: "g", Label: rangeLabel},
+	}
+	if !p.IsFocused() {
+		return actions
 	}
 	// Show the 'l' like hint when tracks are present (story 269).
 	if len(p.filteredTracks()) > 0 {

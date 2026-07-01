@@ -65,9 +65,14 @@ func (q *QueuePane) Title() string { return "Queue" }
 func (q *QueuePane) ToggleKey() int { return 2 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// Shows the filter hint always, plus a 'l like' hint when the selected row is
-// a track (episodes are not likable via /me/tracks) (story 269).
+// Shows the filter hint always, plus a 'l like' hint when focused and the
+// selected row is a track (episodes are not likable via /me/tracks).
+// When unfocused, only the base filter action is shown — 'l like' is a
+// focus-only action (story 270).
 func (q *QueuePane) Actions() []layout.Action {
+	if !q.IsFocused() {
+		return []layout.Action{q.BaseFilterAction()}
+	}
 	actions := []layout.Action{q.BaseFilterAction()}
 	queue := q.filteredQueue()
 	idx := q.Table().SelectedIndex()
