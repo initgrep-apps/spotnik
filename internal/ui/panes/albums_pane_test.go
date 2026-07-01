@@ -821,7 +821,7 @@ func TestAlbumsPane_TrackView_NoHeartWhenUnliked(t *testing.T) {
 }
 
 // TestAlbumsPane_Actions_TrackView_ShowsLike verifies the 'l like' hint appears
-// in track view when tracks are loaded (story 269).
+// in track view when tracks are loaded and the pane is focused (story 269, 270).
 func TestAlbumsPane_Actions_TrackView_ShowsLike(t *testing.T) {
 	a := newTestAlbumsPaneWithData(true)
 	a.SetSize(100, 20)
@@ -835,7 +835,26 @@ func TestAlbumsPane_Actions_TrackView_ShowsLike(t *testing.T) {
 	a = model2.(*AlbumsPane)
 	actions := a.Actions()
 	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
-		"track view with tracks loaded should include 'l like' (story 269)")
+		"track view with tracks loaded and focused should include 'l like' (story 269, 270)")
+}
+
+// TestAlbumsPane_Actions_TrackView_NoLikeWhenUnfocused verifies the 'l like'
+// hint is absent in track view when the pane is unfocused, even with tracks
+// loaded (story 270).
+func TestAlbumsPane_Actions_TrackView_NoLikeWhenUnfocused(t *testing.T) {
+	a := newTestAlbumsPaneWithData(false) // unfocused
+	a.SetSize(100, 20)
+	// Open track view.
+	model, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = model.(*AlbumsPane)
+	tracks := []domain.Track{
+		{ID: "t1", URI: "spotify:track:t1", Name: "So What"},
+	}
+	model2, _ := a.Update(AlbumTracksLoadedMsg{AlbumID: "al1", Offset: 0, Tracks: tracks})
+	a = model2.(*AlbumsPane)
+	actions := a.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"track view with tracks loaded but unfocused should NOT include 'l like' (story 270)")
 }
 
 // TestAlbumsPane_Actions_ListView_NoLike verifies the 'l like' hint is absent

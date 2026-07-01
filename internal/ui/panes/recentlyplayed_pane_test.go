@@ -57,9 +57,18 @@ func TestRecentlyPlayedPane_Metadata(t *testing.T) {
 }
 
 func TestRecentlyPlayedPane_Actions_Default(t *testing.T) {
-	pane, _ := newTestRecentlyPlayedPane()
+	st := state.New()
+	now := time.Now()
+	st.SetRecentlyPlayed([]domain.PlayHistory{
+		{
+			Track:    domain.Track{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Artist A"}}},
+			PlayedAt: now.Add(-2 * time.Minute).Format(time.RFC3339),
+		},
+	})
+	pane := NewRecentlyPlayedPane(st, theme.Load("black"), true) // focused
+	pane.SetSize(120, 20)
 	actions := pane.Actions()
-	// Tracks present → filter + 'l like' hint (story 269).
+	// Tracks present + focused → filter + 'l like' hint (story 269, 270).
 	require.Len(t, actions, 2)
 	assert.Equal(t, "f", actions[0].Key)
 	assert.Equal(t, "l", actions[1].Key)
@@ -429,12 +438,21 @@ func TestRecentlyPlayedPane_View_NoHeartWhenUnliked(t *testing.T) {
 }
 
 // TestRecentlyPlayedPane_Actions_ShowsLikeWhenTracks verifies the 'l like' hint
-// appears when tracks are present (story 269).
+// appears when tracks are present and the pane is focused (story 269, 270).
 func TestRecentlyPlayedPane_Actions_ShowsLikeWhenTracks(t *testing.T) {
-	pane, _ := newTestRecentlyPlayedPane()
+	st := state.New()
+	now := time.Now()
+	st.SetRecentlyPlayed([]domain.PlayHistory{
+		{
+			Track:    domain.Track{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "Artist A"}}},
+			PlayedAt: now.Add(-2 * time.Minute).Format(time.RFC3339),
+		},
+	})
+	pane := NewRecentlyPlayedPane(st, theme.Load("black"), true) // focused
+	pane.SetSize(120, 20)
 	actions := pane.Actions()
 	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
-		"Actions should include 'l like' when tracks are present")
+		"Actions should include 'l like' when focused and tracks are present")
 }
 
 // TestRecentlyPlayedPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint
@@ -446,4 +464,13 @@ func TestRecentlyPlayedPane_Actions_NoLikeWhenEmpty(t *testing.T) {
 	actions := pane.Actions()
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
 		"Actions should NOT include 'l like' when no tracks are loaded")
+}
+
+// TestRecentlyPlayedPane_Actions_NoLikeWhenUnfocused verifies the 'l like' hint
+// is absent when the pane is unfocused, even when tracks are present (story 270).
+func TestRecentlyPlayedPane_Actions_NoLikeWhenUnfocused(t *testing.T) {
+	pane, _ := newTestRecentlyPlayedPane() // unfocused
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when unfocused, even with tracks")
 }

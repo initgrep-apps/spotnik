@@ -191,10 +191,6 @@ func (p *NowPlayingPane) Actions() []layout.Action {
 	if ps != nil && ps.CurrentlyPlayingType == "episode" {
 		actions = append(actions, layout.Action{Key: "i", Label: "details"})
 	}
-	// Show the 'l' like hint when a track is loaded (story 269).
-	if ps != nil && ps.Item != nil {
-		actions = append(actions, layout.Action{Key: "l", Label: "like"})
-	}
 	return actions
 }
 
@@ -791,21 +787,6 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 			return VisualizerPatternChangedMsg{PatternIndex: p.engine.Pattern()}
 		}
 
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == "l":
-		// Like/unlike the currently playing track. Reads liked status from the
-		// store (O(1) lookup) and emits a ToggleLikeRequestMsg for the root app
-		// to handle the premium gate, optimistic update, and API dispatch.
-		ps := p.store.PlaybackState()
-		if ps == nil || ps.Item == nil {
-			return p, nil
-		}
-		track := *ps.Item
-		return p, func() tea.Msg {
-			return ToggleLikeRequestMsg{
-				Track:          track,
-				CurrentlyLiked: p.store.IsTrackLiked(track.ID),
-			}
-		}
 	}
 
 	return p, nil

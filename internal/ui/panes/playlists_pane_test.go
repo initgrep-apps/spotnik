@@ -104,7 +104,7 @@ func TestPlaylistsPane_Actions_TrackView(t *testing.T) {
 }
 
 // TestPlaylistsPane_Actions_TrackView_ShowsLike verifies the 'l like' hint
-// appears in track view when tracks are loaded (story 269).
+// appears in track view when tracks are loaded and the pane is focused (story 269, 270).
 func TestPlaylistsPane_Actions_TrackView_ShowsLike(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
@@ -116,7 +116,24 @@ func TestPlaylistsPane_Actions_TrackView_ShowsLike(t *testing.T) {
 	pane.refreshTrackRows()
 	actions := pane.Actions()
 	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
-		"track view with tracks loaded should include 'l like' (story 269)")
+		"track view with tracks loaded and focused should include 'l like' (story 269, 270)")
+}
+
+// TestPlaylistsPane_Actions_TrackView_NoLikeWhenUnfocused verifies the 'l like'
+// hint is absent in track view when the pane is unfocused, even with tracks
+// loaded (story 270).
+func TestPlaylistsPane_Actions_TrackView_NoLikeWhenUnfocused(t *testing.T) {
+	pane := newTestPlaylistsPaneWithData(false) // unfocused
+	pane.SetSize(80, 20)
+	pane.inTrackView = true
+	pane.selectedID = "pl1"
+	pane.loadedTracks = []domain.Track{
+		{ID: "t1", Name: "Track One", URI: "spotify:track:t1", Artists: []domain.Artist{{Name: "A"}}},
+	}
+	pane.refreshTrackRows()
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"track view with tracks loaded but unfocused should NOT include 'l like' (story 270)")
 }
 
 // TestPlaylistsPane_View_EmptyPlaylists verifies clean render on empty data.

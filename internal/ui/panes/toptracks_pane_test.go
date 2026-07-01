@@ -64,9 +64,12 @@ func TestTopTracksPane_Metadata(t *testing.T) {
 }
 
 func TestTopTracksPane_Actions_Default_ShowsFilterAndRange(t *testing.T) {
-	pane, _ := newTestTopTracksPane()
+	st := state.New()
+	populateStoreTopTracks(st, "short_term")
+	pane := NewTopTracksPane(st, theme.Load("black"), true) // focused
+	pane.SetSize(120, 20)
 	actions := pane.Actions()
-	// Tracks present → filter + range + 'l like' (story 269).
+	// Tracks present + focused → filter + range + 'l like' (story 269, 270).
 	require.Len(t, actions, 3)
 	assert.Equal(t, "f", actions[0].Key)
 	assert.Equal(t, "g", actions[1].Key)
@@ -516,12 +519,15 @@ func TestTopTracksPane_View_NoHeartWhenUnliked(t *testing.T) {
 }
 
 // TestTopTracksPane_Actions_ShowsLikeWhenTracks verifies the 'l like' hint
-// appears when tracks are present (story 269).
+// appears when tracks are present and the pane is focused (story 269, 270).
 func TestTopTracksPane_Actions_ShowsLikeWhenTracks(t *testing.T) {
-	pane, _ := newTestTopTracksPane()
+	st := state.New()
+	populateStoreTopTracks(st, "short_term")
+	pane := NewTopTracksPane(st, theme.Load("black"), true) // focused
+	pane.SetSize(120, 20)
 	actions := pane.Actions()
 	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
-		"Actions should include 'l like' when tracks are present")
+		"Actions should include 'l like' when focused and tracks are present")
 }
 
 // TestTopTracksPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint is
@@ -533,4 +539,13 @@ func TestTopTracksPane_Actions_NoLikeWhenEmpty(t *testing.T) {
 	actions := pane.Actions()
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
 		"Actions should NOT include 'l like' when no tracks are loaded")
+}
+
+// TestTopTracksPane_Actions_NoLikeWhenUnfocused verifies the 'l like' hint
+// is absent when the pane is unfocused, even when tracks are present (story 270).
+func TestTopTracksPane_Actions_NoLikeWhenUnfocused(t *testing.T) {
+	pane, _ := newTestTopTracksPane() // unfocused
+	actions := pane.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' when unfocused, even with tracks")
 }

@@ -65,9 +65,13 @@ func (l *LikedSongsPane) Title() string { return "Liked Songs" }
 func (l *LikedSongsPane) ToggleKey() int { return 5 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// Shows the filter hint always, plus a 'l like' hint when tracks are present
-// (story 269).
+// Shows the filter hint always, plus a 'l like' hint when focused and tracks
+// are present. When unfocused, only the base filter action is shown — 'l like'
+// is a focus-only action (story 270).
 func (l *LikedSongsPane) Actions() []layout.Action {
+	if !l.IsFocused() {
+		return []layout.Action{l.BaseFilterAction()}
+	}
 	actions := []layout.Action{l.BaseFilterAction()}
 	if len(l.filteredTracks()) > 0 {
 		actions = append(actions, layout.Action{Key: "l", Label: "like"})

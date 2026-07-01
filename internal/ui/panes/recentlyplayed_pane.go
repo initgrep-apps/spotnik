@@ -68,9 +68,13 @@ func (r *RecentlyPlayedPane) Title() string { return "Recently Played" }
 func (r *RecentlyPlayedPane) ToggleKey() int { return 6 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// Shows the filter hint always, plus a 'l like' hint when tracks are present
-// (story 269).
+// Shows the filter hint always, plus a 'l like' hint when focused and tracks
+// are present. When unfocused, only the base filter action is shown — 'l like'
+// is a focus-only action (story 270).
 func (r *RecentlyPlayedPane) Actions() []layout.Action {
+	if !r.IsFocused() {
+		return []layout.Action{r.BaseFilterAction()}
+	}
 	actions := []layout.Action{r.BaseFilterAction()}
 	if len(r.filteredItems()) > 0 {
 		actions = append(actions, layout.Action{Key: "l", Label: "like"})

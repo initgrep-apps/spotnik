@@ -2084,64 +2084,7 @@ func TestNowPlayingPane_View_TrackModeWithExplicitType(t *testing.T) {
 	assert.Contains(t, output, "Artist1", "explicit track type should render artist")
 }
 
-// --- Story 267 Task 7: Like toggle keybinding + heart indicator ---
-
-// TestNowPlayingPane_L_EmitsToggleLikeRequest verifies that pressing 'l' in the
-// NowPlayingPane when a track is playing emits a ToggleLikeRequestMsg with the
-// currently playing track and CurrentlyLiked=false (track not yet liked).
-func TestNowPlayingPane_L_EmitsToggleLikeRequest(t *testing.T) {
-	pane, w := newTestNowPlayingPaneWithState(true, true)
-
-	// Track is not liked yet.
-	require.False(t, w.IsTrackLiked("track-1"))
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-	require.NotNil(t, cmd, "pressing 'l' should emit a command")
-
-	msg := cmd()
-	req, ok := msg.(ToggleLikeRequestMsg)
-	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
-	assert.Equal(t, "track-1", req.Track.ID, "should carry the currently playing track")
-	assert.Equal(t, "Blinding Lights", req.Track.Name)
-	assert.False(t, req.CurrentlyLiked, "CurrentlyLiked should be false for an unliked track")
-}
-
-// TestNowPlayingPane_L_WhenLiked_EmitsCurrentlyLikedTrue verifies that pressing
-// 'l' when the track is already liked sets CurrentlyLiked=true (unlike direction).
-func TestNowPlayingPane_L_WhenLiked_EmitsCurrentlyLikedTrue(t *testing.T) {
-	pane, w := newTestNowPlayingPaneWithState(true, true)
-	// Mark the currently playing track as liked.
-	w.SetLikedTracks([]api.SavedTrack{
-		{Track: api.Track{ID: "track-1", Name: "Blinding Lights"}},
-	})
-	require.True(t, w.IsTrackLiked("track-1"))
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(ToggleLikeRequestMsg)
-	require.True(t, ok, "expected ToggleLikeRequestMsg, got %T", msg)
-	assert.True(t, req.CurrentlyLiked, "CurrentlyLiked should be true for a liked track")
-}
-
-// TestNowPlayingPane_L_NotFocused_NoOp verifies that 'l' is ignored when the
-// pane is not focused (consistent with other keybindings in handleKey).
-func TestNowPlayingPane_L_NotFocused_NoOp(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, false) // not focused
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-	assert.Nil(t, cmd, "pressing 'l' when not focused should be a no-op")
-}
-
-// TestNowPlayingPane_L_NoTrack_NoOp verifies 'l' is a no-op when nothing is
-// playing (no item to like).
-func TestNowPlayingPane_L_NoTrack_NoOp(t *testing.T) {
-	pane := newTestNowPlayingPane(true) // no playback state
-	pane.SetSize(80, 24)
-
-	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-	assert.Nil(t, cmd, "pressing 'l' with no track playing should be a no-op")
-}
+// --- Story 267 Task 7: Heart indicator (visual only, no keybinding) ---
 
 // TestNowPlayingPane_View_ShowsHeartWhenLiked verifies the track name renders
 // without a ♥ prefix even when the track is liked (heart prefix reverted in
@@ -2178,20 +2121,28 @@ func TestNowPlayingPane_View_NoHeartWhenUnliked(t *testing.T) {
 		"View should not show the heart prefix when the track is not liked")
 }
 
-// TestNowPlayingPane_Actions_ShowsLikeWhenTrackLoaded verifies the 'l like' hint
-// appears in Actions() when a track is loaded (story 269).
-func TestNowPlayingPane_Actions_ShowsLikeWhenTrackLoaded(t *testing.T) {
-	pane, _ := newTestNowPlayingPaneWithState(true, true)
-	actions := pane.Actions()
-	assert.Contains(t, actions, layout.Action{Key: "l", Label: "like"},
-		"Actions should include 'l like' when a track is loaded")
-}
-
-// TestNowPlayingPane_Actions_NoLikeWhenEmpty verifies the 'l like' hint is
-// absent when no track is loaded (story 269).
-func TestNowPlayingPane_Actions_NoLikeWhenEmpty(t *testing.T) {
+// TestNowPlayingPane_Actions_NoLikeAction verifies the 'l like' hint is never
+// present in NowPlayingPane Actions() — NowPlaying is a playback control pane,
+// not a track list pane (story 270).
+func TestNowPlayingPane_Actions_NoLikeAction(t *testing.T) {
+	// Empty state — no 'l'.
 	pane := newTestNowPlayingPane(true)
 	actions := pane.Actions()
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
-		"Actions should NOT include 'l like' when no track is loaded")
+		"Actions should NOT include 'l like' — NowPlaying is a playback control pane")
+
+	// With track loaded — still no 'l'.
+	paneWithTrack, _ := newTestNowPlayingPaneWithState(true, true)
+	actions = paneWithTrack.Actions()
+	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
+		"Actions should NOT include 'l like' even when a track is loaded")
+}
+
+// TestNowPlayingPane_L_KeyIgnored verifies that pressing 'l' on NowPlayingPane
+// does NOT emit a ToggleLikeRequestMsg — NowPlaying is a playback control pane,
+// not a track list pane (story 270).
+func TestNowPlayingPane_L_KeyIgnored(t *testing.T) {
+	pane, _ := newTestNowPlayingPaneWithState(true, true)
+	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	assert.Nil(t, cmd, "pressing 'l' on NowPlayingPane must not emit any command")
 }
