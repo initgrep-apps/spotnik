@@ -7,7 +7,7 @@ package app_test
 // - ToggleLikeRequestMsg like path: optimistic AddLikedTrack + dispatch like cmd
 // - ToggleLikeRequestMsg unlike path: optimistic RemoveLikedTrack + dispatch unlike cmd
 // - Premium gate: free-tier user gets warning toast, no API dispatch
-// - ToggleLikeResultMsg success: toast ("♥ Liked" or "Unliked")
+// - ToggleLikeResultMsg success: toast ("♥ Added to Liked Songs" or "Removed from Liked Songs")
 // - ToggleLikeResultMsg error: rollback optimistic update + error toast
 
 import (
@@ -196,7 +196,7 @@ func TestRouting_ToggleLikeRequest_PremiumGate(t *testing.T) {
 // --- ToggleLikeResultMsg ---
 
 // TestRouting_ToggleLikeResult_Success verifies a successful like result shows
-// a success toast ("♥ Liked").
+// a success toast ("♥ Added to Liked Songs").
 func TestRouting_ToggleLikeResult_Success(t *testing.T) {
 	a := newLikeRoutingApp()
 
@@ -216,11 +216,11 @@ func TestRouting_ToggleLikeResult_Success(t *testing.T) {
 		a.Update(alertMsg)
 	}
 	view := a.View()
-	assert.Contains(t, view, "♥ Liked", "success toast should show ♥ Liked")
+	assert.Contains(t, view, "♥ Added to Liked Songs", "success toast should show ♥ Added to Liked Songs")
 }
 
 // TestRouting_ToggleLikeResult_UnlikeSuccess verifies a successful unlike result
-// shows a success toast ("Unliked").
+// shows an info toast ("Removed from Liked Songs").
 func TestRouting_ToggleLikeResult_UnlikeSuccess(t *testing.T) {
 	a := newLikeRoutingApp()
 
@@ -239,7 +239,7 @@ func TestRouting_ToggleLikeResult_UnlikeSuccess(t *testing.T) {
 		a.Update(alertMsg)
 	}
 	view := a.View()
-	assert.Contains(t, view, "Unliked", "success toast should show Unliked")
+	assert.Contains(t, view, "Removed from Liked Songs", "info toast should show Removed from Liked Songs")
 }
 
 // TestRouting_ToggleLikeResult_ErrorRollback verifies that on error the
