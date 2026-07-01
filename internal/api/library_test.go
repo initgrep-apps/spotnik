@@ -402,15 +402,20 @@ func TestGetRecentlyPlayed_Success(t *testing.T) {
 	assert.Equal(t, "2024-03-01T22:15:00Z", items[0].PlayedAt)
 }
 
-// TestLikeTrack_SendsPUT verifies that LikeTrack sends the correct method, path, and body.
+// TestLikeTrack_SendsPUT verifies that LikeTrack sends PUT to /v1/me/library?uris=spotify:track:<id>
+// with no JSON body and no Content-Type header.
 func TestLikeTrack_SendsPUT(t *testing.T) {
-	var capturedMethod, capturedPath, capturedBody string
+	var capturedMethod, capturedPath, capturedRawQuery string
+	var capturedBody []byte
+	var capturedContentType string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedMethod = r.Method
 		capturedPath = r.URL.Path
+		capturedRawQuery = r.URL.RawQuery
 		buf := make([]byte, 1024)
 		n, _ := r.Body.Read(buf)
-		capturedBody = string(buf[:n])
+		capturedBody = buf[:n]
+		capturedContentType = r.Header.Get("Content-Type")
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -421,16 +426,26 @@ func TestLikeTrack_SendsPUT(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPut, capturedMethod)
-	assert.Equal(t, "/v1/me/tracks", capturedPath)
-	assert.Contains(t, capturedBody, "track-xyz789")
+	assert.Equal(t, "/v1/me/library", capturedPath)
+	assert.Contains(t, capturedRawQuery, "uris=spotify%3Atrack%3Atrack-xyz789")
+	assert.Empty(t, capturedBody, "no JSON body should be sent")
+	assert.Empty(t, capturedContentType, "no Content-Type header should be set")
 }
 
-// TestUnlikeTrack_SendsDELETE verifies that UnlikeTrack sends the correct method and path.
+// TestUnlikeTrack_SendsDELETE verifies that UnlikeTrack sends DELETE to /v1/me/library?uris=spotify:track:<id>
+// with no JSON body and no Content-Type header.
 func TestUnlikeTrack_SendsDELETE(t *testing.T) {
-	var capturedMethod, capturedPath string
+	var capturedMethod, capturedPath, capturedRawQuery string
+	var capturedBody []byte
+	var capturedContentType string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedMethod = r.Method
 		capturedPath = r.URL.Path
+		capturedRawQuery = r.URL.RawQuery
+		buf := make([]byte, 1024)
+		n, _ := r.Body.Read(buf)
+		capturedBody = buf[:n]
+		capturedContentType = r.Header.Get("Content-Type")
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -441,7 +456,10 @@ func TestUnlikeTrack_SendsDELETE(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodDelete, capturedMethod)
-	assert.Equal(t, "/v1/me/tracks", capturedPath)
+	assert.Equal(t, "/v1/me/library", capturedPath)
+	assert.Contains(t, capturedRawQuery, "uris=spotify%3Atrack%3Atrack-xyz789")
+	assert.Empty(t, capturedBody, "no JSON body should be sent")
+	assert.Empty(t, capturedContentType, "no Content-Type header should be set")
 }
 
 // TestLibraryClient_DoNoContent_ServerError verifies 403 returns a typed ForbiddenError.

@@ -1,7 +1,7 @@
 ---
 title: "Fix: Switch to /me/library Endpoint, Fix Search Overlay l Key"
 feature: 05-library
-status: open
+status: done
 ---
 
 ## Background
