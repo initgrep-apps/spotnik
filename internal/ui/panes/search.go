@@ -10,8 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/initgrep-apps/spotnik/internal/domain"
-	"github.com/initgrep-apps/spotnik/internal/state"
 	"github.com/initgrep-apps/spotnik/internal/ui/layout"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 	"github.com/initgrep-apps/spotnik/internal/uikit"
@@ -121,21 +119,13 @@ type SearchRequestMsg struct {
 // resultActions returns the shortcut actions displayed as corner-notches
 // in the top border of the Results panel. Key bindings are handled by
 // handleKey() in the overlay Update() — these are display-only hints.
-// The 'l like' hint is shown only when the selected result is a track
-// (story 269).
 func (o *SearchOverlay) resultActions() []layout.Action {
-	actions := []layout.Action{
+	return []layout.Action{
 		{Key: "ctrl+a", Label: "queue"},
 		{Key: "tab", Label: "filter"},
 		{Key: "pgdn", Label: "next"},
 		{Key: "pgup", Label: "prev"},
 	}
-	if selected := o.resultList.SelectedItem(); selected != nil {
-		if si, ok := selected.(SearchListItem); ok && si.IsTrack {
-			actions = append(actions, layout.Action{Key: "l", Label: "like"})
-		}
-	}
-	return actions
 }
 
 // NOTE: SearchPageLoadedMsg and SearchLoadingMsg are defined in messages.go alongside
@@ -149,11 +139,6 @@ func (o *SearchOverlay) resultActions() []layout.Action {
 //   - Panel 2 (Results): tab bar + separator + scrollable results list with action notches
 type SearchOverlay struct {
 	theme theme.Theme
-	// store is the read-only view of the central Store. Used by the 'l'
-	// keybinding to look up liked status (IsTrackLiked) when emitting
-	// ToggleLikeRequestMsg. nil when not wired (e.g. in unit tests that
-	// don't exercise the like flow) — 'l' is a no-op in that case.
-	store    state.StateReader
 	delegate SearchItemDelegate
 	input    textinput.Model
 	sp       *uikit.Spinner
@@ -625,16 +610,6 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return o, tea.Batch(cmd, debounceCmd)
 
 	default:
-		// 'l' likes/unlikes the selected track result. Intercept it before text
-		// input so it acts as a keybinding, matching the other panes. Only
-		// applies to track items; no-op otherwise. Search results carry a URI
-		// but not a full domain.Track, so we extract the ID from the URI and
-		// build a minimal domain.Track from the SearchListItem fields. Emits
-		// ToggleLikeRequestMsg for the root app to handle the premium gate,
-		// optimistic update, and API dispatch. No-op when no store is wired.
-		if m.Type == tea.KeyRunes && string(m.Runes) == "l" {
-			return o.handleToggleLike()
-		}
 		// Regular typing — update input, re-parse prefix, schedule debounce.
 		wasEmpty := o.input.Value() == ""
 		var cmd tea.Cmd
@@ -718,73 +693,8 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: uri, TrackName: name} }
 }
 
-// handleToggleLike likes/unlikes the currently selected track result.
-// Search results don't carry a full domain.Track — the track ID is extracted
-// from the URI ("spotify:track:<id>") and a domain.Track is built from the
-// SearchListItem fields: Name, URI, Artists (split from ArtistNames), and Album
-// (from AlbumName). DurationMs can't be recovered from the formatted "3:42"
-// string, so it is left as 0 and corrected on the next LikedSongs re-fetch.
-// Emits ToggleLikeRequestMsg for the root app to handle the premium gate,
-// optimistic update, and API dispatch. No-op when no store is wired, the list
-// is empty, or the selected item is not a track.
 func (o *SearchOverlay) handleToggleLike() (tea.Model, tea.Cmd) {
-	if o.store == nil {
-		return o, nil
-	}
-	selected := o.resultList.SelectedItem()
-	if selected == nil {
-		return o, nil
-	}
-	si, ok := selected.(SearchListItem)
-	if !ok || !si.IsTrack || si.URI == "" {
-		return o, nil
-	}
-	track := domain.Track{
-		ID:      trackIDFromURI(si.URI),
-		Name:    si.Name,
-		URI:     si.URI,
-		Artists: artistsFromNames(si.ArtistNames),
-		Album:   domain.Album{Name: si.AlbumName},
-	}
-	return o, func() tea.Msg {
-		return ToggleLikeRequestMsg{
-			Track:          track,
-			CurrentlyLiked: o.store.IsTrackLiked(track.ID),
-		}
-	}
-}
-
-// artistsFromNames splits a comma-joined artist names string (e.g.
-// "Artist1, Artist2") into a slice of domain.Artist. Each name is trimmed of
-// surrounding whitespace. Returns nil when names is empty.
-func artistsFromNames(names string) []domain.Artist {
-	if names == "" {
-		return nil
-	}
-	parts := strings.Split(names, ",")
-	artists := make([]domain.Artist, 0, len(parts))
-	for _, p := range parts {
-		name := strings.TrimSpace(p)
-		if name == "" {
-			continue
-		}
-		artists = append(artists, domain.Artist{Name: name})
-	}
-	if len(artists) == 0 {
-		return nil
-	}
-	return artists
-}
-
-// trackIDFromURI extracts the Spotify track ID from a URI of the form
-// "spotify:track:<id>". Returns the empty string when the URI is malformed or
-// is not a track URI.
-func trackIDFromURI(uri string) string {
-	const prefix = "spotify:track:"
-	if !strings.HasPrefix(uri, prefix) {
-		return ""
-	}
-	return strings.TrimPrefix(uri, prefix)
+	return o, nil
 }
 
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
@@ -1099,7 +1009,6 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	// Preserve the existing store reference so the heart indicator keeps working
 	// across theme switches.
 	o.delegate = NewSearchItemDelegate(th)
-	o.delegate.SetStore(o.store)
 	o.resultList.SetDelegate(o.delegate)
 	// Reconstruct spinner so loading indicator uses the new theme's colors.
 	// Empty text: each render site appends its own context label.
@@ -1112,18 +1021,6 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	if o.prefixState == PrefixLocked {
 		o.promoteToPromptTag()
 	}
-}
-
-// SetStore wires the read-only Store reference used by the 'l' keybinding to
-// look up liked status and by the list delegate to render the heart indicator.
-// Called by the root app after constructing the overlay. When not called, 'l'
-// is a no-op and no heart prefix is rendered (unit tests that don't exercise
-// the like flow can skip this).
-func (o *SearchOverlay) SetStore(s state.StateReader) {
-	o.store = s
-	// Propagate to the list delegate so renderTrack can show the heart.
-	o.delegate.SetStore(s)
-	o.resultList.SetDelegate(o.delegate)
 }
 
 // --- Test helpers (exported only for test packages) ---
