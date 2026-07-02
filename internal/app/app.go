@@ -366,7 +366,6 @@ func New(cfg *config.Config, opts AppOptions) *App {
 	}
 
 	searchPane := panes.NewSearchOverlay(t)
-	searchPane.SetStore(s)
 	devicePane := panes.NewDeviceOverlay(s, t)
 	profilePane := panes.NewProfileOverlay(s, t)
 
@@ -1083,9 +1082,6 @@ func (a *App) openSearch() (*App, tea.Cmd) {
 	a.searchCancel = func() {}
 	a.searchCtx = nil
 	a.searchPane.Reset()
-	// Re-wire the store — Reset() preserves it but this guards against any
-	// edge case where the store reference is lost (e.g. theme switch).
-	a.searchPane.SetStore(a.store)
 	a.searchOpen = true
 	cmd := a.searchPane.Init()
 	return a, cmd
