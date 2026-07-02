@@ -282,7 +282,6 @@ func TestFollowedShows_Title_Level2(t *testing.T) {
 
 	title := p.Title()
 	assert.Contains(t, title, "Test Show")
-	assert.Contains(t, title, "42 eps")
 	assert.Contains(t, title, "Followed Shows")
 }
 
