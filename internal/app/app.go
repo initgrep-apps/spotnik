@@ -229,6 +229,11 @@ type App struct {
 	// tokenStore is the keychain token store, needed for the TUI auth flow.
 	tokenStore keychain.TokenStore
 
+	// tokenProvider is the RefreshableTokenProvider shared across all API clients.
+	// It proactively refreshes the access token before expiry so 401s are avoided
+	// during normal operation. Set by initAPIClients.
+	tokenProvider api.TokenProvider
+
 	// tokenBaseURL overrides the Spotify token endpoint for tests.
 	// Empty string means use the real production Spotify endpoint.
 	tokenBaseURL string

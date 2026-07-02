@@ -71,6 +71,13 @@ func (b *BaseClient) SetGateway(gw *Gateway) {
 	b.gateway.Store(gw)
 }
 
+// SetTokenProvider replaces the TokenProvider used for all future requests.
+// This allows swapping in a RefreshableTokenProvider after initial construction
+// without recreating every API client. Safe to call concurrently with doJSON/doNoContent.
+func (b *BaseClient) SetTokenProvider(tp TokenProvider) {
+	b.token = tp
+}
+
 // newRequest builds an authenticated HTTP request with the Authorization header set.
 // It calls b.token.AccessToken(ctx) per-request so that a RefreshableTokenProvider
 // can silently update the token without restarting the client.
