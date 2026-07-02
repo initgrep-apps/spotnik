@@ -1758,26 +1758,27 @@ func TestNowPlayingPane_RenderEpisodeInfo_ShowsEpisodeFields(t *testing.T) {
 }
 
 // TestNowPlayingPane_RenderEpisodeInfo_ShowsPodcastNotch verifies that
-// Title() includes "⏵ Podcast" when an episode is playing.
+// Title() does NOT include episode info in the border — episode details
+// are shown in the content area and the 'i' details overlay.
 func TestNowPlayingPane_RenderEpisodeInfo_ShowsPodcastNotch(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
 	pane.SetSize(80, 24)
 
 	title := pane.Title()
-	assert.Contains(t, title, "⏵ Podcast", "episode mode title should include Podcast notch")
+	assert.NotContains(t, title, "⏵ Podcast", "episode info should not leak into border title")
+	assert.Equal(t, "Now Playing", title)
 }
 
-// TestNowPlayingPane_Title_EpisodeMode verifies that Title() in compact mode
-// (height < 8) includes episode name and show name for episodes.
+// TestNowPlayingPane_Title_EpisodeMode verifies that Title() does NOT embed
+// episode info in the border — episode details are shown in the content area
+// and the 'i' details overlay, not in the border title.
 func TestNowPlayingPane_Title_EpisodeMode(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
 	pane.SetSize(80, 6)
 	pane.localProgressMs = 750000
 
 	title := pane.Title()
-	assert.Contains(t, title, "The Big Interview", "compact episode title should include episode name")
-	assert.Contains(t, title, "Tech Talks Daily", "compact episode title should include show name")
-	assert.Contains(t, title, "⏵ Podcast", "compact episode title should include Podcast notch")
+	assert.Equal(t, "Now Playing", title, "episode info should not leak into border title")
 }
 
 // TestNowPlayingPane_Actions_TrackMode_NoIDetails verifies that Actions() does NOT
@@ -1790,20 +1791,16 @@ func TestNowPlayingPane_Actions_TrackMode_NoIDetails(t *testing.T) {
 	}
 }
 
-// TestNowPlayingPane_Actions_EpisodeMode_HasIDetails verifies that Actions()
-// includes {Key: "i", Label: "details"} when an episode is playing.
-func TestNowPlayingPane_Actions_EpisodeMode_HasIDetails(t *testing.T) {
+// TestNowPlayingPane_Actions_EpisodeMode_NoIDetails verifies that Actions()
+// does NOT include {i, details} — episode details are shown via the 'i' key
+// handled at the app level, not as a border action.
+func TestNowPlayingPane_Actions_EpisodeMode_NoIDetails(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
 	actions := pane.Actions()
 
-	found := false
 	for _, a := range actions {
-		if a.Key == "i" && a.Label == "details" {
-			found = true
-			break
-		}
+		assert.NotEqual(t, "i", a.Key, "episode mode should NOT have i:details action in border")
 	}
-	assert.True(t, found, "episode mode should have {i, details} action")
 }
 
 // TestNowPlayingPane_Actions_EmptyState_NoIDetails verifies that Actions()
@@ -1892,16 +1889,16 @@ func TestNowPlayingPane_View_NilState_EmptyState(t *testing.T) {
 	assert.Contains(t, output, "Nothing playing", "nil state should render empty state")
 }
 
-// TestNowPlayingPane_Title_EpisodeCompact_ProgressFormat verifies that the compact
-// episode title formats progress as "current/total" (e.g. "12:30/45:00"), not
-// "glyph/current total" (e.g. "⏸/12:30 45:00").
+// TestNowPlayingPane_Title_EpisodeCompact_ProgressFormat verifies that episode
+// info does NOT leak into the border title — the title is always "Now Playing"
+// for episodes regardless of height.
 func TestNowPlayingPane_Title_EpisodeCompact_ProgressFormat(t *testing.T) {
 	pane, _ := newTestNowPlayingPaneWithEpisode(true, true)
-	pane.SetSize(80, 6)           // height < 8 triggers compact title
+	pane.SetSize(80, 6)           // height < 8
 	pane.localProgressMs = 750000 // 12:30
 
 	title := pane.Title()
-	assert.Contains(t, title, "12:30/45:00", "compact episode title should format progress as current/total")
+	assert.Equal(t, "Now Playing", title, "episode info should not leak into border title")
 }
 
 // TestNowPlayingPane_View_EpisodeTypeWithNilEpisode_EmptyState verifies that View()
@@ -1990,8 +1987,7 @@ func TestNowPlayingPane_EpisodeMode_NilShow_NoPanic(t *testing.T) {
 		pane.SetSize(80, 6)
 		assert.NotPanics(t, func() {
 			title := pane.Title()
-			assert.Contains(t, title, "Mystery Episode", "compact title should include episode name even with nil Show")
-			assert.NotContains(t, title, "Tech Talks Daily", "compact title should not show name when Show is nil")
+			assert.Equal(t, "Now Playing", title, "episode info should not leak into border title")
 		}, "Title() in compact mode must not panic when Episode.Show is nil")
 	})
 
@@ -1999,7 +1995,7 @@ func TestNowPlayingPane_EpisodeMode_NilShow_NoPanic(t *testing.T) {
 		pane := NewNowPlayingPane(s, th, true)
 		pane.SetSize(80, 24)
 		title := pane.Title()
-		assert.Contains(t, title, "⏵ Podcast", "normal title should include Podcast notch even with nil Show")
+		assert.Equal(t, "Now Playing", title, "episode info should not leak into border title")
 	})
 }
 

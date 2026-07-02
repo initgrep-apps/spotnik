@@ -112,12 +112,13 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 // ID returns PaneAlbums — the identifier for the albums grid slot.
 func (a *AlbumsPane) ID() layout.PaneID { return layout.PaneAlbums }
 
-// Title returns the pane title. In track sub-view it shows the album name and
-// number of loaded tracks.
+// Title returns the pane title. In track sub-view it shows the album name
+// truncated to 30 characters to leave room for border actions.
 func (a *AlbumsPane) Title() string {
 	if a.inTrackView {
 		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
-		return fmt.Sprintf("Albums %s%s %s (%d tracks)", hrule, hrule, a.selectedName, len(a.loadedTracks))
+		name := uikit.TruncateRunes(a.selectedName, 20)
+		return fmt.Sprintf("Albums %s%s %s", hrule, hrule, name)
 	}
 	return "Albums"
 }

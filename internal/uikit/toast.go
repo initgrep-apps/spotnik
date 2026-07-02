@@ -162,10 +162,15 @@ func renderToastMessage(glyph, title, body string) string {
 // ellipsis glyph (unicode "…" = 1 rune, ascii "..." = 3 runes) so the result
 // is exactly max runes.
 //
+// TruncateRunes truncates s to at most max runes, replacing the last few runes
+// with an ellipsis glyph. If s is already within the limit, it is returned unchanged.
 // Runtime guard: if max < len(ellipsis runes) the function returns s unchanged
-// rather than panicking via an out-of-bounds slice. Normalize always calls this
-// with max >= 48 so the guard path is defensive — it protects future callers
-// that may pass a smaller max.
+// rather than panicking via an out-of-bounds slice.
+func TruncateRunes(s string, max int) string {
+	return truncateRunes(s, max)
+}
+
+// truncateRunes is the internal implementation of TruncateRunes.
 func truncateRunes(s string, max int) string {
 	runes := []rune(s)
 	if len(runes) <= max {

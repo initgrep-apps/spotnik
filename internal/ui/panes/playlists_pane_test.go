@@ -836,7 +836,7 @@ func TestPlaylistsPane_RefreshTrackRows_ReadsLoadedTracks(t *testing.T) {
 }
 
 // TestPlaylistsPane_Title_InTrackView_ShowsTrackTotal verifies that Title() shows
-// p.trackTotal, not store data.
+// the playlist name truncated, without item count.
 func TestPlaylistsPane_Title_InTrackView_ShowsTrackTotal(t *testing.T) {
 	pane := newTestPlaylistsPaneWithData(true)
 	pane.SetSize(80, 20)
@@ -845,7 +845,8 @@ func TestPlaylistsPane_Title_InTrackView_ShowsTrackTotal(t *testing.T) {
 	pane.trackTotal = 42
 
 	title := pane.Title()
-	assert.Equal(t, "Playlists ── LoFi (42 tracks)", title)
+	assert.Contains(t, title, "LoFi")
+	assert.NotContains(t, title, "42 tracks")
 }
 
 // TestPlaylistsPane_SetFocused_TrackView_PaneFocused verifies that SetFocused(true)
