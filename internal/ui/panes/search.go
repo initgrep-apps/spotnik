@@ -138,7 +138,7 @@ func (o *SearchOverlay) resultActions() []layout.Action {
 //   - Panel 1 (Search): text input
 //   - Panel 2 (Results): tab bar + separator + scrollable results list with action notches
 type SearchOverlay struct {
-	theme theme.Theme
+	theme    theme.Theme
 	delegate SearchItemDelegate
 	input    textinput.Model
 	sp       *uikit.Spinner
