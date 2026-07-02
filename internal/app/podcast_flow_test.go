@@ -126,7 +126,6 @@ func TestPodcastFlow_FollowedShowsDrillDown(t *testing.T) {
 	// Step 2: Send Enter on show 0 → drill into episode sub-view.
 	_, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	assert.Contains(t, pane.Title(), "Tech Weekly", "title should reflect selected show")
-	assert.Contains(t, pane.Title(), "eps", "title should include episode count")
 
 	// Step 3: Send Esc → return to show list.
 	_, _ = pane.Update(tea.KeyMsg{Type: tea.KeyEsc})

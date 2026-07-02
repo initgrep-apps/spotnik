@@ -118,12 +118,13 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 // ID returns PanePlaylists — the identifier for the playlists grid slot.
 func (p *PlaylistsPane) ID() layout.PaneID { return layout.PanePlaylists }
 
-// Title returns the pane title. In track sub-view, it shows the playlist name and
-// track count sourced from the API response (p.trackTotal), not from the store.
+// Title returns the pane title. In track sub-view, it shows the playlist name
+// truncated to 30 characters to leave room for border actions.
 func (p *PlaylistsPane) Title() string {
 	if p.inTrackView {
 		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
-		return fmt.Sprintf("Playlists %s%s %s (%d tracks)", hrule, hrule, p.selectedName, p.trackTotal)
+		name := uikit.TruncateRunes(p.selectedName, 20)
+		return fmt.Sprintf("Playlists %s%s %s", hrule, hrule, name)
 	}
 	return "Playlists"
 }

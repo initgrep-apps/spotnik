@@ -83,7 +83,8 @@ func (p *FollowedShowsPane) ID() layout.PaneID { return layout.PaneFollowedShows
 func (p *FollowedShowsPane) Title() string {
 	if p.inEpisodeView {
 		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
-		return fmt.Sprintf("Followed Shows %s%s %s (%d eps)", hrule, hrule, p.selectedShowName, p.episodesTotal)
+		name := uikit.TruncateRunes(p.selectedShowName, 20)
+		return fmt.Sprintf("Followed Shows %s%s %s", hrule, hrule, name)
 	}
 	return "Followed Shows"
 }
