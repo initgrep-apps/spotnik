@@ -113,9 +113,10 @@ type ErrorMapper struct{}
 //  2. api.UnauthorizedError → ToastNone (caller routes to unauthorizedMsg handler)
 //  3. api.RateLimitError → ToastWarning "Rate-limited" with retry-after body
 //  4. api.ForbiddenError → ToastWarning with operation-specific title and body
-//  5. context.Canceled / context.DeadlineExceeded → ToastError "Request took too long."
-//  6. net.Error (timeout) or *url.Error / *net.DNSError → ToastError "Check your connection."
-//  7. Everything else (5xx, generic) → ToastError "Spotify is having trouble."
+//  5. api.NotFoundError → ToastWarning "No active device" for playback ops
+//  6. context.Canceled / context.DeadlineExceeded → ToastError "Request took too long."
+//  7. net.Error (timeout) or *url.Error / *net.DNSError → ToastError "Check your connection."
+//  8. Everything else (5xx, generic) → ToastError "Spotify is having trouble."
 //
 // A Toast with Intent == ToastNone means silent drop or delegated path.
 // Callers should check `toast.Intent == ToastNone` before dispatching.
@@ -154,7 +155,18 @@ func (em *ErrorMapper) Map(op Operation, err error) Toast {
 		}
 	}
 
-	// Priority 5: Context cancellation / deadline exceeded.
+	// Priority 5: NotFoundError — no active device for playback, or resource not found.
+	var notFoundErr *api.NotFoundError
+	if errors.As(err, &notFoundErr) {
+		body := em.notFoundBodyFor(op)
+		return Toast{
+			Intent: ToastWarning,
+			Title:  em.titleFor(op),
+			Body:   body,
+		}
+	}
+
+	// Priority 6: Context cancellation / deadline exceeded.
 	// NOTE: context.DeadlineExceeded implements net.Error with Timeout()=true, so
 	// context checks must come BEFORE the net.Error check to avoid misclassifying
 	// deadline errors as network connectivity issues.
@@ -220,4 +232,16 @@ func (em *ErrorMapper) forbiddenBodyFor(op Operation) string {
 		return b
 	}
 	return "A Premium subscription is required for this feature."
+}
+
+// notFoundBodyFor returns the operation-specific body text for a 404 response.
+// Playback operations get "no active device" guidance; everything else gets a
+// generic "not found" message.
+func (em *ErrorMapper) notFoundBodyFor(op Operation) string {
+	switch op {
+	case OpPlayback, OpQueue, OpAddToQueue, OpTransfer, OpSeek, OpVolume:
+		return "No active device. Open Spotify or select a device (d)."
+	default:
+		return "Resource not found. It may have been removed."
+	}
 }
