@@ -693,10 +693,6 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 	return o, func() tea.Msg { return AddToQueueMsg{TrackURI: uri, TrackName: name} }
 }
 
-func (o *SearchOverlay) handleToggleLike() (tea.Model, tea.Cmd) {
-	return o, nil
-}
-
 // cycleTabForward advances the active tab, wrapping from the last tab back to TabAll.
 // It updates o.intent.tab and resets o.intent.page to 1, then schedules a debounce.
 // handleDebounce fires SearchRequestMsg if the query is non-empty at tick time.
