@@ -150,6 +150,11 @@ func (a *App) InitAPIClients(token string) {
 // gateway, then injects them into the app. All request recording is handled by
 // the gateway event journal (GatewayEventLog) — no separate logging transport
 // is needed. Called after a successful auth flow or token refresh.
+//
+// Each client is wired with a RefreshableTokenProvider that proactively refreshes
+// the access token before expiry (within 5 minutes). This prevents 401 responses
+// during normal operation — the existing 401→unauthorizedMsg→refresh flow remains
+// as a safety net for edge cases (e.g. token revoked server-side).
 func (a *App) initAPIClients(token string) {
 	// Wire the store as a GatewayEventRecorder so Gateway.Do() records
 	// per-request lifecycle events (allowed/waited/deduped/blocked/completed)
@@ -159,38 +164,48 @@ func (a *App) initAPIClients(token string) {
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 
+	tp := api.NewRefreshableTokenProvider(a.tokenStore, a.clientID, a.tokenBaseURL, httpClient)
+	a.tokenProvider = tp
+
 	player := api.NewPlayer("", token)
 	player.SetHTTPClient(httpClient)
 	player.SetGateway(a.gateway)
+	player.SetTokenProvider(tp)
 	a.player = player
 
 	library := api.NewLibraryClient("", token)
 	library.SetHTTPClient(httpClient)
 	library.SetGateway(a.gateway)
+	library.SetTokenProvider(tp)
 	a.library = library
 
 	search := api.NewSearchClient("", token)
 	search.SetHTTPClient(httpClient)
 	search.SetGateway(a.gateway)
+	search.SetTokenProvider(tp)
 	a.search = search
 
 	devices := api.NewDevicesClient("", token)
 	devices.SetHTTPClient(httpClient)
 	devices.SetGateway(a.gateway)
+	devices.SetTokenProvider(tp)
 	a.devices = devices
 
 	userAPI := api.NewUserClient("", token)
 	userAPI.SetHTTPClient(httpClient)
 	userAPI.SetGateway(a.gateway)
+	userAPI.SetTokenProvider(tp)
 	a.userAPI = userAPI
 
 	playlistsAPI := api.NewPlaylistsClient("", token)
 	playlistsAPI.SetHTTPClient(httpClient)
 	playlistsAPI.SetGateway(a.gateway)
+	playlistsAPI.SetTokenProvider(tp)
 	a.playlistsAPI = playlistsAPI
 
 	podcastClient := api.NewPodcastClient("", token)
 	podcastClient.SetHTTPClient(httpClient)
 	podcastClient.SetGateway(a.gateway)
+	podcastClient.SetTokenProvider(tp)
 	a.podcastClient = podcastClient
 }

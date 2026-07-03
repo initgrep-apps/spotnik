@@ -99,9 +99,9 @@ func (p *NowPlayingPane) ID() layout.PaneID {
 }
 
 // Title returns the display title for the border.
-// When height < 8 (pane too small for the overlay body), the title embeds track/episode
+// When height < 8 (pane too small for the overlay body), the title embeds track
 // info so the user can still see what's playing without any content area.
-// When an episode is playing, the title includes a ⏵ Podcast notch.
+// Episode info is never embedded in the border — use 'i' for the details overlay.
 func (p *NowPlayingPane) Title() string {
 	ps := p.store.PlaybackState()
 	if ps == nil {
@@ -110,31 +110,7 @@ func (p *NowPlayingPane) Title() string {
 
 	switch ps.CurrentlyPlayingType {
 	case "episode":
-		if ps.Episode == nil {
-			return "Now Playing"
-		}
-		ep := ps.Episode
-		podcastNotch := " ⏵ Podcast"
-		if p.height < 8 {
-			showName := ""
-			if ep.Show != nil {
-				showName = ep.Show.Name
-			}
-			m := uikit.ActiveMode()
-			var stateGlyph string
-			if ps.IsPlaying {
-				stateGlyph = uikit.GlyphFor(uikit.GlyphPaused, m)
-			} else {
-				stateGlyph = uikit.GlyphFor(uikit.GlyphPlaying, m)
-			}
-			sep := uikit.GlyphFor(uikit.GlyphHRule, m)
-			midDot := uikit.GlyphFor(uikit.GlyphSeparator, m)
-			current := formatDurationMs(p.localProgressMs)
-			total := formatDurationMs(ep.DurationMs)
-			return fmt.Sprintf("Now Playing%s %s %s %s %s %s %s %s/%s",
-				podcastNotch, sep, ep.Name, midDot, showName, sep, stateGlyph, current, total)
-		}
-		return fmt.Sprintf("Now Playing%s", podcastNotch)
+		return "Now Playing"
 
 	case "track":
 		if ps.Item == nil {
@@ -180,18 +156,13 @@ func (p *NowPlayingPane) ToggleKey() int {
 // fixedWidth). At narrow widths none of these actions will appear; once the
 // pane is wide enough they all appear. This is expected graceful degradation, not a bug.
 func (p *NowPlayingPane) Actions() []layout.Action {
-	actions := []layout.Action{
+	return []layout.Action{
 		{Key: "s", Label: "shfl"},
 		{Key: "r", Label: "rpt"},
 		{Key: "space", Label: "play"},
 		{Key: "+/-", Label: "vol"},
 		{Key: "v", Label: "viz"},
 	}
-	ps := p.store.PlaybackState()
-	if ps != nil && ps.CurrentlyPlayingType == "episode" {
-		actions = append(actions, layout.Action{Key: "i", Label: "details"})
-	}
-	return actions
 }
 
 // SetSize updates the pane's dimensions and recomputes the side-by-side
@@ -568,11 +539,8 @@ func (p *NowPlayingPane) buildInfoLines(bodyHeight int, infoWidth int) []string 
 		artistNames[i] = a.Name
 	}
 
-	// Track name with optional ♥ prefix when the track is liked.
+	// Track name renders as-is — no heart prefix (reverted in story 269).
 	trackName := t.Name
-	if p.store.IsTrackLiked(t.ID) {
-		trackName = uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode()) + " " + trackName
-	}
 
 	pad := strings.Repeat(" ", npInfoPadLeft)
 	ctrl := components.NewControls(p.theme, ps.IsPlaying, ps.ShuffleState, ps.RepeatState)
@@ -790,21 +758,6 @@ func (p *NowPlayingPane) handleKey(msg tea.KeyMsg) (*NowPlayingPane, tea.Cmd) {
 			return VisualizerPatternChangedMsg{PatternIndex: p.engine.Pattern()}
 		}
 
-	case msg.Type == tea.KeyRunes && string(msg.Runes) == "l":
-		// Like/unlike the currently playing track. Reads liked status from the
-		// store (O(1) lookup) and emits a ToggleLikeRequestMsg for the root app
-		// to handle the premium gate, optimistic update, and API dispatch.
-		ps := p.store.PlaybackState()
-		if ps == nil || ps.Item == nil {
-			return p, nil
-		}
-		track := *ps.Item
-		return p, func() tea.Msg {
-			return ToggleLikeRequestMsg{
-				Track:          track,
-				CurrentlyLiked: p.store.IsTrackLiked(track.ID),
-			}
-		}
 	}
 
 	return p, nil

@@ -118,12 +118,13 @@ func NewPlaylistsPane(store state.StateReader, th theme.Theme, focused bool) *Pl
 // ID returns PanePlaylists — the identifier for the playlists grid slot.
 func (p *PlaylistsPane) ID() layout.PaneID { return layout.PanePlaylists }
 
-// Title returns the pane title. In track sub-view, it shows the playlist name and
-// track count sourced from the API response (p.trackTotal), not from the store.
+// Title returns the pane title. In track sub-view, it shows the playlist name
+// truncated to 30 characters to leave room for border actions.
 func (p *PlaylistsPane) Title() string {
 	if p.inTrackView {
 		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
-		return fmt.Sprintf("Playlists %s%s %s (%d tracks)", hrule, hrule, p.selectedName, p.trackTotal)
+		name := uikit.TruncateRunes(p.selectedName, 20)
+		return fmt.Sprintf("Playlists %s%s %s", hrule, hrule, name)
 	}
 	return "Playlists"
 }
@@ -132,9 +133,16 @@ func (p *PlaylistsPane) Title() string {
 func (p *PlaylistsPane) ToggleKey() int { return 3 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
+// In track view, shows Esc back always, plus 'l like' when focused and tracks
+// are loaded. When unfocused in track view, only Esc back is shown — 'l like'
+// is a focus-only action (story 270).
 func (p *PlaylistsPane) Actions() []layout.Action {
 	if p.inTrackView {
-		return []layout.Action{{Key: "Esc", Label: "back"}}
+		actions := []layout.Action{{Key: "Esc", Label: "back"}}
+		if p.IsFocused() && len(p.loadedTracks) > 0 {
+			actions = append(actions, layout.Action{Key: "l", Label: "like"})
+		}
+		return actions
 	}
 	return []layout.Action{p.BaseFilterAction()}
 }
@@ -510,21 +518,16 @@ func (p *PlaylistsPane) isOwnedByCurrentUser(pl domain.SimplePlaylist) bool {
 // refreshTrackRows rebuilds track rows from p.loadedTracks (pane-owned data).
 // It no longer reads from the global store.
 func (p *PlaylistsPane) refreshTrackRows() {
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(p.loadedTracks))
 	for i, track := range p.loadedTracks {
 		artistName := ""
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
 		}
-		// Prepend the heart glyph when the track is liked.
-		name := track.Name
-		if p.store.IsTrackLiked(track.ID) {
-			name = heart + " " + name
-		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"track":    name,
+			"track":    track.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(track.DurationMs),
 		}

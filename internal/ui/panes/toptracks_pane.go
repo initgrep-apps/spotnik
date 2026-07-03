@@ -86,13 +86,23 @@ func (p *TopTracksPane) TimeRange() string { return p.timeRange }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
 // Shows filter (f) and time range cycle (g) with the current range as label.
-// The close-notch is retired — the border renderer uses FilterQuery instead.
+// The 'l like' hint is shown only when focused and tracks are present.
+// When unfocused, only filter and range are shown — 'l like' is a focus-only
+// action (story 270).
 func (p *TopTracksPane) Actions() []layout.Action {
 	rangeLabel := topTracksRangeLabels[p.timeRange]
-	return []layout.Action{
+	actions := []layout.Action{
 		p.BaseFilterAction(),
 		{Key: "g", Label: rangeLabel},
 	}
+	if !p.IsFocused() {
+		return actions
+	}
+	// Show the 'l' like hint when tracks are present (story 269).
+	if len(p.filteredTracks()) > 0 {
+		actions = append(actions, layout.Action{Key: "l", Label: "like"})
+	}
+	return actions
 }
 
 // Init satisfies tea.Model. TopTracksPane has no startup command.
@@ -228,21 +238,16 @@ func (p *TopTracksPane) RefreshRows() { p.refreshRows() }
 // refreshRows re-reads the store and applies filtered track rows.
 func (p *TopTracksPane) refreshRows() {
 	tracks := p.filteredTracks()
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(tracks))
 	for i, track := range tracks {
 		artistName := ""
 		if len(track.Artists) > 0 {
 			artistName = track.Artists[0].Name
 		}
-		// Prepend the heart glyph when the track is liked.
-		name := track.Name
-		if p.store.IsTrackLiked(track.ID) {
-			name = heart + " " + name
-		}
 		rows[i] = map[string]string{
 			"index":  fmt.Sprintf("%d", i+1),
-			"track":  name,
+			"track":  track.Name,
 			"artist": artistName,
 			"dur":    trackDuration(track.DurationMs),
 		}

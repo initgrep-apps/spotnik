@@ -31,8 +31,21 @@ func (e *UnauthorizedError) Error() string {
 	return "unauthorized: token expired or invalid"
 }
 
+// NotFoundError is returned when the Spotify API responds with 404.
+// For playback endpoints this typically means no active device is available.
+type NotFoundError struct {
+	Message string
+}
+
+func (e *NotFoundError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("not found: %s", e.Message)
+	}
+	return "not found"
+}
+
 // checkResponseStatus inspects an HTTP response and returns a typed error
-// for known error status codes (401, 403, 429). For other non-2xx codes,
+// for known error status codes (401, 403, 404, 429). For other non-2xx codes,
 // it returns a generic error. Returns nil for success responses.
 func checkResponseStatus(resp *http.Response, body []byte) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -49,6 +62,10 @@ func checkResponseStatus(resp *http.Response, body []byte) error {
 			msg = "Spotify Premium required"
 		}
 		return &ForbiddenError{Message: msg}
+
+	case http.StatusNotFound:
+		msg := parseSpotifyErrorMessage(body)
+		return &NotFoundError{Message: msg}
 
 	case http.StatusTooManyRequests:
 		return &RateLimitError{RetryAfter: parseRetryAfter(resp)}

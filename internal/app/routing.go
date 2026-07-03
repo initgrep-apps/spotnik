@@ -563,7 +563,7 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if secondary != nil && retryAfter > 0 {
 				return a, tea.Batch(refreshCmd, secondary), true
 			}
-			toast := a.errorMapper.Map(uikit.OpLibrary, m.Err)
+			toast := a.errorMapper.Map(uikit.OpLikeTracks, m.Err)
 			if toast.Intent == uikit.ToastNone {
 				// Error suppressed by mapper: log to stderr so the silent
 				// rollback is at least observable for debugging.
@@ -578,18 +578,21 @@ func (a *App) routePlaylistMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			return a, tea.Batch(refreshCmd, a.toasts.Cmd(toast)), true
 		}
-		// Success toast.
+		// Success toast — like is success (green), unlike is info (blue).
+		var intent uikit.ToastIntent
 		var title string
 		if m.Liked {
-			title = "♥ Liked"
+			intent = uikit.ToastSuccess
+			title = "♥ Added to Liked Songs"
 		} else {
-			title = "Unliked"
+			intent = uikit.ToastInfo
+			title = "Removed from Liked Songs"
 		}
 		// NOTE: see the comment on the request handler above — the empty
 		// LikedTracksLoadedMsg is a re-render hint scoped to routeLibraryMsg.
 		refreshCmd := a.forwardToPane(layout.PaneLikedSongs, panes.LikedTracksLoadedMsg{})
 		return a, tea.Batch(refreshCmd, a.toasts.Cmd(uikit.Toast{
-			Intent: uikit.ToastSuccess,
+			Intent: intent,
 			Title:  title,
 		})), true
 

@@ -112,12 +112,13 @@ func NewAlbumsPane(store state.StateReader, th theme.Theme, focused bool) *Album
 // ID returns PaneAlbums — the identifier for the albums grid slot.
 func (a *AlbumsPane) ID() layout.PaneID { return layout.PaneAlbums }
 
-// Title returns the pane title. In track sub-view it shows the album name and
-// number of loaded tracks.
+// Title returns the pane title. In track sub-view it shows the album name
+// truncated to 30 characters to leave room for border actions.
 func (a *AlbumsPane) Title() string {
 	if a.inTrackView {
 		hrule := uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode())
-		return fmt.Sprintf("Albums %s%s %s (%d tracks)", hrule, hrule, a.selectedName, len(a.loadedTracks))
+		name := uikit.TruncateRunes(a.selectedName, 20)
+		return fmt.Sprintf("Albums %s%s %s", hrule, hrule, name)
 	}
 	return "Albums"
 }
@@ -126,13 +127,16 @@ func (a *AlbumsPane) Title() string {
 func (a *AlbumsPane) ToggleKey() int { return 4 }
 
 // Actions returns the pane-specific shortcut hints displayed in the border.
-// In track sub-view shows {Esc, back}. In list view shows {f, filter} only —
-// Enter-to-open is the implicit pane-wide convention (matches Playlists), so the
-// hint is omitted to avoid border clutter and to keep the two drill-down panes
-// visually consistent.
+// In track sub-view shows Esc back always, plus 'l like' when focused and
+// tracks are loaded. When unfocused in track view, only Esc back is shown —
+// 'l like' is a focus-only action (story 270).
 func (a *AlbumsPane) Actions() []layout.Action {
 	if a.inTrackView {
-		return []layout.Action{{Key: "Esc", Label: "back"}}
+		actions := []layout.Action{{Key: "Esc", Label: "back"}}
+		if a.IsFocused() && len(a.loadedTracks) > 0 {
+			actions = append(actions, layout.Action{Key: "l", Label: "like"})
+		}
+		return actions
 	}
 	return []layout.Action{a.BaseFilterAction()}
 }
@@ -330,21 +334,16 @@ func (a *AlbumsPane) checkPrefetch() tea.Cmd {
 
 // refreshTrackRows rebuilds the track table rows from loadedTracks.
 func (a *AlbumsPane) refreshTrackRows() {
-	heart := uikit.GlyphFor(uikit.GlyphLiked, uikit.ActiveMode())
+	// Track names render as-is — no heart prefix (reverted in story 269).
 	rows := make([]map[string]string, len(a.loadedTracks))
 	for i, tr := range a.loadedTracks {
 		artistName := ""
 		if len(tr.Artists) > 0 {
 			artistName = tr.Artists[0].Name
 		}
-		// Prepend the heart glyph when the track is liked.
-		name := tr.Name
-		if a.store.IsTrackLiked(tr.ID) {
-			name = heart + " " + name
-		}
 		rows[i] = map[string]string{
 			"index":    fmt.Sprintf("%d", i+1),
-			"name":     name,
+			"name":     tr.Name,
 			"artist":   artistName,
 			"duration": formatDurationMs(tr.DurationMs),
 		}

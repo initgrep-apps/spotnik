@@ -1,11 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 )
 
@@ -267,36 +266,28 @@ func (l *LibraryClient) RecentlyPlayed(ctx context.Context, limit int) ([]PlayHi
 	return response.Items, nil
 }
 
-// LikeTrack adds the given track to the user's liked songs via PUT /me/tracks.
+// LikeTrack adds the given track to the user's library via PUT /me/library?uris=spotify:track:<id>.
+// No JSON body — the track URI is passed as a query parameter.
 // Errors are wrapped with context.
 func (l *LibraryClient) LikeTrack(ctx context.Context, trackID string) error {
-	body, err := json.Marshal(map[string][]string{"ids": {trackID}})
-	if err != nil {
-		return fmt.Errorf("marshaling like track body: %w", err)
-	}
-
-	req, err := l.newRequest(ctx, http.MethodPut, "/v1/me/tracks", bytes.NewReader(body))
+	uri := "spotify:track:" + trackID
+	path := "/v1/me/library?uris=" + url.QueryEscape(uri)
+	req, err := l.newRequest(ctx, http.MethodPut, path, nil)
 	if err != nil {
 		return fmt.Errorf("creating like track request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-
 	return l.doNoContent(req)
 }
 
-// UnlikeTrack removes the given track from the user's liked songs via DELETE /me/tracks.
+// UnlikeTrack removes the given track from the user's library via DELETE /me/library?uris=spotify:track:<id>.
+// No JSON body — the track URI is passed as a query parameter.
 // Errors are wrapped with context.
 func (l *LibraryClient) UnlikeTrack(ctx context.Context, trackID string) error {
-	body, err := json.Marshal(map[string][]string{"ids": {trackID}})
-	if err != nil {
-		return fmt.Errorf("marshaling unlike track body: %w", err)
-	}
-
-	req, err := l.newRequest(ctx, http.MethodDelete, "/v1/me/tracks", bytes.NewReader(body))
+	uri := "spotify:track:" + trackID
+	path := "/v1/me/library?uris=" + url.QueryEscape(uri)
+	req, err := l.newRequest(ctx, http.MethodDelete, path, nil)
 	if err != nil {
 		return fmt.Errorf("creating unlike track request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-
 	return l.doNoContent(req)
 }

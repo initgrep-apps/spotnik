@@ -33,13 +33,14 @@ func newLikeTestApp() *app.App {
 	return a
 }
 
-// TestBuildLikeTrackCmd_Success verifies that a 204 response from PUT /me/tracks
+// TestBuildLikeTrackCmd_Success verifies that a 204 response from PUT /me/library?uris=...
 // produces a ToggleLikeResultMsg with Liked=true and nil Err.
 func TestBuildLikeTrackCmd_Success(t *testing.T) {
-	var capturedMethod, capturedPath string
+	var capturedMethod, capturedPath, capturedRawQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedMethod = r.Method
 		capturedPath = r.URL.Path
+		capturedRawQuery = r.URL.RawQuery
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
@@ -59,7 +60,8 @@ func TestBuildLikeTrackCmd_Success(t *testing.T) {
 	assert.True(t, result.Liked, "Liked should be true after successful like")
 	assert.False(t, result.OriginalLiked, "OriginalLiked should be false (was not liked before)")
 	assert.Equal(t, http.MethodPut, capturedMethod, "like should use PUT")
-	assert.Equal(t, "/v1/me/tracks", capturedPath)
+	assert.Equal(t, "/v1/me/library", capturedPath)
+	assert.Contains(t, capturedRawQuery, "uris=spotify%3Atrack%3Atrack-1")
 }
 
 // TestBuildLikeTrackCmd_NilClient verifies that a nil library client produces
@@ -79,13 +81,14 @@ func TestBuildLikeTrackCmd_NilClient(t *testing.T) {
 	assert.Equal(t, "track-1", result.TrackID)
 }
 
-// TestBuildUnlikeTrackCmd_Success verifies that a 204 response from DELETE /me/tracks
+// TestBuildUnlikeTrackCmd_Success verifies that a 204 response from DELETE /me/library?uris=...
 // produces a ToggleLikeResultMsg with Liked=false and nil Err.
 func TestBuildUnlikeTrackCmd_Success(t *testing.T) {
-	var capturedMethod, capturedPath string
+	var capturedMethod, capturedPath, capturedRawQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedMethod = r.Method
 		capturedPath = r.URL.Path
+		capturedRawQuery = r.URL.RawQuery
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
@@ -105,7 +108,8 @@ func TestBuildUnlikeTrackCmd_Success(t *testing.T) {
 	assert.False(t, result.Liked, "Liked should be false after successful unlike")
 	assert.True(t, result.OriginalLiked, "OriginalLiked should be true (was liked before)")
 	assert.Equal(t, http.MethodDelete, capturedMethod, "unlike should use DELETE")
-	assert.Equal(t, "/v1/me/tracks", capturedPath)
+	assert.Equal(t, "/v1/me/library", capturedPath)
+	assert.Contains(t, capturedRawQuery, "uris=spotify%3Atrack%3Atrack-2")
 }
 
 // TestBuildUnlikeTrackCmd_NilClient verifies that a nil library client produces
