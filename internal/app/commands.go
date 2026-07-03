@@ -59,10 +59,6 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		isShuffled = ps.ShuffleState
 		repeatMode = ps.RepeatState
 	}
-	activeDeviceID := ""
-	if dev := a.store.ActiveDevice(); dev != nil {
-		activeDeviceID = dev.ID
-	}
 
 	return func() tea.Msg {
 		// Playback controls are user-triggered — Interactive priority skips in-flight dedup.
@@ -73,7 +69,7 @@ func (a *App) buildPlaybackAPICmd(action panes.PlaybackAction) tea.Cmd {
 		case panes.ActionPause:
 			err = player.Pause(ctx)
 		case panes.ActionPlay:
-			err = player.Play(ctx, domain.PlayOptions{DeviceID: activeDeviceID})
+			err = player.Play(ctx, domain.PlayOptions{})
 		case panes.ActionNext:
 			err = player.Next(ctx)
 		case panes.ActionPrevious:

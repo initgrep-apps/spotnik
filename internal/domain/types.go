@@ -355,10 +355,6 @@ type PlayOptions struct {
 	// Offset specifies where within the context to start playback.
 	// When non-nil, playback starts at the given track URI within the context.
 	Offset *PlayOffset `json:"offset,omitempty"`
-
-	// DeviceID is the Spotify Connect device to target for playback.
-	// When empty, Spotify uses the last active device.
-	DeviceID string `json:"device_id,omitempty"`
 }
 
 // ArtistFollowers holds the follower count from Spotify's nested followers object.
