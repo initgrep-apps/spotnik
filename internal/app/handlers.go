@@ -765,9 +765,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.queuePoll.errorCount = 0
 		a.store.ClearQueueError()
-		if m.Items != nil {
-			a.store.SetQueue(m.Items)
-		}
+		a.store.SetQueue(m.Items)
 		if qp := a.queuePane(); qp != nil {
 			qp.RefreshRows()
 		}
