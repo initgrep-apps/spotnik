@@ -141,11 +141,11 @@ func PaneEmptyStatus(category string, isFetching bool, fetchErr error,
 	if isFetching {
 		return EmptyState{Status: EmptyStatusFetching, Text: "No " + category}
 	}
-	if neverFetched {
-		return EmptyState{Status: EmptyStatusNeverFetched, Text: "No " + category}
-	}
 	if fetchErr != nil {
 		return EmptyState{Status: EmptyStatusError, Text: "No " + category}
+	}
+	if neverFetched {
+		return EmptyState{Status: EmptyStatusNeverFetched, Text: "No " + category}
 	}
 	return EmptyState{Status: EmptyStatusNone, Text: "No " + category}
 }

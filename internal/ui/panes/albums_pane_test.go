@@ -887,7 +887,6 @@ func TestAlbumsPane_View_EmptyState_Fetching(t *testing.T) {
 // the pane shows "Unable to load saved albums".
 func TestAlbumsPane_View_EmptyState_Error(t *testing.T) {
 	s := state.New()
-	s.SetAlbumsFetchedAt(time.Now()) // simulate prior successful fetch
 	s.SetAlbumsFetchError(fmt.Errorf("network error"))
 	th := theme.Load("black")
 	pane := NewAlbumsPane(s, th, true)

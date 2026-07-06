@@ -293,7 +293,6 @@ func TestTopArtistsPane_View_EmptyState_Fetching(t *testing.T) {
 // the pane shows "Unable to load top artists".
 func TestTopArtistsPane_View_EmptyState_Error(t *testing.T) {
 	st := state.New()
-	st.StampStatsFetchedAt("short_term") // simulate prior successful fetch
 	st.SetStatsError(fmt.Errorf("network error"))
 	th := theme.Load("black")
 	pane := NewTopArtistsPane(st, th, true)

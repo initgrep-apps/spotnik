@@ -352,11 +352,21 @@ func TestPaneEmptyStatus_NeverFetched(t *testing.T) {
 }
 
 // TestPaneEmptyStatus_Error verifies that PaneEmptyStatus returns
-// EmptyStatusError when fetchErr is non-nil (and not throttled/fetching/never-fetched).
+// EmptyStatusError when fetchErr is non-nil (and not throttled/fetching).
+// neverFetched is true to simulate first-fetch-failed scenario.
 func TestPaneEmptyStatus_Error(t *testing.T) {
-	es := uikit.PaneEmptyStatus("saved albums", false, assert.AnError, false, false, 0)
+	es := uikit.PaneEmptyStatus("saved albums", false, assert.AnError, true, false, 0)
 	assert.Equal(t, uikit.EmptyStatusError, es.Status)
 	assert.Equal(t, "No saved albums", es.Text)
+}
+
+// TestPaneEmptyStatus_ErrorOverridesNeverFetched verifies that fetchErr takes
+// priority over neverFetched. When both are true (first fetch failed), the
+// result must be EmptyStatusError, not EmptyStatusNeverFetched.
+func TestPaneEmptyStatus_ErrorOverridesNeverFetched(t *testing.T) {
+	es := uikit.PaneEmptyStatus("followed shows", false, assert.AnError, true, false, 0)
+	assert.Equal(t, uikit.EmptyStatusError, es.Status)
+	assert.Equal(t, "No followed shows", es.Text)
 }
 
 // TestPaneEmptyStatus_ThrottledOverridesAll verifies that throttled takes

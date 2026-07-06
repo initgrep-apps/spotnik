@@ -329,7 +329,6 @@ func TestLikedSongsPane_View_EmptyState_Fetching(t *testing.T) {
 // the pane shows "Unable to load liked songs".
 func TestLikedSongsPane_View_EmptyState_Error(t *testing.T) {
 	s := state.New()
-	s.SetLikedTracksFetchedAt(time.Now()) // simulate prior successful fetch
 	s.SetLikedTracksFetchError(fmt.Errorf("network error"))
 	th := theme.Load("black")
 	pane := NewLikedSongsPane(s, th, true)

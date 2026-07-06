@@ -937,7 +937,6 @@ func TestPlaylistsPane_View_EmptyState_Fetching(t *testing.T) {
 // the pane shows "Unable to load playlists".
 func TestPlaylistsPane_View_EmptyState_Error(t *testing.T) {
 	s := state.New()
-	s.SetPlaylistsFetchedAt(time.Now()) // simulate prior successful fetch
 	s.SetPlaylistsFetchError(fmt.Errorf("network error"))
 	th := theme.Load("black")
 	pane := NewPlaylistsPane(s, th, true)
