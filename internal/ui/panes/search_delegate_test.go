@@ -62,7 +62,7 @@ func TestFormatFollowers(t *testing.T) {
 		{n: 3200, want: "3.2K followers"},
 		{n: 1000, want: "1.0K followers"},
 		{n: 847, want: "847 followers"},
-		{n: 0, want: "0 followers"},
+		{n: 0, want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
@@ -720,7 +720,7 @@ func TestArtistsToListItems_EmptyGenres(t *testing.T) {
 	assert.Equal(t, "500 followers", si.Subtitle)
 }
 
-// TestArtistsToListItems_ZeroFollowers verifies zero followers is displayed.
+// TestArtistsToListItems_ZeroFollowers verifies zero followers is hidden (private count).
 func TestArtistsToListItems_ZeroFollowers(t *testing.T) {
 	artists := []domain.SearchArtist{
 		{
@@ -733,7 +733,7 @@ func TestArtistsToListItems_ZeroFollowers(t *testing.T) {
 	}
 	items := artistsToListItems(artists)
 	si := items[0].(SearchListItem)
-	assert.Equal(t, "0 followers", si.Followers)
+	assert.Equal(t, "", si.Followers)
 }
 
 // TestTracksToListItems_SingleArtist verifies single artist has no comma.

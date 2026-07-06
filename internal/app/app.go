@@ -139,6 +139,11 @@ type App struct {
 	// Reset to 0 when closeSearch() is called.
 	searchPage int
 
+	// searchGen is the staleness key for the current search generation.
+	// Incremented on each new query or tab change; page changes do NOT increment.
+	// Prevents stale responses from a previous tab from overwriting current tab's total.
+	searchGen int
+
 	// searchLoading is true while a search HTTP call is in-flight.
 	// Reset to false on close, error, or successful result delivery.
 	searchLoading bool

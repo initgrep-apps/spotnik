@@ -312,25 +312,24 @@ func (a *App) buildAddToQueueCmd(trackURI, trackName string) tea.Cmd {
 // Returns nil if ctx is already cancelled — Bubble Tea drops nil messages
 // silently, preventing stale SearchPageLoadedMsg from entering the Update loop.
 // page is 1-based; offset is computed internally as (page-1)*SearchPageSize.
-func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string, types []string, page int) tea.Cmd {
+// gen is the search generation counter for staleness detection.
+func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string, types []string, page, gen int) tea.Cmd {
 	return func() tea.Msg {
 		if ctx.Err() != nil {
 			return nil
 		}
 		if client == nil {
-			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: errNilClient}
+			return panes.SearchPageLoadedMsg{Query: query, Page: page, Gen: gen, Err: errNilClient}
 		}
 		offset := (page - 1) * SearchPageSize
-		// Spotify rejects any request with offset >= 1000. Return an error message
-		// so the user sees a toast instead of a silent no-op on PgDn.
 		if offset >= 1000 {
 			return panes.SearchPageLoadedMsg{
 				Query: query,
 				Page:  page,
+				Gen:   gen,
 				Err:   errSearchOffsetLimit,
 			}
 		}
-		// Search is user-triggered (debounce fires after keypress) — Interactive priority skips in-flight dedup.
 		result, err := client.Search(
 			api.WithPriority(ctx, api.Interactive),
 			query,
@@ -339,7 +338,6 @@ func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string,
 			offset,
 		)
 		if ctx.Err() != nil {
-			// Request completed but context was cancelled — caller has moved on.
 			return nil
 		}
 		if err != nil {
@@ -349,12 +347,13 @@ func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string,
 			if isUnauthorizedError(err) {
 				return unauthorizedMsg{}
 			}
-			return panes.SearchPageLoadedMsg{Query: query, Page: page, Err: err}
+			return panes.SearchPageLoadedMsg{Query: query, Page: page, Gen: gen, Err: err}
 		}
 		items, total := convertSearchResult(result)
 		return panes.SearchPageLoadedMsg{
 			Query:   query,
 			Page:    page,
+			Gen:     gen,
 			Results: items,
 			Total:   total,
 		}
@@ -363,8 +362,8 @@ func buildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string,
 
 // BuildSearchPageCmd is an exported wrapper around buildSearchPageCmd for testing.
 // Exported for tests only — production code must use buildSearchPageCmd.
-func BuildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string, types []string, page int) tea.Cmd {
-	return buildSearchPageCmd(ctx, client, query, types, page)
+func BuildSearchPageCmd(ctx context.Context, client api.SearchAPI, query string, types []string, page, gen int) tea.Cmd {
+	return buildSearchPageCmd(ctx, client, query, types, page, gen)
 }
 
 // convertSearchResult converts a Spotify search API response into a flat list

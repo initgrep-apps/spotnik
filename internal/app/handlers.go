@@ -182,31 +182,26 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// Cancel any in-flight HTTP call before starting a new one.
 		a.searchCancel()
 
-		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
-		// Fall back to all four types when no prefix filter is active.
 		searchTypes := m.Types
 		if len(searchTypes) == 0 {
 			searchTypes = []string{"track", "artist", "album", "playlist"}
 		}
 
-		// Record staleness keys for the incoming request.
 		a.searchQuery = m.Query
 		a.searchPage = m.Page
+		a.searchGen = m.Gen
 		a.searchLoading = true
 
-		// Create a cancellable context for this request.
 		ctx, cancel := context.WithCancel(context.Background())
 		a.searchCancel = cancel
 		a.searchCtx = ctx
 
-		// Tell the overlay we are loading before the HTTP call goes out.
 		isFirst := len(a.searchPane.Results()) == 0
 		loadingCmd := func() tea.Msg { return panes.SearchLoadingMsg{IsFirstPage: isFirst} }
 
-		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, m.Page)
+		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, m.Page, m.Gen)
 
 		return a, tea.Batch(loadingCmd, fetchCmd)
 
@@ -226,7 +221,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		// Discard stale results AND stale errors — the user moved on to a different query or page.
-		if m.Query != a.searchQuery || m.Page != a.searchPage {
+		if m.Query != a.searchQuery || m.Page != a.searchPage || m.Gen != a.searchGen {
 			return a, nil
 		}
 		if m.Err != nil {
