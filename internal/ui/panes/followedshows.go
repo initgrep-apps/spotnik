@@ -254,14 +254,20 @@ func (p *FollowedShowsPane) checkEpisodePrefetch() tea.Cmd {
 }
 
 func (p *FollowedShowsPane) View() string {
-	if !p.inEpisodeView && len(p.store.FollowedShows()) == 0 && !p.Filter().IsActive() {
-		return uikit.EmptyState{
-			Text:   "No followed shows",
-			Hint:   "Search for shows with /",
-			Width:  p.width,
-			Height: p.height,
-			Theme:  p.theme,
-		}.Render()
+	if !p.inEpisodeView && !p.Filter().IsActive() && len(p.store.FollowedShows()) == 0 {
+		es := uikit.PaneEmptyStatus("followed shows", false,
+			p.store.FollowedShowsFetching(),
+			p.store.FollowedShowsFetchError(),
+			p.store.FollowedShowsFetchedAt().IsZero(),
+			p.store.IsThrottled(),
+			p.store.ThrottleRetryAfterSecs())
+		if es.Status == uikit.EmptyStatusNone {
+			es.Hint = "Search for shows with /"
+		}
+		es.Width = p.width
+		es.Height = p.height
+		es.Theme = p.theme
+		return es.Render()
 	}
 	var parts []string
 	if p.Filter().IsActive() {

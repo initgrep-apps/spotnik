@@ -120,6 +120,10 @@ type StateReader interface {
 	LikedTracksFetchedAt() time.Time
 	// RecentPlayedFetchedAt returns the time recently played was last successfully fetched.
 	RecentPlayedFetchedAt() time.Time
+	// FollowedShowsFetchedAt returns the time followed shows were last successfully fetched.
+	FollowedShowsFetchedAt() time.Time
+	// SavedEpisodesFetchedAt returns the time saved episodes were last successfully fetched.
+	SavedEpisodesFetchedAt() time.Time
 
 	// --- Gateway event journal ---
 

@@ -439,14 +439,20 @@ func (p *PlaylistsPane) checkPrefetch() tea.Cmd {
 
 // View renders the pane content. Pure — reads state, returns string.
 func (p *PlaylistsPane) View() string {
-	if !p.inTrackView && len(p.store.Playlists()) == 0 && !p.Filter().IsActive() {
-		return uikit.EmptyState{
-			Text:   "No playlists",
-			Hint:   "Create playlists in Spotify or search with /",
-			Width:  p.width,
-			Height: p.height,
-			Theme:  p.theme,
-		}.Render()
+	if !p.inTrackView && !p.Filter().IsActive() && len(p.store.Playlists()) == 0 {
+		es := uikit.PaneEmptyStatus("playlists", false,
+			p.store.PlaylistsFetching(),
+			p.store.PlaylistsFetchError(),
+			p.store.PlaylistsFetchedAt().IsZero(),
+			p.store.IsThrottled(),
+			p.store.ThrottleRetryAfterSecs())
+		if es.Status == uikit.EmptyStatusNone {
+			es.Hint = "Create playlists in Spotify or search with /"
+		}
+		es.Width = p.width
+		es.Height = p.height
+		es.Theme = p.theme
+		return es.Render()
 	}
 
 	var parts []string
