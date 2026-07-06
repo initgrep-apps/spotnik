@@ -440,7 +440,7 @@ func (p *PlaylistsPane) checkPrefetch() tea.Cmd {
 // View renders the pane content. Pure — reads state, returns string.
 func (p *PlaylistsPane) View() string {
 	if !p.inTrackView && !p.Filter().IsActive() && len(p.store.Playlists()) == 0 {
-		es := uikit.PaneEmptyStatus("playlists", false,
+		es := uikit.PaneEmptyStatus("playlists",
 			p.store.PlaylistsFetching(),
 			p.store.PlaylistsFetchError(),
 			p.store.PlaylistsFetchedAt().IsZero(),

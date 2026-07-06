@@ -214,7 +214,7 @@ func (p *TopTracksPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 // View renders the top tracks pane content. Pure — reads state, returns string.
 func (p *TopTracksPane) View() string {
 	if !p.Filter().IsActive() && len(p.store.TopTracks(p.timeRange)) == 0 {
-		es := uikit.PaneEmptyStatus("top tracks", false,
+		es := uikit.PaneEmptyStatus("top tracks",
 			p.store.StatsFetching(p.timeRange),
 			p.store.StatsError(),
 			p.store.StatsFetchedAt(p.timeRange).IsZero(),

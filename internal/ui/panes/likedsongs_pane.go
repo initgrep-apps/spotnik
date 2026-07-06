@@ -156,7 +156,7 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the liked songs pane content. Pure — reads state, returns string.
 func (l *LikedSongsPane) View() string {
 	if !l.Filter().IsActive() && len(l.store.LikedTracks()) == 0 {
-		es := uikit.PaneEmptyStatus("liked songs", false,
+		es := uikit.PaneEmptyStatus("liked songs",
 			l.store.LikedFetching(),
 			l.store.LikedTracksFetchError(),
 			l.store.LikedTracksFetchedAt().IsZero(),

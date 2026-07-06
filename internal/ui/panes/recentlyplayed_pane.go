@@ -160,7 +160,7 @@ func (r *RecentlyPlayedPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the recently played pane content. Pure — reads state, returns string.
 func (r *RecentlyPlayedPane) View() string {
 	if !r.Filter().IsActive() && len(r.store.RecentlyPlayed()) == 0 {
-		es := uikit.PaneEmptyStatus("recently played tracks", false,
+		es := uikit.PaneEmptyStatus("recently played tracks",
 			r.store.RecentFetching(),
 			r.store.RecentPlayedFetchError(),
 			r.store.RecentPlayedFetchedAt().IsZero(),

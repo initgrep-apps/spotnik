@@ -255,7 +255,7 @@ func (p *FollowedShowsPane) checkEpisodePrefetch() tea.Cmd {
 
 func (p *FollowedShowsPane) View() string {
 	if !p.inEpisodeView && !p.Filter().IsActive() && len(p.store.FollowedShows()) == 0 {
-		es := uikit.PaneEmptyStatus("followed shows", false,
+		es := uikit.PaneEmptyStatus("followed shows",
 			p.store.FollowedShowsFetching(),
 			p.store.FollowedShowsFetchError(),
 			p.store.FollowedShowsFetchedAt().IsZero(),

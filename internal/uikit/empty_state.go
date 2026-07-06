@@ -124,13 +124,12 @@ func (e EmptyState) Render() string {
 
 // PaneEmptyStatus determines the EmptyState for a pane based on store state.
 // category is the display name (e.g. "followed shows", "saved episodes").
-// hasData is true when len(store.Data()) > 0.
 // isFetching is the store's *Fetching() accessor result.
 // fetchErr is the store's *FetchErr() accessor result.
 // neverFetched is true when fetchedAt is zero time.
 // isThrottled is store.IsThrottled().
 // retryAfterSecs is store.ThrottleRetryAfterSecs().
-func PaneEmptyStatus(category string, hasData, isFetching bool, fetchErr error,
+func PaneEmptyStatus(category string, isFetching bool, fetchErr error,
 	neverFetched, isThrottled bool, retryAfterSecs int) EmptyState {
 	if isThrottled {
 		return EmptyState{

@@ -357,7 +357,7 @@ func (a *AlbumsPane) View() string {
 		return a.trackTable.View()
 	}
 	if !a.Filter().IsActive() && len(a.store.SavedAlbums()) == 0 {
-		es := uikit.PaneEmptyStatus("saved albums", false,
+		es := uikit.PaneEmptyStatus("saved albums",
 			a.store.AlbumsFetching(),
 			a.store.AlbumsFetchError(),
 			a.store.AlbumsFetchedAt().IsZero(),

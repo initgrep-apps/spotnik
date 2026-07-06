@@ -115,7 +115,7 @@ func (p *SavedEpisodesPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p *SavedEpisodesPane) View() string {
 	if !p.Filter().IsActive() && len(p.store.SavedEpisodes()) == 0 {
-		es := uikit.PaneEmptyStatus("saved episodes", false,
+		es := uikit.PaneEmptyStatus("saved episodes",
 			p.store.SavedEpisodesFetching(),
 			p.store.SavedEpisodesFetchError(),
 			p.store.SavedEpisodesFetchedAt().IsZero(),

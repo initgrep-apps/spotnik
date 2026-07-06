@@ -329,7 +329,7 @@ func TestEmptyState_StatusNone(t *testing.T) {
 // TestPaneEmptyStatus_Throttled verifies that PaneEmptyStatus returns
 // EmptyStatusRateLimited when isThrottled is true.
 func TestPaneEmptyStatus_Throttled(t *testing.T) {
-	es := uikit.PaneEmptyStatus("followed shows", false, false, nil, true, true, 5)
+	es := uikit.PaneEmptyStatus("followed shows", false, nil, true, true, 5)
 	assert.Equal(t, uikit.EmptyStatusRateLimited, es.Status)
 	assert.Equal(t, "No followed shows", es.Text)
 	assert.Equal(t, "Rate limited — retrying in 5s", es.Hint)
@@ -338,7 +338,7 @@ func TestPaneEmptyStatus_Throttled(t *testing.T) {
 // TestPaneEmptyStatus_Fetching verifies that PaneEmptyStatus returns
 // EmptyStatusFetching when isFetching is true (and not throttled).
 func TestPaneEmptyStatus_Fetching(t *testing.T) {
-	es := uikit.PaneEmptyStatus("saved episodes", false, true, nil, true, false, 0)
+	es := uikit.PaneEmptyStatus("saved episodes", true, nil, true, false, 0)
 	assert.Equal(t, uikit.EmptyStatusFetching, es.Status)
 	assert.Equal(t, "No saved episodes", es.Text)
 }
@@ -346,7 +346,7 @@ func TestPaneEmptyStatus_Fetching(t *testing.T) {
 // TestPaneEmptyStatus_NeverFetched verifies that PaneEmptyStatus returns
 // EmptyStatusNeverFetched when neverFetched is true (and not fetching/throttled).
 func TestPaneEmptyStatus_NeverFetched(t *testing.T) {
-	es := uikit.PaneEmptyStatus("playlists", false, false, nil, true, false, 0)
+	es := uikit.PaneEmptyStatus("playlists", false, nil, true, false, 0)
 	assert.Equal(t, uikit.EmptyStatusNeverFetched, es.Status)
 	assert.Equal(t, "No playlists", es.Text)
 }
@@ -354,23 +354,15 @@ func TestPaneEmptyStatus_NeverFetched(t *testing.T) {
 // TestPaneEmptyStatus_Error verifies that PaneEmptyStatus returns
 // EmptyStatusError when fetchErr is non-nil (and not throttled/fetching/never-fetched).
 func TestPaneEmptyStatus_Error(t *testing.T) {
-	es := uikit.PaneEmptyStatus("saved albums", false, false, assert.AnError, false, false, 0)
+	es := uikit.PaneEmptyStatus("saved albums", false, assert.AnError, false, false, 0)
 	assert.Equal(t, uikit.EmptyStatusError, es.Status)
 	assert.Equal(t, "No saved albums", es.Text)
-}
-
-// TestPaneEmptyStatus_HasData verifies that PaneEmptyStatus returns
-// EmptyStatusNone when hasData is true (data present, no empty state needed).
-func TestPaneEmptyStatus_HasData(t *testing.T) {
-	es := uikit.PaneEmptyStatus("liked songs", true, false, nil, false, false, 0)
-	assert.Equal(t, uikit.EmptyStatusNone, es.Status)
-	assert.Equal(t, "No liked songs", es.Text)
 }
 
 // TestPaneEmptyStatus_ThrottledOverridesAll verifies that throttled takes
 // priority over all other states.
 func TestPaneEmptyStatus_ThrottledOverridesAll(t *testing.T) {
-	es := uikit.PaneEmptyStatus("top tracks", false, true, assert.AnError, true, true, 10)
+	es := uikit.PaneEmptyStatus("top tracks", true, assert.AnError, true, true, 10)
 	assert.Equal(t, uikit.EmptyStatusRateLimited, es.Status)
 	assert.Equal(t, "Rate limited — retrying in 10s", es.Hint)
 }

@@ -182,7 +182,7 @@ func (a *TopArtistsPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 // View renders the top artists pane content. Pure — reads state, returns string.
 func (a *TopArtistsPane) View() string {
 	if !a.Filter().IsActive() && len(a.store.TopArtists(a.timeRange)) == 0 {
-		es := uikit.PaneEmptyStatus("top artists", false,
+		es := uikit.PaneEmptyStatus("top artists",
 			a.store.StatsFetching(a.timeRange),
 			a.store.StatsError(),
 			a.store.StatsFetchedAt(a.timeRange).IsZero(),
