@@ -36,7 +36,7 @@ func TestBuildSearchPageCmd_CancelledCtxBeforeHTTP_ReturnsNil(t *testing.T) {
 	cancel() // cancel immediately — ctx is already done
 
 	client := api.NewSearchClient(srv.URL, "test-token")
-	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 1)
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 1, 0)
 	require.NotNil(t, cmd, "BuildSearchPageCmd should return a non-nil tea.Cmd")
 
 	msg := cmd()
@@ -59,7 +59,7 @@ func TestBuildSearchPageCmd_CancelledCtxAfterCmd_ReturnsNil(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	client := api.NewSearchClient(srv.URL, "test-token")
-	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 1)
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 1, 0)
 	require.NotNil(t, cmd)
 
 	// Cancel before executing — covers the pre-entry ctx.Err() guard.
@@ -89,7 +89,7 @@ func TestBuildSearchPageCmd_ValidCtx_ReturnsSearchPageLoadedMsg(t *testing.T) {
 	ctx := context.Background()
 	client := api.NewSearchClient(srv.URL, "test-token")
 	// page=3 → offset=(3-1)*10=20
-	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 3)
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 3, 0)
 	require.NotNil(t, cmd)
 
 	msg := cmd()
@@ -120,7 +120,7 @@ func TestBuildSearchPageCmd_PageOne_UsesOffset0(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cmd := app.BuildSearchPageCmd(context.Background(), api.NewSearchClient(srv.URL, "tok"), "q", []string{"track"}, 1)
+	cmd := app.BuildSearchPageCmd(context.Background(), api.NewSearchClient(srv.URL, "tok"), "q", []string{"track"}, 1, 0)
 	require.NotNil(t, cmd)
 	_ = cmd()
 	assert.Equal(t, "0", capturedOffset, "page 1 should use offset=0")
@@ -140,7 +140,7 @@ func TestBuildSearchPageCmd_OffsetAtLimit_ReturnsError(t *testing.T) {
 	ctx := context.Background()
 	client := api.NewSearchClient(srv.URL, "test-token")
 	// page=101 → offset=(101-1)*10=1000 → guard fires → error msg
-	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 101)
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 101, 0)
 	require.NotNil(t, cmd, "BuildSearchPageCmd should return a non-nil tea.Cmd")
 
 	msg := cmd()
@@ -168,7 +168,7 @@ func TestBuildSearchPageCmd_OffsetJustUnderCap_DoesNotReturnNil(t *testing.T) {
 	ctx := context.Background()
 	client := api.NewSearchClient(srv.URL, "test-token")
 	// page=100 → offset=(100-1)*10=990 → just under cap → should proceed
-	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 100)
+	cmd := app.BuildSearchPageCmd(ctx, client, "jazz", []string{"track"}, 100, 0)
 	require.NotNil(t, cmd)
 
 	msg := cmd()

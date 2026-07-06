@@ -429,21 +429,17 @@ type SearchResultSelectedMsg struct {
 }
 
 // SearchPageLoadedMsg is sent by the root app model after a single page of search
-// results has loaded. Query and Page are staleness keys — app.go discards this message
-// if either does not match the current search session. Results carries the pre-converted
-// list items for this page. Total is the flat count across all types/pages.
+// results has loaded. Query, Page, and Gen are staleness keys — app.go discards this
+// message if any does not match the current search session. Results carries the
+// pre-converted list items for this page. Total is the flat count across all types/pages.
 // Err is non-nil if the search failed.
 type SearchPageLoadedMsg struct {
-	// Query is the query string that triggered this search, for staleness detection.
-	Query string
-	// Page is the 1-based page number for this result, used as a staleness key.
-	Page int
-	// Results carries the pre-converted list items for this page (max SearchPageSize=10).
+	Query   string
+	Page    int
+	Gen     int
 	Results []SearchListItem
-	// Total is the total result count across all types/pages, for the pagination bar.
-	Total int
-	// Err is non-nil if the fetch failed.
-	Err error
+	Total   int
+	Err     error
 }
 
 // Podcast messages

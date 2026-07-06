@@ -110,10 +110,14 @@ type SearchClosedMsg struct{}
 // Types carries the Spotify API type filter derived from the locked prefix (e.g. ["track"]
 // for ":songs"). When empty the app handler defaults to all four types.
 // Page is the 1-based page number to fetch; incremented/decremented by Ctrl+Right/Left.
+// Gen is a monotonic generation counter — incremented on each new search (query/tab change)
+// but NOT on page changes. Used for staleness detection so stale responses from a
+// previous tab don't overwrite the current tab's total.
 type SearchRequestMsg struct {
 	Query string
 	Types []string
-	Page  int // 1-based page number; reflects intent.page at debounce fire time
+	Page  int
+	Gen   int
 }
 
 // resultActions returns the shortcut actions displayed as corner-notches
@@ -166,6 +170,11 @@ type SearchOverlay struct {
 	// loadingNextPage is true while a subsequent page fetch is in flight.
 	// When true, results!=nil and we show a spinner line above the existing list.
 	loadingNextPage bool
+
+	// gen is a monotonic counter incremented on each new search (query or tab change).
+	// Page changes do NOT increment gen. Carried through SearchRequestMsg → SearchPageLoadedMsg
+	// so the app layer can discard stale responses from a previous tab/query.
+	gen int
 
 	// intent is the single source of truth for what the user currently wants to search.
 	// All four triggers (type, Tab, Ctrl+Right, Ctrl+Left) write to this struct and call
@@ -352,32 +361,21 @@ func (o *SearchOverlay) SetSize(width, height int) {
 
 // resizeList recomputes the list dimensions from the current panelHeights() and
 // applies them via resultList.SetSize(). Must be called after any state change that
-// could affect total (which controls whether the pagination bar occupies a line)
-// or loading state (which controls whether the spinner line occupies a line above
-// the list). As of story 212, searchH is always 3 and helpH is always 0 —
-// the variable hint line and bottom key bar have been removed.
+// could affect total (which controls whether the pagination bar occupies a line).
 func (o *SearchOverlay) resizeList() {
 	w := o.overlayWidth()
 	_, resultsH, _ := o.panelHeights()
 
-	// Subtract 1 line for the pagination bar when total > 0.
 	paginationLine := 0
 	if o.total > 0 {
 		paginationLine = 1
 	}
 
-	// Subtract 1 line for the spinner line when loadingNextPage (spinner above list).
-	spinnerLine := 0
-	if o.loadingNextPage {
-		spinnerLine = 1
-	}
-
-	// Inner list dimensions: subtract results border (2) + tab bar (1) + separator (1) + optional lines.
 	listW := w - 2
 	if listW < 1 {
 		listW = 1
 	}
-	listH := resultsH - 4 - paginationLine - spinnerLine
+	listH := resultsH - 4 - paginationLine
 	if listH < 1 {
 		listH = 1
 	}
@@ -498,8 +496,9 @@ func (o *SearchOverlay) handleDebounce(m searchDebounceMsg) (tea.Model, tea.Cmd)
 	}
 	types := searchTypesForTab(o.intent.tab)
 	page := o.intent.page
+	gen := o.gen
 	return o, func() tea.Msg {
-		return SearchRequestMsg{Query: query, Types: types, Page: page}
+		return SearchRequestMsg{Query: query, Types: types, Page: page, Gen: gen}
 	}
 }
 
@@ -592,9 +591,9 @@ func (o *SearchOverlay) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		// Re-apply list dimensions in case loading state or total changed.
 		o.resizeList()
-		// Update intent.query to reflect the current input value, then update page to 1.
 		o.intent.query = o.input.Value()
 		o.intent.page = 1
+		o.gen++
 		if o.prefixState == PrefixTyping {
 			// Still editing the prefix — don't fire debounce yet.
 			return o, cmd
@@ -699,27 +698,53 @@ func (o *SearchOverlay) handleAddToQueue() (tea.Model, tea.Cmd) {
 // NOTE: Tab cycling is only reachable when prefixState is not PrefixTyping (Tab routing
 // in handleKey sends PrefixTyping → textinput suggestion acceptance instead). When a
 // prefix is locked the clean query (prefix stripped) is used so the API never sees raw ":songs kk".
+//
+// Results are cleared immediately on tab switch — the old results belong to a different
+// type filter and showing them would be misleading. loadingFirstPage is set so the
+// results panel shows a spinner until the new API call returns.
 func (o *SearchOverlay) cycleTabForward() (tea.Model, tea.Cmd) {
 	o.intent.tab = SearchTab((int(o.intent.tab) + 1) % NumTabs)
 	o.intent.page = 1
+	o.gen++
 	o.syncInputToTab()
-	o.rebuildListItems()
-	// Re-apply list dimensions in case loading state or total changed.
+	query := o.cleanQuery()
+	if query != "" {
+		o.results = nil
+		o.total = 0
+		o.loadingFirstPage = true
+		o.loadingNextPage = false
+		o.resultList.SetItems(nil)
+		o.resizeList()
+		return o, o.scheduleDebounce()
+	}
 	o.resizeList()
-	return o, o.scheduleDebounce()
+	return o, nil
 }
 
 // cycleTabBackward retreats the active tab, wrapping from TabAll back to the last tab.
 // It updates o.intent.tab and resets o.intent.page to 1, then schedules a debounce.
 // handleDebounce fires SearchRequestMsg if the query is non-empty at tick time.
+//
+// Results are cleared immediately on tab switch — the old results belong to a different
+// type filter and showing them would be misleading. loadingFirstPage is set so the
+// results panel shows a spinner until the new API call returns.
 func (o *SearchOverlay) cycleTabBackward() (tea.Model, tea.Cmd) {
 	o.intent.tab = SearchTab((int(o.intent.tab) + NumTabs - 1) % NumTabs)
 	o.intent.page = 1
+	o.gen++
 	o.syncInputToTab()
-	o.rebuildListItems()
-	// Re-apply list dimensions in case loading state or total changed.
+	query := o.cleanQuery()
+	if query != "" {
+		o.results = nil
+		o.total = 0
+		o.loadingFirstPage = true
+		o.loadingNextPage = false
+		o.resultList.SetItems(nil)
+		o.resizeList()
+		return o, o.scheduleDebounce()
+	}
 	o.resizeList()
-	return o, o.scheduleDebounce()
+	return o, nil
 }
 
 // View renders the search overlay as two bordered panels stacked vertically:
@@ -762,16 +787,15 @@ func (o *SearchOverlay) renderSearchPanel(w, h int) string {
 	return chrome.Render(inner)
 }
 
-// renderResultsPanel builds Panel 2: the tab bar, separator, optional spinner line,
+// renderResultsPanel builds Panel 2: the tab bar, separator,
 // scrollable results list, and optional pagination bar.
 //
 // Panel 2 layout (top to bottom):
 //
 //	tab bar        (1 line)
 //	separator      (1 line)
-//	spinner line   (0 or 1 line, loadingNextPage only)
 //	list           (fills remaining height)
-//	pagination bar (1 line, only when total > 0)
+//	pagination bar (1 line, only when total > 0; spinner inline when loadingNextPage)
 func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 	innerWidth := w - 2
 	if innerWidth < 1 {
@@ -782,34 +806,18 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 		innerHeight = 1
 	}
 
-	// Tab bar row (1 line).
 	tabBar := o.renderTabBar(innerWidth)
 
-	// Separator row (1 line) — thin dashes in TextMuted color.
 	separator := lipgloss.NewStyle().
 		Foreground(o.theme.TextMuted()).
 		Render(strings.Repeat(uikit.GlyphFor(uikit.GlyphHRule, uikit.ActiveMode()), innerWidth))
 
-	// Spinner line (1 line) — only visible while loadingNextPage.
-	// When loadingFirstPage, the entire results area shows only the spinner.
-	var spinnerLine string
-	if o.loadingNextPage {
-		spinnerLine = lipgloss.NewStyle().
-			Foreground(o.theme.TextMuted()).
-			Render(o.sp.View() + "Loading" + uikit.GlyphFor(uikit.GlyphEllipsis, uikit.ActiveMode()))
-	}
-
-	// Calculate extra lines consumed by optional elements.
 	fixedLines := 2 // tab bar + separator
-	if o.loadingNextPage {
-		fixedLines++
-	}
 	paginationLine := 0
 	if o.total > 0 {
 		paginationLine = 1
 	}
 
-	// Results area fills the remaining lines.
 	resultsAreaH := innerHeight - fixedLines - paginationLine
 	if resultsAreaH < 1 {
 		resultsAreaH = 1
@@ -817,7 +825,6 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 
 	var resultsArea string
 	if o.loadingFirstPage {
-		// First-page loading: centered spinner only, no list.
 		centered := lipgloss.NewStyle().
 			Foreground(o.theme.TextMuted()).
 			Width(innerWidth).Align(lipgloss.Center).
@@ -834,11 +841,7 @@ func (o *SearchOverlay) renderResultsPanel(w, h int) string {
 			Render(resultsContent)
 	}
 
-	// Assemble inner content lines.
 	lines := []string{tabBar, separator}
-	if o.loadingNextPage {
-		lines = append(lines, spinnerLine)
-	}
 	lines = append(lines, resultsArea)
 	if o.total > 0 {
 		lines = append(lines, o.renderPaginationBar(innerWidth))
@@ -895,13 +898,10 @@ func (o *SearchOverlay) renderTabBar(innerWidth int) string {
 // renderPaginationBar renders the [ ←  page N of M  → ] line.
 // Arrows are dimmed (TextMuted) when navigation in that direction is not possible.
 // The bar is centered within the given width w.
+// When loadingNextPage is true, a spinner frame is shown left of the brackets.
 func (o *SearchOverlay) renderPaginationBar(w int) string {
-	// Show only the current page number — not "of M".
-	// The Spotify API total can be very large (e.g. 10,000+ results) and showing
-	// "page 1 of 1000" is misleading when we only ever fetch 10 items per page.
-	// The → arrow dims when hasNextPage() is false, giving the same directional signal
-	// without the confusing denominator.
-	center := fmt.Sprintf("  page %d  ", o.intent.page)
+	totalPages := (o.total + SearchPageSize - 1) / SearchPageSize
+	center := fmt.Sprintf("  page %d of %d  ", o.intent.page, totalPages)
 
 	prevStyle := o.theme.TextPrimary()
 	nextStyle := o.theme.TextPrimary()
@@ -916,6 +916,14 @@ func (o *SearchOverlay) renderPaginationBar(w int) string {
 	left := lipgloss.NewStyle().Foreground(prevStyle).Render("[ " + uikit.GlyphFor(uikit.GlyphArrowLeft, m))
 	right := lipgloss.NewStyle().Foreground(nextStyle).Render(uikit.GlyphFor(uikit.GlyphArrowRight, m) + " ]")
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, left, center, right)
+
+	if o.loadingNextPage {
+		spinner := lipgloss.NewStyle().
+			Foreground(o.theme.TextMuted()).
+			Render(o.sp.View())
+		bar = spinner + " " + bar
+	}
+
 	return lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(bar)
 }
 
@@ -950,16 +958,19 @@ func (o *SearchOverlay) rebuildListItems() {
 // rebuildFromResults rebuilds the list from the locally cached SearchListItems.
 // Items were pre-converted by commands.go before delivery via SearchPageLoadedMsg,
 // so no further domain conversion is needed here.
+// The list cursor is reset to 0 after SetItems to prevent out-of-bounds cursor
+// positions when the new result set is smaller than the previous one (e.g. after
+// pagination followed by a new query with fewer results).
 func (o *SearchOverlay) rebuildFromResults() {
 	if o.results == nil {
 		return
 	}
-	// Convert []SearchListItem to []list.Item for the bubbles/list component.
 	items := make([]list.Item, len(o.results))
 	for i, r := range o.results {
 		items[i] = r
 	}
 	o.resultList.SetItems(items)
+	o.resultList.Select(0)
 }
 
 // overlayWidth returns the effective overlay width: 70% of terminal width, minimum 40.

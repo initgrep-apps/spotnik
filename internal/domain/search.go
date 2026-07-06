@@ -29,7 +29,8 @@ type SearchArtist struct {
 }
 
 // UnmarshalJSON implements custom unmarshaling to extract the nested followers.total
-// into the flat Followers field.
+// into the flat Followers field. Handles the case where the Spotify API returns
+// "followers": null (e.g. for artists with hidden follower counts).
 func (a *SearchArtist) UnmarshalJSON(data []byte) error {
 	raw := &struct {
 		ID         string   `json:"id"`
@@ -37,7 +38,7 @@ func (a *SearchArtist) UnmarshalJSON(data []byte) error {
 		URI        string   `json:"uri"`
 		Genres     []string `json:"genres"`
 		Popularity int      `json:"popularity"`
-		Followers  struct {
+		Followers  *struct {
 			Total int `json:"total"`
 		} `json:"followers"`
 	}{}
@@ -49,7 +50,9 @@ func (a *SearchArtist) UnmarshalJSON(data []byte) error {
 	a.URI = raw.URI
 	a.Genres = raw.Genres
 	a.Popularity = raw.Popularity
-	a.Followers = raw.Followers.Total
+	if raw.Followers != nil {
+		a.Followers = raw.Followers.Total
+	}
 	return nil
 }
 
