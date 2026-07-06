@@ -170,7 +170,8 @@ func TestRecentlyPlayedPane_EmptyData(t *testing.T) {
 	// Should not panic and should show empty state message.
 	view := pane.View()
 	assert.NotEmpty(t, view)
-	assert.Contains(t, view, "No recently played tracks")
+	// Fresh store: never fetched → shows "Loading recently played tracks..."
+	assert.Contains(t, view, "Loading recently played tracks...")
 }
 
 func TestRecentlyPlayedPane_RefreshRows(t *testing.T) {

@@ -258,3 +258,41 @@ Non-blocking review findings (existing white-box tests cover these behaviors):
 **Feature:** 21-test-infrastructure
 
 1. TestPodcastFlow_EpisodeDetailsOverlay_NoOpForTrack duplicates existing TestApp_IKey_NoOp_WhenTrackPlaying in episode_details_overlay_test.go
+
+---
+
+## SavedEpisodes missing Hint for genuinely-empty state
+**Found:** 2026-07-06 | **Source:** PR #406 Review
+**Feature:** 22-rate-limit-resilience
+
+All 7 other panes set a contextual Hint when EmptyStatusNone. SavedEpisodes does not.
+
+## No golden test for non-never-fetched states
+**Found:** 2026-07-06 | **Source:** PR #406 Review
+**Feature:** 22-rate-limit-resilience
+
+All 8 golden tests use state.New() (fresh store → EmptyStatusNeverFetched). No golden snapshot captures visual output of error, fetching, or rate-limited states.
+
+## EmptyState Text dual role is fragile
+**Found:** 2026-07-06 | **Source:** PR #406 Review
+**Feature:** 22-rate-limit-resilience
+
+Text field serves as display text when Status=None, but as category-source when Status≠None. The strings.TrimPrefix(e.Text, "No ") parsing is an implicit contract. Consider adding a Category field.
+
+## PaneEmptyStatus has 7 positional parameters
+**Found:** 2026-07-06 | **Source:** PR #406 Review
+**Feature:** 22-rate-limit-resilience
+
+5 bool parameters in sequence is error-prone. Consider a struct parameter.
+
+## EmptyStatusNone untested at pane level
+**Found:** 2026-07-06 | **Source:** PR #406 Review
+**Feature:** 22-rate-limit-resilience
+
+No pane test verifies genuinely-empty data (API returned 200, zero items) renders "No X" + hint.
+
+## FollowedShows/SavedEpisodes/RecentlyPlayed missing pane-level status tests
+**Found:** 2026-07-06 | **Source:** PR #406 Review
+**Feature:** 22-rate-limit-resilience
+
+These 3 panes have updated View() using PaneEmptyStatus but only got golden file updates, not the 4 new status tests.

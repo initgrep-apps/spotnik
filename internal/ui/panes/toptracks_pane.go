@@ -213,14 +213,20 @@ func (p *TopTracksPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 
 // View renders the top tracks pane content. Pure — reads state, returns string.
 func (p *TopTracksPane) View() string {
-	if len(p.store.TopTracks(p.timeRange)) == 0 && !p.Filter().IsActive() {
-		return uikit.EmptyState{
-			Text:   "No top tracks",
-			Hint:   "Listen to more music to populate this list",
-			Width:  p.width,
-			Height: p.height,
-			Theme:  p.theme,
-		}.Render()
+	if !p.Filter().IsActive() && len(p.store.TopTracks(p.timeRange)) == 0 {
+		es := uikit.PaneEmptyStatus("top tracks",
+			p.store.StatsFetching(p.timeRange),
+			p.store.StatsError(),
+			p.store.StatsFetchedAt(p.timeRange).IsZero(),
+			p.store.IsThrottled(),
+			p.store.ThrottleRetryAfterSecs())
+		if es.Status == uikit.EmptyStatusNone {
+			es.Hint = "Listen to more music to populate this list"
+		}
+		es.Width = p.width
+		es.Height = p.height
+		es.Theme = p.theme
+		return es.Render()
 	}
 
 	var parts []string

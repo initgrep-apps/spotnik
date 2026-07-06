@@ -120,6 +120,10 @@ type StateReader interface {
 	LikedTracksFetchedAt() time.Time
 	// RecentPlayedFetchedAt returns the time recently played was last successfully fetched.
 	RecentPlayedFetchedAt() time.Time
+	// FollowedShowsFetchedAt returns the time followed shows were last successfully fetched.
+	FollowedShowsFetchedAt() time.Time
+	// SavedEpisodesFetchedAt returns the time saved episodes were last successfully fetched.
+	SavedEpisodesFetchedAt() time.Time
 
 	// --- Gateway event journal ---
 
@@ -139,6 +143,36 @@ type StateReader interface {
 	SelectedShowID() string
 	// SelectedShow returns the full show data for the currently selected show, or nil.
 	SelectedShow() *domain.Show
+
+	// --- Fetch errors (read-only) ---
+
+	// PlaylistsFetchError returns the last playlists list fetch error, or nil.
+	PlaylistsFetchError() error
+	// AlbumsFetchError returns the last saved albums fetch error, or nil.
+	AlbumsFetchError() error
+	// LikedTracksFetchError returns the last liked tracks fetch error, or nil.
+	LikedTracksFetchError() error
+	// RecentPlayedFetchError returns the last recently played fetch error, or nil.
+	RecentPlayedFetchError() error
+	// StatsError returns the last stats fetch error, or nil if successful.
+	StatsError() error
+	// FollowedShowsFetchError returns the last followed shows fetch error, or nil.
+	FollowedShowsFetchError() error
+	// SavedEpisodesFetchError returns the last saved episodes fetch error, or nil.
+	SavedEpisodesFetchError() error
+	// ShowEpisodesFetchError returns the last show episodes fetch error, or nil.
+	ShowEpisodesFetchError() error
+
+	// --- Fetching sentinels (podcast + stats) ---
+
+	// FollowedShowsFetching returns true while a followed-shows fetch is in-flight.
+	FollowedShowsFetching() bool
+	// SavedEpisodesFetching returns true while a saved-episodes fetch is in-flight.
+	SavedEpisodesFetching() bool
+	// ShowEpisodesFetching returns true while a show-episodes fetch is in-flight.
+	ShowEpisodesFetching() bool
+	// StatsFetching returns true while a stats fetch for the given time range is in-flight.
+	StatsFetching(timeRange string) bool
 
 	// --- Throttle observability ---
 

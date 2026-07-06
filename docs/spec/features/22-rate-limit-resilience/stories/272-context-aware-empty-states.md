@@ -1,7 +1,7 @@
 ---
 title: "Context-Aware Empty States"
 feature: 22-rate-limit-resilience
-status: open
+status: done
 ---
 
 ## Background

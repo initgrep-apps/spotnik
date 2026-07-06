@@ -35,7 +35,8 @@ func TestFollowedShowsPane_EmptyState(t *testing.T) {
 	p := NewFollowedShowsPane(s, th, true)
 	p.SetSize(80, 20)
 	output := p.View()
-	assert.Contains(t, output, "No followed shows")
+	// Fresh store: never fetched → shows "Loading followed shows..."
+	assert.Contains(t, output, "Loading followed shows...")
 }
 
 func TestFollowedShowsPane_InitialState_Level1(t *testing.T) {

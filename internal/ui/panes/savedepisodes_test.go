@@ -34,7 +34,8 @@ func TestSavedEpisodesPane_EmptyState(t *testing.T) {
 	p := NewSavedEpisodesPane(s, th, true)
 	p.SetSize(80, 20)
 	output := p.View()
-	assert.Contains(t, output, "No saved episodes")
+	// Fresh store: never fetched → shows "Loading saved episodes..."
+	assert.Contains(t, output, "Loading saved episodes...")
 }
 
 func TestSavedEpisodesPane_EnterPlayable(t *testing.T) {

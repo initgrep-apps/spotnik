@@ -3,6 +3,7 @@ package panes
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -281,6 +282,56 @@ func TestTopTracksPane_RefreshRows(t *testing.T) {
 	pane.RefreshRows()
 	view := pane.View()
 	assert.Contains(t, view, "Refreshed Track")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestTopTracksPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading top tracks...".
+func TestTopTracksPane_View_EmptyState_NeverFetched(t *testing.T) {
+	st := state.New()
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading top tracks...")
+}
+
+// TestTopTracksPane_View_EmptyState_Fetching verifies that when StatsFetching is true,
+// the pane shows "Loading top tracks...".
+func TestTopTracksPane_View_EmptyState_Fetching(t *testing.T) {
+	st := state.New()
+	st.SetStatsFetching("short_term", true)
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading top tracks...")
+}
+
+// TestTopTracksPane_View_EmptyState_Error verifies that when StatsError is set,
+// the pane shows "Unable to load top tracks".
+func TestTopTracksPane_View_EmptyState_Error(t *testing.T) {
+	st := state.New()
+	st.SetStatsError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load top tracks")
+}
+
+// TestTopTracksPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load top tracks" with rate-limit hint.
+func TestTopTracksPane_View_EmptyState_RateLimited(t *testing.T) {
+	st := state.New()
+	st.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load top tracks")
+	assert.Contains(t, output, "Rate limited")
 }
 
 // ── Story 71 Task 2: column color tokens ─────────────────────────────────────

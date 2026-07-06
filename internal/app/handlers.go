@@ -356,6 +356,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearStatsError()
 				return a, nil
 			}
 			a.statsPoll.errorCount++
@@ -1015,6 +1016,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetPlaylistsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearPlaylistsFetchError()
 				return a, nil
 			}
 			a.playlistsPoll.errorCount++
@@ -1092,6 +1094,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetAlbumsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearAlbumsFetchError()
 				return a, nil
 			}
 			a.albumsPoll.errorCount++
@@ -1168,6 +1171,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetLikedFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearLikedTracksFetchError()
 				return a, nil
 			}
 			a.likedSongsPoll.errorCount++
@@ -1231,6 +1235,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetRecentFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearRecentPlayedFetchError()
 				return a, nil
 			}
 			a.recentPlayedPoll.errorCount++
@@ -1513,6 +1518,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetFollowedShowsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearFollowedShowsFetchError()
 				return a, nil
 			}
 			a.followedShowsPoll.errorCount++
@@ -1562,6 +1568,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSavedEpisodesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearSavedEpisodesFetchError()
 				return a, nil
 			}
 			a.savedEpisodesPoll.errorCount++
@@ -1603,6 +1610,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetShowEpisodesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearShowEpisodesFetchError()
 				// Forward to pane so it clears episodesFetching.
 				return a, a.forwardToPane(layout.PaneFollowedShows, m)
 			}
