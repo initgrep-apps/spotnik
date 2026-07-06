@@ -27,6 +27,7 @@
 | 18 | Podcasts & Player Unification | `features/18-podcasts/` | done | 227–236, 238–244 | Phase 1: Podcasts page with 4 panes + PodcastAPI client. Phase 2: Unified Player page, content-aware NowPlaying, FollowedShows drill-down, mixed-content Queue, auto-switch presets, visibility-gated polling, Episode Details overlay |
 | 20 | Pane Content Design Language | `features/20-pane-content-design/` | done | 245–255 | Consistent design language: responsive column hiding, optimized headers, empty states, # column restoration, pagination footer fix |
 | 21 | End-to-End Test Infrastructure | `features/21-test-infrastructure/` | done | 256–266 ✓ | Component golden-file snapshots + integration flow tests using `teatest`; testing pyramid gains View() regression and multi-step flow layers |
+| 22 | Rate Limit Resilience & Empty State Context | `features/22-rate-limit-resilience/` | open | 272–273 | Context-aware empty states (never-fetched/fetching/error/rate-limited vs genuinely empty); gateway proactive traffic shaping with adaptive rate limiting and fetch scheduler |
 
 ---
 
