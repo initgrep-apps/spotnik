@@ -223,6 +223,158 @@ func TestEmptyState_AsciiMode(t *testing.T) {
 	}
 }
 
+// --- Status-driven rendering tests ---
+
+// TestEmptyState_StatusNeverFetched verifies that EmptyStatusNeverFetched
+// renders "Loading {category}..." with no hint.
+func TestEmptyState_StatusNeverFetched(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text:   "No followed shows",
+		Status: uikit.EmptyStatusNeverFetched,
+		Width:  40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Loading followed shows...")
+	assert.NotContains(t, full, "No followed shows")
+}
+
+// TestEmptyState_StatusFetching verifies that EmptyStatusFetching
+// renders "Loading {category}..." with no hint.
+func TestEmptyState_StatusFetching(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text:   "No saved episodes",
+		Status: uikit.EmptyStatusFetching,
+		Width:  40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Loading saved episodes...")
+	assert.NotContains(t, full, "No saved episodes")
+}
+
+// TestEmptyState_StatusError verifies that EmptyStatusError
+// renders "Unable to load {category}" with default hint.
+func TestEmptyState_StatusError(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text:   "No playlists",
+		Status: uikit.EmptyStatusError,
+		Width:  40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Unable to load playlists")
+	assert.Contains(t, full, "Check your connection")
+}
+
+// TestEmptyState_StatusErrorCustomHint verifies that EmptyStatusError
+// uses the caller-provided hint when set.
+func TestEmptyState_StatusErrorCustomHint(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text:   "No playlists",
+		Hint:   "Custom error hint",
+		Status: uikit.EmptyStatusError,
+		Width:  40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Unable to load playlists")
+	assert.Contains(t, full, "Custom error hint")
+	assert.NotContains(t, full, "Check your connection")
+}
+
+// TestEmptyState_StatusRateLimited verifies that EmptyStatusRateLimited
+// renders "Unable to load {category}" with the caller-provided hint.
+func TestEmptyState_StatusRateLimited(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text:   "No followed shows",
+		Hint:   "Rate limited — retrying in 5s",
+		Status: uikit.EmptyStatusRateLimited,
+		Width:  40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Unable to load followed shows")
+	assert.Contains(t, full, "Rate limited — retrying in 5s")
+}
+
+// TestEmptyState_StatusNone verifies that EmptyStatusNone uses Text/Hint as-is.
+func TestEmptyState_StatusNone(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Text:   "No liked songs",
+		Hint:   "Press / to search for tracks",
+		Status: uikit.EmptyStatusNone,
+		Width:  40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "No liked songs")
+	assert.Contains(t, full, "Press / to search for tracks")
+}
+
+// --- PaneEmptyStatus helper tests ---
+
+// TestPaneEmptyStatus_Throttled verifies that PaneEmptyStatus returns
+// EmptyStatusRateLimited when isThrottled is true.
+func TestPaneEmptyStatus_Throttled(t *testing.T) {
+	es := uikit.PaneEmptyStatus("followed shows", false, false, nil, true, true, 5)
+	assert.Equal(t, uikit.EmptyStatusRateLimited, es.Status)
+	assert.Equal(t, "No followed shows", es.Text)
+	assert.Equal(t, "Rate limited — retrying in 5s", es.Hint)
+}
+
+// TestPaneEmptyStatus_Fetching verifies that PaneEmptyStatus returns
+// EmptyStatusFetching when isFetching is true (and not throttled).
+func TestPaneEmptyStatus_Fetching(t *testing.T) {
+	es := uikit.PaneEmptyStatus("saved episodes", false, true, nil, true, false, 0)
+	assert.Equal(t, uikit.EmptyStatusFetching, es.Status)
+	assert.Equal(t, "No saved episodes", es.Text)
+}
+
+// TestPaneEmptyStatus_NeverFetched verifies that PaneEmptyStatus returns
+// EmptyStatusNeverFetched when neverFetched is true (and not fetching/throttled).
+func TestPaneEmptyStatus_NeverFetched(t *testing.T) {
+	es := uikit.PaneEmptyStatus("playlists", false, false, nil, true, false, 0)
+	assert.Equal(t, uikit.EmptyStatusNeverFetched, es.Status)
+	assert.Equal(t, "No playlists", es.Text)
+}
+
+// TestPaneEmptyStatus_Error verifies that PaneEmptyStatus returns
+// EmptyStatusError when fetchErr is non-nil (and not throttled/fetching/never-fetched).
+func TestPaneEmptyStatus_Error(t *testing.T) {
+	es := uikit.PaneEmptyStatus("saved albums", false, false, assert.AnError, false, false, 0)
+	assert.Equal(t, uikit.EmptyStatusError, es.Status)
+	assert.Equal(t, "No saved albums", es.Text)
+}
+
+// TestPaneEmptyStatus_HasData verifies that PaneEmptyStatus returns
+// EmptyStatusNone when hasData is true (data present, no empty state needed).
+func TestPaneEmptyStatus_HasData(t *testing.T) {
+	es := uikit.PaneEmptyStatus("liked songs", true, false, nil, false, false, 0)
+	assert.Equal(t, uikit.EmptyStatusNone, es.Status)
+	assert.Equal(t, "No liked songs", es.Text)
+}
+
+// TestPaneEmptyStatus_ThrottledOverridesAll verifies that throttled takes
+// priority over all other states.
+func TestPaneEmptyStatus_ThrottledOverridesAll(t *testing.T) {
+	es := uikit.PaneEmptyStatus("top tracks", false, true, assert.AnError, true, true, 10)
+	assert.Equal(t, uikit.EmptyStatusRateLimited, es.Status)
+	assert.Equal(t, "Rate limited — retrying in 10s", es.Hint)
+}
+
 // containsSubstr is a simple substring check used in tests.
 func containsSubstr(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)
