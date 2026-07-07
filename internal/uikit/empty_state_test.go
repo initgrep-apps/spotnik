@@ -339,7 +339,7 @@ func TestPaneEmptyStatus_Throttled(t *testing.T) {
 		IsThrottled: true, RetryAfterSecs: 5,
 	})
 	assert.Equal(t, uikit.EmptyStatusRateLimited, es.Status)
-	assert.Equal(t, "No followed shows", es.Text)
+	assert.Equal(t, "Unable to load followed shows", es.Text)
 	assert.Equal(t, "Rate limited — retrying in 5s", es.Hint)
 }
 
@@ -350,7 +350,7 @@ func TestPaneEmptyStatus_Fetching(t *testing.T) {
 		IsFetching: true, NeverFetched: true,
 	})
 	assert.Equal(t, uikit.EmptyStatusFetching, es.Status)
-	assert.Equal(t, "No saved episodes", es.Text)
+	assert.Equal(t, "Loading saved episodes...", es.Text)
 }
 
 // TestPaneEmptyStatus_NeverFetched verifies that PaneEmptyStatus returns
@@ -360,7 +360,7 @@ func TestPaneEmptyStatus_NeverFetched(t *testing.T) {
 		NeverFetched: true,
 	})
 	assert.Equal(t, uikit.EmptyStatusNeverFetched, es.Status)
-	assert.Equal(t, "No playlists", es.Text)
+	assert.Equal(t, "Loading playlists...", es.Text)
 }
 
 // TestPaneEmptyStatus_Error verifies that PaneEmptyStatus returns
@@ -371,7 +371,7 @@ func TestPaneEmptyStatus_Error(t *testing.T) {
 		FetchErr: assert.AnError, NeverFetched: true,
 	})
 	assert.Equal(t, uikit.EmptyStatusError, es.Status)
-	assert.Equal(t, "No saved albums", es.Text)
+	assert.Equal(t, "Unable to load saved albums", es.Text)
 }
 
 // TestPaneEmptyStatus_ErrorOverridesNeverFetched verifies that fetchErr takes
@@ -382,7 +382,7 @@ func TestPaneEmptyStatus_ErrorOverridesNeverFetched(t *testing.T) {
 		FetchErr: assert.AnError, NeverFetched: true,
 	})
 	assert.Equal(t, uikit.EmptyStatusError, es.Status)
-	assert.Equal(t, "No followed shows", es.Text)
+	assert.Equal(t, "Unable to load followed shows", es.Text)
 }
 
 // TestPaneEmptyStatus_ThrottledOverridesAll verifies that throttled takes
@@ -394,6 +394,45 @@ func TestPaneEmptyStatus_ThrottledOverridesAll(t *testing.T) {
 	})
 	assert.Equal(t, uikit.EmptyStatusRateLimited, es.Status)
 	assert.Equal(t, "Rate limited — retrying in 10s", es.Hint)
+}
+
+// TestPaneEmptyStatus_None verifies that PaneEmptyStatus returns
+// EmptyStatusNone when all flags are false/zero (default fallthrough).
+func TestPaneEmptyStatus_None(t *testing.T) {
+	es := uikit.PaneEmptyStatus("playlists", uikit.PaneFetchState{})
+	assert.Equal(t, uikit.EmptyStatusNone, es.Status)
+	assert.Equal(t, "No playlists", es.Text)
+}
+
+// TestEmptyState_StatusError_EmptyCategory verifies that Render() handles
+// EmptyStatusError with an empty Category gracefully.
+func TestEmptyState_StatusError_EmptyCategory(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Category: "",
+		Status:   uikit.EmptyStatusError,
+		Width:    40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Unable to load data")
+	assert.Contains(t, full, "Check your connection")
+}
+
+// TestEmptyState_StatusFetching_EmptyCategory verifies that Render() handles
+// EmptyStatusFetching with an empty Category gracefully.
+func TestEmptyState_StatusFetching_EmptyCategory(t *testing.T) {
+	th := theme.Load("black")
+	es := uikit.EmptyState{
+		Category: "",
+		Status:   uikit.EmptyStatusFetching,
+		Width:    40, Height: 5, Theme: th,
+	}
+	lines := uikit.Capture(es.Render())
+	require.Len(t, lines, 5)
+	full := strings.Join(lines, "\n")
+	assert.Contains(t, full, "Loading...")
 }
 
 // containsSubstr is a simple substring check used in tests.

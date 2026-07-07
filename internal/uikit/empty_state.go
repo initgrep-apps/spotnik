@@ -69,15 +69,27 @@ func (e EmptyState) Render() string {
 
 	switch e.Status {
 	case EmptyStatusNeverFetched, EmptyStatusFetching:
-		text = "Loading " + e.Category + "..."
+		if e.Category == "" {
+			text = "Loading..."
+		} else {
+			text = "Loading " + e.Category + "..."
+		}
 		hint = ""
 	case EmptyStatusError:
-		text = "Unable to load " + e.Category
+		if e.Category == "" {
+			text = "Unable to load data"
+		} else {
+			text = "Unable to load " + e.Category
+		}
 		if hint == "" {
 			hint = "Check your connection"
 		}
 	case EmptyStatusRateLimited:
-		text = "Unable to load " + e.Category
+		if e.Category == "" {
+			text = "Unable to load data"
+		} else {
+			text = "Unable to load " + e.Category
+		}
 		// hint is set by caller with retry-after info
 	}
 
@@ -138,18 +150,30 @@ func PaneEmptyStatus(category string, s PaneFetchState) EmptyState {
 		return EmptyState{
 			Category: category,
 			Status:   EmptyStatusRateLimited,
-			Text:     "No " + category,
+			Text:     "Unable to load " + category,
 			Hint:     fmt.Sprintf("Rate limited — retrying in %ds", s.RetryAfterSecs),
 		}
 	}
 	if s.IsFetching {
-		return EmptyState{Category: category, Status: EmptyStatusFetching, Text: "No " + category}
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusFetching,
+			Text:     "Loading " + category + "...",
+		}
 	}
 	if s.FetchErr != nil {
-		return EmptyState{Category: category, Status: EmptyStatusError, Text: "No " + category}
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusError,
+			Text:     "Unable to load " + category,
+		}
 	}
 	if s.NeverFetched {
-		return EmptyState{Category: category, Status: EmptyStatusNeverFetched, Text: "No " + category}
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusNeverFetched,
+			Text:     "Loading " + category + "...",
+		}
 	}
 	return EmptyState{Category: category, Status: EmptyStatusNone, Text: "No " + category}
 }

@@ -595,3 +595,18 @@ func TestFollowedShowsPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Unable to load followed shows")
 	assert.Contains(t, output, "Rate limited")
 }
+
+// TestFollowedShowsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No followed shows"
+// with the contextual hint.
+func TestFollowedShowsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetFollowedShows([]domain.SavedShow{})
+	s.SetFollowedShowsFetchedAt(time.Now())
+	th := theme.Load("black")
+	p := NewFollowedShowsPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "No followed shows")
+	assert.Contains(t, output, "Search for shows with /")
+}

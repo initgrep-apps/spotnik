@@ -525,3 +525,18 @@ func TestRecentlyPlayedPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Unable to load recently played tracks")
 	assert.Contains(t, output, "Rate limited")
 }
+
+// TestRecentlyPlayedPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No recently played tracks"
+// with the contextual hint.
+func TestRecentlyPlayedPane_View_EmptyState_None(t *testing.T) {
+	st := state.New()
+	st.SetRecentlyPlayed([]domain.PlayHistory{})
+	st.SetRecentPlayedFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewRecentlyPlayedPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No recently played tracks")
+	assert.Contains(t, output, "Listen to something to populate this list")
+}

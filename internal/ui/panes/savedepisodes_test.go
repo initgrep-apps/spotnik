@@ -130,3 +130,18 @@ func TestSavedEpisodesPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Unable to load saved episodes")
 	assert.Contains(t, output, "Rate limited")
 }
+
+// TestSavedEpisodesPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No saved episodes"
+// with the contextual hint.
+func TestSavedEpisodesPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetSavedEpisodes([]domain.SavedEpisode{})
+	s.SetSavedEpisodesFetchedAt(time.Now())
+	th := theme.Load("black")
+	p := NewSavedEpisodesPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "No saved episodes")
+	assert.Contains(t, output, "Save episodes in Spotify or search with /")
+}
