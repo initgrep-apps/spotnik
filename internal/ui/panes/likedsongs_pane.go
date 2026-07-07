@@ -156,12 +156,13 @@ func (l *LikedSongsPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the liked songs pane content. Pure — reads state, returns string.
 func (l *LikedSongsPane) View() string {
 	if !l.Filter().IsActive() && len(l.store.LikedTracks()) == 0 {
-		es := uikit.PaneEmptyStatus("liked songs",
-			l.store.LikedFetching(),
-			l.store.LikedTracksFetchError(),
-			l.store.LikedTracksFetchedAt().IsZero(),
-			l.store.IsThrottled(),
-			l.store.ThrottleRetryAfterSecs())
+		es := uikit.PaneEmptyStatus("liked songs", uikit.PaneFetchState{
+			IsFetching:     l.store.LikedFetching(),
+			FetchErr:       l.store.LikedTracksFetchError(),
+			NeverFetched:   l.store.LikedTracksFetchedAt().IsZero(),
+			IsThrottled:    l.store.IsThrottled(),
+			RetryAfterSecs: l.store.ThrottleRetryAfterSecs(),
+		})
 		if es.Status == uikit.EmptyStatusNone {
 			es.Hint = "Press / to search for tracks"
 		}

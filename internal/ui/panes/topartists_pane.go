@@ -182,12 +182,13 @@ func (a *TopArtistsPane) cycleTimeRange() (tea.Model, tea.Cmd) {
 // View renders the top artists pane content. Pure — reads state, returns string.
 func (a *TopArtistsPane) View() string {
 	if !a.Filter().IsActive() && len(a.store.TopArtists(a.timeRange)) == 0 {
-		es := uikit.PaneEmptyStatus("top artists",
-			a.store.StatsFetching(a.timeRange),
-			a.store.StatsError(),
-			a.store.StatsFetchedAt(a.timeRange).IsZero(),
-			a.store.IsThrottled(),
-			a.store.ThrottleRetryAfterSecs())
+		es := uikit.PaneEmptyStatus("top artists", uikit.PaneFetchState{
+			IsFetching:     a.store.StatsFetching(a.timeRange),
+			FetchErr:       a.store.StatsError(),
+			NeverFetched:   a.store.StatsFetchedAt(a.timeRange).IsZero(),
+			IsThrottled:    a.store.IsThrottled(),
+			RetryAfterSecs: a.store.ThrottleRetryAfterSecs(),
+		})
 		if es.Status == uikit.EmptyStatusNone {
 			es.Hint = "Listen to more music to populate this list"
 		}

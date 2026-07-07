@@ -29,14 +29,16 @@ const (
 // renders below Text. Both Text and Hint are rendered in the Muted role.
 //
 // When Status is set (non-zero), Render() derives the display text from the
-// status instead of using Text/Hint directly. Text is still used as the
-// category source (e.g. "No followed shows" → category "followed shows").
+// status instead of using Text/Hint directly. Category provides the noun
+// phrase used in status-driven messages (e.g. "followed shows").
 //
 // Render() returns exactly Height newline-separated lines.
 type EmptyState struct {
+	// Category is the noun phrase used in status-driven messages
+	// (e.g. "followed shows", "saved episodes"). Required when Status is set.
+	Category string
 	// Text is the primary no-data message (e.g. "Empty queue").
-	// When Status is set, Text is used to derive the category name by
-	// stripping the "No " prefix.
+	// Used as-is when Status is EmptyStatusNone.
 	Text string
 	// Hint is the optional secondary help text rendered below Text.
 	// When Status is EmptyStatusRateLimited, the caller should set Hint
@@ -67,18 +69,27 @@ func (e EmptyState) Render() string {
 
 	switch e.Status {
 	case EmptyStatusNeverFetched, EmptyStatusFetching:
-		category := strings.TrimPrefix(e.Text, "No ")
-		text = "Loading " + category + "..."
+		if e.Category == "" {
+			text = "Loading..."
+		} else {
+			text = "Loading " + e.Category + "..."
+		}
 		hint = ""
 	case EmptyStatusError:
-		category := strings.TrimPrefix(e.Text, "No ")
-		text = "Unable to load " + category
+		if e.Category == "" {
+			text = "Unable to load data"
+		} else {
+			text = "Unable to load " + e.Category
+		}
 		if hint == "" {
 			hint = "Check your connection"
 		}
 	case EmptyStatusRateLimited:
-		category := strings.TrimPrefix(e.Text, "No ")
-		text = "Unable to load " + category
+		if e.Category == "" {
+			text = "Unable to load data"
+		} else {
+			text = "Unable to load " + e.Category
+		}
 		// hint is set by caller with retry-after info
 	}
 
@@ -122,32 +133,49 @@ func (e EmptyState) Render() string {
 	return strings.Join(lines, "\n")
 }
 
+// PaneFetchState bundles the store-derived flags that PaneEmptyStatus needs
+// to determine the correct EmptyStatus.
+type PaneFetchState struct {
+	IsFetching     bool
+	FetchErr       error
+	NeverFetched   bool
+	IsThrottled    bool
+	RetryAfterSecs int
+}
+
 // PaneEmptyStatus determines the EmptyState for a pane based on store state.
 // category is the display name (e.g. "followed shows", "saved episodes").
-// isFetching is the store's *Fetching() accessor result.
-// fetchErr is the store's *FetchErr() accessor result.
-// neverFetched is true when fetchedAt is zero time.
-// isThrottled is store.IsThrottled().
-// retryAfterSecs is store.ThrottleRetryAfterSecs().
-func PaneEmptyStatus(category string, isFetching bool, fetchErr error,
-	neverFetched, isThrottled bool, retryAfterSecs int) EmptyState {
-	if isThrottled {
+func PaneEmptyStatus(category string, s PaneFetchState) EmptyState {
+	if s.IsThrottled {
 		return EmptyState{
-			Status: EmptyStatusRateLimited,
-			Text:   "No " + category,
-			Hint:   fmt.Sprintf("Rate limited — retrying in %ds", retryAfterSecs),
+			Category: category,
+			Status:   EmptyStatusRateLimited,
+			Text:     "Unable to load " + category,
+			Hint:     fmt.Sprintf("Rate limited — retrying in %ds", s.RetryAfterSecs),
 		}
 	}
-	if isFetching {
-		return EmptyState{Status: EmptyStatusFetching, Text: "No " + category}
+	if s.IsFetching {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusFetching,
+			Text:     "Loading " + category + "...",
+		}
 	}
-	if fetchErr != nil {
-		return EmptyState{Status: EmptyStatusError, Text: "No " + category}
+	if s.FetchErr != nil {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusError,
+			Text:     "Unable to load " + category,
+		}
 	}
-	if neverFetched {
-		return EmptyState{Status: EmptyStatusNeverFetched, Text: "No " + category}
+	if s.NeverFetched {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusNeverFetched,
+			Text:     "Loading " + category + "...",
+		}
 	}
-	return EmptyState{Status: EmptyStatusNone, Text: "No " + category}
+	return EmptyState{Category: category, Status: EmptyStatusNone, Text: "No " + category}
 }
 
 // centerLine pads a single rendered line with spaces so the visible content

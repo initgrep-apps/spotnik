@@ -314,6 +314,21 @@ func TestTopArtistsPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Rate limited")
 }
 
+// TestTopArtistsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No top artists"
+// with the contextual hint.
+func TestTopArtistsPane_View_EmptyState_None(t *testing.T) {
+	st := state.New()
+	st.SetTopArtists("short_term", []domain.FullArtist{})
+	st.StampStatsFetchedAt("short_term")
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No top artists")
+	assert.Contains(t, output, "Listen to more music to populate this list")
+}
+
 // ── Story 71 Task 3: column color tokens ─────────────────────────────────────
 
 // TestTopArtistsPane_UsesColumnColors verifies that TopArtistsPane column definitions

@@ -334,6 +334,21 @@ func TestTopTracksPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Rate limited")
 }
 
+// TestTopTracksPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No top tracks"
+// with the contextual hint.
+func TestTopTracksPane_View_EmptyState_None(t *testing.T) {
+	st := state.New()
+	st.SetTopTracks("short_term", []domain.Track{})
+	st.StampStatsFetchedAt("short_term")
+	th := theme.Load("black")
+	pane := NewTopTracksPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No top tracks")
+	assert.Contains(t, output, "Listen to more music to populate this list")
+}
+
 // ── Story 71 Task 2: column color tokens ─────────────────────────────────────
 
 // TestTopTracksPane_UsesColumnColors verifies that TopTracksPane column definitions
