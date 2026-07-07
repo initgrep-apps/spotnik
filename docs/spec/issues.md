@@ -296,3 +296,11 @@ No pane test verifies genuinely-empty data (API returned 200, zero items) render
 **Feature:** 22-rate-limit-resilience
 
 These 3 panes have updated View() using PaneEmptyStatus but only got golden file updates, not the 4 new status tests.
+
+---
+
+## Missing golden tests for Fetching and RateLimited states
+**Found:** 2026-07-06 | **Source:** PR #407 Review
+**Feature:** 22-rate-limit-resilience
+
+Only Error state golden test added. No golden snapshot for Fetching or RateLimited visual output.
