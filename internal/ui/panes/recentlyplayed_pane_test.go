@@ -475,3 +475,53 @@ func TestRecentlyPlayedPane_Actions_NoLikeWhenUnfocused(t *testing.T) {
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
 		"Actions should NOT include 'l like' when unfocused, even with tracks")
 }
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestRecentlyPlayedPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading recently played tracks...".
+func TestRecentlyPlayedPane_View_EmptyState_NeverFetched(t *testing.T) {
+	st := state.New()
+	th := theme.Load("black")
+	pane := NewRecentlyPlayedPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading recently played tracks...")
+}
+
+// TestRecentlyPlayedPane_View_EmptyState_Fetching verifies that when RecentFetching is true,
+// the pane shows "Loading recently played tracks...".
+func TestRecentlyPlayedPane_View_EmptyState_Fetching(t *testing.T) {
+	st := state.New()
+	st.SetRecentFetching(true)
+	th := theme.Load("black")
+	pane := NewRecentlyPlayedPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading recently played tracks...")
+}
+
+// TestRecentlyPlayedPane_View_EmptyState_Error verifies that when RecentPlayedFetchError is set,
+// the pane shows "Unable to load recently played tracks".
+func TestRecentlyPlayedPane_View_EmptyState_Error(t *testing.T) {
+	st := state.New()
+	st.SetRecentPlayedFetchError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	pane := NewRecentlyPlayedPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load recently played tracks")
+}
+
+// TestRecentlyPlayedPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load recently played tracks" with rate-limit hint.
+func TestRecentlyPlayedPane_View_EmptyState_RateLimited(t *testing.T) {
+	st := state.New()
+	st.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	pane := NewRecentlyPlayedPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load recently played tracks")
+	assert.Contains(t, output, "Rate limited")
+}

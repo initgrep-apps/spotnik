@@ -908,6 +908,21 @@ func TestAlbumsPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Rate limited")
 }
 
+// TestAlbumsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No saved albums"
+// with the contextual hint.
+func TestAlbumsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetSavedAlbums([]domain.SavedAlbum{})
+	s.SetAlbumsFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No saved albums")
+	assert.Contains(t, output, "Save albums in Spotify or search with /")
+}
+
 // TestAlbumsPane_Actions_ListView_NoLike verifies the 'l like' hint is absent
 // in the albums list view (story 269).
 func TestAlbumsPane_Actions_ListView_NoLike(t *testing.T) {

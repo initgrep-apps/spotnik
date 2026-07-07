@@ -255,12 +255,13 @@ func (p *FollowedShowsPane) checkEpisodePrefetch() tea.Cmd {
 
 func (p *FollowedShowsPane) View() string {
 	if !p.inEpisodeView && !p.Filter().IsActive() && len(p.store.FollowedShows()) == 0 {
-		es := uikit.PaneEmptyStatus("followed shows",
-			p.store.FollowedShowsFetching(),
-			p.store.FollowedShowsFetchError(),
-			p.store.FollowedShowsFetchedAt().IsZero(),
-			p.store.IsThrottled(),
-			p.store.ThrottleRetryAfterSecs())
+		es := uikit.PaneEmptyStatus("followed shows", uikit.PaneFetchState{
+			IsFetching:     p.store.FollowedShowsFetching(),
+			FetchErr:       p.store.FollowedShowsFetchError(),
+			NeverFetched:   p.store.FollowedShowsFetchedAt().IsZero(),
+			IsThrottled:    p.store.IsThrottled(),
+			RetryAfterSecs: p.store.ThrottleRetryAfterSecs(),
+		})
 		if es.Status == uikit.EmptyStatusNone {
 			es.Hint = "Search for shows with /"
 		}

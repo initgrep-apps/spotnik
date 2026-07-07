@@ -357,12 +357,13 @@ func (a *AlbumsPane) View() string {
 		return a.trackTable.View()
 	}
 	if !a.Filter().IsActive() && len(a.store.SavedAlbums()) == 0 {
-		es := uikit.PaneEmptyStatus("saved albums",
-			a.store.AlbumsFetching(),
-			a.store.AlbumsFetchError(),
-			a.store.AlbumsFetchedAt().IsZero(),
-			a.store.IsThrottled(),
-			a.store.ThrottleRetryAfterSecs())
+		es := uikit.PaneEmptyStatus("saved albums", uikit.PaneFetchState{
+			IsFetching:     a.store.AlbumsFetching(),
+			FetchErr:       a.store.AlbumsFetchError(),
+			NeverFetched:   a.store.AlbumsFetchedAt().IsZero(),
+			IsThrottled:    a.store.IsThrottled(),
+			RetryAfterSecs: a.store.ThrottleRetryAfterSecs(),
+		})
 		if es.Status == uikit.EmptyStatusNone {
 			es.Hint = "Save albums in Spotify or search with /"
 		}

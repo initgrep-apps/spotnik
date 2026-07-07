@@ -1,7 +1,9 @@
 package panes
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -77,4 +79,54 @@ func TestSavedEpisodesPane_DurationZero(t *testing.T) {
 	p.SetSize(80, 20)
 	output := p.View()
 	assert.Contains(t, output, "\u2014")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestSavedEpisodesPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading saved episodes...".
+func TestSavedEpisodesPane_View_EmptyState_NeverFetched(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	p := NewSavedEpisodesPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Loading saved episodes...")
+}
+
+// TestSavedEpisodesPane_View_EmptyState_Fetching verifies that when SavedEpisodesFetching is true,
+// the pane shows "Loading saved episodes...".
+func TestSavedEpisodesPane_View_EmptyState_Fetching(t *testing.T) {
+	s := state.New()
+	s.SetSavedEpisodesFetching(true)
+	th := theme.Load("black")
+	p := NewSavedEpisodesPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Loading saved episodes...")
+}
+
+// TestSavedEpisodesPane_View_EmptyState_Error verifies that when SavedEpisodesFetchError is set,
+// the pane shows "Unable to load saved episodes".
+func TestSavedEpisodesPane_View_EmptyState_Error(t *testing.T) {
+	s := state.New()
+	s.SetSavedEpisodesFetchError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	p := NewSavedEpisodesPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Unable to load saved episodes")
+}
+
+// TestSavedEpisodesPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load saved episodes" with rate-limit hint.
+func TestSavedEpisodesPane_View_EmptyState_RateLimited(t *testing.T) {
+	s := state.New()
+	s.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	p := NewSavedEpisodesPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Unable to load saved episodes")
+	assert.Contains(t, output, "Rate limited")
 }
