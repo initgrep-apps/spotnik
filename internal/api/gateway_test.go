@@ -45,6 +45,32 @@ func TestWithPriority_AndPriorityFromContext(t *testing.T) {
 // --- tokenBucket tests ---
 // NOTE: tokenBucket and Gateway are in the same package (api) so we access unexported types directly.
 
+func TestNewGateway_AdaptiveDefaults(t *testing.T) {
+	gw := NewGateway()
+	snap := gw.Snapshot()
+	assert.InDelta(t, defaultBackgroundRate, snap.BackgroundRate, 0.01)
+	assert.InDelta(t, defaultBurst, snap.BurstCapacity, 0.01)
+	assert.InDelta(t, defaultBurst, float64(snap.TokensMax), 0.01)
+	assert.Equal(t, 0.0, snap.Last429AgoSecs)
+}
+
+func TestGateway_Snapshot_IncludesAdaptiveFields(t *testing.T) {
+	gw := NewGateway()
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "5")
+			return resp, nil
+		})
+	require.Error(t, err)
+
+	snap := gw.Snapshot()
+	assert.InDelta(t, 1.0, snap.BackgroundRate, 0.01)
+	assert.InDelta(t, defaultBurst, snap.BurstCapacity, 0.01)
+	assert.Greater(t, snap.Last429AgoSecs, 0.0)
+}
+
 func TestTokenBucket_AllowsBurst(t *testing.T) {
 	// A fresh bucket with max=5 should allow 5 calls immediately.
 	tb := newTokenBucket(5, 5)
