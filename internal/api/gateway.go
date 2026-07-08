@@ -86,8 +86,8 @@ const (
 	// recoveryInterval is how long must pass without a 429 before rate rises.
 	recoveryInterval = 30 * time.Second
 
-	// longIdleThreshold is how long without input before library polling pauses.
-	longIdleThreshold = 15 * time.Minute
+	// LongIdleThreshold is how long without input before library polling pauses.
+	LongIdleThreshold = 15 * time.Minute
 )
 
 // Gateway is the central control point for all outbound Spotify API requests.
@@ -399,6 +399,12 @@ func (g *Gateway) CanAdmit(priority Priority) bool {
 	g.bucket.mu.Unlock()
 
 	return hasToken
+}
+
+// TryRecover is the exported entry point for the periodic recovery tick.
+// It delegates to the unexported tryRecover implementation.
+func (g *Gateway) TryRecover() {
+	g.tryRecover()
 }
 
 // tryRecover raises the Background rate slowly when no 429 has occurred for

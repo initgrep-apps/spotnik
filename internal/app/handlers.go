@@ -375,6 +375,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statsPoll.errorCount = 0
 		a.statsPoll.backoffTicks = 0
 		a.statsPoll.hasData = true
+		a.statsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearStatsError()
 		if m.TimeRange != "" {
 			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
@@ -515,45 +516,19 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, fetchQueueCmd(a.player))
 		}
 
-		// Library pane polling — per-pane exponential backoff, isolated from global 429.
-		for _, entry := range []struct {
-			paneID   layout.PaneID
-			p        *pollState
-			iv       libraryIntervals
-			fetching func() bool
-			setFetch func(bool)
-			cmd      func() tea.Cmd
-		}{
-			{layout.PanePlaylists, &a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
-			{layout.PaneAlbums, &a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
-			{layout.PaneLikedSongs, &a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
-			{layout.PaneRecentlyPlayed, &a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
-			{layout.PaneTopTracks, &a.statsPoll, statsIntervals,
-				func() bool { return a.store.StatsFetching("short_term") },
-				func(b bool) { a.store.SetStatsFetching("short_term", b) },
-				func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
-			{layout.PaneFollowedShows, &a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
-			{layout.PaneSavedEpisodes, &a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
-		} {
-			// TopTracks and TopArtists share the same stats data. Continue polling
-			// if either pane is visible.
-			if entry.paneID == layout.PaneTopTracks {
-				if !a.layout.IsPaneVisible(layout.PaneTopTracks) && !a.layout.IsPaneVisible(layout.PaneTopArtists) {
-					continue
-				}
-			} else if !a.layout.IsPaneVisible(entry.paneID) {
-				continue
-			}
-			p := entry.p
-			if p.backoffTicks > 0 {
-				p.backoffTicks--
-			} else if interval := a.libraryInterval(p, entry.iv); a.tickCount%interval == 0 {
-				if !entry.fetching() {
-					entry.setFetch(true)
-					cmds = append(cmds, entry.cmd())
-				}
+		// Long-idle guard: pause all library polling after 15 minutes of inactivity.
+		// Playback and queue still run (so the app can resume when the user returns).
+		if !a.isLongIdle() {
+			if best := a.pickMostOverdueLibraryPane(); best != nil && a.gateway.CanAdmit(api.Background) {
+				best.p.lastDispatchedTick = a.tickCount
+				best.setFetch(true)
+				cmds = append(cmds, best.cmd())
 			}
 		}
+
+		// Recovery tick: even if no pane was admitted, try to raise the gateway rate.
+		a.gateway.TryRecover()
+
 		// Devices overlay polling (10s) — only while the overlay is open.
 		if a.deviceOverlayOpen {
 			const devicePollInterval = 10
@@ -1042,6 +1017,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.playlistsPoll.errorCount = 0
 		a.playlistsPoll.backoffTicks = 0
 		a.playlistsPoll.hasData = true
+		a.playlistsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearPlaylistsFetchError()
 		if m.Offset == 0 {
 			a.store.SetPlaylists(m.Items)
@@ -1120,6 +1096,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.albumsPoll.errorCount = 0
 		a.albumsPoll.backoffTicks = 0
 		a.albumsPoll.hasData = true
+		a.albumsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearAlbumsFetchError()
 		if m.Offset == 0 {
 			a.store.SetSavedAlbums(m.Items)
@@ -1190,6 +1167,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.likedSongsPoll.errorCount = 0
 		a.likedSongsPoll.backoffTicks = 0
 		a.likedSongsPoll.hasData = true
+		a.likedSongsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearLikedTracksFetchError()
 		a.store.SetLikedTracks(m.Items)
 		a.store.SetLikedTotal(len(m.Items) + m.Offset)
@@ -1254,6 +1232,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.recentPlayedPoll.errorCount = 0
 		a.recentPlayedPoll.backoffTicks = 0
 		a.recentPlayedPoll.hasData = true
+		a.recentPlayedPoll.lastSuccessTick = a.tickCount
 		a.store.ClearRecentPlayedFetchError()
 		a.store.SetRecentlyPlayed(m.Items)
 		// Forward to RecentlyPlayedPane.
@@ -1536,6 +1515,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.followedShowsPoll.errorCount = 0
 		a.followedShowsPoll.backoffTicks = 0
 		a.followedShowsPoll.hasData = true
+		a.followedShowsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearFollowedShowsFetchError()
 		a.store.SetFollowedShows(m.Items)
 		// Re-resolve the selected show from refreshed data so the metadata
@@ -1586,6 +1566,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.savedEpisodesPoll.errorCount = 0
 		a.savedEpisodesPoll.backoffTicks = 0
 		a.savedEpisodesPoll.hasData = true
+		a.savedEpisodesPoll.lastSuccessTick = a.tickCount
 		a.store.ClearSavedEpisodesFetchError()
 		a.store.SetSavedEpisodes(m.Items)
 		var cmds []tea.Cmd
