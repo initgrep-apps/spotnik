@@ -1,7 +1,7 @@
 ---
 title: "Gateway Proactive Traffic Shaping"
 feature: 22-rate-limit-resilience
-status: open
+status: done
 ---
 
 ## Background
@@ -358,57 +358,51 @@ This prevents the initial burst from overwhelming the gateway when it's already 
 
 ## Acceptance Criteria
 
-- [ ] Gateway reduces token bucket rate on consecutive 429s: 6→3→1 req/s
-- [ ] Gateway recovers rate gradually: doubles every 30s after 429s stop, up to 6 req/s
-- [ ] `Gateway.CanAdmit(priority)` returns false during backoff and when semaphore is full
-- [ ] `CanAdmit` triggers `tryRecover()` on each call (periodic recovery check)
-- [ ] `tokenBucket.setRate(rate)` updates both rate and max dynamically
-- [ ] Fetch scheduler dispatches at most 1 library pane per tick
-- [ ] Most overdue pane wins (highest `since/interval` ratio)
-- [ ] `pollState.lastDispatchedTick` tracks when each pane was last dispatched
-- [ ] `checkNewlyVisiblePanes` stops dispatching when `CanAdmit` returns false
-- [ ] `GatewayStateSnapshot` includes `AdaptiveRate` and `Consecutive429s`
-- [ ] Playback + Queue polling unchanged (dispatched on their own intervals, not through scheduler)
-- [ ] Devices overlay polling unchanged (dispatched on its own interval, not through scheduler)
-- [ ] Existing per-pane backoff and fetching sentinels still work correctly
-- [ ] `make ci` passes
+- [x] `tokenBucket` exposes `setRate(rate)` and keeps `max` (burst) independent of `rate`
+- [x] `NewGateway()` defaults to Background rate 2 req/s, burst 5
+- [x] `Gateway` tracks `backgroundRate`, `burst`, `last429Time`, `lastRecoveryTick`
+- [x] Each 429 reduces `backgroundRate` by 1 req/s, floored at 0.5 req/s
+- [x] `tryRecover()` raises `backgroundRate` by 0.5 req/s every 30s with no 429s, capped at 2 req/s
+- [x] `CanAdmit(Background)` returns false during backoff, when semaphore is full, or when token bucket has no tokens
+- [x] `CanAdmit(Interactive)` returns false only during backoff
+- [x] `CanAdmit` triggers `tryRecover()` on every call, even during backoff
+- [x] `TickMsg` handler calls `gateway.tryRecover()` even when no pane is dispatched
+- [x] Scheduler dispatches at most 1 library pane per tick
+- [x] Scheduler picks the most overdue pane using `lastSuccessTick / interval`
+- [x] `checkNewlyVisiblePanes()` stops dispatching when `CanAdmit` returns false
+- [x] Library polling pauses when `isLongIdle()` is true
+- [x] Playback and queue polling remain unchanged
+- [x] Devices overlay polling remains unchanged
+- [x] Per-pane backoff and fetching sentinels continue to work
+- [x] `GatewayStateSnapshot` includes `BackgroundRate`, `BurstCapacity`, `Last429AgoSecs`
+- [x] `make ci` passes
 
 ## Tasks
 
-- [ ] Add `setRate()` method to `tokenBucket` in `internal/api/gateway_bucket.go`
-      - test: `TestTokenBucket_SetRate`, `TestTokenBucket_SetRate_PreservesTokens`
-
-- [ ] Add adaptive rate fields to `Gateway`; update `NewGateway()` in `internal/api/gateway.go`
-      - test: `TestNewGateway_AdaptiveRateDefaults`
-
-- [ ] Add adaptive rate reduction in `Do()` 429 handling block in `internal/api/gateway.go`
-      - test: `TestGateway_AdaptiveRate_ReducesOnConsecutive429`, `TestGateway_AdaptiveRate_FloorsAtMin`
-
-- [ ] Add consecutive-429 reset on successful requests in `Do()` in `internal/api/gateway.go`
-      - test: `TestGateway_AdaptiveRate_ResetsConsecutiveOnSuccess`
-
-- [ ] Add `tryRecover()` method in `internal/api/gateway.go`
-      - test: `TestGateway_AdaptiveRate_RecoversAfterInterval`, `TestGateway_AdaptiveRate_RecoversToInitial`
-
-- [ ] Add `CanAdmit()` method in `internal/api/gateway.go`
-      - test: `TestGateway_CanAdmit_RejectsDuringBackoff`, `TestGateway_CanAdmit_RejectsWhenSemaphoreFull`, `TestGateway_CanAdmit_AllowsWhenClear`, `TestGateway_CanAdmit_CallsTryRecover`
-
-- [ ] Add `AdaptiveRate` + `Consecutive429s` to `domain.GatewayStateSnapshot` in `internal/domain/types.go`
-      - test: compile-time — existing gateway tests will fail if fields are missing from snapshot methods
-
-- [ ] Update `captureSnapshot()` and `captureSnapshotLocked()` in `internal/api/gateway.go`
-      - test: `TestGateway_StateSnapshot_AdaptiveRate`, `TestGateway_StateSnapshot_Consecutive429s`
-
-- [ ] Add `lastDispatchedTick` to `pollState` in `internal/app/app.go`
-      - test: compile-time — field addition, no behavior change yet
-
-- [ ] Add `pollEntries()` method to `*App` in `internal/app/app.go`
-      - test: `TestApp_PollEntries_AllSevenPanes`, `TestApp_PollEntries_IntervalsNonZero`
-
-- [ ] Replace batch dispatch with fetch scheduler in TickMsg handler in `internal/app/handlers.go`
-      - test: `TestApp_FetchScheduler_DispatchesMostOverdue`, `TestApp_FetchScheduler_SkipsWhenCanAdmitFalse`, `TestApp_FetchScheduler_SkipsHiddenPanes`, `TestApp_FetchScheduler_SkipsWhenFetching`, `TestApp_FetchScheduler_RespectsPerPaneBackoff`
-
-- [ ] Add `CanAdmit` gate to `checkNewlyVisiblePanes()` in `internal/app/app.go`
+- [x] Decouple `max` and `rate` in `tokenBucket`; add `setRate()`; add burst parameter to `NewGateway()`
+      - test: `TestTokenBucket_SetRate_PreservesBurst`, `TestTokenBucket_SetRate_PreservesTokens`, `TestTokenBucket_BurstIndependentFromRate`
+- [x] Update `NewGateway()` with default rate 2/s, burst 5 and adaptive fields
+      - test: `TestNewGateway_AdaptiveDefaults`
+- [x] Add 429 rate-reduction logic in `Do()` with safe lock ordering
+      - test: `TestGateway_429_ReducesRate`, `TestGateway_429_FloorsAtMin`
+- [x] Add `tryRecover()` and wire it into `CanAdmit()` and `TickMsg`
+      - test: `TestGateway_RecoversRateAfterInterval`, `TestGateway_RecoveryCappedAtDefault`
+- [x] Implement `CanAdmit(priority)` with backoff, semaphore, and token checks
+      - test: `TestGateway_CanAdmit_BackoffFalse`, `TestGateway_CanAdmit_SemaphoreFullFalse`, `TestGateway_CanAdmit_NoTokenFalse`, `TestGateway_CanAdmit_CallsTryRecover`
+- [x] Add `BackgroundRate`, `BurstCapacity`, `Last429AgoSecs` to `GatewayStateSnapshot` in `internal/domain/gateway.go` and update capture methods
+      - test: `TestGateway_Snapshot_IncludesAdaptiveFields`
+- [x] Add `lastSuccessTick` to `pollState` in `internal/app/app.go`
+      - test: compile-time / existing poll tests
+- [x] Add `libraryPollEntries()` and `pickMostOverdueLibraryPane()` to `*App`
+      - test: `TestApp_PickMostOverdue_OverdueWins`, `TestApp_PickMostOverdue_SkipsHidden`, `TestApp_PickMostOverdue_SkipsBackoff`, `TestApp_PickMostOverdue_UsesSuccessTick`
+- [x] Replace library batch dispatch with scheduler in `TickMsg` handler
+      - test: `TestApp_Tick_DispatchesAtMostOneLibraryPane`, `TestApp_Tick_SchedulerRespectsCanAdmit`, `TestApp_Tick_PausesLibraryOnLongIdle`
+- [x] Gate `checkNewlyVisiblePanes()` with `CanAdmit`
       - test: `TestApp_CheckNewlyVisiblePanes_StopsWhenCanAdmitFalse`
-
-- [ ] `make ci` passes
+- [x] Add `isLongIdle()` and long-idle pause to library scheduler; update `lastInteraction` on `WindowSizeMsg`
+      - test: `TestApp_IsLongIdle`, `TestApp_LongIdlePausesLibraryPolling`
+- [x] Update loaded-message handlers to set `lastSuccessTick` on success
+      - test: existing handler tests extended
+- [x] Regenerate golden files if `GatewayHealthPane`/`GatewayLivePane` output changes
+      - test: `go test ./... -update`, review diff, commit
+- [x] `make ci` passes

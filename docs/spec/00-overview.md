@@ -48,4 +48,4 @@ See `issues.md` for untriaged issues from PR reviews. Triage into feature storie
 
 ---
 
-*Last updated: 2026-06-26 — story 260 done (Search overlay golden snapshots + integration flow tests)*
+*Last updated: 2026-07-08 — story 273 done (gateway proactive traffic shaping with adaptive rate limiting and fetch scheduler)*
