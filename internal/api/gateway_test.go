@@ -88,6 +88,43 @@ func TestTokenBucket_RespectsContextCancellation(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
+func TestTokenBucket_SetRate_PreservesBurst(t *testing.T) {
+	tb := newTokenBucket(5, 2)
+	assert.Equal(t, 5.0, tb.max)
+	tb.setRate(0.5)
+	assert.Equal(t, 5.0, tb.max, "setRate must not change burst capacity")
+}
+
+func TestTokenBucket_SetRate_PreservesTokens(t *testing.T) {
+	tb := newTokenBucket(5, 2)
+	require.NoError(t, tb.wait(context.Background()))
+	require.NoError(t, tb.wait(context.Background()))
+	assert.InDelta(t, 3.0, tb.tokens, 0.01)
+
+	tb.setRate(0.5)
+	assert.InDelta(t, 3.0, tb.tokens, 0.01, "setRate must preserve existing tokens")
+}
+
+func TestTokenBucket_SetRate_CapsExcessTokens(t *testing.T) {
+	// Construct a bucket manually so tokens can exceed the intended max.
+	tb := newTokenBucket(5, 2)
+	tb.tokens = 8
+	tb.setRate(1)
+	assert.Equal(t, 5.0, tb.tokens, "setRate must cap tokens at unchanged max")
+}
+
+func TestTokenBucket_BurstIndependentFromRate(t *testing.T) {
+	// Low rate but burst of 5 should allow 5 immediate calls.
+	tb := newTokenBucket(5, 0.1)
+	for i := 0; i < 5; i++ {
+		require.NoError(t, tb.wait(context.Background()), "burst call %d should not block", i+1)
+	}
+	// Sixth call blocks because rate is very low.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	assert.ErrorIs(t, tb.wait(ctx), context.DeadlineExceeded)
+}
+
 // --- Gateway concurrency limiter tests ---
 
 func TestGateway_MaxConcurrentRequests(t *testing.T) {
