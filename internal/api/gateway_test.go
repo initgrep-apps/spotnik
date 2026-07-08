@@ -423,25 +423,6 @@ func TestGateway_Interactive_ConsumesTokenBucket(t *testing.T) {
 	assert.Equal(t, 0, blocked.StatusCode)
 }
 
-func TestGateway_IsThrottled(t *testing.T) {
-	gw := NewGateway()
-	assert.False(t, gw.IsThrottled(), "should not be throttled initially")
-
-	// Trigger a 429.
-	_, _ = gw.Do(context.Background(), Background,
-		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
-		func() (*http.Response, error) {
-			resp := newFakeResponse(429, "")
-			resp.Header.Set("Retry-After", "30")
-			return resp, nil
-		})
-
-	assert.True(t, gw.IsThrottled(), "should be throttled after 429")
-	assert.Equal(t, 30, gw.RetryAfterSecs())
-}
-
-// --- GET-only dedup safety ---
-
 // TestGateway_Dedup_OnlyForGET verifies that POST requests with the same key
 // are NOT deduplicated — each must trigger an independent HTTP call.
 func TestGateway_Dedup_OnlyForGET(t *testing.T) {
@@ -480,6 +461,8 @@ func TestGateway_Dedup_OnlyForGET(t *testing.T) {
 // and get results when the primaries finish.
 func TestGateway_Dedup_WaitersDoNotConsumeSlots(t *testing.T) {
 	gw := NewGateway()
+	// Give the bucket a generous burst so primaries + waiters don't block on tokens.
+	gw.bucket = newTokenBucket(20, 100)
 
 	const concurrency = 5
 	release := make(chan struct{})
@@ -539,6 +522,155 @@ func TestGateway_Dedup_WaitersDoNotConsumeSlots(t *testing.T) {
 	// Only the 5 primary calls should have been made.
 	assert.Equal(t, int64(concurrency), atomic.LoadInt64(&callCount), "expected exactly 5 HTTP calls (one per key)")
 }
+
+func TestGateway_IsThrottled(t *testing.T) {
+	gw := NewGateway()
+	assert.False(t, gw.IsThrottled(), "should not be throttled initially")
+
+	// Trigger a 429.
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "30")
+			return resp, nil
+		})
+
+	assert.True(t, gw.IsThrottled(), "should be throttled after 429")
+	assert.Equal(t, 30, gw.RetryAfterSecs())
+}
+
+func TestGateway_429_ReducesRate(t *testing.T) {
+	gw := NewGateway()
+	assert.Equal(t, defaultBackgroundRate, gw.Snapshot().BackgroundRate)
+
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "5")
+			return resp, nil
+		})
+	require.Error(t, err)
+
+	snap := gw.Snapshot()
+	assert.Equal(t, 1.0, snap.BackgroundRate, "429 should reduce rate by 1 req/s")
+	assert.InDelta(t, float64(defaultBurst), snap.BurstCapacity, 0.01, "burst capacity must stay at default")
+}
+
+func TestGateway_429_FloorsAtMin(t *testing.T) {
+	gw := NewGateway()
+	for i := 0; i < 3; i++ {
+		_, err := gw.Do(context.Background(), Background,
+			RequestKey{Method: "GET", Path: fmt.Sprintf("/limited-%d", i), Priority: Background},
+			func() (*http.Response, error) {
+				resp := newFakeResponse(429, "")
+				resp.Header.Set("Retry-After", "1")
+				return resp, nil
+			})
+		require.Error(t, err)
+		// Wait for the 1s backoff to expire so the next request is not rejected at phase 1.
+		time.Sleep(1100 * time.Millisecond)
+	}
+
+	snap := gw.Snapshot()
+	assert.Equal(t, minBackgroundRate, snap.BackgroundRate, "rate must floor at minBackgroundRate")
+}
+
+func TestGateway_RecoversRateAfterInterval(t *testing.T) {
+	gw := NewGateway()
+	_, err := gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/limited", Priority: Background},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "1")
+			return resp, nil
+		})
+	require.Error(t, err)
+	assert.Equal(t, 1.0, gw.Snapshot().BackgroundRate)
+
+	// Recovery requires recoveryInterval to pass since the last 429.
+	gw.mu.Lock()
+	gw.last429Time = time.Now().Add(-2 * recoveryInterval)
+	gw.lastRecoveryTick = time.Now().Add(-2 * recoveryInterval)
+	gw.mu.Unlock()
+	gw.tryRecover()
+	assert.InDelta(t, 1.5, gw.Snapshot().BackgroundRate, 0.01, "rate should recover by one step")
+}
+
+func TestGateway_RecoveryCappedAtDefault(t *testing.T) {
+	gw := NewGateway()
+	gw.mu.Lock()
+	gw.backgroundRate = 1.5
+	gw.last429Time = time.Now().Add(-2 * recoveryInterval)
+	gw.lastRecoveryTick = time.Now().Add(-2 * recoveryInterval)
+	gw.mu.Unlock()
+
+	gw.tryRecover()
+	assert.InDelta(t, defaultBackgroundRate, gw.Snapshot().BackgroundRate, 0.01)
+
+	// Another recovery tick should not exceed default.
+	gw.mu.Lock()
+	gw.lastRecoveryTick = time.Now().Add(-2 * recoveryInterval)
+	gw.mu.Unlock()
+	gw.tryRecover()
+	assert.InDelta(t, defaultBackgroundRate, gw.Snapshot().BackgroundRate, 0.01)
+}
+
+func TestGateway_CanAdmit_BackoffFalse(t *testing.T) {
+	gw := NewGateway()
+	gw.mu.Lock()
+	gw.backoffUntil = time.Now().Add(5 * time.Second)
+	gw.mu.Unlock()
+	assert.False(t, gw.CanAdmit(Background))
+	assert.False(t, gw.CanAdmit(Interactive))
+}
+
+func TestGateway_CanAdmit_SemaphoreFullFalse(t *testing.T) {
+	gw := NewGateway()
+	// Set long backoff in past so only semaphore matters.
+	gw.mu.Lock()
+	gw.backoffUntil = time.Time{}
+	gw.mu.Unlock()
+	// Fill the semaphore without releasing.
+	for i := 0; i < cap(gw.semaphore); i++ {
+		gw.semaphore <- struct{}{}
+	}
+	assert.False(t, gw.CanAdmit(Background))
+	assert.True(t, gw.CanAdmit(Interactive), "interactive admission ignores semaphore")
+}
+
+func TestGateway_CanAdmit_NoTokenFalse(t *testing.T) {
+	gw := NewGateway()
+	gw.mu.Lock()
+	gw.backoffUntil = time.Time{}
+	gw.mu.Unlock()
+	// Drain all tokens.
+	for i := 0; i < defaultBurst; i++ {
+		require.NoError(t, gw.bucket.wait(context.Background()))
+	}
+	assert.False(t, gw.CanAdmit(Background), "no token means Background not admitted")
+	assert.True(t, gw.CanAdmit(Interactive), "interactive admission ignores tokens")
+}
+
+func TestGateway_CanAdmit_CallsTryRecover(t *testing.T) {
+	gw := NewGateway()
+	gw.mu.Lock()
+	gw.backgroundRate = 1.0
+	gw.last429Time = time.Now().Add(-2 * recoveryInterval)
+	gw.lastRecoveryTick = time.Now().Add(-2 * recoveryInterval)
+	gw.mu.Unlock()
+
+	_ = gw.CanAdmit(Background)
+	assert.InDelta(t, 1.5, gw.Snapshot().BackgroundRate, 0.01, "CanAdmit must trigger tryRecover")
+}
+
+// Snapshot returns a fresh GatewayStateSnapshot (exported for tests).
+func (g *Gateway) Snapshot() domain.GatewayStateSnapshot {
+	return g.captureSnapshot()
+}
+
+// --- GET-only dedup safety ---
 
 // TestGateway_PlaybackState_RoutedThroughGateway verifies that the Player's
 // PlaybackState method routes through the gateway when one is attached,
@@ -608,7 +740,7 @@ func TestGateway_StateSnapshot_TokensAvailable(t *testing.T) {
 	first := events[0]
 	assert.Equal(t, domain.EventRequestEntered, first.Kind)
 	// Token bucket starts full at 10, no backoff on fresh gateway.
-	assert.Equal(t, 10, first.Snapshot.TokensMax, "token max should be 10")
+	assert.Equal(t, defaultBurst, first.Snapshot.TokensMax, "token max should match default burst")
 	assert.Equal(t, 0, first.Snapshot.ConcurrentActive, "no concurrent requests at entry")
 	assert.Equal(t, 5, first.Snapshot.ConcurrentMax, "semaphore max should be 5")
 	assert.Equal(t, 0.0, first.Snapshot.BackoffRemaining, "no backoff on fresh gateway")
@@ -1053,7 +1185,7 @@ func TestGateway_CaptureSnapshot_TokenLevel(t *testing.T) {
 		})
 	}
 	snap := gw.captureSnapshot()
-	assert.Equal(t, 10, snap.TokensMax, "TokensMax must always be 10")
+	assert.Equal(t, defaultBurst, snap.TokensMax, "TokensMax must match default burst")
 	// After 3 tokens consumed, available should be ≤ TokensMax-3 (some refill may have occurred).
 	assert.LessOrEqual(t, snap.TokensAvailable, snap.TokensMax,
 		"TokensAvailable must not exceed TokensMax")
@@ -1119,7 +1251,7 @@ func TestGateway_EmitEvent_CallsRecorderWithCorrectFields(t *testing.T) {
 	assert.Equal(t, "GET", e.Method)
 	assert.Equal(t, "/me/player", e.Path)
 	assert.Equal(t, domain.PriorityBackground, e.Priority)
-	assert.Equal(t, 10, e.Snapshot.TokensMax, "snapshot must be populated")
+	assert.Equal(t, defaultBurst, e.Snapshot.TokensMax, "snapshot must be populated")
 }
 
 // TestGateway_NextRequestID_Increments verifies nextRequestID increments
@@ -1326,8 +1458,8 @@ func TestGateway_Do_EventsHaveSnapshots(t *testing.T) {
 	events := rec.all()
 	require.NotEmpty(t, events, "must have events")
 	for _, e := range events {
-		assert.Equal(t, 10, e.Snapshot.TokensMax,
-			"every event must carry a snapshot with TokensMax=10, kind=%v", e.Kind)
+		assert.Equal(t, defaultBurst, e.Snapshot.TokensMax,
+			"every event must carry a snapshot with default burst, kind=%v", e.Kind)
 	}
 }
 
