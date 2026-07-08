@@ -375,6 +375,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statsPoll.errorCount = 0
 		a.statsPoll.backoffTicks = 0
 		a.statsPoll.hasData = true
+		a.statsPoll.hasSuccess = true
 		a.statsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearStatsError()
 		if m.TimeRange != "" {
@@ -698,7 +699,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear sentinels for the same reason as RateLimitedMsg: the domain loaded-message
 		// handler never fires when the command short-circuits to unauthorizedMsg.
 		a.clearAllFetchingSentinels()
-		// If tokenStore is nil or has no refresh token, skip to show expired message.
+		// If there is no token store we cannot refresh; emit a session-expired toast
+		// and return without trying to refresh.
+		if a.tokenStore == nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Session expired",
+				Body:   string(uikit.RecoveryRunAuth),
+			})
+		}
 		return a, buildRefreshTokenCmd(a.tokenStore, a.clientID, a.tokenBaseURL)
 
 	case tokenRefreshedMsg:
@@ -1017,6 +1026,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.playlistsPoll.errorCount = 0
 		a.playlistsPoll.backoffTicks = 0
 		a.playlistsPoll.hasData = true
+		a.playlistsPoll.hasSuccess = true
 		a.playlistsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearPlaylistsFetchError()
 		if m.Offset == 0 {
@@ -1096,6 +1106,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.albumsPoll.errorCount = 0
 		a.albumsPoll.backoffTicks = 0
 		a.albumsPoll.hasData = true
+		a.albumsPoll.hasSuccess = true
 		a.albumsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearAlbumsFetchError()
 		if m.Offset == 0 {
@@ -1167,6 +1178,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.likedSongsPoll.errorCount = 0
 		a.likedSongsPoll.backoffTicks = 0
 		a.likedSongsPoll.hasData = true
+		a.likedSongsPoll.hasSuccess = true
 		a.likedSongsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearLikedTracksFetchError()
 		a.store.SetLikedTracks(m.Items)
@@ -1232,6 +1244,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.recentPlayedPoll.errorCount = 0
 		a.recentPlayedPoll.backoffTicks = 0
 		a.recentPlayedPoll.hasData = true
+		a.recentPlayedPoll.hasSuccess = true
 		a.recentPlayedPoll.lastSuccessTick = a.tickCount
 		a.store.ClearRecentPlayedFetchError()
 		a.store.SetRecentlyPlayed(m.Items)
@@ -1515,6 +1528,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.followedShowsPoll.errorCount = 0
 		a.followedShowsPoll.backoffTicks = 0
 		a.followedShowsPoll.hasData = true
+		a.followedShowsPoll.hasSuccess = true
 		a.followedShowsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearFollowedShowsFetchError()
 		a.store.SetFollowedShows(m.Items)
@@ -1566,6 +1580,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.savedEpisodesPoll.errorCount = 0
 		a.savedEpisodesPoll.backoffTicks = 0
 		a.savedEpisodesPoll.hasData = true
+		a.savedEpisodesPoll.hasSuccess = true
 		a.savedEpisodesPoll.lastSuccessTick = a.tickCount
 		a.store.ClearSavedEpisodesFetchError()
 		a.store.SetSavedEpisodes(m.Items)

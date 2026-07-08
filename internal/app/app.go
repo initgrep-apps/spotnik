@@ -435,13 +435,13 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		idleThreshold:     idleThresholdSecs * time.Second,
 		// Treat all library polls as overdue at startup so the scheduler can begin
 		// fetching immediately while still enforcing one pane per tick.
-		playlistsPoll:     pollState{lastSuccessTick: -9999},
-		albumsPoll:        pollState{lastSuccessTick: -9999},
-		likedSongsPoll:    pollState{lastSuccessTick: -9999},
-		recentPlayedPoll:  pollState{lastSuccessTick: -9999},
-		statsPoll:         pollState{lastSuccessTick: -9999},
-		followedShowsPoll: pollState{lastSuccessTick: -9999},
-		savedEpisodesPoll: pollState{lastSuccessTick: -9999},
+		playlistsPoll:     pollState{lastSuccessTick: -9999, hasSuccess: false},
+		albumsPoll:        pollState{lastSuccessTick: -9999, hasSuccess: false},
+		likedSongsPoll:    pollState{lastSuccessTick: -9999, hasSuccess: false},
+		recentPlayedPoll:  pollState{lastSuccessTick: -9999, hasSuccess: false},
+		statsPoll:         pollState{lastSuccessTick: -9999, hasSuccess: false},
+		followedShowsPoll: pollState{lastSuccessTick: -9999, hasSuccess: false},
+		savedEpisodesPoll: pollState{lastSuccessTick: -9999, hasSuccess: false},
 		prefs:             prefs.New(config.DefaultConfigPath()),
 		// searchCancel must never be nil; initialize to a no-op so it is always safe to call.
 		searchCancel: func() {},
@@ -638,6 +638,9 @@ type pollState struct {
 	// lastSuccessTick is the tick of the last successful fetch. Used by the
 	// scheduler so a pane whose previous fetch failed is not treated as fresh.
 	lastSuccessTick int
+	// hasSuccess is true once this pane has completed a successful fetch.
+	// lastSuccessTick alone is unreliable because tickCount starts at 0.
+	hasSuccess bool
 }
 
 // libraryIntervals defines the polling cadence (seconds) for a library data type.
@@ -717,9 +720,9 @@ func (a *App) pickMostOverdueLibraryPane() *libraryPollEntry {
 
 		// Use last success, not last dispatch, so a pane whose previous fetch
 		// failed is not treated as freshly updated. A pane that has never
-		// succeeded (lastSuccessTick == 0) is eligible immediately.
+		// succeeded is eligible immediately regardless of its lastSuccessTick.
 		since := a.tickCount - p.lastSuccessTick
-		if p.lastSuccessTick != 0 && since < interval {
+		if p.hasSuccess && since < interval {
 			continue
 		}
 

@@ -40,6 +40,7 @@ func setAllLibraryPollsFresh(a *App) {
 	for _, p := range fresh {
 		p.lastSuccessTick = a.tickCount
 		p.hasData = true
+		p.hasSuccess = true
 	}
 }
 

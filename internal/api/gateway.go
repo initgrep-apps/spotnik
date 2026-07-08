@@ -155,9 +155,8 @@ func NewGateway() *Gateway {
 // captureSnapshot reads the gateway's current state under locks.
 // Returns a GatewayStateSnapshot suitable for embedding in a GatewayEvent.
 //
-// Lock ordering: acquires bucket.mu first, then g.mu. The caller must NOT
-// hold g.mu when calling this method. If the caller already holds g.mu,
-// use captureSnapshotLocked() instead.
+// Lock ordering: releases bucket.mu before acquiring g.mu to avoid lock-order
+// inversion. captureSnapshotLocked() is preferred when g.mu is already held.
 func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	g.bucket.mu.Lock()
 	now := time.Now()
@@ -170,53 +169,7 @@ func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	g.bucket.mu.Unlock()
 
 	g.mu.Lock()
-	backoffRemaining := time.Until(g.backoffUntil).Seconds()
-	if backoffRemaining < 0 {
-		backoffRemaining = 0
-	}
-	dedupWaiters := len(g.inflight)
-	inFlightKeys := make([]string, 0, len(g.inflight))
-	for k := range g.inflight {
-		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
-	}
-	backgroundRate := g.backgroundRate
-	burst := g.burst
-	last429Ago := 0.0
-	if !g.last429Time.IsZero() {
-		last429Ago = time.Since(g.last429Time).Seconds()
-	}
-	g.mu.Unlock()
-
-	return domain.GatewayStateSnapshot{
-		TokensAvailable:  int(tokens),
-		TokensMax:        tokenMax,
-		ConcurrentActive: len(g.semaphore),
-		ConcurrentMax:    cap(g.semaphore),
-		BackoffRemaining: backoffRemaining,
-		DedupWaiters:     dedupWaiters,
-		InFlightKeys:     inFlightKeys,
-		BackgroundRate:   backgroundRate,
-		BurstCapacity:    burst,
-		Last429AgoSecs:   last429Ago,
-	}
-}
-
-// captureSnapshotLocked reads gateway state when g.mu is already held.
-// Only acquires bucket.mu (safe — bucket.mu is never held when g.mu is acquired).
-// Reads semaphore length without a lock (channel len is always safe).
-// Reads inflight/backoff from g.mu-protected fields without re-acquiring.
-func (g *Gateway) captureSnapshotLocked() domain.GatewayStateSnapshot {
-	g.bucket.mu.Lock()
-	now := time.Now()
-	elapsed := now.Sub(g.bucket.lastFill).Seconds()
-	tokens := g.bucket.tokens + elapsed*g.bucket.rate
-	if tokens > g.bucket.max {
-		tokens = g.bucket.max
-	}
-	tokenMax := int(g.bucket.max)
-	g.bucket.mu.Unlock()
-
-	// g.mu is already held by caller — read fields directly.
+	defer g.mu.Unlock()
 	backoffRemaining := time.Until(g.backoffUntil).Seconds()
 	if backoffRemaining < 0 {
 		backoffRemaining = 0
@@ -245,51 +198,6 @@ func (g *Gateway) captureSnapshotLocked() domain.GatewayStateSnapshot {
 		BurstCapacity:    burst,
 		Last429AgoSecs:   last429Ago,
 	}
-}
-
-// emitEvent records a gateway event if a recorder is attached.
-// Captures a state snapshot at the current moment.
-// The caller must NOT hold g.mu — use emitEventLocked() if g.mu is held.
-func (g *Gateway) emitEvent(kind domain.EventKind, reqID uint64, method, path string,
-	priority domain.RequestPriority, statusCode int, durationMs int64) {
-	g.mu.Lock()
-	rec := g.recorder
-	g.mu.Unlock()
-	if rec == nil {
-		return
-	}
-	rec.RecordEvent(domain.GatewayEvent{
-		Timestamp:  time.Now(),
-		Kind:       kind,
-		RequestID:  reqID,
-		Method:     method,
-		Path:       path,
-		Priority:   priority,
-		StatusCode: statusCode,
-		DurationMs: durationMs,
-		Snapshot:   g.captureSnapshot(),
-	})
-}
-
-// emitEventLocked is like emitEvent but for use when g.mu is already held.
-// Reads recorder from the locked state and uses captureSnapshotLocked().
-func (g *Gateway) emitEventLocked(kind domain.EventKind, reqID uint64, method, path string,
-	priority domain.RequestPriority, statusCode int, durationMs int64) {
-	rec := g.recorder
-	if rec == nil {
-		return
-	}
-	rec.RecordEvent(domain.GatewayEvent{
-		Timestamp:  time.Now(),
-		Kind:       kind,
-		RequestID:  reqID,
-		Method:     method,
-		Path:       path,
-		Priority:   priority,
-		StatusCode: statusCode,
-		DurationMs: durationMs,
-		Snapshot:   g.captureSnapshotLocked(),
-	})
 }
 
 // CheckAndEmitRefill checks if the token bucket level has changed since the
@@ -333,13 +241,39 @@ func (g *Gateway) CheckAndEmitBackoffExpiry() {
 	rec := g.recorder
 	g.mu.Unlock()
 
-	if wasActive && !nowActive && rec != nil {
-		rec.RecordEvent(domain.GatewayEvent{
-			Timestamp: time.Now(),
-			Kind:      domain.EventBackoffExpired,
-			Snapshot:  g.captureSnapshot(),
-		})
+	if !wasActive || nowActive || rec == nil {
+		return
 	}
+	rec.RecordEvent(domain.GatewayEvent{
+		Timestamp: time.Now(),
+		Kind:      domain.EventBackoffExpired,
+		Snapshot:  g.captureSnapshot(),
+	})
+}
+
+// emitEvent records a gateway event if a recorder is attached.
+// Captures a state snapshot at the current moment. Safe to call whether or
+// not g.mu is held, because it acquires g.mu itself and never holds both g.mu
+// and bucket.mu at the same time.
+func (g *Gateway) emitEvent(kind domain.EventKind, reqID uint64, method, path string,
+	priority domain.RequestPriority, statusCode int, durationMs int64) {
+	g.mu.Lock()
+	rec := g.recorder
+	g.mu.Unlock()
+	if rec == nil {
+		return
+	}
+	rec.RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       kind,
+		RequestID:  reqID,
+		Method:     method,
+		Path:       path,
+		Priority:   priority,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+		Snapshot:   g.captureSnapshot(),
+	})
 }
 
 // IsThrottled returns true when the gateway is in a 429 backoff period.
@@ -386,6 +320,9 @@ func (g *Gateway) CanAdmit(priority Priority) bool {
 		return false
 	}
 
+	// Read-only token check: do NOT mutate bucket.lastFill or bucket.tokens.
+	// Only Do() may refill and consume tokens, otherwise concurrent CanAdmit
+	// calls would corrupt the bucket accounting.
 	g.bucket.mu.Lock()
 	now := time.Now()
 	elapsed := now.Sub(g.bucket.lastFill).Seconds()
@@ -393,8 +330,6 @@ func (g *Gateway) CanAdmit(priority Priority) bool {
 	if tokens > g.bucket.max {
 		tokens = g.bucket.max
 	}
-	g.bucket.lastFill = now
-	g.bucket.tokens = tokens
 	hasToken := tokens >= 1
 	g.bucket.mu.Unlock()
 
@@ -479,11 +414,9 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	g.mu.Lock()
 	throttled := time.Now().Before(g.backoffUntil)
 	retryAfter := g.retryAfter
-	if throttled {
-		g.emitEventLocked(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
-	}
 	g.mu.Unlock()
 	if throttled {
+		g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 		return nil, &RateLimitError{RetryAfter: retryAfter}
 	}
 
@@ -596,7 +529,12 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		g.mu.Unlock()
 
 		// Ensure the entry is always closed and removed, even on panic.
+		// Guard against nil entry — if a panic occurs before assignment, the
+		// deferred body would panic again on close(entry.done).
 		defer func() {
+			if entry == nil {
+				return
+			}
 			close(entry.done)
 			g.mu.Lock()
 			delete(g.inflight, key)
