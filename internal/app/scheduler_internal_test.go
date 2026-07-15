@@ -93,11 +93,9 @@ func TestApp_PickMostOverdue_UsesSuccessTick(t *testing.T) {
 	a := newSchedulerTestApp(t)
 	a.tickCount = 1000
 	setAllLibraryPollsFresh(a)
-	// Albums was dispatched recently but its last successful fetch was long ago.
-	a.albumsPoll.lastDispatchedTick = 999
+	// Albums last successful fetch was long ago.
 	a.albumsPoll.lastSuccessTick = 10
 
-	a.playlistsPoll.lastDispatchedTick = 500
 	a.playlistsPoll.lastSuccessTick = 950
 
 	best := a.pickMostOverdueLibraryPane()

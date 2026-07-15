@@ -371,7 +371,7 @@ func (g *Gateway) tryRecover() {
 	bucket := g.bucket
 	g.mu.Unlock()
 
-	bucket.setRate(newRate)
+	_ = bucket.setRate(newRate)
 }
 
 // Do executes fn as a controlled HTTP call through the gateway.
@@ -449,6 +449,7 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			select {
 			case <-entry.done:
 			case <-ctx.Done():
+				g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 				return nil, ctx.Err()
 			}
 			// Emit DedupResolved — the waiter received the shared response.
@@ -484,6 +485,7 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			g.emitEvent(domain.EventSemaphoreReleased, reqID, key.Method, key.Path, domainPriority, 0, 0)
 		}()
 	case <-ctx.Done():
+		g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 		return nil, ctx.Err()
 	}
 
@@ -506,6 +508,7 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			select {
 			case <-existing.done:
 			case <-ctx.Done():
+				g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 				return nil, ctx.Err()
 			}
 			// Emit DedupResolved.
@@ -552,51 +555,59 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		err = fmt.Errorf("HTTP transport returned nil response")
 	}
 
-	// Buffer the response body so waiters can read it.
-	if err == nil {
-		body, readErr := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if readErr != nil {
-			err = fmt.Errorf("buffering response body: %w", readErr)
-		} else {
-			// Always replace the body with a readable clone so the primary
-			// caller can read it regardless of status code.
-			resp.Body = io.NopCloser(bytes.NewReader(body))
+	// Close the response body defensively. Go's http.Client.Do can return
+	// (non-nil resp, non-nil err) simultaneously (truncated body, redirect
+	// error). The body must be closed in both paths to avoid connection
+	// pool leaks.
+	if resp != nil {
+		if err == nil {
+			body, readErr := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if readErr != nil {
+				err = fmt.Errorf("buffering response body: %w", readErr)
+			} else {
+				// Always replace the body with a readable clone so the primary
+				// caller can read it regardless of status code.
+				resp.Body = io.NopCloser(bytes.NewReader(body))
 
-			if entry != nil {
-				entry.body = body
-			}
-
-			// On 429: set the gateway backoff, reduce adaptive rate, and emit
-			// BackoffStarted before creating the error.
-			// We do NOT suppress the error here — checkResponseStatus in
-			// doJSON/doNoContent would also create one, but dedup waiters
-			// bypass checkResponseStatus. By creating the error here, all
-			// callers (primary + dedup waiters) receive a consistent
-			// RateLimitError with the correct RetryAfter value.
-			if resp.StatusCode == http.StatusTooManyRequests {
-				retryAfter := parseRetryAfter(resp)
-				now := time.Now()
-				g.mu.Lock()
-				g.retryAfter = retryAfter
-				g.backoffUntil = now.Add(time.Duration(retryAfter) * time.Second)
-				g.last429Time = now
-
-				newRate := g.backgroundRate - rateReductionStep
-				if newRate < minBackgroundRate {
-					newRate = minBackgroundRate
+				if entry != nil {
+					entry.body = body
 				}
-				g.backgroundRate = newRate
-				g.lastRecoveryTick = now
 
-				bucket := g.bucket
-				rate := g.backgroundRate
-				g.mu.Unlock()
-				bucket.setRate(rate)
-				// Emit BackoffStarted now that backoffUntil is set.
-				g.emitEvent(domain.EventBackoffStarted, reqID, key.Method, key.Path, domainPriority, resp.StatusCode, 0)
-				err = &RateLimitError{RetryAfter: retryAfter}
+				// On 429: set the gateway backoff, reduce adaptive rate, and emit
+				// BackoffStarted before creating the error.
+				// We do NOT suppress the error here — checkResponseStatus in
+				// doJSON/doNoContent would also create one, but dedup waiters
+				// bypass checkResponseStatus. By creating the error here, all
+				// callers (primary + dedup waiters) receive a consistent
+				// RateLimitError with the correct RetryAfter value.
+				if resp.StatusCode == http.StatusTooManyRequests {
+					retryAfter := parseRetryAfter(resp)
+					now := time.Now()
+					g.mu.Lock()
+					g.retryAfter = retryAfter
+					g.backoffUntil = now.Add(time.Duration(retryAfter) * time.Second)
+					g.last429Time = now
+
+					newRate := g.backgroundRate - rateReductionStep
+					if newRate < minBackgroundRate {
+						newRate = minBackgroundRate
+					}
+					g.backgroundRate = newRate
+					g.lastRecoveryTick = now
+
+					bucket := g.bucket
+					rate := g.backgroundRate
+					g.mu.Unlock()
+					_ = bucket.setRate(rate)
+					// Emit BackoffStarted now that backoffUntil is set.
+					g.emitEvent(domain.EventBackoffStarted, reqID, key.Method, key.Path, domainPriority, resp.StatusCode, 0)
+					err = &RateLimitError{RetryAfter: retryAfter}
+				}
 			}
+		} else {
+			// fn returned (resp, err) — close the body to avoid a leak.
+			_ = resp.Body.Close()
 		}
 	}
 
@@ -616,8 +627,15 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	}
 
 	// Emit the final decision event for the primary caller.
-	// All primary callers that reach this point were allowed through — no waiting path exists.
-	g.emitEvent(domain.EventRequestAllowed, reqID, key.Method, key.Path, domainPriority, httpStatus, httpDuration)
+	// On success: EventRequestAllowed. On failure: EventRequestFailed.
+	// Both carry the HTTP status and duration for observability.
+	if err != nil {
+		g.emitEvent(domain.EventRequestFailed, reqID, key.Method, key.Path,
+			domainPriority, httpStatus, httpDuration)
+	} else {
+		g.emitEvent(domain.EventRequestAllowed, reqID, key.Method, key.Path,
+			domainPriority, httpStatus, httpDuration)
+	}
 
 	if err != nil {
 		return nil, err

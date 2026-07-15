@@ -117,7 +117,7 @@ func TestTokenBucket_RespectsContextCancellation(t *testing.T) {
 func TestTokenBucket_SetRate_PreservesBurst(t *testing.T) {
 	tb := newTokenBucket(5, 2)
 	assert.Equal(t, 5.0, tb.max)
-	tb.setRate(0.5)
+	require.NoError(t, tb.setRate(0.5))
 	assert.Equal(t, 5.0, tb.max, "setRate must not change burst capacity")
 }
 
@@ -127,7 +127,7 @@ func TestTokenBucket_SetRate_PreservesTokens(t *testing.T) {
 	require.NoError(t, tb.wait(context.Background()))
 	assert.InDelta(t, 3.0, tb.tokens, 0.01)
 
-	tb.setRate(0.5)
+	require.NoError(t, tb.setRate(0.5))
 	assert.InDelta(t, 3.0, tb.tokens, 0.01, "setRate must preserve existing tokens")
 }
 
@@ -135,8 +135,23 @@ func TestTokenBucket_SetRate_CapsExcessTokens(t *testing.T) {
 	// Construct a bucket manually so tokens can exceed the intended max.
 	tb := newTokenBucket(5, 2)
 	tb.tokens = 8
-	tb.setRate(1)
+	require.NoError(t, tb.setRate(1))
 	assert.Equal(t, 5.0, tb.tokens, "setRate must cap tokens at unchanged max")
+}
+
+func TestTokenBucket_SetRate_RejectsNonPositive(t *testing.T) {
+	tb := newTokenBucket(5, 2)
+
+	err := tb.setRate(0)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "positive")
+
+	err = tb.setRate(-1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "positive")
+
+	// Valid rate still works.
+	require.NoError(t, tb.setRate(1.5))
 }
 
 func TestTokenBucket_BurstIndependentFromRate(t *testing.T) {
@@ -1438,6 +1453,49 @@ func TestGateway_Do_429Response_EmitsBackoffStarted(t *testing.T) {
 
 	kinds := collectKinds(rec.all())
 	assert.Contains(t, kinds, domain.EventBackoffStarted, "must emit BackoffStarted on 429")
+}
+
+// TestGateway_Do_429Response_EmitsRequestFailed verifies that a 429 response
+// emits EventRequestFailed (not EventRequestAllowed) so the UI can distinguish
+// successful pass-throughs from failed requests.
+func TestGateway_Do_429Response_EmitsRequestFailed(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/failed", Priority: Background},
+		func() (*http.Response, error) {
+			resp := newFakeResponse(429, "")
+			resp.Header.Set("Retry-After", "5")
+			return resp, nil
+		})
+
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventRequestFailed, "429 must emit EventRequestFailed")
+	assert.NotContains(t, kinds, domain.EventRequestAllowed, "429 must not emit EventRequestAllowed")
+}
+
+// TestGateway_Do_SuccessEmitsRequestAllowed verifies a 200 response still
+// emits EventRequestAllowed (not EventRequestFailed).
+func TestGateway_Do_SuccessEmitsRequestAllowed(t *testing.T) {
+	gw := NewGateway()
+	rec := &mockEventRecorder{}
+	gw.mu.Lock()
+	gw.recorder = rec
+	gw.mu.Unlock()
+
+	_, _ = gw.Do(context.Background(), Background,
+		RequestKey{Method: "GET", Path: "/ok", Priority: Background},
+		func() (*http.Response, error) {
+			return newFakeResponse(200, "ok"), nil
+		})
+
+	kinds := collectKinds(rec.all())
+	assert.Contains(t, kinds, domain.EventRequestAllowed, "200 must emit EventRequestAllowed")
+	assert.NotContains(t, kinds, domain.EventRequestFailed, "200 must not emit EventRequestFailed")
 }
 
 // TestGateway_Do_EventsHaveCorrectRequestID verifies all events for the same
