@@ -156,7 +156,7 @@ func NewGateway() *Gateway {
 // Returns a GatewayStateSnapshot suitable for embedding in a GatewayEvent.
 //
 // Lock ordering: releases bucket.mu before acquiring g.mu to avoid lock-order
-// inversion. captureSnapshotLocked() is preferred when g.mu is already held.
+// inversion. Never hold both locks at the same time.
 func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	g.bucket.mu.Lock()
 	now := time.Now()

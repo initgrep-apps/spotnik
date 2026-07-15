@@ -1,5 +1,6 @@
-// token bucket rate limiter for the API gateway — 10 tokens/second,
-// burst 10; background requests drain the bucket; interactive requests bypass it.
+// token bucket rate limiter for the API gateway — burst 5, 2 req/s default
+// Background rate (adaptive). All requests consume tokens; Interactive is not
+// bypassed but is only gated by 429 backoff at the CanAdmit pre-flight layer.
 package api
 
 import (
@@ -33,6 +34,9 @@ func newTokenBucket(max, rate float64) *tokenBucket {
 // setRate updates the refill rate without changing the burst capacity.
 // Existing tokens are preserved, capped to the unchanged max.
 func (tb *tokenBucket) setRate(rate float64) {
+	if rate <= 0 {
+		return
+	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	tb.rate = rate
