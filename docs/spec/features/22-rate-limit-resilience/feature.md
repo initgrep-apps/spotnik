@@ -1,6 +1,6 @@
 ---
 title: "Rate Limit Resilience & Empty State Context"
-status: open
+status: done
 ---
 
 ## Description
