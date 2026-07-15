@@ -494,7 +494,8 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 		}()
 		wg.Wait()
 
-		// Rate limit errors take priority — return immediately so backoff kicks in.
+		// Rate limit and auth errors take priority — return immediately so
+		// backoff or token refresh kicks in.
 		if tracksErr != nil {
 			if retryAfter := parse429RetryAfter(tracksErr); retryAfter > 0 {
 				return panes.RateLimitedMsg{RetryAfterSecs: retryAfter}
@@ -502,7 +503,6 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 			if isUnauthorizedError(tracksErr) {
 				return unauthorizedMsg{}
 			}
-			return panes.StatsLoadedMsg{TimeRange: timeRange, Err: tracksErr}
 		}
 		if artistsErr != nil {
 			if retryAfter := parse429RetryAfter(artistsErr); retryAfter > 0 {
@@ -511,7 +511,14 @@ func (a *App) buildFetchStatsCmd(timeRange string) tea.Cmd {
 			if isUnauthorizedError(artistsErr) {
 				return unauthorizedMsg{}
 			}
-			return panes.StatsLoadedMsg{TimeRange: timeRange, Err: artistsErr}
+		}
+		// If both failed with non-429/non-401 errors, join them so neither is
+		// silently lost. errors.Join skips nil errors automatically.
+		if tracksErr != nil || artistsErr != nil {
+			return panes.StatsLoadedMsg{
+				TimeRange: timeRange,
+				Err:       errors.Join(tracksErr, artistsErr),
+			}
 		}
 
 		return panes.StatsLoadedMsg{
@@ -603,7 +610,10 @@ func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL stri
 			return tokenRefreshedMsg{err: errors.New("no token store configured")}
 		}
 		refreshToken, err := store.Get(keychain.KeyRefreshToken)
-		if err != nil || refreshToken == "" {
+		if err != nil {
+			return tokenRefreshedMsg{err: fmt.Errorf("reading refresh token from keychain: %w", err)}
+		}
+		if refreshToken == "" {
 			return tokenRefreshedMsg{err: errors.New("no refresh token available")}
 		}
 		if err := api.Refresh(context.Background(), http.DefaultClient, tokenBaseURL, refreshToken, clientID, store); err != nil {
@@ -611,7 +621,7 @@ func buildRefreshTokenCmd(store keychain.TokenStore, clientID, tokenBaseURL stri
 		}
 		newToken, err := store.Get(keychain.KeyAccessToken)
 		if err != nil {
-			return tokenRefreshedMsg{err: err}
+			return tokenRefreshedMsg{err: fmt.Errorf("reading access token from keychain: %w", err)}
 		}
 		return tokenRefreshedMsg{newToken: newToken}
 	}

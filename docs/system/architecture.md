@@ -866,8 +866,9 @@ POLLING  tick: 1000ms  state: active    STORE  fetching: []
 | `EventHttpCompleted` | After `fn()` returns, with status code and latency |
 | `EventBackoffStarted` | After 429 response sets `backoffUntil` |
 | `EventRequestAllowed` | Primary caller succeeded (no backoff wait) |
+| `EventRequestFailed` | Primary caller passed gateway but HTTP call returned an error (429, 5xx, transport) |
 
-Lock ordering: `emitEvent()` acquires `g.mu` then `bucket.mu`. `emitEventLocked()` assumes `g.mu` is already held and only acquires `bucket.mu`. `bucket.mu` is never held when calling `emitEvent()`.
+Lock ordering: `emitEvent()` acquires `g.mu` to read the recorder, then releases `g.mu` before calling `captureSnapshot()` which acquires `bucket.mu` then `g.mu` in sequence (never both at once). `bucket.mu` is never held when calling `emitEvent()`.
 
 Periodic events are emitted on `viz.TickMsg` (every 200ms) from `app.go`:
 

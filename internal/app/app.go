@@ -633,8 +633,6 @@ type pollState struct {
 	// exponential backoff calculation in calcBackoffTicks. Reset to 0 on success.
 	errorCount int
 	hasData    bool // true after first successful load; switches interval regime
-	// lastDispatchedTick is the tick when this pane was last scheduled.
-	lastDispatchedTick int
 	// lastSuccessTick is the tick of the last successful fetch. Used by the
 	// scheduler so a pane whose previous fetch failed is not treated as fresh.
 	lastSuccessTick int

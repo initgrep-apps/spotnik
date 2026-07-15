@@ -521,7 +521,6 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Playback and queue still run (so the app can resume when the user returns).
 		if !a.isLongIdle() {
 			if best := a.pickMostOverdueLibraryPane(); best != nil && a.gateway.CanAdmit(api.Background) {
-				best.p.lastDispatchedTick = a.tickCount
 				best.setFetch(true)
 				cmds = append(cmds, best.cmd())
 			}
@@ -1291,13 +1290,31 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.ProfileLogoutMsg:
 		// User confirmed logout — clear tokens and quit.
-		_ = a.tokenStore.Delete()
+		if err := a.tokenStore.Delete(); err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Logout failed",
+				Body:   "Token may persist in keychain: " + err.Error(),
+			})
+		}
 		return a, tea.Quit
 
 	case panes.ProfileForgetMsg:
 		// User confirmed forget — clear tokens and remove client_id from config, then quit.
-		_ = a.tokenStore.Delete()
-		_ = config.ClearClientID(config.DefaultConfigPath())
+		if err := a.tokenStore.Delete(); err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to forget credentials",
+				Body:   "Token may persist in keychain: " + err.Error(),
+			})
+		}
+		if err := config.ClearClientID(config.DefaultConfigPath()); err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to clear client ID",
+				Body:   err.Error(),
+			})
+		}
 		return a, tea.Quit
 
 	case panes.FetchCurrentUserRequestMsg:

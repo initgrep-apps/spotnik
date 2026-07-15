@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -32,10 +33,11 @@ func newTokenBucket(max, rate float64) *tokenBucket {
 }
 
 // setRate updates the refill rate without changing the burst capacity.
+// Returns an error if rate is non-positive to prevent div-by-zero in wait().
 // Existing tokens are preserved, capped to the unchanged max.
-func (tb *tokenBucket) setRate(rate float64) {
+func (tb *tokenBucket) setRate(rate float64) error {
 	if rate <= 0 {
-		return
+		return fmt.Errorf("token bucket rate must be positive, got %f", rate)
 	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
@@ -43,6 +45,7 @@ func (tb *tokenBucket) setRate(rate float64) {
 	if tb.tokens > tb.max {
 		tb.tokens = tb.max
 	}
+	return nil
 }
 
 // wait blocks until a token is available or ctx is cancelled.

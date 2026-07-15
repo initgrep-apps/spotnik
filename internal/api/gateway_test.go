@@ -117,7 +117,7 @@ func TestTokenBucket_RespectsContextCancellation(t *testing.T) {
 func TestTokenBucket_SetRate_PreservesBurst(t *testing.T) {
 	tb := newTokenBucket(5, 2)
 	assert.Equal(t, 5.0, tb.max)
-	tb.setRate(0.5)
+	require.NoError(t, tb.setRate(0.5))
 	assert.Equal(t, 5.0, tb.max, "setRate must not change burst capacity")
 }
 
@@ -127,7 +127,7 @@ func TestTokenBucket_SetRate_PreservesTokens(t *testing.T) {
 	require.NoError(t, tb.wait(context.Background()))
 	assert.InDelta(t, 3.0, tb.tokens, 0.01)
 
-	tb.setRate(0.5)
+	require.NoError(t, tb.setRate(0.5))
 	assert.InDelta(t, 3.0, tb.tokens, 0.01, "setRate must preserve existing tokens")
 }
 
@@ -135,7 +135,7 @@ func TestTokenBucket_SetRate_CapsExcessTokens(t *testing.T) {
 	// Construct a bucket manually so tokens can exceed the intended max.
 	tb := newTokenBucket(5, 2)
 	tb.tokens = 8
-	tb.setRate(1)
+	require.NoError(t, tb.setRate(1))
 	assert.Equal(t, 5.0, tb.tokens, "setRate must cap tokens at unchanged max")
 }
 

@@ -40,6 +40,11 @@ const (
 	EventDedupResolved
 	// EventHttpCompleted means an HTTP response was received from Spotify.
 	EventHttpCompleted
+	// EventRequestFailed means a request passed the gateway but the HTTP
+	// call returned an error (429, 5xx, transport error). Distinct from
+	// EventRequestBlocked (rejected before execution) and EventRequestAllowed
+	// (passed through successfully).
+	EventRequestFailed
 )
 
 // GatewayStateSnapshot holds a frozen copy of gateway internal state at a specific
