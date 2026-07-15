@@ -6,7 +6,7 @@ status: done
 
 ## Background
 
-Spotify's rate limit is a **rolling 30-second window** — not a per-second cap. If the app makes too many requests in any 30-second window, Spotify returns 429 with a `Retry-After` header. The exact limit depends on whether the app is in development mode or extended quota mode. There is no published absolute number; the app must detect 429s and adapt.
+Spotify's rate limit is a **rolling 30-second window**. There is no published absolute number; the limit depends on the app's mode (development vs. extended quota). The app must therefore keep its own request volume conservative and self-correct when Spotify signals it is too aggressive.
 
 Spotify's own recommendations for building with rate limits:
 1. **Backoff-retry strategy** — respect `Retry-After`, slow down after 429
@@ -20,389 +20,478 @@ What Spotnik already does well:
 - Inflight dedup for identical Background GETs
 - Per-pane exponential backoff on errors
 
-Two gaps remain:
+What it does **not** do well enough yet:
 
-**Gap 1 — Simultaneous burst dispatch:** When Dashboard preset has 8 panes + NowPlaying + Queue, all eligible panes fire fetch commands on the same tick via `tea.Batch`. The gateway's semaphore (5) and token bucket (10 req/s) provide backpressure, but 8 simultaneous goroutines still consume tokens rapidly. When intervals align (e.g., tick 60: playlists@60, albums@120, liked@60, recent@30 all fire), the burst can trigger Spotify's 30-second window limit.
+**Gap 1 — Default token bucket is too permissive for sustained load.**  
+The gateway currently allows **10 requests per second** with a burst of 10. Over a 30-second rolling window that is **up to 300 requests**. In practice this exceeds the limit Spotify enforces for many apps, so the 429s the user observed are expected consequences, not edge cases. The gateway reacts to 429s after they happen but never lowers its own steady-state ceiling.
 
-**Gap 2 — Token bucket too permissive for sustained load:** The token bucket allows 10 req/s sustained = 300 requests per 30-second window. This is tuned for burst (initial preset load) but too aggressive for steady-state polling. The bucket has no mechanism to self-adjust when 429s indicate the current rate exceeds Spotify's limit.
+**Gap 2 — Burst amplification on preset switch and aligned ticks.**  
+When the Dashboard preset is active, 5–7 library panes are visible. On each tick all eligible panes fire at once via `tea.Batch`. When their intervals align (e.g. tick 60: playlists@60, liked@60, recent@30, followed shows@60) a burst hits Spotify in the same second. Preset switches make this worse: `checkNewlyVisiblePanes()` dispatches every newly visible stale pane immediately.
 
-**What exists today:**
-- `Gateway.Do()` — 4-phase pipeline: backoff check → token bucket → inflight dedup → semaphore
-- `tokenBucket` — 10 req/s, burst 10, lazy refill, blocking `wait()`
-- `checkNewlyVisiblePanes()` — fires all stale panes at once on preset switch (correct for initial load)
-- Tick handler — all eligible panes dispatched in one `tea.Batch` (the problem)
-- Global 429 backoff — stops all fetches, clears sentinels, schedules `throttleExpiredMsg`
+**Gap 3 — Polling never pauses when the user is away.**  
+Idle detection currently shortens intervals after 60 seconds of no input, but it does not stop library polling. If the app is left running overnight with music paused, it still polls the same visible panes every 2–10 minutes forever. Over hours this still consumes the 30-second budget when a burst occurs.
 
-**What must change:**
-1. Gateway adaptively reduces its internal rate limit after consecutive 429s
-2. Gateway recovers rate limit gradually (not instant reset)
-3. Gateway exposes `CanAdmit(priority Priority) bool` for pre-flight checks
-4. App-level fetch scheduler dispatches at most 1 library fetch per tick
-5. Token bucket rate is dynamically adjustable (not hardcoded 10)
+**Gap 4 — No pre-flight admission gate.**  
+Commands are dispatched into goroutines that only learn they are blocked when they reach the gateway. This wastes goroutines and makes it hard for the app to avoid piling up work when the gateway is already saturated.
 
-**Future optimizations (out of scope for this story):**
-- Batch API usage: `Get Multiple Albums`, `Get Several Shows`, `Get Several Episodes` could reduce request count for initial loads
-- Playlist `snapshot_id`: skip re-fetching playlist tracks when snapshot hasn't changed
+## Problem statement
+
+The user left the app running with the Dashboard preset selected and music playing. After hours/days away, the app showed a "rate limited" toast and the gateway blocked requests. The gateway's job is to avoid letting Spotify rate-limit Spotnik in the first place. It failed because its internal throttle was set too high, it had no mechanism to self-adjust downward, and it kept issuing background requests even when there was no human present.
 
 ## Design
 
-### 1. `internal/api/gateway.go` — adaptive rate limit
+### Goal
 
-Add fields to `Gateway`:
+Reduce the steady-state request rate to something Spotify's rolling 30-second window tolerates, smooth bursts, and stop all library polling when the user has been away for a long time. Keep playback/queue polling responsive.
+
+### 1. `internal/api/gateway_bucket.go` — decouple rate and burst
+
+Add a configurable burst cap that is independent of the refill rate. A slow refill rate should not kill initial preset load completely.
+
+```go
+type tokenBucket struct {
+    mu       sync.Mutex
+    tokens   float64
+    max      float64 // burst capacity (not the same as rate)
+    rate     float64 // tokens per second
+    lastFill time.Time
+}
+
+func newTokenBucket(max, rate float64) *tokenBucket
+
+// setRate updates the refill rate without changing the burst capacity.
+// Existing tokens are preserved, capped to the (unchanged) max.
+func (tb *tokenBucket) setRate(rate float64)
+```
+
+**Lock ordering note:** `setRate` only acquires `tb.mu`. `Gateway` code must never hold both `g.mu` and `tb.mu` at the same time in opposite order to `captureSnapshot()`. Specifically, `captureSnapshot()` acquires `tb.mu` then `g.mu`; therefore any code path that holds `g.mu` and needs to adjust the bucket must release `g.mu` before calling `setRate`, or use a helper that acquires `tb.mu` after releasing `g.mu`.
+
+### 2. `internal/api/gateway.go` — adaptive rate limiting
+
+New constants:
+
+```go
+const (
+    // defaultBackgroundRate is the sustained rate for Background requests.
+    // 2 req/s = 60 requests per 30-second rolling window.
+    // This is intentionally conservative; the adaptive mechanism can raise
+    // it temporarily after a sustained clean period.
+    defaultBackgroundRate = 2.0 // req/s
+
+    // defaultBurst is the maximum tokens the bucket can hold.
+    // Allows short bursts (e.g. initial preset load) without raising the
+    // long-term average above Spotify's rolling window.
+    defaultBurst = 5
+
+    // minBackgroundRate is the floor. Never drop below this.
+    minBackgroundRate = 0.5 // req/s
+
+    // rateReductionStep is how much the rate is lowered on each 429.
+    rateReductionStep = 1.0 // req/s
+
+    // rateRecoveryStep is how much the rate is raised on each recovery tick.
+    rateRecoveryStep = 0.5 // req/s
+
+    // recoveryInterval is how long must pass without a 429 before rate rises.
+    recoveryInterval = 30 * time.Second
+
+    // longIdleThreshold is how long without input before library polling pauses.
+    longIdleThreshold = 15 * time.Minute
+)
+```
+
+New Gateway fields:
 
 ```go
 type Gateway struct {
     // ... existing fields ...
 
-    // Adaptive rate limiting — reduces internal rate after 429s, recovers gradually.
-    adaptiveRate     float64       // current effective rate (starts at initialRate)
-    initialRate      float64       // rate to recover to (10 req/s)
-    minRate          float64       // floor (1 req/s)
-    consecutive429s  int           // count of consecutive 429 responses
-    last429Time      time.Time     // when the last 429 occurred
-    recoveryInterval time.Duration // how long before attempting rate increase (30s)
+    // backgroundRate is the current effective Background request rate.
+    backgroundRate float64
+    // burst is the token bucket burst capacity (kept independent of rate).
+    burst float64
+    // last429Time is when the most recent 429 response was received.
+    last429Time time.Time
+    // lastRecoveryTick is when the rate was last raised toward defaultBackgroundRate.
+    lastRecoveryTick time.Time
 }
 ```
 
-**Constants:**
-
-```go
-const (
-    // defaultInitialRate is 6 req/s = 180 requests per 30-second rolling window.
-    // Spotify's rate limit is a rolling 30-second window (not per-second).
-    // 6 req/s is a conservative default that stays well under typical limits
-    // while still allowing fast initial preset population.
-    // The adaptive mechanism will reduce this further if 429s occur.
-    defaultInitialRate      = 6.0   // req/s
-    defaultMinRate          = 1.0   // req/s — floor, never drop below this
-    defaultRecoveryInterval = 30 * time.Second
-)
-```
-
-**Constructor update (`NewGateway`):**
+Constructor:
 
 ```go
 func NewGateway() *Gateway {
     g := &Gateway{
-        bucket:           newTokenBucket(defaultInitialRate, defaultInitialRate),
+        bucket:           newTokenBucket(defaultBurst, defaultBackgroundRate),
         semaphore:        make(chan struct{}, 5),
         inflight:         make(map[RequestKey]*inflightEntry),
-        adaptiveRate:     defaultInitialRate,
-        initialRate:      defaultInitialRate,
-        minRate:          defaultMinRate,
-        recoveryInterval: defaultRecoveryInterval,
+        backgroundRate:   defaultBackgroundRate,
+        burst:            defaultBurst,
+        last429Time:      time.Time{},
+        lastRecoveryTick: time.Now(),
     }
     g.lastEmittedTokens = int(g.bucket.max)
     return g
 }
 ```
 
-**On 429 — reduce rate (`Do()` method, inside the 429 handling block at `gateway.go:494`):**
-
-After setting `g.backoffUntil` and `g.retryAfter`:
+On 429 — inside the `resp.StatusCode == 429` block in `Do()`:
 
 ```go
-// Adaptive rate reduction: halve the rate on each consecutive 429.
-g.consecutive429s++
-g.last429Time = time.Now()
-newRate := g.initialRate / float64(int(1)<<uint(g.consecutive429s-1))
-if newRate < g.minRate {
-    newRate = g.minRate
+now := time.Now()
+g.mu.Lock()
+g.retryAfter = retryAfter
+g.backoffUntil = now.Add(time.Duration(retryAfter) * time.Second)
+g.last429Time = now
+
+// Reduce rate by one step, floored at minBackgroundRate.
+newRate := g.backgroundRate - rateReductionStep
+if newRate < minBackgroundRate {
+    newRate = minBackgroundRate
 }
-g.adaptiveRate = newRate
-g.bucket.setRate(g.adaptiveRate)
+g.backgroundRate = newRate
+
+// Reset recovery timer so we do not start climbing again immediately.
+g.lastRecoveryTick = now
+
+// Snapshot the values we need for setRate while still under g.mu, then
+// release g.mu before touching the bucket to preserve lock order.
+bucket := g.bucket
+rate := g.backgroundRate
+g.mu.Unlock()
+
+bucket.setRate(rate)
 ```
 
-Sequence: 6 → 3 → 1.5 → 1.0 (floor)
-
-**On successful request — reset consecutive counter (`Do()` method, after a non-429 response):**
-
-After the HTTP call completes with a non-429 status:
+On recovery:
 
 ```go
-if resp != nil && resp.StatusCode != http.StatusTooManyRequests {
-    g.mu.Lock()
-    if g.consecutive429s > 0 {
-        g.consecutive429s = 0
-        // Don't immediately restore rate — recovery is gradual via tryRecover()
-    }
-    g.mu.Unlock()
-}
-```
-
-**Recovery — gradually increase rate:**
-
-```go
-// tryRecover checks if enough time has passed since the last 429 to increase the rate.
-// Called from CanAdmit() on each pre-flight check (every tick).
+// tryRecover raises the Background rate slowly when no 429 has occurred
+// for recoveryInterval and at least recoveryInterval has passed since the
+// last rate change. Called from CanAdmit and from App.TickMsg.
 func (g *Gateway) tryRecover() {
     g.mu.Lock()
-    defer g.mu.Unlock()
-    if g.consecutive429s > 0 {
-        return // still in active 429 sequence, don't recover
+
+    if g.backgroundRate >= defaultBackgroundRate {
+        g.mu.Unlock()
+        return
     }
-    if g.adaptiveRate >= g.initialRate {
-        return // already at max
+    if time.Since(g.last429Time) < recoveryInterval {
+        g.mu.Unlock()
+        return
     }
-    if time.Since(g.last429Time) < g.recoveryInterval {
-        return // not enough time since last 429
+    if time.Since(g.lastRecoveryTick) < recoveryInterval {
+        g.mu.Unlock()
+        return
     }
-    // Increase by one step: double the rate, cap at initialRate.
-    newRate := g.adaptiveRate * 2
-    if newRate > g.initialRate {
-        newRate = g.initialRate
+
+    newRate := g.backgroundRate + rateRecoveryStep
+    if newRate > defaultBackgroundRate {
+        newRate = defaultBackgroundRate
     }
-    g.adaptiveRate = newRate
-    g.last429Time = time.Now() // reset timer for next recovery step
-    g.bucket.setRate(g.adaptiveRate)
+    g.backgroundRate = newRate
+    g.lastRecoveryTick = time.Now()
+
+    // Snapshot the bucket pointer and new rate, then release g.mu before
+    // touching the bucket. captureSnapshot() locks bucket.mu then g.mu, so we
+    // must never hold g.mu while acquiring bucket.mu.
+    bucket := g.bucket
+    g.mu.Unlock()
+
+    bucket.setRate(newRate)
 }
 ```
 
-Recovery sequence: 1.0 → 2.0 → 4.0 → 6.0 (30s between each step, ~90 seconds full recovery)
+Sequence after 429s: 2 → 1 → 0.5 req/s. Recovery: 0.5 → 1 → 1.5 → 2 (one step every 30s).
 
-### 2. `internal/api/gateway_bucket.go` — dynamic rate
+**Why no "consecutive 429" counter:** Once the gateway enters backoff after the first 429, all subsequent Background requests are rejected at phase 1 before they reach Spotify. They therefore cannot return additional 429s. Counting consecutive 429 responses would stay at 1 and reset on the first success, giving the same behavior as tracking the most recent 429. Using `last429Time` is simpler and matches the actual execution model.
 
-Add `setRate` method to `tokenBucket`:
+### 3. `internal/api/gateway.go` — `CanAdmit`
 
-```go
-// setRate updates the token bucket's refill rate and max capacity.
-// Thread-safe — acquires tb.mu.
-func (tb *tokenBucket) setRate(rate float64) {
-    tb.mu.Lock()
-    defer tb.mu.Unlock()
-    tb.rate = rate
-    tb.max = rate // burst = rate (1 second of burst)
-}
-```
-
-When rate changes, existing tokens are preserved. The new rate takes effect on the next `wait()` call.
-
-### 3. `internal/api/gateway.go` — `CanAdmit()`
-
-Non-blocking pre-flight check. The app calls this before dispatching a fetch command to avoid creating goroutines that will immediately block or fail.
+Pre-flight admission that prevents the app from dispatching commands that will immediately fail or block for a long time.
 
 ```go
-// CanAdmit returns true if the gateway is likely to accept a request of the given
-// priority without blocking or returning a RateLimitError. This is a pre-flight
-// check — the actual Do() call still goes through all enforcement phases.
+// CanAdmit returns true if the gateway is currently willing to accept a
+// request of the given priority. It is called by the app before dispatching
+// a fetch command so the app can avoid creating work that will be rejected.
 //
-// Returns false when:
-//   - Gateway is in 429 backoff
-//   - Semaphore is at capacity (5 concurrent requests already in-flight)
+// It returns false when:
+//   - the gateway is in 429 backoff
+//   - the token bucket has no tokens right now (Background only)
+//   - the semaphore is full (Background only)
+//
+// Interactive requests are only gated by backoff; they are never queued by the
+// app and the caller decides whether to dispatch them.
 func (g *Gateway) CanAdmit(priority Priority) bool {
-    // Check backoff.
     g.mu.Lock()
     throttled := time.Now().Before(g.backoffUntil)
     g.mu.Unlock()
+
+    // Periodic recovery tick. Runs even during backoff so the rate can climb
+    // while the door is closed and be ready when it reopens.
+    g.tryRecover()
+
     if throttled {
         return false
     }
 
-    // Attempt recovery before checking — this is the periodic recovery tick.
-    g.tryRecover()
+    if priority == Interactive {
+        // Interactive requests are never queued by the app; only reject during backoff.
+        return true
+    }
 
-    // Check semaphore capacity (non-blocking).
     if len(g.semaphore) >= cap(g.semaphore) {
         return false
     }
 
-    return true
+    // Non-blocking token check.
+    g.bucket.mu.Lock()
+    now := time.Now()
+    elapsed := now.Sub(g.bucket.lastFill).Seconds()
+    tokens := g.bucket.tokens + elapsed*g.bucket.rate
+    if tokens > g.bucket.max {
+        tokens = g.bucket.max
+    }
+    g.bucket.lastFill = now
+    g.bucket.tokens = tokens
+    hasToken := tokens >= 1
+    g.bucket.mu.Unlock()
+
+    return hasToken
 }
 ```
-
-Note: `CanAdmit` does NOT check the token bucket. The token bucket is a rate-smoothing mechanism — it may cause a short wait but won't reject. The semaphore and backoff are the hard gates.
 
 ### 4. `internal/app/handlers.go` — fetch scheduler
 
-Replace the current "all eligible panes in one Batch" dispatch with a round-robin scheduler that picks the single most overdue pane per tick.
+Replace the batch loop with a round-robin scheduler that dispatches at most one library pane per tick.
 
-**New struct:**
-
-```go
-// pollEntry describes one pane's polling configuration for the fetch scheduler.
-type pollEntry struct {
-    paneID     layout.PaneID
-    p          *pollState
-    intervalFn func() int  // returns current interval based on playback/idle state
-    fetching   func() bool
-    setFetch   func(bool)
-    cmd        func() tea.Cmd
-    lastTick   int  // tickCount when this pane was last dispatched
-}
-```
-
-**Scheduler logic** — replaces the `for _, entry := range []struct{...}` loop at `handlers.go:518-555`:
-
-```go
-// Build the poll table once (in App struct or as a method).
-entries := a.pollEntries()
-
-// Find the most overdue visible pane.
-var best *pollEntry
-var bestRatio float64
-for i := range entries {
-    e := &entries[i]
-    if !a.layout.IsPaneVisible(e.paneID) {
-        continue
-    }
-    // TopTracks/TopArtists share stats — visible if either is.
-    if e.paneID == layout.PaneTopTracks {
-        if !a.layout.IsPaneVisible(layout.PaneTopTracks) && !a.layout.IsPaneVisible(layout.PaneTopArtists) {
-            continue
-        }
-    }
-    if e.p.backoffTicks > 0 {
-        e.p.backoffTicks--
-        continue
-    }
-    if e.fetching() {
-        continue
-    }
-    interval := e.intervalFn()
-    if interval <= 0 {
-        continue
-    }
-    since := a.tickCount - e.lastTick
-    if since < interval {
-        continue
-    }
-    ratio := float64(since) / float64(interval)
-    if ratio > bestRatio {
-        bestRatio = ratio
-        best = e
-    }
-}
-
-// Dispatch the most overdue pane if gateway admits it.
-if best != nil && a.gateway.CanAdmit(api.Background) {
-    best.setFetch(true)
-    best.lastTick = a.tickCount
-    cmds = append(cmds, best.cmd())
-}
-```
-
-**`pollEntries()` method on `*App`:**
-
-```go
-func (a *App) pollEntries() []pollEntry {
-    return []pollEntry{
-        {layout.PanePlaylists, &a.playlistsPoll, func() int { return a.libraryInterval(&a.playlistsPoll, playlistsIntervals) }, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }, 0},
-        {layout.PaneAlbums, &a.albumsPoll, func() int { return a.libraryInterval(&a.albumsPoll, albumsIntervals) }, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }, 0},
-        {layout.PaneLikedSongs, &a.likedSongsPoll, func() int { return a.libraryInterval(&a.likedSongsPoll, likedSongsIntervals) }, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }, 0},
-        {layout.PaneRecentlyPlayed, &a.recentPlayedPoll, func() int { return a.libraryInterval(&a.recentPlayedPoll, recentPlayedIntervals) }, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }, 0},
-        {layout.PaneTopTracks, &a.statsPoll, func() int { return a.libraryInterval(&a.statsPoll, statsIntervals) }, func() bool { return a.store.StatsFetching("short_term") }, func(b bool) { a.store.SetStatsFetching("short_term", b) }, func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }, 0},
-        {layout.PaneFollowedShows, &a.followedShowsPoll, func() int { return a.libraryInterval(&a.followedShowsPoll, podcastIntervals) }, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }, 0},
-        {layout.PaneSavedEpisodes, &a.savedEpisodesPoll, func() int { return a.libraryInterval(&a.savedEpisodesPoll, podcastIntervals) }, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }, 0},
-    }
-}
-```
-
-**Key properties of the scheduler:**
-- At most 1 library fetch per tick (playback + queue are separate, dispatched unconditionally on their own intervals)
-- Most overdue pane wins — ensures fairness, no pane starves
-- `CanAdmit` gate prevents dispatch when gateway is saturated
-- `lastTick` tracks when each pane was last dispatched (not when it last succeeded)
-- Per-pane backoff still applies (`p.backoffTicks > 0` skips)
-- Fetching sentinel still applies (`e.fetching()` skips)
-
-**Initial load (preset switch) is unchanged:** `checkNewlyVisiblePanes()` still fires all stale panes at once via `tea.Batch`. The scheduler only governs steady-state polling. This preserves fast initial population.
-
-### 5. `internal/app/app.go` — add `pollEntries` field or method
-
-The `pollEntry` slice is static (same 7 entries always). Store as a method that returns a new slice each call (so `lastTick` is reset per call — actually no, `lastTick` must persist across calls).
-
-**Option A:** Store `lastTick` on `pollState` (already exists). Add `lastDispatchedTick int` to `pollState`.
+Add `lastDispatchedTick` and `lastSuccessTick` to `pollState` in `internal/app/app.go`:
 
 ```go
 type pollState struct {
-    errorCount         int
     backoffTicks       int
+    errorCount         int
     hasData            bool
-    lastDispatchedTick int  // NEW: tickCount when last dispatched
+    lastDispatchedTick int
+    lastSuccessTick    int
 }
 ```
 
-Then the scheduler reads `p.lastDispatchedTick` instead of `e.lastTick`.
+Polling table method on `*App`:
 
-**Option B:** Store entries as a field on `*App` with pointers to `pollState`.
+```go
+func (a *App) libraryPollEntries() []libraryPollEntry {
+    return []libraryPollEntry{
+        {layout.PanePlaylists, &a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
+        {layout.PaneAlbums, &a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
+        {layout.PaneLikedSongs, &a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
+        {layout.PaneRecentlyPlayed, &a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
+        {layout.PaneTopTracks, &a.statsPoll, statsIntervals,
+            func() bool { return a.store.StatsFetching("short_term") },
+            func(b bool) { a.store.SetStatsFetching("short_term", b) },
+            func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
+        {layout.PaneFollowedShows, &a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
+        {layout.PaneSavedEpisodes, &a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
+    }
+}
+```
 
-Option A is simpler and keeps state with the pollState. Use Option A.
+Tick handler scheduler logic:
 
-### 6. Gateway state observability
+```go
+// Playback and queue keep their own unconditional intervals.
+playbackInterval, queueInterval := a.pollIntervals()
+if a.tickCount%playbackInterval == 0 {
+    cmds = append(cmds, fetchPlaybackStateCmd(a.player, api.Background))
+}
+if a.tickCount%queueInterval == 0 {
+    cmds = append(cmds, fetchQueueCmd(a.player))
+}
 
-The `GatewayHealthPane` and `GatewayLivePane` already read gateway events. The adaptive rate should be visible in the `GatewayStateSnapshot` so these panes can display it.
+// Long-idle guard: pause all library polling after 15 minutes of inactivity.
+// Playback and queue still run (so the app can resume when the user returns).
+if !a.isLongIdle() {
+    if best := a.pickMostOverdueLibraryPane(); best != nil && a.gateway.CanAdmit(api.Background) {
+        p := best.p
+        p.lastDispatchedTick = a.tickCount
+        best.setFetch(true)
+        cmds = append(cmds, best.cmd())
+    }
+}
 
-Add to `domain.GatewayStateSnapshot`:
+// Recovery tick: even if no pane was admitted, try to raise the gateway rate.
+a.gateway.tryRecover()
+```
+
+`pickMostOverdueLibraryPane`:
+
+```go
+func (a *App) pickMostOverdueLibraryPane() *libraryPollEntry {
+    entries := a.libraryPollEntries()
+    var best *libraryPollEntry
+    var bestRatio float64
+    for i := range entries {
+        e := &entries[i]
+        paneID := e.paneID
+        if e.paneID == layout.PaneTopTracks {
+            if !a.layout.IsPaneVisible(layout.PaneTopTracks) && !a.layout.IsPaneVisible(layout.PaneTopArtists) {
+                continue
+            }
+        } else if !a.layout.IsPaneVisible(paneID) {
+            continue
+        }
+
+        p := e.p
+        if p.backoffTicks > 0 {
+            p.backoffTicks--
+            continue
+        }
+        if e.fetching() {
+            continue
+        }
+
+        interval := a.libraryInterval(p, e.iv)
+        if interval <= 0 {
+            continue
+        }
+
+        // Use last success, not last dispatch, so a pane whose previous fetch
+        // failed is not treated as freshly updated.
+        since := a.tickCount - p.lastSuccessTick
+        if since < interval {
+            continue
+        }
+
+        ratio := float64(since) / float64(interval)
+        if ratio > bestRatio {
+            bestRatio = ratio
+            best = e
+        }
+    }
+    return best
+}
+```
+
+`lastSuccessTick` is set by each library loaded-message handler on success, alongside resetting `errorCount` and setting `hasData = true`.
+
+### 5. `internal/app/app.go` — `checkNewlyVisiblePanes` gating
+
+Initial preset load is still batched, but each dispatch is gated by `CanAdmit` so the batch stops if the gateway is saturated.
+
+```go
+// Iterate visible panes in deterministic order so CanAdmit gating produces
+// consistent results across runs and tests.
+visibleIDs := make([]layout.PaneID, 0, len(cur.Visible))
+for id := range cur.Visible {
+    visibleIDs = append(visibleIDs, id)
+}
+sort.Slice(visibleIDs, func(i, j int) bool { return visibleIDs[i] < visibleIDs[j] })
+
+for _, id := range visibleIDs {
+    if oldVisible[id] {
+        continue
+    }
+    gate, ok := gates[id]
+    if !ok {
+        continue
+    }
+    if gate.fetching() {
+        continue
+    }
+    if !gate.stale() {
+        continue
+    }
+    if !a.gateway.CanAdmit(api.Background) {
+        break
+    }
+    gate.setFetch(true)
+    cmds = append(cmds, gate.cmd())
+}
+```
+
+### 6. `internal/app/app.go` — long-idle helper
+
+```go
+// isLongIdle returns true when the user has been inactive longer than longIdleThreshold.
+// When true, library polling pauses. Playback/queue continue so the UI stays current.
+// NOTE: this is measured from lastInteraction, independent of idleThreshold.
+func (a *App) isLongIdle() bool {
+    return time.Since(a.lastInteraction) > longIdleThreshold
+}
+```
+
+`lastInteraction` is updated on `tea.KeyMsg`, `tea.MouseMsg`, and `tea.WindowSizeMsg` (a resize implies the user is at the machine).
+
+### 7. `internal/domain/gateway.go` — GatewayStateSnapshot observability
 
 ```go
 type GatewayStateSnapshot struct {
     // ... existing fields ...
-    AdaptiveRate     float64 // current adaptive rate limit (req/s)
-    Consecutive429s  int     // count of consecutive 429 responses
+    BackgroundRate   float64 // current adaptive Background rate limit (req/s)
+    BurstCapacity    float64 // token bucket burst capacity
+    Last429AgoSecs   float64 // seconds since last 429 (0 if never)
 }
 ```
 
-Update `captureSnapshot()` and `captureSnapshotLocked()` to include these fields.
+`captureSnapshot()` and `captureSnapshotLocked()` populate these. The fields are added to `internal/domain/gateway.go`, not `internal/domain/types.go`.
 
-### 7. `checkNewlyVisiblePanes` — add `CanAdmit` gate
+### 8. UI panes
 
-When switching presets, `checkNewlyVisiblePanes` fires all stale panes at once. Add a `CanAdmit` check to avoid dispatching into a saturated gateway:
-
-```go
-if !a.gateway.CanAdmit(api.Background) {
-    break // stop dispatching — remaining panes will be picked up by the scheduler
-}
-```
-
-This prevents the initial burst from overwhelming the gateway when it's already under backoff or at capacity.
+`GatewayHealthPane` and `GatewayLivePane` already read `GatewayStateSnapshot`. They will display `BackgroundRate` without additional data plumbing. If layout/golden output changes, golden files must be regenerated with `go test ./... -update` and sanity tests updated if behavior is critical.
 
 ## Acceptance Criteria
 
-- [x] `tokenBucket` exposes `setRate(rate)` and keeps `max` (burst) independent of `rate`
-- [x] `NewGateway()` defaults to Background rate 2 req/s, burst 5
-- [x] `Gateway` tracks `backgroundRate`, `burst`, `last429Time`, `lastRecoveryTick`
-- [x] Each 429 reduces `backgroundRate` by 1 req/s, floored at 0.5 req/s
-- [x] `tryRecover()` raises `backgroundRate` by 0.5 req/s every 30s with no 429s, capped at 2 req/s
-- [x] `CanAdmit(Background)` returns false during backoff, when semaphore is full, or when token bucket has no tokens
-- [x] `CanAdmit(Interactive)` returns false only during backoff
-- [x] `CanAdmit` triggers `tryRecover()` on every call, even during backoff
-- [x] `TickMsg` handler calls `gateway.tryRecover()` even when no pane is dispatched
-- [x] Scheduler dispatches at most 1 library pane per tick
-- [x] Scheduler picks the most overdue pane using `lastSuccessTick / interval`
-- [x] `checkNewlyVisiblePanes()` stops dispatching when `CanAdmit` returns false
-- [x] Library polling pauses when `isLongIdle()` is true
-- [x] Playback and queue polling remain unchanged
-- [x] Devices overlay polling remains unchanged
-- [x] Per-pane backoff and fetching sentinels continue to work
-- [x] `GatewayStateSnapshot` includes `BackgroundRate`, `BurstCapacity`, `Last429AgoSecs`
-- [x] `make ci` passes
+- [ ] `tokenBucket` exposes `setRate(rate)` and keeps `max` (burst) independent of `rate`
+- [ ] `NewGateway()` defaults to Background rate 2 req/s, burst 5
+- [ ] `Gateway` tracks `backgroundRate`, `burst`, `last429Time`, `lastRecoveryTick`
+- [ ] Each 429 reduces `backgroundRate` by 1 req/s, floored at 0.5 req/s
+- [ ] `tryRecover()` raises `backgroundRate` by 0.5 req/s every 30s with no 429s, capped at 2 req/s
+- [ ] `CanAdmit(Background)` returns false during backoff, when semaphore is full, or when token bucket has no tokens
+- [ ] `CanAdmit(Interactive)` returns false only during backoff
+- [ ] `CanAdmit` triggers `tryRecover()` on every call, even during backoff
+- [ ] `TickMsg` handler calls `gateway.tryRecover()` even when no pane is dispatched
+- [ ] Scheduler dispatches at most 1 library pane per tick
+- [ ] Scheduler picks the most overdue pane using `lastSuccessTick / interval`
+- [ ] `checkNewlyVisiblePanes()` stops dispatching when `CanAdmit` returns false
+- [ ] Library polling pauses when `isLongIdle()` is true
+- [ ] Playback and queue polling remain unchanged
+- [ ] Devices overlay polling remains unchanged
+- [ ] Per-pane backoff and fetching sentinels continue to work
+- [ ] `GatewayStateSnapshot` includes `BackgroundRate`, `BurstCapacity`, `Last429AgoSecs`
+- [ ] `make ci` passes
 
 ## Tasks
 
-- [x] Decouple `max` and `rate` in `tokenBucket`; add `setRate()`; add burst parameter to `NewGateway()`
+- [ ] Decouple `max` and `rate` in `tokenBucket`; add `setRate()`; add burst parameter to `NewGateway()`
       - test: `TestTokenBucket_SetRate_PreservesBurst`, `TestTokenBucket_SetRate_PreservesTokens`, `TestTokenBucket_BurstIndependentFromRate`
-- [x] Update `NewGateway()` with default rate 2/s, burst 5 and adaptive fields
+- [ ] Update `NewGateway()` with default rate 2/s, burst 5 and adaptive fields
       - test: `TestNewGateway_AdaptiveDefaults`
-- [x] Add 429 rate-reduction logic in `Do()` with safe lock ordering
+- [ ] Add 429 rate-reduction logic in `Do()` with safe lock ordering
       - test: `TestGateway_429_ReducesRate`, `TestGateway_429_FloorsAtMin`
-- [x] Add `tryRecover()` and wire it into `CanAdmit()` and `TickMsg`
+- [ ] Add `tryRecover()` and wire it into `CanAdmit()` and `TickMsg`
       - test: `TestGateway_RecoversRateAfterInterval`, `TestGateway_RecoveryCappedAtDefault`
-- [x] Implement `CanAdmit(priority)` with backoff, semaphore, and token checks
+- [ ] Implement `CanAdmit(priority)` with backoff, semaphore, and token checks
       - test: `TestGateway_CanAdmit_BackoffFalse`, `TestGateway_CanAdmit_SemaphoreFullFalse`, `TestGateway_CanAdmit_NoTokenFalse`, `TestGateway_CanAdmit_CallsTryRecover`
-- [x] Add `BackgroundRate`, `BurstCapacity`, `Last429AgoSecs` to `GatewayStateSnapshot` in `internal/domain/gateway.go` and update capture methods
+- [ ] Add `BackgroundRate`, `BurstCapacity`, `Last429AgoSecs` to `GatewayStateSnapshot` in `internal/domain/gateway.go` and update capture methods
       - test: `TestGateway_Snapshot_IncludesAdaptiveFields`
-- [x] Add `lastSuccessTick` to `pollState` in `internal/app/app.go`
+- [ ] Add `lastSuccessTick` to `pollState` in `internal/app/app.go`
       - test: compile-time / existing poll tests
-- [x] Add `libraryPollEntries()` and `pickMostOverdueLibraryPane()` to `*App`
+- [ ] Add `libraryPollEntries()` and `pickMostOverdueLibraryPane()` to `*App`
       - test: `TestApp_PickMostOverdue_OverdueWins`, `TestApp_PickMostOverdue_SkipsHidden`, `TestApp_PickMostOverdue_SkipsBackoff`, `TestApp_PickMostOverdue_UsesSuccessTick`
-- [x] Replace library batch dispatch with scheduler in `TickMsg` handler
+- [ ] Replace library batch dispatch with scheduler in `TickMsg` handler
       - test: `TestApp_Tick_DispatchesAtMostOneLibraryPane`, `TestApp_Tick_SchedulerRespectsCanAdmit`, `TestApp_Tick_PausesLibraryOnLongIdle`
-- [x] Gate `checkNewlyVisiblePanes()` with `CanAdmit`
+- [ ] Gate `checkNewlyVisiblePanes()` with `CanAdmit`
       - test: `TestApp_CheckNewlyVisiblePanes_StopsWhenCanAdmitFalse`
-- [x] Add `isLongIdle()` and long-idle pause to library scheduler; update `lastInteraction` on `WindowSizeMsg`
+- [ ] Add `isLongIdle()` and long-idle pause to library scheduler; update `lastInteraction` on `WindowSizeMsg`
       - test: `TestApp_IsLongIdle`, `TestApp_LongIdlePausesLibraryPolling`
-- [x] Update loaded-message handlers to set `lastSuccessTick` on success
+- [ ] Update loaded-message handlers to set `lastSuccessTick` on success
       - test: existing handler tests extended
-- [x] Regenerate golden files if `GatewayHealthPane`/`GatewayLivePane` output changes
+- [ ] Regenerate golden files if `GatewayHealthPane`/`GatewayLivePane` output changes
       - test: `go test ./... -update`, review diff, commit
-- [x] `make ci` passes
+- [ ] `make ci` passes
+
+## Out of scope
+
+- Batch API usage (`Get Multiple Albums`, `Get Several Shows`, `Get Several Episodes`)
+- Playlist `snapshot_id` short-circuit
+- These remain valid future optimizations but are not required to stop the observed 429s.

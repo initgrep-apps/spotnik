@@ -29,3 +29,4 @@ Two tightly-coupled problems discovered during long-running sessions with the Da
 |---|-------|------|------------|
 | 272 | Context-aware empty states | `stories/272-context-aware-empty-states.md` | — |
 | 273 | Gateway proactive traffic shaping | `stories/273-gateway-traffic-shaping.md` | — |
+| 274 | Empty state follow-ups from PR #406 review | `stories/274-empty-state-followups.md` | 272 |

@@ -958,6 +958,21 @@ func TestPlaylistsPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Rate limited")
 }
 
+// TestPlaylistsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No playlists"
+// with the contextual hint.
+func TestPlaylistsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetPlaylists([]domain.SimplePlaylist{})
+	s.SetPlaylistsFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No playlists")
+	assert.Contains(t, output, "Create playlists in Spotify or search with /")
+}
+
 // ── Story 158: LockedRow for Spotify-owned playlists ─────────────────────────
 
 // TestPlaylistsPane_SpotifyOwnedRow_HasLockedGlyph verifies that a playlist with

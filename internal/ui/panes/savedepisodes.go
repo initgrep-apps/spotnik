@@ -115,12 +115,16 @@ func (p *SavedEpisodesPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p *SavedEpisodesPane) View() string {
 	if !p.Filter().IsActive() && len(p.store.SavedEpisodes()) == 0 {
-		es := uikit.PaneEmptyStatus("saved episodes",
-			p.store.SavedEpisodesFetching(),
-			p.store.SavedEpisodesFetchError(),
-			p.store.SavedEpisodesFetchedAt().IsZero(),
-			p.store.IsThrottled(),
-			p.store.ThrottleRetryAfterSecs())
+		es := uikit.PaneEmptyStatus("saved episodes", uikit.PaneFetchState{
+			IsFetching:     p.store.SavedEpisodesFetching(),
+			FetchErr:       p.store.SavedEpisodesFetchError(),
+			NeverFetched:   p.store.SavedEpisodesFetchedAt().IsZero(),
+			IsThrottled:    p.store.IsThrottled(),
+			RetryAfterSecs: p.store.ThrottleRetryAfterSecs(),
+		})
+		if es.Status == uikit.EmptyStatusNone {
+			es.Hint = "Save episodes in Spotify or search with /"
+		}
 		es.Width = p.width
 		es.Height = p.height
 		es.Theme = p.theme

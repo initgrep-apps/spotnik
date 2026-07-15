@@ -350,6 +350,21 @@ func TestLikedSongsPane_View_EmptyState_RateLimited(t *testing.T) {
 	assert.Contains(t, output, "Rate limited")
 }
 
+// TestLikedSongsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No liked songs"
+// with the contextual hint.
+func TestLikedSongsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetLikedTracks([]domain.SavedTrack{})
+	s.SetLikedTracksFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No liked songs")
+	assert.Contains(t, output, "Press / to search for tracks")
+}
+
 // ── Story 120: dead pane action removal ──────────────────────────────────────
 
 // TestLikedSongsPane_Actions_NoLikeEntry verifies 'i' is not in Actions()
