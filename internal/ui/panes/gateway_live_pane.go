@@ -260,6 +260,11 @@ func buildGatewayLiveRow(e domain.GatewayEvent) (gatewayLiveRow, bool) {
 		intent = uikit.RoleSuccess
 		label = fmt.Sprintf("%s  %s %s  allowed", ts, e.Method, path)
 
+	case domain.EventRequestFailed:
+		role = uikit.GlyphError
+		intent = uikit.RoleError
+		label = fmt.Sprintf("%s  %s %s  failed", ts, e.Method, path)
+
 	case domain.EventRequestBlocked:
 		role = uikit.GlyphError
 		intent = uikit.RoleError
