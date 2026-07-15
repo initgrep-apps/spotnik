@@ -304,3 +304,21 @@ These 3 panes have updated View() using PaneEmptyStatus but only got golden file
 **Feature:** 22-rate-limit-resilience
 
 Only Error state golden test added. No golden snapshot for Fetching or RateLimited visual output.
+
+---
+
+## Gateway traffic shaping: review follow-ups
+**Found:** 2026-07-09 | **Source:** PR #409 Review (Round 2)
+**Feature:** 22-rate-limit-resilience (story 273)
+
+Non-blocking items from PR #409 round 2 review. Code reviewer verdict: minor issues only. Silent-failure audit flagged observability gaps and pre-existing issues in modified files.
+
+Items to log:
+1. **Dead state field `lastDispatchedTick`** — `internal/app/app.go` declares it, `handlers.go:524` and `scheduler_internal_test.go` write it, but no production read. Scheduler uses `lastSuccessTick`+`hasSuccess`. Remove field + writes.
+2. **resp.Body leak on (resp!=nil, err!=nil) in `Do()`** — `internal/api/gateway.go:547-601`. Close lives inside `if err == nil`; when `fn()` returns non-nil resp AND non-nil err, body never closed. Pre-existing but in PR-modified path. Fix: close defensively regardless of err.
+3. **ctx.Done() cancellation paths emit no event** — `internal/api/gateway.go` dedup wait / semaphore acquire / dedup re-check return `ctx.Err()` without emitting `EventRequestBlocked`. bucket.wait cancel path does emit. Inconsistent observability.
+4. **EventRequestAllowed emitted for failed/429 primary callers** — `internal/api/gateway.go:620` fires unconditionally. Gate to success or introduce terminal error event.
+5. **Silent token delete on logout/forget** — `internal/app/handlers.go:1294,1299` discards keychain delete error. Security-adjacent; surface failure via toast before quit.
+6. **`setRate` no `rate>0` validation** — `internal/api/gateway_bucket.go`. Partially addressed (silent no-op guard added). Consider returning error for programmer misuse. Callers already clamp above `minBackgroundRate`.
+7. **`buildFetchStatsCmd` drops second error** — `internal/app/commands.go:498-515`. If both tracks+artists fail, only tracksErr returned. Use `errors.Join`.
+8. **Keychain Get errors masked as "no refresh token"** — `internal/app/commands.go:606-608,614`. Keychain failure indistinguishable from missing token. Wrap original error.

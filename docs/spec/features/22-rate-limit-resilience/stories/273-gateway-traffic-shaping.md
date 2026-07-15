@@ -1,7 +1,7 @@
 ---
 title: "Gateway Proactive Traffic Shaping"
 feature: 22-rate-limit-resilience
-status: open
+status: done
 ---
 
 ## Background

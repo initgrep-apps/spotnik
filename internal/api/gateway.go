@@ -62,13 +62,43 @@ type RequestKey struct {
 	Priority Priority
 }
 
+const (
+	// defaultBackgroundRate is the sustained rate for Background requests.
+	// 2 req/s = 60 requests per 30-second rolling window.
+	// This is intentionally conservative; the adaptive mechanism can raise
+	// it temporarily after a sustained clean period.
+	defaultBackgroundRate = 2.0 // req/s
+
+	// defaultBurst is the maximum tokens the bucket can hold.
+	// Allows short bursts (e.g. initial preset load) without raising the
+	// long-term average above Spotify's rolling window.
+	defaultBurst = 5
+
+	// minBackgroundRate is the floor. Never drop below this.
+	minBackgroundRate = 0.5 // req/s
+
+	// rateReductionStep is how much the rate is lowered on each 429.
+	rateReductionStep = 1.0 // req/s
+
+	// rateRecoveryStep is how much the rate is raised on each recovery tick.
+	rateRecoveryStep = 0.5 // req/s
+
+	// recoveryInterval is how long must pass without a 429 before rate rises.
+	recoveryInterval = 30 * time.Second
+
+	// LongIdleThreshold is how long without input before library polling pauses.
+	LongIdleThreshold = 15 * time.Minute
+)
+
 // Gateway is the central control point for all outbound Spotify API requests.
 // It enforces:
-//   - Token-bucket rate limiting (10 req/s burst of 10)
+//   - Token-bucket rate limiting (adaptive Background rate, burst of 5)
 //   - Concurrency cap of 5 simultaneous in-flight requests
 //   - In-flight request deduplication (same key → only one HTTP call)
 //   - 429 backoff: both priorities are rejected immediately; Interactive
 //     requests are not queued so stale commands do not pile up (F27-S126)
+//   - Adaptive rate limiting: lowers Background rate after 429s and recovers
+//     slowly when 429s stop.
 type Gateway struct {
 	mu            sync.Mutex
 	bucket        *tokenBucket
@@ -85,6 +115,15 @@ type Gateway struct {
 	// lastBackoffActive tracks whether backoff was active at the last check.
 	// Used to detect the backoff→clear transition for BackoffExpired events.
 	lastBackoffActive bool
+
+	// backgroundRate is the current effective Background request rate.
+	backgroundRate float64
+	// burst is the token bucket burst capacity (kept independent of rate).
+	burst float64
+	// last429Time is when the most recent 429 response was received.
+	last429Time time.Time
+	// lastRecoveryTick is when the rate was last raised toward defaultBackgroundRate.
+	lastRecoveryTick time.Time
 }
 
 // SetRecorder sets the gateway event recorder. Pass nil to disable recording.
@@ -96,12 +135,16 @@ func (g *Gateway) SetRecorder(r domain.GatewayEventRecorder) {
 }
 
 // NewGateway creates a Gateway with default limits:
-// 10 requests/second token bucket, burst of 10, max 5 concurrent in-flight.
+// 2 Background requests/second token bucket, burst of 5, max 5 concurrent in-flight.
 func NewGateway() *Gateway {
 	g := &Gateway{
-		bucket:    newTokenBucket(10, 10),
-		semaphore: make(chan struct{}, 5),
-		inflight:  make(map[RequestKey]*inflightEntry),
+		bucket:           newTokenBucket(defaultBurst, defaultBackgroundRate),
+		semaphore:        make(chan struct{}, 5),
+		inflight:         make(map[RequestKey]*inflightEntry),
+		backgroundRate:   defaultBackgroundRate,
+		burst:            defaultBurst,
+		last429Time:      time.Time{},
+		lastRecoveryTick: time.Now(),
 	}
 	// Initialize lastEmittedTokens to max so the first CheckAndEmitRefill
 	// only fires when the level actually changes from the initial full state.
@@ -112,9 +155,8 @@ func NewGateway() *Gateway {
 // captureSnapshot reads the gateway's current state under locks.
 // Returns a GatewayStateSnapshot suitable for embedding in a GatewayEvent.
 //
-// Lock ordering: acquires bucket.mu first, then g.mu. The caller must NOT
-// hold g.mu when calling this method. If the caller already holds g.mu,
-// use captureSnapshotLocked() instead.
+// Lock ordering: releases bucket.mu before acquiring g.mu to avoid lock-order
+// inversion. Never hold both locks at the same time.
 func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	g.bucket.mu.Lock()
 	now := time.Now()
@@ -127,6 +169,7 @@ func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	g.bucket.mu.Unlock()
 
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	backoffRemaining := time.Until(g.backoffUntil).Seconds()
 	if backoffRemaining < 0 {
 		backoffRemaining = 0
@@ -136,43 +179,11 @@ func (g *Gateway) captureSnapshot() domain.GatewayStateSnapshot {
 	for k := range g.inflight {
 		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
 	}
-	g.mu.Unlock()
-
-	return domain.GatewayStateSnapshot{
-		TokensAvailable:  int(tokens),
-		TokensMax:        tokenMax,
-		ConcurrentActive: len(g.semaphore),
-		ConcurrentMax:    cap(g.semaphore),
-		BackoffRemaining: backoffRemaining,
-		DedupWaiters:     dedupWaiters,
-		InFlightKeys:     inFlightKeys,
-	}
-}
-
-// captureSnapshotLocked reads gateway state when g.mu is already held.
-// Only acquires bucket.mu (safe — bucket.mu is never held when g.mu is acquired).
-// Reads semaphore length without a lock (channel len is always safe).
-// Reads inflight/backoff from g.mu-protected fields without re-acquiring.
-func (g *Gateway) captureSnapshotLocked() domain.GatewayStateSnapshot {
-	g.bucket.mu.Lock()
-	now := time.Now()
-	elapsed := now.Sub(g.bucket.lastFill).Seconds()
-	tokens := g.bucket.tokens + elapsed*g.bucket.rate
-	if tokens > g.bucket.max {
-		tokens = g.bucket.max
-	}
-	tokenMax := int(g.bucket.max)
-	g.bucket.mu.Unlock()
-
-	// g.mu is already held by caller — read fields directly.
-	backoffRemaining := time.Until(g.backoffUntil).Seconds()
-	if backoffRemaining < 0 {
-		backoffRemaining = 0
-	}
-	dedupWaiters := len(g.inflight)
-	inFlightKeys := make([]string, 0, len(g.inflight))
-	for k := range g.inflight {
-		inFlightKeys = append(inFlightKeys, fmt.Sprintf("%s %s", k.Method, k.Path))
+	backgroundRate := g.backgroundRate
+	burst := g.burst
+	last429Ago := 0.0
+	if !g.last429Time.IsZero() {
+		last429Ago = time.Since(g.last429Time).Seconds()
 	}
 
 	return domain.GatewayStateSnapshot{
@@ -183,52 +194,10 @@ func (g *Gateway) captureSnapshotLocked() domain.GatewayStateSnapshot {
 		BackoffRemaining: backoffRemaining,
 		DedupWaiters:     dedupWaiters,
 		InFlightKeys:     inFlightKeys,
+		BackgroundRate:   backgroundRate,
+		BurstCapacity:    burst,
+		Last429AgoSecs:   last429Ago,
 	}
-}
-
-// emitEvent records a gateway event if a recorder is attached.
-// Captures a state snapshot at the current moment.
-// The caller must NOT hold g.mu — use emitEventLocked() if g.mu is held.
-func (g *Gateway) emitEvent(kind domain.EventKind, reqID uint64, method, path string,
-	priority domain.RequestPriority, statusCode int, durationMs int64) {
-	g.mu.Lock()
-	rec := g.recorder
-	g.mu.Unlock()
-	if rec == nil {
-		return
-	}
-	rec.RecordEvent(domain.GatewayEvent{
-		Timestamp:  time.Now(),
-		Kind:       kind,
-		RequestID:  reqID,
-		Method:     method,
-		Path:       path,
-		Priority:   priority,
-		StatusCode: statusCode,
-		DurationMs: durationMs,
-		Snapshot:   g.captureSnapshot(),
-	})
-}
-
-// emitEventLocked is like emitEvent but for use when g.mu is already held.
-// Reads recorder from the locked state and uses captureSnapshotLocked().
-func (g *Gateway) emitEventLocked(kind domain.EventKind, reqID uint64, method, path string,
-	priority domain.RequestPriority, statusCode int, durationMs int64) {
-	rec := g.recorder
-	if rec == nil {
-		return
-	}
-	rec.RecordEvent(domain.GatewayEvent{
-		Timestamp:  time.Now(),
-		Kind:       kind,
-		RequestID:  reqID,
-		Method:     method,
-		Path:       path,
-		Priority:   priority,
-		StatusCode: statusCode,
-		DurationMs: durationMs,
-		Snapshot:   g.captureSnapshotLocked(),
-	})
 }
 
 // CheckAndEmitRefill checks if the token bucket level has changed since the
@@ -272,13 +241,39 @@ func (g *Gateway) CheckAndEmitBackoffExpiry() {
 	rec := g.recorder
 	g.mu.Unlock()
 
-	if wasActive && !nowActive && rec != nil {
-		rec.RecordEvent(domain.GatewayEvent{
-			Timestamp: time.Now(),
-			Kind:      domain.EventBackoffExpired,
-			Snapshot:  g.captureSnapshot(),
-		})
+	if !wasActive || nowActive || rec == nil {
+		return
 	}
+	rec.RecordEvent(domain.GatewayEvent{
+		Timestamp: time.Now(),
+		Kind:      domain.EventBackoffExpired,
+		Snapshot:  g.captureSnapshot(),
+	})
+}
+
+// emitEvent records a gateway event if a recorder is attached.
+// Captures a state snapshot at the current moment. Safe to call whether or
+// not g.mu is held, because it acquires g.mu itself and never holds both g.mu
+// and bucket.mu at the same time.
+func (g *Gateway) emitEvent(kind domain.EventKind, reqID uint64, method, path string,
+	priority domain.RequestPriority, statusCode int, durationMs int64) {
+	g.mu.Lock()
+	rec := g.recorder
+	g.mu.Unlock()
+	if rec == nil {
+		return
+	}
+	rec.RecordEvent(domain.GatewayEvent{
+		Timestamp:  time.Now(),
+		Kind:       kind,
+		RequestID:  reqID,
+		Method:     method,
+		Path:       path,
+		Priority:   priority,
+		StatusCode: statusCode,
+		DurationMs: durationMs,
+		Snapshot:   g.captureSnapshot(),
+	})
 }
 
 // IsThrottled returns true when the gateway is in a 429 backoff period.
@@ -293,6 +288,90 @@ func (g *Gateway) RetryAfterSecs() int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.retryAfter
+}
+
+// CanAdmit returns true if the gateway is currently willing to accept a
+// request of the given priority. It is called by the app before dispatching
+// a fetch command so the app can avoid creating work that will be rejected.
+//
+// It returns false when:
+//   - the gateway is in 429 backoff
+//   - the token bucket has no tokens right now (Background only)
+//   - the semaphore is full (Background only)
+//
+// Interactive requests are only gated by backoff; they are never queued by the
+// app and the caller decides whether to dispatch them.
+func (g *Gateway) CanAdmit(priority Priority) bool {
+	g.mu.Lock()
+	throttled := time.Now().Before(g.backoffUntil)
+	g.mu.Unlock()
+
+	g.tryRecover()
+
+	if throttled {
+		return false
+	}
+
+	if priority == Interactive {
+		return true
+	}
+
+	if len(g.semaphore) >= cap(g.semaphore) {
+		return false
+	}
+
+	// Read-only token check: do NOT mutate bucket.lastFill or bucket.tokens.
+	// Only Do() may refill and consume tokens, otherwise concurrent CanAdmit
+	// calls would corrupt the bucket accounting.
+	g.bucket.mu.Lock()
+	now := time.Now()
+	elapsed := now.Sub(g.bucket.lastFill).Seconds()
+	tokens := g.bucket.tokens + elapsed*g.bucket.rate
+	if tokens > g.bucket.max {
+		tokens = g.bucket.max
+	}
+	hasToken := tokens >= 1
+	g.bucket.mu.Unlock()
+
+	return hasToken
+}
+
+// TryRecover is the exported entry point for the periodic recovery tick.
+// It delegates to the unexported tryRecover implementation.
+func (g *Gateway) TryRecover() {
+	g.tryRecover()
+}
+
+// tryRecover raises the Background rate slowly when no 429 has occurred for
+// recoveryInterval and at least recoveryInterval has passed since the
+// last rate change. Called from CanAdmit and from App.TickMsg.
+func (g *Gateway) tryRecover() {
+	g.mu.Lock()
+
+	if g.backgroundRate >= defaultBackgroundRate {
+		g.mu.Unlock()
+		return
+	}
+	if time.Since(g.last429Time) < recoveryInterval {
+		g.mu.Unlock()
+		return
+	}
+	if time.Since(g.lastRecoveryTick) < recoveryInterval {
+		g.mu.Unlock()
+		return
+	}
+
+	newRate := g.backgroundRate + rateRecoveryStep
+	if newRate > defaultBackgroundRate {
+		newRate = defaultBackgroundRate
+	}
+	g.backgroundRate = newRate
+	g.lastRecoveryTick = time.Now()
+
+	bucket := g.bucket
+	g.mu.Unlock()
+
+	bucket.setRate(newRate)
 }
 
 // Do executes fn as a controlled HTTP call through the gateway.
@@ -335,11 +414,9 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 	g.mu.Lock()
 	throttled := time.Now().Before(g.backoffUntil)
 	retryAfter := g.retryAfter
-	if throttled {
-		g.emitEventLocked(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
-	}
 	g.mu.Unlock()
 	if throttled {
+		g.emitEvent(domain.EventRequestBlocked, reqID, key.Method, key.Path, domainPriority, 0, 0)
 		return nil, &RateLimitError{RetryAfter: retryAfter}
 	}
 
@@ -452,7 +529,12 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 		g.mu.Unlock()
 
 		// Ensure the entry is always closed and removed, even on panic.
+		// Guard against nil entry — if a panic occurs before assignment, the
+		// deferred body would panic again on close(entry.done).
 		defer func() {
+			if entry == nil {
+				return
+			}
 			close(entry.done)
 			g.mu.Lock()
 			delete(g.inflight, key)
@@ -485,7 +567,8 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 				entry.body = body
 			}
 
-			// On 429: set the gateway backoff and emit BackoffStarted before creating the error.
+			// On 429: set the gateway backoff, reduce adaptive rate, and emit
+			// BackoffStarted before creating the error.
 			// We do NOT suppress the error here — checkResponseStatus in
 			// doJSON/doNoContent would also create one, but dedup waiters
 			// bypass checkResponseStatus. By creating the error here, all
@@ -493,10 +576,23 @@ func (g *Gateway) Do(ctx context.Context, priority Priority, key RequestKey,
 			// RateLimitError with the correct RetryAfter value.
 			if resp.StatusCode == http.StatusTooManyRequests {
 				retryAfter := parseRetryAfter(resp)
+				now := time.Now()
 				g.mu.Lock()
 				g.retryAfter = retryAfter
-				g.backoffUntil = time.Now().Add(time.Duration(retryAfter) * time.Second)
+				g.backoffUntil = now.Add(time.Duration(retryAfter) * time.Second)
+				g.last429Time = now
+
+				newRate := g.backgroundRate - rateReductionStep
+				if newRate < minBackgroundRate {
+					newRate = minBackgroundRate
+				}
+				g.backgroundRate = newRate
+				g.lastRecoveryTick = now
+
+				bucket := g.bucket
+				rate := g.backgroundRate
 				g.mu.Unlock()
+				bucket.setRate(rate)
 				// Emit BackoffStarted now that backoffUntil is set.
 				g.emitEvent(domain.EventBackoffStarted, reqID, key.Method, key.Path, domainPriority, resp.StatusCode, 0)
 				err = &RateLimitError{RetryAfter: retryAfter}

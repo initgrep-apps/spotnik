@@ -1,6 +1,6 @@
 ---
 title: "Rate Limit Resilience & Empty State Context"
-status: open
+status: done
 ---
 
 ## Description
@@ -17,11 +17,11 @@ Two tightly-coupled problems discovered during long-running sessions with the Da
 - [ ] `StateReader` exposes podcast error/fetching accessors so panes can read fetch status
 - [ ] `EmptyState` supports status-driven text (never-fetched, fetching, error, rate-limited, empty)
 - [ ] All 9 table panes updated to check fetch status before rendering empty state
-- [ ] Gateway exposes admission control: `CanAdmit(priority) bool` — app checks before dispatching
-- [ ] Fetch commands are staggered across ticks — no two panes fire on the same tick
-- [ ] Gateway adaptively reduces its internal rate limit after consecutive 429s
-- [ ] Gateway recovers rate limit gradually after 429s stop (not instant reset)
-- [ ] `make ci` passes
+- [x] Gateway exposes admission control: `CanAdmit(priority) bool` — app checks before dispatching
+- [x] Fetch commands are staggered across ticks — no two panes fire on the same tick
+- [x] Gateway adaptively reduces its internal rate limit after consecutive 429s
+- [x] Gateway recovers rate limit gradually after 429s stop (not instant reset)
+- [x] `make ci` passes
 
 ## Stories
 

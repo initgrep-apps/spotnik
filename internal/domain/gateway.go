@@ -61,6 +61,12 @@ type GatewayStateSnapshot struct {
 	DedupWaiters int
 	// InFlightKeys lists string descriptions of currently in-flight GET requests.
 	InFlightKeys []string
+	// BackgroundRate is the current adaptive Background rate limit (req/s).
+	BackgroundRate float64
+	// BurstCapacity is the token bucket burst capacity.
+	BurstCapacity float64
+	// Last429AgoSecs is seconds since the last 429 response (0 if never).
+	Last429AgoSecs float64
 }
 
 // GatewayEvent records a single gateway lifecycle event with a snapshot of the
