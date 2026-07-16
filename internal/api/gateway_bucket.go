@@ -1,9 +1,11 @@
-// token bucket rate limiter for the API gateway — 10 tokens/second,
-// burst 10; background requests drain the bucket; interactive requests bypass it.
+// token bucket rate limiter for the API gateway — burst 5, 2 req/s default
+// Background rate (adaptive). All requests consume tokens; Interactive is not
+// bypassed but is only gated by 429 backoff at the CanAdmit pre-flight layer.
 package api
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -14,7 +16,7 @@ import (
 type tokenBucket struct {
 	mu       sync.Mutex
 	tokens   float64
-	max      float64
+	max      float64 // burst capacity (independent of refill rate)
 	rate     float64 // tokens per second
 	lastFill time.Time
 }
@@ -28,6 +30,22 @@ func newTokenBucket(max, rate float64) *tokenBucket {
 		rate:     rate,
 		lastFill: time.Now(),
 	}
+}
+
+// setRate updates the refill rate without changing the burst capacity.
+// Returns an error if rate is non-positive to prevent div-by-zero in wait().
+// Existing tokens are preserved, capped to the unchanged max.
+func (tb *tokenBucket) setRate(rate float64) error {
+	if rate <= 0 {
+		return fmt.Errorf("token bucket rate must be positive, got %f", rate)
+	}
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.rate = rate
+	if tb.tokens > tb.max {
+		tb.tokens = tb.max
+	}
+	return nil
 }
 
 // wait blocks until a token is available or ctx is cancelled.

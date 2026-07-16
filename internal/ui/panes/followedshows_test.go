@@ -3,6 +3,7 @@ package panes
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -35,7 +36,8 @@ func TestFollowedShowsPane_EmptyState(t *testing.T) {
 	p := NewFollowedShowsPane(s, th, true)
 	p.SetSize(80, 20)
 	output := p.View()
-	assert.Contains(t, output, "No followed shows")
+	// Fresh store: never fetched → shows "Loading followed shows..."
+	assert.Contains(t, output, "Loading followed shows...")
 }
 
 func TestFollowedShowsPane_InitialState_Level1(t *testing.T) {
@@ -542,4 +544,69 @@ func TestFollowedShows_View_Level2_NoEmptyState(t *testing.T) {
 
 	output := p.View()
 	assert.NotContains(t, output, "No followed shows")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestFollowedShowsPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading followed shows...".
+func TestFollowedShowsPane_View_EmptyState_NeverFetched(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	p := NewFollowedShowsPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Loading followed shows...")
+}
+
+// TestFollowedShowsPane_View_EmptyState_Fetching verifies that when FollowedShowsFetching is true,
+// the pane shows "Loading followed shows...".
+func TestFollowedShowsPane_View_EmptyState_Fetching(t *testing.T) {
+	s := state.New()
+	s.SetFollowedShowsFetching(true)
+	th := theme.Load("black")
+	p := NewFollowedShowsPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Loading followed shows...")
+}
+
+// TestFollowedShowsPane_View_EmptyState_Error verifies that when FollowedShowsFetchError is set,
+// the pane shows "Unable to load followed shows".
+func TestFollowedShowsPane_View_EmptyState_Error(t *testing.T) {
+	s := state.New()
+	s.SetFollowedShowsFetchError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	p := NewFollowedShowsPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Unable to load followed shows")
+}
+
+// TestFollowedShowsPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load followed shows" with rate-limit hint.
+func TestFollowedShowsPane_View_EmptyState_RateLimited(t *testing.T) {
+	s := state.New()
+	s.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	p := NewFollowedShowsPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "Unable to load followed shows")
+	assert.Contains(t, output, "Rate limited")
+}
+
+// TestFollowedShowsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No followed shows"
+// with the contextual hint.
+func TestFollowedShowsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetFollowedShows([]domain.SavedShow{})
+	s.SetFollowedShowsFetchedAt(time.Now())
+	th := theme.Load("black")
+	p := NewFollowedShowsPane(s, th, true)
+	p.SetSize(80, 20)
+	output := p.View()
+	assert.Contains(t, output, "No followed shows")
+	assert.Contains(t, output, "Search for shows with /")
 }

@@ -5,6 +5,7 @@ package app_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/initgrep-apps/spotnik/internal/app"
 	"github.com/initgrep-apps/spotnik/internal/config"
@@ -15,15 +16,40 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// collectAllMsgs executes a tea.Cmd (possibly a batch) and collects every
-// resulting tea.Msg by executing each sub-command recursively. This mirrors
-// the collectInitMsgs pattern in app_test.go so nested batches are resolved
-// regardless of depth.
-func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
+// execCmdFast runs cmd with a short timeout. Fetch commands in tests resolve
+// immediately; the periodic tea.Tick command blocks for 1s and is ignored.
+func execCmdFast(cmd tea.Cmd, timeout time.Duration) tea.Msg {
 	if cmd == nil {
 		return nil
 	}
-	msg := cmd()
+	type result struct {
+		msg tea.Msg
+	}
+	ch := make(chan result, 1)
+	go func() {
+		ch <- result{msg: cmd()}
+	}()
+	select {
+	case r := <-ch:
+		return r.msg
+	case <-time.After(timeout):
+		return nil
+	}
+}
+
+// collectAllMsgs executes a tea.Cmd (which may be a BatchMsg) and recursively
+// collects all resulting tea.Msg values by executing each sub-command recursively. This mirrors
+// the collectInitMsgs pattern in app_test.go so nested batches are resolved
+// regardless of depth.
+func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
+	return collectAllMsgsTimeout(cmd, 10*time.Millisecond)
+}
+
+func collectAllMsgsTimeout(cmd tea.Cmd, timeout time.Duration) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := execCmdFast(cmd, timeout)
 	if msg == nil {
 		return nil
 	}
@@ -31,7 +57,7 @@ func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
 		var msgs []tea.Msg
 		for _, c := range batch {
 			if c != nil {
-				msgs = append(msgs, collectAllMsgs(c)...)
+				msgs = append(msgs, collectAllMsgsTimeout(c, timeout)...)
 			}
 		}
 		return msgs
@@ -39,52 +65,74 @@ func collectAllMsgs(cmd tea.Cmd) []tea.Msg {
 	return []tea.Msg{msg}
 }
 
-// assertAllLibraryMsgs fails the test if any of the five library fetch message
-// types is absent from msgs.
-func assertAllLibraryMsgs(t *testing.T, msgs []tea.Msg) {
-	t.Helper()
-	types := map[string]bool{
-		"LibraryLoadedMsg":        false,
-		"AlbumsLoadedMsg":         false,
-		"LikedTracksLoadedMsg":    false,
-		"RecentlyPlayedLoadedMsg": false,
-		"StatsLoadedMsg":          false,
-	}
-	for _, m := range msgs {
-		switch m.(type) {
-		case panes.LibraryLoadedMsg:
-			types["LibraryLoadedMsg"] = true
-		case panes.AlbumsLoadedMsg:
-			types["AlbumsLoadedMsg"] = true
-		case panes.LikedTracksLoadedMsg:
-			types["LikedTracksLoadedMsg"] = true
-		case panes.RecentlyPlayedLoadedMsg:
-			types["RecentlyPlayedLoadedMsg"] = true
-		case panes.StatsLoadedMsg:
-			types["StatsLoadedMsg"] = true
-		}
-	}
-	for _, name := range []string{"LibraryLoadedMsg", "AlbumsLoadedMsg", "LikedTracksLoadedMsg", "RecentlyPlayedLoadedMsg", "StatsLoadedMsg"} {
-		assert.True(t, types[name], "TickMsg at tick 0 must dispatch %s", name)
-	}
+// collectImmediateMsgs resolves a tea.Cmd recursively, but skips the periodic
+// tea.Tick command that produces the next panes.TickMsg. This keeps tests fast
+// while still expanding batches of immediate fetch commands.
+func collectImmediateMsgs(cmd tea.Cmd) []tea.Msg {
+	return collectAllMsgsTimeout(cmd, 10*time.Millisecond)
 }
 
-// TestApp_TickMsg_LibraryPollDispatchesAtTick0 verifies that the TickMsg handler
-// dispatches library fetch commands at tick 0 (retry-mode interval = 5s, and
-// 0 % 5 == 0 triggers the first fetch immediately).
-func TestApp_TickMsg_LibraryPollDispatchesAtTick0(t *testing.T) {
+// countLibraryMsgs returns how many distinct library fetch messages are in msgs.
+func countLibraryMsgs(msgs []tea.Msg) int {
+	count := 0
+	for _, m := range msgs {
+		switch m.(type) {
+		case panes.LibraryLoadedMsg, panes.AlbumsLoadedMsg, panes.LikedTracksLoadedMsg,
+			panes.RecentlyPlayedLoadedMsg, panes.StatsLoadedMsg,
+			panes.FollowedShowsLoadedMsg, panes.SavedEpisodesLoadedMsg:
+			count++
+		}
+	}
+	return count
+}
+
+// TestApp_TickMsg_LibraryPollDispatchesAtMostOnePane verifies the scheduler
+// dispatches exactly one library pane per tick and spreads visible panes across
+// consecutive ticks.
+func TestApp_TickMsg_LibraryPollDispatchesAtMostOnePane(t *testing.T) {
 	a := app.New(&config.Config{}, app.AppOptions{})
-	// Layout must be computed before polling checks pane visibility.
 	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	a = model.(*app.App)
 
-	// Tick 0: all library panes are in retry mode (hasData=false) so interval=5.
-	// 0 % 5 == 0 → all five library panes should dispatch fetch commands.
+	// Tick 0: scheduler should pick exactly one visible library pane.
 	_, cmd := a.Update(panes.TickMsg{})
-	require.NotNil(t, cmd, "TickMsg at tick 0 must return a batch command")
+	require.NotNil(t, cmd, "TickMsg at tick 0 must return a command")
+	msgs := collectImmediateMsgs(cmd)
+	assert.Equal(t, 1, countLibraryMsgs(msgs), "scheduler must dispatch exactly one library pane per tick")
+}
 
-	msgs := collectAllMsgs(cmd)
-	assertAllLibraryMsgs(t, msgs)
+// TestApp_TickMsg_LibrarySchedulerCyclesVisiblePanes verifies that sending
+// several consecutive ticks eventually dispatches each visible library pane type.
+func TestApp_TickMsg_LibrarySchedulerCyclesVisiblePanes(t *testing.T) {
+	a := app.New(&config.Config{}, app.AppOptions{})
+	model, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = model.(*app.App)
+
+	seen := map[string]bool{}
+	for i := 0; i < 20; i++ {
+		m, cmd := a.Update(panes.TickMsg{})
+		a = m.(*app.App)
+		if cmd != nil {
+			for _, msg := range collectImmediateMsgs(cmd) {
+				switch msg.(type) {
+				case panes.LibraryLoadedMsg:
+					seen["playlists"] = true
+				case panes.AlbumsLoadedMsg:
+					seen["albums"] = true
+				case panes.LikedTracksLoadedMsg:
+					seen["liked"] = true
+				case panes.RecentlyPlayedLoadedMsg:
+					seen["recent"] = true
+				case panes.StatsLoadedMsg:
+					seen["stats"] = true
+				}
+			}
+		}
+	}
+
+	for _, name := range []string{"playlists", "albums", "liked", "recent", "stats"} {
+		assert.True(t, seen[name], "scheduler should eventually dispatch %s pane", name)
+	}
 }
 
 // TestApp_TickMsg_DevicesPollWhileOverlayOpen verifies that the devices overlay is

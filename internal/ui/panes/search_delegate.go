@@ -689,7 +689,11 @@ func joinGenres(genres []string, max int) string {
 }
 
 // formatFollowers returns a human-readable follower count: "12.4M followers", "3.2K followers", "847 followers".
+// Returns empty string when n is 0 — Spotify hides follower counts for some artists (private).
 func formatFollowers(n int) string {
+	if n == 0 {
+		return ""
+	}
 	switch {
 	case n >= 1_000_000:
 		return fmt.Sprintf("%.1fM followers", float64(n)/1_000_000)

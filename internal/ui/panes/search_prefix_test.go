@@ -799,6 +799,30 @@ func TestSetTheme_UpdatesCompletionStyle(t *testing.T) {
 		"CompletionStyle foreground should match new theme TextMuted()")
 }
 
+// TestSetTheme_UpdatesTextStyle verifies TextStyle changes with new theme.
+func TestSetTheme_UpdatesTextStyle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	newTheme := theme.Load("dracula")
+	o.SetTheme(newTheme)
+
+	assert.Equal(t, newTheme.TextPrimary(), o.TextStyleFg(),
+		"TextStyle foreground should match new theme TextPrimary()")
+}
+
+// TestSetTheme_UpdatesCursorStyle verifies Cursor.Style changes with new theme.
+func TestSetTheme_UpdatesCursorStyle(t *testing.T) {
+	o := newTestSearchOverlay()
+	o.SetSize(80, 30)
+
+	newTheme := theme.Load("dracula")
+	o.SetTheme(newTheme)
+
+	assert.Equal(t, newTheme.Accent(), o.CursorStyleFg(),
+		"Cursor.Style foreground should match new theme Accent()")
+}
+
 // TestSetTheme_ReRendersPromptTagWhenLocked verifies active Prompt tag is re-styled on theme change.
 func TestSetTheme_ReRendersPromptTagWhenLocked(t *testing.T) {
 	o := newTestSearchOverlay()

@@ -1,22 +1,52 @@
 package uikit
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/initgrep-apps/spotnik/internal/ui/theme"
 )
 
+// EmptyStatus classifies why a pane has no data to display.
+type EmptyStatus int
+
+const (
+	// EmptyStatusNone means data is genuinely empty (API returned 200, zero items).
+	EmptyStatusNone EmptyStatus = iota
+	// EmptyStatusNeverFetched means no API call has ever completed for this data.
+	EmptyStatusNeverFetched
+	// EmptyStatusFetching means the first API call is in-flight.
+	EmptyStatusFetching
+	// EmptyStatusError means the last API call failed with a non-rate-limit error.
+	EmptyStatusError
+	// EmptyStatusRateLimited means the gateway is in 429 backoff.
+	EmptyStatusRateLimited
+)
+
 // EmptyState is shown when a pane has nothing to display. Text is centered
 // vertically and horizontally in the provided rectangle; an optional Hint
 // renders below Text. Both Text and Hint are rendered in the Muted role.
 //
+// When Status is set (non-zero), Render() derives the display text from the
+// status instead of using Text/Hint directly. Category provides the noun
+// phrase used in status-driven messages (e.g. "followed shows").
+//
 // Render() returns exactly Height newline-separated lines.
 type EmptyState struct {
+	// Category is the noun phrase used in status-driven messages
+	// (e.g. "followed shows", "saved episodes"). Required when Status is set.
+	Category string
 	// Text is the primary no-data message (e.g. "Empty queue").
+	// Used as-is when Status is EmptyStatusNone.
 	Text string
 	// Hint is the optional secondary help text rendered below Text.
+	// When Status is EmptyStatusRateLimited, the caller should set Hint
+	// with the retry-after info (e.g. "Rate limited — retrying in 5s").
 	Hint string
+	// Status, when set (non-zero), overrides Text/Hint with status-driven
+	// messages. EmptyStatusNone uses Text/Hint as-is.
+	Status EmptyStatus
 	// Width is the column width of the rendered output.
 	Width int
 	// Height is the number of lines in the rendered output.
@@ -27,18 +57,48 @@ type EmptyState struct {
 
 // Render centers Text (and Hint below it) both horizontally and vertically
 // within the Height×Width rectangle. Both are styled in the Muted role.
+// When Status is set, derives display text from the status.
 // Returns exactly Height newline-joined lines.
 func (e EmptyState) Render() string {
 	if e.Height <= 0 {
 		return ""
 	}
 
+	text := e.Text
+	hint := e.Hint
+
+	switch e.Status {
+	case EmptyStatusNeverFetched, EmptyStatusFetching:
+		if e.Category == "" {
+			text = "Loading..."
+		} else {
+			text = "Loading " + e.Category + "..."
+		}
+		hint = ""
+	case EmptyStatusError:
+		if e.Category == "" {
+			text = "Unable to load data"
+		} else {
+			text = "Unable to load " + e.Category
+		}
+		if hint == "" {
+			hint = "Check your connection"
+		}
+	case EmptyStatusRateLimited:
+		if e.Category == "" {
+			text = "Unable to load data"
+		} else {
+			text = "Unable to load " + e.Category
+		}
+		// hint is set by caller with retry-after info
+	}
+
 	mutedStyle := lipgloss.NewStyle().Foreground(e.Theme.TextMuted())
 
 	// Build the body lines (text + optional hint).
-	body := mutedStyle.Render(e.Text)
-	if e.Hint != "" {
-		body = body + "\n" + mutedStyle.Render(e.Hint)
+	body := mutedStyle.Render(text)
+	if hint != "" {
+		body = body + "\n" + mutedStyle.Render(hint)
 	}
 
 	bodyLines := strings.Split(body, "\n")
@@ -71,6 +131,51 @@ func (e EmptyState) Render() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// PaneFetchState bundles the store-derived flags that PaneEmptyStatus needs
+// to determine the correct EmptyStatus.
+type PaneFetchState struct {
+	IsFetching     bool
+	FetchErr       error
+	NeverFetched   bool
+	IsThrottled    bool
+	RetryAfterSecs int
+}
+
+// PaneEmptyStatus determines the EmptyState for a pane based on store state.
+// category is the display name (e.g. "followed shows", "saved episodes").
+func PaneEmptyStatus(category string, s PaneFetchState) EmptyState {
+	if s.IsThrottled {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusRateLimited,
+			Text:     "Unable to load " + category,
+			Hint:     fmt.Sprintf("Rate limited — retrying in %ds", s.RetryAfterSecs),
+		}
+	}
+	if s.IsFetching {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusFetching,
+			Text:     "Loading " + category + "...",
+		}
+	}
+	if s.FetchErr != nil {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusError,
+			Text:     "Unable to load " + category,
+		}
+	}
+	if s.NeverFetched {
+		return EmptyState{
+			Category: category,
+			Status:   EmptyStatusNeverFetched,
+			Text:     "Loading " + category + "...",
+		}
+	}
+	return EmptyState{Category: category, Status: EmptyStatusNone, Text: "No " + category}
 }
 
 // centerLine pads a single rendered line with spaces so the visible content

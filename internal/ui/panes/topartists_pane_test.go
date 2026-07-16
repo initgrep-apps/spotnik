@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -261,6 +262,71 @@ func TestTopArtistsPane_RefreshRows(t *testing.T) {
 	pane.RefreshRows()
 	view := pane.View()
 	assert.Contains(t, view, "Refreshed Artist")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestTopArtistsPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading top artists...".
+func TestTopArtistsPane_View_EmptyState_NeverFetched(t *testing.T) {
+	st := state.New()
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading top artists...")
+}
+
+// TestTopArtistsPane_View_EmptyState_Fetching verifies that when StatsFetching is true,
+// the pane shows "Loading top artists...".
+func TestTopArtistsPane_View_EmptyState_Fetching(t *testing.T) {
+	st := state.New()
+	st.SetStatsFetching("short_term", true)
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading top artists...")
+}
+
+// TestTopArtistsPane_View_EmptyState_Error verifies that when StatsError is set,
+// the pane shows "Unable to load top artists".
+func TestTopArtistsPane_View_EmptyState_Error(t *testing.T) {
+	st := state.New()
+	st.SetStatsError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load top artists")
+}
+
+// TestTopArtistsPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load top artists" with rate-limit hint.
+func TestTopArtistsPane_View_EmptyState_RateLimited(t *testing.T) {
+	st := state.New()
+	st.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load top artists")
+	assert.Contains(t, output, "Rate limited")
+}
+
+// TestTopArtistsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No top artists"
+// with the contextual hint.
+func TestTopArtistsPane_View_EmptyState_None(t *testing.T) {
+	st := state.New()
+	st.SetTopArtists("short_term", []domain.FullArtist{})
+	st.StampStatsFetchedAt("short_term")
+	th := theme.Load("black")
+	pane := NewTopArtistsPane(st, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No top artists")
+	assert.Contains(t, output, "Listen to more music to populate this list")
 }
 
 // ── Story 71 Task 3: column color tokens ─────────────────────────────────────

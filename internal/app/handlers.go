@@ -182,31 +182,26 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.closeSearch()
 
 	case panes.SearchRequestMsg:
-		// Cancel any in-flight HTTP call before starting a new one.
 		a.searchCancel()
 
-		// Use the type filter from the overlay when set (e.g. ":songs" → ["track"]).
-		// Fall back to all four types when no prefix filter is active.
 		searchTypes := m.Types
 		if len(searchTypes) == 0 {
 			searchTypes = []string{"track", "artist", "album", "playlist"}
 		}
 
-		// Record staleness keys for the incoming request.
 		a.searchQuery = m.Query
 		a.searchPage = m.Page
+		a.searchGen = m.Gen
 		a.searchLoading = true
 
-		// Create a cancellable context for this request.
 		ctx, cancel := context.WithCancel(context.Background())
 		a.searchCancel = cancel
 		a.searchCtx = ctx
 
-		// Tell the overlay we are loading before the HTTP call goes out.
 		isFirst := len(a.searchPane.Results()) == 0
 		loadingCmd := func() tea.Msg { return panes.SearchLoadingMsg{IsFirstPage: isFirst} }
 
-		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, m.Page)
+		fetchCmd := buildSearchPageCmd(ctx, a.search, m.Query, searchTypes, m.Page, m.Gen)
 
 		return a, tea.Batch(loadingCmd, fetchCmd)
 
@@ -226,7 +221,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		// Discard stale results AND stale errors — the user moved on to a different query or page.
-		if m.Query != a.searchQuery || m.Page != a.searchPage {
+		if m.Query != a.searchQuery || m.Page != a.searchPage || m.Gen != a.searchGen {
 			return a, nil
 		}
 		if m.Err != nil {
@@ -361,6 +356,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearStatsError()
 				return a, nil
 			}
 			a.statsPoll.errorCount++
@@ -379,6 +375,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statsPoll.errorCount = 0
 		a.statsPoll.backoffTicks = 0
 		a.statsPoll.hasData = true
+		a.statsPoll.hasSuccess = true
+		a.statsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearStatsError()
 		if m.TimeRange != "" {
 			a.store.SetTopTracks(m.TimeRange, m.TopTracks)
@@ -519,45 +517,18 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, fetchQueueCmd(a.player))
 		}
 
-		// Library pane polling — per-pane exponential backoff, isolated from global 429.
-		for _, entry := range []struct {
-			paneID   layout.PaneID
-			p        *pollState
-			iv       libraryIntervals
-			fetching func() bool
-			setFetch func(bool)
-			cmd      func() tea.Cmd
-		}{
-			{layout.PanePlaylists, &a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
-			{layout.PaneAlbums, &a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
-			{layout.PaneLikedSongs, &a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
-			{layout.PaneRecentlyPlayed, &a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
-			{layout.PaneTopTracks, &a.statsPoll, statsIntervals,
-				func() bool { return a.store.StatsFetching("short_term") },
-				func(b bool) { a.store.SetStatsFetching("short_term", b) },
-				func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
-			{layout.PaneFollowedShows, &a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
-			{layout.PaneSavedEpisodes, &a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
-		} {
-			// TopTracks and TopArtists share the same stats data. Continue polling
-			// if either pane is visible.
-			if entry.paneID == layout.PaneTopTracks {
-				if !a.layout.IsPaneVisible(layout.PaneTopTracks) && !a.layout.IsPaneVisible(layout.PaneTopArtists) {
-					continue
-				}
-			} else if !a.layout.IsPaneVisible(entry.paneID) {
-				continue
-			}
-			p := entry.p
-			if p.backoffTicks > 0 {
-				p.backoffTicks--
-			} else if interval := a.libraryInterval(p, entry.iv); a.tickCount%interval == 0 {
-				if !entry.fetching() {
-					entry.setFetch(true)
-					cmds = append(cmds, entry.cmd())
-				}
+		// Long-idle guard: pause all library polling after 15 minutes of inactivity.
+		// Playback and queue still run (so the app can resume when the user returns).
+		if !a.isLongIdle() {
+			if best := a.pickMostOverdueLibraryPane(); best != nil && a.gateway.CanAdmit(api.Background) {
+				best.setFetch(true)
+				cmds = append(cmds, best.cmd())
 			}
 		}
+
+		// Recovery tick: even if no pane was admitted, try to raise the gateway rate.
+		a.gateway.TryRecover()
+
 		// Devices overlay polling (10s) — only while the overlay is open.
 		if a.deviceOverlayOpen {
 			const devicePollInterval = 10
@@ -727,7 +698,15 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear sentinels for the same reason as RateLimitedMsg: the domain loaded-message
 		// handler never fires when the command short-circuits to unauthorizedMsg.
 		a.clearAllFetchingSentinels()
-		// If tokenStore is nil or has no refresh token, skip to show expired message.
+		// If there is no token store we cannot refresh; emit a session-expired toast
+		// and return without trying to refresh.
+		if a.tokenStore == nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Session expired",
+				Body:   string(uikit.RecoveryRunAuth),
+			})
+		}
 		return a, buildRefreshTokenCmd(a.tokenStore, a.clientID, a.tokenBaseURL)
 
 	case tokenRefreshedMsg:
@@ -1020,6 +999,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetPlaylistsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearPlaylistsFetchError()
 				return a, nil
 			}
 			a.playlistsPoll.errorCount++
@@ -1045,6 +1025,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.playlistsPoll.errorCount = 0
 		a.playlistsPoll.backoffTicks = 0
 		a.playlistsPoll.hasData = true
+		a.playlistsPoll.hasSuccess = true
+		a.playlistsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearPlaylistsFetchError()
 		if m.Offset == 0 {
 			a.store.SetPlaylists(m.Items)
@@ -1097,6 +1079,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetAlbumsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearAlbumsFetchError()
 				return a, nil
 			}
 			a.albumsPoll.errorCount++
@@ -1122,6 +1105,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.albumsPoll.errorCount = 0
 		a.albumsPoll.backoffTicks = 0
 		a.albumsPoll.hasData = true
+		a.albumsPoll.hasSuccess = true
+		a.albumsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearAlbumsFetchError()
 		if m.Offset == 0 {
 			a.store.SetSavedAlbums(m.Items)
@@ -1173,6 +1158,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetLikedFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearLikedTracksFetchError()
 				return a, nil
 			}
 			a.likedSongsPoll.errorCount++
@@ -1191,6 +1177,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.likedSongsPoll.errorCount = 0
 		a.likedSongsPoll.backoffTicks = 0
 		a.likedSongsPoll.hasData = true
+		a.likedSongsPoll.hasSuccess = true
+		a.likedSongsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearLikedTracksFetchError()
 		a.store.SetLikedTracks(m.Items)
 		a.store.SetLikedTotal(len(m.Items) + m.Offset)
@@ -1236,6 +1224,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetRecentFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearRecentPlayedFetchError()
 				return a, nil
 			}
 			a.recentPlayedPoll.errorCount++
@@ -1254,6 +1243,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.recentPlayedPoll.errorCount = 0
 		a.recentPlayedPoll.backoffTicks = 0
 		a.recentPlayedPoll.hasData = true
+		a.recentPlayedPoll.hasSuccess = true
+		a.recentPlayedPoll.lastSuccessTick = a.tickCount
 		a.store.ClearRecentPlayedFetchError()
 		a.store.SetRecentlyPlayed(m.Items)
 		// Forward to RecentlyPlayedPane.
@@ -1299,13 +1290,31 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case panes.ProfileLogoutMsg:
 		// User confirmed logout — clear tokens and quit.
-		_ = a.tokenStore.Delete()
+		if err := a.tokenStore.Delete(); err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Logout failed",
+				Body:   "Token may persist in keychain: " + err.Error(),
+			})
+		}
 		return a, tea.Quit
 
 	case panes.ProfileForgetMsg:
 		// User confirmed forget — clear tokens and remove client_id from config, then quit.
-		_ = a.tokenStore.Delete()
-		_ = config.ClearClientID(config.DefaultConfigPath())
+		if err := a.tokenStore.Delete(); err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to forget credentials",
+				Body:   "Token may persist in keychain: " + err.Error(),
+			})
+		}
+		if err := config.ClearClientID(config.DefaultConfigPath()); err != nil {
+			return a, a.toasts.Cmd(uikit.Toast{
+				Intent: uikit.ToastError,
+				Title:  "Failed to clear client ID",
+				Body:   err.Error(),
+			})
+		}
 		return a, tea.Quit
 
 	case panes.FetchCurrentUserRequestMsg:
@@ -1518,6 +1527,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetFollowedShowsFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearFollowedShowsFetchError()
 				return a, nil
 			}
 			a.followedShowsPoll.errorCount++
@@ -1535,6 +1545,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.followedShowsPoll.errorCount = 0
 		a.followedShowsPoll.backoffTicks = 0
 		a.followedShowsPoll.hasData = true
+		a.followedShowsPoll.hasSuccess = true
+		a.followedShowsPoll.lastSuccessTick = a.tickCount
 		a.store.ClearFollowedShowsFetchError()
 		a.store.SetFollowedShows(m.Items)
 		// Re-resolve the selected show from refreshed data so the metadata
@@ -1567,6 +1579,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetSavedEpisodesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearSavedEpisodesFetchError()
 				return a, nil
 			}
 			a.savedEpisodesPoll.errorCount++
@@ -1584,6 +1597,8 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.savedEpisodesPoll.errorCount = 0
 		a.savedEpisodesPoll.backoffTicks = 0
 		a.savedEpisodesPoll.hasData = true
+		a.savedEpisodesPoll.hasSuccess = true
+		a.savedEpisodesPoll.lastSuccessTick = a.tickCount
 		a.store.ClearSavedEpisodesFetchError()
 		a.store.SetSavedEpisodes(m.Items)
 		var cmds []tea.Cmd
@@ -1608,6 +1623,7 @@ func (a *App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.store.SetShowEpisodesFetching(false)
 		if m.Err != nil {
 			if errors.Is(m.Err, errNilClient) {
+				a.store.ClearShowEpisodesFetchError()
 				// Forward to pane so it clears episodesFetching.
 				return a, a.forwardToPane(layout.PaneFollowedShows, m)
 			}

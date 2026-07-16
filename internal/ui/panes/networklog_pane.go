@@ -186,7 +186,7 @@ func (p *NetworkLogPane) refreshRows() {
 	for _, e := range events {
 		switch e.Kind {
 		case domain.EventRequestAllowed, domain.EventRequestBlocked,
-			domain.EventDedupJoined:
+			domain.EventRequestFailed, domain.EventDedupJoined:
 			p.pendingDecisions[e.RequestID] = e.Kind
 		case domain.EventDedupResolved:
 			// Waiter's lifecycle is complete — clear its pendingDecisions entry.
@@ -282,6 +282,8 @@ func (p *NetworkLogPane) buildTableRows() {
 		switch row.decision {
 		case domain.EventRequestAllowed:
 			dec = "allowed"
+		case domain.EventRequestFailed:
+			dec = "failed"
 		case domain.EventRequestBlocked:
 			dec = "blocked"
 		case domain.EventDedupJoined:

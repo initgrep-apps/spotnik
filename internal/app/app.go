@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -138,6 +139,11 @@ type App struct {
 	// searchPage is the staleness key for the current in-flight page.
 	// Reset to 0 when closeSearch() is called.
 	searchPage int
+
+	// searchGen is the staleness key for the current search generation.
+	// Incremented on each new query or tab change; page changes do NOT increment.
+	// Prevents stale responses from a previous tab from overwriting current tab's total.
+	searchGen int
 
 	// searchLoading is true while a search HTTP call is in-flight.
 	// Reset to false on close, error, or successful result delivery.
@@ -427,6 +433,15 @@ func New(cfg *config.Config, opts AppOptions) *App {
 		version:           ver,
 		lastInteraction:   time.Now(),
 		idleThreshold:     idleThresholdSecs * time.Second,
+		// Treat all library polls as overdue at startup so the scheduler can begin
+		// fetching immediately while still enforcing one pane per tick.
+		playlistsPoll:     pollState{lastSuccessTick: -9999, hasSuccess: false},
+		albumsPoll:        pollState{lastSuccessTick: -9999, hasSuccess: false},
+		likedSongsPoll:    pollState{lastSuccessTick: -9999, hasSuccess: false},
+		recentPlayedPoll:  pollState{lastSuccessTick: -9999, hasSuccess: false},
+		statsPoll:         pollState{lastSuccessTick: -9999, hasSuccess: false},
+		followedShowsPoll: pollState{lastSuccessTick: -9999, hasSuccess: false},
+		savedEpisodesPoll: pollState{lastSuccessTick: -9999, hasSuccess: false},
 		prefs:             prefs.New(config.DefaultConfigPath()),
 		// searchCancel must never be nil; initialize to a no-op so it is always safe to call.
 		searchCancel: func() {},
@@ -574,6 +589,13 @@ func (a *App) isIdle() bool {
 	return time.Since(a.lastInteraction) > a.idleThreshold
 }
 
+// isLongIdle returns true when the user has been inactive longer than longIdleThreshold.
+// When true, library polling pauses. Playback/queue continue so the UI stays current.
+// NOTE: this is measured from lastInteraction, independent of idleThreshold.
+func (a *App) isLongIdle() bool {
+	return time.Since(a.lastInteraction) > api.LongIdleThreshold
+}
+
 // pollIntervals returns the current playback and queue polling intervals
 // based on user activity and playback state.
 //
@@ -611,6 +633,12 @@ type pollState struct {
 	// exponential backoff calculation in calcBackoffTicks. Reset to 0 on success.
 	errorCount int
 	hasData    bool // true after first successful load; switches interval regime
+	// lastSuccessTick is the tick of the last successful fetch. Used by the
+	// scheduler so a pane whose previous fetch failed is not treated as fresh.
+	lastSuccessTick int
+	// hasSuccess is true once this pane has completed a successful fetch.
+	// lastSuccessTick alone is unreliable because tickCount starts at 0.
+	hasSuccess bool
 }
 
 // libraryIntervals defines the polling cadence (seconds) for a library data type.
@@ -626,6 +654,84 @@ var (
 	statsIntervals        = libraryIntervals{playing: 3600, paused: 3600, idle: 3600}
 	podcastIntervals      = libraryIntervals{playing: 60, paused: 120, idle: 300}
 )
+
+// libraryPollEntry describes a single library pane for the round-robin scheduler.
+type libraryPollEntry struct {
+	paneID   layout.PaneID
+	p        *pollState
+	iv       libraryIntervals
+	fetching func() bool
+	setFetch func(bool)
+	cmd      func() tea.Cmd
+}
+
+// libraryPollEntries returns the ordered list of library panes that participate
+// in the round-robin polling scheduler.
+func (a *App) libraryPollEntries() []libraryPollEntry {
+	return []libraryPollEntry{
+		{layout.PanePlaylists, &a.playlistsPoll, playlistsIntervals, a.store.PlaylistsFetching, a.store.SetPlaylistsFetching, func() tea.Cmd { return a.buildFetchPlaylistsCmd(0) }},
+		{layout.PaneAlbums, &a.albumsPoll, albumsIntervals, a.store.AlbumsFetching, a.store.SetAlbumsFetching, func() tea.Cmd { return a.buildFetchAlbumsCmd(0) }},
+		{layout.PaneLikedSongs, &a.likedSongsPoll, likedSongsIntervals, a.store.LikedFetching, a.store.SetLikedFetching, func() tea.Cmd { return a.buildFetchLikedTracksCmd(0) }},
+		{layout.PaneRecentlyPlayed, &a.recentPlayedPoll, recentPlayedIntervals, a.store.RecentFetching, a.store.SetRecentFetching, func() tea.Cmd { return a.buildFetchRecentlyPlayedCmd() }},
+		{layout.PaneTopTracks, &a.statsPoll, statsIntervals,
+			func() bool { return a.store.StatsFetching("short_term") },
+			func(b bool) { a.store.SetStatsFetching("short_term", b) },
+			func() tea.Cmd { return a.buildFetchStatsCmd("short_term") }},
+		{layout.PaneFollowedShows, &a.followedShowsPoll, podcastIntervals, a.store.FollowedShowsFetching, a.store.SetFollowedShowsFetching, func() tea.Cmd { return a.buildFetchFollowedShowsCmd() }},
+		{layout.PaneSavedEpisodes, &a.savedEpisodesPoll, podcastIntervals, a.store.SavedEpisodesFetching, a.store.SetSavedEpisodesFetching, func() tea.Cmd { return a.buildFetchSavedEpisodesCmd() }},
+	}
+}
+
+// pickMostOverdueLibraryPane selects the visible library pane that is most
+// overdue relative to its polling interval. It skips hidden panes, panes in
+// per-pane backoff, and panes with an in-flight fetch. Panes that have never
+// successfully loaded are treated as eligible immediately. Returns nil if none
+// is eligible.
+func (a *App) pickMostOverdueLibraryPane() *libraryPollEntry {
+	entries := a.libraryPollEntries()
+	var best *libraryPollEntry
+	var bestRatio float64
+	for i := range entries {
+		e := &entries[i]
+		paneID := e.paneID
+		if e.paneID == layout.PaneTopTracks {
+			if !a.layout.IsPaneVisible(layout.PaneTopTracks) && !a.layout.IsPaneVisible(layout.PaneTopArtists) {
+				continue
+			}
+		} else if !a.layout.IsPaneVisible(paneID) {
+			continue
+		}
+
+		p := e.p
+		if p.backoffTicks > 0 {
+			p.backoffTicks--
+			continue
+		}
+		if e.fetching() {
+			continue
+		}
+
+		interval := a.libraryInterval(p, e.iv)
+		if interval <= 0 {
+			continue
+		}
+
+		// Use last success, not last dispatch, so a pane whose previous fetch
+		// failed is not treated as freshly updated. A pane that has never
+		// succeeded is eligible immediately regardless of its lastSuccessTick.
+		since := a.tickCount - p.lastSuccessTick
+		if p.hasSuccess && since < interval {
+			continue
+		}
+
+		ratio := float64(since) / float64(interval)
+		if ratio > bestRatio {
+			bestRatio = ratio
+			best = e
+		}
+	}
+	return best
+}
 
 // calcBackoffTicks computes per-pane exponential backoff: min(5 * 2^(errorCount-1), 60).
 func calcBackoffTicks(errorCount int) int {
@@ -1200,7 +1306,8 @@ func (a *App) closeOnboardingPermissions() (*App, tea.Cmd) {
 // checkNewlyVisiblePanes finds panes that are visible in the current preset
 // but were not visible in oldVisible. For each newly visible pane, if its
 // data is stale and no fetch is in-flight, a fetch command is dispatched.
-// Returns nil if no panes need fetching.
+// Dispatches are gated by gateway.CanAdmit so the batch stops if the gateway
+// is saturated. Returns nil if no panes need fetching.
 func (a *App) checkNewlyVisiblePanes(oldVisible map[layout.PaneID]bool) tea.Cmd {
 	type paneStaleGate struct {
 		stale    func() bool
@@ -1255,7 +1362,16 @@ func (a *App) checkNewlyVisiblePanes(oldVisible map[layout.PaneID]bool) tea.Cmd 
 
 	cur := a.layout.ActivePreset()
 	var cmds []tea.Cmd
+
+	// Iterate visible panes in deterministic order so CanAdmit gating produces
+	// consistent results across runs and tests.
+	visibleIDs := make([]layout.PaneID, 0, len(cur.Visible))
 	for id := range cur.Visible {
+		visibleIDs = append(visibleIDs, id)
+	}
+	sort.Slice(visibleIDs, func(i, j int) bool { return visibleIDs[i] < visibleIDs[j] })
+
+	for _, id := range visibleIDs {
 		if oldVisible[id] {
 			continue
 		}
@@ -1268,6 +1384,9 @@ func (a *App) checkNewlyVisiblePanes(oldVisible map[layout.PaneID]bool) tea.Cmd 
 		}
 		if !gate.stale() {
 			continue
+		}
+		if !a.gateway.CanAdmit(api.Background) {
+			break
 		}
 		gate.setFetch(true)
 		cmds = append(cmds, gate.cmd())

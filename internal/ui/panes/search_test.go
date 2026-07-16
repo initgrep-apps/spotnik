@@ -2157,23 +2157,14 @@ func TestHandleDebounce_Table(t *testing.T) {
 }
 
 // TestCycleTab_EmptyQuery_NoSearchRequest verifies that cycling the tab with an empty
-// query triggers debounce but handleDebounce no-ops (empty query check).
+// query is a no-op — no debounce, no loading state, no API call.
 func TestCycleTab_EmptyQuery_NoSearchRequest(t *testing.T) {
 	o := newTestSearchOverlay()
 	o.SetSize(80, 40)
 
-	// Tab with no query typed — debounce is scheduled but fires nothing.
 	_, cmd := sendKey(t, o, "tab")
-	require.NotNil(t, cmd, "tab change should schedule debounce (non-nil cmd)")
-
-	// Execute the debounce cmd — since query is empty, it should be a no-op.
-	// The cmd returned by cycleTabForward is scheduleDebounce (a time-based tick).
-	// We can't fire the time-based tick synchronously, but we can verify the overlay
-	// fires no SearchRequestMsg synchronously either.
-	msg := cmd()
-	// The message from the debounce tick is a searchDebounceMsg, not a SearchRequestMsg.
-	_, isReq := msg.(panes.SearchRequestMsg)
-	assert.False(t, isReq, "tab change with empty query should not directly emit SearchRequestMsg")
+	assert.Nil(t, cmd, "tab change with empty query should not schedule debounce")
+	assert.False(t, o.LoadingFirstPage(), "loadingFirstPage must be false when query is empty")
 }
 
 // TestCycleTab_NonEmptyQuery_EmitsSearchRequest verifies that cycling the tab when a
@@ -2621,9 +2612,7 @@ func TestRenderPaginationBar_MidPage_BothArrowsNormal(t *testing.T) {
 		"next arrow must use Text on mid page; bar=%q", bar)
 }
 
-// TestRenderPaginationBar_ContainsPageNumber verifies the bar shows "page N" without "of M".
-// Showing "of M" is misleading: the Spotify API total can be huge (e.g. 10,000+) and the
-// total pages can change between requests. The simpler "page N" with arrow dimming is clearer.
+// TestRenderPaginationBar_ContainsPageNumber verifies the bar shows "page N of M".
 func TestRenderPaginationBar_ContainsPageNumber(t *testing.T) {
 	th := theme.Load("black")
 	o := panes.NewSearchOverlay(th)
@@ -2634,11 +2623,10 @@ func TestRenderPaginationBar_ContainsPageNumber(t *testing.T) {
 	o = m.(*panes.SearchOverlay)
 	bar := panes.RenderPaginationBarForTest(o, 60)
 
-	// Must contain "page 1" but must NOT contain "of" — total page count is hidden.
 	assert.True(t, strings.Contains(bar, "page 1"),
 		"pagination bar must show 'page 1'; bar=%q", bar)
-	assert.False(t, strings.Contains(bar, " of "),
-		"pagination bar must NOT show 'of M' total; bar=%q", bar)
+	assert.True(t, strings.Contains(bar, " of "),
+		"pagination bar must show 'of M' total; bar=%q", bar)
 }
 
 // TestResizeList_SubtractsPaginationLine verifies that resizeList() subtracts 1 extra

@@ -114,13 +114,21 @@ func (p *SavedEpisodesPane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p *SavedEpisodesPane) View() string {
-	if len(p.store.SavedEpisodes()) == 0 && !p.Filter().IsActive() {
-		return uikit.EmptyState{
-			Text:   "No saved episodes",
-			Width:  p.width,
-			Height: p.height,
-			Theme:  p.theme,
-		}.Render()
+	if !p.Filter().IsActive() && len(p.store.SavedEpisodes()) == 0 {
+		es := uikit.PaneEmptyStatus("saved episodes", uikit.PaneFetchState{
+			IsFetching:     p.store.SavedEpisodesFetching(),
+			FetchErr:       p.store.SavedEpisodesFetchError(),
+			NeverFetched:   p.store.SavedEpisodesFetchedAt().IsZero(),
+			IsThrottled:    p.store.IsThrottled(),
+			RetryAfterSecs: p.store.ThrottleRetryAfterSecs(),
+		})
+		if es.Status == uikit.EmptyStatusNone {
+			es.Hint = "Save episodes in Spotify or search with /"
+		}
+		es.Width = p.width
+		es.Height = p.height
+		es.Theme = p.theme
+		return es.Render()
 	}
 	var parts []string
 	if p.Filter().IsActive() {

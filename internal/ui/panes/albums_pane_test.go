@@ -3,6 +3,7 @@ package panes
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -855,6 +856,71 @@ func TestAlbumsPane_Actions_TrackView_NoLikeWhenUnfocused(t *testing.T) {
 	actions := a.Actions()
 	assert.NotContains(t, actions, layout.Action{Key: "l", Label: "like"},
 		"track view with tracks loaded but unfocused should NOT include 'l like' (story 270)")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestAlbumsPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading saved albums...".
+func TestAlbumsPane_View_EmptyState_NeverFetched(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading saved albums...")
+}
+
+// TestAlbumsPane_View_EmptyState_Fetching verifies that when AlbumsFetching is true,
+// the pane shows "Loading saved albums...".
+func TestAlbumsPane_View_EmptyState_Fetching(t *testing.T) {
+	s := state.New()
+	s.SetAlbumsFetching(true)
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading saved albums...")
+}
+
+// TestAlbumsPane_View_EmptyState_Error verifies that when AlbumsFetchError is set,
+// the pane shows "Unable to load saved albums".
+func TestAlbumsPane_View_EmptyState_Error(t *testing.T) {
+	s := state.New()
+	s.SetAlbumsFetchError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load saved albums")
+}
+
+// TestAlbumsPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load saved albums" with rate-limit hint.
+func TestAlbumsPane_View_EmptyState_RateLimited(t *testing.T) {
+	s := state.New()
+	s.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load saved albums")
+	assert.Contains(t, output, "Rate limited")
+}
+
+// TestAlbumsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No saved albums"
+// with the contextual hint.
+func TestAlbumsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetSavedAlbums([]domain.SavedAlbum{})
+	s.SetAlbumsFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewAlbumsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No saved albums")
+	assert.Contains(t, output, "Save albums in Spotify or search with /")
 }
 
 // TestAlbumsPane_Actions_ListView_NoLike verifies the 'l like' hint is absent

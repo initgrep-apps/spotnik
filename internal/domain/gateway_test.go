@@ -45,6 +45,9 @@ func TestGatewayStateSnapshot_ZeroValue(t *testing.T) {
 	assert.Equal(t, 0.0, snap.BackoffRemaining)
 	assert.Equal(t, 0, snap.DedupWaiters)
 	assert.Nil(t, snap.InFlightKeys)
+	assert.Equal(t, 0.0, snap.BackgroundRate)
+	assert.Equal(t, 0.0, snap.BurstCapacity)
+	assert.Equal(t, 0.0, snap.Last429AgoSecs)
 }
 
 func TestGatewayEvent_ZeroValue(t *testing.T) {
@@ -63,6 +66,9 @@ func TestGatewayEvent_RoundTrip(t *testing.T) {
 		BackoffRemaining: 1.5,
 		DedupWaiters:     2,
 		InFlightKeys:     []string{"/me/player", "/me/tracks"},
+		BackgroundRate:   2.0,
+		BurstCapacity:    5.0,
+		Last429AgoSecs:   12.0,
 	}
 	ev := domain.GatewayEvent{
 		Timestamp:  now,

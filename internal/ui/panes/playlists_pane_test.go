@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -905,6 +906,71 @@ func TestPlaylistsPane_Actions_ListView_NoNOrR(t *testing.T) {
 		keys[i] = a.Key
 	}
 	assert.Contains(t, keys, "f", "Actions() must still include 'f' (filter)")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestPlaylistsPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading playlists...".
+func TestPlaylistsPane_View_EmptyState_NeverFetched(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading playlists...")
+}
+
+// TestPlaylistsPane_View_EmptyState_Fetching verifies that when PlaylistsFetching is true,
+// the pane shows "Loading playlists...".
+func TestPlaylistsPane_View_EmptyState_Fetching(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetching(true)
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading playlists...")
+}
+
+// TestPlaylistsPane_View_EmptyState_Error verifies that when PlaylistsFetchError is set,
+// the pane shows "Unable to load playlists".
+func TestPlaylistsPane_View_EmptyState_Error(t *testing.T) {
+	s := state.New()
+	s.SetPlaylistsFetchError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load playlists")
+}
+
+// TestPlaylistsPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load playlists" with rate-limit hint.
+func TestPlaylistsPane_View_EmptyState_RateLimited(t *testing.T) {
+	s := state.New()
+	s.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load playlists")
+	assert.Contains(t, output, "Rate limited")
+}
+
+// TestPlaylistsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No playlists"
+// with the contextual hint.
+func TestPlaylistsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetPlaylists([]domain.SimplePlaylist{})
+	s.SetPlaylistsFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewPlaylistsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No playlists")
+	assert.Contains(t, output, "Create playlists in Spotify or search with /")
 }
 
 // ── Story 158: LockedRow for Spotify-owned playlists ─────────────────────────

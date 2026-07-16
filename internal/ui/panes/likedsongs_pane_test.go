@@ -3,6 +3,7 @@ package panes
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/initgrep-apps/spotnik/internal/domain"
@@ -297,6 +298,71 @@ func TestLikedSongsPane_I_EmptyList(t *testing.T) {
 
 	_, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	assert.Nil(t, cmd, "'i' should return nil cmd (handler removed)")
+}
+
+// ── Story 272: Context-aware empty states ─────────────────────────────────────
+
+// TestLikedSongsPane_View_EmptyState_NeverFetched verifies that a fresh store
+// (never fetched) shows "Loading liked songs...".
+func TestLikedSongsPane_View_EmptyState_NeverFetched(t *testing.T) {
+	s := state.New()
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading liked songs...")
+}
+
+// TestLikedSongsPane_View_EmptyState_Fetching verifies that when LikedFetching is true,
+// the pane shows "Loading liked songs...".
+func TestLikedSongsPane_View_EmptyState_Fetching(t *testing.T) {
+	s := state.New()
+	s.SetLikedFetching(true)
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Loading liked songs...")
+}
+
+// TestLikedSongsPane_View_EmptyState_Error verifies that when LikedTracksFetchError is set,
+// the pane shows "Unable to load liked songs".
+func TestLikedSongsPane_View_EmptyState_Error(t *testing.T) {
+	s := state.New()
+	s.SetLikedTracksFetchError(fmt.Errorf("network error"))
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load liked songs")
+}
+
+// TestLikedSongsPane_View_EmptyState_RateLimited verifies that when IsThrottled is true,
+// the pane shows "Unable to load liked songs" with rate-limit hint.
+func TestLikedSongsPane_View_EmptyState_RateLimited(t *testing.T) {
+	s := state.New()
+	s.SetThrottle(true, 5, time.Now())
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "Unable to load liked songs")
+	assert.Contains(t, output, "Rate limited")
+}
+
+// TestLikedSongsPane_View_EmptyState_None verifies that when data is genuinely empty
+// (FetchedAt stamped, no error, not throttled), the pane shows "No liked songs"
+// with the contextual hint.
+func TestLikedSongsPane_View_EmptyState_None(t *testing.T) {
+	s := state.New()
+	s.SetLikedTracks([]domain.SavedTrack{})
+	s.SetLikedTracksFetchedAt(time.Now())
+	th := theme.Load("black")
+	pane := NewLikedSongsPane(s, th, true)
+	pane.SetSize(80, 20)
+	output := pane.View()
+	assert.Contains(t, output, "No liked songs")
+	assert.Contains(t, output, "Press / to search for tracks")
 }
 
 // ── Story 120: dead pane action removal ──────────────────────────────────────

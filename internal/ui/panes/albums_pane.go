@@ -356,14 +356,21 @@ func (a *AlbumsPane) View() string {
 	if a.inTrackView {
 		return a.trackTable.View()
 	}
-	if len(a.store.SavedAlbums()) == 0 && !a.Filter().IsActive() {
-		return uikit.EmptyState{
-			Text:   "No saved albums",
-			Hint:   "Save albums in Spotify or search with /",
-			Width:  a.width,
-			Height: a.height,
-			Theme:  a.theme,
-		}.Render()
+	if !a.Filter().IsActive() && len(a.store.SavedAlbums()) == 0 {
+		es := uikit.PaneEmptyStatus("saved albums", uikit.PaneFetchState{
+			IsFetching:     a.store.AlbumsFetching(),
+			FetchErr:       a.store.AlbumsFetchError(),
+			NeverFetched:   a.store.AlbumsFetchedAt().IsZero(),
+			IsThrottled:    a.store.IsThrottled(),
+			RetryAfterSecs: a.store.ThrottleRetryAfterSecs(),
+		})
+		if es.Status == uikit.EmptyStatusNone {
+			es.Hint = "Save albums in Spotify or search with /"
+		}
+		es.Width = a.width
+		es.Height = a.height
+		es.Theme = a.theme
+		return es.Render()
 	}
 
 	var parts []string

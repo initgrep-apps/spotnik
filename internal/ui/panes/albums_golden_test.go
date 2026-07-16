@@ -1,6 +1,7 @@
 package panes_test
 
 import (
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -56,6 +57,20 @@ func TestAlbumsPane_View_AlbumList(t *testing.T) {
 // TestAlbumsPane_View_EmptyState verifies golden snapshot when no albums exist.
 func TestAlbumsPane_View_EmptyState(t *testing.T) {
 	s := state.New()
+	th := theme.Load("black")
+
+	pane := panes.NewAlbumsPane(s, th, false)
+	pane.SetSize(78, 10)
+
+	tm := goldentest.NewPaneTest(t, pane, 80, 24)
+	goldentest.AssertGolden(t, goldentest.WaitAndReadOutput(t, tm))
+}
+
+// TestAlbumsPane_View_EmptyState_Error verifies golden snapshot when albums
+// fetch failed with an error (non-never-fetched state).
+func TestAlbumsPane_View_EmptyState_Error(t *testing.T) {
+	s := state.New()
+	s.SetAlbumsFetchError(fmt.Errorf("network error"))
 	th := theme.Load("black")
 
 	pane := panes.NewAlbumsPane(s, th, false)
