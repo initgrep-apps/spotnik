@@ -206,7 +206,9 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti.Placeholder = searchPlaceholders[0].Text
 	// Placeholder uses TextMuted() color so it looks like an actionable suggestion,
 	// not a passive muted hint.
+	ti.TextStyle = lipgloss.NewStyle().Foreground(t.TextPrimary())
 	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
+	ti.Cursor.Style = lipgloss.NewStyle().Foreground(t.Accent())
 	// Enable native inline ghost completion for command prefixes.
 	// Each suggestion has a trailing space so that acceptance immediately
 	// triggers parsePrefix() and the lock + Prompt-tag promotion.
@@ -1020,10 +1022,14 @@ func (o *SearchOverlay) SetTheme(th theme.Theme) {
 	// Reconstruct spinner so loading indicator uses the new theme's colors.
 	// Empty text: each render site appends its own context label.
 	o.sp = uikit.NewSpinner("", th)
+	// Update typed text style so user input uses the new TextPrimary() color.
+	o.input.TextStyle = lipgloss.NewStyle().Foreground(th.TextPrimary())
 	// Update placeholder style so the cycling hints use the new TextMuted() color.
 	o.input.PlaceholderStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
 	// Update completion/ghost text style so suggestions use the new TextMuted() color.
 	o.input.CompletionStyle = lipgloss.NewStyle().Foreground(th.TextMuted())
+	// Update cursor style so blink colour follows the new accent.
+	o.input.Cursor.Style = lipgloss.NewStyle().Foreground(th.Accent())
 	// Re-render the Prompt tag if a prefix is locked, applying the new theme colors.
 	if o.prefixState == PrefixLocked {
 		o.promoteToPromptTag()
@@ -1180,6 +1186,11 @@ func (o *SearchOverlay) InputAvailableSuggestions() []string {
 	return o.input.AvailableSuggestions()
 }
 
+// TextStyleFg returns the foreground color of the input's TextStyle — exported for tests.
+func (o *SearchOverlay) TextStyleFg() lipgloss.TerminalColor {
+	return o.input.TextStyle.GetForeground()
+}
+
 // PlaceholderStyleFg returns the foreground color of the input's PlaceholderStyle — exported for tests.
 func (o *SearchOverlay) PlaceholderStyleFg() lipgloss.TerminalColor {
 	return o.input.PlaceholderStyle.GetForeground()
@@ -1188,6 +1199,11 @@ func (o *SearchOverlay) PlaceholderStyleFg() lipgloss.TerminalColor {
 // CompletionStyleFg returns the foreground color of the input's CompletionStyle — exported for tests.
 func (o *SearchOverlay) CompletionStyleFg() lipgloss.TerminalColor {
 	return o.input.CompletionStyle.GetForeground()
+}
+
+// CursorStyleFg returns the foreground color of the input's Cursor.Style — exported for tests.
+func (o *SearchOverlay) CursorStyleFg() lipgloss.TerminalColor {
+	return o.input.Cursor.Style.GetForeground()
 }
 
 // SyncInputToTab is the exported wrapper for syncInputToTab — used in tests.
