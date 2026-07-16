@@ -206,7 +206,9 @@ func NewSearchOverlay(t theme.Theme) *SearchOverlay {
 	ti.Placeholder = searchPlaceholders[0].Text
 	// Placeholder uses TextMuted() color so it looks like an actionable suggestion,
 	// not a passive muted hint.
+	ti.TextStyle = lipgloss.NewStyle().Foreground(t.TextPrimary())
 	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(t.TextMuted())
+	ti.Cursor.Style = lipgloss.NewStyle().Foreground(t.Accent())
 	// Enable native inline ghost completion for command prefixes.
 	// Each suggestion has a trailing space so that acceptance immediately
 	// triggers parsePrefix() and the lock + Prompt-tag promotion.

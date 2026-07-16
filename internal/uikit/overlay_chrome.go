@@ -44,7 +44,7 @@ func (o OverlayChrome) Render(content string) string {
 		Height:      o.Height,
 		Title:       o.Title,
 		Actions:     o.Actions,
-		AccentColor: o.Theme.Accent(),
+		AccentColor: o.Theme.ActiveBorder(),
 		Focused:     true,
 		Theme:       o.Theme,
 		// Resolve glyph mode here so layout/border.go does not need to import
