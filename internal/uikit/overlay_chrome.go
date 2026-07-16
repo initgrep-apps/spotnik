@@ -10,7 +10,7 @@ import (
 type Action = layout.Action
 
 // OverlayChrome renders a floating overlay panel. It is visually identical to
-// a focused PaneChrome but always uses Theme.Accent() as the border colour —
+// a focused PaneChrome but always uses Theme.ActiveBorder() as the border colour —
 // overlays always own input focus.
 //
 // Every overlay pane composes OverlayChrome to render its outer border.
