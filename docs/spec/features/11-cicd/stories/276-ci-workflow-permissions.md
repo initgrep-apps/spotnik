@@ -1,7 +1,7 @@
 ---
 title: "Add explicit GITHUB_TOKEN permissions to CI workflow"
 feature: 11-cicd
-status: open
+status: done
 ---
 
 ## Background
