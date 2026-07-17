@@ -18,7 +18,7 @@
 | 06 | Search | `features/06-search/` | done | 05, 16, 81–104, 212–213 | Full-screen overlay, multi-tab results, prefix autocomplete, pagination |
 | 07 | Stats & Listening History | `features/07-stats/` | done | 08, 14, 48, 55 | Top tracks, top artists, recently played with time-range cycling |
 | 08 | Theming & Appearance | `features/08-theming/` | done | 01, 40, 70–75, 77–79, 207, 208 | Token-based themes, TOML config, runtime switcher, 13 built-in themes including mono-dark/mono-light; Page A/B → Music/Stats rename |
-| 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | done | 02, 17, 76, 79, 80, 114–117, 134–145, 196, 204, 209 | PKCE OAuth, config-first client ID, TUI onboarding, auth CLI subcommands, profile overlay |
+| 09 | Auth, Bootstrap & User Profile | `features/09-auth-and-profile/` | in-progress | 02, 17, 76, 79, 80, 114–117, 134–145, 196, 204, 209, 275 | PKCE OAuth, config-first client ID, TUI onboarding, auth CLI subcommands, profile overlay, callback XSS fix |
 | 10 | Developer Tools (Stats Page) | `features/10-developer-tools/` | done | 51, 56, 61–69, 109–113, 173–182, 210, 211 | GatewayHealth/PollingTraffic/GatewayLive panes, NetworkLog, universal filter border + Esc-clear, TableBasedPane consolidation, StateReader interface |
 | 11 | CI/CD & Release | `features/11-cicd/` | done | 57, 128–133, 194 | GitHub Actions, GoReleaser, release-please, multi-platform distribution, curl/PS1 installer scripts |
 | 12 | CLI Output Renderer | `features/12-cli-output/` | done | 146–149 | `internal/cliout` package, typed message taxonomy, palette config, TTY-guarded spinner, validated prompt |
