@@ -134,6 +134,7 @@ func StartCallbackServer(port int) (*callbackServer, <-chan CallbackResult, erro
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		errParam := r.URL.Query().Get("error")
 		if errParam != "" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = fmt.Fprintf(w, "Authorization failed: %s", html.EscapeString(errParam))
 			resultCh <- CallbackResult{Err: fmt.Errorf("authorization denied: %s", errParam)}
@@ -142,13 +143,14 @@ func StartCallbackServer(port int) (*callbackServer, <-chan CallbackResult, erro
 
 		code := r.URL.Query().Get("code")
 		if code == "" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = fmt.Fprintf(w, "Missing code parameter")
 			resultCh <- CallbackResult{Err: fmt.Errorf("callback missing code parameter")}
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, "<html><body><h1>Authorization successful!</h1><p>You can close this tab.</p></body></html>")
 		resultCh <- CallbackResult{Code: code}

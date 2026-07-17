@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -122,27 +123,56 @@ func TestCallbackServer_HandlesError(t *testing.T) {
 
 // TestCallbackServer_ErrorResponse_EscapesHTML verifies that a malicious error
 // query parameter is HTML-escaped in the response body to prevent reflected XSS.
+// It also asserts the response carries a text/plain content type so browsers do
+// not sniff and render the body as HTML.
 func TestCallbackServer_ErrorResponse_EscapesHTML(t *testing.T) {
-	srv, codeCh, err := api.StartCallbackServer(0)
-	require.NoError(t, err)
-	defer srv.Close()
+	cases := []struct {
+		name         string
+		errorParam   string
+		expectedBody string
+	}{
+		{
+			name:         "script tag",
+			errorParam:   "<script>alert(1)</script>",
+			expectedBody: "Authorization failed: &lt;script&gt;alert(1)&lt;/script&gt;",
+		},
+		{
+			name:         "dangerous metacharacters",
+			errorParam:   `<>&"'`,
+			expectedBody: "Authorization failed: &lt;&gt;&amp;&#34;&#39;",
+		},
+		{
+			name:         "ampersand only",
+			errorParam:   "user_denied&foo=bar",
+			expectedBody: "Authorization failed: user_denied&amp;foo=bar",
+		},
+	}
 
-	resp, err := http.Get(fmt.Sprintf("%s/callback?error=<script>alert(1)</script>", srv.URL))
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, codeCh, err := api.StartCallbackServer(0)
+			require.NoError(t, err)
+			defer srv.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
+			resp, err := http.Get(fmt.Sprintf("%s/callback?error=%s", srv.URL, url.QueryEscape(tc.errorParam)))
+			require.NoError(t, err)
+			defer func() { _ = resp.Body.Close() }()
 
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, string(body), "&lt;script&gt;")
-	assert.NotContains(t, string(body), "<script>")
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
 
-	// Drain the callback result channel.
-	select {
-	case <-codeCh:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for error on channel")
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			assert.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
+			assert.Equal(t, tc.expectedBody, string(body))
+
+			// Drain the callback result channel and assert an error is delivered.
+			select {
+			case result := <-codeCh:
+				require.Error(t, result.Err)
+			case <-time.After(2 * time.Second):
+				t.Fatal("timed out waiting for error on channel")
+			}
+		})
 	}
 }
 
