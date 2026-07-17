@@ -1,7 +1,7 @@
 ---
 title: "Fix reflected XSS in OAuth callback error response"
 feature: 09-auth-and-profile
-status: open
+status: done
 ---
 
 ## Background
