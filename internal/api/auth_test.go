@@ -120,6 +120,32 @@ func TestCallbackServer_HandlesError(t *testing.T) {
 	}
 }
 
+// TestCallbackServer_ErrorResponse_EscapesHTML verifies that a malicious error
+// query parameter is HTML-escaped in the response body to prevent reflected XSS.
+func TestCallbackServer_ErrorResponse_EscapesHTML(t *testing.T) {
+	srv, codeCh, err := api.StartCallbackServer(0)
+	require.NoError(t, err)
+	defer srv.Close()
+
+	resp, err := http.Get(fmt.Sprintf("%s/callback?error=<script>alert(1)</script>", srv.URL))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, string(body), "&lt;script&gt;")
+	assert.NotContains(t, string(body), "<script>")
+
+	// Drain the callback result channel.
+	select {
+	case <-codeCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for error on channel")
+	}
+}
+
 // TestCallbackServer_RandomPort verifies the server binds to a port > 0.
 func TestCallbackServer_RandomPort(t *testing.T) {
 	srv, _, err := api.StartCallbackServer(0)

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -134,7 +135,7 @@ func StartCallbackServer(port int) (*callbackServer, <-chan CallbackResult, erro
 		errParam := r.URL.Query().Get("error")
 		if errParam != "" {
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = fmt.Fprintf(w, "Authorization failed: %s", errParam)
+			_, _ = fmt.Fprintf(w, "Authorization failed: %s", html.EscapeString(errParam))
 			resultCh <- CallbackResult{Err: fmt.Errorf("authorization denied: %s", errParam)}
 			return
 		}
