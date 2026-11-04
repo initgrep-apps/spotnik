@@ -884,7 +884,7 @@ Overlays intercept all keys while open. Focus saved + restored on close.
 | `0` | Cycle Player → Stats → Player | Global |
 | **Pane Toggle (context-aware)** | | |
 | `1`–`8` | Toggle pane visibility (mapping varies by preset) | Player page |
-| `2`–`5` | Toggle pane visibility | Stats page |
+| `1`–`5` | Toggle pane visibility | Stats page |
 | **Presets** | | |
 | `p` | Cycle to next preset (6 Player, 1 Stats) | Per page |
 | **Playback (always route to NowPlaying)** | | |
@@ -907,7 +907,6 @@ Overlays intercept all keys while open. Focus saved + restored on close.
 | `f` | Toggle filter in focused pane | List panes |
 | `g` | Cycle time range | TopTracks / TopArtists |
 | `l` | Like / unlike selected track | LikedSongs / Queue / TopTracks / RecentlyPlayed / Playlists (track view) / Albums (track view) / Search |
-| `A` | Add selected track to queue | Search overlay / list panes |
 | **Playlist Management (Playlists pane)** | | |
 | `Enter` | Open playlist tracks (sub-view) | Playlists pane |
 | **Global Overlays** | | |
@@ -921,9 +920,11 @@ Overlays intercept all keys while open. Focus saved + restored on close.
 | `Tab` | Cycle result tab forward | Search overlay |
 | `Shift+Tab` | Cycle result tab backward | Search overlay |
 | `Enter` | Play selected track (overlay stays open) | Search overlay |
-| `Ctrl+A` / `A` | Add selected track to queue | Search overlay |
+| `Ctrl+A` | Add selected track to queue | Search overlay |
+| `Ctrl+U` | Clear search input | Search overlay |
 | `PgDn` | Next results page | Search overlay |
 | `PgUp` | Previous results page | Search overlay |
+| `Esc` | Close search overlay | Search overlay |
 | **Profile Overlay** | | |
 | `l` | Logout — ends session, keeps Client ID (press twice to confirm) | Profile overlay |
 | `f` | Forget — removes session + Client ID (press twice to confirm) | Profile overlay |
